@@ -3951,7 +3951,7 @@ async function _openGraphSwitcherModal() {
         '</div>' +
         '<div id="graphSwitcherLoading" class="text-center py-4">' +
         '<div class="spinner-border spinner-border-sm text-primary"></div>' +
-        '<span class="ms-2">Loading registry domains...</span>' +
+        '<span class="ms-2">Loading registry contexts...</span>' +
         '</div>' +
         '<div id="graphSwitcherContent" style="display:none;">' +
         '<div id="graphSwitcherList"></div>' +
@@ -3972,7 +3972,7 @@ async function _openGraphSwitcherModal() {
         var list = document.getElementById('graphSwitcherList');
         var rows = data.domains || data.projects || [];
         if (!data.success || !rows.length) {
-            list.innerHTML = '<div class="text-muted text-center p-3">No domains found in the registry</div>';
+            list.innerHTML = '<div class="text-muted text-center p-3">No contexts found in the registry</div>';
             return;
         }
 
@@ -4006,7 +4006,7 @@ async function _openGraphSwitcherModal() {
                 '</div>';
         });
 
-        list.innerHTML = domainsHtml || '<div class="text-muted text-center p-3">No domains with versions found</div>';
+        list.innerHTML = domainsHtml || '<div class="text-muted text-center p-3">No contexts with versions found</div>';
     } catch (err) {
         console.error('[GraphSwitcher] Error:', err);
         document.getElementById('graphSwitcherLoading').innerHTML =
@@ -4049,7 +4049,7 @@ async function _graphSwitcherSelect(domainName, version) {
         } else {
             if (typeof hideDomainLoading === 'function') hideDomainLoading();
             if (list) list.innerHTML = '<div class="text-danger p-3"><i class="bi bi-exclamation-triangle me-1"></i>' +
-                esc(data.message || 'Failed to load domain') + '</div>';
+                esc(data.message || 'Failed to load context') + '</div>';
         }
     } catch (err) {
         if (typeof hideDomainLoading === 'function') hideDomainLoading();
@@ -4228,7 +4228,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         var params = new URLSearchParams(qs);
                         var tgtDom = params.get('domain') || params.get('project') || '';
                         if (typeof showDomainLoading === 'function') {
-                            showDomainLoading('Loading ' + (tgtDom || 'domain') + '...');
+                            showDomainLoading('Loading ' + (tgtDom || 'context') + '...');
                         }
                     } catch (_) { /* ignore */ }
                     window.location.href = url;

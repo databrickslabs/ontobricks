@@ -94,7 +94,7 @@ def _patch_route(monkeypatch, *, row=None, error=None, agent_result=None, captur
                 raise error
             return row
 
-    monkeypatch.setattr("back.objects.simulation.Simulation", FakeSimulation)
+    monkeypatch.setattr("back.objects.intelligence.Simulation", FakeSimulation)
 
     def fake_run(**kwargs):
         captured.update(kwargs)

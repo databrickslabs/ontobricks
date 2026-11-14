@@ -1,0 +1,72 @@
+<!-- Intelligence → Patterns → Discover -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-2">
+        <div class="me-auto">
+            <h4 class="mb-1"><i class="bi bi-grid-3x3-gap me-2"></i>Pattern discovery</h4>
+            <p class="text-muted mb-0 small">
+                Discover recurring neighbourhood shapes for a chosen entity type on Databricks,
+                then save the matching entities as a snapshot.
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="patRefreshBtn" title="Reload the last run">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-secondary" id="patSaveBtn" disabled>
+                <i class="bi bi-bookmark-plus me-1"></i>Save
+            </button>
+            <button type="button" class="btn btn-sm btn-primary" id="patDetectBtn">
+                <i class="bi bi-search me-1"></i>Detect
+            </button>
+        </div>
+    </div>
+
+    <div class="pat-layout">
+        <section class="pat-main">
+            <div class="card pat-preview-card">
+                <div class="card-body p-3">
+                    <div id="patPreviewLoading" class="pat-preview-loading d-none text-muted small" aria-live="polite">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
+                            <h6 class="fw-semibold mb-1" id="patPreviewLoadingTitle">Loading…</h6>
+                            <p class="small text-muted mb-0" id="patPreviewLoadingMsg">Fetching the last discovery run…</p>
+                        </div>
+                    </div>
+                    <div id="patPreviewEmpty" class="pat-preview-empty text-muted small">
+                        <div class="text-center">
+                            <i class="bi bi-grid-3x3-gap fs-1 text-muted d-block mb-2"></i>
+                            <h6 class="fw-semibold mb-1">No patterns yet</h6>
+                            <p class="small text-muted mb-0">Run <strong>Detect</strong> to choose an entity type and discover neighbourhood shapes.</p>
+                        </div>
+                    </div>
+                    <div id="patPreviewBody" class="pat-preview-body d-none">
+                        <div id="patDetails" class="pat-details" aria-live="polite">
+                            <p class="text-muted small mb-0">Select a pattern to see its neighbourhood and matching entities.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+{% include "partials/intelligence/_intel_patterns_detect_modal.html" %}
+
+<div class="modal fade" id="patSaveModal" tabindex="-1" aria-labelledby="patSaveModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="patSaveModalLabel">Save pattern</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label" for="patSaveLabel">Name</label>
+                <input type="text" class="form-control" id="patSaveLabel" maxlength="120" placeholder="e.g. FR phone+case buyers">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="patSaveConfirmBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>

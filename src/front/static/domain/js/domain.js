@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let _creatingNewDomain = false;
     try { _creatingNewDomain = sessionStorage.getItem('ob_creating_new_domain') === '1'; } catch (e) {}
     if (_creatingNewDomain && typeof showDomainLoading === 'function') {
-        showDomainLoading('Creating new domain…');
+        showDomainLoading('Creating new context…');
     }
 
     // Check URL for section parameter
@@ -149,7 +149,7 @@ async function loadDomainInfo() {
             }
         }
     } catch (error) {
-        console.error('Error loading domain info:', error);
+        console.error('Error loading context info:', error);
     }
 }
 
@@ -164,7 +164,7 @@ async function loadDefaultBaseUriDomain() {
             _defaultBaseUriDomain = result.base_uri.trim();
         }
     } catch (error) {
-        console.log('Could not load default base URI domain:', error);
+        console.log('Could not load default base URI context:', error);
     }
 }
 
@@ -213,7 +213,7 @@ function applyBaseUriMode() {
         baseUriEl.readOnly = true;
         baseUriEl.style.backgroundColor = '#e9ecef';
         updateAutoBaseUri();
-        if (hintEl) hintEl.innerHTML = 'Auto-generated from <a href="/settings">Settings</a> default domain and domain name.';
+        if (hintEl) hintEl.innerHTML = 'Auto-generated from <a href="/settings">Settings</a> default Base URI and context name.';
     } else {
         baseUriEl.readOnly = false;
         baseUriEl.style.backgroundColor = '';
@@ -246,7 +246,7 @@ async function checkDomainNameAvailability(nameEl) {
                 hint.style.display = 'block';
                 nameEl.parentNode.appendChild(hint);
             }
-            hint.textContent = `A domain named "${data.folder}" already exists in the registry.`;
+            hint.textContent = `A context named "${data.folder}" already exists in the registry.`;
         } else {
             nameEl.classList.remove('is-invalid');
             if (hint) hint.remove();
@@ -315,7 +315,7 @@ async function saveDomainInfo() {
         };
     
     try {
-        showNotification('Saving domain info...', 'info', 1000);
+        showNotification('Saving context info...', 'info', 1000);
         
         const response = await fetch('/domain/info', {
             method: 'POST',
@@ -371,7 +371,7 @@ async function handleDomainFileUpload(input) {
     const file = input.files[0];
     if (!file) return;
     
-    if (typeof showDomainLoading === 'function') showDomainLoading('Loading domain...');
+    if (typeof showDomainLoading === 'function') showDomainLoading('Loading context...');
     try {
         const formData = new FormData();
         formData.append('file', file);
@@ -403,7 +403,7 @@ async function handleDomainFileUpload(input) {
 async function newDomain() {
     const confirmed = await showConfirmDialog({
         title: 'New Context',
-        message: 'Start a new domain? This will clear all current data.',
+        message: 'Start a new context? This will clear all current data.',
         confirmText: 'Start New',
         confirmClass: 'btn-warning',
         icon: 'file-earmark-plus'
@@ -419,7 +419,7 @@ async function newDomain() {
         const data = await response.json();
         
         if (data.success) {
-            showNotification('New domain started!', 'success');
+            showNotification('New context started!', 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             setTimeout(() => location.reload(), 1000);
         } else {

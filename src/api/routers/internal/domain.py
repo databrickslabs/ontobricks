@@ -43,7 +43,7 @@ from api.routers.internal._permissions import (
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/domain", tags=["Domain"])
+router = APIRouter(prefix="/domain", tags=["Context"])
 
 
 # ===========================================
@@ -130,7 +130,7 @@ async def check_domain_name(
     except Exception as exc:
         logger.exception("check_domain_name: registry lookup failed for '%s'", name)
         raise InfrastructureError(
-            "Could not verify domain name availability",
+            "Could not verify context name availability",
         ) from exc
 
 

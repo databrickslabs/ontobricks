@@ -569,40 +569,33 @@ class TwinBackgroundTasks:
             tm.fail_task(task_id, _error_text(exc))
 
     @staticmethod
-    def run_pattern_materialize_task(
+    def run_pattern_save_task(
         tm,
         task_id: str,
         domain,
         settings,
-        store,
         graph_name: str,
         *,
         pattern_id: str,
         label: str,
     ) -> None:
-        """Write one discovered pattern into the graph in a worker thread."""
+        """Snapshot one discovered pattern into its saved-pattern table."""
         try:
-            tm.start_task(task_id, "Materializing pattern...")
-            tm.update_progress(task_id, 10, "Writing pattern memberships")
-            result = _analytics()(domain).materialize_pattern(
-                store,
-                graph_name,
-                pattern_id,
-                label,
-                settings=settings,
-                on_progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),
+            tm.start_task(task_id, "Saving pattern...")
+            tm.update_progress(task_id, 10, "Copying pattern members")
+            result = _analytics()(domain).save_pattern(
+                graph_name, pattern_id, label, settings=settings
             )
             tm.complete_task(
                 task_id,
                 result=result,
                 message=(
                     f"Saved pattern '{result.get('label', label)}' "
-                    f"({result.get('size', 0):,} members, "
-                    f"{result.get('inserted', 0):,} triples)"
+                    f"({result.get('size', 0):,} members)"
                 ),
             )
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Pattern materialization task failed: %s", exc)
+            logger.exception("Pattern save task failed: %s", exc)
             tm.fail_task(task_id, _error_text(exc))
 
     @staticmethod

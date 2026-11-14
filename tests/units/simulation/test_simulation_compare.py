@@ -9,7 +9,7 @@ import pytest
 
 from back.core.errors import InfrastructureError
 from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
-from back.objects.simulation import CompareGraph, Simulation
+from back.objects.intelligence import CompareGraph, Simulation
 
 from tests.units.simulation.test_simulation_runner_api import (
     EX,
@@ -18,7 +18,7 @@ from tests.units.simulation.test_simulation_runner_api import (
     _Registry,
 )
 
-sim_mod = sys.modules["back.objects.simulation.Simulation"]
+sim_mod = sys.modules["back.objects.intelligence.Simulation"]
 
 pytestmark = pytest.mark.unit
 
@@ -172,7 +172,7 @@ class TestCompareToLive:
         store = _Store(live if live is not None else _live())
         _Sb.rows = _sandbox()
         _Sb.patch = {(EX + "a", EX + "score", "300")}
-        sandbox_mod = importlib.import_module("back.objects.simulation.Sandbox")
+        sandbox_mod = importlib.import_module("back.objects.intelligence.Sandbox")
         monkeypatch.setattr("back.core.graphdb.get_graphdb", lambda *a, **k: store)
         monkeypatch.setattr(sandbox_mod, "Sandbox", _Sb)
         seen = {}

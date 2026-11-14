@@ -69,7 +69,7 @@ TASK_TYPES: Dict[str, TaskTypeSpec] = {
         label="Knowledge Graph Build",
         task_tag="scheduled_build",
         steps=[
-            {"name": "prepare", "description": "Loading domain and generating SQL"},
+            {"name": "prepare", "description": "Loading context and generating SQL"},
             {"name": "view", "description": "Creating Triple-Store VIEW in Unity Catalog"},
             {"name": "graph", "description": "Populating the graph store"},
         ],
@@ -82,7 +82,7 @@ TASK_TYPES: Dict[str, TaskTypeSpec] = {
         label="Cohort Materialisation",
         task_tag="scheduled_cohort",
         steps=[
-            {"name": "prepare", "description": "Loading domain and rule"},
+            {"name": "prepare", "description": "Loading context and rule"},
             {"name": "engine", "description": "Running cohort engine"},
             {"name": "write", "description": "Writing cohort outputs"},
         ],
@@ -97,7 +97,7 @@ TASK_TYPES: Dict[str, TaskTypeSpec] = {
         label="Graph Analytics",
         task_tag="scheduled_analytics",
         steps=[
-            {"name": "prepare", "description": "Loading domain from registry"},
+            {"name": "prepare", "description": "Loading context from registry"},
             {"name": "job", "description": "Running the Databricks analytics job"},
         ],
         normalize_config=analytics.normalize_config,
@@ -111,7 +111,7 @@ TASK_TYPES: Dict[str, TaskTypeSpec] = {
         label="Inference",
         task_tag="scheduled_reasoning",
         steps=[
-            {"name": "prepare", "description": "Loading domain from registry"},
+            {"name": "prepare", "description": "Loading context from registry"},
             {"name": "infer", "description": "Running inference phases"},
             {"name": "write", "description": "Materialising inferred triples"},
         ],

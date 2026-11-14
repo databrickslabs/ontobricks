@@ -11,7 +11,7 @@ from back.core.errors import ValidationError
 from back.objects.digitaltwin.constants import RDF_TYPE
 from back.core.graphdb.lakebase import _companion_ddl
 from back.core.graphdb.lakebase.SimulationStore import SimulationStore
-from back.objects.simulation import (
+from back.objects.intelligence import (
     Diff,
     Patch,
     Reasoning,
@@ -19,7 +19,7 @@ from back.objects.simulation import (
     Scope,
     Spec,
 )
-from back.objects.simulation.overlay import overlay_relation
+from back.objects.intelligence.overlay import overlay_relation
 
 pytestmark = pytest.mark.unit
 
@@ -236,7 +236,7 @@ class TestSimulationStoreGuard:
 
 class TestBeforePicture:
     def test_persist_before_clones_when_store_supports_it(self):
-        from back.objects.simulation.Sandbox import _CompanionMixin
+        from back.objects.intelligence.Sandbox import _CompanionMixin
 
         class Store:
             def __init__(self):
@@ -258,7 +258,7 @@ class TestBeforePicture:
         assert box.store.cloned == ("g__sim_s1", "g__smb_s1")
 
     def test_has_before_picture_uses_table_exists(self):
-        from back.objects.simulation.Sandbox import _CompanionMixin
+        from back.objects.intelligence.Sandbox import _CompanionMixin
 
         class Store:
             def table_exists(self, name):

@@ -159,12 +159,12 @@
             });
             const data = await resp.json();
             if (!data.success) {
-                showNotification('Error: ' + (data.message || 'Failed to load domain'), 'error');
+                showNotification('Error: ' + (data.message || 'Failed to load context'), 'error');
                 return;
             }
             window.location.href = '/domain/?section=review';
         } catch (err) {
-            showNotification('Error loading domain: ' + err.message, 'error');
+            showNotification('Error loading context: ' + err.message, 'error');
         }
     }
 

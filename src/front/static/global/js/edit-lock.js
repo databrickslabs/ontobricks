@@ -147,7 +147,7 @@
             '<i class="bi bi-lock-fill me-1"></i>' +
             'This version is being edited by <strong>' +
             escapeHtml(holderLabel(data)) +
-            '</strong> — you have read-only access until they close the domain.';
+            '</strong> — you have read-only access until they close the context.';
         banner.appendChild(msg);
 
         var actions = document.createElement('span');

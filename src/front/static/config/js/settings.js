@@ -2884,7 +2884,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '</div>';
                 html += '<div id="' + collapseId + '" class="collapse lk-domain-body">';
                 html += '<p class="small text-muted px-3 pt-2 mb-0">Analytics tables with no matching '
-                    + 'triple-store objects — left over from a renamed or deleted domain version.</p>';
+                    + 'triple-store objects — left over from a renamed or deleted context version.</p>';
                 html += analyticsBlock(grp.items || [], true);
                 html += '</div></div>';
             });
@@ -3720,7 +3720,7 @@ document.addEventListener('DOMContentLoaded', function () {
             : '');
 
         const bodyContent = 'Drop all <strong>' + count + ' object' + (count !== 1 ? 's' : '')
-            + '</strong> for domain <code>' + escapeHtmlSettings(domainKey) + '</code>?'
+            + '</strong> for context <code>' + escapeHtmlSettings(domainKey) + '</code>?'
             + '<ul class="mt-2 mb-0 ps-3">' + listHtml + '</ul>';
 
         const modalEl  = document.getElementById('lkDropConfirmModal');
@@ -3728,7 +3728,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const confirmBtn = document.getElementById('lkDropConfirmBtn');
 
         if (!modalEl || !bodyEl || !confirmBtn) {
-            if (window.confirm('Drop all ' + count + ' objects for domain ' + domainKey + '?')) {
+            if (window.confirm('Drop all ' + count + ' objects for context ' + domainKey + '?')) {
                 _execDropAll(items, schema, database, branchPath, ucItems);
             }
             return;
@@ -3805,7 +3805,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     + '</ul></div>';
             }
         } else {
-            showNotification('All domain objects dropped', 'success');
+            showNotification('All context objects dropped', 'success');
         }
         _showDropSpinner(result, 'Reloading objects…');
         await loadLakebaseObjects();
@@ -4094,7 +4094,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '</div>';
                 html += '<div id="' + collapseId + '" class="collapse lk-domain-body">';
                 html += '<p class="small text-muted px-3 pt-2 mb-0">Analytics tables with no matching '
-                    + 'triple-store objects — left over from a renamed or deleted domain version.</p>';
+                    + 'triple-store objects — left over from a renamed or deleted context version.</p>';
                 html += _lkAnalyticsBlock(grp.items || [], location, true);
                 html += '</div></div>';
             });

@@ -868,7 +868,7 @@ function showNewDomainDialog() {
                             <div class="mb-3">
                                 <label for="${modalId}_desc" class="form-label fw-semibold">Description <span class="text-muted fw-normal">(optional)</span></label>
                                 <textarea class="form-control new-domain-field" id="${modalId}_desc" rows="2"
-                                          placeholder="Short description of this domain…" maxlength="256"></textarea>
+                                          placeholder="Short description of this context…" maxlength="256"></textarea>
                             </div>
                             <div class="alert alert-light border small py-2 mb-3">
                                 <i class="bi bi-hdd-network me-1"></i>

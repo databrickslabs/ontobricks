@@ -118,7 +118,7 @@ def test_js_renders_server_capabilities_and_new_endpoints():
     assert "/domain/set-version-status" in js
     assert "/domain/versions/" in js
     assert "deletes_domain" in js
-    assert "Delete last version and domain" in js
+    assert "Delete last version and context" in js
     assert "STATUS_MAP" in js
     assert "is_latest" not in js
     assert "status === 'DRAFT'" not in js
@@ -375,7 +375,7 @@ def test_registry_uses_server_delete_capability():
     assert "v.can_delete" in js
     assert "v.delete_block_reason" in js
     assert "deletesDomain" in js
-    assert "Delete last version and domain" in js
+    assert "Delete last version and context" in js
     delete_section = js[
         js.index("function createRegistryVersionDeleteControl") :
         js.index("document.addEventListener")
@@ -490,7 +490,7 @@ def test_registry_domain_delete_asks_github_when_mirror_enabled():
             await context.deleteRegistryDomain('acme');
 
             assert.equal(confirmation.title, 'Delete Context');
-            assert.equal(confirmation.checkboxLabel, 'Also delete this domain from GitHub');
+            assert.equal(confirmation.checkboxLabel, 'Also delete this context from GitHub');
             assert.equal(request.url, '/settings/registry/domains/acme?delete_github=1');
             assert.equal(request.options.method, 'DELETE');
         })().catch((error) => {
@@ -551,8 +551,8 @@ def test_last_version_delete_asks_github_when_mirror_enabled():
 
             await context.deleteVersionFromList('acme', '1', null, true);
 
-            assert.equal(confirmation.title, 'Delete last version and domain');
-            assert.equal(confirmation.checkboxLabel, 'Also delete this domain from GitHub');
+            assert.equal(confirmation.title, 'Delete last version and context');
+            assert.equal(confirmation.checkboxLabel, 'Also delete this context from GitHub');
             assert.equal(request.url, '/domain/versions/1?delete_github=1');
         })().catch((error) => {
             console.error(error);
@@ -586,7 +586,7 @@ def test_registry_last_version_delete_sends_github_query():
 
             await context.deleteRegistryVersion('acme', '1', () => {}, () => {}, true);
 
-            assert.equal(confirmation.checkboxLabel, 'Also delete this domain from GitHub');
+            assert.equal(confirmation.checkboxLabel, 'Also delete this context from GitHub');
             assert.equal(
                 request.url,
                 '/settings/registry/domains/acme/versions/1?delete_github=1'

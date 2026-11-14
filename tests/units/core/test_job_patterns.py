@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from back.core.errors import InfrastructureError
-from back.core.graph_analysis.JobPatterns import (
+from back.core.graph_analysis.pattern.JobPatterns import (
     MEMBERS_PAGE_MAX,
     TOP_PATTERNS_MAX,
     JobPatterns,

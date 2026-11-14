@@ -59,7 +59,7 @@ class GraphEngineNeo4jSettings:
         ]
         raise ValidationError(
             "Cannot delete or rename Neo4j connection(s) still referenced by "
-            "domains — re-point those domains first. " + "; ".join(parts)
+            "contexts — re-point those contexts first. " + "; ".join(parts)
         )
 
     @staticmethod

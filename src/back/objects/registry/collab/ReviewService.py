@@ -104,7 +104,7 @@ class ReviewService:
             ok, domains, msg = svc.list_domain_details_cached()
             if not ok:
                 raise InfrastructureError(
-                    "Failed to list registry domains", detail=msg
+                    "Failed to list registry contexts", detail=msg
                 )
 
             events_by_key = ReviewService._group_events(
@@ -294,7 +294,7 @@ class ReviewService:
         """
         _ = request  # identity is not needed; the list is the same for any member
         if not folder:
-            raise ValidationError("domain is required")
+            raise ValidationError("context is required")
         try:
             from back.core.helpers import get_databricks_host_and_token
 
@@ -313,7 +313,7 @@ class ReviewService:
         except Exception as exc:  # noqa: BLE001
             logger.exception("ReviewService.review_team failed")
             raise InfrastructureError(
-                "Failed to load domain access list", detail=str(exc)
+                "Failed to load context access list", detail=str(exc)
             ) from exc
 
         # Role lookup keyed by the stored principal string (mirrors the
@@ -439,7 +439,7 @@ class ReviewService:
         )
         if not is_member:
             raise AuthorizationError(
-                "You need a role on this domain to review it"
+                "You need a role on this context to review it"
             )
         if status != STATUS_IN_REVIEW:
             raise ConflictError(
@@ -600,7 +600,7 @@ class ReviewService:
     ) -> Tuple[RegistryService, Dict[str, Any]]:
         """Resolve the registry service + the version ``info`` blob."""
         if not folder or not version:
-            raise ValidationError("domain and version are required")
+            raise ValidationError("context and version are required")
         domain = get_domain(session_mgr)
         svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
@@ -678,7 +678,7 @@ class ReviewService:
             return max(1, int(svc.store.get_domain_quorum(folder)))
         except Exception as exc:  # noqa: BLE001
             raise InfrastructureError(
-                "Failed to read the domain review quorum", detail=str(exc)
+                "Failed to read the context review quorum", detail=str(exc)
             ) from exc
 
     @staticmethod

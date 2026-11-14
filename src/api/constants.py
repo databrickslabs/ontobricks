@@ -82,8 +82,8 @@ EXTERNAL_OPENAPI_TAGS: List[Dict[str, str]] = [
         "Authentication via request body or headers.",
     },
     {
-        "name": "Domain",
-        "description": "**Domain API** — Registry domain list and domain design artifacts "
+        "name": "Context",
+        "description": "**Context API** — Registry context list and context design artifacts "
         "(OWL ontology, R2RML, generated Spark SQL), including `graph_backend` "
         "configuration and `has_graph` availability metadata.",
     },
@@ -106,7 +106,7 @@ EXTERNAL_OPENAPI_TAGS: List[Dict[str, str]] = [
     },
     {
         "name": "GraphQL",
-        "description": "**GraphQL API** — List domains with a materialized graph, "
+        "description": "**GraphQL API** — List contexts with a materialized graph, "
         "open GraphiQL, execute queries, and retrieve SDL for the "
         "auto-generated ontology-backed schema.",
     },

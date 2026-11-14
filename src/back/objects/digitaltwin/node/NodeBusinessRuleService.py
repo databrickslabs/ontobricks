@@ -109,7 +109,7 @@ class NodeBusinessRuleService:
         sid = TwinGraphAccess.sandbox_id(simulation_id)
         store = get_graphdb(snap, settings, for_write=sid is None)
         if store is None:
-            raise InfrastructureError("Graph store is not available for this domain")
+            raise InfrastructureError("Graph store is not available for this context")
 
         svc, graph_target, after_write = NodeBusinessRuleService._reasoning_target(
             domain, settings, snap, store, entity_uri, sid
@@ -243,7 +243,7 @@ class NodeBusinessRuleService:
             return ReasoningService(snap, store), "live", None
 
         from back.core.helpers import effective_graph_name, effective_graph_query_table
-        from back.objects.simulation import (
+        from back.objects.intelligence import (
             Simulation,
             Reasoning,
             Sandbox,

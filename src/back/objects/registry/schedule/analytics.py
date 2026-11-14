@@ -36,7 +36,7 @@ def run(ctx: TaskContext) -> None:
     from back.core.graph_analysis import analytics_job_status
     from back.objects.digitaltwin import DigitalTwin
 
-    ctx.progress(5, "Loading domain from registry...")
+    ctx.progress(5, "Loading context from registry...")
     domain = ctx.domain
 
     # Same preflight the interactive endpoint runs, so a misconfigured
@@ -45,7 +45,7 @@ def run(ctx: TaskContext) -> None:
     available, reason = analytics_job_status(domain, ctx.settings)
     if not available:
         raise ValidationError(
-            reason or "Graph analytics is not available for this domain"
+            reason or "Graph analytics is not available for this context"
         )
 
     DigitalTwin.run_metrics_task(

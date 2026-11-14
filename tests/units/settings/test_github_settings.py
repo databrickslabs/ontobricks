@@ -96,7 +96,7 @@ def test_obx_result_rejects_empty_repo(gcs):
         "back.objects.domain.settings.GitHubSettings.GitHubSyncService",
         return_value=sync,
     ):
-        with pytest.raises(ValidationError, match="No domains found"):
+        with pytest.raises(ValidationError, match="No contexts found"):
             GitHubSettings.github_obx_envelope_result(
                 "empty@x", MagicMock(), MagicMock()
             )

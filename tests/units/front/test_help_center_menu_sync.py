@@ -189,7 +189,7 @@ def test_ontology_entities_uses_list_nested_icon():
 
 
 def test_intelligence_pipeline_uses_menu_label():
-    assert _menus()["simulation"]["label"] == "Intelligence"
+    assert _menus()["intelligence"]["label"] == "Intelligence"
     html = _help_html()
     assert "<strong>Intelligence</strong>" in html
     assert "<strong>6. Intelligence</strong>" in html
@@ -199,7 +199,7 @@ def test_simulation_workflow_follows_menu_order():
     page = _help_html()
     labels = [
         item["label"]
-        for group in _menus()["simulation"]["groups"]
+        for group in _menus()["intelligence"]["groups"]
         for item in group["items"]
     ]
     hw6_start = page.index('id="hw6"')

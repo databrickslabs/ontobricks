@@ -8,11 +8,11 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FRONT = REPO_ROOT / "src/front"
-MODAL = FRONT / "templates/partials/simulation/_sim_fact_wizard.html"
-JS = FRONT / "static/simulation/js/simulation-fact-wizard.js"
-WORKBENCH = FRONT / "templates/partials/simulation/_sim_workbench.html"
-PAGE = FRONT / "templates/simulation.html"
-WB_JS = FRONT / "static/simulation/js/simulation-workbench.js"
+MODAL = FRONT / "templates/partials/intelligence/_sim_fact_wizard.html"
+JS = FRONT / "static/intelligence/js/simulation-fact-wizard.js"
+WORKBENCH = FRONT / "templates/partials/intelligence/_sim_workbench.html"
+PAGE = FRONT / "templates/intelligence.html"
+WB_JS = FRONT / "static/intelligence/js/simulation-workbench.js"
 
 
 def _read(path: Path) -> str:
@@ -21,8 +21,8 @@ def _read(path: Path) -> str:
 
 def test_page_wires_wizard_partial_and_script():
     page = _read(PAGE)
-    assert 'partials/simulation/_sim_fact_wizard.html' in page
-    assert "simulation/js/simulation-fact-wizard.js" in page
+    assert 'partials/intelligence/_sim_fact_wizard.html' in page
+    assert "intelligence/js/simulation-fact-wizard.js" in page
 
 
 def test_workbench_exposes_wizard_and_per_field_lookup():

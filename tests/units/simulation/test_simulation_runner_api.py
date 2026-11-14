@@ -11,7 +11,7 @@ import pytest
 from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
-from back.objects.simulation import (
+from back.objects.intelligence import (
     Simulation,
     Diff,
     Runner,
@@ -19,8 +19,8 @@ from back.objects.simulation import (
     Spec,
 )
 
-runner_mod = sys.modules["back.objects.simulation.Runner"]
-sim_mod = sys.modules["back.objects.simulation.Simulation"]
+runner_mod = sys.modules["back.objects.intelligence.Runner"]
+sim_mod = sys.modules["back.objects.intelligence.Simulation"]
 
 pytestmark = pytest.mark.unit
 
@@ -341,7 +341,7 @@ class TestSimulationFacade:
 
         import importlib
 
-        sandbox_mod = importlib.import_module("back.objects.simulation.Sandbox")
+        sandbox_mod = importlib.import_module("back.objects.intelligence.Sandbox")
         monkeypatch.setattr(
             "back.core.graphdb.get_graphdb", lambda *a, **k: _Store()
         )
@@ -371,7 +371,7 @@ class TestSimulationFacade:
 
         import importlib
 
-        sandbox_mod = importlib.import_module("back.objects.simulation.Sandbox")
+        sandbox_mod = importlib.import_module("back.objects.intelligence.Sandbox")
         monkeypatch.setattr(
             "back.core.graphdb.get_graphdb", lambda *a, **k: object()
         )
@@ -400,7 +400,7 @@ class TestSimulationFacade:
 
         import importlib
 
-        sandbox_mod = importlib.import_module("back.objects.simulation.Sandbox")
+        sandbox_mod = importlib.import_module("back.objects.intelligence.Sandbox")
         monkeypatch.setattr(
             "back.core.graphdb.get_graphdb", lambda *a, **k: object()
         )
@@ -1237,4 +1237,4 @@ class TestSimulationApi:
         from front.routes import all_frontend_routers
 
         assert self.api.router in all_internal_routers
-        assert any(r.prefix == "/simulation" for r in all_frontend_routers)
+        assert any(r.prefix == "/intelligence" for r in all_frontend_routers)

@@ -99,14 +99,14 @@
         $('entityImportBody').classList.add('d-none');
         $('entityImportSearch').value = '';
         const select = $('entityImportDomain');
-        select.innerHTML = '<option value="">Select a domain…</option>';
+        select.innerHTML = '<option value="">Select a context…</option>';
         render();
         bootstrap.Modal.getOrCreateInstance($('entityImportModal')).show();
         try {
             const body = await getJson('/ontology/bridges/domains');
             const domains = body.domains || [];
             if (!domains.length) {
-                showError('No other domain in the registry.');
+                showError('No other context in the registry.');
                 return;
             }
             domains.forEach(d => select.add(new Option(d.name, d.name)));

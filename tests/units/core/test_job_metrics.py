@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 import pytest
 
 from back.core.errors import InfrastructureError, ValidationError
-from back.core.graph_analysis.JobMetrics import (
+from back.core.graph_analysis.metrics.JobMetrics import (
     APPROXIMATE_METRICS,
     UNAVAILABLE_METRICS,
     JobMetrics,

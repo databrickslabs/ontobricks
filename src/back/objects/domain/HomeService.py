@@ -345,7 +345,7 @@ class HomeService:
                 for p in props_without_domain
             )
             ontology_warnings.append(
-                f"{len(props_without_domain)} relationship(s) without domain: {names}"
+                f"{len(props_without_domain)} relationship(s) without context: {names}"
             )
 
         dtwin = HomeService._compute_dtwin_indicator(domain, ts_status, dt_exist)

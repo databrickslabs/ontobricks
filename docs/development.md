@@ -772,7 +772,7 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Mapping `/mapping` | Sidebar with section links (General, Import, Studio, Manual, Auto-Map, Diagnostics, Spark SQL); General tabs (Informations, R2RML); Studio **Export** (R2RML), mapping-core.js |
 | Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Documents, My Tasks, Discussions, Cockpit, Audit trail), section divs |
 | Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Explorer, Query, Chat), Build, Advanced (Data Quality, Inference, Analytics); Sigma.js script |
-| Simulation `/simulation/` | Sidebar: Cohorts, Run, Scenarios, Compare, Runs; scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
+| Intelligence `/intelligence/` | Sidebar: Community, Cohorts, Patterns, Scenarios, Compare, Runs; scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
 | About `/about` | Page renders, contains "OntoBricks" |
 
 **Run:**
@@ -1428,7 +1428,7 @@ back/core/
 ├── github/           <- GitHub Git Data API client (atomic commits, no git clone)
 ├── w3c/              <- W3C standard parsers/generators (OWL, RDFS, R2RML, SPARQL, SHACL)
 ├── industry/         <- Standard industry ontology importers (CDISC, FIBO, IOF)
-├── graph_analysis/   <- Graph metrics and community jobs, cohorts
+├── graph_analysis/   <- Graph analysis by type: community/, cohort/, pattern/, metrics/ (+ shared job plumbing)
 ├── reasoning/        <- OWL 2 RL, IF-THEN (Simple), SPARQL rules (Complex)
 ├── sqlwizard/        <- LLM-assisted SQL generation
 ├── mcp_tools.py      <- Catalog of the configurable MCP surface + policy coercion
@@ -1860,7 +1860,7 @@ All logging goes through `back/core/logging/LogManager`.
 | REST v1 | `src/api/routers/v1.py`, `src/api/service.py` |
 | Domain list & artifacts | `src/api/routers/domains.py` |
 | Knowledge Graph REST | `src/api/routers/digitaltwin.py` |
-| Graph analysis / clustering | `src/back/core/graph_analysis/` (`CommunityDetector`, models) |
+| Graph analysis / clustering | `src/back/core/graph_analysis/community/` (`JobCommunities`, `CommunityMaterializer`) |
 | GraphQL | `src/back/fastapi/graphql_routes.py` |
 | Agents | `src/agents/**` |
 | MCP | `src/mcp-server/server/app.py`, `src/mcp-server/server/main.py` |

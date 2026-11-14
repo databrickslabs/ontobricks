@@ -14,16 +14,16 @@
     <!-- ========== Domain ========== -->
     <div class="mb-4 pb-4 border-bottom">
         <h5 class="fw-semibold mb-2 d-flex align-items-center gap-2">
-            <i class="bi bi-box text-primary"></i> Domain
+            <i class="bi bi-box text-primary"></i> Context
         </h5>
         <p class="text-muted small mb-2">
-            List registry domains, discover versions, inspect design readiness (ontology, data assets, mappings),
+            List registry contexts, discover versions, inspect design readiness (ontology, data assets, mappings),
             and export artifacts (OWL, R2RML, generated Spark SQL).
             Optional registry overrides: <code>registry_catalog</code>, <code>registry_schema</code>, <code>registry_volume</code>.
         </p>
         <p class="small mb-3">
             <a href="/api/docs#/Project" target="_blank" class="text-decoration-none">
-                <i class="bi bi-journal-code me-1"></i>OpenAPI: Domain
+                <i class="bi bi-journal-code me-1"></i>OpenAPI: Context
             </a>
         </p>
 
@@ -35,9 +35,9 @@
             </button>
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2 mb-0">
-            <span class="fw-semibold small api-field-label api-no-wrap">Domain</span>
+            <span class="fw-semibold small api-field-label api-no-wrap">Context</span>
             <select class="form-select form-select-sm api-domain-select" id="apiDomainName">
-                <option value="">Loading domains...</option>
+                <option value="">Loading contexts...</option>
             </select>
             <span class="fw-semibold small api-field-label api-no-wrap">Version</span>
             <select class="form-select form-select-sm api-version-select" id="apiDomainVersion">
@@ -52,7 +52,7 @@
              class="small text-muted mt-2"
              role="status"
              aria-live="polite">
-            Select an API-exposed domain to inspect its backend availability.
+            Select an API-exposed context to inspect its backend availability.
         </div>
     </div>
 
@@ -64,16 +64,16 @@
                  data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
                 <code class="flex-grow-1 api-endpoint-path">/api/v1/domains</code>
-                <small class="text-muted">List registry domains</small>
+                <small class="text-muted">List registry contexts</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Returns PUBLISHED, API-exposed domains with their configured
+                    Returns PUBLISHED, API-exposed contexts with their configured
                     <code>graph_backend</code>, graph availability
-                    (<code>has_graph</code>), and per-domain
+                    (<code>has_graph</code>), and per-context
                     <code>mcp_policy</code>. A backend of <code>none</code>
-                    denotes an ontology-only domain; <code>has_graph</code>
+                    denotes an ontology-only context; <code>has_graph</code>
                     becomes true after a successful graph build.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
@@ -112,12 +112,12 @@
                  data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
                 <code class="flex-grow-1 api-endpoint-path">/api/v1/domain/versions</code>
-                <small class="text-muted">List domain versions</small>
+                <small class="text-muted">List context versions</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Returns all versions available for a given domain in the registry,
+                    Returns all versions available for a given context in the registry,
                     sorted from latest to oldest. Pass any version as
                     <code>domain_version</code> — DRAFT, IN-REVIEW, and PUBLISHED
                     are all served.
@@ -126,7 +126,7 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td><em>required</em></td><td>Domain name in the registry</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td><em>required</em></td><td>Context name in the registry</td></tr>
                     </tbody>
                 </table>
 
@@ -159,15 +159,15 @@
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Returns the readiness status of the domain's <strong>ontology</strong>,
+                    Returns the readiness status of the context's <strong>ontology</strong>,
                     <strong>data assets</strong>, and <strong>mapping</strong> (entity, relationship,
-                    and attribute mapping progress). Indicates whether the domain is ready to build.
+                    and attribute mapping progress). Indicates whether the context is ready to build.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -220,14 +220,14 @@
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Returns the domain's ontology serialized as OWL in Turtle format.
+                    Returns the context's ontology serialized as OWL in Turtle format.
                     Includes the full OWL document, base URI, and class/property counts.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -259,7 +259,7 @@
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Returns the domain's R2RML mapping document in Turtle format.
+                    Returns the context's R2RML mapping document in Turtle format.
                     R2RML defines how relational tables map to RDF triples &mdash;
                     each TriplesMap specifies a source table, subject template, and predicate-object mappings.
                 </p>
@@ -267,7 +267,7 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -299,7 +299,7 @@
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Returns the Spark SQL query generated from the domain's R2RML mappings.
+                    Returns the Spark SQL query generated from the context's R2RML mappings.
                     This is the SQL that produces <code>(subject, predicate, object)</code> triples
                     when executed against the source tables. The dialect adapts to the triple store backend
                     (Spark SQL for Delta).
@@ -308,7 +308,7 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -353,7 +353,7 @@
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Returns the registry location (catalog, schema, volume) for the domain.
+                    Returns the registry location (catalog, schema, volume) for the context.
                     Reads from the current session if available, otherwise from environment variables.
                     Used by external clients (e.g. MCP server) for registry discovery.
                 </p>
@@ -392,7 +392,7 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -431,7 +431,7 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                         <tr><td><code>include_inferred</code></td><td>boolean</td><td>true</td><td>Live inferred graph vs asserted triples</td></tr>
                         <tr><td><code>simulation_id</code></td><td>string</td><td>&mdash;</td><td>Ready scenario sandbox (Explorer overlay)</td></tr>
@@ -481,7 +481,7 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -580,7 +580,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                         <tr><td><code>entity_type</code></td><td>string</td><td>&mdash;</td><td>Filter by <code>rdf:type</code> local name (exact, case-insensitive)</td></tr>
                         <tr><td><code>search</code></td><td>string</td><td>&mdash;</td><td>Text search on entity labels (<code>rdfs:label</code>) or URI local name</td></tr>
@@ -668,7 +668,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                         <tr><td><code>subject</code></td><td>string</td><td>&mdash;</td><td>Filter by subject (partial match)</td></tr>
                         <tr><td><code>predicate</code></td><td>string</td><td>&mdash;</td><td>Filter by predicate URI (exact match)</td></tr>
@@ -752,7 +752,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -848,7 +848,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -950,7 +950,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -1002,7 +1002,7 @@ Content-Type: application/json
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    List scenarios for the selected domain. Rows with
+                    List scenarios for the selected context. Rows with
                     <code>status: ready</code> can be passed as
                     <code>simulation_id</code> on graph queries.
                 </p>
@@ -1010,7 +1010,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -1289,7 +1289,7 @@ Content-Type: application/json
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Returns every saved cohort rule on the active domain. Each entry includes the
+                    Returns every saved cohort rule on the active context. Each entry includes the
                     full rule payload (links, compatibility, output config) so callers can re-run,
                     preview, or materialise without a second round-trip.
                 </p>
@@ -1297,7 +1297,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -1355,7 +1355,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -1398,7 +1398,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -1476,7 +1476,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Context name in the registry (uses current session if omitted)</td></tr>
                         <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
@@ -1517,8 +1517,8 @@ Content-Type: application/json
     <div class="card border-0 ob-api-note mt-4">
         <div class="card-body py-2 px-3 small api-info-note-text">
             <i class="bi bi-info-circle me-1"></i>
-            All endpoints accept a <code>domain_name</code> query parameter to select a domain
-            from the registry. If omitted, the current session's domain is used. When called from
+            All endpoints accept a <code>domain_name</code> query parameter to select a context
+            from the registry. If omitted, the current session's context is used. When called from
             external clients, ensure the Databricks workspace URL and token are configured.
         </div>
     </div>
@@ -1529,7 +1529,7 @@ Content-Type: application/json
     <div class="section-header mb-4 mt-5">
         <h4 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>GraphQL API</h4>
         <p class="text-muted mb-0 small">
-            Auto-generated typed GraphQL schema from the domain's ontology.
+            Auto-generated typed GraphQL schema from the context's ontology.
             External base path: <code>/api/v1/graphql</code> (same endpoints also exist at <code>/graphql</code> for the in-app UI).
             <a href="/api/docs#/GraphQL" target="_blank" class="ms-2">
                 <i class="bi bi-box-arrow-up-right"></i> OpenAPI (GraphQL)
@@ -1545,12 +1545,12 @@ Content-Type: application/json
                  data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
                 <code class="flex-grow-1 api-endpoint-path">/api/v1/graphql</code>
-                <small class="text-muted">List materialized graph domains</small>
+                <small class="text-muted">List materialized graph contexts</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Returns PUBLISHED, API-exposed domains with a populated
+                    Returns PUBLISHED, API-exposed contexts with a populated
                     ontology and materialized graph &mdash; the prerequisites
                     for auto-generating and executing a GraphQL schema.
                 </p>
@@ -1582,7 +1582,7 @@ Content-Type: application/json
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Opens the interactive GraphiQL IDE for the selected domain.
+                    Opens the interactive GraphiQL IDE for the selected context.
                     The schema is auto-generated from the ontology &mdash; every entity becomes a
                     GraphQL type, every data property a field, and every object property a relationship.
                 </p>
@@ -1590,7 +1590,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>Domain name in the registry</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>Context name in the registry</td></tr>
                     </tbody>
                 </table>
 
@@ -1611,7 +1611,7 @@ Content-Type: application/json
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Execute a GraphQL query against the domain's graph viewer.
+                    Execute a GraphQL query against the context's graph viewer.
                     The schema is derived from the ontology; clients request exactly the fields
                     they need, and relationships are resolved as nested objects.
                 </p>
@@ -1619,7 +1619,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>Domain name in the registry</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>Context name in the registry</td></tr>
                     </tbody>
                 </table>
 
@@ -1693,14 +1693,14 @@ Content-Type: application/json
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns the auto-generated GraphQL schema in SDL (Schema Definition Language) format.
-                    The schema reflects the domain's ontology: each entity is a type, each data property
+                    The schema reflects the context's ontology: each entity is a type, each data property
                     a field, and each object property a typed relationship.
                 </p>
                 <h6 class="small fw-semibold mb-1">Path Parameters</h6>
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>domain_name</code></td><td>string</td><td>Domain name in the registry</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>Context name in the registry</td></tr>
                     </tbody>
                 </table>
 
@@ -1721,9 +1721,9 @@ Content-Type: application/json
     <div class="card border-0 ob-api-note mt-4">
         <div class="card-body py-2 px-3 small api-info-note-text">
             <i class="bi bi-info-circle me-1"></i>
-            The GraphQL schema is <strong>auto-generated</strong> from the domain's ontology.
+            The GraphQL schema is <strong>auto-generated</strong> from the context's ontology.
             Change the ontology and the schema updates automatically &mdash; no hand-written types needed.
-            Only PUBLISHED, API-exposed domains with a populated ontology and
+            Only PUBLISHED, API-exposed contexts with a populated ontology and
             materialized graph expose a GraphQL endpoint.
         </div>
     </div>

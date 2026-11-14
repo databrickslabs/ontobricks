@@ -285,17 +285,17 @@ async function _switchDomainForBridge(domainName, focusUri) {
             } else if (typeof fetchCachedInvalidate === 'function') {
                 fetchCachedInvalidate('/navbar/state');
             }
-            console.log('[Bridge] Switched to domain:', domainName);
+            console.log('[Bridge] Switched to context:', domainName);
             var target = '/dtwin/?section=sigmagraph';
             if (focusUri) target += '&focus=' + encodeURIComponent(focusUri);
             window.location.replace(target);
         } else {
             if (typeof hideDomainLoading === 'function') hideDomainLoading();
-            console.warn('[Bridge] Failed to switch domain:', data.message || data);
+            console.warn('[Bridge] Failed to switch context:', data.message || data);
         }
     } catch (err) {
         if (typeof hideDomainLoading === 'function') hideDomainLoading();
-        console.error('[Bridge] Error switching domain:', err);
+        console.error('[Bridge] Error switching context:', err);
     }
 }
 

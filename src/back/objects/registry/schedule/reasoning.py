@@ -73,7 +73,7 @@ def run(ctx: TaskContext) -> None:
 
     cfg = normalize_config(ctx.config)
 
-    ctx.progress(5, "Loading domain from registry...")
+    ctx.progress(5, "Loading context from registry...")
     snapshot = ctx.snapshot
 
     options: Dict[str, Any] = dict(cfg["phases"])

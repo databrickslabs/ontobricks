@@ -96,7 +96,7 @@ class TwinAnalytics:
         source_table, reason = resolve_analytics_source(self._domain, settings)
         if not source_table:
             raise InfrastructureError(
-                "The community detection job cannot read this domain", detail=reason
+                "The community detection job cannot read this context", detail=reason
             )
         with analytics_snapshot(self._domain, settings, source_table) as scan_table:
             communities = self.build_job_communities(
@@ -191,6 +191,19 @@ class TwinAnalytics:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _pattern_warehouse(domain: Any, settings: Any, what: str) -> Any:
+        """Return the Build (Delta) builder used for pattern reads and writes."""
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        if not builder.has_client():
+            raise InfrastructureError(
+                f"{what} cannot be read",
+                detail="No Build SQL Warehouse client could be created",
+            )
+        return builder
+
+    @staticmethod
     def build_job_patterns(
         domain: Any, settings: Any, graph_name: str, source_table: str = ""
     ) -> Any:
@@ -200,15 +213,11 @@ class TwinAnalytics:
             LakeflowRunner,
             pattern_output_table,
         )
-        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.helpers import resolve_pattern_job_name
 
-        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
-        if not builder.has_client():
-            raise InfrastructureError(
-                "The pattern detection output cannot be read",
-                detail="No Build SQL Warehouse client could be created",
-            )
+        builder = TwinAnalytics._pattern_warehouse(
+            domain, settings, "The pattern detection output"
+        )
         runner = LakeflowRunner(
             resolve_pattern_job_name(settings),
             timeout_s=int(getattr(settings, "analytics_job_timeout_s", 3600) or 3600),
@@ -223,6 +232,26 @@ class TwinAnalytics:
                 domain,
                 graph_name,
             ),
+        )
+
+    @staticmethod
+    def build_saved_patterns(domain: Any, settings: Any, graph_name: str) -> Any:
+        """Wire a :class:`SavedPatternStore` on the Build warehouse."""
+        from back.core.graph_analysis import (
+            SavedPatternStore,
+            pattern_output_table,
+            saved_pattern_table,
+        )
+
+        builder = TwinAnalytics._pattern_warehouse(
+            domain, settings, "The saved patterns"
+        )
+        schema = TwinAnalytics.analytics_output_schema(domain, settings)
+        return SavedPatternStore(
+            pattern_output_table(schema, domain, graph_name),
+            saved_pattern_table(schema, domain, graph_name),
+            query=builder.execute_query,
+            execute=builder.execute_statement,
         )
 
     def detect_patterns(
@@ -246,7 +275,7 @@ class TwinAnalytics:
         source_table, reason = resolve_analytics_source(self._domain, settings)
         if not source_table:
             raise InfrastructureError(
-                "The pattern detection job cannot read this domain", detail=reason
+                "The pattern detection job cannot read this context", detail=reason
             )
         with analytics_snapshot(self._domain, settings, source_table) as scan_table:
             patterns = self.build_job_patterns(
@@ -290,51 +319,46 @@ class TwinAnalytics:
             pattern_id, with_diagram=True
         )
 
-    def _pattern_materializer(self, store: Any, graph_name: str):
-        from back.core.graph_analysis import PatternMaterializer
-
-        return PatternMaterializer(store, graph_name, self._base_uri())
-
-    def materialize_pattern(
+    def save_pattern(
         self,
-        store: Any,
         graph_name: str,
         pattern_id: str,
         label: str,
         settings: Any = None,
-        on_progress: Optional[Any] = None,
     ) -> Dict[str, Any]:
         from back.core.errors import ValidationError
 
         patterns = self.build_job_patterns(self._domain, settings, graph_name)
         if not patterns.summary():
-            raise ValidationError(
-                "No pattern detection run to materialize. Run Detect first."
-            )
-        return self._pattern_materializer(store, graph_name).materialize(
-            patterns, pattern_id, label, on_progress=on_progress
+            raise ValidationError("No pattern detection run to save. Run Detect first.")
+        return self.build_saved_patterns(self._domain, settings, graph_name).save(
+            pattern_id, label
         )
 
-    def list_saved_patterns(self, store: Any, graph_name: str) -> Dict[str, Any]:
-        items = self._pattern_materializer(store, graph_name).list_saved()
+    def list_saved_patterns(
+        self, graph_name: str, settings: Any = None
+    ) -> Dict[str, Any]:
+        items = self.build_saved_patterns(self._domain, settings, graph_name).list_saved()
         return {"patterns": items, "count": len(items)}
 
     def saved_pattern_members(
         self,
-        store: Any,
         graph_name: str,
         saved_id: str,
         offset: int = 0,
         limit: int = 100,
+        settings: Any = None,
     ) -> Dict[str, Any]:
-        return self._pattern_materializer(store, graph_name).members(
+        return self.build_saved_patterns(self._domain, settings, graph_name).members(
             saved_id, offset, limit
         )
 
     def delete_saved_pattern(
-        self, store: Any, graph_name: str, saved_id: str
+        self, graph_name: str, saved_id: str, settings: Any = None
     ) -> Dict[str, Any]:
-        deleted = self._pattern_materializer(store, graph_name).delete(saved_id)
+        deleted = self.build_saved_patterns(self._domain, settings, graph_name).delete(
+            saved_id
+        )
         return {"deleted": deleted, "saved_id": saved_id}
 
     def compute_graph_metrics(
@@ -375,7 +399,7 @@ class TwinAnalytics:
         source_table, reason = resolve_analytics_source(self._domain, settings)
         if not source_table:
             raise InfrastructureError(
-                "The graph analytics job cannot read this domain", detail=reason
+                "The graph analytics job cannot read this context", detail=reason
             )
 
         request = MetricsRequest(

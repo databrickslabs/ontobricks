@@ -868,7 +868,7 @@ def _check_lakebase_registry_initialized(settings: Settings) -> Tuple[str, str]:
             _ERROR,
             f"The registries table exists in schema '{store.schema}' but has no row. "
             "Run Settings → Registry → Initialize to create the registry entry. "
-            "Without this, the app cannot resolve domain paths or load global config.",
+            "Without this, the app cannot resolve context paths or load global config.",
         )
     if reason == "no_registries_table":
         return (
@@ -1047,7 +1047,7 @@ def _check_graphdb_tables(settings: Settings) -> Tuple[str, str]:
                 _WARNING,
                 f"Graph schema '{schema}' is empty — no tables or views yet. "
                 "Run Knowledge Graph → Build to populate it (one table + one VIEW per "
-                "domain version, e.g. <domain>_<version> + <domain>_<version>_data).",
+                "context version, e.g. <domain>_<version> + <domain>_<version>_data).",
             )
         return (
             _OK,
@@ -1302,7 +1302,7 @@ def _check_delta_objects_exist(settings: Settings) -> Tuple[str, str]:
                 _WARNING,
                 f"No objects found in {cfg.catalog}.{cfg.schema}. "
                 "Run Knowledge Graph → Build to create the R2RML VIEW and _data Delta table "
-                "for each domain version.",
+                "for each context version.",
             )
         data_tables = [o for o in objects if isinstance(o, dict) and o.get("name", "").endswith("_data")]
         views = [o for o in objects if isinstance(o, dict) and o.get("table_type") == "VIEW"]

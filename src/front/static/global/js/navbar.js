@@ -7,7 +7,7 @@ function showDomainLoading(label) {
     const el = document.getElementById('domainLoadingOverlay');
     if (!el) return;
     const lbl = document.getElementById('domainLoadingLabel');
-    if (lbl) lbl.textContent = label || 'Loading domain...';
+    if (lbl) lbl.textContent = label || 'Loading context...';
     el.classList.remove('d-none');
 }
 
@@ -379,12 +379,12 @@ function applyDomainInfo(data) {
     const settingsReturnLink = document.getElementById('settingsDomainReturnLink');
     if (settingsReturnLink) {
         if (hasDomain) {
-            const label = `Back to domain for ${domainName}, opens domain navigation via the workspace map`;
+            const label = `Back to context for ${domainName}, opens context navigation via the workspace map`;
             settingsReturnLink.setAttribute('aria-label', label);
             settingsReturnLink.setAttribute('title', label);
         } else {
-            settingsReturnLink.setAttribute('aria-label', 'Back to domain');
-            settingsReturnLink.setAttribute('title', 'Back to domain');
+            settingsReturnLink.setAttribute('aria-label', 'Back to context');
+            settingsReturnLink.setAttribute('title', 'Back to context');
         }
     }
 
@@ -410,7 +410,7 @@ function applyDomainInfo(data) {
  */
 function updateMenusForGraphBackend(backend) {
     const graphless = backend === 'none';
-    const title = 'Not available for a No Backend (ontology-only) domain';
+    const title = 'Not available for a No Backend (ontology-only) context';
     document.querySelectorAll('.nav-requires-graph').forEach(link => {
         if (graphless) {
             link.classList.add('nav-disabled');
@@ -460,7 +460,7 @@ function updateMenusForDomainStatus(isSaved) {
             link.removeAttribute('title');
         } else {
             link.classList.add('nav-disabled');
-            link.setAttribute('title', 'Save domain to Unity Catalog first');
+            link.setAttribute('title', 'Save context to Unity Catalog first');
         }
     });
     
@@ -476,7 +476,7 @@ function updateMenusForDomainStatus(isSaved) {
             item.classList.add('disabled');
             item.style.pointerEvents = 'none';
             item.style.opacity = '0.5';
-            item.setAttribute('title', 'Save domain to Unity Catalog first');
+            item.setAttribute('title', 'Save context to Unity Catalog first');
         }
     });
     
@@ -488,7 +488,7 @@ function updateMenusForDomainStatus(isSaved) {
             link.removeAttribute('title');
         } else {
             link.classList.add('sidebar-disabled');
-            link.setAttribute('title', 'Save domain to Unity Catalog first');
+            link.setAttribute('title', 'Save context to Unity Catalog first');
         }
     });
     
@@ -502,7 +502,7 @@ function updateMenusForDomainStatus(isSaved) {
         } else {
             btn.disabled = true;
             btn.classList.add('disabled');
-            btn.setAttribute('title', 'Save domain to Unity Catalog first');
+            btn.setAttribute('title', 'Save context to Unity Catalog first');
         }
     });
     
@@ -660,8 +660,8 @@ async function domainNew() {
         const ok = await doDomainSave({ afterSave: '/domain/#information' });
         if (!ok) return;
     } catch (error) {
-        console.error('Error creating new domain:', error);
-        showNotification('Failed to create new domain: ' + error.message, 'error');
+        console.error('Error creating new context:', error);
+        showNotification('Failed to create new context: ' + error.message, 'error');
     }
 }
 
@@ -888,7 +888,7 @@ async function saveDomainInfoBeforeSave() {
 
         // Only save if we have something to save
         if (Object.keys(domainInfoPayload).length > 0) {
-            console.log('[Context] Auto-saving domain info before UC save:', domainInfoPayload);
+            console.log('[Context] Auto-saving context info before UC save:', domainInfoPayload);
             try {
                 const response = await fetch('/domain/info', {
                     method: 'POST',
@@ -905,7 +905,7 @@ async function saveDomainInfoBeforeSave() {
                 );
                 invalidateDomainCaches();
             } catch (e) {
-                console.warn('Could not auto-save domain info:', e);
+                console.warn('Could not auto-save context info:', e);
             }
         }
     }
@@ -938,12 +938,12 @@ async function doDomainSave(opts = {}) {
         if (_nameEl && _nameEl.classList.contains('is-invalid')) {
             const _hint = document.getElementById('domainNameDuplicateHint');
             const _msg = (_hint && _hint.textContent.trim())
-                || 'A domain with this name already exists in the registry. Please choose a different name.';
+                || 'A context with this name already exists in the registry. Please choose a different name.';
             showNotification(_msg, 'error');
             try { _nameEl.focus(); } catch (e) {}
             return false;
         }
-        showNotification('Saving domain to registry...', 'info', 5000);
+        showNotification('Saving context to registry...', 'info', 5000);
         const response = await fetch('/domain/save-to-uc', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -997,7 +997,7 @@ async function closeCurrentDomain(options = {}) {
     try {
         loaded = await hasLoadedDomain();
     } catch (error) {
-        showNotification('Could not determine whether a domain is open.', 'error');
+        showNotification('Could not determine whether a context is open.', 'error');
         return false;
     }
     if (!loaded) return true;
@@ -1024,7 +1024,7 @@ async function domainClose() {
  */
 async function closeDomainSession(options = {}) {
     const { navigate = true } = options;
-    showDomainLoading('Closing domain...');
+    showDomainLoading('Closing context...');
     try {
         const response = await fetch('/domain/close', {
             method: 'POST',
@@ -1033,7 +1033,7 @@ async function closeDomainSession(options = {}) {
         });
         const data = await response.json();
         if (!response.ok || data.success === false) {
-            throw new Error(data.message || 'Could not close domain');
+            throw new Error(data.message || 'Could not close context');
         }
         invalidateDomainCaches();
         if (navigate) {
@@ -1045,7 +1045,7 @@ async function closeDomainSession(options = {}) {
         return true;
     } catch (error) {
         hideDomainLoading();
-        showNotification('Failed to close domain: ' + error.message, 'error');
+        showNotification('Failed to close context: ' + error.message, 'error');
         return false;
     }
 }
@@ -1062,7 +1062,7 @@ function showCloseDomainDialog(options = {}) {
 
         const closeHint = allowSave
             ? 'Do you want to save your changes before closing?'
-            : 'This domain is open in read-only mode and cannot be saved from this session.';
+            : 'This context is open in read-only mode and cannot be saved from this session.';
         const saveAction = allowSave ? `<button type="button" class="btn btn-primary" id="closeSaveBtn">
                    <i class="bi bi-cloud-upload"></i> Save &amp; Close
                </button>`
@@ -1184,16 +1184,16 @@ async function domainSwitch() {
         const resp = await fetch('/domain/info', { credentials: 'same-origin' });
         info = await resp.json();
     } catch (e) {
-        showNotification('Could not read the current domain', 'error');
+        showNotification('Could not read the current context', 'error');
         return;
     }
 
     const domainSlug = (info && info.domain_folder) || '';
-    const domainName = (info && (info.name || (info.info && info.info.name))) || 'domain';
+    const domainName = (info && (info.name || (info.info && info.info.name))) || 'context';
     const currentVersion = (info && (info.info && info.info.version)) || (info && info.version) || '';
 
     if (!domainSlug) {
-        showNotification('Save the domain to the registry first before switching versions', 'warning');
+        showNotification('Save the context to the registry first before switching versions', 'warning');
         return;
     }
 
@@ -1477,7 +1477,7 @@ function showDomainLoadDialog() {
         const domainSlug = document.getElementById('loadDomainSelect').value;
         const version = document.getElementById('loadVersionSelect').value;
         if (!domainSlug || !version) {
-            showNotification('Please select a domain and version', 'warning');
+            showNotification('Please select a context and version', 'warning');
             return;
         }
         modal.hide();
@@ -1498,11 +1498,11 @@ async function loadDomainsFromRegistry() {
         }
         infoDiv.innerHTML = '<div class="alert alert-success small mb-0"><i class="bi bi-check-circle-fill text-success me-1"></i> Registry</div>';
 
-        domainSelect.innerHTML = '<option value="">Loading domains...</option>';
+        domainSelect.innerHTML = '<option value="">Loading contexts...</option>';
         const domainListResp = await fetch('/domain/list-projects', { credentials: 'same-origin' });
         const domainListData = await domainListResp.json();
 
-        domainSelect.innerHTML = '<option value="">Select domain...</option>';
+        domainSelect.innerHTML = '<option value="">Select context...</option>';
         domainSelect.disabled = false;
 
         const _domainList = domainListData.domains || domainListData.projects || [];
@@ -1511,7 +1511,7 @@ async function loadDomainsFromRegistry() {
                 domainSelect.innerHTML += `<option value="${d}">${d}</option>`;
             });
         } else {
-            domainSelect.innerHTML = '<option value="">No domains found</option>';
+            domainSelect.innerHTML = '<option value="">No contexts found</option>';
         }
 
         domainSelect.onchange = () => loadVersionsForDomainFromRegistry(domainSelect.value);
@@ -1526,7 +1526,7 @@ async function loadVersionsForDomainFromRegistry(domainName) {
 
     if (!domainName) {
         versionSelect.disabled = true;
-        versionSelect.innerHTML = '<option value="">Select domain first</option>';
+        versionSelect.innerHTML = '<option value="">Select context first</option>';
         return;
     }
 
@@ -1683,8 +1683,8 @@ async function importDomainWithVersion(importedDomain, version) {
         handleImportResponse(data);
     } catch (error) {
         hideDomainLoading();
-        console.error('Error importing domain:', error);
-        showNotification('Failed to import domain: ' + error.message, 'error');
+        console.error('Error importing context:', error);
+        showNotification('Failed to import context: ' + error.message, 'error');
     }
 }
 
@@ -1692,7 +1692,7 @@ async function importDomainWithVersion(importedDomain, version) {
  * Import domain export directly (legacy format)
  */
 async function importDomainDirect(importedDomain) {
-    showDomainLoading('Loading domain...');
+    showDomainLoading('Loading context...');
     try {
         const response = await fetch('/domain/import', {
             method: 'POST',
@@ -1705,8 +1705,8 @@ async function importDomainDirect(importedDomain) {
         handleImportResponse(data);
     } catch (error) {
         hideDomainLoading();
-        console.error('Error importing domain:', error);
-        showNotification('Failed to import domain: ' + error.message, 'error');
+        console.error('Error importing context:', error);
+        showNotification('Failed to import context: ' + error.message, 'error');
     }
 }
 
@@ -1733,7 +1733,7 @@ function handleImportResponse(data) {
         setTimeout(() => navigateToDomainGeneral(), 1500);
     } else {
         hideDomainLoading();
-        showNotification('Error loading domain: ' + data.message, 'error');
+        showNotification('Error loading context: ' + data.message, 'error');
     }
 }
 

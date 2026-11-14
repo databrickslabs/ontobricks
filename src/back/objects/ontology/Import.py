@@ -28,10 +28,10 @@ IndustryKind = Literal["fibo", "cdisc", "iof", "fhir"]
 logger = get_logger(__name__)
 
 _INDUSTRY_EMPTY_MESSAGE: Dict[IndustryKind, str] = {
-    "fibo": "No FIBO domains selected.",
-    "cdisc": "No CDISC domains selected.",
-    "iof": "No IOF domains selected.",
-    "fhir": "No FHIR domains selected.",
+    "fibo": "No FIBO contexts selected.",
+    "cdisc": "No CDISC contexts selected.",
+    "iof": "No IOF contexts selected.",
+    "fhir": "No FHIR contexts selected.",
 }
 
 _INDUSTRY_LOG_LABEL: Dict[IndustryKind, str] = {

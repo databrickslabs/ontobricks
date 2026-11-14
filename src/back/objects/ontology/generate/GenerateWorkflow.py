@@ -94,7 +94,7 @@ def _format_pages_as_documentation(pages: List[Dict[str, Any]]) -> str:
     blocks = [
         "",
         "# ADDITIONAL DOCUMENTATION (Genie Knowledge Pages)",
-        "The following Unity Catalog Knowledge Pages were selected as domain",
+        "The following Unity Catalog Knowledge Pages were selected as context",
         "documentation. Treat them as evidence for entity detection (same as",
         "READY Knowledge Store documents).",
     ]

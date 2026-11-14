@@ -10,7 +10,7 @@ import networkx as nx
 import pytest
 
 from back.core.errors import InfrastructureError
-from back.core.graph_analysis.JobCommunities import (
+from back.core.graph_analysis.community.JobCommunities import (
     MEMBERS_PAGE_MAX,
     TOP_CLUSTERS_MAX,
     JobCommunities,

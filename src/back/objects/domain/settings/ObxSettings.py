@@ -62,7 +62,7 @@ class ObxSettings:
             wanted = [str(v) for v in (explicit or [])]
             return [v for v in available if v in set(wanted)]
         raise ValidationError(
-            f"Unknown export mode '{mode}' for domain '{folder}' "
+            f"Unknown export mode '{mode}' for context '{folder}' "
             f"(expected one of: all, active, latest, selected)"
         )
 
@@ -95,7 +95,7 @@ class ObxSettings:
 
             entries = (spec or {}).get("domains") or []
             if not entries:
-                raise ValidationError("No domains selected for export")
+                raise ValidationError("No contexts selected for export")
 
             exported_domains: List[Dict[str, Any]] = []
             errors: List[str] = []
@@ -111,7 +111,7 @@ class ObxSettings:
                     svc, name, mode, explicit
                 )
                 if not versions:
-                    errors.append(f'No versions to export for domain "{name}"')
+                    errors.append(f'No versions to export for context "{name}"')
                     continue
 
                 version_docs: Dict[str, Any] = {}
@@ -138,7 +138,7 @@ class ObxSettings:
 
             if not exported_domains:
                 raise ValidationError(
-                    "Nothing to export (no readable versions for the selected domains)"
+                    "Nothing to export (no readable versions for the selected contexts)"
                 )
 
             envelope = _ss.obx_format.build_envelope(
@@ -435,7 +435,7 @@ class ObxSettings:
             rename_display_name = (decision.get("new_name") or "").strip()
             if not re.fullmatch(r"[A-Z][A-Za-z0-9]{0,63}", rename_display_name):
                 raise ValidationError(
-                    "Imported domain name must be CamelCase alphanumeric"
+                    "Imported context name must be CamelCase alphanumeric"
                 )
             target_folder = _ss.sanitize_domain_folder(rename_display_name)
             if svc.domain_exists(target_folder):
@@ -457,7 +457,7 @@ class ObxSettings:
         if action in ("overwrite", "add_missing"):
             return folder, "add_missing", "", ""
         raise ValidationError(
-            f"Unknown import action '{action}' for domain '{folder}'"
+            f"Unknown import action '{action}' for context '{folder}'"
         )
 
     @staticmethod
@@ -563,7 +563,7 @@ class ObxSettings:
                 "success": True,
                 "message": (
                     f"Imported {summary['imported_versions']} version(s) "
-                    f"across {len(summary['domains'])} domain(s)"
+                    f"across {len(summary['domains'])} context(s)"
                 ),
                 **summary,
             }

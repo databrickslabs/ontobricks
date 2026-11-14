@@ -257,7 +257,7 @@ class GraphEngineSettings:
         ok, details, message = svc.list_domain_details_cached()
         if not ok:
             raise InfrastructureError(
-                "Failed to list registry domains", detail=message
+                "Failed to list registry contexts", detail=message
             )
 
         keys: set[str] = set()

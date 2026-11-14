@@ -13,7 +13,7 @@ from agents.agent_simulation_facts import tools as facts_tools
 from agents.agent_cohort import tools as cohort_tools
 from agents.tools.context import ToolContext
 from back.core.errors import ValidationError
-from back.objects.simulation import Patch
+from back.objects.intelligence import Patch
 
 pytestmark = pytest.mark.unit
 

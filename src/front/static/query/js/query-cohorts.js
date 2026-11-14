@@ -25,7 +25,7 @@ const CohortModule = {
         await this._loadOntology();
         await this.loadRules();
         // Honour a deep-link from the run page's "view/edit" button:
-        // ``/simulation/?section=cohorts&rule=<id>`` lands on the design
+        // ``/intelligence/?section=cohorts&rule=<id>`` lands on the design
         // surface with that rule preloaded into the form.
         const params = new URLSearchParams(window.location.search || '');
         const ruleParam = params.get('rule');
@@ -223,7 +223,7 @@ const CohortModule = {
                 </button>
                 ${editLink
                     ? `<a class="cohort-rule-edit" title="View / edit rule definition"
-                          href="/simulation/?section=cohorts&rule=${encodeURIComponent(r.id)}">
+                          href="/intelligence/?section=cohorts&rule=${encodeURIComponent(r.id)}">
                            <i class="bi bi-pencil-square"></i>
                        </a>`
                     : ''}

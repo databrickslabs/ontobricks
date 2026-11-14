@@ -236,7 +236,7 @@ class TestDomainFilter:
         select = html[html.index('id="settingsRunsDomain"'):]
         first_option = select[select.index("<option"): select.index("</select>")]
         assert 'value=""' in first_option
-        assert "All domains" in first_option
+        assert "All contexts" in first_option
 
 
 class TestPagination:

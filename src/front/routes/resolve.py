@@ -36,7 +36,7 @@ async def resolve_entity_query(
     request: Request,
     uri: str = Query(None, description="Full ontology entity URI"),
     domain: Optional[str] = Query(
-        None, description="Target domain name for cross-domain bridges"
+        None, description="Target context name for cross-context bridges"
     ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
@@ -56,7 +56,7 @@ async def resolve_entity_path(
     request: Request,
     uri: str,
     domain: Optional[str] = Query(
-        None, description="Target domain name for cross-domain bridges"
+        None, description="Target context name for cross-context bridges"
     ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),

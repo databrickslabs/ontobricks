@@ -600,7 +600,7 @@
             if (list) {
                 list.innerHTML =
                     '<div class="alert alert-warning small mb-0">' +
-                    'Save this domain to the registry to start a discussion.</div>';
+                    'Save this context to the registry to start a discussion.</div>';
             }
             return;
         }

@@ -7,7 +7,7 @@ var registryGithubEnabled = false;
 
 function githubDomainDeleteExtras(enabled) {
     return enabled
-        ? { checkboxLabel: 'Also delete this domain from GitHub', checkboxChecked: false }
+        ? { checkboxLabel: 'Also delete this context from GitHub', checkboxChecked: false }
         : {};
 }
 
@@ -55,7 +55,7 @@ function createRegistryVersionDeleteControl(v, domainName) {
 async function deleteRegistryDomain(domainName) {
     const options = {
         title: 'Delete Context',
-        message: 'Permanently delete domain "' + escapeHtml(domainName)
+        message: 'Permanently delete context "' + escapeHtml(domainName)
             + '" and all its versions from the registry? This permanently '
             + 'removes all Documents content and cannot be undone.',
         confirmText: 'Delete',
@@ -85,7 +85,7 @@ async function deleteRegistryDomain(domainName) {
             showNotification('Error: ' + data.message, 'error');
         }
     } catch (e) {
-        showNotification('Error deleting domain: ' + e.message, 'error');
+        showNotification('Error deleting context: ' + e.message, 'error');
     }
 }
 
@@ -97,14 +97,14 @@ async function deleteRegistryVersion(
     deletesDomain = false
 ) {
     const options = {
-        title: deletesDomain ? 'Delete last version and domain' : 'Delete Version',
+        title: deletesDomain ? 'Delete last version and context' : 'Delete Version',
         message: deletesDomain
             ? 'Version v' + escapeHtml(String(version))
                 + ' is the only version of "' + escapeHtml(String(domainName))
-                + '". Deleting it will also delete the domain and all Knowledge '
+                + '". Deleting it will also delete the context and all Knowledge '
                 + 'Store content. This cannot be undone.'
             : 'Permanently delete version v' + escapeHtml(String(version)) +
-                ' from domain "' + escapeHtml(String(domainName)) +
+                ' from context "' + escapeHtml(String(domainName)) +
                 '"? This permanently removes its Documents content '
                 + 'and cannot be undone.',
         confirmText: 'Delete',
@@ -425,7 +425,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         section.style.display = 'flex';
         listDiv.innerHTML = '<div class="text-center text-muted small py-3">' +
-            '<span class="spinner-border spinner-border-sm me-1"></span> Loading domains...</div>';
+            '<span class="spinner-border spinner-border-sm me-1"></span> Loading contexts...</div>';
 
         try {
             const [data, vsData] = await Promise.all([
@@ -438,7 +438,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!data.success) {
                 listDiv.innerHTML = '<div class="text-muted small py-3"><i class="bi bi-exclamation-triangle text-warning me-1"></i> ' +
-                    (data.message || 'Could not load domains') + '</div>';
+                    (data.message || 'Could not load contexts') + '</div>';
                 return;
             }
 
@@ -447,7 +447,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const rows = data.domains || data.projects || [];
             if (!rows.length) {
                 listDiv.innerHTML = '<div class="text-muted small py-3 text-center">' +
-                    '<i class="bi bi-folder"></i> No domains in registry yet</div>';
+                    '<i class="bi bi-folder"></i> No contexts in registry yet</div>';
                 return;
             }
 
@@ -499,7 +499,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     ? '<button type="button" class="btn btn-sm border-0 text-muted" data-requires-app="admin" disabled title="Cannot delete the currently loaded domain">' +
                           '<i class="bi bi-trash"></i></button>'
                     : '<button type="button" class="btn btn-sm btn-outline-danger border-0 registry-delete-btn" data-requires-app="admin" ' +
-                          'data-domain="' + escapeHtml(d.name) + '" title="Delete domain and all versions">' +
+                          'data-domain="' + escapeHtml(d.name) + '" title="Delete context and all versions">' +
                           '<i class="bi bi-trash"></i></button>';
                 const versionsBadge = publishedVer
                     ? '<span class="badge bg-secondary">' + vCount + '</span> ' +
@@ -623,7 +623,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
         } catch (e) {
-            console.error('Error loading registry domains:', e);
+            console.error('Error loading registry contexts:', e);
             listDiv.innerHTML = '<div class="text-danger small py-3">' +
                 '<i class="bi bi-x-circle me-1"></i> Error loading domains</div>';
         }
@@ -632,7 +632,7 @@ document.addEventListener('DOMContentLoaded', function () {
     async function loadRegistryDomainVersion(domainName, version) {
         const confirmed = await showConfirmDialog({
             title: 'Load Context',
-            message: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' + escapeHtml(version) + '</strong>? Any unsaved changes to the current domain will be lost.',
+            message: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' + escapeHtml(version) + '</strong>? Any unsaved changes to the current context will be lost.',
             confirmText: 'Load',
             confirmClass: 'btn-primary',
             icon: 'box-arrow-in-down'
@@ -660,10 +660,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 }, 800);
             } else {
-                showNotification('Error: ' + (data.message || 'Failed to load domain'), 'error');
+                showNotification('Error: ' + (data.message || 'Failed to load context'), 'error');
             }
         } catch (e) {
-            showNotification('Error loading domain: ' + e.message, 'error');
+            showNotification('Error loading context: ' + e.message, 'error');
         }
     }
 
@@ -678,7 +678,7 @@ document.addEventListener('DOMContentLoaded', function () {
             title: 'Open in Validation',
             message: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' +
                 escapeHtml(version) + '</strong> and open its Validation workspace? ' +
-                'Any unsaved changes to the current domain will be lost.',
+                'Any unsaved changes to the current context will be lost.',
             confirmText: 'Open',
             confirmClass: 'btn-info',
             icon: 'ui-checks'
@@ -698,10 +698,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
                 window.location.href = '/domain/?section=review';
             } else {
-                showNotification('Error: ' + (data.message || 'Failed to load domain'), 'error');
+                showNotification('Error: ' + (data.message || 'Failed to load context'), 'error');
             }
         } catch (e) {
-            showNotification('Error loading domain: ' + e.message, 'error');
+            showNotification('Error loading context: ' + e.message, 'error');
         }
     }
 
@@ -728,13 +728,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await resp.json();
             if (!data.success) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-danger small py-3">' +
-                    escapeHtml(data.message || 'Could not load domains') + '</td></tr>';
+                    escapeHtml(data.message || 'Could not load contexts') + '</td></tr>';
                 return;
             }
             const rows = data.domains || [];
             if (!rows.length) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-muted small py-3 text-center">' +
-                    'No domains in registry yet</td></tr>';
+                    'No contexts in registry yet</td></tr>';
                 return;
             }
             tbody.innerHTML = rows.map((d, idx) => {
@@ -806,7 +806,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         if (!selected.length) {
-            showNotification('Pick at least one domain to export', 'warning');
+            showNotification('Pick at least one context to export', 'warning');
             return;
         }
 
@@ -840,7 +840,7 @@ document.addEventListener('DOMContentLoaded', function () {
             a.click();
             a.remove();
             URL.revokeObjectURL(url);
-            showNotification('Exported ' + selected.length + ' domain(s) to ' + filename, 'success');
+            showNotification('Exported ' + selected.length + ' context(s) to ' + filename, 'success');
             bootstrap.Modal.getInstance(document.getElementById('exportObxModal'))?.hide();
         } catch (e) {
             showNotification('Export error: ' + e.message, 'error');
@@ -1040,7 +1040,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     '<input type="text" class="form-control form-control-sm import-obx-name" ' +
                         'value="' + escapeHtml(importName) + '" required maxlength="64" ' +
                         'pattern="[A-Z][A-Za-z0-9]*" autocomplete="off" spellcheck="false" ' +
-                        'aria-label="Imported domain name">' +
+                        'aria-label="Imported context name">' +
                     '<div class="invalid-feedback">Use a unique CamelCase alphanumeric name.</div>' +
                 '</td>' +
                 '<td>' + versionBadges + '</td>' +
@@ -1133,13 +1133,13 @@ document.addEventListener('DOMContentLoaded', function () {
             '#importObxTableBody .import-obx-pick:checked'
         ).length;
         if (!selectedCount) {
-            showNotification('Pick at least one domain to import', 'warning');
+            showNotification('Pick at least one context to import', 'warning');
             return;
         }
 
         if (!namesValid) {
             showNotification(
-                'Use a unique CamelCase alphanumeric name for every imported domain',
+                'Use a unique CamelCase alphanumeric name for every imported context',
                 'warning'
             );
             document.querySelector('#importObxTableBody .import-obx-name.is-invalid')?.focus();
@@ -1154,7 +1154,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 title: 'Confirm import',
                 message:
                     'Existing versions will be left unchanged. Only missing ' +
-                    'versions will be added (' + addMissing + ' domain(s)).',
+                    'versions will be added (' + addMissing + ' context(s)).',
                 confirmText: 'Import',
                 confirmClass: 'btn-primary',
                 icon: 'info-circle'
@@ -1694,10 +1694,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     '<div class="summary-item"><i class="bi bi-signpost-split text-primary"></i> ' +
                         '<span class="summary-value">' + totalBridges + '</span> bridge' + (totalBridges !== 1 ? 's' : '') + '</div>' +
                     '<div class="summary-item"><i class="bi bi-box text-secondary"></i> ' +
-                        '<span class="summary-value">' + domainsWithBridges.length + '</span> domain' + (domainsWithBridges.length !== 1 ? 's' : '') +
+                        '<span class="summary-value">' + domainsWithBridges.length + '</span> context' + (domainsWithBridges.length !== 1 ? 's' : '') +
                         ' with bridges</div>' +
                     '<div class="summary-item"><i class="bi bi-globe text-secondary"></i> ' +
-                        '<span class="summary-value">' + domains.length + '</span> total domain' + (domains.length !== 1 ? 's' : '') + '</div>' +
+                        '<span class="summary-value">' + domains.length + '</span> total context' + (domains.length !== 1 ? 's' : '') + '</div>' +
                 '</div>';
                 summaryEl.style.display = '';
             }

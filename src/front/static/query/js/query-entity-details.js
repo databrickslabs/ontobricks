@@ -8,7 +8,7 @@
 // ENTITY DETAILS PANEL
 // =====================================================
 
-/** Simulations run on Lakebase graphs only (see back/objects/simulation). */
+/** Simulations run on Lakebase graphs only (see back/objects/intelligence). */
 function _simulationAvailable() {
     const cfg = window.__TRIPLESTORE_CONFIG || {};
     const backend = String(cfg.triple_store_backend || 'lakebase').toLowerCase();
@@ -516,7 +516,7 @@ async function showEntityDetails(entity) {
         behaviourBody += renderBusinessRuleSection(entity.id, businessRules);
     }
     if (entity.id && _simulationAvailable()) {
-        const simUrl = '/simulation/?section=scenarios'
+        const simUrl = '/intelligence/?section=scenarios'
             + '&entity=' + encodeURIComponent(entity.id)
             + '&label=' + encodeURIComponent(displayLabel || '');
         behaviourBody += `

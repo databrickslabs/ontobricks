@@ -113,7 +113,7 @@ def test_request_treats_live_source_as_no_simulation(client, wired, monkeypatch)
         def sandbox_relation(self, sid):
             raise AssertionError(f"must not look up live source {sid!r}")
 
-    monkeypatch.setattr("back.objects.simulation.Simulation", FakeSim)
+    monkeypatch.setattr("back.objects.intelligence.Simulation", FakeSim)
     for sentinel in ("live", "live:inferred"):
         resp = client.post(
             "/dtwin/nodes/business-rule/request",
@@ -136,7 +136,7 @@ def test_confirm_forwards_simulation_id(client, wired, monkeypatch):
             assert sid == "sim1"
             return "g__sim_sim1"
 
-    monkeypatch.setattr("back.objects.simulation.Simulation", FakeSim)
+    monkeypatch.setattr("back.objects.intelligence.Simulation", FakeSim)
     token = client.post(
         "/dtwin/nodes/business-rule/request",
         json={

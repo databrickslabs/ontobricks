@@ -7,11 +7,11 @@ from typing import Any, Dict, List
 
 import pytest
 
-from back.core.graph_analysis.CommunityMaterializer import (
+from back.core.graph_analysis.community.CommunityMaterializer import (
     ASSIGNMENTS_MAX,
     CommunityMaterializer,
 )
-from back.core.graph_analysis.CommunityVocabulary import CommunityVocabulary
+from back.core.graph_analysis.community.CommunityVocabulary import CommunityVocabulary
 from back.core.graphdb.constants import RDFS_LABEL, RDF_TYPE
 
 pytestmark = pytest.mark.unit

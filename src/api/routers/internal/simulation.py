@@ -1,4 +1,4 @@
-"""Internal API -- what-if simulation sandboxes (Simulation menu)."""
+"""Internal API -- what-if simulation sandboxes (Intelligence > Simulation)."""
 
 import json
 import os
@@ -14,7 +14,7 @@ from back.core.logging import get_logger
 from back.objects.digitaltwin import DigitalTwin
 from back.objects.registry import ROLE_BUILDER
 from back.objects.session import SessionManager, get_domain, get_session_manager
-from back.objects.simulation import Patch, Simulation
+from back.objects.intelligence import Patch, Simulation
 from shared.config.settings import Settings, get_settings
 
 logger = get_logger(__name__)

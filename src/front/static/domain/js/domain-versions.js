@@ -7,7 +7,7 @@ var versionsGithubEnabled = false;
 
 function githubDomainDeleteExtras(enabled) {
     return enabled
-        ? { checkboxLabel: 'Also delete this domain from GitHub', checkboxChecked: false }
+        ? { checkboxLabel: 'Also delete this context from GitHub', checkboxChecked: false }
         : {};
 }
 
@@ -292,14 +292,14 @@ async function transitionVersion(
 
 async function deleteVersionFromList(domainFolder, version, triggerButton = null, deletesDomain = false) {
     const options = {
-        title: deletesDomain ? 'Delete last version and domain' : 'Delete Version',
+        title: deletesDomain ? 'Delete last version and context' : 'Delete Version',
         message: deletesDomain
             ? 'Version v' + escapeHtml(version)
                 + ' is the only version of "' + escapeHtml(domainFolder)
-                + '". Deleting it will also delete the domain and all Knowledge '
+                + '". Deleting it will also delete the context and all Knowledge '
                 + 'Store content. This cannot be undone.'
             : 'Permanently delete version v' + escapeHtml(version)
-                + ' from domain "' + escapeHtml(domainFolder)
+                + ' from context "' + escapeHtml(domainFolder)
                 + '"? This permanently removes its Documents content '
                 + 'and cannot be undone.',
         confirmText: 'Delete Version',
@@ -349,7 +349,7 @@ async function loadVersionFromList(version, triggerButton = null) {
         const statusData = await fetch('/domain/version-status', { credentials: 'same-origin' }).then(r => r.json());
         const domainFolder = (statusData && (statusData.domain_folder || statusData.project_folder)) || '';
         if (!domainFolder) {
-            showNotification('Cannot determine domain folder', 'error');
+            showNotification('Cannot determine context folder', 'error');
             return;
         }
 

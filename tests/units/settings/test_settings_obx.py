@@ -172,7 +172,7 @@ class TestExportRegistryObx:
         registry_svc = _make_registry_svc()
         with patch.object(_svc_module, "RegistryService") as rs_cls:
             rs_cls.from_context.return_value = registry_svc
-            with pytest.raises(ValidationError, match="No domains selected"):
+            with pytest.raises(ValidationError, match="No contexts selected"):
                 SettingsService.export_registry_obx_result(
                     {"domains": []}, session_mgr, settings
                 )

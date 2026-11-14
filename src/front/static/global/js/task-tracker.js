@@ -31,12 +31,12 @@ const TASK_TYPE_URLS = {
     'registry_archive': '/dtwin#sync',
     'quality_checks': '/dtwin#quality',
     'graph_analytics': '/dtwin#analytics',
-    'community_detection': '/simulation/?section=communities',
-    'community_materialize': '/simulation/?section=communities',
-    'pattern_detection': '/simulation/?section=patterns',
-    'pattern_materialize': '/simulation/?section=patterns',
+    'community_detection': '/intelligence/?section=communities',
+    'community_materialize': '/intelligence/?section=communities',
+    'pattern_detection': '/intelligence/?section=patterns',
+    'pattern_save': '/intelligence/?section=patterns',
     'entity_job_action': '/dtwin',
-    'simulation': '/simulation/?section=scenarios'
+    'simulation': '/intelligence/?section=scenarios'
 };
 
 function taskOpenUrl(task) {
@@ -45,7 +45,7 @@ function taskOpenUrl(task) {
     if (type !== 'simulation') return base;
     const sid = task.result && task.result.simulation_id;
     if (!sid) return base;
-    let url = '/simulation/?section=scenarios&simulation=' + encodeURIComponent(sid);
+    let url = '/intelligence/?section=scenarios&simulation=' + encodeURIComponent(sid);
     if (task.status === 'completed') url += '&tab=results';
     return url;
 }

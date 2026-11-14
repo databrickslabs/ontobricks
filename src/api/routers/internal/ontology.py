@@ -1791,7 +1791,7 @@ async def list_bridge_domains(
     settings: Settings = Depends(get_settings),
 ):
     """List registry domains available as bridge targets (excludes the current domain)."""
-    with map_route_errors("Listing bridge domains failed", logger):
+    with map_route_errors("Listing bridge contexts failed", logger):
         from back.objects.registry import RegistryService
         from back.core.helpers import run_blocking
 
@@ -1799,7 +1799,7 @@ async def list_bridge_domains(
         svc = RegistryService.from_context(domain, settings)
         ok, details, msg = await run_blocking(svc.list_domain_details_cached)
         if not ok:
-            raise InfrastructureError("Listing registry domains failed", detail=msg)
+            raise InfrastructureError("Listing registry contexts failed", detail=msg)
 
         current_name = (domain.info.get("name") or "").strip().lower()
         current_folder = (domain.domain_folder or "").strip().lower()
@@ -1819,7 +1819,7 @@ async def list_bridge_domain_classes(
     settings: Settings = Depends(get_settings),
 ):
     """Load a target domain's ontology classes for bridge selection."""
-    with map_route_errors("Loading bridge domain classes failed", logger):
+    with map_route_errors("Loading bridge context classes failed", logger):
         from back.objects.registry import RegistryService
         from back.core.helpers import run_blocking
 
@@ -1831,7 +1831,7 @@ async def list_bridge_domain_classes(
         )
         if not ok:
             raise InfrastructureError(
-                "Loading bridge domain ontology failed", detail=msg
+                "Loading bridge context ontology failed", detail=msg
             )
 
         ontology = svc._extract_latest_ontology(data)
@@ -1872,11 +1872,11 @@ async def _load_source_ontology(domain, settings, domain_name: str):
         (domain.domain_folder or "").strip().lower(),
     }
     if domain_name.strip().lower() in current:
-        raise ValidationError("Cannot import entities from the current domain")
+        raise ValidationError("Cannot import entities from the current context")
     svc = RegistryService.from_context(domain, settings)
     ok, data, version, msg = await run_blocking(svc.load_latest_domain_data, domain_name)
     if not ok:
-        raise InfrastructureError("Loading source domain ontology failed", detail=msg)
+        raise InfrastructureError("Loading source context ontology failed", detail=msg)
     return svc._extract_latest_ontology(data), version
 
 
@@ -1908,7 +1908,7 @@ async def entity_import(
         domain_name = (data.get("domain") or "").strip()
         names = [n for n in data.get("entities") or [] if isinstance(n, str) and n]
         if not domain_name or not names:
-            raise ValidationError("A source domain and at least one entity are required")
+            raise ValidationError("A source context and at least one entity are required")
         domain = get_domain(session_mgr)
         source, version = await _load_source_ontology(domain, settings, domain_name)
         return Ontology(domain).import_entities_from_domain(

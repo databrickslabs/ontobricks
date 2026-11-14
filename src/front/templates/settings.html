@@ -168,7 +168,7 @@
                                         With <strong>Lakehouse</strong> selected as the graph backend, OntoBricks stores triples
                                         directly in governed Delta tables in Unity Catalog. The
                                         <strong>Registry catalog and schema</strong> (Settings → Registry) define
-                                        where all triple-store objects live for every domain.
+                                        where all triple-store objects live for every context.
                                     </p>
                                     <p class="mb-0">
                                         Pick a dedicated Query SQL Warehouse on the <strong>SQL Warehouse</strong>
@@ -240,10 +240,10 @@
                             <div class="tab-pane fade" id="dtpane-objects" role="tabpanel" aria-labelledby="dttab-objects">
                                 <p class="small text-muted mb-3">
                                     Lists triple-store objects in the Registry UC schema
-                                    (<code>catalog.schema</code>) only for domain versions configured
+                                    (<code>catalog.schema</code>) only for context versions configured
                                     with the <strong>Lakehouse</strong> backend.
                                     Use <strong>Drop</strong> to remove a single object or every artefact
-                                    for one domain version (views are dropped before tables).
+                                    for one context version (views are dropped before tables).
                                 </p>
                                 <dl class="row small mb-3">
                                     <dt class="col-sm-3">Registry</dt>
@@ -470,7 +470,7 @@
                                                 </button>
                                             </div>
                                             <div id="lakebaseUcCatalogHelp" class="form-text small mt-1 mb-0 text-muted">
-                                                UC catalog for synced table registration. If empty: Registry catalog, then domain Delta.
+                                                UC catalog for synced table registration. If empty: Registry catalog, then context Delta.
                                             </div>
                                             <div id="lakebaseUcCatalogLoadMsg" class="form-text small mt-1 d-none text-warning"></div>
                                         </div>
@@ -885,7 +885,7 @@
 
                     <div class="mb-4">
                         <label for="baseUriDefault" class="form-label fw-semibold">
-                            Default Base URI Context
+                            Default Base URI
                             <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
                                 <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
                             </span>
@@ -893,7 +893,7 @@
                         <input type="text" class="form-control" id="baseUriDefault"
                                placeholder="https://databricks-ontology.com" value="https://databricks-ontology.com">
                         <small class="text-muted">
-                            <i class="bi bi-info-circle"></i> This domain is used as the default Base URI when creating new domains. Stored globally for all users.
+                            <i class="bi bi-info-circle"></i> This Base URI is used as the default when creating new contexts. Stored globally for all users.
                         </small>
                     </div>
 
@@ -907,7 +907,7 @@
                         <input type="number" class="form-control settings-registry-ttl-input" id="registryCacheTtl"
                                min="10" step="10" value="300">
                         <small class="text-muted">
-                            <i class="bi bi-info-circle"></i> How long the registry domain list is cached before refreshing from Databricks (minimum 10s).
+                            <i class="bi bi-info-circle"></i> How long the registry context list is cached before refreshing from Databricks (minimum 10s).
                         </small>
                     </div>
 
@@ -921,7 +921,7 @@
                         <input type="number" class="form-control settings-edit-lock-ttl-input" id="editLockTtlMin"
                                min="0" step="1" value="10">
                         <small class="text-muted">
-                            <i class="bi bi-info-circle"></i> How long a DRAFT single-editor lock survives with no keep-alive (a crashed / closed tab) before another user can reclaim it. The editor's browser auto-renews while open. Set to <strong>0</strong> to disable the lease (a lock is then held until the editor closes the domain or an admin force-unlocks it).
+                            <i class="bi bi-info-circle"></i> How long a DRAFT single-editor lock survives with no keep-alive (a crashed / closed tab) before another user can reclaim it. The editor's browser auto-renews while open. Set to <strong>0</strong> to disable the lease (a lock is then held until the editor closes the context or an admin force-unlocks it).
                         </small>
                     </div>
 
@@ -935,7 +935,7 @@
                         <input type="number" class="form-control" id="dataAssetsImportLimit"
                                min="1" max="500" step="1" value="40">
                         <small class="text-muted">
-                            <i class="bi bi-info-circle"></i> Maximum Unity Catalog tables, views and metric views a domain may import. Default <strong>40</strong> (range 1–500). Extra assets in a schema are skipped until you raise the limit or remove existing assets.
+                            <i class="bi bi-info-circle"></i> Maximum Unity Catalog tables, views and metric views a context may import. Default <strong>40</strong> (range 1–500). Extra assets in a schema are skipped until you raise the limit or remove existing assets.
                         </small>
                     </div>
 
@@ -988,7 +988,7 @@
                             <i class="bi bi-info-circle"></i> Graph analytics runs entirely in a serverless Databricks job, which computes counts, average degree, density, degree centrality, the entity-type profiles, <strong>PageRank</strong>, the <strong>clustering coefficient</strong> and the <strong>component count</strong> exactly, plus <strong>betweenness</strong> and <strong>closeness</strong> as sampled estimates. This is the only way analytics runs, so leaving it off disables the Analytics page.
                         </small>
                         <small class="text-muted d-block mt-1">
-                            <i class="bi bi-exclamation-triangle"></i> Requires the Databricks bundle to have been deployed, so that the job exists, and the domain to have been built at least once. The job reads the mapped-triples snapshot every Build materialises, so it works the same on the Delta engine, on Lakebase in either mode, and on Neo4j. When a prerequisite is missing the Analytics page says which one rather than falling back to a different calculation. Runs take minutes rather than seconds.
+                            <i class="bi bi-exclamation-triangle"></i> Requires the Databricks bundle to have been deployed, so that the job exists, and the context to have been built at least once. The job reads the mapped-triples snapshot every Build materialises, so it works the same on the Delta engine, on Lakebase in either mode, and on Neo4j. When a prerequisite is missing the Analytics page says which one rather than falling back to a different calculation. Runs take minutes rather than seconds.
                         </small>
                         <small id="analyticsJobEnabledSource" class="text-muted d-block mt-1"></small>
                     </div>
@@ -997,7 +997,7 @@
 
                     <div class="mb-0">
                         <label class="form-label fw-semibold"><i class="bi bi-code-square me-1"></i> API Documentation</label>
-                        <p class="small text-muted mb-2">External API: REST <code>/api/v1/*</code>, domains <code>/api/v1/domains</code> and <code>/api/v1/domain/*</code> (versions, design status, OWL, R2RML, Spark SQL), Knowledge Graph <code>/api/v1/digitaltwin/*</code>, GraphQL <code>/api/v1/graphql/*</code>. In-app GraphQL also lives under <code>/graphql</code>. Other JSON routes are documented under <a href="/docs" target="_blank">/docs</a>.</p>
+                        <p class="small text-muted mb-2">External API: REST <code>/api/v1/*</code>, contexts <code>/api/v1/domains</code> and <code>/api/v1/domain/*</code> (versions, design status, OWL, R2RML, Spark SQL), Knowledge Graph <code>/api/v1/digitaltwin/*</code>, GraphQL <code>/api/v1/graphql/*</code>. In-app GraphQL also lives under <code>/graphql</code>. Other JSON routes are documented under <a href="/docs" target="_blank">/docs</a>.</p>
                         <div class="d-flex gap-2 flex-wrap">
                             <a href="/api/docs" target="_blank" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-file-earmark-code me-1"></i> Swagger UI
@@ -1214,7 +1214,7 @@
                     <div class="section-header d-flex justify-content-between align-items-center mb-4">
                         <div>
                             <h4 class="mb-1"><i class="bi bi-lock me-2"></i>Locks</h4>
-                            <p class="text-muted mb-0 small">Active domain edit-locks (single-editor concurrency) — force-unlock a stuck lock</p>
+                            <p class="text-muted mb-0 small">Active context edit-locks (single-editor concurrency) — force-unlock a stuck lock</p>
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshLocks" title="Refresh">
                             <i class="bi bi-arrow-clockwise"></i>

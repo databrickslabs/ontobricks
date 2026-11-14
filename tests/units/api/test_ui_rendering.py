@@ -208,8 +208,8 @@ class TestBaseTemplate:
         settings_return_link = _find(tags, tag="a", id_="settingsDomainReturnLink")
         assert settings_return_link is not None
         assert settings_return_link.get("href") == "/domain/"
-        assert settings_return_link.get("title") == "Back to domain"
-        assert settings_return_link.get("aria-label") == "Back to domain"
+        assert settings_return_link.get("title") == "Back to context"
+        assert settings_return_link.get("aria-label") == "Back to context"
 
     def test_subnav_has_ontology_and_mapping_dropdowns(self, client):
         """Ontology and Mapping are dropdowns in the L2 subnav."""
@@ -406,15 +406,15 @@ class TestSettingsPage:
         settings_link = _find(tags, tag="a", id_="settingsDomainReturnLink")
         assert settings_link is not None
         assert settings_link.get("href") == "/domain/"
-        assert settings_link.get("title") == "Back to domain"
-        assert settings_link.get("aria-label") == "Back to domain"
+        assert settings_link.get("title") == "Back to context"
+        assert settings_link.get("aria-label") == "Back to context"
         settings_inner = re.search(
             r'<a\b[^>]*id="settingsDomainReturnLink"[^>]*>(.*?)</a>',
             html,
             flags=re.DOTALL,
         )
         assert settings_inner is not None
-        assert "Back to domain" in settings_inner.group(1)
+        assert "Back to context" in settings_inner.group(1)
         assert "Back to domain management" not in settings_inner.group(1)
         assert re.search(
             r'<a\b[^>]*id="settingsDomainReturnLink"[^>]*>.*\bbi-arrow-left\b.*</a>',

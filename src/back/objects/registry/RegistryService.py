@@ -352,7 +352,7 @@ class RegistryService:
             ok, details, msg = await run_blocking(self.list_domain_details)
             if not ok:
                 logger.warning(
-                    "Could not list registry domains for URI resolution: %s",
+                    "Could not list registry contexts for URI resolution: %s",
                     msg,
                 )
                 return None
@@ -374,14 +374,14 @@ class RegistryService:
 
             if best_match.strip().lower() in (current_name, current_folder_l):
                 logger.debug(
-                    "URI %s belongs to the current domain; no switch needed",
+                    "URI %s belongs to the current context; no switch needed",
                     entity_uri,
                 )
                 return None
 
             if current_base and entity_uri.startswith(current_base):
                 logger.debug(
-                    "URI %s matches current domain base URI; no switch needed",
+                    "URI %s matches current context base URI; no switch needed",
                     entity_uri,
                 )
                 return None
@@ -774,7 +774,7 @@ class RegistryService:
         """
         latest = self.get_latest_version(folder)
         if not latest:
-            return False, {}, "", f'No versions found for domain "{folder}"'
+            return False, {}, "", f'No versions found for context "{folder}"'
         ok, data, msg = self.read_version(folder, latest)
         if not ok:
             return False, {}, latest, msg
@@ -822,7 +822,7 @@ class RegistryService:
             False,
             {},
             "",
-            f'No PUBLISHED version available for domain "{folder}"',
+            f'No PUBLISHED version available for context "{folder}"',
         )
 
     def load_published_domain_data_cached(

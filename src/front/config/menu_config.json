@@ -592,17 +592,17 @@
         },
 
         {
-            "id": "simulation",
+            "id": "intelligence",
             "label": "Intelligence",
             "icon": "bi-sliders2-vertical",
-            "route": "/simulation/",
+            "route": "/intelligence/",
             "requires_domain_saved": true,
             "navbar_hidden": true,
             "status_indicator": null,
             "navbar_actions": [],
             "groups": [
                 {
-                    "id": "simulation-community",
+                    "id": "intelligence-community",
                     "title": "Community",
                     "icon": "bi-diagram-3",
                     "items": [
@@ -616,7 +616,7 @@
                     ]
                 },
                 {
-                    "id": "simulation-cohorts",
+                    "id": "intelligence-cohorts",
                     "title": "Cohorts",
                     "icon": "bi-people-fill",
                     "items": [
@@ -637,7 +637,7 @@
                     ]
                 },
                 {
-                    "id": "simulation-patterns",
+                    "id": "intelligence-patterns",
                     "title": "Patterns",
                     "icon": "bi-grid-3x3-gap",
                     "items": [
@@ -658,7 +658,7 @@
                     ]
                 },
                 {
-                    "id": "simulation-scenarios",
+                    "id": "intelligence-simulation",
                     "title": "Simulation",
                     "icon": "bi-sliders2-vertical",
                     "items": [

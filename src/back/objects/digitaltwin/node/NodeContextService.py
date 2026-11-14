@@ -491,7 +491,7 @@ class NodeContextService:
             context_policy, VIRTUAL_ATTRIBUTES_FEATURE
         ):
             raise ValidationError(
-                "Virtual attributes are disabled for this domain by its MCP policy"
+                "Virtual attributes are disabled for this context by its MCP policy"
             )
 
         local_id = DigitalTwin.extract_local_id(entity_uri)
@@ -539,7 +539,7 @@ class NodeContextService:
         """
         if NodeContextService.context_feature_disabled(context_policy, "actions"):
             raise ValidationError(
-                "Actions are disabled for this domain by its MCP policy"
+                "Actions are disabled for this context by its MCP policy"
             )
 
         local_id = DigitalTwin.extract_local_id(entity_uri)
@@ -612,7 +612,7 @@ class NodeContextService:
             context_policy, BUSINESS_RULES_FEATURE
         ):
             raise ValidationError(
-                "Business rules are disabled for this domain by its MCP policy"
+                "Business rules are disabled for this context by its MCP policy"
             )
         matched_cls = NodeContextService.match_ontology_class(
             entity_uri, domain.get_classes() or []

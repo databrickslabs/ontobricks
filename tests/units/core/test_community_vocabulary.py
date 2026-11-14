@@ -2,7 +2,7 @@
 
 import pytest
 
-from back.core.graph_analysis.CommunityVocabulary import CommunityVocabulary
+from back.core.graph_analysis.community.CommunityVocabulary import CommunityVocabulary
 
 pytestmark = pytest.mark.unit
 

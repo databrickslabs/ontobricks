@@ -115,7 +115,7 @@ const GraphQLPlayground = (() => {
             _hideAll();
             const msg = _el('graphqlErrorMsg');
             if (msg) msg.textContent =
-                'Could not resolve the domain name. Make sure a domain is loaded.';
+                'Could not resolve the context name. Make sure a context is loaded.';
             _show('graphqlError');
             return;
         }

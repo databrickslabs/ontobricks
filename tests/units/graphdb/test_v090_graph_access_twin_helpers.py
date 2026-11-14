@@ -53,7 +53,7 @@ class TestTwinGraphAccess:
         ) == (True, None)
 
     def test_graph_query_table_uses_simulation_union(self, monkeypatch):
-        from back.objects.simulation import Simulation
+        from back.objects.intelligence import Simulation
 
         seen = {}
 

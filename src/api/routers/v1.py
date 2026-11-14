@@ -77,7 +77,7 @@ class DomainPathModel(CredentialsModel):
 
     domain_path: str = Field(
         ...,
-        description="Full path to the domain JSON file in Unity Catalog volume",
+        description="Full path to the context JSON file in Unity Catalog volume",
         validation_alias=AliasChoices("domain_path", "project_path"),
         examples=["/Volumes/main/ontobricks/domains/my_domain.json"],
     )
@@ -140,7 +140,7 @@ class DomainFileInfoResponse(BaseModel):
     author: str = ""
     graph_backend: Literal["none", "lakebase", "databricks", "neo4j"] = Field(
         default="lakebase",
-        description="Normalized backend; 'none' denotes an ontology-only domain.",
+        description="Normalized backend; 'none' denotes an ontology-only context.",
     )
     statistics: DomainStatisticsResponse
 
@@ -204,7 +204,7 @@ async def api_health():
 # ===========================================
 
 
-@router.post("/domains/list", response_model=SuccessResponse, summary="List Domains")
+@router.post("/domains/list", response_model=SuccessResponse, summary="List Contexts")
 async def list_domains(
     data: UCLocationModel,
     x_databricks_host: Optional[str] = Header(
@@ -239,7 +239,7 @@ async def list_domains(
 
     return SuccessResponse(
         data={"domains": domains, "count": len(domains)},
-        message=f"Found {len(domains)} domains",
+        message=f"Found {len(domains)} contexts",
     )
 
 
@@ -327,7 +327,7 @@ async def get_r2rml(
     r2rml_content = sl["assignment"].get("r2rml_output", "")
 
     if not r2rml_content:
-        raise NotFoundError("No R2RML mapping found in domain. Generate R2RML first.")
+        raise NotFoundError("No R2RML mapping found in context. Generate R2RML first.")
 
     return SuccessResponse(data={"r2rml": r2rml_content, "format": "turtle"})
 

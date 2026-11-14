@@ -10,7 +10,7 @@
     <div>
         DRAFT versions use a <strong>single-editor lock</strong>: only one user
         may edit a given <code>(domain, version)</code> at a time; others land
-        read-only until the holder <strong>closes</strong> the domain. A lock
+        read-only until the holder <strong>closes</strong> the context. A lock
         left by a crashed / closed tab &mdash; or by an editor who goes
         <strong>inactive</strong> (they are warned first) &mdash; is
         auto-reclaimed once its <strong>lease</strong> lapses (configurable in

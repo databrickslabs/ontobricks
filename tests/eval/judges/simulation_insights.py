@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from back.core.errors import ValidationError
-from back.objects.simulation import Patch
+from back.objects.intelligence import Patch
 
 REQUIRED_SECTIONS = ("What changed", "Why", "Business impact", "Risks")
 VALID_GRAPHS = frozenset({"live", "sandbox"})

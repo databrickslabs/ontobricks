@@ -48,7 +48,7 @@ def load_domain_headless(svc, domain_name: str, version: str, host: str, reg: di
         loaded_version = version
         if not ok:
             raise NotFoundError(
-                err or f"Version '{version}' not found for domain '{domain_name}'"
+                err or f"Version '{version}' not found for context '{domain_name}'"
             )
     else:
         ok, data, loaded_version, err = svc.load_latest_domain_data(domain_name)

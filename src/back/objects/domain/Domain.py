@@ -847,20 +847,20 @@ class Domain:
             svc = self.build_registry_service()
             result = await run_blocking(self.load_domain_from_uc, svc, target_domain)
             logger.info(
-                "[Bridge] Server-side domain switch to '%s' v%s",
+                "[Bridge] Server-side context switch to '%s' v%s",
                 target_domain,
                 result.get("version", "?"),
             )
             return True
         except OntoBricksError as e:
             logger.warning(
-                "[Bridge] Domain switch to '%s' failed: %s",
+                "[Bridge] Context switch to '%s' failed: %s",
                 target_domain,
                 e,
             )
         except Exception as e:
             logger.exception(
-                "[Bridge] Error switching to domain '%s': %s",
+                "[Bridge] Error switching to context '%s': %s",
                 target_domain,
                 e,
             )
@@ -924,14 +924,14 @@ class Domain:
             ok, names, msg = svc.list_domains_cached()
             if not ok:
                 raise InfrastructureError(
-                    "Failed to list domains from registry", detail=msg
+                    "Failed to list contexts from registry", detail=msg
                 )
             return {"success": True, "domains": names}
         except OntoBricksError:
             raise
         except Exception as e:
             logger.exception("List domains failed: %s", e)
-            raise InfrastructureError("Failed to list domains", detail=str(e)) from e
+            raise InfrastructureError("Failed to list contexts", detail=str(e)) from e
 
     @staticmethod
     def list_domain_versions_result(
@@ -943,7 +943,7 @@ class Domain:
                 raise ValidationError("Registry not configured")
             ok, versions, msg = svc.list_versions(domain_name)
             if not ok:
-                raise InfrastructureError("Failed to list domain versions", detail=msg)
+                raise InfrastructureError("Failed to list context versions", detail=msg)
             # Best-effort per-version lifecycle status, so callers (e.g. the
             # Load-Domain modal) can label versions DRAFT / IN-REVIEW /
             # PUBLISHED. Sourced from the cached domain metadata; never fatal.
@@ -975,7 +975,7 @@ class Domain:
         except Exception as e:
             logger.exception("List domain versions failed: %s", e)
             raise InfrastructureError(
-                "Failed to list domain versions", detail=str(e)
+                "Failed to list context versions", detail=str(e)
             ) from e
 
     def list_version_details(
@@ -1112,7 +1112,7 @@ class Domain:
                 )
             if is_new_domain and svc.domain_exists(folder):
                 raise ConflictError(
-                    f'A domain named "{folder}" already exists in the registry. Please choose a different name.',
+                    f'A context named "{folder}" already exists in the registry. Please choose a different name.',
                 )
             version = self._s.current_version or "1"
             # Lifecycle lock: never overwrite a version that is no longer a
@@ -1196,13 +1196,13 @@ class Domain:
                 logger.info("Domain saved to registry: %s", reg_path)
                 return {"success": True, "message": "Context saved"}
             raise InfrastructureError(
-                "Failed to save domain to Unity Catalog registry", detail=message
+                "Failed to save context to Unity Catalog registry", detail=message
             )
         except OntoBricksError:
             raise
         except Exception as e:
             logger.exception("Save domain to UC failed: %s", e)
-            raise InfrastructureError("Save domain to UC failed", detail=str(e)) from e
+            raise InfrastructureError("Save context to UC failed", detail=str(e)) from e
 
     def load_domain_from_uc(
         self,
@@ -1232,7 +1232,7 @@ class Domain:
                     version = svc.get_latest_version(domain_name)
                     if not version:
                         raise NotFoundError(
-                            f'No versions found for domain "{domain_name}"'
+                            f'No versions found for context "{domain_name}"'
                         )
                     logger.info(
                         "No version specified for '%s'; no active version, falling back to latest v%s",
@@ -1247,7 +1247,7 @@ class Domain:
                 if r_msg and "not found" in r_msg.lower():
                     raise NotFoundError(r_msg)
                 raise InfrastructureError(
-                    "Failed to load domain from registry", detail=r_msg
+                    "Failed to load context from registry", detail=r_msg
                 )
 
             self._s.clear_generated_content()
@@ -1303,7 +1303,7 @@ class Domain:
         except Exception as e:
             logger.exception("Load domain from UC failed: %s", e)
             raise InfrastructureError(
-                "Load domain from UC failed", detail=str(e)
+                "Load context from UC failed", detail=str(e)
             ) from e
 
     def create_new_domain_version(self, svc: RegistryService) -> Dict[str, Any]:

@@ -159,7 +159,7 @@ def _load_domain_from_registry(
             domain.domain_folder = domain_name
             domain.save()
             logger.info(
-                "GraphQL: using session domain '%s' at version %s",
+                "GraphQL: using session context '%s' at version %s",
                 domain_name,
                 session_ver,
             )
@@ -188,7 +188,7 @@ def _load_domain_from_registry(
     domain.save()
 
     logger.info(
-        "GraphQL: loaded domain '%s' version %s from registry",
+        "GraphQL: loaded context '%s' version %s from registry",
         domain_name,
         version,
     )
@@ -301,8 +301,8 @@ def _get_schema_and_context(
 @router.get(
     "",
     response_model=GraphQLDomainsResponse,
-    summary="List GraphQL-enabled domains",
-    description="Returns domains that have both MCP/API enabled and a "
+    summary="List GraphQL-enabled contexts",
+    description="Returns contexts that have both MCP/API enabled and a "
     "populated ontology — prerequisites for a GraphQL schema.",
 )
 async def graphql_list_domains(
@@ -345,7 +345,7 @@ async def graphql_depth_settings():
     "/{domain_name}",
     response_class=HTMLResponse,
     summary="GraphiQL playground",
-    description="Interactive GraphQL playground for a domain's knowledge graph.",
+    description="Interactive GraphQL playground for a context's knowledge graph.",
 )
 async def graphql_playground(
     request: Request,
@@ -384,9 +384,9 @@ async def graphql_playground(
 @router.post(
     "/{domain_name}",
     summary="Execute GraphQL query",
-    description="Execute a GraphQL query against a domain's knowledge graph. "
-    "The schema is auto-generated from the domain's ontology. "
-    "Query param ``cache`` (true/false) overrides the domain Search cache switch.",
+    description="Execute a GraphQL query against a context's knowledge graph. "
+    "The schema is auto-generated from the context's ontology. "
+    "Query param ``cache`` (true/false) overrides the context Search cache switch.",
 )
 async def graphql_execute(
     request: Request,

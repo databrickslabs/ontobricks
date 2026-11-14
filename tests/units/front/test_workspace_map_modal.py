@@ -22,7 +22,7 @@ _COLUMN_ICONS = {
     "ontology": "bi-bezier2",
     "assignment": "bi-shuffle",
     "digitaltwin": "bi-radar",
-    "simulation": "bi-sliders2-vertical",
+    "intelligence": "bi-sliders2-vertical",
 }
 
 
@@ -54,7 +54,7 @@ def test_modal_root_and_five_columns():
         "ontology",
         "assignment",
         "digitaltwin",
-        "simulation",
+        "intelligence",
     ]
 
 
@@ -69,9 +69,9 @@ def test_column_icons_match_menu_config():
 
 def test_simulation_workbench_is_not_on_the_map():
     html = _render_modal()
-    sim_column = html.split('data-workspace-map-col="simulation"', 1)[1]
-    assert "/simulation/?section=workbench" not in sim_column
-    assert "/simulation/?section=scenarios" in sim_column
+    sim_column = html.split('data-workspace-map-col="intelligence"', 1)[1]
+    assert "/intelligence/?section=workbench" not in sim_column
+    assert "/intelligence/?section=scenarios" in sim_column
 
 
 def test_representative_workspace_routes_are_rendered():
@@ -96,9 +96,9 @@ def test_mapping_and_kg_items_carry_graph_gate():
         'data-workspace-map-col="digitaltwin"', 1
     )[0]
     kg_column = html.split('data-workspace-map-col="digitaltwin"', 1)[1].split(
-        'data-workspace-map-col="simulation"', 1
+        'data-workspace-map-col="intelligence"', 1
     )[0]
-    sim_column = html.split('data-workspace-map-col="simulation"', 1)[1]
+    sim_column = html.split('data-workspace-map-col="intelligence"', 1)[1]
     assert "nav-requires-graph" in mapping_column
     assert "nav-requires-graph" in kg_column
     assert "nav-requires-graph" in sim_column
@@ -131,7 +131,7 @@ def test_settings_return_link_reuses_workspace_map_modal_handler():
     js = _read(NAVBAR_JS)
     assert "const triggerIds = ['domainContextTrigger', 'settingsDomainReturnLink'];" in js
     assert "link.addEventListener('click', openWorkspaceMap);" in js
-    assert "opens domain navigation via the workspace map" in js
+    assert "opens context navigation via the workspace map" in js
 
 
 def test_navbar_highlights_current_workspace_map_item():

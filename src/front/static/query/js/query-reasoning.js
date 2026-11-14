@@ -405,7 +405,7 @@ const ReasoningModule = {
                 && !window.OB.canRefreshGraph()) {
             if (typeof showNotification === 'function')
                 showNotification(
-                    'Materialise is unavailable — builder access and an unlocked domain are required.',
+                    'Materialise is unavailable — builder access and an unlocked context are required.',
                     'warning'
                 );
             return;

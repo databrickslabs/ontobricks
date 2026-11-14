@@ -149,7 +149,7 @@ class TwinResolve:
         t_end = time.perf_counter()
 
         logger.info(
-            "DigitalTwin: loaded domain '%s' version %s from registry "
+            "DigitalTwin: loaded context '%s' version %s from registry "
             "[read_only=%s registry=%.0fms import=%.0fms gen=%.0fms save=%.0fms total=%.0fms]",
             domain_name,
             version,

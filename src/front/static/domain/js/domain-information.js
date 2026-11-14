@@ -473,7 +473,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Re-enable version selector after a short delay to override any global disabling
         setTimeout(enableVersionSelector, 100);
     } catch (e) {
-        console.log('Could not fetch domain status:', e);
+        console.log('Could not fetch context status:', e);
     } finally {
         // Hand-off from navbar.js domainNew(): hide the overlay once the
         // initial info round-trips have resolved.

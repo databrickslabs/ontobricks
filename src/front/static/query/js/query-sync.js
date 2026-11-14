@@ -1089,7 +1089,7 @@ async function startTripleStoreSync() {
     if (window.OB && typeof window.OB.canRefreshGraph === 'function'
             && !window.OB.canRefreshGraph()) {
         showNotification(
-            'Build is unavailable — builder access and an unlocked domain are required.',
+            'Build is unavailable — builder access and an unlocked context are required.',
             'warning'
         );
         return;

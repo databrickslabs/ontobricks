@@ -482,9 +482,12 @@ src/
 │   │   │   ├── cdisc/                  # CdiscImportService
 │   │   │   └── iof/                    # IofImportService
 │   │   │
-│   │   ├── graph_analysis/             # Graph metrics & community jobs, cohorts
-│   │   │   ├── CommunityDetector.py    # CommunityDetector (NetworkX backend)
-│   │   │   └── models.py              # ClusterRequest, ClusterResult, DetectionResult, DetectionStats
+│   │   ├── graph_analysis/             # Graph analysis, grouped by type of analysis
+│   │   │   ├── community/              # JobCommunities, CommunityMaterializer, CommunityVocabulary
+│   │   │   ├── cohort/                 # CohortBuilder, CohortVocabulary
+│   │   │   ├── pattern/                # JobPatterns, SavedPatternStore, pattern_diagram
+│   │   │   ├── metrics/                # JobMetrics (graph metrics)
+│   │   │   └── models.py               # Shared models; LakeflowRunner, preflight, profiles also shared
 │   │   │
 │   │   ├── github/                     # GitHub Git Data API client (no git clone)
 │   │   │   └── GitHubClient.py         # Atomic tree commits for the registry mirror
@@ -1420,17 +1423,17 @@ and projects it into a capped `{nodes, edges, summary}` payload.
 
 | File | Purpose |
 |------|---------|
-| `src/back/objects/simulation/Simulation.py` | Facade: CRUD, backend gate, run launch, diff paging, live compare |
-| `src/back/objects/simulation/CompareGraph.py` | Sandbox-vs-live triple diff projected as a capped node/edge graph |
-| `src/back/objects/simulation/Runner.py` | Background run: scope → seed → patch → reason → diff → persist |
-| `src/back/objects/simulation/Sandbox.py` | Sandbox lifecycle and patch semantics |
+| `src/back/objects/intelligence/Simulation.py` | Facade: CRUD, backend gate, run launch, diff paging, live compare |
+| `src/back/objects/intelligence/CompareGraph.py` | Sandbox-vs-live triple diff projected as a capped node/edge graph |
+| `src/back/objects/intelligence/Runner.py` | Background run: scope → seed → patch → reason → diff → persist |
+| `src/back/objects/intelligence/Sandbox.py` | Sandbox lifecycle and patch semantics |
 | `src/back/core/graphdb/lakebase/SimulationStore.py` | Sandbox-pinned Lakebase store with the write-target guard |
 | `src/back/objects/registry/store/lakebase/Simulations.py` | `simulations` / `simulation_runs` registry mixin |
 | `src/api/routers/internal/simulation.py` | Internal JSON API |
 | `src/api/routers/simulation.py` | Public `/api/v1/simulations` CRUD + run |
 | `src/back/objects/digitaltwin/query/TwinSandboxSparql.py` | SPARQL over a ready sandbox snapshot |
-| `src/front/templates/simulation.html` | Community / Cohorts / Patterns / Scenarios / Compare / Runs page (scenario editor is not a sidebar item) |
-| `src/front/static/simulation/js/simulation-compare.js` | Compare section: scenario picker, Sigma overlay graph, details panel |
+| `src/front/templates/intelligence.html` | Community / Cohorts / Patterns / Scenarios / Compare / Runs page (scenario editor is not a sidebar item) |
+| `src/front/static/intelligence/js/simulation-compare.js` | Compare section: scenario picker, Sigma overlay graph, details panel |
 
 Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
 (former Knowledge Graph → Cohorts) live under this menu. Bookmarks to
@@ -1470,10 +1473,13 @@ materializations. Same job-only gate as Community (analytics toggle +
 3. **Read back** — `GET /dtwin/patterns/latest` (top-N + stats + job gate);
    `GET /dtwin/patterns/{id}/shape` (tokens + layered diagram) and `/members`
    (paged ≤ 500).
-4. **Materialize** (`POST /dtwin/patterns/materialize`) starts
-   `pattern_materialize`. `PatternMaterializer` writes a named `Pattern`
-   individual + `:inPattern` memberships (multiple saved patterns coexist).
-5. **Saved** — `GET /dtwin/patterns/saved`, delete one saved pattern's triples.
+4. **Save** (`POST /dtwin/patterns/save`) starts `pattern_save`.
+   `SavedPatternStore` copies the member rows of the chosen pattern into
+   `graph_pattern_saved_<slug>` (a Delta table next to the job output). Several
+   saved patterns coexist, keyed by `saved_id`. The RDF graph is not written.
+5. **Saved** — `GET /dtwin/patterns/saved` (list), `GET …/saved/{id}/members`
+   (paged), `DELETE …/saved/{id}` (drops that snapshot only). Saved snapshots
+   survive the next Detect, which overwrites `graph_patterns_<slug>`.
 
 `class_filter` for patterns is a **single** required anchor type; hops walk
 the full graph (not induced). `via` in shape records is the full predicate
@@ -1486,14 +1492,13 @@ lifecycle) are documented for operators — not separate product modes in v1.
 |------|---------|
 | `src/jobs/graph_analytics_job.py` | `PatternSQL` / `run_patterns` — signatures, refine, outputs |
 | `resources/pattern_detection.job.yml` | Bundle job `<app>-pattern-detection` |
-| `src/back/core/graph_analysis/JobPatterns.py` | Trigger the job and read bounded outputs |
-| `src/back/core/graph_analysis/pattern_diagram.py` | Shape-edge rows → layered diagram model |
-| `src/back/core/graph_analysis/PatternVocabulary.py` | Pattern / `inPattern` URI helpers |
-| `src/back/core/graph_analysis/PatternMaterializer.py` | Named save, list, delete |
+| `src/back/core/graph_analysis/pattern/JobPatterns.py` | Trigger the job and read bounded outputs |
+| `src/back/core/graph_analysis/pattern/pattern_diagram.py` | Shape-edge rows → layered diagram model |
+| `src/back/core/graph_analysis/pattern/SavedPatternStore.py` | Save, list, page, delete saved snapshots (Unity Catalog) |
 | `src/api/routers/internal/dtwin.py` | `/dtwin/patterns/*` endpoints |
 | `src/back/objects/digitaltwin/TwinAnalytics.py` | Job wiring and pattern entry points |
-| `src/back/objects/digitaltwin/TwinBackgroundTasks.py` | `pattern_detection`, `pattern_materialize` |
-| `src/front/static/simulation/js/simulation-patterns.js` | Discover / Saved UI |
+| `src/back/objects/digitaltwin/TwinBackgroundTasks.py` | `pattern_detection`, `pattern_save` |
+| `src/front/static/intelligence/js/intelligence-patterns.js` | Discover / Saved UI |
 
 ---
 
@@ -1553,13 +1558,13 @@ SQL stores (Delta, Lakebase) aggregate in the database.
 |------|---------|
 | `src/jobs/graph_analytics_job.py` | `CommunitySQL` / `run_communities` — label propagation and outputs on the job |
 | `resources/community_detection.job.yml` | Bundle job `<app>-community-detection` |
-| `src/back/core/graph_analysis/JobCommunities.py` | Trigger the job and read its bounded outputs |
-| `src/back/core/graph_analysis/CommunityVocabulary.py` | Cluster / `inCluster` URI helpers |
-| `src/back/core/graph_analysis/CommunityMaterializer.py` | Set-based materialize, bounded `load_current` / `assignments` / `members`, clear |
+| `src/back/core/graph_analysis/community/JobCommunities.py` | Trigger the job and read its bounded outputs |
+| `src/back/core/graph_analysis/community/CommunityVocabulary.py` | Cluster / `inCluster` URI helpers |
+| `src/back/core/graph_analysis/community/CommunityMaterializer.py` | Set-based materialize, bounded `load_current` / `assignments` / `members`, clear |
 | `src/api/routers/internal/dtwin.py` | detect / latest / members / current / assignments / materialize / clear endpoints |
 | `src/back/objects/digitaltwin/TwinAnalytics.py` | Job wiring and cluster read/write entry points |
 | `src/back/objects/digitaltwin/TwinBackgroundTasks.py` | `run_community_task`, `run_community_materialize_task` |
-| `src/front/static/simulation/js/simulation-communities.js` | Intelligence Community UI (tasks, preview, paged members) |
+| `src/front/static/intelligence/js/intelligence-communities.js` | Intelligence Community UI (tasks, preview, paged members) |
 | `src/front/static/query/js/query-sigmagraph.js` | Colour / collapse from assignments of drawn nodes |
 | `src/front/templates/partials/dtwin/_query_sigmagraph.html` | Data Clusters visualization panel |
 | `src/front/static/query/css/query-sigmagraph.css` | Cluster panel and chip styles |

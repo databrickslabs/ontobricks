@@ -12,7 +12,7 @@ from back.objects.session import SessionManager, get_session_manager, get_domain
 from back.objects.domain import Domain
 from shared.config.settings import Settings, get_settings
 
-router = APIRouter(prefix="/domain", tags=["Domain"])
+router = APIRouter(prefix="/domain", tags=["Context"])
 
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)

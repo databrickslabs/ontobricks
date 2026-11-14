@@ -252,7 +252,7 @@ class GitHubSyncService:
         self.ensure_claim()
         ok, folders, msg = store.list_domain_folders()
         if not ok:
-            raise ValidationError(f"Cannot list registry domains: {msg}")
+            raise ValidationError(f"Cannot list registry contexts: {msg}")
         files: Dict[str, str] = {}
         errors: List[str] = []
         index: Dict[str, List[str]] = {}
@@ -288,7 +288,7 @@ class GitHubSyncService:
             )
         sha = self.client.commit_files(
             files,
-            self._message("sync", "all domains", actor),
+            self._message("sync", "all contexts", actor),
             replace_prefixes=[self.cfg.path("domains")],
             author=self._author,
         )
@@ -371,7 +371,7 @@ class GitHubSyncService:
         envelope = obx_format.build_envelope(domains, exported_by=exported_by)
         envelope["source"] = f"github:{self.cfg.label}"
         logger.info(
-            "GitHub OBX envelope from %s: %d files, %d domains in %.1fs",
+            "GitHub OBX envelope from %s: %d files, %d contexts in %.1fs",
             self.cfg.label,
             len(listing),
             len(domains),

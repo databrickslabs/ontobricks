@@ -338,7 +338,7 @@ async function parseAndLoadOwl(content, filename) {
                     credentials: 'same-origin'
                 });
             } catch (e) {
-                console.log('Could not update domain base URI:', e);
+                console.log('Could not update context base URI:', e);
             }
             
             await autoGenerateOwl();
@@ -717,7 +717,7 @@ async function parseAndLoadRdfs(content, filename) {
                     credentials: 'same-origin'
                 });
             } catch (e) {
-                console.log('Could not update domain base URI:', e);
+                console.log('Could not update context base URI:', e);
             }
             
             await autoGenerateOwl();

@@ -22,7 +22,7 @@ def normalize_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def run(ctx: TaskContext) -> RunOutcome:
     """Rebuild graph companion indexes for the scheduled domain."""
-    ctx.progress(5, "Loading domain from registry...")
+    ctx.progress(5, "Loading context from registry...")
     backend = GraphDBFactory._resolve_graph_backend(ctx.domain)
     if backend not in _SUPPORTED_BACKENDS:
         raise ValidationError(

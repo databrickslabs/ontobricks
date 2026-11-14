@@ -3,7 +3,7 @@
 <div class="content-section">
     <div class="section-header mb-4">
         <h4 class="mb-1"><i class="bi bi-info-circle me-2"></i>Configuration</h4>
-        <p class="text-muted mb-0 small">Define your domain details</p>
+        <p class="text-muted mb-0 small">Define your context details</p>
     </div>
 
     <form id="domainForm" class="card h-100 ob-tabs-wrap">
@@ -94,7 +94,7 @@
                                    value="{{ domain.base_uri or '' }}"
                                    readonly>
                             <small class="text-muted">
-                                <span id="baseUriHint">Auto-generated from <a href="/settings">Settings</a> default base URI domain and domain name.</span>
+                                <span id="baseUriHint">Auto-generated from <a href="/settings">Settings</a> default Base URI and context name.</span>
                             </small>
                         </div>
                         
@@ -103,7 +103,7 @@
                                 <i class="bi bi-card-text"></i> Description
                             </label>
                             <textarea class="form-control domain-editable" id="domainDescription" rows="4" 
-                                      placeholder="Describe your domain, its purpose, and scope...">{{ domain.description or '' }}</textarea>
+                                      placeholder="Describe your context, its purpose, and scope...">{{ domain.description or '' }}</textarea>
                         </div>
                         
                         <div class="row">
@@ -246,10 +246,10 @@
                             <!-- Shown only when backend = No Backend (JS toggles d-none) -->
                             <div class="alert alert-info border small mt-2 py-2 mb-0 {% if domain.graph_backend != 'none' %}d-none{% endif %}" id="noBackendNotice">
                                 <i class="bi bi-diagram-2 me-1"></i>
-                                <strong>Ontology-only domain.</strong> No graph is built: the
+                                <strong>Ontology-only context.</strong> No graph is built: the
                                 <strong>Mapping</strong> and <strong>Graph</strong> features are disabled,
                                 the graph MCP tools are turned off (only <code>describe_ontology</code> is exposed),
-                                and the domain can be submitted for review and published on its ontology alone.
+                                and the context can be submitted for review and published on its ontology alone.
                             </div>
                         </fieldset>
 
@@ -378,7 +378,7 @@
                             </div>
                             <small class="text-muted">
                                 <i class="bi bi-info-circle me-1"></i>The Triple-Store Gateway VIEW is always created in the
-                                registry's <strong>catalog.schema</strong>.  Its name is derived from the domain
+                                registry's <strong>catalog.schema</strong>.  Its name is derived from the context
                                 name and version (<code>triplestore_&lt;domain&gt;_V&lt;version&gt;</code>).
                             </small>
                         </div>
@@ -390,7 +390,7 @@
                             <p class="small mb-3">
                                 Whose identity a graph read runs under depends on the backend selected above.
                                 In Databricks Apps every graph read also requires <strong>Team membership</strong>
-                                on this domain (<em>Viewer</em> role or higher); App administrators bypass, and
+                                on this context (<em>Viewer</em> role or higher); App administrators bypass, and
                                 these checks are disabled in local development.
                             </p>
 
@@ -425,8 +425,8 @@
                                     <li><strong>Reads run as</strong> the app service principal &mdash;
                                         <i class="bi bi-dash-circle text-muted me-1"></i>no OBO (Postgres carries no
                                         Unity Catalog identity).</li>
-                                    <li><strong>Read requires</strong> Team membership on this domain
-                                        (Viewer role or higher); the query is pinned to this domain's graph table.</li>
+                                    <li><strong>Read requires</strong> Team membership on this context
+                                        (Viewer role or higher); the query is pinned to this context's graph table.</li>
                                     <li>Both reads and the build use the same service-principal identity.</li>
                                 </ul>
                             </div>
@@ -441,8 +441,8 @@
                                     <li><strong>Reads run as</strong> the stored Bolt profile
                                         (<a href="/settings?section=neo4j">Settings &rarr; Neo4j</a>) &mdash;
                                         <i class="bi bi-dash-circle text-muted me-1"></i>no OBO.</li>
-                                    <li><strong>Read requires</strong> Team membership on this domain
-                                        (Viewer role or higher); queries are pinned to this domain's Neo4j database.</li>
+                                    <li><strong>Read requires</strong> Team membership on this context
+                                        (Viewer role or higher); queries are pinned to this context's Neo4j database.</li>
                                     <li>Both reads and the build use the same Bolt profile identity.</li>
                                 </ul>
                             </div>
@@ -455,7 +455,7 @@
                         <div class="alert alert-light border small mb-4">
                             <i class="bi bi-info-circle me-1"></i>
                             Controls what an MCP client (Databricks Playground, Claude, an agent) sees
-                            when it selects this domain. Settings apply as soon as the client calls
+                            when it selects this context. Settings apply as soon as the client calls
                             <code>select_domain</code> &mdash; no MCP server restart. They have no effect
                             on this authoring UI, which always shows the full ontology.
                         </div>
@@ -489,8 +489,8 @@
                                 {% endfor %}
                             </div>
                             <small class="text-muted d-block mt-2">
-                                <i class="bi bi-shield-lock me-1"></i>Always exposed (they run before a domain
-                                is selected, so no per-domain policy can hide them):
+                                <i class="bi bi-shield-lock me-1"></i>Always exposed (they run before a context
+                                is selected, so no per-context policy can hide them):
                                 {% for name in domain.mcp_registry_tools %}<code>{{ name }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
                             </small>
                         </div>

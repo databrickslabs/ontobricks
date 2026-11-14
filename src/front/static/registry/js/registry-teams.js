@@ -116,7 +116,7 @@
             container.innerHTML =
                 '<div class="empty-state">' +
                 '<i class="bi bi-folder-x me-1"></i>' +
-                ' No domains found in the registry.' +
+                ' No contexts found in the registry.' +
                 '</div>';
             return;
         }

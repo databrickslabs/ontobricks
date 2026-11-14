@@ -2,7 +2,7 @@
 
 import pytest
 
-from back.core.graph_analysis.pattern_diagram import (
+from back.core.graph_analysis.pattern.pattern_diagram import (
     MAX_DIAGRAM_EDGES,
     build_pattern_diagram,
     local_label,

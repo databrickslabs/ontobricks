@@ -216,12 +216,12 @@
      * the current permission scope without opening Settings.
      */
     const ROLE_TOOLTIPS = {
-        admin: 'Admin — full access to all domains, settings, and registry.',
-        builder: 'Builder — full read/write access on this domain '
+        admin: 'Admin — full access to all contexts, settings, and registry.',
+        builder: 'Builder — full read/write access on this context '
             + '(ontology, mappings, twins, dashboards).',
-        editor: 'Editor — can read and edit this domain\'s ontology and '
+        editor: 'Editor — can read and edit this context\'s ontology and '
             + 'mappings.',
-        viewer: 'Viewer — read-only access on this domain. Ask a domain '
+        viewer: 'Viewer — read-only access on this context. Ask a context '
             + 'admin for editor or builder rights to make changes.',
     };
 

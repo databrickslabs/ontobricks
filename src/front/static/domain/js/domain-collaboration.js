@@ -259,12 +259,12 @@
             });
             const data = await resp.json();
             if (!data.success) {
-                note('Error: ' + (data.message || 'Failed to load domain'), 'error');
+                note('Error: ' + (data.message || 'Failed to load context'), 'error');
                 return;
             }
             window.location.href = '/domain/?section=review';
         } catch (err) {
-            note('Error loading domain: ' + err.message, 'error');
+            note('Error loading context: ' + err.message, 'error');
         }
     }
 
@@ -303,7 +303,7 @@
         if (!dc.folder || !dc.hasRegistry) {
             c.innerHTML =
                 '<div class="alert alert-info small mb-0">' +
-                'Save this domain to the registry to start collaborating.</div>';
+                'Save this context to the registry to start collaborating.</div>';
             return;
         }
         try {
@@ -495,7 +495,7 @@
                 if (panelEl) {
                     panelEl.innerHTML =
                         '<div class="alert alert-warning small mb-0">' +
-                        'Save this domain to the registry to start a discussion.</div>';
+                        'Save this context to the registry to start a discussion.</div>';
                 }
                 return;
             }

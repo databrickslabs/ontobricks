@@ -14,7 +14,7 @@ from back.core.helpers import run_blocking
 from back.core.logging import get_logger
 from back.objects.digitaltwin import DigitalTwin
 from back.objects.session import SessionManager, get_session_manager
-from back.objects.simulation import Simulation
+from back.objects.intelligence import Simulation
 from shared.config.settings import Settings, get_settings
 
 from api.routers.digitaltwin import TaskProgressResponse, _poll_task, assert_public_graph_read, assert_public_graph_write

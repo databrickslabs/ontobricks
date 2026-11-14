@@ -34,7 +34,7 @@ async function loadDomainGateway() {
         if (!domains.length) {
             container.innerHTML =
                 '<div class="ob-domain-grid-empty text-muted">' +
-                '<div><i class="bi bi-box fs-3 d-block mb-2"></i>No domains yet.</div>' +
+                '<div><i class="bi bi-box fs-3 d-block mb-2"></i>No contexts yet.</div>' +
                 '<button type="button" class="ob-domain-empty-cta" data-requires-app="admin" data-action="newDomain">' +
                 '<i class="bi bi-file-earmark-plus"></i> Create your first domain</button>' +
                 '</div>';
@@ -63,10 +63,10 @@ async function loadDomainGateway() {
             }
         });
     } catch (err) {
-        console.error('Error loading domain gateway:', err);
+        console.error('Error loading context gateway:', err);
         container.innerHTML =
             '<div class="ob-domain-grid-empty text-muted">' +
-            '<i class="bi bi-exclamation-triangle"></i> Could not load domains.</div>';
+            '<i class="bi bi-exclamation-triangle"></i> Could not load contexts.</div>';
     }
 }
 
@@ -146,7 +146,7 @@ async function openDomain(name, version) {
         });
         const data = await resp.json();
         if (!data.success) {
-            showNotification('Error: ' + (data.message || 'Failed to open domain'), 'error');
+            showNotification('Error: ' + (data.message || 'Failed to open context'), 'error');
             return;
         }
         if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
@@ -157,7 +157,7 @@ async function openDomain(name, version) {
             window.location.href = '/domain/?section=information';
         }
     } catch (err) {
-        showNotification('Error opening domain: ' + err.message, 'error');
+        showNotification('Error opening context: ' + err.message, 'error');
     }
 }
 

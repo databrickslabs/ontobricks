@@ -46,7 +46,7 @@
             formula: 'BC(v) = Σ<sub>s ≠ v ≠ t</sub> <sup>σ(s, t | v)</sup>/<sub>σ(s, t)</sub>',
             formulaDesc: '<ul class="mb-0"><li><code>σ(s, t)</code> — total number of shortest paths from node <em>s</em> to node <em>t</em></li><li><code>σ(s, t | v)</code> — those shortest paths that pass through <em>v</em></li><li>Result is normalised to [0, 1] by dividing by <code>(N−1)(N−2)/2</code></li></ul>',
             example: '<strong>Scenario:</strong> A <em>Department</em> entity that connects multiple <em>Employee</em> clusters to <em>Project</em> entities lies on many shortest paths. Its betweenness is high — removing it would disconnect large parts of the graph.',
-            why: 'High-betweenness nodes are <strong>bottlenecks and single points of failure</strong>. They are the most critical entities for connectivity. In a knowledge graph, they often represent integration points, shared reference data, or cross-domain hubs.',
+            why: 'High-betweenness nodes are <strong>bottlenecks and single points of failure</strong>. They are the most critical entities for connectivity. In a knowledge graph, they often represent integration points, shared reference data, or cross-context hubs.',
         },
         degree: {
             title: 'Degree Centrality',
@@ -1501,7 +1501,7 @@
             var vsResp = await fetch('/domain/version-status', { credentials: 'same-origin' });
             var vs = await vsResp.json();
             if (!vs.domain_folder || !vs.has_registry) {
-                throw new Error('Save this domain to the registry first.');
+                throw new Error('Save this context to the registry first.');
             }
 
             // POST the comment directly to the API

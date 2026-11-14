@@ -2750,7 +2750,7 @@ class Mapping:
                             {
                                 "check": "domain_match",
                                 "status": "warning",
-                                "detail": f"Ontology domain is '{ont_domain}' but source entity is '{src_name or local_src}'",
+                                "detail": f"Ontology context is '{ont_domain}' but source entity is '{src_name or local_src}'",
                             }
                         )
             if ont_range and resolved_tgt:

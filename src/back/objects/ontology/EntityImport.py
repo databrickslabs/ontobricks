@@ -135,7 +135,7 @@ class EntityImport:
         source_by_name = {c["name"]: c for c in source.get("classes") or [] if c.get("name")}
         unknown = [n for n in names if n not in source_by_name]
         if unknown:
-            raise ValidationError(f"Unknown entities in source domain: {', '.join(unknown)}")
+            raise ValidationError(f"Unknown entities in source context: {', '.join(unknown)}")
 
         classes = list(s.get_classes())
         properties = list(s.get_properties())

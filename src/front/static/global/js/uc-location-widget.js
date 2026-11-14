@@ -59,7 +59,7 @@ const UCLocationWidget = (function() {
                 }
             }
         } catch (error) {
-            console.error('[UCLocationWidget] Error loading domain registry location:', error);
+            console.error('[UCLocationWidget] Error loading context registry location:', error);
         }
         return { catalog: '', schema: '', volume: '' };
     }

@@ -545,7 +545,7 @@ class TestIndustryImport:
         assert session.ontology["base_uri"] == "http://f/"
 
     def test_empty_selection_rejected(self, session):
-        with pytest.raises(ValidationError, match="No FIBO domains selected"):
+        with pytest.raises(ValidationError, match="No FIBO contexts selected"):
             Import(session).import_industry_ontology("fibo", [])
 
     def test_domain_errors_propagate_unchanged(self, session, monkeypatch):

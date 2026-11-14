@@ -1339,7 +1339,9 @@ collapses that partition, looking up memberships only for the entities it draws.
 ### Pattern detection
 
 **Intelligence → Patterns → Discover** finds recurring egocentric neighbourhood
-signatures for a **required** anchor entity type on a dedicated Databricks job
+signatures for a **required** anchor entity type. **Detect** opens a dialog for
+entity type, hops, bins, min support, and refine top-N, then runs a dedicated
+Databricks job
 (`…-pattern-detection`). It uses the same admin toggle and `…_data` snapshot as
 Community / Analytics. Each anchor's attributes (numeric quantile bins;
 categorical values, except identifier-like attributes with more than 20
@@ -1358,11 +1360,11 @@ next to the run stats. Select a pattern to see a layered diagram of that
 neighbourhood (entity type at hop 0, then 1 / 2 / 3 hops) and the list of
 matching entities. Optional **Refine top-N** merges near-duplicates that
 differ only by relationship multiplicity into a motif; it only applies at the
-**Exact** level. Nothing is written to
-the graph until **Save & materialize**, which stores a named pattern
-(`Pattern` + `:inPattern` memberships) you can list or delete under
-**Patterns → Saved**. Re-run Detect after the graph changes; saved patterns do
-not auto-refresh. A run from before the diagram table was added asks you to
+**Exact** level. Nothing is written to the graph. **Save** keeps a named
+snapshot of the matching entities in Unity Catalog (table
+`graph_pattern_saved_<slug>` next to the Detect output), which you can list or
+delete under **Patterns → Saved**. A saved snapshot does not change when the
+graph changes or when you run Detect again; save again to capture a new result. A run from before the diagram table was added asks you to
 Detect again before it can draw.
 
 Patterns vary by structure (attribute-heavy, 1-hop, multi-hop, fan-out),
@@ -2564,7 +2566,7 @@ import. The repository must already be configured and claimed in Settings.
 
 - **Deep-linked sections**: Sidebar section changes update the URL (`?section=<id>`), so you can bookmark or share a specific section. Browser Back/Forward navigates between previously visited sections.
 - **Domain identity target**: The contextual identity launcher (`Domain` name + version badge) lives in the L2 rail. Clicking it opens the workspace map.
-- **Workspace map launcher**: `Open workspace map` opens a five-column menu directory for Domain, Ontology, Mapping, Graph, and Simulation actions. It launches sections/routes without forcing a jump to `/domain/`.
+- **Workspace map launcher**: `Open workspace map` opens a five-column menu directory for Domain, Ontology, Mapping, Graph, and Intelligence actions. It launches sections/routes without forcing a jump to `/domain/`.
 - **Workspace active state**: The current workspace becomes a static highlighted segment (`aria-current="page"`); only inactive workspace targets keep dropdown menus.
 - **Mobile icon state**: On narrow screens, workspace and action labels are visually hidden and controls remain as titled icons with keyboard focus support.
 
@@ -3282,7 +3284,7 @@ After import you can:
 ### Simulation
 - **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
 - **Community detection**: **Intelligence → Community → Detect** previews a label-propagation partition computed on a Databricks job, then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer only visualises that partition.
-- **Pattern detection**: **Intelligence → Patterns → Discover** finds recurring typed neighbourhoods (attributes + multi-hop relationships) on a Databricks job; **Save & materialize** writes named `Pattern` + `:inPattern` triples. **Saved** lists and deletes them.
+- **Pattern detection**: **Intelligence → Patterns → Discover** finds recurring typed neighbourhoods (attributes + multi-hop relationships) on a Databricks job; **Save** keeps a named snapshot of the matching entities in Unity Catalog (the graph is not changed). **Saved** lists and deletes them.
 - **Cohort design and run**: **Intelligence → Cohorts** authors grouping rules; **Intelligence → Run** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
 
 ### Graph (Sync & Explore)

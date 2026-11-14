@@ -36,7 +36,7 @@ def test_import_button_opens_the_file_picker():
 def test_export_and_import_ids_do_not_clash_with_graph_or_simulation_pages():
     partial = _read("templates/partials/ontology/_ontology_business_rules.html")
     new_ids = {"brExportRulesBtn", "brImportRulesBtn", "brImportRulesFile", "brImportSummaryModal"}
-    for rel in ("templates/dtwin.html", "templates/simulation.html"):
+    for rel in ("templates/dtwin.html", "templates/intelligence.html"):
         page_ids = set(re.findall(r'\bid="([^"]+)"', _read(rel)))
         assert not (new_ids & page_ids), rel
     for ident in new_ids - {"brImportSummaryModal"}:

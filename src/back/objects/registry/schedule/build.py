@@ -281,7 +281,7 @@ def run(ctx: TaskContext) -> RunOutcome:
     start = time.time()
     domain_name = ctx.domain_name
 
-    ctx.progress(5, "Loading domain from registry...")
+    ctx.progress(5, "Loading context from registry...")
     domain = ctx.domain
     version = ctx.loaded_version
 
@@ -347,7 +347,7 @@ def run(ctx: TaskContext) -> RunOutcome:
         settings=ctx.settings,
     )
 
-    ctx.progress(95, "Saving domain metadata...")
+    ctx.progress(95, "Saving context metadata...")
     _persist_domain_metadata(
         ctx.registry_service, domain, version, ctx.run_ts, domain_name
     )

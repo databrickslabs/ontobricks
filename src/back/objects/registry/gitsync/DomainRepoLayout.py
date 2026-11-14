@@ -323,10 +323,10 @@ class DomainRepoLayout:
         lines = [
             "# OntoBricks ontology repository",
             "",
-            "Mirrored automatically by OntoBricks. Edit domains in OntoBricks; "
+            "Mirrored automatically by OntoBricks. Edit contexts in OntoBricks; "
             "changes made here are only applied through *Import from GitHub*.",
             "",
-            "| Domain | Versions |",
+            "| Context | Versions |",
             "|--------|----------|",
         ]
         for folder in sorted(domains):

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from back.core.graphdb.lakebase import _companion_ddl
-from back.objects.simulation import Artifacts
+from back.objects.intelligence import Artifacts
 
 pytestmark = pytest.mark.unit
 

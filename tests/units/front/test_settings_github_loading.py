@@ -42,7 +42,7 @@ def test_title_row_stays_visible_while_the_spinner_shows(template):
 
     assert "section-header" in header
     assert "<h4" in header and "GitHub" in header
-    assert "Mirror every domain" in header
+    assert "Mirror every context" in header
     assert 'id="btnSaveGithub"' in header
     assert "section-header" not in loaded
 

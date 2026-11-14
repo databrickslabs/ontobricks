@@ -88,7 +88,7 @@
 
                             <h4 class="mt-4"><i class="bi bi-diagram-3 me-2"></i>The OntoBricks pipeline</h4>
                             <div class="help-pipeline">
-                                <div class="help-step"><span class="help-step-num">1</span><div><strong>Registry</strong><br><small>Browse and select a domain</small></div></div>
+                                <div class="help-step"><span class="help-step-num">1</span><div><strong>Registry</strong><br><small>Browse and select a context</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step"><span class="help-step-num">2</span><div><strong>Context</strong><br><small>Define metadata, documents, data assets</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
@@ -111,7 +111,7 @@
                             <ul>
                                 <li>A Databricks workspace with Unity Catalog enabled</li>
                                 <li>A running SQL Warehouse</li>
-                                <li>A UC Volume for the domain registry (configure via <em>Settings &rarr; Registry &rarr; Initialize</em> if empty)</li>
+                                <li>A UC Volume for the context registry (configure via <em>Settings &rarr; Registry &rarr; Initialize</em> if empty)</li>
                                 <li>A Databricks Model Serving endpoint (for LLM-powered automation)</li>
                             </ul>
 
@@ -120,7 +120,7 @@
                                     <div class="help-step-badge">1</div>
                                     <div>
                                         <h5><i class="bi bi-plus-circle me-2"></i>Create a Context</h5>
-                                        <p>As an Admin (<code>CAN_MANAGE</code>), open <strong>Registry</strong> &rarr; click <em>New Context</em>. Give it a name (e.g. <code>sales_demo</code>), then open the <strong>Configuration</strong> tab and click <em>Save Context</em> (<kbd>Cmd/Ctrl+S</kbd>). Editors and Builders open an assigned domain from Home or Registry Browse. The domain must be saved before ontology, mapping and digital-twin features unlock.</p>
+                                        <p>As an Admin (<code>CAN_MANAGE</code>), open <strong>Registry</strong> &rarr; click <em>New Context</em>. Give it a name (e.g. <code>sales_demo</code>), then open the <strong>Configuration</strong> tab and click <em>Save Context</em> (<kbd>Cmd/Ctrl+S</kbd>). Editors and Builders open an assigned context from Home or Registry Browse. The context must be saved before ontology, mapping and digital-twin features unlock.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
@@ -175,18 +175,18 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#hw1">
-                                            <i class="bi bi-boxes me-2"></i><strong>1. Registry</strong> &mdash; manage domains
+                                            <i class="bi bi-boxes me-2"></i><strong>1. Registry</strong> &mdash; manage contexts
                                         </button>
                                     </h2>
                                     <div id="hw1" class="accordion-collapse collapse show" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
-                                            <p>The Registry is the central index of all domains (ontology + mapping + triple store) stored in your Unity Catalog Volume.</p>
+                                            <p>The Registry is the central index of all contexts (ontology + mapping + triple store) stored in your Unity Catalog Volume.</p>
                                             <ul>
-                                                <li><strong>Browse</strong> &mdash; list and open existing domains</li>
-                                                <li><strong>New Context</strong> (Admin only) &mdash; create a fresh domain</li>
-                                                <li><strong>Load Context</strong> (navbar) &mdash; open an existing domain from UC</li>
-                                                <li><strong>Export / Import</strong> &mdash; move domains between environments as a portable <code>.obx</code> file (see the <a href="#help-docs/advanced-features#registry-import-and-export" data-help-jump="docs" data-help-doc="advanced-features" data-help-anchor="registry-import-and-export">Registry import and export</a> guide)</li>
-                                                <li><strong>Bridges</strong> &mdash; cross-domain links that allow navigating from one graph viewer to another</li>
+                                                <li><strong>Browse</strong> &mdash; list and open existing contexts</li>
+                                                <li><strong>New Context</strong> (Admin only) &mdash; create a fresh context</li>
+                                                <li><strong>Load Context</strong> (navbar) &mdash; open an existing context from UC</li>
+                                                <li><strong>Export / Import</strong> &mdash; move contexts between environments as a portable <code>.obx</code> file (see the <a href="#help-docs/advanced-features#registry-import-and-export" data-help-jump="docs" data-help-doc="advanced-features" data-help-anchor="registry-import-and-export">Registry import and export</a> guide)</li>
+                                                <li><strong>Bridges</strong> &mdash; cross-context links that allow navigating from one graph viewer to another</li>
                                             </ul>
                                             <p class="text-muted small mb-0">Automation (<em>Settings &rarr; Automation &rarr; Scheduler</em>), the REST <em>API</em> reference (<em>Settings &rarr; Developer</em>) and the <em>Registry Location</em> volume (<em>Settings &rarr; Registry</em>) are configured from Settings, not the Registry modal.</p>
                                         </div>
@@ -205,13 +205,13 @@
                                             <ul>
                                                 <li><strong>General</strong> &mdash; overall readiness dashboard (ontology &check;, mapping &check;, sync &check;)</li>
                                                 <li><strong>Configuration</strong> &mdash; name, description, base URI, custom URI override</li>
-                                                <li><strong>Versions</strong> &mdash; manage snapshots of your domain</li>
+                                                <li><strong>Versions</strong> &mdash; manage snapshots of your context</li>
                                                 <li><strong>Data Assets</strong> &mdash; import Unity Catalog metadata (catalog, schema, tables, columns)</li>
                                                 <li><strong>Documents</strong> &mdash; upload documents; parsed text is stored in Lakebase and shared by Generate and Mapping</li>
                                                 <li><strong>Pages</strong> &mdash; select Unity Catalog Knowledge Pages to use later in Ontology Generate</li>
                                             </ul>
-                                            <p>Loading a domain (Home, navbar Load, Registry, Versions) always opens <strong>Configuration</strong>.</p>
-                                            <p><strong>Save</strong> your domain (<kbd>Cmd/Ctrl+S</kbd>) before moving to Ontology or Mapping.</p>
+                                            <p>Loading a context (Home, navbar Load, Registry, Versions) always opens <strong>Configuration</strong>.</p>
+                                            <p><strong>Save</strong> your context (<kbd>Cmd/Ctrl+S</kbd>) before moving to Ontology or Mapping.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -310,7 +310,7 @@
                                                 <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;)</li>
                                                 <li><strong>Run</strong> &mdash; preview a saved cohort rule and materialise it to the graph or a Unity Catalog table</li>
                                                 <li><strong>Discover</strong> &mdash; automatically find recurring neighbourhood patterns for a chosen entity type (attributes + multi-hop relationships) on Databricks, then save matching entities to the graph</li>
-                                                <li><strong>Saved</strong> &mdash; list and delete named patterns materialized from Discover</li>
+                                                <li><strong>Saved</strong> &mdash; list and delete patterns saved from Discover</li>
                                                 <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Graph → Business rules, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed by comparing the materialised sandbox after-picture to its before-picture companion; <em>Explorer</em> opens that sandbox in the graph viewer</li>
                                                 <li><strong>Compare</strong> &mdash; overlay a ready sandbox on the current live graph (inferred or asserted only), on the same scope as the scenario: one colour-coded graph of unchanged, added (sandbox only) and removed (live only) triples, with exact counters and a details panel</li>
                                                 <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>
@@ -338,7 +338,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-share"></i></div>
                                         <h5>Interactive Graph Viewer</h5>
-                                        <p>Two-phase search, configurable depth, Graph dropdown to view a ready simulation sandbox, cross-domain bridges, colour-by-cluster and super-nodes from a partition materialized in Intelligence → Community.</p>
+                                        <p>Two-phase search, configurable depth, Graph dropdown to view a ready simulation sandbox, cross-context bridges, colour-by-cluster and super-nodes from a partition materialized in Intelligence → Community.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -365,8 +365,8 @@
                                 <div class="col-md-6">
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-signpost-split"></i></div>
-                                        <h5>Cross-domain Bridges</h5>
-                                        <p>Link entities from different domains. The navbar bridges navigation automatically switches domains and focuses the target entity.</p>
+                                        <h5>Cross-context Bridges</h5>
+                                        <p>Link entities from different contexts. The navbar bridges navigation automatically switches contexts and focuses the target entity.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -380,7 +380,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-people-fill"></i></div>
                                         <h5>Cohort Discovery</h5>
-                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Simulation &rarr; Cohorts</strong>, run &amp; preview in <strong>Simulation &rarr; Run</strong>.</p>
+                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Intelligence &rarr; Cohorts</strong>, run &amp; preview in <strong>Intelligence &rarr; Cohorts &rarr; Run</strong>.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -394,7 +394,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-cloud-arrow-up"></i></div>
                                         <h5>Unity Catalog first</h5>
-                                        <p>All domains are stored in UC volumes; triples land in a Delta view plus the domain's Graph DB engine (<strong>Lakebase</strong>, <strong>Lakehouse</strong>, or <strong>Neo4j</strong>). Incremental sync by default.</p>
+                                        <p>All contexts are stored in UC volumes; triples land in a Delta view plus the context's Graph DB engine (<strong>Lakebase</strong>, <strong>Lakehouse</strong>, or <strong>Neo4j</strong>). Incremental sync by default.</p>
                                     </div>
                                 </div>
                             </div>
@@ -407,7 +407,7 @@
                             <div class="accordion help-accordion" id="helpFaqAccordion">
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">What is an ontology, really?</button></h2>
-                                    <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">An ontology is a formal description of the concepts (classes/entities), their properties (attributes), and the relationships between them in a domain. OntoBricks expresses ontologies in the W3C <strong>OWL</strong> standard and materializes data as RDF triples.</div></div>
+                                    <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">An ontology is a formal description of the concepts (classes/entities), their properties (attributes), and the relationships between them in a context. OntoBricks expresses ontologies in the W3C <strong>OWL</strong> standard and materializes data as RDF triples.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">Do I have to write OWL or SPARQL by hand?</button></h2>
@@ -415,11 +415,11 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">Which triple store backends are supported?</button></h2>
-                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">OntoBricks always materializes a <strong>Delta</strong> view in Unity Catalog (governance + lineage). Each domain also picks a <strong>Graph DB</strong> engine &mdash; <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta triples), or <strong>Neo4j</strong> (typed property graph over Bolt) &mdash; under <em>Configuration &rarr; Backend</em>. Engine connection settings live under <em>Settings &rarr; Back end</em>. See the in-app <a href="#help-docs/backend#neo4j-backend" data-help-jump="docs" data-help-doc="backend" data-help-anchor="neo4j-backend">Neo4j Backend</a> guide for Aura / Community / Enterprise requirements.</div></div>
+                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">OntoBricks always materializes a <strong>Delta</strong> view in Unity Catalog (governance + lineage). Each context also picks a <strong>Graph DB</strong> engine &mdash; <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta triples), or <strong>Neo4j</strong> (typed property graph over Bolt) &mdash; under <em>Configuration &rarr; Backend</em>. Engine connection settings live under <em>Settings &rarr; Back end</em>. See the in-app <a href="#help-docs/backend#neo4j-backend" data-help-jump="docs" data-help-doc="backend" data-help-anchor="neo4j-backend">Neo4j Backend</a> guide for Aura / Community / Enterprise requirements.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Why do I see grey/disabled menu items?</button></h2>
-                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry (a load always opens <em>Configuration</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Graph then become enabled.</div></div>
+                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved context</em>. Create/load a context from the Registry (a load always opens <em>Configuration</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Graph then become enabled.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Auto-Map is running &mdash; can I leave the page?</button></h2>
@@ -438,8 +438,8 @@
                                     <div id="faq8" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Every sidebar section is deep-linkable. Simply copy the current URL &mdash; it already contains the <code>?section=...</code> parameter. Back/Forward in the browser works as expected.</div></div>
                                 </div>
                                 <div class="accordion-item">
-                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq9">How are bridges between domains defined?</button></h2>
-                                    <div id="faq9" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Go to <strong>Registry &rarr; Bridges</strong> to declare cross-domain links. In the Graph Viewer, right-clicking an entity exposes available bridges; clicking one switches domains and focuses the target entity.</div></div>
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq9">How are bridges between contexts defined?</button></h2>
+                                    <div id="faq9" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Go to <strong>Registry &rarr; Bridges</strong> to declare cross-context links. In the Graph Viewer, right-clicking an entity exposes available bridges; clicking one switches contexts and focuses the target entity.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq10">Is CSRF protection enabled?</button></h2>
@@ -457,7 +457,7 @@
                                 <p>Your SQL Warehouse is not yet configured or is starting. Click the <i class="bi bi-server"></i> icon (admin-only) or go to <strong>Settings</strong> to pick a warehouse and wait for it to reach the <em>running</em> state.</p>
                             </div>
                             <div class="help-trouble">
-                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Registry is empty / no domains shown.&rdquo;</h5>
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Registry is empty / no contexts shown.&rdquo;</h5>
                                 <p>Open <strong>Settings &rarr; Registry</strong> and click <em>Initialize</em>. This creates the required folder structure in your Unity Catalog Volume.</p>
                             </div>
                             <div class="help-trouble">
@@ -469,12 +469,12 @@
                                 <p>Large mappings benefit from a larger SQL Warehouse. Also check that your mappings are reasonable SQL (avoid unnecessary cross-joins). Data movement is handled by Databricks Lakeflow synced tables.</p>
                             </div>
                             <div class="help-trouble">
-                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Session state leaked after switching domains.&rdquo;</h5>
-                                <p>Refresh the browser once. The latest version resets all per-domain state on switch &mdash; if you still see staleness, report it with a changelog reference.</p>
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Session state leaked after switching contexts.&rdquo;</h5>
+                                <p>Refresh the browser once. The latest version resets all per-context state on switch &mdash; if you still see staleness, report it with a changelog reference.</p>
                             </div>
                             <div class="help-trouble">
-                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;I see &lsquo;requires domain saved&rsquo; tooltips everywhere.&rdquo;</h5>
-                                <p>An Admin (<code>CAN_MANAGE</code>) must first create and save a domain: Registry &rarr; <em>New Context</em> &rarr; then on the Configuration page press <kbd>Cmd/Ctrl+S</kbd>. Editors and Builders can then open assigned domains from Home or Registry Browse.</p>
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;I see &lsquo;requires context saved&rsquo; tooltips everywhere.&rdquo;</h5>
+                                <p>An Admin (<code>CAN_MANAGE</code>) must first create and save a context: Registry &rarr; <em>New Context</em> &rarr; then on the Configuration page press <kbd>Cmd/Ctrl+S</kbd>. Editors and Builders can then open assigned contexts from Home or Registry Browse.</p>
                             </div>
                         </section>
 
@@ -485,7 +485,7 @@
                             <table class="table table-sm table-striped help-table">
                                 <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
                                 <tbody>
-                                    <tr><td><kbd>Cmd/Ctrl</kbd> + <kbd>S</kbd></td><td>Save the current domain</td></tr>
+                                    <tr><td><kbd>Cmd/Ctrl</kbd> + <kbd>S</kbd></td><td>Save the current context</td></tr>
                                     <tr><td><kbd>Cmd/Ctrl</kbd> + <kbd>K</kbd></td><td>Focus the sidebar search (when available)</td></tr>
                                     <tr><td><kbd>?</kbd></td><td>Toggle the compact keyboard-shortcut overlay</td></tr>
                                     <tr><td><kbd>Esc</kbd></td><td>Close the active overlay/modal</td></tr>
@@ -509,7 +509,7 @@
                             <h2><i class="bi bi-book me-2"></i>Glossary</h2>
                             <dl class="help-glossary">
                                 <dt>Ontology</dt><dd>Formal model of entities (classes), their attributes (data properties) and relationships (object properties), expressed in OWL.</dd>
-                                <dt>Entity</dt><dd>A concept in the domain (e.g. <em>Customer</em>, <em>Order</em>); the underlying OWL term is <em>Class</em>.</dd>
+                                <dt>Entity</dt><dd>A concept in the context (e.g. <em>Customer</em>, <em>Order</em>); the underlying OWL term is <em>Class</em>.</dd>
                                 <dt>Attribute / Data Property</dt><dd>A scalar value attached to an entity (e.g. <em>email</em>, <em>birthDate</em>).</dd>
                                 <dt>Relationship / Object Property</dt><dd>A link between two entities (e.g. <em>Customer placedOrder Order</em>).</dd>
                                 <dt>OWL</dt><dd>W3C Web Ontology Language &mdash; the vocabulary OntoBricks uses to describe the ontology.</dd>
@@ -518,11 +518,11 @@
                                 <dt>SHACL</dt><dd>W3C Shapes Constraint Language &mdash; used for data quality validation.</dd>
                                 <dt>IF-THEN</dt><dd>Inference rules written as &ldquo;IF ... THEN ...&rdquo;.</dd>
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
-                                <dt>Bridge</dt><dd>Cross-domain link between entities of two different domains.</dd>
-                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Simulation &rarr; Cohorts</em>, run under <em>Simulation &rarr; Run</em>.</dd>
+                                <dt>Bridge</dt><dd>Cross-context link between entities of two different contexts.</dd>
+                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Intelligence &rarr; Cohorts</em>, run under <em>Intelligence &rarr; Cohorts &rarr; Run</em>.</dd>
                                 <dt>Simulation</dt><dd>A named what-if sandbox: a slice of the Knowledge Graph copied into an isolated table, patched with hypothetical triples, and re-reasoned &mdash; the live graph is never modified.</dd>
-                                <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the domain Graph DB.</dd>
-                                <dt>Graph DB</dt><dd>Per-domain engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>
+                                <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the context Graph DB.</dd>
+                                <dt>Graph DB</dt><dd>Per-context engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>
                                 <dt>Neo4j</dt><dd>Optional Graph DB backend that stores the Knowledge Graph as a typed property graph (nodes, labels, relationships) instead of flat triples. Requires Neo4j 5.x (Aura recommended).</dd>
                                 <dt>Unity Catalog (UC)</dt><dd>Databricks unified governance for catalogs, schemas, tables and volumes.</dd>
                                 <dt>MCP</dt><dd>Model Context Protocol &mdash; exposes the graph viewer to LLM agents.</dd>

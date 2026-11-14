@@ -106,7 +106,7 @@
         if (st.rows.length === 0) {
             el(tab.ids.wrapper).style.display = 'none';
             el(tab.ids.emptyScope).textContent = selectedDomain()
-                ? 'for this domain'
+                ? 'for this context'
                 : '';
             el(tab.ids.empty).style.display = '';
             renderPagination(kind);
@@ -237,7 +237,7 @@
         } catch (err) {
             // The filter is an optional narrowing of an already-complete
             // view, so a failure here must not stop the tables from loading.
-            console.error('[settings-runs] failed to list domains:', err);
+            console.error('[settings-runs] failed to list contexts:', err);
         }
     }
 

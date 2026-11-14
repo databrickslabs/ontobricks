@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, Tuple
 
-from back.core.graph_analysis.JobMetrics import resolve_analytics_source
+from back.core.graph_analysis.metrics.JobMetrics import resolve_analytics_source
 from back.core.helpers import (
     resolve_analytics_job_enabled,
     resolve_analytics_job_name,

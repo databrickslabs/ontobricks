@@ -69,7 +69,7 @@ SECTION_INVENTORY = {
         "graphql",
         "chat",
     },
-    "simulation.html": {
+    "intelligence.html": {
         "communities",
         "scenarios",
         "cohorts",

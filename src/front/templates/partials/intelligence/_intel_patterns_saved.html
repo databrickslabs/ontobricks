@@ -1,0 +1,31 @@
+<!-- Intelligence → Patterns → Saved -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-2">
+        <div class="me-auto">
+            <h4 class="mb-1"><i class="bi bi-bookmark-check me-2"></i>Saved patterns</h4>
+            <p class="text-muted mb-0 small">
+                Patterns saved from Discover, kept as snapshots in Unity Catalog. Delete removes only that snapshot.
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="patSavedRefreshBtn" title="Reload saved patterns">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-3">
+            <div id="patSavedLoading" class="text-muted small d-none" aria-live="polite">
+                <div class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm text-primary mb-2" role="status" aria-hidden="true"></div>
+                    <p class="small text-muted mb-0">Loading saved patterns…</p>
+                </div>
+            </div>
+            <div id="patSavedEmpty" class="text-muted small">
+                <p class="mb-0">No saved patterns yet. Discover a pattern and use <strong>Save</strong>.</p>
+            </div>
+            <div id="patSavedList" class="pat-saved-list d-none"></div>
+        </div>
+    </div>
+</div>

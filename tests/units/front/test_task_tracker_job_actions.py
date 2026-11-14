@@ -16,7 +16,7 @@ def test_task_type_urls_include_entity_job_action():
 
 def test_task_type_urls_include_simulation():
     js = TRACKER.read_text(encoding="utf-8")
-    assert "'simulation': '/simulation/?section=scenarios'" in js
+    assert "'simulation': '/intelligence/?section=scenarios'" in js
     assert "function taskOpenUrl(" in js
     assert "tab=results" in js
     assert "&simulation=" in js

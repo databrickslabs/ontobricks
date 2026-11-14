@@ -14,7 +14,7 @@ from back.core.helpers import is_uri
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.objects.digitaltwin.constants import RDF_TYPE
-from back.objects.simulation.overlay import load_overlay_preds
+from back.objects.intelligence.overlay import load_overlay_preds
 
 logger = get_logger(__name__)
 

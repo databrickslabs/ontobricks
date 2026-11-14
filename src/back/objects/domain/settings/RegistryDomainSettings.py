@@ -68,7 +68,7 @@ class RegistryDomainSettings:
 
             ok, result, msg = svc.list_domain_details_cached()
             if not ok:
-                raise InfrastructureError("Failed to list registry domains", detail=msg)
+                raise InfrastructureError("Failed to list registry contexts", detail=msg)
             result = copy.deepcopy(result)
             loaded_folder = str(domain.domain_folder or "")
             loaded_version = str(domain.current_version or "")
@@ -98,7 +98,7 @@ class RegistryDomainSettings:
         except Exception as e:
             logger.exception("List registry domains failed: %s", e)
             raise InfrastructureError(
-                "Failed to list registry domains", detail=str(e)
+                "Failed to list registry contexts", detail=str(e)
             ) from e
 
     @staticmethod
@@ -144,7 +144,7 @@ class RegistryDomainSettings:
             if errors:
                 joined = "; ".join(errors)
                 raise InfrastructureError(
-                    "Registry domain was only partially deleted",
+                    "Registry context was only partially deleted",
                     detail=joined,
                 )
             RegistryDomainSettings._delete_github_mirror(
@@ -163,7 +163,7 @@ class RegistryDomainSettings:
         except Exception as e:
             logger.exception("Delete registry domain failed: %s", e)
             raise InfrastructureError(
-                "Delete registry domain failed", detail=str(e)
+                "Delete registry context failed", detail=str(e)
             ) from e
 
     @staticmethod
@@ -222,7 +222,7 @@ class RegistryDomainSettings:
                         domain_errors = svc.delete_domain(domain_name)
                         if domain_errors:
                             raise InfrastructureError(
-                                "Version was deleted but the empty domain could not be removed",
+                                "Version was deleted but the empty context could not be removed",
                                 detail="; ".join(domain_errors),
                             )
                         domain_deleted = True
@@ -246,7 +246,7 @@ class RegistryDomainSettings:
             _ss.clear_version_status_cache()
             if domain_deleted:
                 message = (
-                    f'Version {version} was the last version; domain '
+                    f'Version {version} was the last version; context '
                     f'"{domain_name}" deleted'
                 )
             else:

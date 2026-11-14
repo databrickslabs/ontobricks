@@ -331,10 +331,10 @@ async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
             self._store.insert_triples("g__sim_sim1", rows)
             return len(rows)
 
-    monkeypatch.setattr("back.objects.simulation.Simulation", FakeSim)
-    monkeypatch.setattr("back.objects.simulation.Sandbox", FakeSandbox)
+    monkeypatch.setattr("back.objects.intelligence.Simulation", FakeSim)
+    monkeypatch.setattr("back.objects.intelligence.Sandbox", FakeSandbox)
     monkeypatch.setattr(
-        "back.objects.simulation.Reasoning",
+        "back.objects.intelligence.Reasoning",
         FakeSimReasoning,
     )
     monkeypatch.setattr(

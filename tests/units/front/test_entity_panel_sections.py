@@ -206,7 +206,7 @@ def test_equivalent_and_disjoint_are_chip_pickers_over_hidden_selects():
         ("renderSharedEntityActions", "No functions yet."),
         ("renderSharedEntityJobs", "No jobs yet."),
         ("renderSharedEntityBusinessRules", "No inference rules yet."),
-        ("renderSharedEntityBridges", "No bridges to other domains yet."),
+        ("renderSharedEntityBridges", "No bridges to other contexts yet."),
         ("renderSharedEntityDashboard", "No dashboard linked yet."),
         ("renderSharedEntityDataset", "No datasets linked yet."),
     ],

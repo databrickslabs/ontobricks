@@ -438,12 +438,12 @@ class PermissionService:
             data = store.load_domain_permissions(domain_folder)
         except Exception as e:
             if for_update:
-                raise InfrastructureError("Cannot read domain permissions", detail=str(e)) from e
+                raise InfrastructureError("Cannot read context permissions", detail=str(e)) from e
             logger.warning("Error loading domain permissions for %s: %s", domain_folder, e)
             return {"version": 1, "permissions": []}
         self._domain_perm_cache[domain_folder] = (data, now)
         logger.info(
-            "Loaded %d domain permission entries for %s (backend=%s)",
+            "Loaded %d context permission entries for %s (backend=%s)",
             len(data.get("permissions", [])),
             domain_folder,
             store.backend,
@@ -466,14 +466,14 @@ class PermissionService:
             ok, msg = store.save_domain_permissions(domain_folder, data)
             if not ok:
                 logger.error(
-                    "Failed to write domain permissions for %s: %s",
+                    "Failed to write context permissions for %s: %s",
                     domain_folder,
                     msg,
                 )
-                return False, f"Failed to save domain permissions: {msg}"
+                return False, f"Failed to save context permissions: {msg}"
             self._domain_perm_cache[domain_folder] = (data, time.time())
             logger.info(
-                "Saved %d domain permission entries for %s (backend=%s)",
+                "Saved %d context permission entries for %s (backend=%s)",
                 len(data.get("permissions", [])),
                 domain_folder,
                 store.backend,
@@ -675,7 +675,7 @@ class PermissionService:
             if e["principal"].lower() != principal.lower()
         ]
         if len(data["permissions"]) == before:
-            return False, f"Principal '{principal}' not found in domain permissions"
+            return False, f"Principal '{principal}' not found in context permissions"
         return self.save_domain_permissions(
             host,
             token,
@@ -847,7 +847,7 @@ class PermissionService:
                     )
             except Exception as exc:
                 logger.error(
-                    "Batch save failed for domain %s: %s", domain_folder, exc
+                    "Batch save failed for context %s: %s", domain_folder, exc
                 )
                 failed.append(
                     {

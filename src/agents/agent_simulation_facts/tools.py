@@ -18,7 +18,7 @@ from agents.tools.loopback_http import loopback_client
 from back.core.errors import ValidationError
 from back.core.helpers import extract_local_name, is_uri
 from back.core.logging import get_logger
-from back.objects.simulation import Patch
+from back.objects.intelligence import Patch
 
 logger = get_logger(__name__)
 

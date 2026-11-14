@@ -108,12 +108,12 @@ def test_generic_caption_names_the_toolbar_and_the_tree():
 
 def test_both_inference_screens_use_the_wrapper_and_load_phase_tree_js():
     graph = _read("templates/partials/dtwin/_query_reasoning.html")
-    sim = _read("templates/partials/simulation/_sim_workbench.html")
+    sim = _read("templates/partials/intelligence/_sim_workbench.html")
     for tpl, tree_id in ((graph, "reasoningPhaseTree"), (sim, "simWbPhases")):
         assert "partials/layout/_inference_phase_tree.html" in tpl
         assert f'tree_id="{tree_id}"' in tpl
     for page, module in (("templates/dtwin.html", "query/js/query-reasoning.js"),
-                         ("templates/simulation.html", "simulation/js/simulation-rules.js")):
+                         ("templates/intelligence.html", "intelligence/js/simulation-rules.js")):
         src = _read(page)
         assert src.index("global/js/phase-tree.js") < src.index(module)
     assert "reasoning-tile" not in graph

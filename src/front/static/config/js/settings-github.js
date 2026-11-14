@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 ? '<div class="text-warning mt-1">' + data.errors.map(esc).join('<br>') + '</div>'
                 : '';
             showResult('success',
-                '<i class="bi bi-cloud-check me-1"></i>Synced ' + data.domains + ' domain(s), ' +
+                '<i class="bi bi-cloud-check me-1"></i>Synced ' + data.domains + ' context(s), ' +
                 data.versions + ' version(s) — ' + sha + warn);
             load();
         });

@@ -227,7 +227,7 @@ the entire app chrome — never duplicate or substitute any of it:
 | Element | Provided by `base.html` | Don't reimplement |
 |---------|-------------------------|-------------------|
 | L1 navbar (top) | `<nav class="navbar navbar-expand-lg navbar-light">` driven by `menu_config.json` | a custom top bar |
-| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the domain crumb, version crumb (`vN ▾`), segmented Domain / Ontology / Mapping / Graph / Simulation workspace track, breadcrumb, and Close → Save actions | a second nav element |
+| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the domain crumb, version crumb (`vN ▾`), segmented Domain / Ontology / Mapping / Graph / Intelligence workspace track, breadcrumb, and Close → Save actions | a second nav element |
 | Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav, with dirty dot and shortcut keycap | a per-page save button |
 | Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
 | Notification Center dropdown | `#notifCenterDropdown` (bell) | a per-page notif list |
@@ -516,7 +516,7 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
 | Ontology | `ontology` | `bi-bezier2` |
 | Mapping | `assignment` | `bi-shuffle` |
 | Graph | `digitaltwin` | `bi-radar` |
-| Simulation | `simulation` | `bi-sliders2-vertical` |
+| Intelligence | `intelligence` | `bi-sliders2-vertical` |
 | Settings | `settings` | `bi-gear` |
 
 Do not reuse Domain's `bi-box` for Graph (or any other
@@ -540,7 +540,7 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
      `vN ▾`, rendered from the `domainSwitch` action in `menu_config.json`.
      It opens the version switcher, which includes **New Version**.
   3. **Workspace links** (`.ob-subnav-workspace-list`): Domain, Ontology,
-     Mapping, Graph, Simulation. No ordinal numbers. The current workspace is a
+     Mapping, Graph, Intelligence. No ordinal numbers. The current workspace is a
      static `aria-current="page"` target; only the other workspace targets
      retain Bootstrap dropdowns.
   4. A `.ob-subnav-flex-spacer` (`flex: 1`) — pushes the right group to the edge.

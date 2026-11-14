@@ -1,0 +1,50 @@
+<div class="modal fade" id="patDetectModal" tabindex="-1" aria-labelledby="patDetectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="patDetectForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="patDetectModalLabel">
+                        <i class="bi bi-search me-2"></i>Detect patterns
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="patClassFilter">Entity</label>
+                        <select class="form-select" id="patClassFilter" required>
+                            <option value="" selected>Select an entity type…</option>
+                        </select>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label" for="patHops">Hops</label>
+                            <input type="number" class="form-control" id="patHops" min="1" max="5" value="3">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" for="patBins">Numeric bins</label>
+                            <input type="number" class="form-control" id="patBins" min="2" max="32" value="8">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" for="patMinSupport">Min support</label>
+                            <input type="number" class="form-control" id="patMinSupport" min="1" value="3">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" for="patRefineTop">Refine top-N</label>
+                            <input type="number" class="form-control" id="patRefineTop" min="0" value="0">
+                        </div>
+                    </div>
+                    <p class="form-text small mb-0 mt-3 text-muted">
+                        Discovery runs on Databricks. Save keeps a snapshot of the matching entities in Unity Catalog; the graph is not changed.
+                    </p>
+                    <div id="patJobStatus" class="alert alert-warning small py-2 px-2 mt-2 mb-0 d-none" role="status"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="patDetectRunBtn">
+                        <i class="bi bi-search me-1"></i>Detect
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

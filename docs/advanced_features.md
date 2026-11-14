@@ -661,7 +661,7 @@ historical rules transparently.
 
 ### 5. The algorithm
 
-The engine (`back/core/graph_analysis/CohortBuilder.py`) is **backend-
+The engine (`back/core/graph_analysis/cohort/CohortBuilder.py`) is **backend-
 agnostic**: it talks to the triplestore exclusively through
 `store.query_triples(graph_name)` and `store.insert_triples(...)`, which
 work on every supported backend (Delta + Spark SQL, Lakebase Postgres SQL,

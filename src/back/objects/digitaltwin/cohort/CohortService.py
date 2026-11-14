@@ -88,7 +88,7 @@ class CohortService:
     # ------------------------------------------------------------------
 
     def _builder(self, store: Any, graph_name: str) -> Any:
-        from back.core.graph_analysis.CohortBuilder import CohortBuilder
+        from back.core.graph_analysis.cohort.CohortBuilder import CohortBuilder
         from shared.config.constants import DEFAULT_BASE_URI
 
         ontology = getattr(self._domain, "ontology", {}) or {}

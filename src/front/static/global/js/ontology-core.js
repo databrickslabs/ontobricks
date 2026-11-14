@@ -62,7 +62,7 @@ async function loadBaseUriFromDomain() {
             OntologyState.config.base_uri = result.info.base_uri;
         }
     } catch (error) {
-        console.log('Could not load base URI from domain session');
+        console.log('Could not load base URI from context session');
     }
 }
 
@@ -77,7 +77,7 @@ async function loadBaseUriDomain() {
             OntologyState.baseUriDomain = result.base_uri;
         }
     } catch (error) {
-        console.log('Using default base URI domain');
+        console.log('Using default base URI context');
     }
     // Load base URI from domain session instead of generating
     loadBaseUriFromDomain();
@@ -347,7 +347,7 @@ async function autoGenerateOwl() {
         const propsWithoutDomain = objectProperties.filter(p => !p.domain);
         if (propsWithoutDomain.length > 0) {
             const names = propsWithoutDomain.map(p => p.label || p.name || '(unnamed)').join(', ');
-            warnings.push(`${propsWithoutDomain.length} relationship(s) without domain (source entity): ${names}`);
+            warnings.push(`${propsWithoutDomain.length} relationship(s) without context (source entity): ${names}`);
         }
         
         const propsWithoutRange = objectProperties.filter(p => !p.range);

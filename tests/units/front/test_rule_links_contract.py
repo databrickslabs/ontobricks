@@ -68,7 +68,7 @@ def test_loader_loads_only_the_editor_assets_and_not_ontology_core():
 
 def test_both_pages_include_editor_markup_in_hidden_wrapper_and_load_loader():
     for page, module in (("templates/dtwin.html", "query/js/query-reasoning.js"),
-                         ("templates/simulation.html", "simulation/js/simulation-rules.js")):
+                         ("templates/intelligence.html", "intelligence/js/simulation-rules.js")):
         src = _read(page)
         assert 'id="if-then-section"' in src
         assert "partials/ontology/_ontology_business_rules.html" in src
@@ -82,7 +82,7 @@ def test_both_pages_include_editor_markup_in_hidden_wrapper_and_load_loader():
 def test_editor_partial_ids_do_not_collide_with_inference_or_simulation_pages():
     partial = _ids(_read("templates/partials/ontology/_ontology_business_rules.html"))
     assert partial, "partial should define ids"
-    for page in ("templates/dtwin.html", "templates/simulation.html"):
+    for page in ("templates/dtwin.html", "templates/intelligence.html"):
         page_ids = _ids(_read(page))
         for partial_id in partial:
             if partial_id == "if-then-section":
@@ -94,7 +94,7 @@ def test_editor_partial_ids_do_not_collide_with_included_partials():
     partial = _ids(_read("templates/partials/ontology/_ontology_business_rules.html"))
     included = ""
     for rel in ("templates/partials/dtwin/_query_reasoning.html",
-                "templates/partials/simulation/_sim_workbench.html",
+                "templates/partials/intelligence/_sim_workbench.html",
                 "templates/partials/layout/_inference_phase_tree.html"):
         included += _read(rel)
     collisions = partial & _ids(included)
@@ -103,7 +103,7 @@ def test_editor_partial_ids_do_not_collide_with_included_partials():
 
 def test_both_inference_modules_attach_the_rule_editor_loader():
     graph = _read("static/query/js/query-reasoning.js")
-    sim = _read("static/simulation/js/simulation-rules.js")
+    sim = _read("static/intelligence/js/simulation-rules.js")
     assert "RuleEditorLoader.attach(" in graph
     assert "RuleEditorLoader.attach(" in sim
 
@@ -112,7 +112,7 @@ def test_rule_editor_host_keeps_modals_in_layout():
     # The host must not be display:none, or Bootstrap renders the editor modals 0x0.
     css = _read("static/query/css/query-reasoning.css")
     assert "#if-then-section.rule-editor-host > .content-section" in css
-    for rel in ("templates/dtwin.html", "templates/simulation.html"):
+    for rel in ("templates/dtwin.html", "templates/intelligence.html"):
         src = _read(rel)
         assert 'id="if-then-section" class="rule-editor-host"' in src
         assert 'id="if-then-section" class="d-none"' not in src

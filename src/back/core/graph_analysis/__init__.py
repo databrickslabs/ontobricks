@@ -1,25 +1,54 @@
-"""Graph analysis: community detection, cohort discovery, and graph metrics."""
+"""Graph analysis, grouped by type of analysis.
 
-from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
-from back.core.graph_analysis.CommunityMaterializer import CommunityMaterializer
-from back.core.graph_analysis.CommunityVocabulary import CommunityVocabulary
-from back.core.graph_analysis.PatternVocabulary import PatternVocabulary
-from back.core.graph_analysis.PatternMaterializer import PatternMaterializer
-from back.core.graph_analysis.JobPatterns import JobPatterns, pattern_output_table
-from back.core.graph_analysis.JobCommunities import (
+Topic sub-packages: ``community`` (community detection), ``cohort`` (cohort
+discovery), ``pattern`` (pattern discovery) and ``metrics`` (graph metrics).
+Shared job plumbing (``LakeflowRunner``, ``preflight``, ``models``,
+``profiles``) stays at this level.
+"""
+
+from back.core.graph_analysis.cohort import CohortBuilder, CohortVocabulary
+from back.core.graph_analysis.community import (
+    CommunityMaterializer,
+    CommunityVocabulary,
     JobCommunities,
     community_output_table,
 )
-from back.core.graph_analysis.JobMetrics import (
-    JobMetrics,
+from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
+from back.core.graph_analysis.metrics import (
     METRIC_SERIES_BUCKETS,
     METRIC_SERIES_COLUMNS,
+    JobMetrics,
     analytics_snapshot,
     metric_series_query,
-    validate_metric_series_column,
     resolve_analytics_source,
+    validate_metric_series_column,
 )
-from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
+from back.core.graph_analysis.models import (
+    COHORT_COMPAT_TYPES,
+    COHORT_GROUP_TYPES,
+    COHORT_LINKS_COMBINE,
+    MODE_JOB,
+    CohortCompat,
+    CohortGroup,
+    CohortHop,
+    CohortLink,
+    CohortOutput,
+    CohortResult,
+    CohortRule,
+    CohortStats,
+    CohortUCTarget,
+    EntityTypeProfile,
+    MetricsRequest,
+    MetricsResult,
+    MetricsStats,
+    NodeMetrics,
+)
+from back.core.graph_analysis.pattern import (
+    JobPatterns,
+    SavedPatternStore,
+    pattern_output_table,
+    saved_pattern_table,
+)
 from back.core.graph_analysis.preflight import (
     analytics_job_configured,
     analytics_job_status,
@@ -28,26 +57,6 @@ from back.core.graph_analysis.preflight import (
     pattern_job_configured,
     pattern_job_status,
     probe_data_table,
-)
-from back.core.graph_analysis.models import (
-    MODE_JOB,
-    EntityTypeProfile,
-    MetricsRequest,
-    NodeMetrics,
-    MetricsStats,
-    MetricsResult,
-    CohortHop,
-    CohortLink,
-    CohortCompat,
-    CohortUCTarget,
-    CohortOutput,
-    CohortRule,
-    CohortGroup,
-    CohortStats,
-    CohortResult,
-    COHORT_COMPAT_TYPES,
-    COHORT_GROUP_TYPES,
-    COHORT_LINKS_COMBINE,
 )
 
 # ---------------------------------------------------------------------------
@@ -119,10 +128,10 @@ __all__ = [
     "CohortVocabulary",
     "CommunityVocabulary",
     "CommunityMaterializer",
-    "PatternVocabulary",
-    "PatternMaterializer",
+    "SavedPatternStore",
     "JobPatterns",
     "pattern_output_table",
+    "saved_pattern_table",
     "JobCommunities",
     "community_output_table",
     "JobMetrics",

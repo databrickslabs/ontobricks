@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from back.objects.simulation import Patch
+from back.objects.intelligence import Patch
 from back.core.errors import ValidationError
 
 

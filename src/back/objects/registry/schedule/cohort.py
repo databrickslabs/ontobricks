@@ -36,13 +36,13 @@ def run(ctx: TaskContext) -> RunOutcome:
     start = time.time()
     rule_id = ctx.target_key
 
-    ctx.progress(5, "Loading domain from registry...")
+    ctx.progress(5, "Loading context from registry...")
     domain = ctx.domain
 
     rules = list(getattr(domain, "cohort_rules", []) or [])
     if not any((r.get("id") == rule_id) for r in rules):
         raise NotFoundError(
-            f"Cohort rule '{rule_id}' not found in domain '{ctx.domain_name}'"
+            f"Cohort rule '{rule_id}' not found in context '{ctx.domain_name}'"
         )
 
     store = ctx.graph_store

@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 import pytest
 
-from back.objects.simulation import Diff, Patch, Sandbox
+from back.objects.intelligence import Diff, Patch, Sandbox
 from tests.units.agents.test_agent_simulation_facts import (
     _PATCH,
     _llm_full_generation,

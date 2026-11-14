@@ -689,12 +689,12 @@ async def list_saved_patterns(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Named materialized patterns."""
+    """Patterns saved from discovery (Unity Catalog snapshots)."""
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
-    store, graph_name = _cluster_graph(domain, settings)
+    _, graph_name = _cluster_graph(domain, settings)
     result = await run_blocking(
-        TwinAnalytics(domain).list_saved_patterns, store, graph_name
+        TwinAnalytics(domain).list_saved_patterns, graph_name, settings
     )
     return {"success": True, **result}
 
@@ -711,14 +711,14 @@ async def saved_pattern_members(
     """One page of a saved pattern's members."""
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
-    store, graph_name = _cluster_graph(domain, settings)
+    _, graph_name = _cluster_graph(domain, settings)
     result = await run_blocking(
         TwinAnalytics(domain).saved_pattern_members,
-        store,
         graph_name,
         saved_id,
         offset,
         limit,
+        settings,
     )
     return {"success": True, **result}
 
@@ -733,12 +733,12 @@ async def delete_saved_pattern(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Drop one named materialized pattern."""
+    """Drop one saved pattern."""
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
-    store, graph_name = _cluster_graph(domain, settings)
+    _, graph_name = _cluster_graph(domain, settings)
     result = await run_blocking(
-        TwinAnalytics(domain).delete_saved_pattern, store, graph_name, saved_id
+        TwinAnalytics(domain).delete_saved_pattern, graph_name, saved_id, settings
     )
     return {"success": True, **result}
 
@@ -787,15 +787,15 @@ async def pattern_shape(
 
 
 @router.post(
-    "/patterns/materialize",
+    "/patterns/save",
     dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
 )
-async def materialize_pattern(
+async def save_pattern(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Save one discovered pattern into the graph (background task)."""
+    """Snapshot one discovered pattern into its saved table (background task)."""
     import threading
 
     from back.core.task_manager import get_task_manager
@@ -815,33 +815,32 @@ async def materialize_pattern(
         raise ValidationError("label is required")
 
     domain = get_domain(session_mgr)
-    store, graph_name = _cluster_graph(domain, settings)
+    _, graph_name = _cluster_graph(domain, settings)
     if not await run_blocking(
         TwinAnalytics(domain).pattern_detection_summary, graph_name, settings
     ):
-        raise ValidationError("No pattern detection run to materialize. Run Detect first.")
+        raise ValidationError("No pattern detection run to save. Run Detect first.")
 
     tm = get_task_manager()
     task = tm.create_task(
-        name="Materialize Pattern",
-        task_type="pattern_materialize",
-        steps=[{"name": "write", "description": "Writing pattern into the graph"}],
+        name="Save Pattern",
+        task_type="pattern_save",
+        steps=[{"name": "write", "description": "Saving pattern members"}],
     )
 
     def run():
-        TwinBackgroundTasks.run_pattern_materialize_task(
+        TwinBackgroundTasks.run_pattern_save_task(
             tm,
             task.id,
             domain,
             settings,
-            store,
             graph_name,
             pattern_id=pattern_id.strip(),
             label=label.strip(),
         )
 
     threading.Thread(target=run, daemon=True).start()
-    return {"success": True, "task_id": task.id, "message": "Pattern materialization started"}
+    return {"success": True, "task_id": task.id, "message": "Pattern save started"}
 
 
 # ===========================================
@@ -2282,7 +2281,7 @@ async def dtwin_nodes_business_rule_request(
     rule = resolved["rule"]
     simulation_id = TwinGraphAccess.sandbox_id(data.get("simulation_id"))
     if simulation_id:
-        from back.objects.simulation import Simulation
+        from back.objects.intelligence import Simulation
 
         Simulation(domain, settings).sandbox_relation(simulation_id)
 
@@ -2874,7 +2873,7 @@ def _insights_fields(data: dict) -> dict:
 
 def _insights_scenario(domain, settings, simulation_id: str) -> dict:
     """Load the scenario facts from the registry; the browser never supplies them."""
-    from back.objects.simulation import Simulation
+    from back.objects.intelligence import Simulation
 
     row = Simulation(domain, settings).get(simulation_id)
     if row.get("status") != "ready":
@@ -3089,7 +3088,7 @@ async def dtwin_graphql_schema(
     domain = get_domain(session_mgr)
     display_name = _chat_resolve_domain_name(domain)
     if not display_name:
-        raise ValidationError("No domain selected in the current session.")
+        raise ValidationError("No context selected in the current session.")
 
     ontology = domain.ontology or {}
     classes = ontology.get("classes", []) or []
@@ -3148,7 +3147,7 @@ async def dtwin_graphql_execute(
     domain = get_domain(session_mgr)
     display_name = _chat_resolve_domain_name(domain)
     if not display_name:
-        raise ValidationError("No domain selected in the current session.")
+        raise ValidationError("No context selected in the current session.")
 
     body = await request.json()
     query = (body.get("query") or "").strip()

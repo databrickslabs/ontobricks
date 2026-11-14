@@ -80,7 +80,7 @@ class TestExportRegistryObx:
             self._export({"domains": [{"name": "d"}]})
 
     def test_empty_selection_rejected(self, svc):
-        with pytest.raises(ValidationError, match="No domains selected"):
+        with pytest.raises(ValidationError, match="No contexts selected"):
             self._export({})
 
     def test_partial_export_collects_warnings(self, svc):
@@ -110,7 +110,7 @@ class TestExportRegistryObx:
         assert result["filename"].startswith("ontobricks-") and result["filename"].endswith(".obx")
         assert result["warnings"] == [
             "Context entry without a name was skipped",
-            'No versions to export for domain "empty"',
+            'No versions to export for context "empty"',
             "broken v1: unreadable",
             "good v1: unreadable",
         ]
@@ -376,7 +376,7 @@ class TestImportRegistryObx:
     def test_nameless_entry_reported(self, svc, raw_envelope):
         result = self._import(raw_envelope([{"name": ""}]), [])
         assert result["errors"] == ["Context entry without a name was skipped"]
-        assert result["message"] == "Imported 0 version(s) across 0 domain(s)"
+        assert result["message"] == "Imported 0 version(s) across 0 context(s)"
         _ss.invalidate_registry_cache.assert_called_once()
 
     @pytest.mark.parametrize("new_name", ["", "lowercase", "Has Space", "A" * 65, "Bad-Dash"])

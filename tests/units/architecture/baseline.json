@@ -56,7 +56,7 @@
     "jobs/graph_analytics_job.py": 3
   },
   "oversized_classes": {
-    "back/core/graph_analysis/CohortBuilder.py::CohortBuilder": 1192,
+    "back/core/graph_analysis/cohort/CohortBuilder.py::CohortBuilder": 1192,
     "back/core/graphdb/lakebase/FlatStore.py::FlatStore": 1148,
     "back/core/graphdb/lakebase/InstanceProvisioner.py::InstanceProvisioner": 811,
     "back/core/graphdb/lakebase/SyncedTableManager.py::SyncedTableManager": 814,
@@ -66,7 +66,7 @@
     "back/core/w3c/shacl/SHACLService.py::SHACLService": 1663,
     "back/core/w3c/sparql/SparqlTranslator.py::SparqlTranslator": 2389,
     "back/objects/digitaltwin/build/_build_pipeline.py::_BuildPipeline": 1421,
-    "back/objects/domain/Domain.py::Domain": 2294,
+    "back/objects/domain/Domain.py::Domain": 2289,
     "back/objects/domain/settings/SettingsService.py::SettingsService": 1388,
     "back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py::GraphEngineLakebaseSettings": 1107,
     "back/objects/domain/settings/graphengine/GraphEngineSettings.py::GraphEngineSettings": 928,

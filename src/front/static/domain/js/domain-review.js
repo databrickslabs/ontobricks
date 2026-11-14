@@ -40,7 +40,7 @@
                 body.innerHTML =
                     '<div class="alert alert-info small mb-0">' +
                     '<i class="bi bi-info-circle me-1"></i>' +
-                    'Save this domain to the registry to start the review workflow.' +
+                    'Save this context to the registry to start the review workflow.' +
                     '</div>';
                 return;
             }
@@ -91,7 +91,7 @@
         const notes = actionNotes(d);
         const discussBtn =
             '<button type="button" class="btn btn-sm btn-outline-secondary" ' +
-            'data-review-discuss="1" title="Open the domain discussion">' +
+            'data-review-discuss="1" title="Open the context discussion">' +
             '<i class="bi bi-chat-dots me-1"></i>Discussion</button>';
         const right =
             '<div class="review-actions d-flex flex-wrap gap-2 justify-content-end">' +
@@ -331,7 +331,7 @@
         return '<div class="card review-card mb-3"><div class="card-body">' +
             '<h6 class="card-title"><i class="bi bi-people me-2"></i>Context access</h6>' +
             '<p class="text-muted small mb-3">People and groups with a role on ' +
-            'this domain. Roles are managed by administrators in ' +
+            'this context. Roles are managed by administrators in ' +
             'Settings &rarr; Admin &rarr; Teams.</p>' +
             '<div id="reviewTeam">' + spinner('Loading members...') + '</div>' +
             '</div></div>';
@@ -369,7 +369,7 @@
             if (!members.length) {
                 el.innerHTML = '<div class="text-muted small">' +
                     'No members assigned yet — only administrators can ' +
-                    'access this domain.</div>';
+                    'access this context.</div>';
                 return;
             }
             const byRole = {};

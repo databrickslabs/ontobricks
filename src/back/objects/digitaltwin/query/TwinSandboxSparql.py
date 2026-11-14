@@ -11,7 +11,7 @@ from back.core.errors import ValidationError
 from back.core.graphdb import get_graphdb
 from back.core.w3c import sparql as sparql_mod
 from back.objects.digitaltwin.TwinGraphAccess import TwinGraphAccess
-from back.objects.simulation import Simulation
+from back.objects.intelligence import Simulation
 
 
 class TwinSandboxSparql:

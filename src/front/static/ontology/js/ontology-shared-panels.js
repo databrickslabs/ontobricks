@@ -874,7 +874,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                 </section>
                 <section class="panel-section">
                     ${panelSectionHeader({ targetId: 'sharedEntityBridges', icon: 'bi-signpost-2', title: 'Bridges',
-                        subtitle: 'Links to entities in other domains.', onAdd: 'openBridgeSelectorModal()', viewOnly })}
+                        subtitle: 'Links to entities in other contexts.', onAdd: 'openBridgeSelectorModal()', viewOnly })}
                     <div id="sharedEntityBridges" class="panel-section-body"><div id="sharedEntityBridgesContent"></div></div>
                 </section>
             </div>
@@ -891,7 +891,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                 <section class="panel-section">
                     ${panelSectionHeader({ targetId: 'sharedEntityJobs', icon: 'bi-play-circle', title: 'Jobs', chip: 'background',
                         subtitle: 'Start a Databricks Job for this entity.',
-                        help: 'The job must declare an entity_id parameter. Spark runs as the job’s run-as identity; on Lakehouse domains the trigger is on behalf of the signed-in user.',
+                        help: 'The job must declare an entity_id parameter. Spark runs as the job’s run-as identity; on Lakehouse contexts the trigger is on behalf of the signed-in user.',
                         onAdd: 'openJobSelectorModal()', viewOnly })}
                     <div id="sharedEntityJobs" class="panel-section-body"><div id="sharedEntityJobsContent"></div></div>
                 </section>
@@ -1533,7 +1533,7 @@ async function loadDatasetDescriptionFromDataSource(index) {
         const data = await resp.json();
         if (_datasetKey(sharedPanelDatasets[index]) !== datasetKey) return;
         if (!data.success || !data.has_metadata || !data.metadata?.tables?.length) {
-            showNotification('No Data Assets loaded for this domain', 'info', 3000);
+            showNotification('No Data Assets loaded for this context', 'info', 3000);
             return;
         }
         const match = data.metadata.tables.find(table => {
@@ -2769,7 +2769,7 @@ function renderSharedEntityBridges(viewOnly = false) {
             });
         }).join('');
     } else {
-        container.innerHTML = panelEmptyState('No bridges to other domains yet.', 'Add a bridge', 'openBridgeSelectorModal()', viewOnly);
+        container.innerHTML = panelEmptyState('No bridges to other contexts yet.', 'Add a bridge', 'openBridgeSelectorModal()', viewOnly);
     }
 }
 
@@ -2860,7 +2860,7 @@ async function openBridgeSelectorModal() {
         const list = document.getElementById('bridgeDomainList');
         const bridgeRows = data.domains || data.projects || [];
         if (!data.success || !bridgeRows.length) {
-            list.innerHTML = '<div class="text-muted p-3 text-center">No other domains found in the registry</div>';
+            list.innerHTML = '<div class="text-muted p-3 text-center">No other contexts found in the registry</div>';
             return;
         }
 
@@ -2876,7 +2876,7 @@ async function openBridgeSelectorModal() {
             </button>
         `).join('');
     } catch (err) {
-        console.error('[Bridges] Error loading domains:', err);
+        console.error('[Bridges] Error loading contexts:', err);
         document.getElementById('bridgeSelectorLoading').innerHTML =
             '<div class="text-danger"><i class="bi bi-exclamation-triangle"></i> Failed to load domains</div>';
     }

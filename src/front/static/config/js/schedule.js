@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('scheduleDomain').disabled = false;
         const ruleSel = document.getElementById('scheduleCohortRule');
         ruleSel.disabled = true;
-        ruleSel.innerHTML = '<option value="">Select a domain first</option>';
+        ruleSel.innerHTML = '<option value="">Select a context first</option>';
         rulesById = {};
         document.getElementById('scheduleIntervalValue').value = '1';
         document.getElementById('scheduleIntervalUnit').value = 'hours';
@@ -264,7 +264,7 @@ document.addEventListener('DOMContentLoaded', function () {
             resetVersionSelect();
             const ruleSel = document.getElementById('scheduleCohortRule');
             ruleSel.disabled = true;
-            ruleSel.innerHTML = '<option value="">Select a domain first</option>';
+            ruleSel.innerHTML = '<option value="">Select a context first</option>';
         }
     });
 
@@ -595,7 +595,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function loadDomainsForModal() {
         const select = document.getElementById('scheduleDomain');
-        select.innerHTML = '<option value="">Loading domains...</option>';
+        select.innerHTML = '<option value="">Loading contexts...</option>';
         try {
             const resp = await fetch('/settings/registry/domains', { credentials: 'same-origin' });
             const data = await resp.json();
@@ -624,7 +624,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const intervalMinutes = unitValueToMinutes();
 
         if (!domainName) {
-            showNotification('Please select a domain', 'warning');
+            showNotification('Please select a context', 'warning');
             return;
         }
         if (needsTarget(taskType) && !targetKey) {

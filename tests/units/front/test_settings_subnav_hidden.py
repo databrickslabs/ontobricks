@@ -2,7 +2,7 @@
 
 The L2 (`#obSubnav`) remains a single shared slot with mutually exclusive
 presentations:
-- Settings + loaded domain: show only "Back to domain"
+- Settings + loaded domain: show only "Back to context"
 - Settings + no domain: hide all L2
 - Non-settings + loaded domain: show normal workspace rail
 - Non-settings + no domain: hide all L2

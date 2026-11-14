@@ -94,24 +94,24 @@ async def test_latest_reports_preflight(wired, monkeypatch):
     assert out["blocked_reason"] == "toggle off"
 
 
-async def test_materialize_needs_a_run(wired):
+async def test_save_needs_a_run(wired):
     wired.dt.pattern_detection_summary.return_value = None
     with pytest.raises(ValidationError, match="Run Detect first"):
-        await dtwin.materialize_pattern(
+        await dtwin.save_pattern(
             _Request({"pattern_id": "abc", "label": "X"}), "sm", "settings"
         )
     assert not wired.started
 
 
-async def test_materialize_starts_a_task(wired):
+async def test_save_starts_a_task(wired):
     wired.dt.pattern_detection_summary.return_value = {"pattern_count": 2}
-    out = await dtwin.materialize_pattern(
+    out = await dtwin.save_pattern(
         _Request({"pattern_id": "abc", "label": "FR buyers"}), "sm", "settings"
     )
     assert out["task_id"] == "t-1"
-    assert wired.tm.create_task.call_args.kwargs["task_type"] == "pattern_materialize"
+    assert wired.tm.create_task.call_args.kwargs["task_type"] == "pattern_save"
     wired.started[0]()
-    kwargs = wired.tasks.run_pattern_materialize_task.call_args.kwargs
+    kwargs = wired.tasks.run_pattern_save_task.call_args.kwargs
     assert kwargs["pattern_id"] == "abc"
     assert kwargs["label"] == "FR buyers"
 
