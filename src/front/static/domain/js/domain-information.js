@@ -24,7 +24,7 @@ function syncGraphBackendCardEditability() {
         'read-only-locked'
     ].some(className => document.body.classList.contains(className));
     document.querySelectorAll('.domain-backend-option').forEach(option => {
-        option.disabled = readOnly || backendSelect.disabled;
+        option.disabled = readOnly || backendSelect.disabled || option.dataset.unavailable === '1';
     });
 }
 

@@ -78,3 +78,7 @@ class TestLakebaseCardStaysDisabled:
     def test_script_skips_unavailable_inputs(self):
         js = (TEMPLATES.parent / "static" / "domain" / "js" / "domain-information.js").read_text()
         assert ".domain-editable:not(#domainName):not([data-unavailable])" in js
+
+    def test_card_editability_sync_keeps_unavailable_disabled(self):
+        js = (TEMPLATES.parent / "static" / "domain" / "js" / "domain-information.js").read_text()
+        assert "option.disabled = readOnly || backendSelect.disabled || option.dataset.unavailable === '1';" in js

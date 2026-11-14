@@ -365,3 +365,29 @@ Modified files:
 - tests/units/front/test_registry_fallback_flag.py
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9766 passed, 339 skipped.
+
+================================================================================
+## Domain backend: the card editability sync also keeps Lakebase disabled
+================================================================================
+
+Context:
+A second code path re-enabled the unavailable Lakebase radio:
+`syncGraphBackendCardEditability()` (run at load and on every body class
+change) set `option.disabled` from the read-only state only. Clicking the
+greyed-out card then switched the hidden backend select to Lakebase, and Save
+stored `graph_backend = lakebase` on a workspace without Lakebase. Found by the
+v2 demo dress rehearsal.
+
+Changes:
+
+1. src/front/static/domain/js/domain-information.js
+   `option.disabled` also honours `data-unavailable="1"`.
+
+2. tests/units/front/test_registry_fallback_flag.py
+   One more check (red before, green after).
+
+Modified files:
+- src/front/static/domain/js/domain-information.js
+- tests/units/front/test_registry_fallback_flag.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9767 passed, 339 skipped.
