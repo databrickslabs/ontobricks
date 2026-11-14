@@ -266,3 +266,47 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9757 passed, 339 skipped
 (readiness-route test deselected, as above).
+
+================================================================================
+## SQLite registry: flag it in the UI as a fallback mode
+================================================================================
+
+Context:
+The SQLite registry exists only so OntoBricks can run where Lakebase is not
+available (a customer region without Lakebase). The UI showed the SQLite mode
+but never said it was a fallback or why, so it read like a nominal option.
+
+Changes:
+
+1. src/front/fastapi/dependencies.py
+   New template global `registry_fallback()` (True when the registry backend is
+   not Lakebase).
+
+2. src/front/templates/base.html
+   A "SQLite fallback" warning badge next to the registry icon in the navbar,
+   with a tooltip that explains the mode and that it is not the target
+   architecture.
+
+3. src/front/templates/partials/registry/_registry_configuration.html
+   A "Fallback mode" alert at the top of Settings > Registry.
+
+4. src/front/templates/partials/domain/_domain_information.html
+   The disabled Lakebase card says why: the registry runs in SQLite fallback
+   mode until Lakebase is available.
+
+5. src/shared/fastapi/health.py
+   The SQLite registry check reads "ready (fallback mode: no Lakebase on this
+   workspace)".
+
+6. tests/units/front/test_registry_fallback_flag.py
+   Badge, alert and health wording (red before, green after).
+
+Modified files:
+- src/front/fastapi/dependencies.py
+- src/front/templates/base.html
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/shared/fastapi/health.py
+- tests/units/front/test_registry_fallback_flag.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9762 passed, 339 skipped.

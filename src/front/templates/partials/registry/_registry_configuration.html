@@ -3,6 +3,12 @@
         <div>
             <h4 class="mb-1"><i class="bi bi-archive me-2"></i>Registry Location</h4>
             {% if registry_backend == "sqlite" %}
+            <div class="alert alert-warning small py-2 my-2" role="alert" id="registryFallbackAlert">
+                <i class="bi bi-exclamation-triangle me-1"></i><strong>Fallback mode.</strong>
+                Lakebase is not available on this workspace, so the registry runs on SQLite: a single-instance store,
+                snapshotted to a Unity Catalog Volume after each change. It keeps OntoBricks running until Lakebase is
+                available; it is not the target architecture.
+            </div>
             <p class="text-muted mb-0 small">Registry data (domains, versions, permissions, schedules, global config) and the <strong>Knowledge Store</strong> live in an embedded <strong>SQLite</strong> database, for workspaces without Lakebase. It is snapshotted to the registry Unity Catalog Volume.</p>
             {% else %}
             <p class="text-muted mb-0 small">Registry data (domains, versions, permissions, schedules, global config) and the <strong>Knowledge Store</strong> live in <strong>Lakebase</strong> (Postgres). A Unity Catalog Volume is optional and only for ad-hoc OBX export bundles.</p>

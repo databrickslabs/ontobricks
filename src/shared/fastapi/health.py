@@ -358,8 +358,8 @@ def _check_sqlite_registry(settings: Settings) -> Tuple[str, str]:
     if not status.get("initialized"):
         return _ERROR, "SQLite registry not ready (%s): %s" % (where, status.get("error"))
     if not info.get("snapshot_path"):
-        return _WARNING, "SQLite registry ready, but no Volume snapshot: data is lost on restart (%s)" % where
-    return _OK, "SQLite registry ready (%s)" % where
+        return _WARNING, "SQLite registry ready (fallback mode), but no Volume snapshot: data is lost on restart (%s)" % where
+    return _OK, "SQLite registry ready (fallback mode: no Lakebase on this workspace) (%s)" % where
 
 
 @_lakebase_only
