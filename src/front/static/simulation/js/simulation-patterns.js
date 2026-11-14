@@ -27,11 +27,12 @@ const SimulationPatterns = {
         const details = document.getElementById('patDetails');
         if (details) {
             details.addEventListener('click', (e) => {
-                if (e.target.closest('[data-pat-more]')) this._loadMoreMembers();
-            });
-            details.addEventListener('change', (e) => {
-                const sel = e.target.closest('#patPatternSelect');
-                if (sel && sel.value) this.selectPattern(sel.value);
+                if (e.target.closest('[data-pat-more]')) {
+                    this._loadMoreMembers();
+                    return;
+                }
+                const opt = e.target.closest('[data-pat-id]');
+                if (opt && opt.dataset.patId) this.selectPattern(opt.dataset.patId);
             });
         }
         const saved = document.getElementById('patSavedList');
@@ -209,44 +210,33 @@ const SimulationPatterns = {
 
     _kpiTile(label, value) {
         return `<div class="col">`
-            + `<div class="sim-kpi-tile h-100">`
-            + `<div class="sim-kpi-value">${this._esc(String(value ?? '—'))}</div>`
-            + `<div class="sim-kpi-label">${this._esc(label)}</div>`
+            + `<div class="sim-kpi-tile pat-kpi-compact h-100">`
+            + `<span class="sim-kpi-value">${this._esc(String(value ?? '—'))}</span>`
+            + `<span class="sim-kpi-label">${this._esc(label)}</span>`
             + `</div></div>`;
     },
 
-    _renderStats(stats) {
-        const el = document.getElementById('patPreviewStats');
-        if (!el) return;
-        if (!stats) {
-            el.classList.add('d-none');
-            el.innerHTML = '';
-            return;
-        }
-        el.classList.remove('d-none');
-        el.innerHTML = `<div class="row g-2 pat-kpi-row">`
-            + this._kpiTile('Patterns', this._fmtNum(stats.pattern_count))
-            + this._kpiTile('Anchors', this._fmtNum(stats.anchor_count))
-            + this._kpiTile('Hops', this._fmtNum(stats.hop_count))
-            + this._kpiTile('Bins', this._fmtNum(stats.bins))
-            + this._kpiTile('Min support', this._fmtNum(stats.min_support))
-            + `</div>`;
-    },
-
-    _patternOptionsHtml(selectedId) {
+    _patternOf(patternId) {
         const patterns = (this.latest && this.latest.patterns) || [];
-        return patterns.map((p) => {
-            const label = p.label || (p.id || '').slice(0, 8);
-            const selected = p.id === selectedId ? ' selected' : '';
-            return `<option value="${this._esc(p.id)}"${selected}>`
-                + `${this._esc(label)}</option>`;
-        }).join('');
+        return patterns.find((p) => p.id === patternId) || null;
     },
 
     _supportOf(patternId) {
-        const patterns = (this.latest && this.latest.patterns) || [];
-        const hit = patterns.find((p) => p.id === patternId);
+        const hit = this._patternOf(patternId);
         return hit ? hit.support : null;
+    },
+
+    _patternMenuHtml(selectedId) {
+        const patterns = (this.latest && this.latest.patterns) || [];
+        return patterns.map((p) => {
+            const label = p.label || (p.id || '').slice(0, 8);
+            const active = p.id === selectedId ? ' active' : '';
+            return `<li><button type="button" class="dropdown-item pat-pattern-option${active}" `
+                + `data-pat-id="${this._esc(p.id)}">`
+                + `<span class="pat-pattern-option-label">${this._esc(label)}</span>`
+                + `<span class="badge pat-support-badge">${this._esc(this._fmtNum(p.support))}</span>`
+                + `</button></li>`;
+        }).join('');
     },
 
     _renderList() {
@@ -292,16 +282,22 @@ const SimulationPatterns = {
     },
 
     _toolbarHtml(selectedId, kpisHtml = '') {
-        const support = this._supportOf(selectedId);
+        const current = this._patternOf(selectedId);
+        const label = (current && (current.label || current.id.slice(0, 8))) || 'Pattern';
+        const support = current ? current.support : null;
         return `
             <div class="pat-detail-toolbar mb-3">
-                <div class="pat-pattern-picker">
-                    <label class="visually-hidden" for="patPatternSelect">Pattern</label>
-                    <select class="form-select pat-pattern-select" id="patPatternSelect">
-                        ${this._patternOptionsHtml(selectedId)}
-                    </select>
-                    <span class="badge pat-support-badge" id="patSupportBadge"
-                          title="Support">${this._esc(this._fmtNum(support))}</span>
+                <div class="dropdown pat-pattern-picker">
+                    <button type="button" class="pat-pattern-toggle" id="patPatternSelect"
+                            data-bs-toggle="dropdown" aria-expanded="false"
+                            title="Select a pattern">
+                        <span class="pat-pattern-label">${this._esc(label)}</span>
+                        <span class="badge pat-support-badge" id="patSupportBadge">${this._esc(this._fmtNum(support))}</span>
+                        <i class="bi bi-chevron-down pat-pattern-caret" aria-hidden="true"></i>
+                    </button>
+                    <ul class="dropdown-menu pat-pattern-menu" aria-labelledby="patPatternSelect">
+                        ${this._patternMenuHtml(selectedId)}
+                    </ul>
                 </div>
                 <div class="row g-2 pat-kpi-row pat-detail-kpis" id="patDetailKpis">${kpisHtml}</div>
             </div>`;
@@ -512,7 +508,6 @@ const SimulationPatterns = {
                 status.classList.toggle('d-none', !this.blockedReason);
                 status.textContent = this.blockedReason;
             }
-            this._renderStats(data.stats);
             if (this.selectedId && !(data.patterns || []).some((p) => p.id === this.selectedId)) {
                 this.selectedId = null;
             }
@@ -521,7 +516,7 @@ const SimulationPatterns = {
             this._notify(err.message || 'Failed to load patterns', 'danger');
         } finally {
             this._showLoading(false);
-            if (!(this.latest && this.latest.stats)) {
+            if (!(this.latest && ((this.latest.patterns || []).length || this.latest.stats))) {
                 document.getElementById('patPreviewEmpty')?.classList.remove('d-none');
             } else {
                 this._renderList();

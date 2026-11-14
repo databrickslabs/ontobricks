@@ -314,3 +314,32 @@ Modified files:
 - tests/units/front/test_simulation_page_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Compact pattern picker with in-control support badge
+================================================================================
+
+Context: The Discover preview still showed a run-level KPI strip, and the
+support badge sat beside the pattern select. The run KPIs are removed; support
+is a badge inside the pattern dropdown control and menu items; the remaining
+KPIs are a single compact line (value + label).
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_patterns.html
+   Remove `#patPreviewStats`.
+2. src/front/static/simulation/js/simulation-patterns.js
+   Custom dropdown with support badge in the toggle and each option; compact
+   KPI tiles; drop `_renderStats`.
+3. src/front/static/simulation/css/simulation.css
+   Compact picker / badge / inline KPI styles.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract for the compact picker and removed run KPIs.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_patterns.html
+- src/front/static/simulation/js/simulation-patterns.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.

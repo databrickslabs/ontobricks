@@ -762,15 +762,17 @@ def test_patterns_section_owns_discovery():
     assert 'id="patSavedList"' in saved
     assert "onclick=" not in saved
     js = _read(FRONT / "static/simulation/js/simulation-patterns.js")
-    # Details: pattern dropdown + support badge beside KPIs, full-width diagram.
+    # Details: compact pattern dropdown with in-control support badge + KPIs.
     assert "/members?offset=0" in js
     assert "/shape`" in js
     assert "this._diagramSvg(shape.diagram)" in js
     assert 'text-anchor="end"' in js
     assert 'width="100%"' in js
-    assert "sim-kpi-tile" in js
-    assert "pat-pattern-select" in js
+    assert "pat-kpi-compact" in js
+    assert "pat-pattern-toggle" in js
     assert "pat-support-badge" in js
+    assert "patPreviewStats" not in disc
+    assert "_renderStats" not in js
     assert "this._kpiTile('Detail'" not in js
     assert "this._kpiTile('Refined'" not in js
     assert "Matching entities" in js
