@@ -2,19 +2,20 @@
  * Settings → Automation → Runs (admin only).
  *
  * The cross-domain twin of Knowledge Graph → Management → Runs: one tab per
- * run kind, spanning every domain in the registry unless the Context filter
- * narrows it, one page at a time.
+ * run kind (build, analytics, simulation), spanning every domain in the
+ * registry unless the Context filter narrows it, one page at a time.
  *
  * Backed by:
  *   - GET /settings/runs/build?domain=&limit=&offset=
  *   - GET /settings/runs/analytics?domain=&limit=&offset=
+ *   - GET /settings/runs/simulation?domain=&limit=&offset=
  *   - GET /settings/registry/domains  (the filter's options)
  *
  * All rendering comes from RunsRender (global/js/runs-render.js), shared with
  * domain-runs.js. This file owns the filter, the paging and the element ids.
  *
- * The two tabs are loaded and rendered independently, so one endpoint failing
- * leaves the other tab's table on screen. Both load on section entry, so
+ * The tabs are loaded and rendered independently, so one endpoint failing
+ * leaves the other tabs' tables on screen. All load on section entry, so
  * switching tabs never waits on a fetch.
  */
 
@@ -77,12 +78,39 @@
                     handler: 'showSettingsAnalyticsRunDetails'
                 });
             }
+        },
+        simulation: {
+            url: '/settings/runs/simulation',
+            label: 'simulation runs',
+            handler: 'showSettingsSimulationRunDetails',
+            ids: {
+                loading: 'srSimLoading',
+                empty: 'srSimEmpty',
+                emptyScope: 'srSimEmptyScope',
+                error: 'srSimError',
+                errorMessage: 'srSimErrorMessage',
+                wrapper: 'srSimTableWrapper',
+                tbody: 'srSimTableBody',
+                pagination: 'srSimPagination',
+                pagingControls: 'srSimPagingControls',
+                pageInfo: 'srSimPageInfo',
+                pageSize: 'srSimPageSize',
+                prev: 'srSimPrev',
+                next: 'srSimNext'
+            },
+            cells: function (run, idx) {
+                return RunsRender.simulationRunCells(run, idx, {
+                    domain: true,
+                    handler: 'showSettingsSimulationRunDetails'
+                });
+            }
         }
     };
 
     const state = {
         build: { rows: [], total: 0, limit: DEFAULT_PAGE_SIZE, offset: 0 },
-        analytics: { rows: [], total: 0, limit: DEFAULT_PAGE_SIZE, offset: 0 }
+        analytics: { rows: [], total: 0, limit: DEFAULT_PAGE_SIZE, offset: 0 },
+        simulation: { rows: [], total: 0, limit: DEFAULT_PAGE_SIZE, offset: 0 }
     };
 
     let domainSel = null;
@@ -214,11 +242,13 @@
     async function loadAll() {
         await loadTab('build');
         await loadTab('analytics');
+        await loadTab('simulation');
     }
 
     function resetPaging() {
         state.build.offset = 0;
         state.analytics.offset = 0;
+        state.simulation.offset = 0;
     }
 
     async function loadDomains() {
@@ -251,9 +281,12 @@
             console.error('[settings-runs] #' + bodyId + ' not found — modal missing from page template.');
             return;
         }
-        body.innerHTML = kind === 'build'
-            ? RunsRender.buildRunDetailsHtml(run)
-            : RunsRender.analyticsRunDetailsHtml(run);
+        const builders = {
+            build: RunsRender.buildRunDetailsHtml,
+            analytics: RunsRender.analyticsRunDetailsHtml,
+            simulation: RunsRender.simulationRunDetailsHtml
+        };
+        body.innerHTML = builders[kind](run);
         bootstrap.Modal.getOrCreateInstance(el(modalId)).show();
     }
 
@@ -265,6 +298,13 @@
         showDetails(
             'analytics', idx,
             'srAnalyticsRunDetailsBody', 'srAnalyticsRunDetailsModal'
+        );
+    };
+
+    window.showSettingsSimulationRunDetails = function (idx) {
+        showDetails(
+            'simulation', idx,
+            'srSimRunDetailsBody', 'srSimRunDetailsModal'
         );
     };
 
@@ -306,6 +346,7 @@
         el('btnReloadSettingsRuns')?.addEventListener('click', loadAll);
         wireTab('build');
         wireTab('analytics');
+        wireTab('simulation');
 
         loadDomains();
 

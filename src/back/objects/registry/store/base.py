@@ -578,6 +578,23 @@ class RegistryStore(ABC):
         """Newest-first simulation runs, optionally for one simulation."""
         return []
 
+    def load_all_simulation_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """One newest-first page of simulation runs across the registry.
+
+        The cross-domain counterpart of :meth:`load_simulation_runs`, with
+        the same ``(page_rows, total_matching_rows)`` contract as
+        :meth:`load_all_build_runs`. Spans every version; each row carries
+        ``domain``, ``version``, and a ``label`` when the scenario still
+        exists. Default is ``([], 0)`` for stores without simulation tables.
+        """
+        return [], 0
+
     def copy_simulations_to_version(
         self, folder: str, from_version: str, to_version: str
     ) -> Tuple[bool, str]:

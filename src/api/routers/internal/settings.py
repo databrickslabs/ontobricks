@@ -1697,6 +1697,30 @@ async def get_all_analytics_runs(
     )
 
 
+@router.get("/runs/simulation")
+async def get_all_simulation_runs(
+    domain: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of simulation runs across every domain (newest-first).
+
+    Backs the Simulation tab of Settings → Automation → Runs (moved from
+    Intelligence → Simulation → Runs). Spans every version; ``domain`` is
+    optional.
+    """
+    return config_service._all_runs_result(
+        "simulation",
+        session_mgr,
+        settings,
+        folder=domain or None,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.get("/build-runs/{domain_name}")
 async def get_build_runs(
     domain_name: str,

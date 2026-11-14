@@ -1,13 +1,14 @@
 /**
  * OntoBricks - runs-render.js
- * Shared rendering for the two run-history pages:
+ * Shared rendering for the run-history pages:
  *
  *   - Knowledge Graph > Management > Runs  (domain-runs.js, one domain)
  *   - Settings > Automation > Runs         (settings-runs.js, every domain)
  *
- * Both show the same two run kinds with the same columns and the same details
- * modals; only the fetching, the paging and the element ids differ. Everything
- * that turns a run object into HTML lives here so the two cannot drift.
+ * Build and analytics share the same columns/details between the two pages;
+ * Settings also has a Simulation tab. Only the fetching, the paging and the
+ * element ids differ. Everything that turns a run object into HTML lives here
+ * so the pages cannot drift.
  *
  * The row builders take an ``opts`` object rather than being duplicated per
  * page: ``domain: true`` inserts the Context cell that only the cross-domain
@@ -61,6 +62,25 @@ window.RunsRender = (function () {
         const st = (status || '').toLowerCase();
         if (st === 'completed') return '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Completed</span>';
         if (st === 'failed') return '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Failed</span>';
+        return '<span class="badge bg-secondary">' + esc(status || 'unknown') + '</span>';
+    }
+
+    // Simulation run rows use success/error (from Runner); scenario rows use
+    // draft/running/ready/failed. One badge covers both so the history tab
+    // and any future reuse stay consistent.
+    function simulationStatusBadge(status) {
+        const st = (status || '').toLowerCase();
+        if (st === 'success' || st === 'ready') {
+            return '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>'
+                + esc(st === 'ready' ? 'Ready' : 'Success') + '</span>';
+        }
+        if (st === 'error' || st === 'failed') {
+            return '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>'
+                + esc(st === 'failed' ? 'Failed' : 'Error') + '</span>';
+        }
+        if (st === 'running') {
+            return '<span class="badge bg-info text-dark"><i class="bi bi-hourglass-split me-1"></i>Running</span>';
+        }
         return '<span class="badge bg-secondary">' + esc(status || 'unknown') + '</span>';
     }
 
@@ -138,9 +158,28 @@ window.RunsRender = (function () {
             + '<td class="text-end">' + (failed ? dash : esc((Number(run.avg_degree) || 0).toFixed(2))) + '</td>'
             + '<td class="text-end font-monospace">' + (failed ? dash : esc((Number(run.density) || 0).toFixed(6))) + '</td>'
             + '<td class="text-end">' + esc(fmtMillis(run.duration_ms)) + '</td>'
-            + detailsCell(
+            +             detailsCell(
                 o.handler || 'showAnalyticsRunDetails', idx,
                 'View analytics run details'
+            );
+    }
+
+    // opts: { domain: bool, handler: string }
+    function simulationRunCells(run, idx, opts) {
+        const o = opts || {};
+        const outcome = run.error || run.message || '';
+        const outcomeCls = run.error ? 'text-danger' : '';
+        const scenario = run.label || run.simulation_id || '—';
+        return '<td class="small">' + fmtTs(run.started_at) + '</td>'
+            + (o.domain ? domainCell(run) : '')
+            + '<td class="text-center">' + versionBadge(run.version) + '</td>'
+            + '<td class="small fw-semibold">' + esc(scenario) + '</td>'
+            + '<td class="text-center">' + simulationStatusBadge(run.status) + '</td>'
+            + '<td class="small ' + outcomeCls + '">' + esc(outcome) + '</td>'
+            + '<td class="text-end small">' + esc(fmtDuration(run.duration_s)) + '</td>'
+            + detailsCell(
+                o.handler || 'showSettingsSimulationRunDetails', idx,
+                'View simulation run details'
             );
     }
 
@@ -267,6 +306,38 @@ window.RunsRender = (function () {
         return html;
     }
 
+    function simulationRunDetailsHtml(run) {
+        const scenario = run.label || run.simulation_id || '—';
+        let html = '<div class="row g-2 mb-3">';
+        html += kv('Status', simulationStatusBadge(run.status));
+        if (run.domain) html += kv('Context', esc(run.domain));
+        html += kv('Version', versionBadge(run.version));
+        html += kv('Scenario', esc(scenario));
+        html += kv('Simulation ID', '<span class="font-monospace small">' + esc(run.simulation_id || '—') + '</span>');
+        html += kv('Started', fmtTs(run.started_at));
+        html += kv('Finished', fmtTs(run.finished_at));
+        html += kv('Duration', esc(fmtDuration(run.duration_s)));
+        html += kv('By', esc(run.owner || '—'));
+        html += kv('Task ID', '<span class="font-monospace small">' + esc(run.task_id || '—') + '</span>');
+        html += '</div>';
+
+        if (run.message) {
+            html += '<div class="alert alert-light border small mb-3"><i class="bi bi-chat-left-text me-1"></i>'
+                + esc(run.message) + '</div>';
+        }
+        if (run.error) {
+            html += '<div class="alert alert-danger small mb-3"><i class="bi bi-exclamation-octagon me-1"></i>'
+                + esc(run.error) + '</div>';
+        }
+
+        const stats = run.stats || {};
+        if (Object.keys(stats).length) {
+            html += '<h6 class="mt-2 mb-2"><i class="bi bi-bar-chart me-1"></i>Stats</h6>';
+            html += statsTable(stats);
+        }
+        return html;
+    }
+
     return {
         esc: esc,
         fmtTs: fmtTs,
@@ -274,16 +345,19 @@ window.RunsRender = (function () {
         fmtMillis: fmtMillis,
         buildStatusBadge: buildStatusBadge,
         analyticsStatusBadge: analyticsStatusBadge,
+        simulationStatusBadge: simulationStatusBadge,
         kindBadge: kindBadge,
         localName: localName,
         analyticsScope: analyticsScope,
         versionBadge: versionBadge,
         buildRunCells: buildRunCells,
         analyticsRunCells: analyticsRunCells,
+        simulationRunCells: simulationRunCells,
         kv: kv,
         statsTable: statsTable,
         phaseTable: phaseTable,
         buildRunDetailsHtml: buildRunDetailsHtml,
-        analyticsRunDetailsHtml: analyticsRunDetailsHtml
+        analyticsRunDetailsHtml: analyticsRunDetailsHtml,
+        simulationRunDetailsHtml: simulationRunDetailsHtml
     };
 })();

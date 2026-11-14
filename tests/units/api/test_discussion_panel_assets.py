@@ -93,6 +93,29 @@ class TestDiscussionDomainScope:
         assert "collectTags" not in panel_js
 
 
+class TestOpenOntologyDiscussionIsGlobal:
+    """Discuss buttons outside Ontology must not depend on ontology-map.js."""
+
+    def test_comments_panel_exports_open_ontology_discussion(self, panel_js):
+        assert "window.openOntologyDiscussion" in panel_js
+        assert "return openForSelection()" in panel_js
+
+    def test_cohorts_header_calls_the_global_opener(self):
+        from pathlib import Path
+
+        shell = (
+            Path(__file__).resolve().parents[3]
+            / "src/front/templates/partials/ontology/_ontology_cohorts.html"
+        ).read_text(encoding="utf-8")
+        design = shell.split('data-cohort-actions="design"', 1)[1].split(
+            'data-cohort-actions="runs"', 1
+        )[0]
+        assert "onto-discuss-btn" in design
+        assert 'onclick="openOntologyDiscussion()"' in design
+        # The silent no-op guard hid a missing script; do not bring it back.
+        assert "typeof openOntologyDiscussion" not in design
+
+
 class TestDiscussionTimelineMarkdown:
     """Domain → Discussions timeline renders comment bodies as markdown."""
 

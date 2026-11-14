@@ -28,6 +28,8 @@ const IntelligencePatterns = {
             if (el) el.addEventListener('click', fn);
         };
         on('patDetectBtn', () => this.openDetectModal());
+        on('patSavedDiscussBtn', () => openOntologyDiscussion());
+        on('patDiscussBtn', () => openOntologyDiscussion());
         on('patBackBtn', () => this.showList({ replace: true }));
         on('patRefreshBtn', () => {
             if (this._viewingSavedId && this._viewingSaved) {

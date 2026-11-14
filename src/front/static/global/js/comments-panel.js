@@ -619,4 +619,13 @@
         taggableFromOntology: taggableFromOntology,
         parseBody: parseBody,
     };
+
+    /**
+     * Shared entry for "Discuss" buttons on Ontology / Intelligence / etc.
+     * Discussions are domain-wide; the panel lives on every page via base.html,
+     * so this must not depend on ontology-map.js (OntologyState).
+     */
+    window.openOntologyDiscussion = function openOntologyDiscussion() {
+        return openForSelection();
+    };
 })();

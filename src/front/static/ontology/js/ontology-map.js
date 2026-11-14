@@ -3946,20 +3946,6 @@ const ICONS_TASK_KEY = 'ontobricks_icons_task';
 let _iconsCurrentTaskId = null;
 
 /**
- * Open the ontology designer discussion. Anchors to the whole ontology
- * diagram (domain/'ontology'); each comment can optionally be tagged with
- * one or more classes/relationships via the compose-box tag picker.
- */
-function openOntologyDiscussion() {
-    if (!window.OntoComments) return;
-    const cfg = (typeof OntologyState !== 'undefined' && OntologyState.config) || {};
-    OntoComments.openForSelection(
-        'domain', 'ontology', 'Whole ontology diagram',
-        OntoComments.taggableFromOntology(cfg)
-    );
-}
-
-/**
  * Restore button state (used after completion, failure, or resume).
  */
 function _restoreAutoAssignIconsButton() {

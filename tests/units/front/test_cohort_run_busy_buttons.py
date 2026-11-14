@@ -8,7 +8,7 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COHORT_JS = REPO_ROOT / "src/front/static/query/js/query-cohorts.js"
-RUN_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_cohorts.html"
+RUN_HTML = REPO_ROOT / "src/front/templates/partials/ontology/_ontology_cohorts.html"
 MODALS = REPO_ROOT / "src/front/templates/partials/_cohort_modals.html"
 
 

@@ -1,9 +1,11 @@
 <!-- JS: /static/config/js/settings-runs.js -->
-<!-- Settings → Automation → Runs: build and analytics history across EVERY
-     domain in the registry (admin only). Same two-tab layout as Knowledge
-     Graph → Management → Runs, plus a Context column, a Context filter whose
-     default is every domain, and server-side pagination — cross-domain
-     history has no natural bound the way one domain's does.
+<!-- Settings → Automation → Runs: build, analytics and simulation history
+     across EVERY domain in the registry (admin only). Same tab layout as
+     Knowledge Graph → Management → Runs for build/analytics, plus a
+     Simulation tab (moved from Intelligence → Simulation → Runs), a Context
+     column, a Context filter whose default is every domain, and server-side
+     pagination — cross-domain history has no natural bound the way one
+     domain's does.
 
      Element ids are prefixed `sr` so a grep for a Runs id is never ambiguous
      between this page and the per-domain one. Each tab owns its own loading /
@@ -14,7 +16,7 @@
         <div>
             <h4 class="mb-1"><i class="bi bi-list-check me-2"></i>Runs</h4>
             <p class="text-muted mb-0 small">
-                Build and analytics history across every context (newest first)
+                Build, analytics and simulation history across every context (newest first)
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -49,6 +51,13 @@
                             data-bs-target="#srtab-analytics" type="button" role="tab"
                             aria-controls="srtab-analytics" aria-selected="false">
                         <i class="bi bi-graph-up-arrow me-1"></i>Analytics runs
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="srtab-btn-simulation" data-bs-toggle="tab"
+                            data-bs-target="#srtab-simulation" type="button" role="tab"
+                            aria-controls="srtab-simulation" aria-selected="false">
+                        <i class="bi bi-sliders2-vertical me-1"></i>Simulation runs
                     </button>
                 </li>
             </ul>
@@ -199,10 +208,79 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- ── TAB: Simulation runs ── -->
+                <div class="tab-pane fade" id="srtab-simulation" role="tabpanel"
+                     aria-labelledby="srtab-btn-simulation">
+
+                    <div id="srSimLoading" class="text-center py-5" style="display:none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-muted mt-2 small">Loading simulation runs from registry&hellip;</p>
+                    </div>
+
+                    <div id="srSimEmpty" class="text-center py-5" style="display:none;">
+                        <i class="bi bi-sliders2-vertical text-muted fs-1"></i>
+                        <p class="text-muted mt-2 mb-1">No simulation runs recorded</p>
+                        <p class="text-muted small" id="srSimEmptyScope"></p>
+                    </div>
+
+                    <div id="srSimError" class="alert alert-warning m-3" role="alert" style="display:none;">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <span id="srSimErrorMessage"></span>
+                    </div>
+
+                    <div id="srSimTableWrapper" style="display:none;">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width:16%;">Started</th>
+                                        <th style="width:16%;">Context</th>
+                                        <th class="text-center" style="width:10%;">Version</th>
+                                        <th style="width:18%;">Scenario</th>
+                                        <th class="text-center" style="width:12%;">Status</th>
+                                        <th style="width:14%;">Outcome</th>
+                                        <th class="text-end" style="width:8%;">Duration</th>
+                                        <th class="text-center" style="width:6%;">Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="srSimTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- See the note on #srBuildPagination above. -->
+                    <div class="d-flex d-none justify-content-between align-items-center mt-3 flex-wrap gap-2"
+                         id="srSimPagination">
+                        <div class="d-flex align-items-center gap-2">
+                            <label for="srSimPageSize" class="text-muted small mb-0">Rows</label>
+                            <select class="form-select form-select-sm w-auto" id="srSimPageSize">
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <div class="d-flex d-none align-items-center gap-2" id="srSimPagingControls">
+                            <span class="text-muted small" id="srSimPageInfo"></span>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Simulation runs pagination">
+                                <button type="button" class="btn btn-outline-secondary" id="srSimPrev">
+                                    <i class="bi bi-chevron-left"></i> Prev
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="srSimNext">
+                                    Next <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
-<!-- NOTE: both run-details modals are rendered at page level in settings.html
+<!-- NOTE: run-details modals are rendered at page level in settings.html
      so they work from any section (a modal inside a hidden .sidebar-section
      shows its backdrop but leaves the dialog invisible). -->

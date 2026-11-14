@@ -24,15 +24,50 @@ const CohortModule = {
     async init() {
         await this._loadOntology();
         await this.loadRules();
-        // Honour a deep-link from the run page's "view/edit" button:
-        // ``/intelligence/?section=cohorts&rule=<id>`` lands on the design
-        // surface with that rule preloaded into the form.
+        // Deep links: ``/intelligence/?section=cohorts&rule=<id>&tab=design|runs``.
+        // ``rule`` preloads the rule; ``tab`` picks the Design or Runs tab.
         const params = new URLSearchParams(window.location.search || '');
         const ruleParam = params.get('rule');
         if (ruleParam && (this.rules || []).some(r => r.id === ruleParam)) {
             this.loadRule(ruleParam);
         } else {
             this.newRule(false);
+        }
+        this._bindTabs();
+        this._showTab(params.get('tab') === 'runs' ? 'runs' : 'design');
+    },
+
+    // ---- Design / Runs tabs --------------------------------------------
+
+    _bindTabs() {
+        const tabs = { cohortTabDesignBtn: 'design', cohortTabRunsBtn: 'runs' };
+        for (const [id, name] of Object.entries(tabs)) {
+            document.getElementById(id)?.addEventListener(
+                'shown.bs.tab', () => this._syncTabChrome(name),
+            );
+        }
+    },
+
+    _showTab(name) {
+        const tab = name === 'runs' ? 'runs' : 'design';
+        const btn = document.getElementById(
+            tab === 'runs' ? 'cohortTabRunsBtn' : 'cohortTabDesignBtn',
+        );
+        if (btn && typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+            try { bootstrap.Tab.getOrCreateInstance(btn).show(); } catch { /* noop */ }
+        }
+        this._syncTabChrome(tab);
+    },
+
+    /** Swap header actions to the active tab and mirror it in the URL. */
+    _syncTabChrome(tab) {
+        document.querySelectorAll('[data-cohort-actions]').forEach(el => {
+            el.classList.toggle('d-none', el.dataset.cohortActions !== tab);
+        });
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('tab') !== tab) {
+            url.searchParams.set('tab', tab);
+            window.history.replaceState(window.history.state, '', url);
         }
     },
 
@@ -184,17 +219,10 @@ const CohortModule = {
             document.getElementById('cohortRulesList'),
             document.getElementById('cohortRulesEmpty'),
             document.getElementById('cohortRulesCount'),
-            false,
-        );
-        this._fillRulesList(
-            document.getElementById('cohortRunRulesList'),
-            document.getElementById('cohortRunRulesEmpty'),
-            document.getElementById('cohortRunRulesCount'),
-            true,
         );
     },
 
-    _fillRulesList(list, empty, counter, editLink) {
+    _fillRulesList(list, empty, counter) {
         if (counter) counter.textContent = this.rules.length;
         if (!list) return;
         list.innerHTML = '';
@@ -221,12 +249,6 @@ const CohortModule = {
                         ${ucIcon}
                     </div>
                 </button>
-                ${editLink
-                    ? `<a class="cohort-rule-edit" title="View / edit rule definition"
-                          href="/intelligence/?section=cohorts&rule=${encodeURIComponent(r.id)}">
-                           <i class="bi bi-pencil-square"></i>
-                       </a>`
-                    : ''}
             `;
             row.querySelector('.cohort-rule-item-main')
                 .addEventListener('click', () => this.loadRule(r.id));
@@ -243,7 +265,6 @@ const CohortModule = {
         this._resetPreviewPane();
         this._hydrateForm();
         this._renderRulesList();
-        this._showBuildTab();
         this._setStatus(`Loaded rule "${r.label || r.id}"`);
     },
 
@@ -446,7 +467,7 @@ const CohortModule = {
     },
 
     _collectFromForm() {
-        // Only Configuration → Cohorts has the build form. Configuration → Runs
+        // Only the Cohorts Design tab has the build form. The Runs tab
         // is read-only — bail without touching ``this.rule`` so the loaded
         // saved rule isn't corrupted.
         if (!document.getElementById('cohortRuleLabel')) return;
@@ -1944,12 +1965,6 @@ const CohortModule = {
         });
     },
 
-    _showBuildTab() {
-        const btn = document.getElementById('cohortTabBuildBtn');
-        if (!btn || typeof bootstrap === 'undefined' || !bootstrap.Tab) return;
-        try { bootstrap.Tab.getOrCreateInstance(btn).show(); } catch { /* noop */ }
-    },
-
     // ---- helpers --------------------------------------------------------
 
     /**
@@ -2053,8 +2068,7 @@ const CohortModule = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('cohorts-section')
-            || document.getElementById('cohort-run-section')) {
+    if (document.getElementById('cohorts-section')) {
         try {
             CohortModule.init();
             CohortModule._hookLabelInput();

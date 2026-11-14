@@ -196,20 +196,27 @@ class ScheduleSettings:
     ) -> Dict[str, Any]:
         """One page of registry-wide run history for the admin Runs page.
 
-        *kind* is ``"build"`` or ``"analytics"``. ``folder=None`` spans every
-        domain. The two kinds share every step but the registry method, so
-        they share one body rather than two near-copies.
+        *kind* is ``"build"``, ``"analytics"``, or ``"simulation"``.
+        ``folder=None`` spans every domain. The kinds share every step but
+        the registry method, so they share one body rather than near-copies.
         """
+        if kind not in ("build", "analytics", "simulation"):
+            raise ValidationError(f"Unknown run kind: {kind}")
         try:
             domain = _ss.get_domain(session_mgr)
             svc = _ss.RegistryService.from_context(domain, settings)
             if not svc.cfg.is_configured:
                 raise ValidationError("Registry not configured")
-            reader = (
-                svc.load_all_build_runs
-                if kind == "build"
-                else svc.load_all_graph_analytics_runs
-            )
+            # Simulation history is store-backed (same tables Simulation uses
+            # via ``RegistryService.store``); build/analytics already wrap the
+            # store on the service. Avoid growing RegistryService for a third
+            # near-identical page reader.
+            if kind == "build":
+                reader = svc.load_all_build_runs
+            elif kind == "analytics":
+                reader = svc.load_all_graph_analytics_runs
+            else:
+                reader = svc.store.load_all_simulation_runs
             runs, total = reader(folder=folder, limit=limit, offset=offset)
             return {
                 "success": True,

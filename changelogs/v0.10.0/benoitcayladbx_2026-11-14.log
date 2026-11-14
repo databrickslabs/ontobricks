@@ -1475,6 +1475,238 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 45.91s
 
+================================================================================
+## Move Intelligence Simulation Runs to Settings → Runs
+
+Context: Simulation run history lived under Intelligence → Simulation → Runs
+while build/analytics history already lived under Settings → Automation →
+Runs. Consolidate all run ledgers on the admin Runs page as a third tab so
+operators have one place to inspect history across contexts.
+
+Changes:
+
+1. src/front/templates/partials/settings/_settings_runs.html
+   Add Simulation runs tab (table, loading/empty/error, pagination).
+2. src/front/static/config/js/settings-runs.js
+   Wire the simulation tab to GET /settings/runs/simulation.
+3. src/front/static/global/js/runs-render.js
+   Shared simulation row/details/status badge helpers.
+4. src/front/templates/settings.html
+   Page-level Simulation Run Details modal.
+5. src/api/routers/internal/settings.py
+   GET /settings/runs/simulation (admin, paginated, optional domain filter).
+6. src/back/objects/domain/settings/ScheduleSettings.py
+   Extend _all_runs_result for kind=simulation via store.load_all_simulation_runs.
+7. src/back/objects/registry/store/base.py
+   Default load_all_simulation_runs → ([], 0).
+8. src/back/objects/registry/store/lakebase/Simulations.py
+   Cross-domain paginated simulation run reader with scenario label join.
+9. src/front/config/menu_config.json
+   Remove Intelligence → Simulation → Runs sidebar item.
+10. src/front/templates/intelligence.html
+    Drop runs-section include.
+11. src/front/templates/partials/intelligence/_sim_runs.html
+    Deleted (content moved to Settings).
+12. src/front/static/intelligence/js/simulation.js
+    Remove loadRuns / runs-section wiring.
+13. src/front/templates/partials/layout/help_modal.html
+    Point simulation run history at Settings → Automation → Runs.
+14. tests/units/front/test_settings_runs_page.py
+    Cover the third tab, modal, pagination, and endpoint wiring.
+15. tests/units/settings/test_all_runs_endpoints.py
+    Parametrize paging/filter tests for /settings/runs/simulation.
+16. tests/units/auth/test_permission_middleware.py
+    Admin-only gate for the simulation runs endpoint.
+17. tests/units/front/test_intelligence_page_contract.py
+    Menu/page no longer expose Simulation → Runs.
+18. tests/units/front/test_sidebar_content_stretch_contract.py
+    Drop runs from intelligence section inventory.
+19. tests/units/front/test_help_center_menu_sync.py
+    Update duplicate-label comment after Runs move.
+
+Modified files:
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/settings/ScheduleSettings.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/Simulations.py
+- src/front/config/menu_config.json
+- src/front/static/config/js/settings-runs.js
+- src/front/static/global/js/runs-render.js
+- src/front/static/intelligence/js/simulation.js
+- src/front/templates/intelligence.html
+- src/front/templates/partials/intelligence/_sim_runs.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/settings.html
+- tests/units/auth/test_permission_middleware.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_settings_runs_page.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/settings/test_all_runs_endpoints.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10544 passed, 324 skipped, 8 deselected, 39 warnings in 44.15s
+
+## Intelligence: merge Cohorts and Runs into one page with Design / Runs tabs
+
+Context: Intelligence → Configuration had two sidebar pages (Cohorts for the
+rule design, Runs for preview and materialise), each with its own saved-rules
+rail. They are now one Cohorts page. The rail is shared, the right card has
+Design and Runs tabs, and the header actions swap with the active tab. Design
+spec: docs/superpowers/specs/2026-11-14-cohorts-runs-tabs-design.md.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_cohorts.html
+   Page shell: header (title with KG status badge; Design actions = Discuss /
+   New rule / Save rule; Runs actions = Purge / Outputs / Preview / Materialise),
+   shared rail, and ob-tabs (Design, Runs). The design form moves into the
+   Design pane; the Runs partial is included in the Runs pane.
+2. src/front/templates/partials/dtwin/_query_cohorts.html
+   Reduced to the Runs pane body (rule summary, preview, path trace, explain).
+   Its own header, rail and action buttons moved to the shell.
+3. src/front/templates/intelligence.html
+   Removed the cohort-run-section sidebar section.
+4. src/front/config/menu_config.json
+   Removed the Runs item from Intelligence → Configuration.
+5. src/front/static/query/js/query-cohorts.js
+   Tab wiring: _bindTabs / _showTab / _syncTabChrome (swap header actions,
+   mirror the active tab in ?tab=design|runs). Single rules list; the pencil
+   edit link is gone. Loading a rule no longer forces the Design tab.
+   Init guard checks cohorts-section only.
+6. src/front/routes/intelligence.py
+   Legacy ?section=cohort-run redirects to ?section=cohorts&tab=runs (keeps rule=).
+7. src/front/routes/dtwin.py
+   /dtwin/?section=cohorts now redirects to ?section=cohorts&tab=runs.
+8. src/front/templates/partials/layout/help_modal.html
+   Help text points to the Design and Runs tabs.
+9. docs/user-guide.md, docs/advanced_features.md, docs/architecture.md
+   Navigation paths and redirect notes updated.
+10. tests/units/front/test_cohorts_runs_tabs_contract.py (new)
+    Contract for the shared rail, tabs, header action swap, tab URL sync,
+    and both legacy redirects.
+11. Updated contract tests for the new file split: test_intelligence_page_contract,
+    test_sidebar_content_stretch_contract, test_kg_section_headers,
+    test_kg_readiness_indicator, test_purge_inferences_ui,
+    test_cohort_run_busy_buttons, test_clarity_design_contract (cohort page now
+    asserts real ob-tabs instead of forbidding tab-pane).
+
+Modified files (this change):
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+- src/front/templates/partials/dtwin/_query_cohorts.html
+- src/front/templates/intelligence.html
+- src/front/config/menu_config.json
+- src/front/static/query/js/query-cohorts.js
+- src/front/routes/intelligence.py
+- src/front/routes/dtwin.py
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/advanced_features.md
+- docs/architecture.md
+- tests/units/front/test_cohorts_runs_tabs_contract.py (new)
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_cohort_run_busy_buttons.py
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/front/test_kg_section_headers.py
+- tests/units/front/test_purge_inferences_ui.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10547 passed, 324 skipped, 8 deselected, 39 warnings in 48.25s
+Browser check not run (no Databricks workspace in this session); the JS passes `node --check`.
+
+## Cohorts: rename header buttons
+
+1. src/front/templates/partials/ontology/_ontology_cohorts.html
+   Header buttons renamed: "New rule" → "New", "Save rule" → "Save"; empty-state hint updated.
+2. docs/user-guide.md, docs/advanced_features.md
+   Button names in the cohort docs updated to match.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+- docs/user-guide.md
+- docs/advanced_features.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10547 passed, 324 skipped, 8 deselected, 39 warnings in 44.45s
+
+## Cohorts: fix Discuss button (no-op on Intelligence)
+
+Context: The Cohorts header Discuss button called ``openOntologyDiscussion()``,
+which only existed in ``ontology-map.js``. Intelligence never loads that script,
+and the ``typeof … === 'function' &&`` guard silently did nothing.
+
+1. src/front/static/global/js/comments-panel.js
+   Export ``window.openOntologyDiscussion`` → ``OntoComments.openForSelection()``
+   (panel already ships on every page via base.html).
+2. src/front/templates/partials/ontology/_ontology_cohorts.html
+   Call ``openOntologyDiscussion()`` directly; drop the silent typeof guard.
+3. src/front/static/ontology/js/ontology-map.js
+   Remove the local duplicate; map toolbar uses the shared global at click time.
+4. tests/units/api/test_discussion_panel_assets.py
+   Contract that the global opener exists and Cohorts wires to it.
+
+Modified files:
+- src/front/static/global/js/comments-panel.js
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/api/test_discussion_panel_assets.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10549 passed, 324 skipped, 8 deselected, 39 warnings in 45.11s
+
+## Graph menu: rename "Advanced" group to "Compute"
+
+1. src/front/config/menu_config.json
+   Graph menu group `digitaltwin-advanced` title "Advanced" → "Compute" (id unchanged).
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10549 passed, 324 skipped, 8 deselected, 39 warnings in 45.00s
+
+## Discuss button on Communities, Patterns and Compare
+
+Context: The domain discussion (window.openOntologyDiscussion, exported by
+comments-panel.js) is domain-wide, so the same button opens the same thread
+everywhere. Added it to the Intelligence section headers that lacked it.
+Bound from JS by id; partials stay free of inline onclick.
+
+1. src/front/templates/partials/intelligence/_intel_communities.html
+   Discuss button (#commDiscussBtn) before Materialize; Detect stays the rightmost CTA.
+2. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Discuss button (#patSavedDiscussBtn) in the list header.
+3. src/front/templates/partials/intelligence/_intel_patterns.html
+   Discuss button (#patDiscussBtn) in the details header.
+4. src/front/templates/partials/intelligence/_sim_compare.html
+   Header now has an actions group with Discuss (#simCompareDiscussBtn).
+5. src/front/static/intelligence/js/intelligence-communities.js
+   init() binds #commDiscussBtn.
+6. src/front/static/intelligence/js/intelligence-patterns.js
+   init() binds #patSavedDiscussBtn and #patDiscussBtn.
+7. src/front/static/intelligence/js/simulation-compare.js
+   init() binds #simCompareDiscussBtn.
+8. tests/units/front/test_intelligence_discuss_buttons.py (new)
+   Contract: each header has the button, it is bound from JS, no inline onclick,
+   Communities Discuss sits before the primary CTA.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_sim_compare.html
+- src/front/static/intelligence/js/intelligence-communities.js
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/js/simulation-compare.js
+- tests/units/front/test_intelligence_discuss_buttons.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10558 passed, 324 skipped, 8 deselected, 39 warnings in 44.67s
+Browser check not run (no Databricks workspace in this session).
+
 ## Fix pattern diagram ontology icons
 
 Context: Pattern details diagrams always showed the default 📦 icon instead of

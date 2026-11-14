@@ -561,7 +561,7 @@
                 },
                 {
                     "id": "digitaltwin-advanced",
-                    "title": "Advanced",
+                    "title": "Compute",
                     "icon": "bi-gear",
                     "items": [
                         {
@@ -604,13 +604,6 @@
                             "icon": "bi-people-fill",
                             "default": false,
                             "requires": null
-                        },
-                        {
-                            "id": "cohort-run",
-                            "label": "Runs",
-                            "icon": "bi-play-circle",
-                            "default": false,
-                            "requires": null
                         }
                     ]
                 },
@@ -651,13 +644,6 @@
                             "id": "compare",
                             "label": "Compare",
                             "icon": "bi-columns-gap",
-                            "default": false,
-                            "requires": null
-                        },
-                        {
-                            "id": "runs",
-                            "label": "Runs",
-                            "icon": "bi-list-check",
                             "default": false,
                             "requires": null
                         }

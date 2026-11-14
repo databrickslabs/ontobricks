@@ -1300,7 +1300,7 @@ Results are displayed as inferred triples and violations. Inferred triples can b
 In the **Business rules** phase tree (Graph → Business rules), rule names are links: clicking one opens the rule editor in place (the IF-THEN graph editor for Simple rules, the SPARQL editor for Complex rules). Users without ontology edit rights see the rule read-only. After you save, the list refreshes and your ticked rules stay ticked.
 
 Builders can use **Purge Inferences** from **Build** (Lakebase and
-Lakehouse), **Inference**, or **Simulation → Run** to remove all materialized
+Lakehouse), **Inference**, or **Intelligence → Configuration → Cohorts → Runs** to remove all materialized
 reasoning and cohort triples from the
 active graph. The confirmation dialog names the active graph and shows the
 combined number of generated triples that will be deleted. The Cockpit
@@ -1479,8 +1479,8 @@ hops or use a cohort or class scope in that case.
 
 Design the grouping rules used as a simulation scope (and as a live graph
 materialisation). Pick the target class, the linking paths, the compatibility
-filters and the grouping type, then **Save rule**. Preview and write results
-from **Simulation → Run**. See [Cohort discovery](advanced_features.md#cohort-discovery).
+filters and the grouping type, then **Save**. Preview and write results
+from **Intelligence → Configuration → Cohorts → Runs**. See [Cohort discovery](advanced_features.md#cohort-discovery).
 
 ### Run (Sidebar)
 
@@ -3294,12 +3294,12 @@ After import you can:
 - **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
 - **Community detection**: **Intelligence → Discovery → Communities** previews a label-propagation partition computed on a Databricks job, then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer only visualises that partition.
 - **Pattern detection**: **Intelligence → Discovery → Patterns** lists saved neighbourhood snapshots; **Detect** finds recurring typed neighbourhoods on a Databricks job and opens the details pane; **Save** keeps a named snapshot in Unity Catalog (the graph is not changed).
-- **Cohort design and run**: **Intelligence → Configuration → Cohorts** authors grouping rules; **Intelligence → Configuration → Runs** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
+- **Cohort design and run**: **Intelligence → Configuration → Cohorts** is one page with two tabs. **Design** authors grouping rules; **Runs** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages and the old **Runs** entry redirect here.
 
 ### Graph (Sync & Explore)
 - **Two Layers**: Every build materializes a Delta view (Unity Catalog, governance) and a Graph DB engine (Lakebase Postgres today; pluggable behind `GraphDBFactory`).
 - **Readiness Status**: Validates ontology, entity mappings, relationship mappings, and attribute mapping completeness before enabling sync and explore actions.
-- **Graph readiness indicator**: Each Knowledge Graph sub-page (Explorer, Chat, Insights, Analytics, GraphQL, Data Quality, Inference) and **Simulation → Run** shows a badge next to the title — *Building…*, *Graph ready · \<backend\>*, or *Graph not built* with a **Go to Build** shortcut. The backend label reflects the domain's selected engine (Lakebase / Lakehouse / Neo4j).
+- **Graph readiness indicator**: Each Knowledge Graph sub-page (Explorer, Chat, Insights, Analytics, GraphQL, Data Quality, Inference) and **Intelligence → Configuration → Cohorts** shows a badge next to the title — *Building…*, *Graph ready · \<backend\>*, or *Graph not built* with a **Go to Build** shortcut. The backend label reflects the domain's selected engine (Lakebase / Lakehouse / Neo4j).
 - **Triple Store Sync**: Synchronize generated triples to a Unity Catalog table — SQL is generated automatically from R2RML mappings (no manual query writing required).
 - **Last Updated Timestamp**: Triple store status displays the last modification date and time retrieved from Unity Catalog Delta table metadata (`DESCRIBE DETAIL`).
 - **Auto-Load Triple Store**: Triples and Graph Viewer views automatically load data from the triple store on navigation (no manual button click required).

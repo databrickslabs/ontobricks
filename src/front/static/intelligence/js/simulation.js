@@ -1,6 +1,7 @@
 /**
- * Simulation page — shared state, API helper, Scenarios + Runs sections,
+ * Simulation page — shared state, API helper, Scenarios section,
  * and background-run polling. Workbench / Results live in their own modules.
+ * Run history lives under Settings → Automation → Runs (Simulation tab).
  */
 const SimulationPage = {
     config: {},
@@ -23,10 +24,6 @@ const SimulationPage = {
         this._bind();
         this.loadScenarios();
         this._resumeTask();
-        document.addEventListener('sidebarSectionChanged', (e) => {
-            const section = e.detail && e.detail.section;
-            if (section === 'runs') this.loadRuns();
-        });
         const scenariosLink = document.querySelector('.sidebar-nav .nav-link[data-section="scenarios"]');
         if (scenariosLink) {
             scenariosLink.addEventListener('click', () => this.showList({ replace: true }));
@@ -41,7 +38,6 @@ const SimulationPage = {
             if (el) el.addEventListener('click', fn);
         };
         on('simRefreshBtn', () => this.loadScenarios());
-        on('simRunsRefreshBtn', () => this.loadRuns());
         on('simNewBtn', () => this.newScenario());
         const body = document.getElementById('simScenariosBody');
         if (body) {
@@ -556,32 +552,6 @@ const SimulationPage = {
         };
         tick();
         this.pollTimer = setInterval(tick, this.POLL_MS);
-    },
-
-    // -- Runs section ------------------------------------------------------
-
-    async loadRuns() {
-        const body = document.getElementById('simRunsBody');
-        if (!body) return;
-        try {
-            const data = await this.api('/simulation/runs?limit=100');
-            const runs = data.runs || [];
-            if (!runs.length) {
-                body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No runs yet.</td></tr>';
-                return;
-            }
-            const labels = Object.fromEntries(this.scenarios.map((s) => [s.id, s.label]));
-            body.innerHTML = runs.map((r) => `<tr>
-                <td class="small">${this.fmtDate(r.started_at)}</td>
-                <td>${this.esc(labels[r.simulation_id] || r.simulation_id)}</td>
-                <td>${this.statusBadge(r.status)}</td>
-                <td class="small ${r.error ? 'text-danger' : ''}">${this.esc(r.error || r.message || '')}</td>
-                <td class="text-end small">${Number(r.duration_s || 0).toFixed(1)} s</td>
-                <td class="small text-muted">${this.esc(r.owner || '')}</td>
-            </tr>`).join('');
-        } catch (err) {
-            body.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">${this.esc(err.message)}</td></tr>`;
-        }
     },
 };
 

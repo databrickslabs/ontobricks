@@ -32,9 +32,6 @@ SIGMAGRAPH_TEMPLATE = (
 ONTOLOGY_COHORT_TEMPLATE = (
     REPO_ROOT / "src/front/templates/partials/ontology/_ontology_cohorts.html"
 )
-QUERY_COHORT_TEMPLATE = (
-    REPO_ROOT / "src/front/templates/partials/dtwin/_query_cohorts.html"
-)
 ONTOLOGY_WIZARD_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-wizard.css"
 ONTOLOGY_WIZARD_TEMPLATE = (
     REPO_ROOT / "src/front/templates/partials/ontology/_ontology_wizard.html"
@@ -464,14 +461,13 @@ def test_mapping_designer_panels_use_the_shared_compact_tab_rail():
     ) == 2
 
 
-def test_cohort_cards_do_not_masquerade_as_tab_strips():
-    for template_path in (ONTOLOGY_COHORT_TEMPLATE, QUERY_COHORT_TEMPLATE):
-        template = _read(template_path)
-        assert "cohort-tabs-wrap" not in template
-        assert 'class="cohort-content-card card"' in template
-    ontology_template = _read(ONTOLOGY_COHORT_TEMPLATE)
-    assert 'role="tabpanel"' not in ontology_template
-    assert 'class="tab-pane' not in ontology_template
+def test_cohort_page_uses_real_ob_tabs_not_a_fake_strip():
+    template = _read(ONTOLOGY_COHORT_TEMPLATE)
+    assert "cohort-tabs-wrap" not in template
+    assert 'class="cohort-content-card card"' in template
+    # Design / Runs are real Bootstrap tabs styled with the shared ob-tabs.
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in template
+    assert template.count('role="tabpanel"') == 2
 
 
 def test_orphan_tab_styles_are_removed():

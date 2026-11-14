@@ -72,10 +72,8 @@ SECTION_INVENTORY = {
         "communities",
         "scenarios",
         "cohorts",
-        "cohort-run",
         "patterns",
         "compare",
-        "runs",
     },
     "settings.html": {
         "databricks",
@@ -131,7 +129,6 @@ STRETCH_PARTIALS = (
     "partials/domain/_domain_runs.html",
     "partials/dtwin/_query_insights.html",
     "partials/dtwin/_query_reasoning.html",
-    "partials/dtwin/_query_cohorts.html",
     "partials/dtwin/_query_analytics.html",
     "partials/settings/_settings_teams.html",
     "partials/settings/_settings_runs.html",

@@ -21,6 +21,8 @@ const SimulationCompare = {
     ],
 
     init() {
+        document.getElementById('simCompareDiscussBtn')
+            ?.addEventListener('click', () => openOntologyDiscussion());
         const run = document.getElementById('simCompareRunBtn');
         if (!run) return;
         run.addEventListener('click', () => this.run());

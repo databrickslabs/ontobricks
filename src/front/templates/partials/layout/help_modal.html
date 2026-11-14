@@ -311,9 +311,8 @@
                                                 <li><strong>Patterns</strong> &mdash; Scenarios-style list; <strong>Detect</strong> finds neighbourhood shapes on Databricks and auto-saves the whole run (every pattern’s diagram, KPIs and members) under the entity type + date/time</li>
                                                 <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Graph → Business rules, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed by comparing the materialised sandbox after-picture to its before-picture companion; <em>Explorer</em> opens that sandbox in the graph viewer</li>
                                                 <li><strong>Compare</strong> &mdash; overlay a ready sandbox on the current live graph (inferred or asserted only), on the same scope as the scenario: one colour-coded graph of unchanged, added (sandbox only) and removed (live only) triples, with exact counters and a details panel</li>
-                                                <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>
                                             </ul>
-                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar Background Tasks hourglass.</p>
+                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar Background Tasks hourglass. Simulation run history lives under <strong>Settings &rarr; Automation &rarr; Runs</strong> (Simulation tab).</p>
                                         </div>
                                     </div>
                                 </div>
@@ -378,7 +377,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-people-fill"></i></div>
                                         <h5>Cohort Discovery</h5>
-                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Intelligence &rarr; Configuration &rarr; Cohorts</strong>, run &amp; preview in <strong>Intelligence &rarr; Configuration &rarr; Runs</strong>.</p>
+                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design and run them on the two tabs of <strong>Intelligence &rarr; Configuration &rarr; Cohorts</strong> (<em>Design</em> and <em>Runs</em>).</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -517,7 +516,7 @@
                                 <dt>IF-THEN</dt><dd>Inference rules written as &ldquo;IF ... THEN ...&rdquo;.</dd>
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
                                 <dt>Bridge</dt><dd>Cross-context link between entities of two different contexts.</dd>
-                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Intelligence &rarr; Configuration &rarr; Cohorts</em>, run under <em>Intelligence &rarr; Configuration &rarr; Runs</em>.</dd>
+                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed on the <em>Design</em> tab of <em>Intelligence &rarr; Configuration &rarr; Cohorts</em>, run on its <em>Runs</em> tab.</dd>
                                 <dt>Simulation</dt><dd>A named what-if sandbox: a slice of the Knowledge Graph copied into an isolated table, patched with hypothetical triples, and re-reasoned &mdash; the live graph is never modified.</dd>
                                 <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the context Graph DB.</dd>
                                 <dt>Graph DB</dt><dd>Per-context engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>

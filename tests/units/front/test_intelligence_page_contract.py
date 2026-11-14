@@ -36,9 +36,9 @@ def test_intelligence_menu_groups():
         "Simulation",
     ]
     by_id = {g["id"]: g for g in groups}
+    # Cohorts and Runs are one page with Design / Runs tabs.
     assert [(i["id"], i["label"]) for i in by_id["intelligence-configuration"]["items"]] == [
         ("cohorts", "Cohorts"),
-        ("cohort-run", "Runs"),
     ]
     assert [(i["id"], i["label"]) for i in by_id["intelligence-discovery"]["items"]] == [
         ("communities", "Communities"),
@@ -47,12 +47,14 @@ def test_intelligence_menu_groups():
     assert [(i["id"], i["label"]) for i in by_id["intelligence-simulation"]["items"]] == [
         ("scenarios", "Scenarios"),
         ("compare", "Compare"),
-        ("runs", "Runs"),
     ]
     items = [i["id"] for g in groups for i in g["items"]]
     assert "results" not in items
     assert "patterns-saved" not in items
     assert "patterns-discover" not in items
+    assert "runs" not in items
+    assert 'id="runs-section"' not in _read(PAGE)
+    assert "_sim_runs.html" not in _read(PAGE)
 
 
 def test_menu_follows_knowledge_graph():
@@ -535,7 +537,8 @@ def test_open_scenario_does_not_bounce_to_list():
 def test_compare_section_is_a_scenarios_submenu_with_overlay_graph():
     scenarios = next(g for g in _menu()["groups"] if g["id"] == "intelligence-simulation")
     ids = [i["id"] for i in scenarios["items"]]
-    assert ids.index("scenarios") < ids.index("compare") < ids.index("runs")
+    assert ids.index("scenarios") < ids.index("compare")
+    assert "runs" not in ids
     html = _read(PAGE)
     partial = _read(FRONT / "templates/partials/intelligence/_sim_compare.html")
     js = _read(FRONT / "static/intelligence/js/simulation-compare.js")

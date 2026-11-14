@@ -205,8 +205,8 @@ def test_simulation_workflow_follows_menu_order():
     hw6_start = page.index('id="hw6"')
     hw6_end = page.index("</div>\n                                </div>", hw6_start)
     hw6_body = page[hw6_start:hw6_end]
-    # Advance the cursor so duplicate labels (e.g. Configuration → Runs and
-    # Simulation → Runs) must appear in menu order, not as the same hit twice.
+    # Advance the cursor so duplicate labels across groups must appear in
+    # menu order, not as the same hit twice.
     cursor = 0
     for label in labels:
         needle = f"<strong>{html.escape(label)}</strong>"

@@ -19,7 +19,7 @@ def test_shared_purge_button_is_in_all_kg_build_and_inference_sections():
         "src/front/templates/partials/dtwin/_query_sync.html",
         "src/front/templates/partials/dtwin/_query_databricks_build.html",
         "src/front/templates/partials/dtwin/_query_reasoning.html",
-        "src/front/templates/partials/dtwin/_query_cohorts.html",
+        "src/front/templates/partials/ontology/_ontology_cohorts.html",
     ]
     for path in paths:
         assert include in _read(path)

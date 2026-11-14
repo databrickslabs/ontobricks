@@ -486,7 +486,7 @@ Delta table — or both.
 
 ### 2. Authoring a rule (UX)
 
-In **Simulation → Cohorts**, open the design form.  The form has five
+In **Intelligence → Configuration → Cohorts**, open the **Design** tab.  The form has five
 sections, each with live feedback:
 
 1. **Identity** — *Rule name* + optional *Description*.  The internal id is
@@ -549,7 +549,7 @@ The sticky **action bar** at the bottom of the form lets you:
 | Button | What it does |
 |---|---|
 | **Preview** | Runs `/dtwin/cohorts/dry-run` and switches to the **Preview** tab (no writes). |
-| **Save rule** | `POST /dtwin/cohorts/rules` — versioned with the domain (works in both Volume and Lakebase modes). |
+| **Save** | `POST /dtwin/cohorts/rules` — versioned with the domain (works in both Volume and Lakebase modes). |
 | **Materialise** | Opens a small modal confirming what gets written. Idempotent per rule. |
 | **Configure outputs** | Toggle graph triples on/off and configure the optional Unity Catalog Delta target. |
 | **View JSON** | Inspect the canonical `CohortRule` payload. |

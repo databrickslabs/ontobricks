@@ -1436,8 +1436,11 @@ and projects it into a capped `{nodes, edges, summary}` payload.
 | `src/front/static/intelligence/js/simulation-compare.js` | Compare section: scenario picker, Sigma overlay graph, details panel |
 
 Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
-(former Knowledge Graph → Cohorts) live under this menu. Bookmarks to
-`/ontology/?section=cohorts` and `/dtwin/?section=cohorts` redirect here.
+(former Knowledge Graph → Cohorts) are one page, **Intelligence → Configuration
+→ Cohorts**, with **Design** and **Runs** tabs sharing one saved-rules rail.
+Bookmarks to `/ontology/?section=cohorts` redirect to the Design tab;
+`/dtwin/?section=cohorts` and `/intelligence/?section=cohort-run` redirect to
+the Runs tab (`?section=cohorts&tab=runs`).
 Materialise still writes to the live graph via `/dtwin/cohorts/*`.
 
 ---

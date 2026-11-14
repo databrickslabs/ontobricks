@@ -40,6 +40,7 @@ const IntelligenceCommunities = {
             const el = document.getElementById(id);
             if (el) el.addEventListener('click', fn);
         };
+        on('commDiscussBtn', () => openOntologyDiscussion());
         on('commDetectBtn', () => this.detect());
         on('commMaterializeBtn', () => this.materialize());
         on('commClearBtn', () => this.clear());
