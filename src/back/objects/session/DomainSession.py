@@ -70,6 +70,8 @@ def sanitize_domain_folder(name: str) -> str:
 # Default empty domain structure
 def get_empty_domain() -> Dict[str, Any]:
     """Return an empty domain data structure."""
+    from back.core.graphdb.GraphDBFactory import default_graph_backend
+
     return {
         "domain": {
             "info": {
@@ -87,7 +89,8 @@ def get_empty_domain() -> Dict[str, Any]:
                 # Mandatory per-domain graph backend:
                 # lakebase | databricks | neo4j | none.
                 # ``none`` is an ontology-only domain: no graph is ever built.
-                "graph_backend": "lakebase",
+                # Defaults to ``databricks`` when the registry runs without Lakebase.
+                "graph_backend": default_graph_backend(),
                 # Named Neo4j connection from Settings → Neo4j (required when
                 # graph_backend == "neo4j"). Value is the connection ``name``.
                 "neo4j_connection": "",

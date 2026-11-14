@@ -2,7 +2,11 @@
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="bi bi-archive me-2"></i>Registry Location</h4>
+            {% if registry_backend == "sqlite" %}
+            <p class="text-muted mb-0 small">Registry data (domains, versions, permissions, schedules, global config) and the <strong>Knowledge Store</strong> live in an embedded <strong>SQLite</strong> database, for workspaces without Lakebase. It is snapshotted to the registry Unity Catalog Volume.</p>
+            {% else %}
             <p class="text-muted mb-0 small">Registry data (domains, versions, permissions, schedules, global config) and the <strong>Knowledge Store</strong> live in <strong>Lakebase</strong> (Postgres). A Unity Catalog Volume is optional and only for ad-hoc OBX export bundles.</p>
+            {% endif %}
         </div>
     </div>
 
@@ -31,8 +35,12 @@
                             <div class="text-muted mt-1" style="font-size:0.72rem;line-height:1.4">
                                 This UC schema hosts the <strong>Delta Lake views</strong> that expose Knowledge Graph triples
                                 to SQL queries (e.g. <code>triples</code>, <code>entities</code>, <code>relationships</code>)
+                                {% if registry_backend == "sqlite" %}
+                                (registry data is in the SQLite registry, not in this schema).
+                                {% else %}
                                 and the <strong>Lakebase-backed registry tables</strong> that store domains, versions,
                                 permissions, and global configuration.
+                                {% endif %}
                                 The app service principal needs <code>USE CATALOG</code>, <code>USE SCHEMA</code>,
                                 and <code>SELECT</code> (plus <code>CREATE TABLE</code> / <code>MODIFY</code> for the registry).
                             </div>
@@ -50,11 +58,17 @@
                                 </div>
                                 <span id="registryVolumeCheckBadge"></span>
                             </div>
-                            <div class="text-muted registry-config-hint">Unity Catalog Volume — optional OBX export bundles</div>
+                            <div class="text-muted registry-config-hint">{% if registry_backend == "sqlite" %}Unity Catalog Volume — SQLite registry snapshot &amp; OBX export bundles{% else %}Unity Catalog Volume — optional OBX export bundles{% endif %}</div>
                             <div class="text-muted mt-1" style="font-size:0.72rem;line-height:1.4">
+                                {% if registry_backend == "sqlite" %}
+                                This Unity Catalog <strong>managed Volume</strong> holds the SQLite registry snapshot
+                                (<code>_registry/</code>) and ad-hoc OBX export bundles. Keep it: without it the
+                                registry is lost when the app restarts.
+                                {% else %}
                                 This Unity Catalog <strong>managed Volume</strong> is optional. Use it for ad-hoc
                                 OBX export bundles. Uploaded documents are parsed into the Lakebase Knowledge Store
                                 (originals are not kept). Registry rows also live in Lakebase, not on the Volume.
+                                {% endif %}
                             </div>
                             <div id="registryVolumeCheckDetail" class="mt-1" style="font-size:0.72rem;display:none;"></div>
                         </div>
@@ -72,6 +86,31 @@
         </div>
     </div>
 
+    {% if registry_backend == "sqlite" %}
+    <div id="sqliteRegistryPanel" class="mb-3">
+        <div class="border rounded p-3 bg-body-tertiary">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong class="small"><i class="bi bi-database me-1"></i> SQLite Registry</strong>
+                <span class="badge bg-info text-dark">REGISTRY_BACKEND=sqlite</span>
+            </div>
+            <ul class="small mb-2 ps-3">
+                <li>The database file lives on the app's local disk (<code>REGISTRY_SQLITE_PATH</code>, default in the temp directory).</li>
+                <li>It is restored at startup from, and snapshotted after writes to,
+                    <code>/Volumes/&lt;catalog&gt;/&lt;schema&gt;/&lt;volume&gt;/_registry/&lt;schema&gt;.sqlite</code>
+                    on the registry Volume (override: <code>REGISTRY_SQLITE_SNAPSHOT_PATH</code>).</li>
+                <li>New domains default to the <strong>Lakehouse</strong> graph backend: there is no Lakebase graph in this workspace.</li>
+            </ul>
+            <div class="alert alert-warning small d-flex align-items-start mb-0 py-2 px-3" role="alert">
+                <i class="bi bi-exclamation-triangle me-2 mt-1"></i>
+                <div>
+                    Run a single app instance. A crash can lose the last few seconds of writes
+                    (the window between a write and its snapshot). Use <strong>Check Access</strong>
+                    to see the file and snapshot paths and test the snapshot.
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
     <div id="lakebasePanel" class="mb-3">
         <div class="border rounded p-3 bg-body-tertiary">
             <div class="d-flex justify-content-between align-items-center mb-2">
@@ -133,6 +172,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <div id="registryConfigStatus" class="mb-3" style="display:none;"></div>
 
@@ -140,7 +180,7 @@
     <div id="lbChecksPanel" style="display:none;" class="mb-3">
         <div class="border rounded p-3 bg-body-tertiary">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <strong class="small"><i class="bi bi-shield-check me-1 text-primary"></i>Lakebase Permission Checks</strong>
+                <strong class="small"><i class="bi bi-shield-check me-1 text-primary"></i>{% if registry_backend == "sqlite" %}SQLite Registry Checks{% else %}Lakebase Permission Checks{% endif %}</strong>
                 <span id="lbChecksSummaryBadge"></span>
             </div>
             <div class="small text-muted mb-2" id="lbChecksContext"></div>

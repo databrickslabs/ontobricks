@@ -127,11 +127,7 @@ class RegistryService:
         """
         from back.objects.registry.store import RegistryFactory
 
-        return RegistryFactory.lakebase(
-            registry_cfg=cfg,
-            schema=cfg.lakebase_schema,
-            database=cfg.lakebase_database,
-        )
+        return RegistryFactory.from_cfg(cfg)
 
     # -- properties --------------------------------------------------
 

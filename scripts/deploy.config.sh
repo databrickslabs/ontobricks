@@ -159,6 +159,10 @@ export APP_TRIPLESTORE_TABLE="${APP_TRIPLESTORE_TABLE:-${REGISTRY_CATALOG}.${REG
 export APP_REGISTRY_CATALOG="${APP_REGISTRY_CATALOG:-$REGISTRY_CATALOG}"
 export APP_REGISTRY_SCHEMA="${APP_REGISTRY_SCHEMA:-$REGISTRY_SCHEMA}"
 
+# Registry backend: lakebase (default) | sqlite for regions without Lakebase
+# (deploy with the Volume-only target: DAB_TARGET=dev). See SQLiteRegistryStore.
+export APP_REGISTRY_BACKEND="${APP_REGISTRY_BACKEND:-lakebase}"
+
 # Lakebase runtime values rendered into app.yaml — always from file.
 export APP_LAKEBASE_SCHEMA="${LAKEBASE_SCHEMA}"
 export APP_LAKEBASE_DATABASE="${LAKEBASE_DATABASE}"

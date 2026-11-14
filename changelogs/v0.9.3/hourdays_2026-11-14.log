@@ -1,0 +1,106 @@
+================================================================================
+## Registry without Lakebase: SQLite backend for regions where Lakebase isn't offered
+================================================================================
+
+Context:
+Lakebase is not offered in every region (GCP europe-west1, for example), and
+a Lakebase project must live in the workspace's region. The registry is the
+only part of OntoBricks that needs Lakebase: the graph and the Explorer run on
+Delta with the Lakehouse backend, and the MCP server goes through the app's
+REST API. This adds REGISTRY_BACKEND=sqlite: the Lakebase registry mixins run
+unchanged on an embedded SQLite file, which is snapshotted to the registry
+UC Volume because a Databricks App's local disk is wiped on restart.
+Lakebase stays the default; nothing changes for existing deployments.
+
+Changes:
+
+1. src/back/objects/registry/store/sqlite/ (new subpackage)
+   - SQLiteDialect: rewrites the registry's Postgres SQL for SQLite (%s
+     placeholders, :: casts, DELETE ... USING, UPDATE/DELETE aliases,
+     string_to_array version ordering, jsonb_set / jsonb_build_object,
+     make_interval lease checks, array_agg(...)[1], = ANY(%s), ON CONFLICT
+     ON CONSTRAINT). Reports which parameters need a list or timestamp
+     conversion.
+   - SQLiteConnection: the psycopg subset the mixins use (cursor with
+     dict rows, fetch*, rowcount, executemany, transaction savepoints).
+     The outermost block is one transaction; work is serialised per file and
+     nested _connect() calls share the outer connection. Values come back as
+     psycopg returns them (jsonb -> dict/list, timestamptz -> aware
+     datetime, boolean -> bool). Registers now(), gen_random_uuid(),
+     version_key() and the first_by aggregate.
+   - SQLiteRegistryStore: subclass of LakebaseRegistryStore that replaces
+     the connection, the schema (created when the file is new; Postgres
+     self-healing migrations skipped) and the Postgres-only diagnostics.
+     No Initialize step: the registry row is seeded on first use.
+   - SQLiteSnapshot: restores the file from the Volume at startup, uploads a
+     consistent copy (SQLite backup API) a few seconds after writes and at
+     exit when dirty. One shared instance per file.
+   - schema.sql: SQLite copy of the Lakebase registry schema.
+2. src/back/objects/registry/store/factory.py
+   RegistryFactory.sqlite(); from_cfg() picks the backend from settings
+   (backend_name()); default snapshot path /Volumes/<cat>/<sch>/<vol>/_registry/<schema>.sqlite.
+3. src/back/objects/registry/RegistryService.py,
+   src/back/objects/registry/collab/EditLockService.py,
+   src/back/objects/domain/settings/RegistrySettings.py
+   The five hardcoded RegistryFactory.lakebase(...) calls go through from_cfg().
+4. src/shared/config/settings.py
+   New registry_backend setting (REGISTRY_BACKEND, default lakebase).
+5. src/back/core/graphdb/GraphDBFactory.py, src/back/objects/session/DomainSession.py
+   default_graph_backend(): new or unset domains default to the Lakehouse
+   backend when the registry runs on SQLite.
+6. src/shared/fastapi/health.py
+   With the SQLite registry the "lakebase" check reports the SQLite registry
+   (file, snapshot, readiness) and Lakebase-only checks report "Not used"
+   (@_lakebase_only decorator).
+7. src/front/routes/home.py, src/front/templates/partials/registry/_registry_configuration.html
+   Settings -> Registry Location describes the SQLite registry (file, Volume
+   snapshot, limits) instead of the Lakebase connection panel.
+8. app.yaml.template, scripts/deploy.config.sh, .env.example, docs/deployment.md
+   REGISTRY_BACKEND rendered from APP_REGISTRY_BACKEND (default lakebase);
+   deployment guide section "Regions without Lakebase".
+9. tests/units/registry/test_sqlite_registry_store.py (new),
+   tests/units/registry/test_registry_factory_backend.py (new),
+   tests/units/settings/test_v090_settings_registry.py
+   51 new tests run every registry mixin end to end on a real SQLite file
+   (catalog, permissions, config, schedules, audit, comments, tasks, edit
+   locks incl. stale reclaim, build runs and rollups, graph analytics,
+   documents), the dialect rules, the snapshot round trip after a lost local
+   disk, backend selection and health. Settings tests now patch from_cfg.
+
+Known limits: one app instance only (single writer); a crash can lose the
+writes made since the last snapshot (a few seconds).
+
+Modified files:
+- src/back/objects/registry/store/sqlite/__init__.py
+- src/back/objects/registry/store/sqlite/SQLiteDialect.py
+- src/back/objects/registry/store/sqlite/SQLiteConnection.py
+- src/back/objects/registry/store/sqlite/SQLiteRegistryStore.py
+- src/back/objects/registry/store/sqlite/SQLiteSnapshot.py
+- src/back/objects/registry/store/sqlite/schema.sql
+- src/back/objects/registry/store/factory.py
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/registry/collab/EditLockService.py
+- src/back/objects/domain/settings/RegistrySettings.py
+- src/shared/config/settings.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/objects/session/DomainSession.py
+- src/shared/fastapi/health.py
+- src/front/routes/home.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- app.yaml.template
+- scripts/deploy.config.sh
+- .env.example
+- docs/deployment.md
+- tests/units/registry/test_sqlite_registry_store.py
+- tests/units/registry/test_registry_factory_backend.py
+- tests/units/settings/test_v090_settings_registry.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks`
+-> 9754 passed, 338 skipped, 9 deselected, 22 warnings in 36.33s.
+The deselected readiness test opens a real SQL warehouse session against the
+conftest's fake host and hangs in connector retries on networks where that
+host doesn't fail fast; it is unrelated to this change.
+Local smoke run (REGISTRY_BACKEND=sqlite, no Lakebase): app boots, readiness
+reports "SQLite registry ready", domain create / save / list / version /
+edit lock / load round trip through the HTTP API works, and new domains get
+the Lakehouse graph backend.

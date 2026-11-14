@@ -40,6 +40,7 @@ the top-level ``status`` is the worst severity across all probes.
 
 from __future__ import annotations
 
+import functools
 import os
 import shutil
 import sys
@@ -324,6 +325,44 @@ def _check_registry_uc_schema_ddl() -> Tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 
+_NOT_USED_ON_SQLITE = (_OK, "Not used: the registry runs on SQLite (REGISTRY_BACKEND=sqlite)")
+
+
+def _registry_on_sqlite() -> bool:
+    """True when the registry runs on SQLite, so Lakebase checks don't apply."""
+    from back.objects.registry.store import RegistryFactory
+
+    return RegistryFactory.backend_name() == "sqlite"
+
+
+def _lakebase_only(check: Callable[..., Tuple[str, str]]) -> Callable[..., Tuple[str, str]]:
+    """Report a Lakebase-only check as not used when the registry runs on SQLite."""
+
+    @functools.wraps(check)
+    def guarded(*args: Any, **kwargs: Any) -> Tuple[str, str]:
+        if _registry_on_sqlite():
+            return _NOT_USED_ON_SQLITE
+        return check(*args, **kwargs)
+
+    return guarded
+
+
+def _check_sqlite_registry(settings: Settings) -> Tuple[str, str]:
+    """Report the SQLite registry: local file, Volume snapshot, initialisation."""
+    from back.objects.registry.store import RegistryFactory
+
+    store = RegistryFactory.from_cfg(_resolve_registry_cfg(settings))
+    status = store.init_status()
+    info = store.describe()
+    where = "file=%s, snapshot=%s" % (info.get("local_path"), info.get("snapshot_path") or "none")
+    if not status.get("initialized"):
+        return _ERROR, "SQLite registry not ready (%s): %s" % (where, status.get("error"))
+    if not info.get("snapshot_path"):
+        return _WARNING, "SQLite registry ready, but no Volume snapshot: data is lost on restart (%s)" % where
+    return _OK, "SQLite registry ready (%s)" % where
+
+
+@_lakebase_only
 def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
     """Probe the configured Graph DB Lakebase database and graph schema.
 
@@ -400,6 +439,8 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
 
 
 def _check_lakebase(settings: Settings) -> Tuple[str, str]:
+    if _registry_on_sqlite():
+        return _check_sqlite_registry(settings)
     from back.core.databricks.lakebase import get_lakebase_auth
 
     auth = get_lakebase_auth()
@@ -432,6 +473,7 @@ def _check_lakebase(settings: Settings) -> Tuple[str, str]:
     return _ERROR, str(err)
 
 
+@_lakebase_only
 def _check_lakebase_permissions(settings: Settings) -> Tuple[str, str]:
     """Verify Lakebase registry privileges expected by OntoBricks runtime."""
     from back.core.databricks.lakebase import get_lakebase_auth
@@ -552,6 +594,7 @@ def _check_lakebase_permissions(settings: Settings) -> Tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 
+@_lakebase_only
 def _check_lakebase_accelerated_sync(settings: Optional[Settings] = None) -> Tuple[str, str]:
     """Probe whether Lakebase Accelerated Sync (Database Synced Tables) is available.
 
@@ -732,6 +775,7 @@ def _check_uc_create_table_privilege(settings: Settings) -> Tuple[str, str]:
     return _OK, f"CREATE TABLE / DROP TABLE succeeded in {cfg.catalog}.{cfg.schema}"
 
 
+@_lakebase_only
 def _check_lakebase_env_vars() -> Tuple[str, str]:
     """Verify the Lakebase PG* env vars are present (must be injected by Databricks Apps).
 
@@ -793,6 +837,7 @@ def _check_lakebase_env_vars() -> Tuple[str, str]:
     )
 
 
+@_lakebase_only
 def _check_lakebase_psycopg() -> Tuple[str, str]:
     """Verify the ``psycopg`` (v3) driver is installed and importable.
 
@@ -816,6 +861,7 @@ def _check_lakebase_psycopg() -> Tuple[str, str]:
         )
 
 
+@_lakebase_only
 def _check_lakebase_registry_initialized(settings: Settings) -> Tuple[str, str]:
     """Verify the registry schema has been initialized (registries row exists).
 
@@ -885,6 +931,7 @@ def _check_lakebase_registry_initialized(settings: Settings) -> Tuple[str, str]:
     return _ERROR, f"Registry not initialized ({reason}): {err}"
 
 
+@_lakebase_only
 def _check_lakebase_registry_tables(settings: Settings) -> Tuple[str, str]:
     """Verify all expected Lakebase registry tables exist in the registry schema.
 
@@ -997,6 +1044,7 @@ def _check_lakebase_registry_tables(settings: Settings) -> Tuple[str, str]:
         return _ERROR, f"Registry table existence check failed: {exc}"
 
 
+@_lakebase_only
 def _check_graphdb_tables(settings: Settings) -> Tuple[str, str]:
     """Report how many tables / views are in the configured graph DB schema."""
     from back.core.databricks.lakebase import BranchLakebaseAuth, get_lakebase_auth
@@ -1059,6 +1107,7 @@ def _check_graphdb_tables(settings: Settings) -> Tuple[str, str]:
         return _ERROR, f"Graph DB table check failed (schema={schema}): {exc}"
 
 
+@_lakebase_only
 def _check_graphdb_permissions(settings: Settings) -> Tuple[str, str]:
     """Verify SELECT / INSERT / UPDATE / DELETE on the graph DB schema tables."""
     from back.core.databricks.lakebase import BranchLakebaseAuth, get_lakebase_auth
@@ -1157,6 +1206,7 @@ def _check_graphdb_permissions(settings: Settings) -> Tuple[str, str]:
         return _ERROR, f"Graph DB permission check failed (schema={schema}): {exc}"
 
 
+@_lakebase_only
 def _check_graphdb_uc_catalog(settings: Settings) -> Tuple[str, str]:
     """Verify UC ALL_PRIVILEGES on sync_uc_catalog when sync_mode == managed_synced.
 

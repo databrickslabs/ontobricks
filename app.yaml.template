@@ -67,6 +67,10 @@ env:
     value: "${APP_REGISTRY_CATALOG}"
   - name: REGISTRY_SCHEMA
     value: "${APP_REGISTRY_SCHEMA}"
+  # Registry backend: lakebase (default) or sqlite for regions without
+  # Lakebase (local SQLite file snapshotted to the registry Volume).
+  - name: REGISTRY_BACKEND
+    value: "${APP_REGISTRY_BACKEND}"
   # App name for permission management — auto-detected at runtime from
   # the Databricks Apps platform (the runtime injects DATABRICKS_APP_NAME
   # as the deployed app's name, e.g. "ontobricks" for prod and

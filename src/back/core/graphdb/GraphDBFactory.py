@@ -46,10 +46,24 @@ LAKEHOUSE_MATERIALIZATIONS: Tuple[str, ...] = ("table", "view")
 DEFAULT_LAKEHOUSE_MATERIALIZATION = "table"
 
 
+def default_graph_backend() -> str:
+    """Graph backend for domains that don't set one.
+
+    ``lakebase``, except when the registry runs without Lakebase
+    (``REGISTRY_BACKEND=sqlite``): then ``databricks`` (Lakehouse), since a
+    workspace with no Lakebase can't host a Lakebase graph either.
+    """
+    from shared.config.settings import get_settings
+
+    if (get_settings().registry_backend or "").strip().lower() == "sqlite":
+        return "databricks"
+    return DEFAULT_GRAPH_BACKEND
+
+
 def normalize_graph_backend(value: Optional[str]) -> str:
-    """Return a valid per-domain graph backend, defaulting to ``lakebase``."""
+    """Return a valid per-domain graph backend, defaulting to :func:`default_graph_backend`."""
     v = (value or "").strip().lower()
-    return v if v in GRAPH_BACKENDS else DEFAULT_GRAPH_BACKEND
+    return v if v in GRAPH_BACKENDS else default_graph_backend()
 
 
 def is_graphless_backend(value: Optional[str]) -> bool:
@@ -278,7 +292,7 @@ class GraphDBFactory:
                 return normalize_graph_backend(info.get("graph_backend"))
         except Exception as exc:  # noqa: BLE001
             logger.debug("Could not read per-domain graph_backend: %s", exc)
-        return DEFAULT_GRAPH_BACKEND
+        return default_graph_backend()
 
     @staticmethod
     def _resolve_graph_engine(

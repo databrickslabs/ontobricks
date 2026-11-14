@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     registry_catalog: str = ""
     registry_schema: str = ""
 
+    # Registry backend: ``lakebase`` (default) or ``sqlite`` for regions
+    # without Lakebase. ``sqlite`` keeps the registry in a local file that is
+    # snapshotted to the registry UC Volume (see ``SQLiteRegistryStore``) and
+    # makes new domains default to the ``databricks`` (Lakehouse) graph backend.
+    registry_backend: str = "lakebase"
+
     # Lakebase: Postgres schema where the registry tables live.
     # Connection parameters (PGHOST/PGPORT/PGDATABASE/PGUSER) come from
     # the Databricks App database resource binding at runtime; the OAuth

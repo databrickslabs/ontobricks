@@ -645,6 +645,26 @@ scripts/deploy.sh
 scripts/deploy.sh -t dev
 ```
 
+#### Regions without Lakebase (SQLite registry)
+
+Lakebase is not offered in every region (for example GCP `europe-west1`), and a
+Lakebase project must live in the workspace's region. In that case run the
+registry on **SQLite** and the graph on the **Lakehouse** (Delta) backend:
+
+```bash
+APP_REGISTRY_BACKEND=sqlite DAB_TARGET=dev scripts/deploy.sh
+```
+
+- The registry is a SQLite file on the app's local disk. Apps disks are wiped on
+  restart, so the file is restored at startup from, and snapshotted a few seconds
+  after each write to, `/Volumes/<catalog>/<schema>/<volume>/_registry/<schema>.sqlite`
+  (override with `REGISTRY_SQLITE_SNAPSHOT_PATH`). The app service principal
+  needs `READ VOLUME` and `WRITE VOLUME` on that Volume.
+- New domains default to the Lakehouse graph backend. Lakebase-only health
+  checks report "Not used". No *Initialize* step is needed.
+- **Limits:** run a single app instance (one writer), and accept that a crash can
+  lose the writes made since the last snapshot. Lakebase has neither limit.
+
 If the apps already exist in the workspace (e.g., from a previous manual deploy), bind bundle resources to them **once** (resource keys and app **names** must match `databricks.yml`):
 
 ```bash

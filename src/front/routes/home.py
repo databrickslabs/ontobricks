@@ -31,11 +31,13 @@ async def settings_page(request: Request):
     Knowledge Graph tab); this page only configures the shared engine
     connections, so no engine value is resolved server-side.
     """
+    from back.objects.registry.store import RegistryFactory
+
     user_role = getattr(request.state, "user_role", "admin")
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {"user_role": user_role},
+        {"user_role": user_role, "registry_backend": RegistryFactory.backend_name()},
     )
 
 

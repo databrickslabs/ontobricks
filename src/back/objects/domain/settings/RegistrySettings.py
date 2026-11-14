@@ -177,11 +177,7 @@ class RegistrySettings:
             )
         try:
             from back.objects.registry.store import RegistryFactory  # noqa: PLC0415
-            store = RegistryFactory.lakebase(
-                registry_cfg=rcfg,
-                schema=rcfg.lakebase_schema,
-                database=rcfg.lakebase_database,
-            )
+            store = RegistryFactory.from_cfg(rcfg)
             return await run_blocking(store.check_permissions)
         except ImportError as exc:
             raise InfrastructureError(
@@ -419,11 +415,7 @@ class RegistrySettings:
         try:
             from back.objects.registry.store import RegistryFactory
 
-            store = RegistryFactory.lakebase(
-                registry_cfg=rcfg,
-                schema=rcfg.lakebase_schema,
-                database=rcfg.lakebase_database,
-            )
+            store = RegistryFactory.from_cfg(rcfg)
             result["initialized"] = bool(store.is_initialized())
         except Exception as exc:  # noqa: BLE001 -- purely informational
             logger.debug("Lakebase schema init probe failed: %s", exc)
@@ -584,11 +576,7 @@ class RegistrySettings:
         try:
             from back.objects.registry.store import RegistryFactory  # noqa: PLC0415
 
-            store = RegistryFactory.lakebase(
-                registry_cfg=rcfg,
-                schema=rcfg.lakebase_schema,
-                database=rcfg.lakebase_database,
-            )
+            store = RegistryFactory.from_cfg(rcfg)
         except ImportError as exc:
             raise InfrastructureError(
                 "psycopg is not installed — Lakebase backend unavailable."

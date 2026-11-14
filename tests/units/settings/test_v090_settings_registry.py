@@ -68,7 +68,7 @@ def rcfg(monkeypatch):
 
 @pytest.fixture
 def factory(monkeypatch):
-    """Patch ``RegistryFactory.lakebase`` used by the Lakebase probes."""
+    """Patch ``RegistryFactory`` used by the registry probes."""
     import back.objects.registry.store as store_pkg
 
     fake_factory = MagicMock()
@@ -138,24 +138,22 @@ class TestCheckLakebasePermissions:
     async def test_returns_store_report_built_for_registry_schema(self, rcfg, factory, monkeypatch):
         monkeypatch.setattr(_rs, "run_blocking", _inline_run_blocking)
         rcfg["cfg"] = _rcfg(lakebase_schema="reg", lakebase_database="db2")
-        factory.lakebase.return_value.check_permissions.return_value = {"ok": True}
+        factory.from_cfg.return_value.check_permissions.return_value = {"ok": True}
 
         result = await RegistrySettings.check_lakebase_permissions(MagicMock(), MagicMock())
 
         assert result == {"ok": True}
-        factory.lakebase.assert_called_once_with(
-            registry_cfg=rcfg["cfg"], schema="reg", database="db2"
-        )
+        factory.from_cfg.assert_called_once_with(rcfg["cfg"])
 
     async def test_missing_psycopg_raises_infrastructure(self, rcfg, factory, monkeypatch):
         monkeypatch.setattr(_rs, "run_blocking", _inline_run_blocking)
-        factory.lakebase.side_effect = ImportError("psycopg")
+        factory.from_cfg.side_effect = ImportError("psycopg")
         with pytest.raises(InfrastructureError, match="psycopg is not installed"):
             await RegistrySettings.check_lakebase_permissions(MagicMock(), MagicMock())
 
     async def test_store_error_surfaces_message(self, rcfg, factory, monkeypatch):
         monkeypatch.setattr(_rs, "run_blocking", _inline_run_blocking)
-        factory.lakebase.return_value.check_permissions.side_effect = RuntimeError("denied")
+        factory.from_cfg.return_value.check_permissions.side_effect = RuntimeError("denied")
         with pytest.raises(InfrastructureError, match="denied"):
             await RegistrySettings.check_lakebase_permissions(MagicMock(), MagicMock())
 
@@ -331,21 +329,21 @@ class TestLakebaseSchemaStatus:
         }
 
     def test_store_error_returns_all_false(self, factory):
-        factory.lakebase.side_effect = RuntimeError("no endpoint")
+        factory.from_cfg.side_effect = RuntimeError("no endpoint")
         assert RegistrySettings._lakebase_schema_status(_rcfg()) == {
             "initialized": False,
             "populated": False,
         }
 
     def test_uninitialized_skips_row_count_probe(self, factory):
-        store = factory.lakebase.return_value
+        store = factory.from_cfg.return_value
         store.is_initialized.return_value = False
 
         assert RegistrySettings._lakebase_schema_status(_rcfg())["initialized"] is False
         store.table_row_counts.assert_not_called()
 
     def test_populated_when_any_canonical_table_has_rows(self, factory):
-        store = factory.lakebase.return_value
+        store = factory.from_cfg.return_value
         store.is_initialized.return_value = True
         store.table_row_counts.return_value = {"domains": 0, "schedules": 3}
 
@@ -363,13 +361,13 @@ class TestLakebaseSchemaStatus:
         }
 
     def test_empty_tables_are_not_populated(self, factory):
-        store = factory.lakebase.return_value
+        store = factory.from_cfg.return_value
         store.is_initialized.return_value = True
         store.table_row_counts.return_value = {"domains": 0, "schedules": None}
         assert RegistrySettings._lakebase_schema_status(_rcfg())["populated"] is False
 
     def test_row_count_failure_keeps_initialized(self, factory):
-        store = factory.lakebase.return_value
+        store = factory.from_cfg.return_value
         store.is_initialized.return_value = True
         store.table_row_counts.side_effect = RuntimeError("x")
         assert RegistrySettings._lakebase_schema_status(_rcfg()) == {
@@ -532,12 +530,12 @@ class TestGrantRegistryPermissions:
             "_registry_grant_app_names",
             staticmethod(lambda s: ["app", "mcp-app"]),
         )
-        factory.lakebase.return_value.grant_app_permissions.return_value = {"ok": 1}
+        factory.from_cfg.return_value.grant_app_permissions.return_value = {"ok": 1}
 
         result = RegistrySettings._grant_registry_permissions(MagicMock(), MagicMock())
 
         assert result == {"ok": 1}
-        factory.lakebase.return_value.grant_app_permissions.assert_called_once_with(
+        factory.from_cfg.return_value.grant_app_permissions.assert_called_once_with(
             app_names=["app", "mcp-app"], uc_catalog="main"
         )
 
@@ -545,7 +543,7 @@ class TestGrantRegistryPermissions:
         monkeypatch.setattr(
             SettingsService, "_registry_grant_app_names", staticmethod(lambda s: ["app"])
         )
-        factory.lakebase.side_effect = ImportError("psycopg")
+        factory.from_cfg.side_effect = ImportError("psycopg")
         with pytest.raises(InfrastructureError, match="psycopg"):
             RegistrySettings._grant_registry_permissions(MagicMock(), MagicMock())
 

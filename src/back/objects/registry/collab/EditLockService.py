@@ -459,11 +459,7 @@ class EditLockService:
         try:
             from back.objects.registry.store import RegistryFactory
 
-            return RegistryFactory.lakebase(
-                registry_cfg=rcfg,
-                schema=rcfg.lakebase_schema,
-                database=rcfg.lakebase_database,
-            )
+            return RegistryFactory.from_cfg(rcfg)
         except ImportError:
             return None
         except Exception as exc:  # noqa: BLE001
