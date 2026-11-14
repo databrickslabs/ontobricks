@@ -212,7 +212,7 @@
                             </select>
 
                             <div class="domain-backend-grid">
-                                <div class="domain-backend-choice">
+                                <div class="domain-backend-choice{% if not lakebase_available %} opacity-50{% endif %}">
                                     <input class="domain-editable domain-backend-option" type="radio"
                                            name="domainGraphBackendChoice" id="domainGraphBackendLakebase"
                                            value="lakebase"
