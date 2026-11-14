@@ -1728,3 +1728,350 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10547 passed, 324 skipped, 8 deselected, 39 warnings in 44.57s
+
+## Patterns diagram: hover highlights the connected neighbourhood
+
+Context: In Intelligence → Patterns, the neighbourhood diagram gave no feedback
+when exploring relationships. Hovering an entity now highlights every entity and
+path connected to it across all hops, and dims the rest. Spec:
+docs/superpowers/specs/2026-11-14-pattern-diagram-hover-highlight-design.md
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Node groups get class `pat-dg-node-g` and `data-node-id`; edges and their
+   labels get `data-source` / `data-target`. New `_bindDiagramHover()` uses
+   delegated `mouseover` / `mouseout` on `document` (no per-SVG listeners).
+   New `_highlightDiagram(node)` builds an undirected adjacency from the edge
+   data attributes and walks the connected component (all hops), then toggles
+   `is-on` on reached nodes and edges and `is-focus` on the hovered node.
+   New `_clearDiagramHighlight(svg)` removes the state. Caption now mentions
+   hovering a node to trace its connections.
+2. src/front/static/intelligence/css/intelligence.css
+   Opacity transition on diagram nodes, edges and labels; `cursor: pointer` on
+   nodes; `.is-hovering` dims unconnected elements to 0.25; `.is-focus` gives the
+   hovered node a primary-colour stroke.
+3. tests/units/front/test_pattern_diagram_hover.py (new)
+   Static contract: markup attributes, delegated listeners, BFS in both
+   directions, clear/reset, CSS dimming and focus rules, no inline handlers.
+4. docs/superpowers/specs/2026-11-14-pattern-diagram-hover-highlight-design.md
+   Status set to Implemented.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py (new)
+- docs/superpowers/specs/2026-11-14-pattern-diagram-hover-highlight-design.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `node --check` on intelligence-patterns.js → OK; Node harness exercising
+the highlight/clear logic with a DOM stub → 9/9 checks pass (ad hoc, not
+committed). `uv run --frozen pytest -q -m "not scenario"` → 10566 passed,
+324 skipped, 8 deselected, 39 warnings in 50.43s.
+Browser check not run (no Databricks workspace in this session).
+
+## Patterns diagram hover: lineage paths + accented relationships
+
+Context: The first hover pass used an undirected connected-component walk.
+Pattern diagrams are always one component rooted at hop 0, so almost nothing
+dimmed and relationships did not stand out — only the focus stroke was
+visible. Hover now lights the hovered node's lineage (ancestors toward the
+entity, descendants toward further hops) and accents those relationship
+edges across related hops; unrelated branches dim.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_highlightDiagram` walks parent→child down and child→parent up; marks
+   edges that lie on that lineage. Reads ids via `getAttribute` (not
+   `dataset`). Caption mentions related paths.
+2. src/front/static/intelligence/css/intelligence.css
+   Related edges/labels/nodes get a primary accent; unrelated stay at 0.25
+   opacity. Explicit 0.15s transitions (avoid broken `opacity var(--db-transition-fast)`).
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract asserts ancestor/descendant walk (not undirected), getAttribute
+   reads, and CSS accent rules.
+4. docs/superpowers/specs/2026-11-14-pattern-diagram-hover-highlight-design.md
+   Spec updated to lineage semantics.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- docs/superpowers/specs/2026-11-14-pattern-diagram-hover-highlight-design.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: Node harness (lineage tree A/B1/C1 vs B2/C2) → 9/9 checks pass (ad
+hoc, not committed). `uv run --frozen pytest -q -m "not scenario"` → 10567 passed,
+324 skipped, 8 deselected, 39 warnings in 44.68s.
+Hard-refresh the Patterns page if the old hover behaviour is still cached.
+
+## Pattern diagram: relationship name + count badge
+
+Context: Edge labels concatenated the relationship name with ×n / share % on
+one truncated line, so names disappeared next to the number. The name now
+sits on the path by itself; the count is a colored badge under it.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_diagramEdge` renders the full `via_label` as `pat-dg-edge-name` at the
+   curve midpoint and a primary ×avg badge (plus a warning % badge when
+   share < 1) underneath. Incoming-edge slot spacing increased for the
+   two-line label.
+2. src/front/static/intelligence/css/intelligence.css
+   Name + badge styles; hover still dims the label group and accents the
+   name in primary.
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract: name is not trimmed onto the count; badge markup present.
+4. tests/units/front/test_intelligence_page_contract.py
+   Diagram contract updated from `text-anchor="end"` to name + badge classes.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10568 passed,
+324 skipped, 8 deselected, 39 warnings in 47.82s.
+Hard-refresh the Patterns page if the old labels are still cached.
+
+## Pattern diagram: anti-overlap layout + relationship tooltips
+
+Context: Name + badge labels collided when several relationships entered the
+same node, and hovering a relationship gave no explanation of ×n / share %.
+Layout now reserves vertical bands for parallel edges; hovering a name or
+badge shows a floating tip with the meaning (and full URI for the name).
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Wider columns, larger edgeSlot / gapY / labelPad; `_layoutDiagram` sizes
+   each node band from incoming fan-out so labels do not overlap. Edges carry
+   `data-pat-tip`; `_bindDiagramTooltips` shows a body-level tip on hover.
+2. src/front/static/intelligence/css/intelligence.css
+   `.pat-dg-tip` floating tooltip; `cursor: help` on names and badges.
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract for layout reservation, tip copy, and tooltip binding.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10570 passed, 324 skipped, 8 deselected, 39 warnings in 46.58s.
+Hard-refresh the Patterns page if the old layout is still cached.
+
+## Pattern diagram: arrows stay on entity boxes
+
+Context: Parallel-edge lane offsets pushed arrow tips into empty band space
+so relationships looked disconnected from their entities. Endpoints now
+attach on the node face; lane offset only bends the curve and labels.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_edgeAttachY` distributes attachments inside the visible rect; lane
+   offset applies to control points / label Y only.
+2. tests/units/front/test_pattern_diagram_hover.py
+   Contract that endpoints use `_edgeAttachY`, not `+ dy` off the box.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+## Patterns: full-height diagram + Matching entities modal
+
+Context: The neighbourhood diagram was capped (~58vh) and the matching
+entities list competed for space. The diagram now fills the details pane;
+Matching entities opens a modal with a spinner while members load.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `selectPattern` loads shape only; toolbar button `data-pat-members`
+   opens `openMembersModal` (spinner → list, Load more in the modal).
+2. src/front/templates/partials/intelligence/_intel_patterns_members_modal.html
+   New Bootstrap modal shell with loading spinner markup.
+3. src/front/templates/intelligence.html
+   Includes the members modal next to the Detect modal.
+4. src/front/static/intelligence/css/intelligence.css
+   Flex fill for details/diagram; remove max-height cap on the scroll area.
+5. tests/units/front/test_intelligence_page_contract.py
+   Contract for modal, button, deferred members load, full-height CSS.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- src/front/templates/intelligence.html
+- src/front/templates/partials/intelligence/_intel_patterns_members_modal.html (new)
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+## Pattern diagram: stronger dim on non-highlighted paths
+
+Context: On hover, unrelated nodes/edges stayed too visible at 0.25 opacity.
+They now fade to near-invisible with a light blur so the lineage stands out.
+
+Changes:
+
+1. src/front/static/intelligence/css/intelligence.css
+   Non-`.is-on` elements under `.is-hovering` use opacity 0.08 and blur(1.2px);
+   transition includes filter.
+2. tests/units/front/test_pattern_diagram_hover.py
+   Contract updated for the stronger dim.
+
+Modified files:
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10571 passed, 324 skipped, 8 deselected, 39 warnings in 45.24s.
+Hard-refresh the Patterns page if cached assets still show the old dim.
+
+## Patterns toolbar: vertically align picker, KPIs, Matching entities
+
+Context: The pattern dropdown, KPI chips and Matching entities button sat on
+different baselines because the KPIs used a Bootstrap row and the button used
+default btn-sm height.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   KPI strip is a flex row (no Bootstrap `row g-2`); members button gets
+   `pat-members-btn`.
+2. src/front/static/intelligence/css/intelligence.css
+   Shared `--pat-chip-h` height on picker, KPI tiles and members button;
+   toolbar/KPI strip use flex align-items center.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract for `pat-members-btn` height and non-Bootstrap KPI strip.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: targeted intelligence page contract passed; full suite covered with later sections.
+
+## Pattern diagram: dotted hop lane guides
+
+Context: Hop columns (Entity, 1 hop, …) had no vertical guide, so depth was
+harder to read. Each column now has a very light dotted vertical lane behind
+the nodes.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_diagramSvg` draws a `pat-dg-lane` line down each hop column centre.
+2. src/front/static/intelligence/css/intelligence.css
+   `.pat-dg-lane` uses `--db-border-light` with a sparse dash pattern.
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract for lane markup and CSS.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10572 passed, 324 skipped, 8 deselected, 39 warnings in 44.48s.
+
+## Pattern detect modal: parameter info tooltips
+
+Context: In the Detect patterns popup, users needed clear explanations for
+the detection parameters: Hops, Numeric bins, Min support, and Refine top-N.
+Added (i) info icons with tooltips explaining each parameter.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_patterns_detect_modal.html
+   Add `bi-info-circle` info icons with tooltips to Hops, Numeric bins,
+   Min support, and Refine top-N form labels.
+2. src/front/static/intelligence/css/intelligence.css
+   Add `.pat-form-info` helper class with `cursor: help` and primary hover color.
+3. src/front/static/intelligence/js/intelligence-patterns.js
+   Initialize Bootstrap tooltips on modal elements in `init()`.
+4. tests/units/front/test_intelligence_page_contract.py
+   Assert presence of `pat-form-info` and parameter labels in modal contract.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_patterns_detect_modal.html
+- src/front/static/intelligence/css/intelligence.css
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10572 passed, 324 skipped, 8 deselected, 39 warnings in 45.17s.
+
+## Pattern diagram: make hop lane guides visible
+
+Context: Hop lane lines used `--db-border-light` (#F4F2EF) on the warm
+canvas, so they were effectively invisible. Stroke contrast and dash size
+are increased; gutter separators between columns are added so guides stay
+visible beside the entity boxes.
+
+Changes:
+
+1. src/front/static/intelligence/css/intelligence.css
+   `.pat-dg-lane` uses a visible light grey (#C9C5BF), thicker dash, and
+   `vector-effect: non-scaling-stroke`. `.pat-dg-lane-gutter` for separators.
+2. src/front/static/intelligence/js/intelligence-patterns.js
+   Draw column-centre guides plus gutter separators between hops.
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract for gutter lanes and non-invisible stroke.
+
+Modified files:
+- src/front/static/intelligence/css/intelligence.css
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10572 passed, 324 skipped, 8 deselected, 39 warnings in 45.64s.
+Hard-refresh the Patterns page to pick up the visible lane CSS/JS.
+
+## Pattern diagram: dotted lane only on the Entity column
+
+Context: Hop / relationship columns also had dotted vertical guides, which
+cluttered the relationship area. Keep a single dotted guide on the Entity
+column only.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_diagramSvg` draws one `pat-dg-lane` at the Entity column centre.
+2. src/front/static/intelligence/css/intelligence.css
+   Remove unused `.pat-dg-lane-gutter`.
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract: entity lane only, no hop/gutter lanes.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/front/test_pattern_diagram_hover.py` → 14 passed.
+
+## Pattern diagram: dotted lanes on Entity and all hop columns
+
+Context: User wants vertical dotted guides on Entity and 1…x hop columns,
+without lines in the relationship gutter between columns.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_diagramSvg` draws one `pat-dg-lane` per hop column centre (0..maxHop).
+2. tests/units/front/test_pattern_diagram_hover.py
+   Contract: per-hop lanes, no gutter separators.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/front/test_pattern_diagram_hover.py` → 14 passed.

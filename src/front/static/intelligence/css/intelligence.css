@@ -880,7 +880,9 @@ a.sim-uri-link:focus-visible {
 .pat-preview-card .card-body {
     flex: 1 1 0%;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .pat-preview-empty,
@@ -901,11 +903,25 @@ a.sim-uri-link:focus-visible {
 }
 
 .pat-preview-body {
+    flex: 1 1 0%;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .pat-details {
+    flex: 1 1 0%;
     min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.pat-detail-body {
+    flex: 1 1 0%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .pat-detail-toolbar {
@@ -914,11 +930,14 @@ a.sim-uri-link:focus-visible {
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
+    min-height: var(--pat-chip-h, 2.25rem);
 }
 
 .pat-pattern-picker {
     flex: 0 1 18rem;
     min-width: 12rem;
+    display: flex;
+    align-items: center;
 }
 
 .pat-pattern-toggle {
@@ -972,6 +991,18 @@ a.sim-uri-link:focus-visible {
     color: var(--db-text-muted, #6F6B65);
 }
 
+.pat-form-info {
+    cursor: help;
+    font-size: 0.8125rem;
+    color: var(--db-text-muted, #6F6B65);
+    transition: color 0.15s ease;
+}
+
+.pat-form-info:hover,
+.pat-form-info:focus {
+    color: var(--db-primary, #4F46E5);
+}
+
 .pat-support-badge {
     display: inline-flex;
     align-items: center;
@@ -1014,10 +1045,14 @@ a.sim-uri-link:focus-visible {
 }
 
 .pat-detail-kpis {
-    flex: 1 1 0%;
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    align-self: center;
     margin: 0;
     gap: 0.5rem;
-    align-items: center;
+    min-height: var(--pat-chip-h, 2.25rem);
 }
 
 .pat-detail-kpis > .col {
@@ -1025,7 +1060,21 @@ a.sim-uri-link:focus-visible {
     align-items: center;
     flex: 0 0 auto;
     width: auto;
+    max-width: none;
     padding: 0;
+    margin: 0;
+}
+
+.pat-members-btn {
+    margin-left: auto;
+    height: var(--pat-chip-h, 2.25rem);
+    min-height: var(--pat-chip-h, 2.25rem);
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    padding-top: 0;
+    padding-bottom: 0;
 }
 
 .pat-kpi-compact.sim-kpi-tile {
@@ -1058,13 +1107,18 @@ a.sim-uri-link:focus-visible {
 }
 
 .pat-diagram {
+    flex: 1 1 0%;
     width: 100%;
     min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .pat-diagram-scroll {
+    flex: 1 1 0%;
     width: 100%;
-    max-height: min(32rem, 58vh);
+    min-height: 0;
     overflow: auto;
     border: 1px solid var(--db-border, #ECEAE6);
     border-radius: var(--db-radius-card, 14px);
@@ -1075,8 +1129,13 @@ a.sim-uri-link:focus-visible {
     display: block;
     width: 100%;
     height: auto;
-    min-height: 14rem;
+    min-height: 100%;
     font-family: inherit;
+}
+
+.pat-members-loading .spinner-border {
+    width: 1.75rem;
+    height: 1.75rem;
 }
 
 .pat-dg-node {
@@ -1108,6 +1167,16 @@ a.sim-uri-link:focus-visible {
     fill: var(--db-text-muted, #6F6B65);
 }
 
+.pat-dg-lane {
+    fill: none;
+    /* Must stay readable on --db-canvas-warm; border-light was invisible. */
+    stroke: #C9C5BF;
+    stroke-width: 1.5;
+    stroke-dasharray: 3 5;
+    pointer-events: none;
+    vector-effect: non-scaling-stroke;
+}
+
 .pat-dg-edge {
     fill: none;
     stroke: var(--db-text-secondary, #6B6864);
@@ -1116,14 +1185,97 @@ a.sim-uri-link:focus-visible {
 
 .pat-dg-edge-label {
     font-size: 10.5px;
+}
+
+.pat-dg-edge-name {
+    font-size: 11px;
+    font-weight: 600;
     fill: var(--db-text, #191817);
     paint-order: stroke;
     stroke: var(--db-canvas-warm, #FAFAF9);
-    stroke-width: 3px;
+    stroke-width: 4px;
+    cursor: help;
+}
+
+.pat-dg-edge-badge {
+    cursor: help;
+}
+
+.pat-dg-edge-badge-bg {
+    fill: var(--db-primary, #4F46E5);
+}
+
+.pat-dg-tip {
+    position: fixed;
+    z-index: 1080;
+    max-width: 18rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: var(--db-radius-control, 10px);
+    background: var(--db-text, #191817);
+    color: var(--db-surface-warm, #FFFFFF);
+    font-size: 0.75rem;
+    line-height: 1.35;
+    pointer-events: none;
+    box-shadow: var(--db-shadow-md, 0 8px 20px rgba(25, 24, 23, 0.18));
+}
+
+.pat-dg-edge-badge-txt {
+    font-size: 9.5px;
+    font-weight: 700;
+    fill: var(--db-on-primary, #FFFFFF);
+    paint-order: normal;
+    stroke: none;
+}
+
+.pat-dg-edge-badge-share .pat-dg-edge-badge-bg {
+    fill: var(--db-status-warning, #B45309);
+}
+
+.pat-dg-edge-badge-share .pat-dg-edge-badge-txt {
+    fill: var(--db-on-primary, #FFFFFF);
 }
 
 .pat-dg-arrow {
     fill: var(--db-text-secondary, #6B6864);
+}
+
+/* Hover highlight: the pointed node's lineage (ancestors + descendants +
+   relationships on those paths) stays bright and gets a primary accent;
+   unrelated branches dim. Toggled by intelligence-patterns.js (classes only). */
+.pat-dg-node-g,
+.pat-dg-edge,
+.pat-dg-edge-label {
+    transition: opacity 0.15s ease, filter 0.15s ease, stroke 0.15s ease, fill 0.15s ease, stroke-width 0.15s ease;
+}
+
+.pat-dg-node-g {
+    cursor: pointer;
+}
+
+.pat-diagram-svg.is-hovering .pat-dg-node-g:not(.is-on),
+.pat-diagram-svg.is-hovering .pat-dg-edge:not(.is-on),
+.pat-diagram-svg.is-hovering .pat-dg-edge-label:not(.is-on) {
+    opacity: 0.08;
+    filter: blur(1.2px);
+}
+
+.pat-dg-node-g.is-focus .pat-dg-node {
+    stroke: var(--db-primary, #4F46E5);
+    stroke-width: 2.5;
+}
+
+.pat-diagram-svg.is-hovering .pat-dg-edge.is-on {
+    stroke: var(--db-primary, #4F46E5);
+    stroke-width: 2.2;
+}
+
+.pat-diagram-svg.is-hovering .pat-dg-edge-label.is-on .pat-dg-edge-name {
+    fill: var(--db-primary, #4F46E5);
+}
+
+.pat-diagram-svg.is-hovering .pat-dg-node-g.is-on:not(.is-focus) .pat-dg-node {
+    stroke: var(--db-primary, #4F46E5);
+    stroke-width: 1.8;
 }
 
 .pat-member-list {

@@ -14,6 +14,7 @@ const IntelligencePatterns = {
     _members: null,
     _busy: false,
     _detectModal: null,
+    _membersModal: null,
     _openingDetails: false,
 
     MEMBERS_PAGE: 100,
@@ -23,6 +24,8 @@ const IntelligencePatterns = {
         + 'Each Detect run is saved automatically so you can reopen it later.',
 
     init() {
+        this._bindDiagramHover();
+        this._bindDiagramTooltips();
         const on = (id, fn) => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('click', fn);
@@ -53,12 +56,18 @@ const IntelligencePatterns = {
         const details = document.getElementById('patDetails');
         if (details) {
             details.addEventListener('click', (e) => {
-                if (e.target.closest('[data-pat-more]')) {
-                    this._loadMoreMembers();
+                if (e.target.closest('[data-pat-members]')) {
+                    this.openMembersModal();
                     return;
                 }
                 const opt = e.target.closest('[data-pat-id]');
                 if (opt && opt.dataset.patId) this.selectPattern(opt.dataset.patId);
+            });
+        }
+        const membersBody = document.getElementById('patMembersModalBody');
+        if (membersBody) {
+            membersBody.addEventListener('click', (e) => {
+                if (e.target.closest('[data-pat-more]')) this._loadMoreMembers();
             });
         }
         const saved = document.getElementById('patSavedList');
@@ -91,6 +100,15 @@ const IntelligencePatterns = {
         const detectEl = document.getElementById('patDetectModal');
         if (detectEl && window.bootstrap) {
             this._detectModal = bootstrap.Modal.getOrCreateInstance(detectEl);
+            if (bootstrap.Tooltip) {
+                detectEl.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
+                    bootstrap.Tooltip.getOrCreateInstance(el);
+                });
+            }
+        }
+        const membersEl = document.getElementById('patMembersModal');
+        if (membersEl && window.bootstrap) {
+            this._membersModal = bootstrap.Modal.getOrCreateInstance(membersEl);
         }
 
         const patternsLink = document.querySelector('.sidebar-nav .nav-link[data-section="patterns"]');
@@ -400,18 +418,15 @@ const IntelligencePatterns = {
         this._syncButtons();
         const details = document.getElementById('patDetails');
         if (!details) return;
+        this._members = null;
         details.innerHTML = this._toolbarHtml(patternId)
             + '<div id="patDetailBody"><p class="text-muted small mb-0">Loading…</p></div>';
         try {
             const shapeUrl = savedId
                 ? `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/shape?pattern_id=${encodeURIComponent(patternId)}`
                 : `/dtwin/patterns/${encodeURIComponent(patternId)}/shape`;
-            const membersUrl = savedId
-                ? `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/members?pattern_id=${encodeURIComponent(patternId)}&offset=0&limit=${this.MEMBERS_PAGE}`
-                : `/dtwin/patterns/${encodeURIComponent(patternId)}/members?offset=0&limit=${this.MEMBERS_PAGE}`;
-            const [shape, members] = await Promise.all([
+            const [shape] = await Promise.all([
                 this._json(shapeUrl),
-                this._json(membersUrl),
                 this._loadClasses(),
             ]);
             if (this.selectedId !== patternId) return;
@@ -421,9 +436,8 @@ const IntelligencePatterns = {
                     shape._runLabel = this._viewingSaved.label;
                 }
             }
-            this._members = members;
             this._selectedShape = shape;
-            details.innerHTML = this._detailsHtml(shape, members);
+            details.innerHTML = this._detailsHtml(shape);
         } catch (err) {
             if (this.selectedId !== patternId) return;
             details.innerHTML = this._toolbarHtml(patternId)
@@ -573,7 +587,11 @@ const IntelligencePatterns = {
                         ${this._patternMenuHtml(selectedId)}
                     </ul>
                 </div>
-                <div class="row g-2 pat-kpi-row pat-detail-kpis" id="patDetailKpis">${kpisHtml}</div>
+                <div class="pat-kpi-row pat-detail-kpis" id="patDetailKpis">${kpisHtml}</div>
+                <button type="button" class="btn btn-sm btn-outline-secondary pat-members-btn"
+                        data-pat-members title="Show entities that match this pattern">
+                    <i class="bi bi-people me-1" aria-hidden="true"></i>Matching entities
+                </button>
             </div>`;
     },
 
@@ -595,7 +613,7 @@ const IntelligencePatterns = {
             + `</li>`;
     },
 
-    _detailsHtml(shape, members) {
+    _detailsHtml(shape) {
         const fromSaved = !!(shape && shape._fromSaved);
         const diagram = shape.diagram
             ? this._diagramSvg(shape.diagram)
@@ -608,10 +626,6 @@ const IntelligencePatterns = {
         // Prefer snapshotted KPI columns when present; else derive from diagram.
         const typeCount = Number(shape._typeCount) || nodes.length || 0;
         const relationCount = Number(shape._relationCount) || edges.length || 0;
-        const rows = (members.members || []).map((m) => this._memberRow(m)).join('');
-        const more = members.has_more
-            ? '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-pat-more>Load more</button>'
-            : '';
         const kpis = this._kpiTile('Hops', this._fmtNum(shape.hop_count))
             + this._kpiTile('Types', this._fmtNum(typeCount))
             + this._kpiTile('Relations', this._fmtNum(relationCount));
@@ -621,17 +635,78 @@ const IntelligencePatterns = {
                 label: (current && current.label) || shape.seed_label || shape._savedLabel,
                 support: shape.support != null ? shape.support : (current && current.support),
             })}
-            <div id="patDetailBody">
-                <div class="pat-diagram mb-3">${diagram}</div>
-                <div class="pat-members">
-                    <h6 class="mb-2">Matching entities</h6>
-                    <ul class="pat-member-list mb-0">${rows || '<li class="text-muted">None</li>'}</ul>
-                    ${more}
-                </div>
+            <div id="patDetailBody" class="pat-detail-body">
+                <div class="pat-diagram">${diagram}</div>
             </div>`;
     },
 
-    DIAGRAM: { colW: 280, nodeW: 150, headH: 34, attrH: 14, gapY: 22, pad: 16, top: 26 },
+    _membersLoadingHtml() {
+        return '<div class="pat-members-loading text-center text-muted py-4">'
+            + '<div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>'
+            + '<p class="small mb-0">Loading matching entities…</p>'
+            + '</div>';
+    },
+
+    _membersListHtml(members) {
+        const rows = (members.members || []).map((m) => this._memberRow(m)).join('');
+        const more = members.has_more
+            ? '<button type="button" class="btn btn-sm btn-outline-secondary mt-3" data-pat-more>Load more</button>'
+            : '';
+        const count = (members.members || []).length;
+        const totalHint = members.has_more
+            ? `${count}+ matching entities`
+            : `${count} matching entit${count === 1 ? 'y' : 'ies'}`;
+        return `<p class="text-muted small mb-2" id="patMembersCount">${this._esc(totalHint)}</p>`
+            + `<ul class="pat-member-list mb-0">${rows || '<li class="text-muted">None</li>'}</ul>`
+            + more;
+    },
+
+    _membersUrl({ offset = 0 } = {}) {
+        const patternId = this.selectedId || '';
+        const savedId = this._viewingSavedId;
+        if (savedId) {
+            return `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/members`
+                + `?pattern_id=${encodeURIComponent(patternId)}`
+                + `&offset=${offset}&limit=${this.MEMBERS_PAGE}`;
+        }
+        return `/dtwin/patterns/${encodeURIComponent(patternId)}/members`
+            + `?offset=${offset}&limit=${this.MEMBERS_PAGE}`;
+    },
+
+    async openMembersModal() {
+        if (!this.selectedId && !this._viewingSavedId) return;
+        const body = document.getElementById('patMembersModalBody');
+        if (!body) return;
+        if (this._membersModal) this._membersModal.show();
+        body.innerHTML = this._membersLoadingHtml();
+        try {
+            if (!this._members || this._members._patternId !== this.selectedId
+                || this._members._savedId !== (this._viewingSavedId || null)) {
+                const members = await this._json(this._membersUrl({ offset: 0 }));
+                this._members = {
+                    ...members,
+                    _patternId: this.selectedId,
+                    _savedId: this._viewingSavedId || null,
+                };
+            }
+            this._renderMembersModal();
+        } catch (err) {
+            body.innerHTML = `<p class="text-danger small mb-0">${this._esc(err.message || 'Failed')}</p>`;
+        }
+    },
+
+    _renderMembersModal() {
+        const body = document.getElementById('patMembersModalBody');
+        if (!body || !this._members) return;
+        body.innerHTML = this._membersListHtml(this._members);
+    },
+
+    // edgeSlot: vertical pitch for parallel edges into the same node (name + badge).
+    // labelPad: extra SVG top/bottom so mid-curve labels are not clipped.
+    DIAGRAM: {
+        colW: 340, nodeW: 150, headH: 34, attrH: 14,
+        gapY: 36, pad: 20, top: 28, edgeSlot: 44, labelPad: 28,
+    },
 
     _shortLabel(uri) {
         const s = String(uri || '');
@@ -664,55 +739,120 @@ const IntelligencePatterns = {
         return s.length > max ? `${s.slice(0, max - 1)}…` : s;
     },
 
-    // Columns by hop, nodes stacked in each column and centred vertically.
+    // Columns by hop. Each node keeps a vertical band wide enough for its
+    // incoming edge labels (name + badge) so parallel relationships do not overlap.
     _layoutDiagram(diagram) {
         const D = this.DIAGRAM;
+        const fanIn = {};
+        (diagram.edges || []).forEach((e) => {
+            fanIn[e.target] = (fanIn[e.target] || 0) + 1;
+        });
         const cols = {};
         diagram.nodes.forEach((n) => { (cols[n.hop] = cols[n.hop] || []).push(n); });
-        const heightOf = (n) => D.headH + D.attrH * (n.attributes || []).length;
-        const colH = (list) => list.reduce((h, n) => h + heightOf(n), 0) + D.gapY * (list.length - 1);
-        const maxH = Math.max(...Object.values(cols).map(colH));
+        const visualH = (n) => D.headH + D.attrH * (n.attributes || []).length;
+        const bandH = (n) => Math.max(visualH(n), Math.max(1, fanIn[n.id] || 0) * D.edgeSlot);
+        const colH = (list) => list.reduce((h, n) => h + bandH(n), 0) + D.gapY * (list.length - 1);
+        const maxH = Math.max(0, ...Object.values(cols).map(colH));
         const pos = {};
         Object.entries(cols).forEach(([hop, list]) => {
-            let y = D.top + (maxH - colH(list)) / 2;
+            let y = D.top + D.labelPad + (maxH - colH(list)) / 2;
             list.forEach((n) => {
-                pos[n.id] = { x: D.pad + Number(hop) * D.colW, y, h: heightOf(n) };
-                y += heightOf(n) + D.gapY;
+                const vh = visualH(n);
+                const band = bandH(n);
+                pos[n.id] = {
+                    x: D.pad + Number(hop) * D.colW,
+                    y: y + (band - vh) / 2,
+                    h: vh,
+                    band,
+                };
+                y += band + D.gapY;
             });
         });
-        const maxHop = Math.max(...Object.keys(cols).map(Number));
+        const maxHop = Math.max(0, ...Object.keys(cols).map(Number));
         return {
             pos,
             maxHop,
             width: D.pad * 2 + maxHop * D.colW + D.nodeW,
-            height: D.top + maxH + D.pad,
+            height: D.top + D.labelPad + maxH + D.labelPad + D.pad,
         };
     },
 
-    _diagramEdge(e, pos, incoming, incomingTotal) {
+    /**
+     * Y on the left/right face of a node box for the i-th of n edges.
+     * Always stays inside the visible rect (never floats in the band gap).
+     */
+    _edgeAttachY(p, index, total) {
+        const n = Math.max(1, total || 1);
+        const i = Math.min(Math.max(1, index || 1), n);
+        if (n === 1) return p.y + p.h / 2;
+        const m = Math.min(8, p.h / 4);
+        return p.y + m + ((i - 1) / (n - 1)) * (p.h - 2 * m);
+    },
+
+    _diagramEdge(e, pos, incoming, incomingTotal, outgoing, outgoingTotal) {
         const D = this.DIAGRAM;
         const a = pos[e.source];
         const b = pos[e.target];
         if (!a || !b) return '';
-        const slot = incoming[e.target] = (incoming[e.target] || 0) + 1;
+        const inSlot = incoming[e.target] = (incoming[e.target] || 0) + 1;
         const nIn = incomingTotal[e.target] || 1;
-        const dy = (slot - (nIn + 1) / 2) * 12;
+        const outSlot = outgoing[e.source] = (outgoing[e.source] || 0) + 1;
+        const nOut = outgoingTotal[e.source] || 1;
+        // Endpoints sit on the entity boxes. Lane offset only bends the curve
+        // and separates labels — it must not pull the arrow off the node.
         const x1 = a.x + D.nodeW;
-        const y1 = a.y + a.h / 2;
+        const y1 = this._edgeAttachY(a, outSlot, nOut);
         const x2 = b.x;
-        const y2 = b.y + b.h / 2 + dy;
+        const y2 = this._edgeAttachY(b, inSlot, nIn);
+        const lane = (inSlot - (nIn + 1) / 2) * D.edgeSlot;
         const mx = (x1 + x2) / 2;
-        const path = `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+        const my = (y1 + y2) / 2 + lane * 0.45;
+        const path = `M${x1},${y1} C${mx},${y1 + lane * 0.35} ${mx},${y2 + lane * 0.35} ${x2},${y2}`;
         const dashed = e.share < 1 ? ' stroke-dasharray="4 3"' : '';
         // Arrow follows the RDF edge: "in" means the neighbour points at its parent.
         const marker = e.direction === 'in' ? 'marker-start="url(#patArrowIn)"' : 'marker-end="url(#patArrow)"';
-        const extra = [
-            e.avg > 1 ? `×${e.avg}` : '',
-            e.share < 1 ? `${Math.round(e.share * 100)}%` : '',
-        ].filter(Boolean).join(' · ');
-        const label = this._trim(e.via_label, 16) + (extra ? ` ${extra}` : '');
-        return `<path d="${path}" class="pat-dg-edge"${dashed} ${marker}><title>${this._esc(e.via)}</title></path>`
-            + `<text x="${x2 - 8}" y="${y2 - 4}" class="pat-dg-edge-label" text-anchor="end">${this._esc(label)}</text>`;
+        const relName = e.via_label || this._shortLabel(e.via) || 'rel';
+        const name = this._esc(relName);
+        const viaTip = `Relationship “${relName}”. Full URI: ${e.via || relName}`;
+        const chipW = (text) => Math.max(22, String(text).length * 6.2 + 10);
+        const chips = [];
+        if (Number(e.avg) > 0) {
+            chips.push({
+                text: `×${e.avg}`,
+                kind: 'avg',
+                tip: `Average neighbours of this type per matching entity (×${e.avg}).`,
+            });
+        }
+        if (e.share < 1) {
+            const pct = Math.round(e.share * 100);
+            chips.push({
+                text: `${pct}%`,
+                kind: 'share',
+                tip: `Share of matching entities that have this relationship (${pct}%). `
+                    + 'Dashed edges mean not every member has it.',
+            });
+        }
+        const gap = 4;
+        const rowW = chips.reduce((s, c) => s + chipW(c.text), 0) + gap * Math.max(0, chips.length - 1);
+        let bx = mx - rowW / 2;
+        const badges = chips.map((chip) => {
+            const w = chipW(chip.text);
+            const g = `<g class="pat-dg-edge-badge pat-dg-edge-badge-${chip.kind}" `
+                + `transform="translate(${bx},${my + 4})" data-pat-tip="${this._esc(chip.tip)}">`
+                + `<rect width="${w}" height="14" rx="7" class="pat-dg-edge-badge-bg"/>`
+                + `<text x="${w / 2}" y="10.5" text-anchor="middle" class="pat-dg-edge-badge-txt">${this._esc(chip.text)}</text>`
+                + `</g>`;
+            bx += w + gap;
+            return g;
+        }).join('');
+        const ends = `data-source="${this._esc(e.source)}" data-target="${this._esc(e.target)}"`;
+        // No SVG <title>: the floating tip owns the explanation (avoids a double tooltip).
+        return `<path d="${path}" class="pat-dg-edge"${dashed} ${marker} ${ends} `
+            + `data-pat-tip="${this._esc(viaTip)}"></path>`
+            + `<g class="pat-dg-edge-label" ${ends} data-pat-tip="${this._esc(viaTip)}">`
+            + `<text x="${mx}" y="${my - 6}" text-anchor="middle" class="pat-dg-edge-name" `
+            + `data-pat-tip="${this._esc(viaTip)}">${name}</text>`
+            + `${badges}</g>`;
     },
 
     _diagramNode(n, p) {
@@ -723,7 +863,8 @@ const IntelligencePatterns = {
             `<text x="${p.x + 10}" y="${p.y + D.headH + 4 + i * D.attrH}" class="pat-dg-attr">`
             + `${this._esc(this._trim(`${at.prop}: ${at.value}`, 26))}</text>`
         )).join('');
-        return `<g><rect x="${p.x}" y="${p.y}" width="${D.nodeW}" height="${p.h}" rx="8" class="${cls}"><title>${this._esc(n.type)}</title></rect>`
+        return `<g class="pat-dg-node-g" data-node-id="${this._esc(n.id)}">`
+            + `<rect x="${p.x}" y="${p.y}" width="${D.nodeW}" height="${p.h}" rx="8" class="${cls}"><title>${this._esc(n.type)}</title></rect>`
             + `<text x="${p.x + 10}" y="${p.y + 21}" class="pat-dg-type">${this._esc(icon)} ${this._esc(this._trim(n.type_label, 18))}</text>`
             + `${attrs}</g>`;
     },
@@ -736,12 +877,25 @@ const IntelligencePatterns = {
             `<text x="${D.pad + h * D.colW + D.nodeW / 2}" y="14" class="pat-dg-head" text-anchor="middle">`
             + `${h === 0 ? 'Entity' : `${h} hop${h > 1 ? 's' : ''}`}</text>`
         )).join('');
+        // Dotted vertical guides through each hop column centre (Entity, 1 hop, …).
+        // No gutter lines in the relationship space between columns.
+        const laneTop = 18;
+        const laneBottom = L.height - Math.max(8, D.pad / 2);
+        const lanes = Array.from({ length: L.maxHop + 1 }, (_, h) => {
+            const x = D.pad + h * D.colW + D.nodeW / 2;
+            return `<line x1="${x}" y1="${laneTop}" x2="${x}" y2="${laneBottom}" class="pat-dg-lane"/>`;
+        }).join('');
         const incomingTotal = {};
+        const outgoingTotal = {};
         (diagram.edges || []).forEach((e) => {
             incomingTotal[e.target] = (incomingTotal[e.target] || 0) + 1;
+            outgoingTotal[e.source] = (outgoingTotal[e.source] || 0) + 1;
         });
         const incoming = {};
-        const edges = (diagram.edges || []).map((e) => this._diagramEdge(e, L.pos, incoming, incomingTotal)).join('');
+        const outgoing = {};
+        const edges = (diagram.edges || []).map((e) => (
+            this._diagramEdge(e, L.pos, incoming, incomingTotal, outgoing, outgoingTotal)
+        )).join('');
         const nodes = diagram.nodes.map((n) => this._diagramNode(n, L.pos[n.id])).join('');
         const note = diagram.truncated ? '<p class="text-muted small mb-0">Showing the most common relationships only.</p>' : '';
         return `<div class="pat-diagram-scroll"><svg class="pat-diagram-svg" width="100%" height="${L.height}" `
@@ -750,44 +904,186 @@ const IntelligencePatterns = {
             + '<marker id="patArrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="pat-dg-arrow"/></marker>'
             + '<marker id="patArrowIn" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" class="pat-dg-arrow"/></marker>'
             + '</defs>'
-            + `${heads}${edges}${nodes}</svg></div>`
-            + '<p class="text-muted small mb-0 mt-1">Dashed: not every member has it · ×n: average per member · hover for full URIs.</p>'
+            + `${lanes}${heads}${edges}${nodes}</svg></div>`
+            + '<p class="text-muted small mb-0 mt-1">Dashed: not every member has it · badge ×n: average per member · '
+            + 'hover a relationship or badge for details · hover a node to trace its related paths.</p>'
             + note;
+    },
+
+    /**
+     * Hover highlight: pointing at a diagram node lights up its lineage —
+     * ancestors toward the entity (hop 0), descendants toward further hops,
+     * and every relationship on those paths. Unrelated branches dim.
+     * (Undirected BFS would light the whole diagram: every pattern graph is
+     * one component rooted at hop 0.) Delegated on document; classes only.
+     */
+    _bindDiagramHover() {
+        document.addEventListener('mouseover', (e) => {
+            const node = e.target.closest?.('.pat-dg-node-g');
+            if (node) this._highlightDiagram(node);
+        });
+        document.addEventListener('mouseout', (e) => {
+            const node = e.target.closest?.('.pat-dg-node-g');
+            if (!node) return;
+            // Still inside a node (child element) or entering another one:
+            // that mouseover handles the highlight, so keep the current state.
+            if (e.relatedTarget?.closest?.('.pat-dg-node-g')) return;
+            this._clearDiagramHighlight(node.closest('.pat-diagram-svg'));
+        });
+    },
+
+    /**
+     * Relationship / badge tooltips: delegated so they survive re-renders.
+     * Prefer the nearest element that carries `data-pat-tip` (badge beats
+     * label group so ×n / % get their own explanations).
+     */
+    _bindDiagramTooltips() {
+        const tipSel = '[data-pat-tip]';
+        document.addEventListener('mouseover', (e) => {
+            const host = e.target.closest?.(tipSel);
+            if (!host || !host.closest?.('.pat-diagram-svg')) return;
+            this._showEdgeTip(host, e);
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!this._edgeTipEl || this._edgeTipEl.hidden) return;
+            if (!e.target.closest?.(tipSel)) return;
+            this._placeEdgeTip(e);
+        });
+        document.addEventListener('mouseout', (e) => {
+            const host = e.target.closest?.(tipSel);
+            if (!host || !host.closest?.('.pat-diagram-svg')) return;
+            if (e.relatedTarget?.closest?.(tipSel)) return;
+            this._hideEdgeTip();
+        });
+    },
+
+    _ensureEdgeTip() {
+        if (this._edgeTipEl) return this._edgeTipEl;
+        const tip = document.createElement('div');
+        tip.id = 'patDgTip';
+        tip.className = 'pat-dg-tip';
+        tip.setAttribute('role', 'tooltip');
+        tip.hidden = true;
+        document.body.appendChild(tip);
+        this._edgeTipEl = tip;
+        return tip;
+    },
+
+    _showEdgeTip(host, e) {
+        const text = this._attr(host, 'data-pat-tip');
+        if (!text) return;
+        const tip = this._ensureEdgeTip();
+        tip.textContent = text;
+        tip.hidden = false;
+        this._placeEdgeTip(e);
+    },
+
+    _placeEdgeTip(e) {
+        const tip = this._edgeTipEl;
+        if (!tip || tip.hidden) return;
+        const pad = 12;
+        const tw = tip.offsetWidth || 200;
+        const th = tip.offsetHeight || 40;
+        let left = e.clientX + pad;
+        let top = e.clientY + pad;
+        if (left + tw > window.innerWidth - 8) left = e.clientX - tw - pad;
+        if (top + th > window.innerHeight - 8) top = e.clientY - th - pad;
+        tip.style.left = `${Math.max(8, left)}px`;
+        tip.style.top = `${Math.max(8, top)}px`;
+    },
+
+    _hideEdgeTip() {
+        if (this._edgeTipEl) this._edgeTipEl.hidden = true;
+    },
+
+    _attr(el, name) {
+        return (el && el.getAttribute && el.getAttribute(name)) || '';
+    },
+
+    _highlightDiagram(node) {
+        const svg = node.closest('.pat-diagram-svg');
+        const id = this._attr(node, 'data-node-id');
+        if (!svg || !id || this._attr(svg, 'data-hover-node') === id) return;
+        svg.setAttribute('data-hover-node', id);
+
+        // Edges always run parent (hop N-1) → child (hop N). Walk both ways
+        // from the hovered node so related hops light up; skip side branches.
+        const down = new Map();
+        const up = new Map();
+        const link = (map, a, b) => {
+            if (!a || !b) return;
+            if (!map.has(a)) map.set(a, []);
+            map.get(a).push(b);
+        };
+        svg.querySelectorAll('.pat-dg-edge').forEach((p) => {
+            const s = this._attr(p, 'data-source');
+            const t = this._attr(p, 'data-target');
+            link(down, s, t);
+            link(up, t, s);
+        });
+
+        const reached = new Set([id]);
+        const walk = (start, adj) => {
+            const stack = [start];
+            while (stack.length) {
+                for (const next of adj.get(stack.pop()) || []) {
+                    if (!reached.has(next)) {
+                        reached.add(next);
+                        stack.push(next);
+                    }
+                }
+            }
+        };
+        walk(id, up);
+        walk(id, down);
+
+        svg.classList.add('is-hovering');
+        svg.querySelectorAll('.pat-dg-node-g').forEach((g) => {
+            const nid = this._attr(g, 'data-node-id');
+            g.classList.toggle('is-on', reached.has(nid));
+            g.classList.toggle('is-focus', nid === id);
+        });
+        // An edge is on the related path only when both ends are in the
+        // lineage AND it actually links them as parent→child in the walk.
+        svg.querySelectorAll('.pat-dg-edge, .pat-dg-edge-label').forEach((el) => {
+            const s = this._attr(el, 'data-source');
+            const t = this._attr(el, 'data-target');
+            const onPath = reached.has(s) && reached.has(t)
+                && (down.get(s) || []).includes(t);
+            el.classList.toggle('is-on', onPath);
+        });
+    },
+
+    _clearDiagramHighlight(svg) {
+        if (!svg) return;
+        svg.removeAttribute('data-hover-node');
+        svg.classList.remove('is-hovering');
+        svg.querySelectorAll('.is-on, .is-focus').forEach((el) => el.classList.remove('is-on', 'is-focus'));
     },
 
     async _loadMoreMembers() {
         if ((!this.selectedId && !this._viewingSavedId) || !this._members) return;
         const offset = (this._members.offset || 0) + (this._members.members || []).length;
+        const btn = document.querySelector('#patMembersModalBody [data-pat-more]');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Loading…';
+        }
         try {
-            const url = this._viewingSavedId
-                ? `/dtwin/patterns/saved/${encodeURIComponent(this._viewingSavedId)}/members`
-                    + `?pattern_id=${encodeURIComponent(this.selectedId || '')}`
-                    + `&offset=${offset}&limit=${this.MEMBERS_PAGE}`
-                : `/dtwin/patterns/${encodeURIComponent(this.selectedId)}/members?offset=${offset}&limit=${this.MEMBERS_PAGE}`;
-            const page = await this._json(url);
+            const page = await this._json(this._membersUrl({ offset }));
             this._members = {
                 ...this._members,
                 members: (this._members.members || []).concat(page.members || []),
                 has_more: !!page.has_more,
                 offset: 0,
             };
-            const details = document.getElementById('patDetails');
-            if (!details) return;
-            const rows = this._members.members.map((m) => this._memberRow(m)).join('');
-            const list = details.querySelector('.pat-member-list');
-            if (list) list.innerHTML = rows || '<li class="text-muted">None</li>';
-            const members = details.querySelector('.pat-members');
-            const btn = details.querySelector('[data-pat-more]');
-            if (!this._members.has_more) {
-                if (btn) btn.remove();
-            } else if (!btn && members) {
-                members.insertAdjacentHTML(
-                    'beforeend',
-                    '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-pat-more>Load more</button>'
-                );
-            }
+            this._renderMembersModal();
         } catch (err) {
             this._notify(err.message || 'Failed to load members', 'danger');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Load more';
+            }
         }
     },
 

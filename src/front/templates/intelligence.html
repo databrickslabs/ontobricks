@@ -35,8 +35,9 @@
                     {% include "partials/intelligence/_intel_patterns.html" %}
                 </div>
             </div>
-            {# Detect modal lives outside the details pane so Detect works from the list. #}
+            {# Detect / members modals live outside the details pane so they work from list or details. #}
             {% include "partials/intelligence/_intel_patterns_detect_modal.html" %}
+            {% include "partials/intelligence/_intel_patterns_members_modal.html" %}
 
             <div id="scenarios-section" class="sidebar-section active">
                 <div id="simScenariosList" class="content-section">

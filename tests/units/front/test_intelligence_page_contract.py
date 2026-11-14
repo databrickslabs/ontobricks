@@ -806,6 +806,10 @@ def test_patterns_section_owns_discovery():
     assert 'id="patDetails"' in disc
     assert 'id="patPatternList"' not in disc
     assert "Discovery runs on Databricks" in detect_modal
+    assert "pat-form-info" in detect_modal
+    assert 'for="patBins"' in detect_modal
+    assert 'for="patMinSupport"' in detect_modal
+    assert 'for="patRefineTop"' in detect_modal
     assert "onclick=" not in disc
     assert "onclick=" not in detect_modal
     assert 'id="patSavedList"' in saved
@@ -862,10 +866,12 @@ def test_patterns_section_owns_discovery():
     assert ".pat-saved-card" in css
     js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
     # Details: compact pattern dropdown with in-control support badge + KPIs.
-    assert "/members?offset=0" in js
+    assert "_membersUrl" in js
+    assert "/members`" in js or "/members" in js
     assert "/shape`" in js
     assert "this._diagramSvg(shape.diagram)" in js
-    assert 'text-anchor="end"' in js
+    assert 'class="pat-dg-edge-name"' in js
+    assert "pat-dg-edge-badge" in js
     assert 'width="100%"' in js
     assert "pat-kpi-compact" in js
     assert "pat-pattern-toggle" in js
@@ -875,10 +881,23 @@ def test_patterns_section_owns_discovery():
     assert "this._kpiTile('Detail'" not in js
     assert "this._kpiTile('Refined'" not in js
     assert "Matching entities" in js
+    assert "data-pat-members" in js
+    assert "openMembersModal" in js
+    assert "_membersLoadingHtml" in js
+    assert "spinner-border" in js
+    assert "this._detailsHtml(shape, members)" not in js
+    assert "this._detailsHtml(shape)" in js
     assert "/dtwin/?section=sigmagraph&focus=" in js
     assert "pat-member-link" in js
     assert "Re-run <strong>Detect</strong> to draw this pattern." in js
     assert "pat-token" not in js
+    members_modal = _read(FRONT / "templates/partials/intelligence/_intel_patterns_members_modal.html")
+    assert 'id="patMembersModal"' in members_modal
+    assert 'id="patMembersModalBody"' in members_modal
+    assert "Matching entities" in members_modal
+    assert "spinner-border" in members_modal
+    intel = _read(FRONT / "templates/intelligence.html")
+    assert "_intel_patterns_members_modal.html" in intel
     js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
     assert "/dtwin/patterns/detect" in js
     assert "/dtwin/patterns/latest" in js
@@ -894,9 +913,17 @@ def test_patterns_section_owns_discovery():
     assert ".pat-layout" in css
     assert ".pat-rail" not in css
     assert ".pat-main" in css
+    assert ".pat-detail-body" in css
+    assert "max-height: min(32rem, 58vh)" not in css
+    assert ".pat-members-btn" in css
+    assert ".pat-form-info" in css
+    assert "height: var(--pat-chip-h" in css.split(".pat-members-btn", 1)[1].split("}", 1)[0]
+    assert 'class="pat-kpi-row pat-detail-kpis"' in js
+    assert "row g-2 pat-kpi-row" not in js
     js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
     assert "openDetectModal" in js
     assert "this._detectModal.show()" in js
+    assert "this._membersModal.show()" in js
     tracker = _read(FRONT / "static/global/js/task-tracker.js")
     for task_type in ("pattern_detection", "pattern_save"):
         assert f"'{task_type}': '/intelligence/?section=patterns'" in tracker
