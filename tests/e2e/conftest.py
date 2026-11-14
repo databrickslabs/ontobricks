@@ -445,8 +445,10 @@ def _resolve_live_bearer() -> Optional[str]:
     profile = os.environ.get("DATABRICKS_CONFIG_PROFILE") or os.environ.get(
         "ONTOBRICKS_E2E_PROFILE", DEFAULT_E2E_PROFILE
     )
-    had_cached = bool(cached)
-    token = DatabricksAuth.mint_token(profile, force_refresh=had_cached)
+    # Always force a refresh: the CLI otherwise hands back its cached token,
+    # which can expire minutes later, while a Playwright context keeps the
+    # bearer it was created with for a whole scenario (15+ minutes).
+    token = DatabricksAuth.mint_token(profile, force_refresh=True)
     if not token:
         pytest.skip(
             "Live e2e needs a Databricks token. Run "

@@ -176,3 +176,27 @@ Modified files:
 
 Tests: `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest tests/e2e/security/test_live_bearer_scope.py`
 -> 1 passed (and 1 failed against the previous harness).
+
+================================================================================
+## E2E harness: always mint a full-lifetime bearer for live runs
+================================================================================
+
+Context:
+Running the scenario campaign against the SQLite-registry test app, scenario 1
+lost its session mid-Auto-Map: from one minute to the next the Apps gateway
+answered every call (including /health) with a 302 to login, without reaching
+the app. The first token of a run came from the CLI cache and expired minutes
+later, while a Playwright context keeps the bearer it was created with for the
+whole (15+ minute) scenario.
+
+Changes:
+
+1. tests/e2e/conftest.py
+   `_resolve_live_bearer` always mints with `--force-refresh`, so every token
+   starts with its full lifetime (the 12-minute cache keeps refreshes rare).
+
+Modified files:
+- tests/e2e/conftest.py
+
+Tests: live scenario campaign against the SQLite-registry test instance (see
+the next section for results).
