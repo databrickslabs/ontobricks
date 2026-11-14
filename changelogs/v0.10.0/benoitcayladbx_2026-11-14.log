@@ -368,3 +368,89 @@ Modified files:
 - tests/units/front/test_simulation_page_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+
+================================================================================
+Fix Group_* Business View leaking ungrouped orphan entities
+================================================================================
+
+Context:
+Selecting a Group_<name> Business View (e.g. Group_Contract) in Ontology Studio
+showed entities that were not members of the group, often as isolated
+orphan-looking nodes. The canvas filtered with a stale hiddenEntities blacklist
+only, so entities added after the snapshot (or never recorded as hidden) leaked
+in. Collapse persist also grew the BV entities list from the All-map position
+cache.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Whitelist visible entities via _studioViewVisibleNames; Group_* views follow
+   live group membership; stop growing BV entities from the global position cache.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Contracts for whitelist filter, Group_* live members, and no cache growth.
+3. docs/user-guide.md
+   Document that Group_<groupName> views show current group members.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --ignore=tests/units/core/test_pattern_materializer.py → 10493 passed, 323 skipped, 8 deselected in 44.62s (pre-existing collection ImportError for missing PatternMaterializer; unrelated to this fix)
+
+================================================================================
+Keep inheritance links on Group_* Business Views
+================================================================================
+
+Context:
+After whitelisting Group_<name> views to live group members, inheritance edges
+disappeared because superclass/subclass nodes outside the group were no longer
+on the canvas, and the snapshot's hiddenInheritances list still suppressed those
+edges. Group_* views now pull in direct inheritance neighbors and ignore the
+stale link hide lists.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   _studioExpandVisibleWithInheritance; Group_* filter expands members and keeps
+   links by remaining endpoints only.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Contract that Group_* views keep inheritance neighbors and skip hide lists.
+3. docs/user-guide.md
+   Note that Group_* views include direct inheritance neighbors.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --ignore=tests/units/core/test_pattern_materializer.py → 10508 passed, 323 skipped, 8 deselected in 45.57s
+
+================================================================================
+Limit Group_* Business Views to group members
+================================================================================
+
+Context:
+The inheritance-neighbour expansion added in the previous change pulled every
+superclass/subclass of a group member onto a Group_* view, even when that
+neighbour belongs to another group (e.g. Claim and Interaction appearing in
+Group_Contract). Group_* views now show exactly the group's members; links
+between members (including inheritance) are still drawn.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Removed _studioExpandVisibleWithInheritance and its call; the Group_* filter
+   uses live membership only.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Contract replaces the inheritance-neighbour test: no expansion, members only.
+3. docs/user-guide.md
+   Group_<groupName> description: members only; member-to-member links drawn.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log

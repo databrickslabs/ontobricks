@@ -319,6 +319,61 @@ function wireStudioViewControls() {
 }
 
 /**
+ * Resolve the ontology group name for a Group_<name>[_N] Business View.
+ * Prefers the longest matching group so Contract wins over Contract_Draft.
+ * @param {string} viewName
+ * @returns {string|null}
+ */
+function _studioGroupNameForView(viewName) {
+    if (!viewName || !String(viewName).startsWith('Group_')) return null;
+    const rest = String(viewName).slice('Group_'.length);
+    if (!rest) return null;
+    const names = (_studioGroupsDefs || [])
+        .map(g => g && g.name)
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length);
+    for (const name of names) {
+        if (rest === name) return name;
+        if (rest.startsWith(name + '_')) {
+            const suffix = rest.slice(name.length + 1);
+            if (/^\d+$/.test(suffix)) return name;
+        }
+    }
+    return null;
+}
+
+/**
+ * Visible entity names for the active Business View.
+ * Group_* views follow live group membership; other views whitelist
+ * layout.entities (minus hiddenEntities). Legacy layouts with an empty
+ * entities list fall back to blacklist-only (everything not hidden).
+ * @param {Object} layout
+ * @returns {Set<string>|null} null → blacklist-only fallback
+ */
+function _studioViewVisibleNames(layout) {
+    const visibility = (layout && layout.visibility) || {};
+    const hidden = new Set(visibility.hiddenEntities || []);
+
+    const groupName = _studioGroupNameForView(_studioActiveView);
+    if (groupName) {
+        const g = (_studioGroupsDefs || []).find(d => d && d.name === groupName);
+        if (g) {
+            return new Set((g.members || []).filter(Boolean));
+        }
+    }
+
+    const inView = new Set(
+        ((layout && layout.entities) || [])
+            .map(e => e && e.name)
+            .filter(Boolean)
+    );
+    if (inView.size > 0) {
+        return new Set([...inView].filter(name => !hidden.has(name)));
+    }
+    return null;
+}
+
+/**
  * Flush current canvas node positions before an ontology save.
  */
 async function flushStudioLayoutBeforeSave() {
@@ -644,22 +699,13 @@ async function persistStudioCollapsedGroups() {
 
         if (_studioActiveView && _studioViewLayout) {
             const byPos = positions;
+            // Update positions for entities already in this BV only. Never grow
+            // the view from the All-map position cache (that leaked ungrouped
+            // entities into Group_* snapshots).
             const entities = (_studioViewLayout.entities || []).map(e => {
                 const p = byPos[e.name];
                 if (!p) return e;
                 return { ...e, x: p.x, y: p.y };
-            });
-            // Ensure every cached entity is present for restore on expand.
-            Object.keys(byPos).forEach(name => {
-                if (entities.some(e => e.name === name)) return;
-                entities.push({
-                    id: undefined,
-                    name: name,
-                    x: byPos[name].x,
-                    y: byPos[name].y,
-                    properties: null,
-                    color: null,
-                });
             });
             const visibility = {
                 ...(_studioViewLayout.visibility || {}),
@@ -1242,15 +1288,25 @@ async function initOntologyMap() {
     console.log(`[Map] Built ${links.length} valid links from ${properties.length} properties`);
 
     // ── Business View filter ───────────────────────────────────────────────
+    // Whitelist layout.entities (and live members for Group_* views). A stale
+    // hiddenEntities blacklist alone lets post-snapshot entities leak in as
+    // isolated orphan-looking nodes. Group_* views show members only.
     if (_studioActiveView && _studioViewLayout) {
         const visibility = _studioViewLayout.visibility || {};
         const hidden = new Set(visibility.hiddenEntities || []);
+        const isGroupView = !!_studioGroupNameForView(_studioActiveView);
+        const visibleNames = _studioViewVisibleNames(_studioViewLayout);
         const posByName = new Map();
         (_studioViewLayout.entities || []).forEach(e => {
             if (e && e.name) posByName.set(e.name, e);
         });
 
-        nodes = nodes.filter(n => !hidden.has(n.name)).map(n => {
+        nodes = nodes.filter(n => {
+            // Whitelist is authoritative (incl. live Group_* members). Legacy
+            // views with an empty entities list fall back to blacklist-only.
+            if (visibleNames) return visibleNames.has(n.name);
+            return !hidden.has(n.name);
+        }).map(n => {
             // Cache wins (exact pre-collapse coords); else BV layout entities.
             const e = posByName.get(n.name);
             const saved = (e && e.x != null && e.y != null)
@@ -1267,6 +1323,9 @@ async function initOntologyMap() {
 
         links = links.filter(l => {
             if (!remainingIds.has(l.source) || !remainingIds.has(l.target)) return false;
+            // Group_* views ignore stale snapshot hide lists — live membership
+            // already defines what belongs on canvas.
+            if (isGroupView) return true;
             if (l.type === 'inheritance') {
                 return !hiddenInhs.some(h =>
                     (h.source === l.source && h.target === l.target)

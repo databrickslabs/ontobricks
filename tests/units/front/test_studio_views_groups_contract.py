@@ -241,6 +241,63 @@ def test_creating_group_creates_group_prefixed_business_view():
     assert "applyStudioView(viewName)" in helper
 
 
+def test_business_view_filter_whitelists_layout_entities():
+    """Studio BV filter must not rely on a stale hiddenEntities blacklist alone.
+
+    Otherwise entities added after a Group_<name> snapshot leak into the canvas
+    as isolated (orphan-looking) nodes that are not part of the group.
+    """
+    js = _read(MAP_JS)
+    assert "function _studioViewVisibleNames(" in js
+    assert "function _studioGroupNameForView(" in js
+
+    # Visible-name helper: layout.entities whitelist, Group_* live membership.
+    helper_start = js.index("function _studioViewVisibleNames(")
+    helper_end = js.index("async function flushStudioLayoutBeforeSave(", helper_start)
+    helper = js[helper_start:helper_end]
+    assert "hiddenEntities" in helper
+    assert "layout.entities" in helper or "_studioViewLayout.entities" in helper
+    assert "_studioGroupNameForView" in helper
+    assert "g.members" in helper
+
+    # Filter site uses the whitelist helper (not bare blacklist-only filter).
+    filter_start = js.index("// ── Business View filter")
+    filter_end = js.index("// ── Ontology Groups collapse", filter_start)
+    block = js[filter_start:filter_end]
+    assert "_studioViewVisibleNames(" in block
+    assert "visibleNames.has(n.name)" in block
+    assert "nodes.filter(n => !hidden.has(n.name))" not in block
+
+
+def test_bv_collapse_persist_does_not_grow_entities_from_cache():
+    """Collapsed-group persist must not copy All-map cache entries into a BV."""
+    js = _read(MAP_JS)
+    start = js.index("async function persistStudioCollapsedGroups(")
+    end = js.index("async function _saveStudioViewLayoutFromNodes(", start)
+    block = js[start:end]
+    assert "Object.keys(byPos).forEach" not in block
+    assert "entities.push(" not in block
+
+
+def test_group_business_view_shows_only_group_members():
+    """Group_* views show exactly the group's members, never other groups' entities.
+
+    Inheritance neighbours outside the group (e.g. a superclass in another group)
+    must not be pulled onto the canvas. Links between members, including
+    inheritance links, are kept; stale snapshot hide lists are ignored.
+    """
+    js = _read(MAP_JS)
+    assert "_studioExpandVisibleWithInheritance" not in js
+
+    filter_start = js.index("// ── Business View filter")
+    filter_end = js.index("// ── Ontology Groups collapse", filter_start)
+    block = js[filter_start:filter_end]
+    assert "isGroupView" in block
+    assert "visibleNames.has(n.name)" in block
+    # Group views ignore the snapshot hide lists for links.
+    assert "if (isGroupView) return true" in block
+
+
 def test_exclusive_group_membership_is_surfaced_in_ui():
     """An entity can belong to only one group — modal, panel, and Studio menus say so."""
     groups_js = _read(GROUPS_JS)
