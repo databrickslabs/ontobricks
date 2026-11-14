@@ -138,7 +138,7 @@ before they break your graph.
 Materialize triples incrementally, then **reason** over the graph with OWL 2 RL
 inference, IF-THEN rules and SHACL validation. Explore interactively: two-phase
 search, N-hop neighbour expansion, cross-domain bridge navigation, community
-detection from Intelligence → Community (label propagation on a Databricks
+detection from Intelligence → Discovery → Communities (label propagation on a Databricks
 job, so it scales to graphs of any size), and explainable
 **cohort discovery**. Right-click any entity to run its **Data Quality Checks**
 (every SHACL shape on its class, its parents and the global ones, with

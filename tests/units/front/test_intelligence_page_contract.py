@@ -23,18 +23,36 @@ def _menu() -> dict:
     return next(m for m in menus if m["id"] == "intelligence")
 
 
-def test_community_group_is_first():
-    assert [g["id"] for g in _menu()["groups"]] == [
-        "intelligence-community",
-        "intelligence-cohorts",
-        "intelligence-patterns",
+def test_intelligence_menu_groups():
+    groups = _menu()["groups"]
+    assert [g["id"] for g in groups] == [
+        "intelligence-configuration",
+        "intelligence-discovery",
         "intelligence-simulation",
     ]
-    items = [i["id"] for g in _menu()["groups"] for i in g["items"]]
+    assert [g["title"] for g in groups] == [
+        "Configuration",
+        "Discovery",
+        "Simulation",
+    ]
+    by_id = {g["id"]: g for g in groups}
+    assert [(i["id"], i["label"]) for i in by_id["intelligence-configuration"]["items"]] == [
+        ("cohorts", "Cohorts"),
+        ("cohort-run", "Runs"),
+    ]
+    assert [(i["id"], i["label"]) for i in by_id["intelligence-discovery"]["items"]] == [
+        ("communities", "Communities"),
+        ("patterns", "Patterns"),
+    ]
+    assert [(i["id"], i["label"]) for i in by_id["intelligence-simulation"]["items"]] == [
+        ("scenarios", "Scenarios"),
+        ("compare", "Compare"),
+        ("runs", "Runs"),
+    ]
+    items = [i["id"] for g in groups for i in g["items"]]
     assert "results" not in items
-    assert "runs" in items
-    assert "patterns" in items
-    assert "patterns-saved" in items
+    assert "patterns-saved" not in items
+    assert "patterns-discover" not in items
 
 
 def test_menu_follows_knowledge_graph():
@@ -734,20 +752,31 @@ def test_community_tasks_have_an_open_task_link():
 def test_patterns_section_owns_discovery():
     html = _read(PAGE)
     assert 'id="patterns-section"' in html
-    assert 'id="patterns-saved-section"' in html
+    assert 'id="patPatternsList"' in html
+    assert 'id="patPatternsDetails"' in html
+    assert 'id="patterns-saved-section"' not in html
     assert "intelligence-patterns.js" in html
     assert _menu()["label"] == "Intelligence"
     groups = {g["id"]: g for g in _menu()["groups"]}
-    assert [i["label"] for i in groups["intelligence-patterns"]["items"]] == ["Discover", "Saved"]
+    assert [i["label"] for i in groups["intelligence-discovery"]["items"]] == [
+        "Communities",
+        "Patterns",
+    ]
     disc = _read(FRONT / "templates/partials/intelligence/_intel_patterns.html")
     saved = _read(FRONT / "templates/partials/intelligence/_intel_patterns_saved.html")
-    assert re.sub(r"<!--.*?-->", "", disc, flags=re.DOTALL).strip().startswith('<div class="content-section">')
     assert 'class="pat-layout"' in disc
     assert 'class="pat-rail"' not in disc
     assert 'class="pat-main"' in disc
-    assert 'id="patDetectBtn"' in disc
-    assert 'class="btn btn-sm btn-primary"' in disc
-    assert 'id="patSaveBtn"' in disc
+    # The list header button opens the Detect dialog (labelled New, like New scenario);
+    # Save is automatic after Detect.
+    assert 'id="patDetectBtn"' in saved
+    assert 'id="patDetectBtn"' in saved and "bi-plus-lg me-1\"></i>New" in saved
+    assert "bi-search me-1\"></i>Detect" not in saved
+    assert 'id="patDetectBtn"' not in disc
+    assert 'id="patBackBtn"' in disc
+    assert 'id="patSaveBtn"' not in disc
+    assert 'id="patSaveModal"' not in html
+    assert "_intel_patterns_save_modal.html" not in html
     detect_modal = _read(
         FRONT / "templates/partials/intelligence/_intel_patterns_detect_modal.html"
     )
@@ -757,8 +786,14 @@ def test_patterns_section_owns_discovery():
     assert 'id="patClassFilter"' in detect_modal
     assert 'for="patClassFilter">Entity</label>' in detect_modal
     assert "Anchor type" not in detect_modal
-    assert "{% include \"partials/intelligence/_intel_patterns_detect_modal.html\" %}" in disc
+    assert "{% include \"partials/intelligence/_intel_patterns_detect_modal.html\" %}" in html
     js_patterns = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    assert "_autoSaveAfterDetect" in js_patterns
+    assert "_autoSaveLabel" in js_patterns
+    assert "_restoreDiscoverPreview" in js_patterns
+    assert "openSavedById(savedId" in js_patterns
+    assert "openSaveModal" not in js_patterns
+    assert "task.result.saved_id" in js_patterns
     assert "cls.emoji || '📦'" in js_patterns
     assert "structure: 'Structure only'" in js_patterns
     assert 'id="patJobStatus"' in detect_modal
@@ -769,6 +804,56 @@ def test_patterns_section_owns_discovery():
     assert "onclick=" not in detect_modal
     assert 'id="patSavedList"' in saved
     assert "onclick=" not in saved
+    assert "data-pat-pattern-id" in js_patterns
+    assert "openSaved" in js_patterns
+    assert "_toggleDetails" in js_patterns
+    assert "showList" in js_patterns
+    assert "syncPatternUrl" in js_patterns
+    assert "applyPatternView" in js_patterns
+    assert "_toggleSavedMembers" not in js_patterns
+    assert "ob-rule-card pat-saved-card" in js_patterns
+    assert "_savedCardHtml" in js_patterns
+    assert "pattern', 'patterns'))} found" in js_patterns
+    assert "Saved ${this._esc(this._fmtDate(p.saved_at))}" in js_patterns
+    assert "p.hop_count" in js_patterns
+    assert "p.pattern_count" in js_patterns
+    assert "member', 'members')" not in js_patterns
+    assert "type', 'types')" not in js_patterns
+    assert "relation', 'relations')" not in js_patterns
+    # KPI values stay on the card as data-* for the details open path.
+    assert "data-pat-types=" in js_patterns
+    assert "data-pat-relations=" in js_patterns
+    assert "data-pat-size=" in js_patterns
+    assert 'data-pat-open="' in js_patterns
+    assert 'title="Open"' in js_patterns
+    assert "_showPendingSaved" in js_patterns
+    assert "/dtwin/patterns/saved/" in js_patterns
+    assert "/shape`" in js_patterns
+    assert "/patterns`" in js_patterns
+    assert "patterns/saved/${encodeURIComponent(saved.id)}/patterns" in js_patterns
+    assert "pattern_id=${encodeURIComponent(patternId)}" in js_patterns
+    assert "_fromSaved" in js_patterns
+    assert "badge bg-success" in js_patterns
+    # An open snapshot must survive a reload of the latest run.
+    assert "if (this._viewingSavedId) {" in js_patterns
+    # Open shows the saved snapshot only (no `/latest` overlay).
+    assert "saved.pattern_id && this._patternOf(saved.pattern_id)" not in js_patterns
+    assert "await this._showPendingSaved()" in js_patterns
+    assert "_warmLatestForPicker" not in js_patterns
+    assert "_setDiscoverHeading" in js_patterns
+    assert "patDiscoverTitleText" in js_patterns
+    assert 'id="patDiscoverTitleText"' in disc
+    assert 'id="patDiscoverSubtitle"' in disc
+    assert "SidebarNav._showSection('patterns')" in js_patterns
+    # `SidebarNav` is a top-level const: `window.SidebarNav` is always undefined.
+    assert "window.SidebarNav" not in js_patterns
+    assert "typeof SidebarNav !== 'undefined'" in js_patterns
+    assert "section=patterns&amp;saved=" in js_patterns
+    perms = _read(FRONT / "static/global/css/permissions.css")
+    assert "button:not([data-pat-open])" in perms
+    assert "button[data-pat-delete]" in perms
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".pat-saved-card" in css
     js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
     # Details: compact pattern dropdown with in-control support badge + KPIs.
     assert "/members?offset=0" in js

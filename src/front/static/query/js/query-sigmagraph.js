@@ -526,7 +526,7 @@ var SigmaGraph = (function () {
 
         var stats = _getClusterStats();
         if (stats.length === 0) {
-            container.innerHTML = '<span class="text-muted small">No materialized clusters — run Intelligence → Community → Detect.</span>';
+            container.innerHTML = '<span class="text-muted small">No materialized clusters — run Intelligence → Discovery → Communities.</span>';
             var countEl = document.getElementById('sgClusterCount');
             if (countEl) countEl.textContent = '';
             return;

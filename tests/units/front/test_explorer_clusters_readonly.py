@@ -17,7 +17,10 @@ def test_explorer_has_no_detect_controls():
     assert "detectClusters" not in html
     assert "detectClustersBackend" not in html
     assert "sgClusterColorBy" in html
-    assert "Intelligence → Community" in html or "Intelligence &rarr; Community" in html
+    assert (
+        "Intelligence → Discovery → Communities" in html
+        or "Intelligence &rarr; Discovery &rarr; Communities" in html
+    )
 
 
 def test_sigma_hydrates_from_current_endpoint():

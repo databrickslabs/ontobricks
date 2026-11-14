@@ -315,9 +315,6 @@ const mappingSidebarConfig = {
             
             setTimeout(() => tryInitManual(0), 50);
         }
-        if (section === 'sparksql' && typeof refreshMappingSql === 'function') {
-            setTimeout(() => refreshMappingSql(), 50);
-        }
         // Dispatch event for other modules
         document.dispatchEvent(new CustomEvent('sectionChange', { detail: { section } }));
     }
@@ -344,8 +341,6 @@ async function initializeDefaultSection() {
             if (typeof initMappingDesigner === 'function') initMappingDesigner();
         } else if (sectionId === 'manual' && typeof ManualModule !== 'undefined') {
             ManualModule.init();
-        } else if (sectionId === 'sparksql' && typeof refreshMappingSql === 'function') {
-            refreshMappingSql();
         }
     }
 }

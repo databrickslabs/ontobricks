@@ -372,7 +372,7 @@ OntoBricks provides an end-to-end, web-based solution that runs directly on Data
 #### Graph Viewer Exploration
 
 - **Interactive Graph Viewer**: Sigma.js WebGL-powered graph with search, filtering, depth control, and entity detail panels.
-- **Data Cluster visualization**: Explorer colours and collapses communities materialized from Intelligence → Community (label propagation on a Databricks job).
+- **Data Cluster visualization**: Explorer colours and collapses communities materialized from Intelligence → Discovery → Communities (label propagation on a Databricks job).
 - **Triples grid**: Sortable, searchable table view of all materialized triples.
 - **Dashboard integration**: Embed Databricks SQL dashboards with parameter mapping to ontology entities.
 
@@ -466,7 +466,7 @@ A **production-ready, source-available Databricks App** under the [Databricks Li
 - **Triple store + Graph DB layers**: Delta view (Unity Catalog) + Lakebase Postgres flat store, pluggable behind `GraphDBFactory`
 - MCP server deployed and operational for Databricks Playground
 - **Entity Groups**: OWL-compliant class grouping via `owl:equivalentClass` + `owl:unionOf`, with expand/collapse super-nodes in the Graph Viewer visualization
-- **Data Cluster Detection**: Intelligence → Community runs label propagation on a Databricks job, then materializes one partition (`Cluster` + `:inCluster`); Explorer colour-by-cluster and collapse/expand super-nodes consume that partition
+- **Data Cluster Detection**: Intelligence → Discovery → Communities runs label propagation on a Databricks job, then materializes one partition (`Cluster` + `:inCluster`); Explorer colour-by-cluster and collapse/expand super-nodes consume that partition
 - Knowledge Graph REST API with design status, ontology, R2RML, Spark SQL endpoints
 - GraphQL API with configurable depth and auto-generated schema
 - Documentation: README, user guide, architecture, API reference, import guide, automated pipeline guide

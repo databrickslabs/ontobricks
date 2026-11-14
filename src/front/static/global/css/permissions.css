@@ -190,7 +190,9 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #newAssistantBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #studioGroupsBtn,
 /* --- Ontology > Data Quality: every per-rule action button. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) .dq-shape-card .btn-group button,
-body:is(.read-only-version, .role-viewer, .read-only-locked) .ob-rule-card .btn-group button,
+/* Pattern Saved: keep Open (read navigation) clickable; Delete stays blocked. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) .ob-rule-card .btn-group button:not([data-pat-open]),
+body:is(.read-only-version, .role-viewer, .read-only-locked) .ob-rule-card .btn-group button[data-pat-delete],
 /* --- Save Context navbar item: still rendered, but neutralised. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #menuSaveDomain {
     pointer-events: none !important;

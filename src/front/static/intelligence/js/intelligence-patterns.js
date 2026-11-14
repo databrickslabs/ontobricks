@@ -1,18 +1,26 @@
 /**
- * Intelligence → Patterns: discover egocentric neighbourhood signatures on
- * Databricks, then save named matches to the graph.
+ * Intelligence → Discovery → Patterns: Scenarios-style list (saved snapshots) + details
+ * pane (Detect results or a saved snapshot), like Workbench.
  */
 const IntelligencePatterns = {
     latest: null,
     blockedReason: '',
     selectedId: null,
+    _pendingPatternId: null,
+    _pendingSaved: null,
+    _viewingSavedId: null,
+    _viewingSaved: null,
     ontologyClasses: null,
     _members: null,
     _busy: false,
-    _saveModal: null,
     _detectModal: null,
+    _openingDetails: false,
 
     MEMBERS_PAGE: 100,
+    LAST_KEY: 'ontobricks-patterns-last',
+    DISCOVER_TITLE: 'Pattern discovery',
+    DISCOVER_SUBTITLE: 'Discover recurring neighbourhood shapes for a chosen entity type on Databricks. '
+        + 'Each Detect run is saved automatically so you can reopen it later.',
 
     init() {
         const on = (id, fn) => {
@@ -20,9 +28,17 @@ const IntelligencePatterns = {
             if (el) el.addEventListener('click', fn);
         };
         on('patDetectBtn', () => this.openDetectModal());
-        on('patRefreshBtn', () => this.refreshDiscover());
-        on('patSaveBtn', () => this.openSaveModal());
-        on('patSaveConfirmBtn', () => this.confirmSave());
+        on('patBackBtn', () => this.showList({ replace: true }));
+        on('patRefreshBtn', () => {
+            if (this._viewingSavedId && this._viewingSaved) {
+                this._pendingSaved = this._viewingSaved;
+                this._showPendingSaved();
+                return;
+            }
+            this._clearSavedView();
+            this.selectedId = null;
+            this.refreshDiscover();
+        });
         on('patSavedRefreshBtn', () => this.refreshSaved());
         const detectForm = document.getElementById('patDetectForm');
         if (detectForm) {
@@ -51,36 +67,36 @@ const IntelligencePatterns = {
                     this.deleteSaved(del.dataset.patDelete);
                     return;
                 }
-                const more = e.target.closest('[data-pat-saved-more]');
-                if (more) {
-                    this._loadSavedMembers(more.dataset.patSavedMore, true);
+                const open = e.target.closest('[data-pat-open]');
+                if (open) {
+                    e.preventDefault();
+                    this.openSaved(open.closest('[data-pat-saved]') || open);
                     return;
                 }
                 const row = e.target.closest('[data-pat-saved]');
-                if (row) this._toggleSavedMembers(row.dataset.patSaved);
+                if (row) this.openSaved(row);
+            });
+            saved.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                if (e.target.closest('[data-pat-delete]')) return;
+                const row = e.target.closest('[data-pat-saved]');
+                if (!row) return;
+                e.preventDefault();
+                this.openSaved(row);
             });
         }
 
-        const modalEl = document.getElementById('patSaveModal');
-        if (modalEl && window.bootstrap) {
-            this._saveModal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        }
         const detectEl = document.getElementById('patDetectModal');
         if (detectEl && window.bootstrap) {
             this._detectModal = bootstrap.Modal.getOrCreateInstance(detectEl);
         }
 
-        document.addEventListener('sidebarSectionChanged', (e) => {
-            const section = e.detail && e.detail.section;
-            if (section === 'patterns') this.refreshDiscover();
-            if (section === 'patterns-saved') this.refreshSaved();
-        });
-        if (document.getElementById('patterns-section')?.classList.contains('active')) {
-            this.refreshDiscover();
+        const patternsLink = document.querySelector('.sidebar-nav .nav-link[data-section="patterns"]');
+        if (patternsLink) {
+            patternsLink.addEventListener('click', () => this.showList({ replace: true }));
         }
-        if (document.getElementById('patterns-saved-section')?.classList.contains('active')) {
-            this.refreshSaved();
-        }
+        window.addEventListener('popstate', () => this.applyPatternView({ fromPop: true }));
+        setTimeout(() => this.applyPatternView({ replace: true }), 0);
     },
 
     _canEdit() {
@@ -98,6 +114,67 @@ const IntelligencePatterns = {
 
     _fmtNum(n) {
         return Number(n || 0).toLocaleString();
+    },
+
+    _fmtDate(iso) {
+        if (!iso) return '–';
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString();
+    },
+
+    _plural(n, one, many) {
+        return `${this._fmtNum(n)} ${Number(n) === 1 ? one : many}`;
+    },
+
+    _savedCardHtml(p) {
+        const id = this._esc(p.id || '');
+        const patternId = this._esc(p.pattern_id || '');
+        const label = p.label || p.id || 'Pattern';
+        const hops = Number(p.hop_count) || 0;
+        const types = Number(p.type_count) || 0;
+        const relations = Number(p.relation_count) || 0;
+        const found = Number(p.pattern_count) || 0;
+        const members = Number(p.size) || Number(p.support) || 0;
+        return `
+        <div class="ob-rule-card pat-saved-card mb-2" role="button" tabindex="0"
+             data-pat-saved="${id}"
+             data-pat-pattern-id="${patternId}"
+             data-pat-label="${this._esc(label)}"
+             data-pat-hops="${hops}"
+             data-pat-types="${types}"
+             data-pat-relations="${relations}"
+             data-pat-found="${found}"
+             data-pat-size="${members}"
+             title="Open">
+            <div class="d-flex align-items-start justify-content-between">
+                <div class="flex-grow-1 min-w-0">
+                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                        <span class="badge bg-success">saved</span>
+                        <span class="text-muted small">${this._esc(this._plural(hops, 'hop', 'hops'))}</span>
+                    </div>
+                    <div class="small fw-medium">
+                        <a href="/intelligence/?section=patterns&amp;saved=${id}"
+                           class="text-decoration-none text-body"
+                           data-pat-open="${id}">${this._esc(label)}</a>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        ${this._esc(this._plural(found, 'pattern', 'patterns'))} found
+                        <span class="mx-1">·</span>
+                        Saved ${this._esc(this._fmtDate(p.saved_at))}
+                    </div>
+                </div>
+                <div class="btn-group btn-group-sm ms-2 flex-shrink-0">
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            data-pat-open="${id}" title="Open">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm"
+                            data-pat-delete="${id}" title="Delete saved pattern">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>`;
     },
 
     _notify(msg, type) {
@@ -145,11 +222,6 @@ const IntelligencePatterns = {
         if (run && !run.classList.contains('is-busy')) {
             run.disabled = !this._canEdit() || this._busy || !!this.blockedReason
                 || !this._selectedClass();
-        }
-        const save = document.getElementById('patSaveBtn');
-        if (save && !save.classList.contains('is-busy')) {
-            save.disabled = !this._canEdit() || this._busy || !this.selectedId
-                || !(this.latest && this.latest.stats);
         }
     },
 
@@ -214,6 +286,23 @@ const IntelligencePatterns = {
         }
     },
 
+    /** Re-show the details preview after a loading overlay hid body + empty. */
+    _restoreDiscoverPreview() {
+        this._showDetailsPane();
+        document.getElementById('patPreviewLoading')?.classList.add('d-none');
+        if (this._viewingSavedId) {
+            document.getElementById('patPreviewEmpty')?.classList.add('d-none');
+            document.getElementById('patPreviewBody')?.classList.remove('d-none');
+            return;
+        }
+        if (this.latest && ((this.latest.patterns || []).length || this.latest.stats)) {
+            this._renderList();
+            return;
+        }
+        document.getElementById('patPreviewBody')?.classList.add('d-none');
+        document.getElementById('patPreviewEmpty')?.classList.remove('d-none');
+    },
+
     // Signature detail the job settled on (finest level that explained enough anchors).
     _detailLabel(level) {
         return {
@@ -259,7 +348,29 @@ const IntelligencePatterns = {
         const empty = document.getElementById('patPreviewEmpty');
         const body = document.getElementById('patPreviewBody');
         const patterns = (this.latest && this.latest.patterns) || [];
+        const pendingSaved = this._pendingSaved;
+        const pending = this._pendingPatternId;
+        this._pendingPatternId = null;
+        if (pendingSaved) {
+            if (empty) empty.classList.add('d-none');
+            if (body) body.classList.remove('d-none');
+            this._showPendingSaved();
+            return;
+        }
+        if (this._viewingSavedId) {
+            // A saved snapshot is open: a (re)load of the latest run must not replace it.
+            if (empty) empty.classList.add('d-none');
+            if (body) body.classList.remove('d-none');
+            return;
+        }
+        if (pending) this.selectedId = pending;
         if (!patterns.length) {
+            if (pending) {
+                if (empty) empty.classList.add('d-none');
+                if (body) body.classList.remove('d-none');
+                this.selectPattern(pending, { sync: true });
+                return;
+            }
             if (empty) empty.classList.remove('d-none');
             if (body) body.classList.add('d-none');
             this.selectedId = null;
@@ -267,26 +378,46 @@ const IntelligencePatterns = {
         }
         if (empty) empty.classList.add('d-none');
         if (body) body.classList.remove('d-none');
-        if (!this.selectedId || !patterns.some((p) => p.id === this.selectedId)) {
+        if (!pending && (!this.selectedId || !patterns.some((p) => p.id === this.selectedId))) {
             this.selectedId = patterns[0].id;
         }
-        if (this.selectedId) this.selectPattern(this.selectedId);
+        if (this.selectedId) this.selectPattern(this.selectedId, { sync: true });
     },
 
-    async selectPattern(patternId) {
+    async selectPattern(patternId, { sync = true } = {}) {
         if (!patternId) return;
+        const savedId = this._viewingSavedId;
         this.selectedId = patternId;
+        if (!savedId) {
+            this._clearSavedView();
+            this.rememberPattern(patternId);
+            if (sync) this.syncPatternUrl({ pattern: patternId });
+        } else if (sync) {
+            this.syncPatternUrl({ saved: savedId, pattern: patternId });
+        }
         this._syncButtons();
         const details = document.getElementById('patDetails');
         if (!details) return;
         details.innerHTML = this._toolbarHtml(patternId)
             + '<div id="patDetailBody"><p class="text-muted small mb-0">Loading…</p></div>';
         try {
+            const shapeUrl = savedId
+                ? `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/shape?pattern_id=${encodeURIComponent(patternId)}`
+                : `/dtwin/patterns/${encodeURIComponent(patternId)}/shape`;
+            const membersUrl = savedId
+                ? `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/members?pattern_id=${encodeURIComponent(patternId)}&offset=0&limit=${this.MEMBERS_PAGE}`
+                : `/dtwin/patterns/${encodeURIComponent(patternId)}/members?offset=0&limit=${this.MEMBERS_PAGE}`;
             const [shape, members] = await Promise.all([
-                this._json(`/dtwin/patterns/${encodeURIComponent(patternId)}/shape`),
-                this._json(`/dtwin/patterns/${encodeURIComponent(patternId)}/members?offset=0&limit=${this.MEMBERS_PAGE}`),
+                this._json(shapeUrl),
+                this._json(membersUrl),
             ]);
             if (this.selectedId !== patternId) return;
+            if (savedId) {
+                shape._fromSaved = true;
+                if (this._viewingSaved && this._viewingSaved.label) {
+                    shape._runLabel = this._viewingSaved.label;
+                }
+            }
             this._members = members;
             this._selectedShape = shape;
             details.innerHTML = this._detailsHtml(shape, members);
@@ -297,18 +428,142 @@ const IntelligencePatterns = {
         }
     },
 
-    _toolbarHtml(selectedId, kpisHtml = '') {
+    showList({ replace = false } = {}) {
+        this._clearSavedView();
+        this._toggleDetails(false);
+        this.syncPatternUrl({}, { replace });
+        this.refreshSaved();
+    },
+
+    _toggleDetails(on) {
+        const list = document.getElementById('patPatternsList');
+        const details = document.getElementById('patPatternsDetails');
+        if (list) list.classList.toggle('d-none', on);
+        if (details) details.classList.toggle('d-none', !on);
+    },
+
+    _showDetailsPane() {
+        this._openingDetails = true;
+        if (typeof SidebarNav !== 'undefined' && SidebarNav.getActiveSection() !== 'patterns') {
+            SidebarNav._showSection('patterns');
+        }
+        this._toggleDetails(true);
+        this._openingDetails = false;
+    },
+
+    rememberPattern(id) {
+        if (!id) return;
+        try { sessionStorage.setItem(this.LAST_KEY, id); } catch (_) { /* ignore */ }
+    },
+
+    syncPatternUrl({ pattern, saved } = {}, { replace = false } = {}) {
+        const url = new URL(window.location.href);
+        url.hash = '';
+        url.searchParams.set('section', 'patterns');
+        const setOrDel = (key, value) => {
+            const text = String(value || '').trim();
+            if (text) url.searchParams.set(key, text);
+            else url.searchParams.delete(key);
+        };
+        setOrDel('pattern', pattern);
+        setOrDel('saved', saved);
+        const state = {
+            section: 'patterns',
+            pattern: pattern || null,
+            saved: saved || null,
+        };
+        const method = replace ? 'replaceState' : 'pushState';
+        if (window.history && window.history[method]) window.history[method](state, '', url);
+    },
+
+    applyPatternView({ replace = false, fromPop = false } = {}) {
+        const params = new URLSearchParams(window.location.search);
+        const rawSection = (params.get('section') || '').trim();
+        if (rawSection && rawSection !== 'patterns') return;
+        const savedId = (params.get('saved') || '').trim();
+        const patternId = (params.get('pattern') || '').trim();
+        const last = (() => {
+            try { return sessionStorage.getItem(this.LAST_KEY) || ''; } catch (_) { return ''; }
+        })();
+
+        if (savedId) {
+            this.openSavedById(savedId, {
+                sync: rawSection !== 'patterns' && !fromPop,
+                replace: true,
+            });
+            return;
+        }
+        if (patternId) {
+            this._openLiveDetails(patternId, {
+                sync: rawSection !== 'patterns' && !fromPop,
+                replace: true,
+            });
+            return;
+        }
+        if (rawSection === 'patterns' && last && fromPop === false && replace) {
+            // Fresh landing on Patterns with no query → list (not last pattern).
+        }
+        this._toggleDetails(false);
+        this.refreshSaved();
+        if (rawSection === 'patterns') {
+            this.syncPatternUrl({}, { replace: true });
+        }
+    },
+
+    async _openLiveDetails(patternId, { sync = false, replace = false } = {}) {
+        this._clearSavedView();
+        this._setDiscoverHeading(null);
+        this._showDetailsPane();
+        this.selectedId = patternId;
+        if (sync) this.syncPatternUrl({ pattern: patternId }, { replace });
+        await this.refreshDiscover();
+        if (patternId) await this.selectPattern(patternId, { sync: false });
+    },
+
+    _clearSavedView() {
+        this._viewingSavedId = null;
+        this._viewingSaved = null;
+        this._setDiscoverHeading(null);
+    },
+
+    _setDiscoverHeading(saved) {
+        const title = document.getElementById('patDiscoverTitleText');
+        const subtitle = document.getElementById('patDiscoverSubtitle');
+        if (title) {
+            title.textContent = saved && saved.label
+                ? saved.label
+                : this.DISCOVER_TITLE;
+        }
+        if (subtitle) {
+            subtitle.textContent = saved
+                ? 'Saved Detect run — all patterns, diagrams and members from when it was saved.'
+                : this.DISCOVER_SUBTITLE;
+        }
+    },
+
+    _toolbarHtml(selectedId, kpisHtml = '', opts = {}) {
         const current = this._patternOf(selectedId);
-        const label = (current && (current.label || current.id.slice(0, 8))) || 'Pattern';
-        const support = current ? current.support : null;
+        const label = opts.label
+            || (current && (current.label || current.id.slice(0, 8)))
+            || 'Pattern';
+        const support = opts.support != null
+            ? opts.support
+            : (current ? current.support : null);
+        const badge = `<span class="badge pat-support-badge" id="patSupportBadge">${this._esc(this._fmtNum(support))}</span>`;
+        const savedBadge = this._viewingSavedId
+            ? '<span class="badge bg-success">saved</span>'
+            : '';
+        // Always use the Detect picker — for a saved run, `latest.patterns` is
+        // the snapshotted catalog so every pattern (diagram + members) is reachable.
         return `
             <div class="pat-detail-toolbar mb-3">
                 <div class="dropdown pat-pattern-picker">
                     <button type="button" class="pat-pattern-toggle" id="patPatternSelect"
                             data-bs-toggle="dropdown" aria-expanded="false"
                             title="Select a pattern">
+                        ${savedBadge}
                         <span class="pat-pattern-label">${this._esc(label)}</span>
-                        <span class="badge pat-support-badge" id="patSupportBadge">${this._esc(this._fmtNum(support))}</span>
+                        ${badge}
                         <i class="bi bi-chevron-down pat-pattern-caret" aria-hidden="true"></i>
                     </button>
                     <ul class="dropdown-menu pat-pattern-menu" aria-labelledby="patPatternSelect">
@@ -338,20 +593,31 @@ const IntelligencePatterns = {
     },
 
     _detailsHtml(shape, members) {
+        const fromSaved = !!(shape && shape._fromSaved);
         const diagram = shape.diagram
             ? this._diagramSvg(shape.diagram)
-            : '<p class="text-muted small mb-0">Re-run <strong>Detect</strong> to draw this pattern.</p>';
+            : (fromSaved
+                ? '<p class="text-muted small mb-0">No diagram in this snapshot'
+                    + ' — Save again from a Detect run that includes the neighbourhood diagram.</p>'
+                : '<p class="text-muted small mb-0">Re-run <strong>Detect</strong> to draw this pattern.</p>');
         const nodes = (shape.diagram && shape.diagram.nodes) || [];
         const edges = (shape.diagram && shape.diagram.edges) || [];
+        // Prefer snapshotted KPI columns when present; else derive from diagram.
+        const typeCount = Number(shape._typeCount) || nodes.length || 0;
+        const relationCount = Number(shape._relationCount) || edges.length || 0;
         const rows = (members.members || []).map((m) => this._memberRow(m)).join('');
         const more = members.has_more
             ? '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-pat-more>Load more</button>'
             : '';
         const kpis = this._kpiTile('Hops', this._fmtNum(shape.hop_count))
-            + this._kpiTile('Types', this._fmtNum(nodes.length))
-            + this._kpiTile('Relations', this._fmtNum(edges.length));
+            + this._kpiTile('Types', this._fmtNum(typeCount))
+            + this._kpiTile('Relations', this._fmtNum(relationCount));
+        const current = this._patternOf(shape.pattern_id || this.selectedId);
         return `
-            ${this._toolbarHtml(shape.pattern_id || this.selectedId, kpis)}
+            ${this._toolbarHtml(shape.pattern_id || this.selectedId, kpis, {
+                label: (current && current.label) || shape.seed_label || shape._savedLabel,
+                support: shape.support != null ? shape.support : (current && current.support),
+            })}
             <div id="patDetailBody">
                 <div class="pat-diagram mb-3">${diagram}</div>
                 <div class="pat-members">
@@ -469,12 +735,15 @@ const IntelligencePatterns = {
     },
 
     async _loadMoreMembers() {
-        if (!this.selectedId || !this._members) return;
+        if ((!this.selectedId && !this._viewingSavedId) || !this._members) return;
         const offset = (this._members.offset || 0) + (this._members.members || []).length;
         try {
-            const page = await this._json(
-                `/dtwin/patterns/${encodeURIComponent(this.selectedId)}/members?offset=${offset}&limit=${this.MEMBERS_PAGE}`
-            );
+            const url = this._viewingSavedId
+                ? `/dtwin/patterns/saved/${encodeURIComponent(this._viewingSavedId)}/members`
+                    + `?pattern_id=${encodeURIComponent(this.selectedId || '')}`
+                    + `&offset=${offset}&limit=${this.MEMBERS_PAGE}`
+                : `/dtwin/patterns/${encodeURIComponent(this.selectedId)}/members?offset=${offset}&limit=${this.MEMBERS_PAGE}`;
+            const page = await this._json(url);
             this._members = {
                 ...this._members,
                 members: (this._members.members || []).concat(page.members || []),
@@ -517,8 +786,13 @@ const IntelligencePatterns = {
         if (this._busy) return;
         const running = await this._findRunningTask(['pattern_detection', 'pattern_save']);
         if (!running) return;
-        if (running.task_type === 'pattern_detection') await this._awaitDetection(running.id);
-        else await this._awaitSave(running.id);
+        if (running.task_type === 'pattern_detection') {
+            await this._awaitDetection(running.id);
+            return;
+        }
+        const savedId = await this._awaitSave(running.id);
+        if (savedId) await this.openSavedById(savedId, { sync: true, replace: true });
+        else this._restoreDiscoverPreview();
     },
 
     async loadLatest() {
@@ -532,7 +806,13 @@ const IntelligencePatterns = {
                 status.classList.toggle('d-none', !this.blockedReason);
                 status.textContent = this.blockedReason;
             }
-            if (this.selectedId && !(data.patterns || []).some((p) => p.id === this.selectedId)) {
+            if (this._pendingSaved) {
+                this.selectedId = this._pendingSaved.pattern_id || this._pendingSaved.id;
+            } else if (this._pendingPatternId) {
+                this.selectedId = this._pendingPatternId;
+            } else if (this._viewingSavedId) {
+                // keep the saved snapshot selected
+            } else if (this.selectedId && !(data.patterns || []).some((p) => p.id === this.selectedId)) {
                 this.selectedId = null;
             }
             this._syncButtons();
@@ -540,10 +820,11 @@ const IntelligencePatterns = {
             this._notify(err.message || 'Failed to load patterns', 'danger');
         } finally {
             this._showLoading(false);
-            if (!(this.latest && ((this.latest.patterns || []).length || this.latest.stats))) {
-                document.getElementById('patPreviewEmpty')?.classList.remove('d-none');
-            } else {
+            if (this._pendingSaved || this._pendingPatternId || this._viewingSavedId
+                    || (this.latest && ((this.latest.patterns || []).length || this.latest.stats))) {
                 this._renderList();
+            } else {
+                document.getElementById('patPreviewEmpty')?.classList.remove('d-none');
             }
         }
     },
@@ -552,16 +833,19 @@ const IntelligencePatterns = {
         this._setBtnSpinner('patDetectBtn', true);
         this._setBusy(true);
         this._showLoading(true, 'Detecting patterns on Databricks…', 'Detecting…');
+        let ok = false;
         try {
             const task = await waitForTask(taskId, (t) => {
                 if (t && t.message) this._showLoading(true, t.message, 'Detecting…');
             });
+            this._clearSavedView();
             await this.loadLatest();
             const stats = (this.latest && this.latest.stats) || {};
             this._notify(
                 task.message || `${this._fmtNum(stats.pattern_count || 0)} patterns detected.`,
                 'success'
             );
+            ok = true;
         } catch (err) {
             await this.loadLatest();
             this._notify(err.message || 'Detection failed', 'danger');
@@ -570,6 +854,50 @@ const IntelligencePatterns = {
             this._setBusy(false);
             this._showLoading(false);
         }
+        if (ok) await this._autoSaveAfterDetect();
+    },
+
+    _entityLabelForSave() {
+        const stats = (this.latest && this.latest.stats) || {};
+        const uri = (stats.class_filter && stats.class_filter[0])
+            || stats.anchor_type
+            || this._selectedClass()
+            || '';
+        if (!uri) return 'Pattern';
+        const classes = this.ontologyClasses || [];
+        const hit = classes.find((c) => (c.uri || c.id) === uri);
+        if (hit && (hit.label || hit.name)) return hit.label || hit.name;
+        const local = String(uri).split(/[#/]/).filter(Boolean).pop();
+        return local || 'Pattern';
+    },
+
+    _autoSaveLabel() {
+        const entity = this._entityLabelForSave();
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} `
+            + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        return `${entity} — ${stamp}`;
+    },
+
+    async _autoSaveAfterDetect() {
+        if (!this._canEdit()) {
+            this._restoreDiscoverPreview();
+            return;
+        }
+        const patterns = (this.latest && this.latest.patterns) || [];
+        const focus = this.selectedId || (patterns[0] && patterns[0].id);
+        if (!focus || !patterns.length) {
+            this._restoreDiscoverPreview();
+            return;
+        }
+        const savedId = await this._save(focus, this._autoSaveLabel());
+        if (savedId) {
+            // Open the snapshot so the user lands on diagrams + picker, not a blank overlay.
+            await this.openSavedById(savedId, { sync: true, replace: true });
+            return;
+        }
+        this._restoreDiscoverPreview();
     },
 
     async openDetectModal() {
@@ -587,6 +915,10 @@ const IntelligencePatterns = {
             return;
         }
         if (this._detectModal) this._detectModal.hide();
+        this._clearSavedView();
+        this._setDiscoverHeading(null);
+        this._showDetailsPane();
+        this.syncPatternUrl({}, { replace: false });
         this._setBtnSpinner('patDetectBtn', true);
         this._setBusy(true);
         try {
@@ -603,6 +935,7 @@ const IntelligencePatterns = {
             });
             if (typeof refreshTasks === 'function') refreshTasks();
             this._notify('Pattern detection started on Databricks.', 'info');
+            // Auto-save opens the new snapshot (URL + details); do not overwrite with pattern=.
             await this._awaitDetection(data.task_id);
         } catch (err) {
             this._setBtnSpinner('patDetectBtn', false);
@@ -611,56 +944,43 @@ const IntelligencePatterns = {
         }
     },
 
-    openSaveModal() {
-        if (!this.selectedId) return;
-        const input = document.getElementById('patSaveLabel');
-        const patterns = (this.latest && this.latest.patterns) || [];
-        const current = patterns.find((p) => p.id === this.selectedId);
-        if (input) input.value = (current && current.label) || '';
-        if (this._saveModal) this._saveModal.show();
-    },
-
-    async confirmSave() {
-        const input = document.getElementById('patSaveLabel');
-        const label = (input && input.value || '').trim();
-        if (!label || !this.selectedId) {
-            this._notify('Enter a name for the pattern.', 'warning');
-            return;
-        }
-        if (this._saveModal) this._saveModal.hide();
-        await this._save(this.selectedId, label);
-    },
-
-    async _awaitSave(taskId) {
-        this._setBtnSpinner('patSaveBtn', true);
+    async _awaitSave(taskId, label) {
         this._setBusy(true);
+        this._showLoading(true, 'Saving Detect run…', 'Saving…');
         try {
             const task = await waitForTask(taskId);
-            this._notify(task.message || 'Pattern saved.', 'success');
+            const name = label || 'Detect run';
+            const savedId = task && task.result && task.result.saved_id;
+            this._notify(task.message || `Saved as ${name}.`, 'success');
+            await this.refreshSaved();
+            return savedId || null;
         } catch (err) {
             this._notify(err.message || 'Save failed', 'danger');
+            return null;
         } finally {
-            this._setBtnSpinner('patSaveBtn', false);
             this._setBusy(false);
+            this._showLoading(false);
         }
     },
 
     async _save(patternId, label) {
-        if (this._busy || !this._canEdit()) return;
-        this._setBtnSpinner('patSaveBtn', true);
+        if (this._busy || !this._canEdit()) return null;
+        const name = (label || '').trim() || this._autoSaveLabel();
         this._setBusy(true);
+        this._showLoading(true, 'Saving Detect run…', 'Saving…');
         try {
             const data = await this._json('/dtwin/patterns/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pattern_id: patternId, label }),
+                body: JSON.stringify({ pattern_id: patternId, label: name }),
             });
             if (typeof refreshTasks === 'function') refreshTasks();
-            await this._awaitSave(data.task_id);
+            return await this._awaitSave(data.task_id, name);
         } catch (err) {
-            this._setBtnSpinner('patSaveBtn', false);
             this._setBusy(false);
+            this._showLoading(false);
             this._notify(err.message || 'Save failed', 'danger');
+            return null;
         }
     },
 
@@ -681,16 +1001,7 @@ const IntelligencePatterns = {
             }
             if (list) {
                 list.classList.remove('d-none');
-                list.innerHTML = patterns.map((p) => (
-                    `<div class="pat-saved-row" data-pat-saved="${this._esc(p.id)}">`
-                    + `<div class="d-flex justify-content-between align-items-center gap-2">`
-                    + `<div><span class="fw-medium">${this._esc(p.label)}</span>`
-                    + `<span class="text-muted small ms-2">${this._fmtNum(p.size)} members</span></div>`
-                    + `<button type="button" class="btn btn-sm btn-outline-danger" data-pat-delete="${this._esc(p.id)}">`
-                    + `<i class="bi bi-trash"></i></button></div>`
-                    + `<div class="pat-saved-members d-none" id="patSavedMembers-${this._esc(p.id)}"></div>`
-                    + `</div>`
-                )).join('');
+                list.innerHTML = patterns.map((p) => this._savedCardHtml(p)).join('');
             }
         } catch (err) {
             if (loading) loading.classList.add('d-none');
@@ -701,41 +1012,117 @@ const IntelligencePatterns = {
         }
     },
 
-    async _toggleSavedMembers(savedId) {
-        const box = document.getElementById(`patSavedMembers-${savedId}`);
-        if (!box) return;
-        if (!box.classList.contains('d-none')) {
-            box.classList.add('d-none');
-            return;
-        }
-        box.classList.remove('d-none');
-        await this._loadSavedMembers(savedId, false);
+    _savedFromCard(el) {
+        const card = el && el.closest ? (el.closest('[data-pat-saved]') || el) : el;
+        if (!card || !card.dataset) return null;
+        const id = card.dataset.patSaved || '';
+        if (!id) return null;
+        return {
+            id,
+            pattern_id: card.dataset.patPatternId || '',
+            label: card.dataset.patLabel || id,
+            hop_count: Number(card.dataset.patHops) || 0,
+            type_count: Number(card.dataset.patTypes) || 0,
+            relation_count: Number(card.dataset.patRelations) || 0,
+            pattern_count: Number(card.dataset.patFound) || 0,
+            size: Number(card.dataset.patSize) || 0,
+        };
     },
 
-    async _loadSavedMembers(savedId, append) {
-        const box = document.getElementById(`patSavedMembers-${savedId}`);
-        if (!box) return;
-        const offset = append ? box.querySelectorAll('li').length : 0;
+    openSaved(el, { sync = true, replace = false } = {}) {
+        const saved = this._savedFromCard(el);
+        if (!saved) {
+            this._notify('Could not open this saved pattern.', 'warning');
+            return;
+        }
+        return this._openSavedDetails(saved, { sync, replace });
+    },
+
+    async openSavedById(savedId, { sync = false, replace = false } = {}) {
+        if (!savedId) return;
+        let saved = null;
+        const card = document.querySelector(`[data-pat-saved="${CSS.escape(savedId)}"]`);
+        if (card) saved = this._savedFromCard(card);
+        if (!saved) {
+            try {
+                const data = await this._json('/dtwin/patterns/saved');
+                const hit = (data.patterns || []).find((p) => p.id === savedId);
+                if (hit) {
+                    saved = {
+                        id: hit.id,
+                        pattern_id: hit.pattern_id || '',
+                        label: hit.label || hit.id,
+                        hop_count: Number(hit.hop_count) || 0,
+                        type_count: Number(hit.type_count) || 0,
+                        relation_count: Number(hit.relation_count) || 0,
+                        pattern_count: Number(hit.pattern_count) || 0,
+                        size: Number(hit.size) || 0,
+                    };
+                }
+            } catch (_) { /* fall through */ }
+        }
+        if (!saved) {
+            this._notify('Saved pattern not found.', 'warning');
+            this.showList({ replace: true });
+            return;
+        }
+        return this._openSavedDetails(saved, { sync, replace });
+    },
+
+    async _openSavedDetails(saved, { sync = true, replace = false } = {}) {
+        this._pendingSaved = saved;
+        this.selectedId = saved.pattern_id || saved.id;
+        this._showDetailsPane();
+        if (sync) this.syncPatternUrl({ saved: saved.id }, { replace });
+        // Snapshot only: saved KPIs + members. Do not pull `/latest` values.
+        await this._showPendingSaved();
+    },
+
+    async _showPendingSaved() {
+        const saved = this._pendingSaved;
+        this._pendingSaved = null;
+        if (!saved) return;
+        this._viewingSavedId = saved.id;
+        this._viewingSaved = saved;
+        this._setDiscoverHeading(saved);
+        this._syncButtons();
+        const empty = document.getElementById('patPreviewEmpty');
+        const body = document.getElementById('patPreviewBody');
+        if (empty) empty.classList.add('d-none');
+        if (body) body.classList.remove('d-none');
+        const details = document.getElementById('patDetails');
+        if (details) {
+            details.innerHTML = '<p class="text-muted small mb-0">Loading saved Detect run…</p>';
+        }
         try {
-            const data = await this._json(
-                `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/members?offset=${offset}&limit=${this.MEMBERS_PAGE}`
+            // Restore the full Detect catalog from the snapshot (not live /latest).
+            const catalog = await this._json(
+                `/dtwin/patterns/saved/${encodeURIComponent(saved.id)}/patterns`
             );
-            const rows = (data.members || []).map((m) => this._memberRow(m)).join('');
-            if (!append) {
-                box.innerHTML = `<ul class="pat-member-list mb-1">${rows}</ul>`;
-            } else {
-                const ul = box.querySelector('ul');
-                if (ul) ul.insertAdjacentHTML('beforeend', rows);
+            if (this._viewingSavedId !== saved.id) return;
+            const patterns = catalog.patterns || [];
+            this.latest = {
+                ...(this.latest || {}),
+                patterns,
+                job_available: true,
+            };
+            const focus = saved.pattern_id
+                || catalog.focus_pattern_id
+                || (patterns[0] && patterns[0].id)
+                || '';
+            this.selectedId = focus;
+            if (!focus) {
+                if (details) {
+                    details.innerHTML = '<p class="text-muted small mb-0">This saved run has no patterns.</p>';
+                }
+                return;
             }
-            box.querySelector('[data-pat-saved-more]')?.remove();
-            if (data.has_more) {
-                box.insertAdjacentHTML(
-                    'beforeend',
-                    `<button type="button" class="btn btn-sm btn-outline-secondary" data-pat-saved-more="${this._esc(savedId)}">Load more</button>`
-                );
-            }
+            await this.selectPattern(focus, { sync: false });
         } catch (err) {
-            this._notify(err.message || 'Failed to load members', 'danger');
+            if (this._viewingSavedId !== saved.id) return;
+            if (details) {
+                details.innerHTML = `<p class="text-danger small mb-0">${this._esc(err.message || 'Failed')}</p>`;
+            }
         }
     },
 
@@ -750,7 +1137,11 @@ const IntelligencePatterns = {
                 method: 'DELETE',
             });
             this._notify('Saved pattern deleted.', 'success');
-            await this.refreshSaved();
+            if (this._viewingSavedId === savedId) {
+                this.showList({ replace: true });
+            } else {
+                await this.refreshSaved();
+            }
         } catch (err) {
             this._notify(err.message || 'Delete failed', 'danger');
         }

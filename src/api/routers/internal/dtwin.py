@@ -588,7 +588,7 @@ async def delete_current_clusters(
 
 
 # ---------------------------------------------------------------------------
-# Pattern detection (Intelligence → Patterns)
+# Pattern detection (Intelligence → Discovery → Patterns)
 # ---------------------------------------------------------------------------
 
 
@@ -699,16 +699,34 @@ async def list_saved_patterns(
     return {"success": True, **result}
 
 
+@router.get("/patterns/saved/{saved_id}/patterns")
+async def saved_pattern_catalog(
+    request: Request,
+    saved_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """All patterns snapshotted in one saved Detect run (picker catalog)."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).saved_pattern_patterns, graph_name, saved_id, settings
+    )
+    return {"success": True, **result}
+
+
 @router.get("/patterns/saved/{saved_id}/members")
 async def saved_pattern_members(
     request: Request,
     saved_id: str,
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    pattern_id: str = Query("", description="Limit to one pattern in the saved run"),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """One page of a saved pattern's members."""
+    """One page of members for a saved Detect run (optionally one pattern)."""
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
     _, graph_name = _cluster_graph(domain, settings)
@@ -719,7 +737,32 @@ async def saved_pattern_members(
         offset,
         limit,
         settings,
+        pattern_id,
     )
+    return {"success": True, **result}
+
+
+@router.get("/patterns/saved/{saved_id}/shape")
+async def saved_pattern_shape(
+    request: Request,
+    saved_id: str,
+    pattern_id: str = Query("", description="Pattern within the saved run"),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Snapshotted shape/diagram for one pattern in a saved Detect run."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).saved_pattern_shape,
+        graph_name,
+        saved_id,
+        settings,
+        pattern_id,
+    )
+    if not result:
+        raise ValidationError(f"Unknown saved pattern: {saved_id}")
     return {"success": True, **result}
 
 

@@ -1114,11 +1114,6 @@
     font-size: 12px;
 }
 
-.ob-sparksql-console {
-    min-height: 400px;
-    background: #1e1e1e;
-}
-
 .ob-autoassign-progress-bar {
     width: 0%;
 }

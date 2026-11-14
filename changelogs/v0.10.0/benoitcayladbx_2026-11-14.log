@@ -793,3 +793,684 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10508 passed, 323 skipped, 8 deselected, 39 warnings in 45.11s
 
+
+================================================================================
+## Open saved patterns in Discover details
+================================================================================
+
+Context: Patterns → Saved listed snapshots with an expand-members click.
+Clicking a saved pattern should switch to Discover and show that pattern's
+details (diagram + matching entities).
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Saved row click/Enter opens Discover via SidebarNav and selects the stored
+   pattern_id; drop inline member expansion.
+2. src/front/static/intelligence/css/intelligence.css
+   Clickable saved-row hover and focus styles.
+3. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Hint that a click opens Discover.
+4. src/front/templates/partials/layout/help_modal.html
+   Saved help text mentions the Discover jump.
+5. tests/units/front/test_intelligence_page_contract.py
+   Contract for data-pat-pattern-id, _openSavedInDiscover, and switchTo.
+6. docs/user-guide.md
+   Document click-to-Discover from Saved.
+7. docs/architecture.md
+   Saved click opens Discover details.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10508 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Style Saved patterns like Scenarios with snapshotted KPIs
+================================================================================
+
+Context: Patterns → Saved used a plain row list with only the member count.
+It should match Simulation → Scenarios cards and show saved-at plus Discover
+KPIs (hops / types / relations / members) and how many patterns that Detect
+run found.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   Snapshot hop_count, support, type_count, relation_count, pattern_count at
+   save time; return them from list_saved; migrate KPI columns on older tables.
+2. src/front/static/intelligence/js/intelligence-patterns.js
+   Render Saved items as ob-rule-card cards with badge, hops, meta line, and
+   delete button (same layout family as Scenarios).
+3. src/front/static/intelligence/css/intelligence.css
+   Clickable .pat-saved-card focus style on shared rule cards.
+4. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Align section header / card shell with Scenarios.
+5. tests/units/core/test_saved_pattern_store.py
+   Fixture shapes/summary/edges; assert KPI snapshot on save/list.
+6. tests/units/front/test_intelligence_page_contract.py
+   Contract for Saved Scenarios-style cards and KPI fields.
+7. docs/user-guide.md
+   Document Saved card KPIs.
+8. docs/architecture.md
+   Note Saved list mirrors Scenarios cards with snapshotted KPIs.
+9. src/front/templates/partials/layout/help_modal.html
+   Saved help text mentions the card KPIs.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+- src/front/templates/partials/layout/help_modal.html
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10509 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Add Open-in-Discover button on Saved pattern cards
+================================================================================
+
+Context: Saved pattern cards only exposed Delete in the action group, so it
+was unclear how to jump to Discover details (card click alone was easy to
+miss next to Delete).
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Add outline-secondary Open button (box-arrow-up-right) that calls
+   `_openSavedInDiscover`; keep card click as a secondary path.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract for `data-pat-open` and Open in Discover.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10509 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Fix Saved KPIs and Open-from-snapshot Discover
+================================================================================
+
+Context: Saved cards showed 0 types/relations/patterns-found because older
+rows predated the KPI columns and were never backfilled. Open called live
+Detect shape by pattern_id, which 400s after a new Detect and looked like a
+dead button.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   Enrich/backfill missing KPIs from live Detect tables on list; derive
+   type_count from members when needed; DESCRIBE before ALTER to avoid
+   FIELD_ALREADY_EXISTS noise.
+2. src/front/static/intelligence/js/intelligence-patterns.js
+   Open loads saved members + snapshotted KPIs; uses live shape only when
+   still present; Load more stays on the saved members endpoint.
+3. tests/units/core/test_saved_pattern_store.py
+   Cover KPI backfill for pre-snapshot rows.
+4. tests/units/front/test_intelligence_page_contract.py
+   Contract for `_showPendingSaved` / saved members URL.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Keep an opened saved pattern in Discover (no overwrite, no 400 probe)
+================================================================================
+
+Context: Open on a Saved card loaded the snapshot, then the reload of the
+latest Detect run replaced the pane with the first live pattern because the
+saved pattern_id was no longer in that run. The probe of the live /shape
+endpoint for that id also logged a 400 in the browser console.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Keep the open snapshot through loadLatest/_renderList; request the live
+   shape only when the pattern is still in the latest run; disable Save while
+   viewing a snapshot; Detect and the Reload button return to the live run.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract for the sticky saved view and the guarded shape request.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Slim Saved list meta line (drop members / types / relations)
+================================================================================
+
+Context: The Saved pattern cards showed members, types and relations next to
+patterns-found and saved-at. Those three belong in Discover details, not the
+list.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   List meta line keeps patterns-found and saved-at only (hops stay in the
+   badge row); data-* KPIs remain for the Open path.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract for the slim list meta line.
+3. docs/user-guide.md
+   Saved list description matches the slim meta line.
+4. docs/architecture.md
+   Same.
+5. src/front/templates/partials/layout/help_modal.html
+   Same.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+- src/front/templates/partials/layout/help_modal.html
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Make Saved → Discover Open switch the pane immediately
+================================================================================
+
+Context: Clicking Open loaded the snapshot into `#patDetails` but left the
+user on the Saved section, and the Discover refresh spinner wiped the
+snapshot. Read-only CSS also blocked the Open button via pointer-events.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Open uses `SidebarNav._showSection('patterns')`, renders the snapshot
+   immediately, skips the Discover loading overlay, and warms `/latest`
+   quietly for the picker; title is an Open link like Scenarios.
+2. src/front/static/global/css/permissions.css
+   Keep `[data-pat-open]` clickable in read-only; Delete stays blocked.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract for `_showSection`, `_skipDiscoverRefresh`, and Open link.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units/front/test_intelligence_page_contract.py → 41 passed.
+
+================================================================================
+## Fix Saved → Open doing nothing (SidebarNav is not on window)
+================================================================================
+
+Context: Open rendered the snapshot into the hidden Discover pane but never
+switched to it. The guard `window.SidebarNav && ...` was always falsy because
+`SidebarNav` is a top-level `const` (not a `window` property), so
+`_showSection('patterns')` was silently skipped. Reproduced and verified with a
+headless Chrome harness (real partials + real sidebar-nav.js + patterns JS).
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Probe the global with `typeof SidebarNav !== 'undefined'` instead of
+   `window.SidebarNav`, so Open switches to the Discover pane.
+2. tests/units/front/test_intelligence_page_contract.py
+   Regression assertions: no `window.SidebarNav`, `typeof SidebarNav` guard.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Fix Saved → Discover missing diagram and empty/wrong dropdown
+================================================================================
+
+Context: Opening a saved pattern switched to Discover and loaded members, but
+the neighbourhood diagram stayed blank and the pattern dropdown was empty or
+stale. Root cause: `_showPendingSaved` gated the live `/shape` call on
+`_patternOf` while `latest` was still empty, and `_warmLatestForPicker` raced
+ahead of `_selectedShape`, so the diagram upgrade never ran and the toolbar
+was never rebuilt with Discover patterns.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Open awaits snapshot then warm; always try `/shape` (tolerate 400); after
+   `/latest` re-render the pane so the dropdown lists Discover patterns and
+   the diagram upgrades when still available.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract for sequenced await, `_rerenderSavedDetails`, no `_patternOf` gate.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Saved Open shows snapshot values and renames Discover
+================================================================================
+
+Context: Opening a saved pattern was mixing in the latest Detect run (dropdown
+of live patterns, live support/KPIs). Discover must show the saved snapshot
+only, and the page title must become the saved pattern name.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Saved view uses snapshotted KPIs/members/label only; static toolbar (no
+   Discover dropdown); page heading becomes the saved name; dropped the
+   `/latest` warm overlay; live `/shape` is used only for the diagram.
+2. src/front/templates/partials/intelligence/_intel_patterns.html
+   Discover title/subtitle ids for rename while viewing a saved pattern.
+3. src/front/static/intelligence/css/intelligence.css
+   Styles for the static saved pattern label.
+4. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Hint updated to describe snapshot open behaviour.
+5. src/front/templates/partials/layout/help_modal.html
+   Help text: Saved opens snapshot under the saved name.
+6. docs/user-guide.md
+   Same wording for Saved → Discover.
+7. tests/units/front/test_intelligence_page_contract.py
+   Contracts for heading ids, static toolbar, no `/latest` warm path.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/static/intelligence/css/intelligence.css
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Patterns list/details navigation (Scenarios mirror)
+================================================================================
+
+Context: Patterns used sibling Discover + Saved nav items. Align with Simulation
+→ Scenarios: one Patterns item, saved cards as the list, Discover content as
+the in-page details pane (Detect ≈ New; Open ≈ Edit), with URL sync and
+snapshot-only saved views.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Single Patterns item; drop patterns-saved.
+2. src/front/templates/intelligence.html
+   One patterns-section with patPatternsList + patPatternsDetails; modals
+   included outside the details pane.
+3. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   List retitled Patterns; Detect on list header.
+4. src/front/templates/partials/intelligence/_intel_patterns.html
+   Details pane with Back; Detect removed from details header.
+5. src/front/templates/partials/intelligence/_intel_patterns_save_modal.html
+   Save modal extracted so it is not trapped in a hidden pane.
+6. src/front/static/intelligence/js/intelligence-patterns.js
+   showList / _toggleDetails / syncPatternUrl / applyPatternView; openSaved;
+   Detect opens details; Patterns nav returns to list.
+7. docs + help + design spec
+   Document list/details model.
+8. tests/units/front/test_intelligence_page_contract.py
+   tests/units/front/test_sidebar_content_stretch_contract.py
+   Contracts for single menu item and list/details shell.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/intelligence.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_save_modal.html
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/architecture.md
+- docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Persist pattern diagram on Save; load via saved shape API
+================================================================================
+
+Context: Opening an older saved pattern (e.g. Customer) showed no diagram and a
+static “Customer / 29” control that looked like an empty dropdown. Save only
+kept members + KPI scalars, so once Detect overwrote the live tables the
+neighbourhood diagram was gone.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   Snapshot seed_label / shape_json / diagram_json at save; shape(saved_id)
+   returns them (with one-time live backfill + persist for legacy rows).
+2. src/back/objects/digitaltwin/TwinAnalytics.py
+   saved_pattern_shape entry point.
+3. src/api/routers/internal/dtwin.py
+   GET /dtwin/patterns/saved/{id}/shape.
+4. src/front/static/intelligence/js/intelligence-patterns.js
+   Open saved loads /saved/{id}/shape; static toolbar shows a clear “saved”
+   badge (not a Detect picker).
+5. tests/units/core/test_saved_pattern_store.py
+   tests/units/front/test_intelligence_page_contract.py
+   Diagram survives Detect overwrite; front contract for saved shape URL.
+6. docs/architecture.md
+   Document saved shape endpoint and diagram persistence.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/front/test_intelligence_page_contract.py
+- docs/architecture.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10511 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Save entire Detect run (all patterns + diagrams) for reopen
+================================================================================
+
+Context: Save only kept one pattern’s members. Reopening could not restore the
+full Detect picker with every pattern’s diagram and infos. Save must snapshot
+the whole Detect run so every found pattern can be browsed later.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   save() copies every pattern from `_shapes` (members, KPIs, diagram);
+   patterns()/shape()/members() scoped by pattern_id; focus_pattern_id stored.
+2. src/back/objects/digitaltwin/TwinAnalytics.py
+   saved_pattern_patterns + pattern_id on members/shape.
+3. src/api/routers/internal/dtwin.py
+   GET …/saved/{id}/patterns; pattern_id query on members/shape.
+4. src/front/static/intelligence/js/intelligence-patterns.js
+   Open saved restores catalog into the picker; selectPattern loads saved
+   shape/members per pattern_id.
+5. src/front/templates/partials/intelligence/_intel_patterns_save_modal.html
+   Copy: Save Detect run (all patterns).
+6. tests + docs/help
+   Multi-pattern save survives Detect overwrite; contract for /patterns catalog.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/templates/partials/intelligence/_intel_patterns_save_modal.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/architecture.md
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10512 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Reorganize Intelligence sidebar into Configuration / Discovery / Simulation
+================================================================================
+
+Context: The Intelligence menu mixed Community, Cohorts, Patterns and Simulation
+as sibling groups with outdated Detect / Discover / Saved labels. Reorganize into
+Configuration (cohort design + run), Discovery (communities + patterns), and
+Simulation; drop the obsolete Community and Patterns section headers and the
+Pattern/Discover submenu.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Groups: Configuration (Cohorts, Runs), Discovery (Communities, Patterns),
+   Simulation (Scenarios, Compare, Runs). Remove intelligence-community and
+   intelligence-patterns groups; keep section ids for routing.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract for the new group order and labels; assert no patterns-discover.
+3. tests/units/front/test_help_center_menu_sync.py
+   Walk help labels with an advancing cursor so duplicate Runs entries stay in
+   menu order.
+4. src/front/templates/partials/layout/help_modal.html
+   Intelligence workflow list and cohort copy match the new menu paths.
+5. docs/architecture.md, docs/user-guide.md, docs/development.md,
+   docs/getting-started.md, docs/product.md, README.md
+   Update Intelligence → Discovery / Configuration navigation paths.
+6. src/front/static/query/js/query-sigmagraph.js
+   src/front/templates/partials/dtwin/_query_sigmagraph.html
+   tests/units/front/test_explorer_clusters_readonly.py
+   Explorer empty-state / contract point at Discovery → Communities.
+7. Comment/path touch-ups in communities/patterns partials + JS, dtwin.py,
+   query-cohorts.js (English-only nav comments).
+
+Modified files:
+- src/front/config/menu_config.json
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_explorer_clusters_readonly.py
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/static/intelligence/js/intelligence-communities.js
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-cohorts.js
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/api/routers/internal/dtwin.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/development.md
+- docs/getting-started.md
+- docs/product.md
+- README.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10512 passed, 323 skipped, 8 deselected.
+
+
+================================================================================
+## Reshape Mapping menu and remove Spark SQL page
+
+Context: The Mapping Spark SQL preview page was no longer needed. The sidebar
+was still a single Mapping Design group plus a W3C Standards group that only
+held Spark SQL. Reorganize into Design / Advanced and drop the UI page while
+keeping the domain Spark SQL API.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Split Mapping into Design (General, Import, Studio, Manual) and Advanced
+   (Auto-Map, Diagnostics); remove Sparks SQL / W3C group.
+2. src/front/templates/mapping.html
+   Remove Sparks SQL section include.
+3. src/front/templates/partials/mapping/_mapping_sparksql.html
+   Deleted Sparks SQL page partial.
+4. src/front/static/mapping/js/mapping-sparksql.js
+   Deleted Sparks SQL page script.
+5. src/front/static/mapping/js/mapping-init.js
+   Drop Sparks SQL section refresh hooks.
+6. src/front/static/mapping/css/mapping-shared.css
+   Remove Sparks SQL loading overlay styles.
+7. src/front/static/global/css/components.css
+   Remove unused .ob-sparksql-console helper used only by that page.
+8. src/front/templates/partials/layout/help_modal.html
+   Drop Mapping → Spark SQL bullet from help workflow.
+9. tests/units/front/test_help_center_menu_sync.py
+   Assert Sparks SQL is no longer a Mapping sidebar item.
+10. tests/units/front/test_sidebar_content_stretch_contract.py
+    Drop Sparks SQL section/partial from Mapping stretch contract.
+11. tests/units/api/test_ui_rendering.py
+    Expect Design + Advanced Mapping sidebar sections.
+12. tests/e2e/mapping/test_mapping_flows.py
+    Cover import + diagnostics; drop Sparks SQL.
+13. tests/e2e/README.md
+    Sync Mapping E2E section list.
+14. docs/development.md
+    Document Design / Advanced Mapping sidebar groups.
+15. docs/architecture.md
+    Remove Mapping Sparks SQL preview UI feature row.
+16. docs/superpowers/specs/2026-11-14-mapping-menu-reshape-design.md
+    Design note for the reshape.
+17. docs/superpowers/plans/2026-11-14-mapping-menu-reshape.md
+    Implementation plan for the reshape.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/mapping.html
+- src/front/templates/partials/mapping/_mapping_sparksql.html (deleted)
+- src/front/static/mapping/js/mapping-sparksql.js (deleted)
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/css/mapping-shared.css
+- src/front/static/global/css/components.css
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/README.md
+- docs/development.md
+- docs/architecture.md
+- docs/superpowers/specs/2026-11-14-mapping-menu-reshape-design.md
+- docs/superpowers/plans/2026-11-14-mapping-menu-reshape.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 44.15s
+
+
+================================================================================
+## Auto-save Pattern Detect runs; remove Save button
+
+Context: After Detect, users had to click Save and name the run manually.
+Every successful Detect should snapshot the full run automatically under a
+stable label (entity type + local date/time), and the Save button/modal are
+no longer needed.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   After a successful Detect, auto-save the whole run as
+   `{entity} — {YYYY-MM-DD HH:MM:SS}`; drop Save modal handlers; reuse
+   pattern_save with the details loading overlay.
+2. src/front/templates/partials/intelligence/_intel_patterns.html
+   Remove Save button; update subtitle for auto-save.
+3. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Update list copy / empty state for automatic save.
+4. src/front/templates/intelligence.html
+   Stop including the Save modal partial.
+5. src/front/templates/partials/intelligence/_intel_patterns_save_modal.html
+   Deleted — manual Save dialog removed.
+6. src/front/templates/partials/layout/help_modal.html
+   Patterns help: Detect auto-saves the whole run.
+7. tests/units/front/test_intelligence_page_contract.py
+   Assert no Save button/modal; assert `_autoSaveAfterDetect` wiring.
+8. docs/architecture.md
+   Document auto-save after Detect.
+9. docs/user-guide.md
+   Document automatic naming and list behaviour.
+10. docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+    Details pane: auto-save instead of Save prompt.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/intelligence.html
+- src/front/templates/partials/intelligence/_intel_patterns_save_modal.html (deleted)
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_intelligence_page_contract.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 47.20s
+
+================================================================================
+## Rename Patterns Detect list button to New
+
+Context: The Patterns list header button opens the Detect dialog. Renamed to
+"New" to match the Scenarios "New scenario" entry point. The dialog's own run
+button still says Detect.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   List header button label Detect → New (icon bi-search → bi-plus-lg); id unchanged.
+2. tests/units/front/test_intelligence_page_contract.py
+   Assert the list button reads New and no Detect label remains.
+3. docs/user-guide.md
+   Patterns list paragraph refers to New instead of Detect for the entry button.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 47.20s
+
+================================================================================
+## Use the Configuration icon consistently across the app
+
+Context: The Context → Configuration item and its page heading used an info
+icon, while Settings and the Intelligence Configuration group used different
+icons. Standardize every Configuration item and group on `bi-sliders`, the
+icon already used by Settings → Configuration.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Context → Configuration item icon `bi-info-circle` → `bi-sliders`.
+2. src/front/config/menu_config.json
+   Context `domain-main` group icon `bi-sliders2` → `bi-sliders`.
+3. src/front/config/menu_config.json
+   Intelligence `intelligence-configuration` group icon `bi-people-fill` → `bi-sliders`.
+4. src/front/config/menu_config.json
+   Mapping Advanced group icon `bi-sliders` → `bi-tools` so `bi-sliders` stays reserved for Configuration.
+5. src/front/templates/partials/domain/_domain_information.html
+   Configuration page heading icon `bi-info-circle` → `bi-sliders`.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/domain/_domain_information.html
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 44.72s
+(one earlier run failed tests/units/front/test_intelligence_page_contract.py::test_patterns_section_owns_discovery; it passes in isolation and on rerun)
+
+
+================================================================================
+## Open saved Detect results after auto-save (fix blank details)
+
+Context: After Detect finished, auto-save showed a loading overlay that hid
+the preview body and never restored it, so the details pane stayed blank.
+Open the newly saved snapshot (picker + diagrams) as soon as save completes.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Return `saved_id` from `_awaitSave`; `_autoSaveAfterDetect` calls
+   `openSavedById`; add `_restoreDiscoverPreview` fallback; stop overwriting
+   the saved URL after Detect.
+2. tests/units/front/test_intelligence_page_contract.py
+   Assert open-after-save wiring (`openSavedById`, `task.result.saved_id`).
+3. docs/user-guide.md
+   Note that New/Detect auto-opens the saved snapshot after the run.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 45.91s

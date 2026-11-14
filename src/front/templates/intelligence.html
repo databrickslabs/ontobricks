@@ -32,12 +32,15 @@
             </div>
 
             <div id="patterns-section" class="sidebar-section">
-                {% include "partials/intelligence/_intel_patterns.html" %}
+                <div id="patPatternsList" class="content-section">
+                    {% include "partials/intelligence/_intel_patterns_saved.html" %}
+                </div>
+                <div id="patPatternsDetails" class="content-section d-none">
+                    {% include "partials/intelligence/_intel_patterns.html" %}
+                </div>
             </div>
-
-            <div id="patterns-saved-section" class="sidebar-section">
-                {% include "partials/intelligence/_intel_patterns_saved.html" %}
-            </div>
+            {# Detect modal lives outside the details pane so Detect works from the list. #}
+            {% include "partials/intelligence/_intel_patterns_detect_modal.html" %}
 
             <div id="scenarios-section" class="sidebar-section active">
                 <div id="simScenariosList" class="content-section">

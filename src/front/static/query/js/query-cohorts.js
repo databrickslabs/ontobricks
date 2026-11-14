@@ -446,7 +446,7 @@ const CohortModule = {
     },
 
     _collectFromForm() {
-        // Only Simulation → Cohorts has the build form. Simulation → Run
+        // Only Configuration → Cohorts has the build form. Configuration → Runs
         // is read-only — bail without touching ``this.rule`` so the loaded
         // saved rule isn't corrupted.
         if (!document.getElementById('cohortRuleLabel')) return;

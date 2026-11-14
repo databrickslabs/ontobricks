@@ -56,7 +56,6 @@ SECTION_INVENTORY = {
         "manual",
         "autoassign",
         "diagnostics",
-        "sparksql",
     },
     "dtwin.html": {
         "sync",
@@ -75,7 +74,6 @@ SECTION_INVENTORY = {
         "cohorts",
         "cohort-run",
         "patterns",
-        "patterns-saved",
         "compare",
         "runs",
     },
@@ -129,7 +127,6 @@ STRETCH_PARTIALS = (
     "partials/mapping/_mapping_manual.html",
     "partials/mapping/_mapping_autoassign.html",
     "partials/mapping/_mapping_diagnostics.html",
-    "partials/mapping/_mapping_sparksql.html",
     "partials/dtwin/_query_sync.html",
     "partials/domain/_domain_runs.html",
     "partials/dtwin/_query_insights.html",

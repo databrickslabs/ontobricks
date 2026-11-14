@@ -205,8 +205,13 @@ def test_simulation_workflow_follows_menu_order():
     hw6_start = page.index('id="hw6"')
     hw6_end = page.index("</div>\n                                </div>", hw6_start)
     hw6_body = page[hw6_start:hw6_end]
-    positions = [hw6_body.index(f"<strong>{html.escape(label)}</strong>") for label in labels]
-    assert positions == sorted(positions)
+    # Advance the cursor so duplicate labels (e.g. Configuration → Runs and
+    # Simulation → Runs) must appear in menu order, not as the same hit twice.
+    cursor = 0
+    for label in labels:
+        needle = f"<strong>{html.escape(label)}</strong>"
+        pos = hw6_body.index(needle, cursor)
+        cursor = pos + len(needle)
 
 
 def test_ontology_advanced_list_matches_menu_items():
@@ -244,7 +249,7 @@ def test_owl_and_r2rml_are_designer_exports_not_sidebar_items():
     assert "owl" not in ontology_ids
     assert "ontology-w3c" not in ontology_group_ids
     assert "r2rml" not in mapping_ids
-    assert "sparksql" in mapping_ids
+    assert "sparksql" not in mapping_ids
 
     ontology_designer = _ONTOLOGY_DESIGNER.read_text(encoding="utf-8")
     mapping_designer = _MAPPING_DESIGNER.read_text(encoding="utf-8")

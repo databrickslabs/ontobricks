@@ -1128,7 +1128,7 @@ base URI.
 **Data Clusters:**
 
 The Graph Viewer **View** tab colours and collapses communities that were
-materialized in **Intelligence → Community → Detect**. Explorer does not run
+materialized in **Intelligence → Discovery → Communities**. Explorer does not run
 detection itself.
 
 1. **Color by cluster**: Recolor nodes by their materialized community instead of by entity type.
@@ -1315,35 +1315,35 @@ source triples safely.
 
 ## Step 4: Simulation (What-if Sandboxes)
 
-**Intelligence** is the fifth workspace in the top navigation. **Community**
-detects graph partitions; **Cohorts** authors grouping rules; **Patterns**
-discovers recurring neighbourhood shapes; **Simulation** runs what-if
-sandboxes.
+**Intelligence** is the fifth workspace in the top navigation.
+**Configuration** authors cohort rules; **Discovery** finds communities and
+recurring neighbourhood patterns; **Simulation** runs what-if sandboxes.
 
 ### Community detection
 
-**Intelligence → Community → Detect** runs label propagation on a serverless
-Databricks job over the domain's `…_data` snapshot, so it works on graphs of
-any size. It needs the *Compute large-graph metrics on Databricks* toggle in
-Settings → Global and a built domain; when either is missing, the page says
-why and Detect stays disabled. **Scope** optionally restricts detection to one
-entity type. Detection runs in the background — you can leave the page and
-come back. The result shows size statistics, modularity, rounds and whether
-the run converged, plus a light Sigma preview of the largest communities
-(capped at 1,500 nodes). Click a node to page through its cluster's entities.
-Nothing is written to the graph until **Materialize**, which replaces the
-previous partition (`Cluster` individuals and `:inCluster` membership) as a
-background task. **Clear graph** drops those triples. Explorer then colours and
-collapses that partition, looking up memberships only for the entities it draws.
+**Intelligence → Discovery → Communities** runs label propagation on a
+serverless Databricks job over the domain's `…_data` snapshot, so it works on
+graphs of any size. It needs the *Compute large-graph metrics on Databricks*
+toggle in Settings → Global and a built domain; when either is missing, the
+page says why and Detect stays disabled. **Scope** optionally restricts
+detection to one entity type. Detection runs in the background — you can leave
+the page and come back. The result shows size statistics, modularity, rounds
+and whether the run converged, plus a light Sigma preview of the largest
+communities (capped at 1,500 nodes). Click a node to page through its
+cluster's entities. Nothing is written to the graph until **Materialize**,
+which replaces the previous partition (`Cluster` individuals and `:inCluster`
+membership) as a background task. **Clear graph** drops those triples.
+Explorer then colours and collapses that partition, looking up memberships
+only for the entities it draws.
 
 ### Pattern detection
 
-**Intelligence → Patterns → Discover** finds recurring egocentric neighbourhood
-signatures for a **required** anchor entity type. **Detect** opens a dialog for
-entity type, hops, bins, min support, and refine top-N, then runs a dedicated
-Databricks job
+**Intelligence → Discovery → Patterns** finds recurring egocentric
+neighbourhood signatures for a **required** anchor entity type. **Detect**
+opens a dialog for entity type, hops, bins, min support, and refine top-N,
+then runs a dedicated Databricks job
 (`…-pattern-detection`). It uses the same admin toggle and `…_data` snapshot as
-Community / Analytics. Each anchor's attributes (numeric quantile bins;
+Communities / Analytics. Each anchor's attributes (numeric quantile bins;
 categorical values, except identifier-like attributes with more than 20
 distinct values such as ids, emails or dates, which are ignored) and multi-hop
 relationships (full predicate URIs; hops walk the full graph, not an induced
@@ -1360,12 +1360,21 @@ next to the run stats. Select a pattern to see a layered diagram of that
 neighbourhood (entity type at hop 0, then 1 / 2 / 3 hops) and the list of
 matching entities. Optional **Refine top-N** merges near-duplicates that
 differ only by relationship multiplicity into a motif; it only applies at the
-**Exact** level. Nothing is written to the graph. **Save** keeps a named
-snapshot of the matching entities in Unity Catalog (table
-`graph_pattern_saved_<slug>` next to the Detect output), which you can list or
-delete under **Patterns → Saved**. A saved snapshot does not change when the
-graph changes or when you run Detect again; save again to capture a new result. A run from before the diagram table was added asks you to
-Detect again before it can draw.
+**Exact** level. Nothing is written to the graph. When Detect finishes, the
+whole run is **saved automatically** in Unity Catalog (table
+`graph_pattern_saved_<slug>` next to the Detect output) under a name built from
+the entity type and the local date/time (for example `Customer — 2026-11-14 14:06:32`).
+You can list or delete those snapshots on the Patterns list. The list uses the
+same card layout as Scenarios and shows hops, how many patterns that Detect run
+found, and when it was saved. **Patterns** uses the same list/details
+navigation as Scenarios: the list shows saved cards; **New** (like New
+scenario) opens the details pane, auto-saves the run, and opens that snapshot
+(picker, diagrams, members) under the saved name; opening a card later shows
+the same snapshot (KPIs, diagrams and matching entities from save time, not a
+later Detect run). A saved
+snapshot does not change when the graph changes or when you run Detect again;
+run Detect again to capture a new result. A run from before the diagram table
+was added asks you to Detect again before it can draw.
 
 Patterns vary by structure (attribute-heavy, 1-hop, multi-hop, fan-out),
 attribute bins, frequency, optional refine, and run parameters (`hops`,
@@ -3283,9 +3292,9 @@ After import you can:
 
 ### Simulation
 - **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
-- **Community detection**: **Intelligence → Community → Detect** previews a label-propagation partition computed on a Databricks job, then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer only visualises that partition.
-- **Pattern detection**: **Intelligence → Patterns → Discover** finds recurring typed neighbourhoods (attributes + multi-hop relationships) on a Databricks job; **Save** keeps a named snapshot of the matching entities in Unity Catalog (the graph is not changed). **Saved** lists and deletes them.
-- **Cohort design and run**: **Intelligence → Cohorts** authors grouping rules; **Intelligence → Run** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
+- **Community detection**: **Intelligence → Discovery → Communities** previews a label-propagation partition computed on a Databricks job, then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer only visualises that partition.
+- **Pattern detection**: **Intelligence → Discovery → Patterns** lists saved neighbourhood snapshots; **Detect** finds recurring typed neighbourhoods on a Databricks job and opens the details pane; **Save** keeps a named snapshot in Unity Catalog (the graph is not changed).
+- **Cohort design and run**: **Intelligence → Configuration → Cohorts** authors grouping rules; **Intelligence → Configuration → Runs** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
 
 ### Graph (Sync & Explore)
 - **Two Layers**: Every build materializes a Delta view (Unity Catalog, governance) and a Graph DB engine (Lakebase Postgres today; pluggable behind `GraphDBFactory`).
@@ -3300,7 +3309,7 @@ After import you can:
 - **Graph Viewer**: Interactive sigma.js WebGL-powered graph to explore entities and relationships visually with search, filtering, depth control, and entity detail panels. **Find Path** highlights the shortest undirected path(s) between two loaded entities (text search picker) without querying the rest of the store. The bottom-left stopwatch reports the latest search's Preview, Expansion, Display, and Total times (seed-selection dwell excluded). Delta/Lakehouse expansion traverses and fetches the bounded subgraph in one Query Warehouse statement; other graph backends retain native or iterative traversal. Graph status on first paint is cache-first so Explorer is not blocked on full triple `COUNT(*)` scans.
 - **Search cache switch**: Context → Configuration → Backend (Lakehouse / Lakebase) enables or disables adjacency, entity-search, and property companions. Default on; re-enable requires Build or Refresh cache. Public find, session find/filter, GraphQL, and MCP `describe_entity` accept `cache` to force companions on or off for one request.
 - **Lakehouse//RT query path**: Administrators can enable **Use Lakehouse//RT for queries** under **Settings → Lakehouse → SQL Warehouse**. Builds stay on a classic or serverless **Build** warehouse; Query is a distinct optional warehouse because RT compute rejects `CREATE VIEW` / CTAS. The native Kernel backend, bounded retries, and an optional **Use CloudFetch** toggle (**Settings → Databricks**) keep RT reads working in Databricks Apps.
-- **Data Cluster visualization**: Explorer View tab colours and collapses communities materialized from **Intelligence → Community** (label propagation on a Databricks job). Detection and materialize live on Intelligence, not Explorer.
+- **Data Cluster visualization**: Explorer View tab colours and collapses communities materialized from **Intelligence → Discovery → Communities** (label propagation on a Databricks job). Detection and materialize live on Intelligence, not Explorer.
 - **Graph Analytics**: Dedicated **Analytics** sidebar section that computes five centrality metrics over the mapped knowledge graph using a serverless Databricks Lakeflow job: PageRank (global influence), Betweenness Centrality (bridging, Brandes–Pich estimate), Degree Centrality (raw connectivity), Closeness Centrality (reachability, Brandes–Pich estimate), and Clustering Coefficient (local density). Results are organised in three tabs — **Dashboard**, **Data Model Health**, and **AI Insights**. The Dashboard shows a KPI row, then a **distribution strip** of five small histogram tiles (one per metric) summarising **every scored node in the graph** — so you can tell whether a top-ranked score is an outlier or typical — followed by a single full-width ranked **point-and-line chart** for the selected metric across **all scored nodes** (sorted by rank). Each metric switch uses one `/dtwin/metrics/series` response. The warehouse ranks every node and returns only the first and last node of each of **1,000 rank buckets** (at most **2,000 points**, whatever the graph size); the chart reports exhaustive total vs rendered points in the status line. Click a distribution tile or use the segmented control to switch metrics; a **Log scale** toggle redraws the histograms on a logarithmic count axis for heavy-tailed metrics. Histograms use 20 linear bins; median and p90 are interpolated approximations and labelled as such. Betweenness and Closeness are Brandes–Pich estimates and may be unavailable for a run (depth cap / pivots disabled) — their tiles then read "Not computed for this run". Legacy cached results (computed before this redesign) still render KPIs, the ranking chart and the detail table; distribution tiles prompt you to re-run the analysis. Clicking a ranking point navigates directly to the entity in the Graph Viewer. A PageRank Detail Table shows all five scores side-by-side with relative mini-bars, and **Top N now controls this table only** (not the chart). The ranking chart card has an explanatory popup (formula, worked example, importance). **Run Analysis** opens an **Analysis scope** dialog where an optional entity type restricts the run to a single class; the scope resets to the full graph each time it opens, and the funnel line above the results always names the scope the displayed result was computed with. Requires the admin toggle enabled, the job bundle deployed, and the domain built (which materialises the Delta snapshot the job reads).
 - **AI Graph Interpretation**: After running an Analytics computation, click **Interpret** to invoke the `agent_graph_interpreter` AI agent. The agent uses the LLM saved in **Context → Configuration → AI**, may call `get_entity_details` to look up top-ranked entities, and produces three structured insight sections (Key Findings, Notable Entities, Recommendations). Results are rendered as styled Bootstrap cards with markdown support. Clickable entity names in "Notable Entities" jump to the Graph Viewer. Unavailable when **No LLM** is selected.
 - **Audit Trail Integration**: From the AI Insights card, click **Add to audit trail** to post the AI-generated interpretation as a comment on the current domain version (markdown-formatted). The discussion panel opens automatically to show the new entry.

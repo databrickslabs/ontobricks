@@ -96,7 +96,7 @@ tests/e2e/
 
 | File | Class | What it tests |
 |---|---|---|
-| `test_mapping_flows.py` | `TestMappingSidebar` | All 5 sections (`information`, `design`, `manual`, `autoassign`, `sparksql`) become visible via `SidebarNav.switchTo()` |
+| `test_mapping_flows.py` | `TestMappingSidebar` | Design + Advanced sections (`information`, `import`, `design`, `manual`, `autoassign`, `diagnostics`) become visible via `SidebarNav.switchTo()` |
 
 ### `domain/` — 6 tests
 

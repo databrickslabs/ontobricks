@@ -348,9 +348,28 @@ class TwinAnalytics:
         offset: int = 0,
         limit: int = 100,
         settings: Any = None,
+        pattern_id: str = "",
     ) -> Dict[str, Any]:
         return self.build_saved_patterns(self._domain, settings, graph_name).members(
-            saved_id, offset, limit
+            saved_id, offset, limit, pattern_id=pattern_id
+        )
+
+    def saved_pattern_patterns(
+        self, graph_name: str, saved_id: str, settings: Any = None
+    ) -> Dict[str, Any]:
+        return self.build_saved_patterns(self._domain, settings, graph_name).patterns(
+            saved_id
+        )
+
+    def saved_pattern_shape(
+        self,
+        graph_name: str,
+        saved_id: str,
+        settings: Any = None,
+        pattern_id: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        return self.build_saved_patterns(self._domain, settings, graph_name).shape(
+            saved_id, pattern_id=pattern_id
         )
 
     def delete_saved_pattern(

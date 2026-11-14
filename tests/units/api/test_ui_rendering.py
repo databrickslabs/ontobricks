@@ -518,7 +518,7 @@ class TestMappingPage:
 
     @pytest.mark.parametrize(
         "section",
-        ["information", "design", "manual", "autoassign", "sparksql"],
+        ["information", "import", "design", "manual", "autoassign", "diagnostics"],
     )
     def test_sidebar_has_section_link(self, client, section):
         html = _html(client, "/mapping")

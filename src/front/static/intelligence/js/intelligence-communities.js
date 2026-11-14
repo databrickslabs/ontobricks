@@ -1,5 +1,5 @@
 /**
- * Intelligence → Community: detect a partition on the Databricks job, then
+ * Intelligence → Discovery → Communities: detect a partition on the Databricks job, then
  * materialize it. Both run as background tasks; every read is bounded (top
  * clusters, a capped preview, members paged on demand). The preview uses a
  * light Sigma explorer (same CDN libs as Compare).

@@ -265,7 +265,6 @@
                                                 <li><strong>Auto-Map</strong> &mdash; LLM generates SQL mappings for every entity and relationship in one shot</li>
                                                 <li><strong>Import</strong> &mdash; load mappings from a file</li>
                                                 <li><strong>Diagnostics</strong> &mdash; consistency checks on the mapping</li>
-                                                <li><strong>Spark SQL</strong> &mdash; preview generated Spark SQL</li>
                                             </ul>
                                             <p>In the mapping panel, the <em>Mapping</em> tab lets you assign columns as <strong>ID</strong>, <strong>Label</strong> or a specific <strong>attribute</strong>, with a live data preview.</p>
                                             <div class="alert alert-warning small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Mappings store the query <em>without</em> a <code>LIMIT</code> &mdash; the preview limit only affects the UI.</div>
@@ -285,7 +284,7 @@
                                             <ul>
                                                 <li><strong>Build</strong> / <strong>Runs</strong> &mdash; trigger a synchronization and inspect its run history</li>
                                                 <li><strong>Overview</strong> / <strong>Analytics</strong> &mdash; insight dashboards: entity &amp; relationship counts, last sync timestamp, quality status, usage trends</li>
-                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, pick live asserted, live inferred, or one ready sandbox per scenario from Graph, open canvas labels and quality rings from View, colour-by-cluster and collapse super-nodes from a partition materialized in Intelligence → Community</li>
+                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, pick live asserted, live inferred, or one ready sandbox per scenario from Graph, open canvas labels and quality rings from View, colour-by-cluster and collapse super-nodes from a partition materialized in Intelligence → Discovery → Communities</li>
                                                 <li><strong>Query</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>
                                                 <li><strong>Chat</strong> &mdash; ask natural-language questions over the materialized graph</li>
                                                 <li><strong>Data Quality</strong> &mdash; run SHACL / constraint validation against the triple store</li>
@@ -306,11 +305,10 @@
                                     <div id="hw6" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
                                             <ul>
-                                                <li><strong>Detect</strong> &mdash; run community detection (label propagation on a Databricks job, any graph size), preview the largest communities, then materialize the partition to the knowledge graph for Explorer</li>
                                                 <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;)</li>
-                                                <li><strong>Run</strong> &mdash; preview a saved cohort rule and materialise it to the graph or a Unity Catalog table</li>
-                                                <li><strong>Discover</strong> &mdash; automatically find recurring neighbourhood patterns for a chosen entity type (attributes + multi-hop relationships) on Databricks, then save matching entities to the graph</li>
-                                                <li><strong>Saved</strong> &mdash; list and delete patterns saved from Discover</li>
+                                                <li><strong>Runs</strong> &mdash; preview a saved cohort rule and materialise it to the graph or a Unity Catalog table</li>
+                                                <li><strong>Communities</strong> &mdash; run community detection (label propagation on a Databricks job, any graph size), preview the largest communities, then materialize the partition to the knowledge graph for Explorer</li>
+                                                <li><strong>Patterns</strong> &mdash; Scenarios-style list; <strong>Detect</strong> finds neighbourhood shapes on Databricks and auto-saves the whole run (every pattern’s diagram, KPIs and members) under the entity type + date/time</li>
                                                 <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Graph → Business rules, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed by comparing the materialised sandbox after-picture to its before-picture companion; <em>Explorer</em> opens that sandbox in the graph viewer</li>
                                                 <li><strong>Compare</strong> &mdash; overlay a ready sandbox on the current live graph (inferred or asserted only), on the same scope as the scenario: one colour-coded graph of unchanged, added (sandbox only) and removed (live only) triples, with exact counters and a details panel</li>
                                                 <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>
@@ -338,7 +336,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-share"></i></div>
                                         <h5>Interactive Graph Viewer</h5>
-                                        <p>Two-phase search, configurable depth, Graph dropdown to view a ready simulation sandbox, cross-context bridges, colour-by-cluster and super-nodes from a partition materialized in Intelligence → Community.</p>
+                                        <p>Two-phase search, configurable depth, Graph dropdown to view a ready simulation sandbox, cross-context bridges, colour-by-cluster and super-nodes from a partition materialized in Intelligence → Discovery → Communities.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -380,7 +378,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-people-fill"></i></div>
                                         <h5>Cohort Discovery</h5>
-                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Intelligence &rarr; Cohorts</strong>, run &amp; preview in <strong>Intelligence &rarr; Cohorts &rarr; Run</strong>.</p>
+                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Intelligence &rarr; Configuration &rarr; Cohorts</strong>, run &amp; preview in <strong>Intelligence &rarr; Configuration &rarr; Runs</strong>.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -519,7 +517,7 @@
                                 <dt>IF-THEN</dt><dd>Inference rules written as &ldquo;IF ... THEN ...&rdquo;.</dd>
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
                                 <dt>Bridge</dt><dd>Cross-context link between entities of two different contexts.</dd>
-                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Intelligence &rarr; Cohorts</em>, run under <em>Intelligence &rarr; Cohorts &rarr; Run</em>.</dd>
+                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Intelligence &rarr; Configuration &rarr; Cohorts</em>, run under <em>Intelligence &rarr; Configuration &rarr; Runs</em>.</dd>
                                 <dt>Simulation</dt><dd>A named what-if sandbox: a slice of the Knowledge Graph copied into an isolated table, patched with hypothetical triples, and re-reasoned &mdash; the live graph is never modified.</dd>
                                 <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the context Graph DB.</dd>
                                 <dt>Graph DB</dt><dd>Per-context engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>

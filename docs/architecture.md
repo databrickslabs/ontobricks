@@ -225,7 +225,7 @@ LIMIT 100
 6. **Generated Spark SQL** - Query with JOINs and UNION ALL
 7. **Triple Store Backend Dispatch** - The single `GraphDBFactory` returns the active engine — a Delta-backed store (`MaterializedStore`) or the Lakebase engine (`FlatStore`). Both subclass `GraphBackend` and expose the same `(subject, predicate, object)` contract.
 8. **RDF-style Results** - Uniform (subject, predicate, object) triples from both backends
-9. **Graph Viewer** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and visualization of communities materialized from Intelligence → Community
+9. **Graph Viewer** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and visualization of communities materialized from Intelligence → Discovery → Communities
 
 **Generated Spark SQL Example** (for generic triple query):
 ```sql
@@ -1344,11 +1344,11 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 
 ## Simulation — What-if Sandboxes
 
-The **Intelligence** menu (after Graph) groups **Community** detection,
-**Cohorts**, **Patterns**, and **Simulation**. Simulation answers *"what
-would the graph conclude if these facts were true?"* without touching the live
-knowledge graph. v1 supports the **Lakebase** graph backend only; graphless
-domains redirect to Domain, other backends show a disabled page.
+The **Intelligence** menu (after Graph) groups **Configuration** (cohorts),
+**Discovery** (communities and patterns), and **Simulation**. Simulation
+answers *"what would the graph conclude if these facts were true?"* without
+touching the live knowledge graph. v1 supports the **Lakebase** graph backend
+only; graphless domains redirect to Domain, other backends show a disabled page.
 
 ### Run pipeline
 
@@ -1432,7 +1432,7 @@ and projects it into a capped `{nodes, edges, summary}` payload.
 | `src/api/routers/internal/simulation.py` | Internal JSON API |
 | `src/api/routers/simulation.py` | Public `/api/v1/simulations` CRUD + run |
 | `src/back/objects/digitaltwin/query/TwinSandboxSparql.py` | SPARQL over a ready sandbox snapshot |
-| `src/front/templates/intelligence.html` | Community / Cohorts / Patterns / Scenarios / Compare / Runs page (scenario editor is not a sidebar item) |
+| `src/front/templates/intelligence.html` | Configuration / Discovery / Simulation page (scenario editor is not a sidebar item) |
 | `src/front/static/intelligence/js/simulation-compare.js` | Compare section: scenario picker, Sigma overlay graph, details panel |
 
 Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
@@ -1444,9 +1444,13 @@ Materialise still writes to the live graph via `/dtwin/cohorts/*`.
 
 ## Graph Analysis — Pattern Detection
 
-**Intelligence → Patterns → Discover** finds recurring egocentric neighbourhood
-signatures for a required anchor class. **Saved** lists and deletes named
-materializations. Same job-only gate as Community (analytics toggle +
+**Intelligence → Discovery → Patterns** mirrors Scenarios list/details: the list
+shows saved neighbourhood snapshots (hops, patterns found, saved-at); **Detect**
+opens the details pane (Workbench-style) with the live discovery result for a
+required anchor class and **auto-saves** the whole run (label =
+entity type + date/time); opening a card shows that snapshot under the saved name.
+Same
+job-only gate as Community (analytics toggle +
 `…_data` snapshot); job name is `ONTOBRICKS_PATTERN_JOB_NAME` /
 `<app>-pattern-detection`.
 
@@ -1473,13 +1477,16 @@ materializations. Same job-only gate as Community (analytics toggle +
 3. **Read back** — `GET /dtwin/patterns/latest` (top-N + stats + job gate);
    `GET /dtwin/patterns/{id}/shape` (tokens + layered diagram) and `/members`
    (paged ≤ 500).
-4. **Save** (`POST /dtwin/patterns/save`) starts `pattern_save`.
-   `SavedPatternStore` copies the member rows of the chosen pattern into
-   `graph_pattern_saved_<slug>` (a Delta table next to the job output). Several
-   saved patterns coexist, keyed by `saved_id`. The RDF graph is not written.
-5. **Saved** — `GET /dtwin/patterns/saved` (list), `GET …/saved/{id}/members`
-   (paged), `DELETE …/saved/{id}` (drops that snapshot only). Saved snapshots
-   survive the next Detect, which overwrites `graph_patterns_<slug>`.
+4. **Auto-save** — when Detect finishes, the UI calls `POST /dtwin/patterns/save`
+   (`pattern_save`) with an automatic label (`{entity type} — {YYYY-MM-DD HH:MM:SS}`).
+   `SavedPatternStore` snapshots the **entire** last Detect run (every pattern’s
+   members, KPIs and `diagram_json`) into `graph_pattern_saved_<slug>`. Several
+   saved runs coexist, keyed by `saved_id`. The RDF graph is not written.
+5. **Saved** — Read-back: `GET /dtwin/patterns/saved` (list),
+   `GET …/saved/{id}/patterns` (picker catalog),
+   `GET …/saved/{id}/members?pattern_id=` (paged),
+   `GET …/saved/{id}/shape?pattern_id=` (diagram), `DELETE …/saved/{id}`.
+   Snapshots survive the next Detect overwriting `graph_patterns_<slug>`.
 
 `class_filter` for patterns is a **single** required anchor type; hops walk
 the full graph (not induced). `via` in shape records is the full predicate
@@ -1498,13 +1505,13 @@ lifecycle) are documented for operators — not separate product modes in v1.
 | `src/api/routers/internal/dtwin.py` | `/dtwin/patterns/*` endpoints |
 | `src/back/objects/digitaltwin/TwinAnalytics.py` | Job wiring and pattern entry points |
 | `src/back/objects/digitaltwin/TwinBackgroundTasks.py` | `pattern_detection`, `pattern_save` |
-| `src/front/static/intelligence/js/intelligence-patterns.js` | Discover / Saved UI |
+| `src/front/static/intelligence/js/intelligence-patterns.js` | Patterns list / details UI |
 
 ---
 
 ## Graph Analysis — Community Detection
 
-**Intelligence → Community** configures and detects partitions.
+**Intelligence → Discovery → Communities** configures and detects partitions.
 **Explorer** only visualizes a materialized partition (colour / collapse).
 
 ### Detect on Databricks, then materialize
@@ -3148,7 +3155,6 @@ and the engine that ultimately runs (column **Engine**).
 | Diagnostics | `mapping-diagnostics.js` | `/mapping/diagnostics/*` | REST | Python validator |
 | Source schema drift | `mapping-design.js`, `mapping-diagnostics.js` | `GET /mapping/schema-drift` | REST | One `DESCRIBE` per distinct source table via `UnityCatalog.get_table_columns` |
 | **R2RML** view | `mapping-r2rml.js` | `/mapping/r2rml/raw` | REST | rdflib serializer |
-| **Spark SQL** preview | `mapping-sparksql.js` | `POST /dtwin/translate` | REST → SPARQL **translation only** | `SparqlTranslator` (no execution; shows the generated SQL) |
 
 #### 4.4 Knowledge Graph (the core read surface)
 

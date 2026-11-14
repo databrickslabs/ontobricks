@@ -1,7 +1,7 @@
 """
 E2E — Mapping page sidebar navigation.
 
-Verifies that each of the six sidebar sections becomes visible when
+Verifies that each Mapping sidebar section becomes visible when
 activated via ``SidebarNav.switchTo()``.
 """
 
@@ -11,7 +11,7 @@ import pytest
 class TestMappingSidebar:
     @pytest.mark.parametrize(
         "section",
-        ["information", "design", "manual", "autoassign", "sparksql"],
+        ["information", "import", "design", "manual", "autoassign", "diagnostics"],
     )
     def test_sidebar_switches_section(self, page, live_server, section):
         page.goto(f"{live_server}/mapping")
