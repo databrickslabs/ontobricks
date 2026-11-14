@@ -204,8 +204,8 @@
                             </legend>
                             <select class="form-select domain-editable d-none" id="domainGraphBackend"
                                     aria-hidden="true" tabindex="-1"
-                                    data-saved-value="{{ domain.graph_backend or 'lakebase' }}">
-                                <option value="lakebase" {% if (domain.graph_backend or 'lakebase') == 'lakebase' %}selected{% endif %}>Lakebase (Postgres)</option>
+                                    data-saved-value="{{ domain.graph_backend or graph_backend_default }}">
+                                <option value="lakebase" {% if (domain.graph_backend or graph_backend_default) == 'lakebase' %}selected{% endif %}{% if not lakebase_available %} disabled{% endif %}>Lakebase (Postgres)</option>
                                 <option value="databricks" {% if domain.graph_backend == 'databricks' %}selected{% endif %}>Lakehouse</option>
                                 <option value="neo4j" {% if domain.graph_backend == 'neo4j' %}selected{% endif %}>Neo4j</option>
                                 <option value="none" {% if domain.graph_backend == 'none' %}selected{% endif %}>No Backend (ontology only)</option>
@@ -216,14 +216,15 @@
                                     <input class="domain-editable domain-backend-option" type="radio"
                                            name="domainGraphBackendChoice" id="domainGraphBackendLakebase"
                                            value="lakebase"
-                                           {% if (domain.graph_backend or 'lakebase') == 'lakebase' %}checked{% endif %}>
+                                           {% if (domain.graph_backend or graph_backend_default) == 'lakebase' %}checked{% endif %}
+                                           {% if not lakebase_available %}disabled{% endif %}>
                                     <label class="domain-backend-card" for="domainGraphBackendLakebase">
                                         <i class="bi bi-check-circle-fill domain-backend-check" aria-hidden="true"></i>
                                         <span class="domain-backend-logo">
                                             <span class="ob-brand-icon ob-icon-postgresql" aria-hidden="true"></span>
                                         </span>
                                         <span class="domain-backend-title">Lakebase</span>
-                                        <span class="domain-backend-description">Managed PostgreSQL graph storage.</span>
+                                        <span class="domain-backend-description">{% if lakebase_available %}Managed PostgreSQL graph storage.{% else %}Not available: this workspace runs without Lakebase.{% endif %}</span>
                                     </label>
                                 </div>
                                 <div class="domain-backend-choice">
@@ -338,7 +339,7 @@
                         </div>
 
                         <!-- Search cache (Lakehouse + Lakebase companions) -->
-                        <div class="mb-4 {% if (domain.graph_backend or 'lakebase') not in ['databricks', 'lakebase'] %}d-none{% endif %}"
+                        <div class="mb-4 {% if (domain.graph_backend or graph_backend_default) not in ['databricks', 'lakebase'] %}d-none{% endif %}"
                              id="searchCacheSection">
                             <div class="d-flex align-items-center justify-content-between mb-1">
                                 <label class="form-label fw-semibold mb-0" for="domainGraphCacheEnabled">
@@ -430,7 +431,7 @@
                                 these checks are disabled in local development.
                             </p>
 
-                            {% set _backend = domain.graph_backend or 'lakebase' %}
+                            {% set _backend = domain.graph_backend or graph_backend_default %}
 
                             <!-- Lakehouse (Unity Catalog) — OBO -->
                             <div class="graph-access-detail {% if _backend != 'databricks' %}d-none{% endif %}"

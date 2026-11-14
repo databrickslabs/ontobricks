@@ -212,7 +212,7 @@
             if (typeof showNotification === 'function') {
                 showNotification(
                     allOk
-                        ? 'All checks passed — UC and Lakebase permissions are in order.'
+                        ? 'All checks passed — UC and registry permissions are in order.'
                         : 'Check completed with issues — review the details below.',
                     allOk ? 'success' : 'warning'
                 );

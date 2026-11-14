@@ -26,12 +26,18 @@ async def domain_page(
     redirect = home_redirect_if_unloaded(domain_session)
     if redirect is not None:
         return redirect
+    from back.core.graphdb.GraphDBFactory import default_graph_backend
+    from back.objects.registry.store import RegistryFactory
+
     domain_data = Domain(domain_session).get_domain_template_data()
     return templates.TemplateResponse(
         request,
         "domain.html",
         {
             "domain": domain_data,
+            # No Lakebase graph when the registry itself runs without Lakebase.
+            "lakebase_available": RegistryFactory.backend_name() != "sqlite",
+            "graph_backend_default": default_graph_backend(),
             **triplestore_page_context(domain_session, settings),
         },
     )

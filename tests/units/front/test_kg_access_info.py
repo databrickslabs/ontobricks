@@ -31,8 +31,13 @@ def _access_block() -> str:
     return html[start:end]
 
 
-def _render_block(**domain) -> str:
-    return Environment(autoescape=True).from_string(_access_block()).render(domain=domain)
+def _render_block(default: str = "lakebase", **domain) -> str:
+    """Render the block with the route-supplied ``graph_backend_default``."""
+    return (
+        Environment(autoescape=True)
+        .from_string(_access_block())
+        .render(domain=domain, graph_backend_default=default)
+    )
 
 
 class TestTheAccessInfoBlockExists:
@@ -82,6 +87,10 @@ class TestOnlyTheSelectedBackendDetailIsShown:
     def test_default_backend_is_lakebase(self):
         rendered = _render_block()  # no graph_backend set
         assert self._is_visible(rendered, "lakebase")
+
+    def test_default_backend_is_lakehouse_without_lakebase(self):
+        rendered = _render_block(default="databricks")  # SQLite registry, no Lakebase
+        assert self._is_visible(rendered, "databricks")
 
     @staticmethod
     def _is_visible(rendered: str, backend: str) -> bool:
