@@ -71,6 +71,10 @@ env:
   # Lakebase (local SQLite file snapshotted to the registry Volume).
   - name: REGISTRY_BACKEND
     value: "${APP_REGISTRY_BACKEND}"
+  # sqlite only: explicit Volume path of the registry snapshot. Empty uses
+  # /Volumes/<catalog>/<schema>/<volume>/_registry/<lakebase_schema>.sqlite.
+  - name: REGISTRY_SQLITE_SNAPSHOT_PATH  # optional
+    value: "${APP_REGISTRY_SQLITE_SNAPSHOT_PATH}"
   # App name for permission management — auto-detected at runtime from
   # the Databricks Apps platform (the runtime injects DATABRICKS_APP_NAME
   # as the deployed app's name, e.g. "ontobricks" for prod and
