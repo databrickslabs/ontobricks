@@ -794,7 +794,10 @@ def test_patterns_section_owns_discovery():
     assert "openSavedById(savedId" in js_patterns
     assert "openSaveModal" not in js_patterns
     assert "task.result.saved_id" in js_patterns
-    assert "cls.emoji || '📦'" in js_patterns
+    # Diagram nodes must resolve ontology icons (same path as communities).
+    assert "await this._loadClasses()" in js_patterns
+    assert "_findOntologyClass" in js_patterns
+    assert "cls.emoji || cls.icon" in js_patterns
     assert "structure: 'Structure only'" in js_patterns
     assert 'id="patJobStatus"' in detect_modal
     assert 'id="patDetails"' in disc

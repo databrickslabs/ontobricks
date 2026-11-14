@@ -1474,3 +1474,25 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 45.91s
+
+## Fix pattern diagram ontology icons
+
+Context: Pattern details diagrams always showed the default 📦 icon instead of
+each class's ontology emoji. Opening a saved Detect run never loaded ontology
+classes before drawing the diagram, and icon lookup used exact URI match only
+(unlike Communities).
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Load ontology classes in selectPattern; resolve icons via _findOntologyClass
+   (flexible URI/label match) and cls.emoji || cls.icon, matching Communities.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract asserts class load + ontology icon resolution for pattern diagrams.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10547 passed, 324 skipped, 8 deselected, 39 warnings in 44.57s

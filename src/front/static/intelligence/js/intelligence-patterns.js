@@ -258,7 +258,7 @@ const IntelligencePatterns = {
         classes.forEach((cls) => {
             const uri = cls.uri || cls.id || '';
             const label = cls.label || cls.name || uri;
-            const icon = cls.emoji || '📦';
+            const icon = cls.emoji || cls.icon || '📦';
             if (!uri) return;
             opts.push(`<option value="${this._esc(uri)}">${this._esc(icon)} ${this._esc(label)}</option>`);
         });
@@ -410,6 +410,7 @@ const IntelligencePatterns = {
             const [shape, members] = await Promise.all([
                 this._json(shapeUrl),
                 this._json(membersUrl),
+                this._loadClasses(),
             ]);
             if (this.selectedId !== patternId) return;
             if (savedId) {
@@ -630,12 +631,30 @@ const IntelligencePatterns = {
 
     DIAGRAM: { colW: 280, nodeW: 150, headH: 34, attrH: 14, gapY: 22, pad: 16, top: 26 },
 
-    _classIcon(typeUri, typeLabel) {
+    _shortLabel(uri) {
+        const s = String(uri || '');
+        const tail = s.split(/[#/]/).pop();
+        return tail || s;
+    },
+
+    // Same flexible URI/label match as communities — graph type URIs often
+    // differ slightly from ontology class URIs (suffix / local-name only).
+    _findOntologyClass(typeUri, typeLabel) {
         const classes = this.ontologyClasses || [];
-        const low = String(typeLabel || '').toLowerCase();
-        const cls = classes.find((c) => (c.uri || c.id) === typeUri)
-            || classes.find((c) => String(c.name || c.label || '').toLowerCase() === low);
-        return (cls && cls.emoji) || '📦';
+        if (!classes.length) return null;
+        const uri = String(typeUri || '');
+        const local = String(typeLabel || this._shortLabel(uri) || '').toLowerCase();
+        return classes.find((cls) => {
+            const classUri = String(cls.uri || cls.id || '');
+            const name = String(cls.name || cls.label || '').toLowerCase();
+            return (uri && (classUri === uri || classUri.endsWith(uri) || uri.endsWith(classUri)))
+                || (local && (name === local || name.endsWith(local) || local.endsWith(name)));
+        }) || null;
+    },
+
+    _classIcon(typeUri, typeLabel) {
+        const cls = this._findOntologyClass(typeUri, typeLabel);
+        return (cls && (cls.emoji || cls.icon)) || '📦';
     },
 
     _trim(text, max) {
