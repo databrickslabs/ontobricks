@@ -210,6 +210,14 @@ const SimulationPatterns = {
         }[level] || level || '—';
     },
 
+    _kpiTile(label, value) {
+        return `<div class="col">`
+            + `<div class="sim-kpi-tile h-100">`
+            + `<div class="sim-kpi-value">${this._esc(String(value ?? '—'))}</div>`
+            + `<div class="sim-kpi-label">${this._esc(label)}</div>`
+            + `</div></div>`;
+    },
+
     _renderStats(stats) {
         const el = document.getElementById('patPreviewStats');
         if (!el) return;
@@ -219,18 +227,15 @@ const SimulationPatterns = {
             return;
         }
         el.classList.remove('d-none');
-        el.innerHTML = [
-            ['Patterns', stats.pattern_count],
-            ['Anchors', stats.anchor_count],
-            ['Hops', stats.hop_count],
-            ['Bins', stats.bins],
-            ['Min support', stats.min_support],
-            ['Detail', this._detailLabel(stats.detail_level)],
-            ['Refined', stats.refined ? 'yes' : 'no'],
-        ].map(([k, v]) => (
-            `<div class="pat-stat"><span class="pat-stat-label">${this._esc(k)}</span>`
-            + `<span class="pat-stat-value">${this._esc(String(v ?? '—'))}</span></div>`
-        )).join('');
+        el.innerHTML = `<div class="row g-2 pat-kpi-row">`
+            + this._kpiTile('Patterns', this._fmtNum(stats.pattern_count))
+            + this._kpiTile('Anchors', this._fmtNum(stats.anchor_count))
+            + this._kpiTile('Hops', this._fmtNum(stats.hop_count))
+            + this._kpiTile('Bins', this._fmtNum(stats.bins))
+            + this._kpiTile('Min support', this._fmtNum(stats.min_support))
+            + this._kpiTile('Detail', this._detailLabel(stats.detail_level))
+            + this._kpiTile('Refined', stats.refined ? 'yes' : 'no')
+            + `</div>`;
     },
 
     _renderList() {
@@ -268,24 +273,52 @@ const SimulationPatterns = {
                 this._json(`/dtwin/patterns/${encodeURIComponent(patternId)}/members?offset=0&limit=${this.MEMBERS_PAGE}`),
             ]);
             this._members = members;
-            const diagram = shape.diagram
-                ? this._diagramSvg(shape.diagram)
-                : '<p class="text-muted small mb-0">Re-run <strong>Detect</strong> to draw this pattern.</p>';
-            const rows = (members.members || []).map((m) => (
-                `<li><span class="fw-medium">${this._esc(m.label || m.uri)}</span>`
-                + `<span class="text-muted small ms-1">${this._esc(m.type_label || '')}</span></li>`
-            )).join('');
-            const more = members.has_more
-                ? '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-pat-more>Load more</button>'
-                : '';
-            details.innerHTML = `
-                <div class="pat-diagram mb-3">${diagram}</div>
-                <p class="small mb-2"><strong>${this._fmtNum(members.total)}</strong> entities match this pattern</p>
-                <ul class="pat-member-list mb-0">${rows || '<li class="text-muted">None</li>'}</ul>
-                ${more}`;
+            this._selectedShape = shape;
+            details.innerHTML = this._detailsHtml(shape, members);
         } catch (err) {
             details.innerHTML = `<p class="text-danger small mb-0">${this._esc(err.message || 'Failed')}</p>`;
         }
+    },
+
+    _detailsHtml(shape, members) {
+        const diagram = shape.diagram
+            ? this._diagramSvg(shape.diagram)
+            : '<p class="text-muted small mb-0">Re-run <strong>Detect</strong> to draw this pattern.</p>';
+        const nodes = (shape.diagram && shape.diagram.nodes) || [];
+        const edges = (shape.diagram && shape.diagram.edges) || [];
+        const title = shape.seed_label || (shape.pattern_id || '').slice(0, 8) || 'Pattern';
+        const rows = (members.members || []).map((m) => (
+            `<li class="pat-member-row">`
+            + `<span class="fw-medium">${this._esc(m.label || m.uri)}</span>`
+            + `<span class="badge rounded-pill text-bg-light border">${this._esc(m.type_label || '—')}</span>`
+            + `</li>`
+        )).join('');
+        const more = members.has_more
+            ? '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-pat-more>Load more</button>'
+            : '';
+        return `
+            <div class="pat-detail-head">
+                <div class="d-flex align-items-baseline justify-content-between gap-2 flex-wrap mb-2">
+                    <h6 class="mb-0">${this._esc(title)}</h6>
+                    <span class="badge rounded-pill text-bg-primary-subtle border border-primary-subtle">
+                        ${this._fmtNum(members.total)} members
+                    </span>
+                </div>
+                <div class="row g-2 pat-kpi-row mb-3">
+                    ${this._kpiTile('Members', this._fmtNum(shape.support || members.total))}
+                    ${this._kpiTile('Hops', this._fmtNum(shape.hop_count))}
+                    ${this._kpiTile('Types', this._fmtNum(nodes.length))}
+                    ${this._kpiTile('Relations', this._fmtNum(edges.length))}
+                    ${this._kpiTile('Detail', this._detailLabel((this.latest && this.latest.stats || {}).detail_level))}
+                    ${this._kpiTile('Refined', shape.refined ? 'yes' : 'no')}
+                </div>
+            </div>
+            <div class="pat-diagram mb-3">${diagram}</div>
+            <div class="pat-members">
+                <h6 class="mb-2">Matching entities</h6>
+                <ul class="pat-member-list mb-0">${rows || '<li class="text-muted">None</li>'}</ul>
+                ${more}
+            </div>`;
     },
 
     DIAGRAM: { colW: 280, nodeW: 150, headH: 34, attrH: 14, gapY: 22, pad: 16, top: 26 },
@@ -383,8 +416,8 @@ const SimulationPatterns = {
         const edges = (diagram.edges || []).map((e) => this._diagramEdge(e, L.pos, incoming, incomingTotal)).join('');
         const nodes = diagram.nodes.map((n) => this._diagramNode(n, L.pos[n.id])).join('');
         const note = diagram.truncated ? '<p class="text-muted small mb-0">Showing the most common relationships only.</p>' : '';
-        return `<div class="pat-diagram-scroll"><svg class="pat-diagram-svg" width="${L.width}" height="${L.height}" `
-            + `viewBox="0 0 ${L.width} ${L.height}" role="img" aria-label="Pattern diagram">`
+        return `<div class="pat-diagram-scroll"><svg class="pat-diagram-svg" width="100%" height="${L.height}" `
+            + `viewBox="0 0 ${L.width} ${L.height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pattern diagram">`
             + '<defs>'
             + '<marker id="patArrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="pat-dg-arrow"/></marker>'
             + '<marker id="patArrowIn" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" class="pat-dg-arrow"/></marker>'
@@ -410,16 +443,19 @@ const SimulationPatterns = {
             const details = document.getElementById('patDetails');
             if (!details) return;
             const rows = this._members.members.map((m) => (
-                `<li><span class="fw-medium">${this._esc(m.label || m.uri)}</span>`
-                + `<span class="text-muted small ms-1">${this._esc(m.type_label || '')}</span></li>`
+                `<li class="pat-member-row">`
+                + `<span class="fw-medium">${this._esc(m.label || m.uri)}</span>`
+                + `<span class="badge rounded-pill text-bg-light border">${this._esc(m.type_label || '—')}</span>`
+                + `</li>`
             )).join('');
             const list = details.querySelector('.pat-member-list');
             if (list) list.innerHTML = rows || '<li class="text-muted">None</li>';
+            const members = details.querySelector('.pat-members');
             const btn = details.querySelector('[data-pat-more]');
             if (!this._members.has_more) {
                 if (btn) btn.remove();
-            } else if (!btn) {
-                details.insertAdjacentHTML(
+            } else if (!btn && members) {
+                members.insertAdjacentHTML(
                     'beforeend',
                     '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-pat-more>Load more</button>'
                 );
