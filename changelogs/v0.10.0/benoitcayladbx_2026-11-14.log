@@ -117,3 +117,200 @@ Modified files:
 - tests/units/front/test_simulation_page_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Use "Context" instead of "Domain" in the user-facing UI
+================================================================================
+
+Context: The Ontobricks concept was still labelled "Domain" in several places
+the user reads (Registry popups, Settings, Context page, help modal, toasts,
+confirm dialogs, API docs tags). The concept is now called "Context" in every
+visible label, title, placeholder, notification and error message. Kept as-is
+on purpose: code identifiers, routes (`/domain/...`), API parameters and
+response keys (`domain_name`, `domains`), CSS classes, element ids, OWL
+`rdfs:domain`, the Databricks Knowledge Pages `domain` attribute/filter, and
+the LLM/MCP-facing prompts and tool descriptions (agent behaviour unchanged,
+no eval impact).
+
+Changes:
+1. src/front/templates/** — visible text, titles, placeholders, aria-labels of
+   the Context page, Registry (Bridges subtitle now reads "Cross-contexts
+   bridges connecting ontology entities across contexts"), Settings, help
+   modal, ontology/mapping panels, dtwin API docs, access-denied page.
+2. src/front/static/**/*.js — notifications, confirm dialogs, tooltips,
+   dropdown placeholders, loading overlays, Registry/Bridges/Teams labels.
+3. src/api/**, src/back/**, src/front/routes/**, src/shared/** — HTTP error and
+   validation messages, job progress labels, OpenAPI descriptions and tag names
+   ("Domain" -> "Context", "List Contexts", ...). Log lines, docstrings and SQL
+   left untouched.
+4. src/front/static/domain/js/domain-pages.js and
+   src/front/templates/partials/domain/_domain_pages.html — kept "Databricks
+   Domain" wording for the Knowledge Pages filter (Databricks-side attribute).
+5. src/front/static/query/js/query-sigmagraph.js, src/front/static/global/js/navbar.js
+   — fallback labels ("context") shown in the loading and switch dialogs.
+6. src/shared/config/constants.py — no change (LLM wizard prompt kept as-is).
+7. tests/** — assertions updated to the new wording (API messages, OpenAPI tag,
+   UI strings, JS contract strings).
+
+Modified files:
+- src/api/constants.py
+- src/api/external_app.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/domains.py
+- src/api/routers/internal/_graph_access.py
+- src/api/routers/internal/_permissions.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/ontology.py
+- src/api/routers/v1.py
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/fastapi/graphql_routes.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/objects/digitaltwin/TwinResolve.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/HomeService.py
+- src/back/objects/domain/settings/GitHubSettings.py
+- src/back/objects/domain/settings/ObxSettings.py
+- src/back/objects/domain/settings/PermissionSettings.py
+- src/back/objects/domain/settings/RegistryDomainSettings.py
+- src/back/objects/domain/settings/graphengine/GraphEngineNeo4jSettings.py
+- src/back/objects/domain/settings/graphengine/GraphEngineSettings.py
+- src/back/objects/mapping/Mapping.py
+- src/back/objects/ontology/EntityImport.py
+- src/back/objects/ontology/Import.py
+- src/back/objects/ontology/generate/GenerateWorkflow.py
+- src/back/objects/registry/PermissionService.py
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/registry/collab/CommentService.py
+- src/back/objects/registry/collab/ReviewService.py
+- src/back/objects/registry/gitsync/DomainRepoLayout.py
+- src/back/objects/registry/gitsync/GitHubSyncService.py
+- src/back/objects/registry/schedule/TaskContext.py
+- src/back/objects/registry/schedule/__init__.py
+- src/back/objects/registry/schedule/analytics.py
+- src/back/objects/registry/schedule/build.py
+- src/back/objects/registry/schedule/cache_refresh.py
+- src/back/objects/registry/schedule/cohort.py
+- src/back/objects/registry/schedule/reasoning.py
+- src/back/objects/simulation/Simulation.py
+- src/front/routes/domain.py
+- src/front/routes/resolve.py
+- src/front/static/config/js/schedule.js
+- src/front/static/config/js/settings-github.js
+- src/front/static/config/js/settings-runs.js
+- src/front/static/config/js/settings.js
+- src/front/static/domain/js/domain-collaboration.js
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain-review.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/domain/js/domain.js
+- src/front/static/global/js/comments-panel.js
+- src/front/static/global/js/edit-lock.js
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/ontology-core.js
+- src/front/static/global/js/permissions.js
+- src/front/static/global/js/uc-location-widget.js
+- src/front/static/global/js/utils.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/home/js/home.js
+- src/front/static/ontology/js/ontology-entity-import.js
+- src/front/static/ontology/js/ontology-import.js
+- src/front/static/ontology/js/ontology-information.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/query/js/query-analytics.js
+- src/front/static/query/js/query-api.js
+- src/front/static/query/js/query-graphql.js
+- src/front/static/query/js/query-reasoning.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query.js
+- src/front/static/registry/js/registry-teams.js
+- src/front/static/registry/js/registry.js
+- src/front/templates/about.html
+- src/front/templates/access_denied.html
+- src/front/templates/base.html
+- src/front/templates/domain.html
+- src/front/templates/home.html
+- src/front/templates/partials/domain/_domain_audit.html
+- src/front/templates/partials/domain/_domain_discussions.html
+- src/front/templates/partials/domain/_domain_documents.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/templates/partials/domain/_domain_mytasks.html
+- src/front/templates/partials/domain/_domain_pages.html
+- src/front/templates/partials/domain/_domain_runs.html
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/domain/_domain_versions.html
+- src/front/templates/partials/dtwin/_query_api.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/mapping/_mapping_import.html
+- src/front/templates/partials/ontology/_ontology_entity_import_modal.html
+- src/front/templates/partials/ontology/_ontology_import.html
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/templates/partials/registry/_export_obx_modal.html
+- src/front/templates/partials/registry/_import_obx_modal.html
+- src/front/templates/partials/registry/_registry_bridges.html
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/templates/partials/registry/_registry_domains.html
+- src/front/templates/partials/settings/_settings_github.html
+- src/front/templates/partials/settings/_settings_locks.html
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/partials/settings/_settings_schedule.html
+- src/front/templates/partials/settings/_settings_teams.html
+- src/front/templates/partials/simulation/_sim_runs.html
+- src/front/templates/partials/simulation/_sim_scenarios.html
+- src/front/templates/settings.html
+- src/shared/fastapi/health.py
+- src/shared/fastapi/main.py
+- tests/contract/test_openapi_contract.py
+- tests/units/api/test_admin_only_domain_create.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_domain_versions_cards.py
+- tests/units/front/test_entity_panel_sections.py
+- tests/units/front/test_registry_obx_import_rename.py
+- tests/units/front/test_settings_github_loading.py
+- tests/units/front/test_settings_runs_page.py
+- tests/units/front/test_settings_subnav_hidden.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/ontology/test_v090_ontology_import.py
+- tests/units/settings/test_github_settings.py
+- tests/units/settings/test_settings_obx.py
+- tests/units/settings/test_v090_graph_engine_neo4j.py
+- tests/units/settings/test_v090_graph_engine_settings.py
+- tests/units/settings/test_v090_settings_obx.py
+- tests/units/settings/test_v090_settings_registry_domains.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+Lint: uv run --frozen ruff check --select F821,F811 on changed Python files → all checks passed.
+Syntax: py_compile on changed Python files, node --check on changed JS files, Jinja parse on changed templates → OK.
+
+================================================================================
+## Pattern picker as dropdown beside KPIs; full-width diagram
+================================================================================
+
+Context: The Discover page listed patterns in a left rail. Selection is now a
+dropdown to the left of the pattern KPIs, with support in a badge; Detail and
+Refined tiles are gone; the diagram uses the full right pane width.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_patterns.html
+   Drop the list pane; details fill the preview body.
+2. src/front/static/simulation/js/simulation-patterns.js
+   Pattern `<select>` + support badge; KPIs Hops/Types/Relations only.
+3. src/front/static/simulation/css/simulation.css
+   Toolbar alignment so dropdown, support badge and KPI tiles share height.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract for dropdown + support badge; no Detail/Refined tiles.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_patterns.html
+- src/front/static/simulation/js/simulation-patterns.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.

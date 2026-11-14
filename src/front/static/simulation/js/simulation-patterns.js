@@ -24,17 +24,14 @@ const SimulationPatterns = {
         on('patSaveConfirmBtn', () => this.confirmSave());
         on('patSavedRefreshBtn', () => this.refreshSaved());
 
-        const list = document.getElementById('patPatternList');
-        if (list) {
-            list.addEventListener('click', (e) => {
-                const row = e.target.closest('[data-pat-id]');
-                if (row) this.selectPattern(row.dataset.patId);
-            });
-        }
         const details = document.getElementById('patDetails');
         if (details) {
             details.addEventListener('click', (e) => {
                 if (e.target.closest('[data-pat-more]')) this._loadMoreMembers();
+            });
+            details.addEventListener('change', (e) => {
+                const sel = e.target.closest('#patPatternSelect');
+                if (sel && sel.value) this.selectPattern(sel.value);
             });
         }
         const saved = document.getElementById('patSavedList');
@@ -233,51 +230,81 @@ const SimulationPatterns = {
             + this._kpiTile('Hops', this._fmtNum(stats.hop_count))
             + this._kpiTile('Bins', this._fmtNum(stats.bins))
             + this._kpiTile('Min support', this._fmtNum(stats.min_support))
-            + this._kpiTile('Detail', this._detailLabel(stats.detail_level))
-            + this._kpiTile('Refined', stats.refined ? 'yes' : 'no')
             + `</div>`;
     },
 
+    _patternOptionsHtml(selectedId) {
+        const patterns = (this.latest && this.latest.patterns) || [];
+        return patterns.map((p) => {
+            const label = p.label || (p.id || '').slice(0, 8);
+            const selected = p.id === selectedId ? ' selected' : '';
+            return `<option value="${this._esc(p.id)}"${selected}>`
+                + `${this._esc(label)}</option>`;
+        }).join('');
+    },
+
+    _supportOf(patternId) {
+        const patterns = (this.latest && this.latest.patterns) || [];
+        const hit = patterns.find((p) => p.id === patternId);
+        return hit ? hit.support : null;
+    },
+
     _renderList() {
-        const list = document.getElementById('patPatternList');
         const empty = document.getElementById('patPreviewEmpty');
         const body = document.getElementById('patPreviewBody');
         const patterns = (this.latest && this.latest.patterns) || [];
         if (!patterns.length) {
             if (empty) empty.classList.remove('d-none');
             if (body) body.classList.add('d-none');
+            this.selectedId = null;
             return;
         }
         if (empty) empty.classList.add('d-none');
         if (body) body.classList.remove('d-none');
-        if (!list) return;
-        list.innerHTML = patterns.map((p) => {
-            const active = p.id === this.selectedId ? ' active' : '';
-            return `<button type="button" class="pat-pattern-row${active}" data-pat-id="${this._esc(p.id)}">`
-                + `<span class="fw-medium">${this._esc(p.label || p.id.slice(0, 8))}</span>`
-                + `<span class="text-muted small">support ${this._fmtNum(p.support)}</span>`
-                + `</button>`;
-        }).join('');
+        if (!this.selectedId || !patterns.some((p) => p.id === this.selectedId)) {
+            this.selectedId = patterns[0].id;
+        }
+        if (this.selectedId) this.selectPattern(this.selectedId);
     },
 
     async selectPattern(patternId) {
+        if (!patternId) return;
         this.selectedId = patternId;
-        this._renderList();
         this._syncButtons();
         const details = document.getElementById('patDetails');
         if (!details) return;
-        details.innerHTML = '<p class="text-muted small mb-0">Loading…</p>';
+        details.innerHTML = this._toolbarHtml(patternId)
+            + '<div id="patDetailBody"><p class="text-muted small mb-0">Loading…</p></div>';
         try {
             const [shape, members] = await Promise.all([
                 this._json(`/dtwin/patterns/${encodeURIComponent(patternId)}/shape`),
                 this._json(`/dtwin/patterns/${encodeURIComponent(patternId)}/members?offset=0&limit=${this.MEMBERS_PAGE}`),
             ]);
+            if (this.selectedId !== patternId) return;
             this._members = members;
             this._selectedShape = shape;
             details.innerHTML = this._detailsHtml(shape, members);
         } catch (err) {
-            details.innerHTML = `<p class="text-danger small mb-0">${this._esc(err.message || 'Failed')}</p>`;
+            if (this.selectedId !== patternId) return;
+            details.innerHTML = this._toolbarHtml(patternId)
+                + `<div id="patDetailBody"><p class="text-danger small mb-0">${this._esc(err.message || 'Failed')}</p></div>`;
         }
+    },
+
+    _toolbarHtml(selectedId, kpisHtml = '') {
+        const support = this._supportOf(selectedId);
+        return `
+            <div class="pat-detail-toolbar mb-3">
+                <div class="pat-pattern-picker">
+                    <label class="visually-hidden" for="patPatternSelect">Pattern</label>
+                    <select class="form-select pat-pattern-select" id="patPatternSelect">
+                        ${this._patternOptionsHtml(selectedId)}
+                    </select>
+                    <span class="badge pat-support-badge" id="patSupportBadge"
+                          title="Support">${this._esc(this._fmtNum(support))}</span>
+                </div>
+                <div class="row g-2 pat-kpi-row pat-detail-kpis" id="patDetailKpis">${kpisHtml}</div>
+            </div>`;
     },
 
     _detailsHtml(shape, members) {
@@ -286,7 +313,6 @@ const SimulationPatterns = {
             : '<p class="text-muted small mb-0">Re-run <strong>Detect</strong> to draw this pattern.</p>';
         const nodes = (shape.diagram && shape.diagram.nodes) || [];
         const edges = (shape.diagram && shape.diagram.edges) || [];
-        const title = shape.seed_label || (shape.pattern_id || '').slice(0, 8) || 'Pattern';
         const rows = (members.members || []).map((m) => (
             `<li class="pat-member-row">`
             + `<span class="fw-medium">${this._esc(m.label || m.uri)}</span>`
@@ -296,28 +322,18 @@ const SimulationPatterns = {
         const more = members.has_more
             ? '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-pat-more>Load more</button>'
             : '';
+        const kpis = this._kpiTile('Hops', this._fmtNum(shape.hop_count))
+            + this._kpiTile('Types', this._fmtNum(nodes.length))
+            + this._kpiTile('Relations', this._fmtNum(edges.length));
         return `
-            <div class="pat-detail-head">
-                <div class="d-flex align-items-baseline justify-content-between gap-2 flex-wrap mb-2">
-                    <h6 class="mb-0">${this._esc(title)}</h6>
-                    <span class="badge rounded-pill text-bg-primary-subtle border border-primary-subtle">
-                        ${this._fmtNum(members.total)} members
-                    </span>
+            ${this._toolbarHtml(shape.pattern_id || this.selectedId, kpis)}
+            <div id="patDetailBody">
+                <div class="pat-diagram mb-3">${diagram}</div>
+                <div class="pat-members">
+                    <h6 class="mb-2">Matching entities</h6>
+                    <ul class="pat-member-list mb-0">${rows || '<li class="text-muted">None</li>'}</ul>
+                    ${more}
                 </div>
-                <div class="row g-2 pat-kpi-row mb-3">
-                    ${this._kpiTile('Members', this._fmtNum(shape.support || members.total))}
-                    ${this._kpiTile('Hops', this._fmtNum(shape.hop_count))}
-                    ${this._kpiTile('Types', this._fmtNum(nodes.length))}
-                    ${this._kpiTile('Relations', this._fmtNum(edges.length))}
-                    ${this._kpiTile('Detail', this._detailLabel((this.latest && this.latest.stats || {}).detail_level))}
-                    ${this._kpiTile('Refined', shape.refined ? 'yes' : 'no')}
-                </div>
-            </div>
-            <div class="pat-diagram mb-3">${diagram}</div>
-            <div class="pat-members">
-                <h6 class="mb-2">Matching entities</h6>
-                <ul class="pat-member-list mb-0">${rows || '<li class="text-muted">None</li>'}</ul>
-                ${more}
             </div>`;
     },
 
@@ -500,7 +516,6 @@ const SimulationPatterns = {
             if (this.selectedId && !(data.patterns || []).some((p) => p.id === this.selectedId)) {
                 this.selectedId = null;
             }
-            this._renderList();
             this._syncButtons();
         } catch (err) {
             this._notify(err.message || 'Failed to load patterns', 'danger');
