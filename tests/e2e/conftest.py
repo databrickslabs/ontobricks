@@ -206,6 +206,14 @@ def _install_redirect_fix(ctx, base: str, token: str) -> None:
     ):
         ctx.route(pattern, _route)
 
+    def _strip_bearer(route):
+        # The context adds the workspace bearer to every request; third-party
+        # hosts (CDNs for D3, fonts, ...) must never receive it.
+        headers = {k: v for k, v in route.request.headers.items() if k.lower() != "authorization"}
+        route.continue_(headers=headers)
+
+    ctx.route(lambda url: not url.startswith(base), _strip_bearer)
+
 
 # Default integration workspace settings. Override via the
 # ``ONTOBRICKS_E2E_*`` env vars documented at the top of this module.

@@ -148,3 +148,31 @@ Tests: `uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/t
 Deployed checks: readiness green, domain create/save/list/load OK, snapshot
 written to the Volume, registry restored after an app stop/start (app log:
 "Restored SQLite registry from /Volumes/.../ontobricks_registry.sqlite").
+
+================================================================================
+## E2E harness: never send the live workspace bearer to third-party hosts
+================================================================================
+
+Context:
+In live mode the e2e and scenario contexts carry `Authorization: Bearer <token>`
+in `extra_http_headers`, which Playwright adds to every request, including CDN
+sub-resources (the app loads D3 from jsdelivr). `_install_redirect_fix` only
+routed app-host documents and let everything else through with the header, so
+a real workspace OAuth token was sent to third-party hosts. Found before running
+the scenario campaign against the SQLite-registry test instance.
+
+Changes:
+
+1. tests/e2e/conftest.py
+   `_install_redirect_fix` adds a route for every URL outside the app base that
+   re-sends the request without the `authorization` header.
+2. tests/e2e/security/test_live_bearer_scope.py (new)
+   Two local HTTP servers stand in for the app and a CDN; the CDN must receive
+   no bearer. Fails on the previous harness, passes with the fix.
+
+Modified files:
+- tests/e2e/conftest.py
+- tests/e2e/security/test_live_bearer_scope.py
+
+Tests: `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest tests/e2e/security/test_live_bearer_scope.py`
+-> 1 passed (and 1 failed against the previous harness).
