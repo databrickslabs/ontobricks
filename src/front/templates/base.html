@@ -58,7 +58,7 @@
     
     {% block extra_css %}{% endblock %}
 </head>
-<body class="llm-unconfigured"
+<body class="llm-unconfigured" data-registry-fallback="{{ '1' if registry_fallback() else '0' }}"
       data-app-role="{{ get_user_role() or 'admin' }}"
       data-domain-role="{{ get_user_domain_role() or 'admin' }}"
       data-app-mode="{{ 'true' if is_app_mode() else 'false' }}"

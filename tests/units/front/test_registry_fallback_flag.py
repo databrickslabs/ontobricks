@@ -56,3 +56,13 @@ class TestHealthWording:
         monkeypatch.setattr(health, "_resolve_registry_cfg", lambda s: RegistryCfg(catalog="", schema="", volume=""))
         _status, detail = health._check_lakebase(get_settings())
         assert "fallback" in detail.lower()
+
+
+class TestNewDomainDialog:
+    def test_body_exposes_the_fallback_flag(self):
+        text = (TEMPLATES / "base.html").read_text()
+        assert "data-registry-fallback=" in text
+
+    def test_dialog_marks_lakebase_unavailable_in_fallback(self):
+        js = (TEMPLATES.parent / "static" / "global" / "js" / "utils.js").read_text()
+        assert "registryFallback === '1'" in js and "not available on this workspace" in js

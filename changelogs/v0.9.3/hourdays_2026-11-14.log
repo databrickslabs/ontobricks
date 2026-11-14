@@ -310,3 +310,30 @@ Modified files:
 - tests/units/front/test_registry_fallback_flag.py
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9762 passed, 339 skipped.
+
+================================================================================
+## New Domain dialog: Lakebase marked unavailable in SQLite fallback mode
+================================================================================
+
+Context:
+The New Domain dialog still listed Lakebase as a graph backend option on a
+workspace without Lakebase.
+
+Changes:
+
+1. src/front/templates/base.html
+   `<body data-registry-fallback="0|1">` exposes the fallback flag to scripts.
+
+2. src/front/static/global/js/utils.js
+   In fallback mode the dialog lists Lakebase as "not available on this
+   workspace (SQLite fallback mode)".
+
+3. tests/units/front/test_registry_fallback_flag.py
+   Two checks for the flag and the dialog text.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/utils.js
+- tests/units/front/test_registry_fallback_flag.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9764 passed, 339 skipped.
