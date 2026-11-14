@@ -261,7 +261,7 @@ function updateVersionStatusUI(isActive, version, hasRegistry) {
     const domainNameInput = document.getElementById('domainName');
     const domainNameHint = document.getElementById('domainNameHint');
 
-    const editableFields = document.querySelectorAll('.domain-editable:not(#domainName)');
+    const editableFields = document.querySelectorAll('.domain-editable:not(#domainName):not([data-unavailable])');
     const baseUriToggle = document.getElementById('baseUriCustomToggle');
 
     const versionDisplay = document.getElementById('domainVersionDisplay');

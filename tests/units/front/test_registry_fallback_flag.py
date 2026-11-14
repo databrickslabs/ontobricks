@@ -66,3 +66,15 @@ class TestNewDomainDialog:
     def test_dialog_marks_lakebase_unavailable_in_fallback(self):
         js = (TEMPLATES.parent / "static" / "global" / "js" / "utils.js").read_text()
         assert "registryFallback === '1'" in js and "not available on this workspace" in js
+
+
+class TestLakebaseCardStaysDisabled:
+    """The page script re-enables editable inputs; an unavailable Lakebase radio must stay disabled."""
+
+    def test_unavailable_radio_is_marked(self):
+        tpl = (TEMPLATES / "partials" / "domain" / "_domain_information.html").read_text()
+        assert "{% if not lakebase_available %}disabled data-unavailable=\"1\"{% endif %}" in tpl
+
+    def test_script_skips_unavailable_inputs(self):
+        js = (TEMPLATES.parent / "static" / "domain" / "js" / "domain-information.js").read_text()
+        assert ".domain-editable:not(#domainName):not([data-unavailable])" in js

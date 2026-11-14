@@ -217,7 +217,7 @@
                                            name="domainGraphBackendChoice" id="domainGraphBackendLakebase"
                                            value="lakebase"
                                            {% if (domain.graph_backend or graph_backend_default) == 'lakebase' %}checked{% endif %}
-                                           {% if not lakebase_available %}disabled{% endif %}>
+                                           {% if not lakebase_available %}disabled data-unavailable="1"{% endif %}>
                                     <label class="domain-backend-card" for="domainGraphBackendLakebase">
                                         <i class="bi bi-check-circle-fill domain-backend-check" aria-hidden="true"></i>
                                         <span class="domain-backend-logo">

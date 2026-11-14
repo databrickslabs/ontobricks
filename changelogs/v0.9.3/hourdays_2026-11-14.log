@@ -337,3 +337,31 @@ Modified files:
 - tests/units/front/test_registry_fallback_flag.py
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9764 passed, 339 skipped.
+
+================================================================================
+## Domain backend: the unavailable Lakebase card stays disabled
+================================================================================
+
+Context:
+On a SQLite (fallback) registry the server renders the Lakebase backend radio
+disabled, but `updateVersionStatusUI` re-enabled every `.domain-editable` input
+when the domain became active, so the greyed-out card could still be selected.
+Found while scripting the v2 demo.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_information.html
+   The unavailable Lakebase radio carries `data-unavailable="1"`.
+
+2. src/front/static/domain/js/domain-information.js
+   The editable-field toggle skips `[data-unavailable]` inputs.
+
+3. tests/units/front/test_registry_fallback_flag.py
+   Two checks (red before, green after).
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- tests/units/front/test_registry_fallback_flag.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9766 passed, 339 skipped.
