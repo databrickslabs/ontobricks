@@ -776,6 +776,8 @@ def test_patterns_section_owns_discovery():
     assert "this._kpiTile('Detail'" not in js
     assert "this._kpiTile('Refined'" not in js
     assert "Matching entities" in js
+    assert "/dtwin/?section=sigmagraph&focus=" in js
+    assert "pat-member-link" in js
     assert "Re-run <strong>Detect</strong> to draw this pattern." in js
     assert "pat-token" not in js
     js = _read(FRONT / "static/simulation/js/simulation-patterns.js")

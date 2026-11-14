@@ -1158,6 +1158,17 @@ a.sim-uri-link:focus-visible {
     border-bottom: none;
 }
 
+.pat-member-link {
+    font-weight: 500;
+    color: var(--db-primary, #4F46E5);
+    text-decoration: none;
+}
+
+.pat-member-link:hover {
+    text-decoration: underline;
+    color: var(--db-primary-dark, #4338CA);
+}
+
 @media (max-width: 991.98px) {
     .pat-pattern-picker {
         flex: 1 1 100%;

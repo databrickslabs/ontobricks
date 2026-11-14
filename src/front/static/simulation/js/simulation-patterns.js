@@ -303,18 +303,31 @@ const SimulationPatterns = {
             </div>`;
     },
 
+    _explorerHref(uri) {
+        if (!uri) return '';
+        return `/dtwin/?section=sigmagraph&focus=${encodeURIComponent(uri)}`;
+    },
+
+    _memberRow(m) {
+        const label = m.label || m.uri || '—';
+        const type = m.type_label || '—';
+        const href = this._explorerHref(m.uri);
+        const name = href
+            ? `<a class="pat-member-link" href="${this._esc(href)}" title="Open in Graph Explorer">${this._esc(label)}</a>`
+            : `<span class="fw-medium">${this._esc(label)}</span>`;
+        return `<li class="pat-member-row">`
+            + `${name}`
+            + `<span class="badge rounded-pill text-bg-light border">${this._esc(type)}</span>`
+            + `</li>`;
+    },
+
     _detailsHtml(shape, members) {
         const diagram = shape.diagram
             ? this._diagramSvg(shape.diagram)
             : '<p class="text-muted small mb-0">Re-run <strong>Detect</strong> to draw this pattern.</p>';
         const nodes = (shape.diagram && shape.diagram.nodes) || [];
         const edges = (shape.diagram && shape.diagram.edges) || [];
-        const rows = (members.members || []).map((m) => (
-            `<li class="pat-member-row">`
-            + `<span class="fw-medium">${this._esc(m.label || m.uri)}</span>`
-            + `<span class="badge rounded-pill text-bg-light border">${this._esc(m.type_label || '—')}</span>`
-            + `</li>`
-        )).join('');
+        const rows = (members.members || []).map((m) => this._memberRow(m)).join('');
         const more = members.has_more
             ? '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-pat-more>Load more</button>'
             : '';
@@ -454,12 +467,7 @@ const SimulationPatterns = {
             };
             const details = document.getElementById('patDetails');
             if (!details) return;
-            const rows = this._members.members.map((m) => (
-                `<li class="pat-member-row">`
-                + `<span class="fw-medium">${this._esc(m.label || m.uri)}</span>`
-                + `<span class="badge rounded-pill text-bg-light border">${this._esc(m.type_label || '—')}</span>`
-                + `</li>`
-            )).join('');
+            const rows = this._members.members.map((m) => this._memberRow(m)).join('');
             const list = details.querySelector('.pat-member-list');
             if (list) list.innerHTML = rows || '<li class="text-muted">None</li>';
             const members = details.querySelector('.pat-members');
@@ -688,9 +696,7 @@ const SimulationPatterns = {
             const data = await this._json(
                 `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/members?offset=${offset}&limit=${this.MEMBERS_PAGE}`
             );
-            const rows = (data.members || []).map((m) => (
-                `<li>${this._esc(m.label || m.uri)}</li>`
-            )).join('');
+            const rows = (data.members || []).map((m) => this._memberRow(m)).join('');
             if (!append) {
                 box.innerHTML = `<ul class="mb-1">${rows}</ul>`;
             } else {
