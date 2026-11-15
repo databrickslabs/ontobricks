@@ -715,7 +715,13 @@ fi
 
 # ── 8. Run ──────────────────────────────────────────────────────────
 if ! $NO_RUN; then
+    # `databricks bundle deploy` can drop the gitignored
+    # resources/_generated_instance_target.yml (sync mirrors tracked
+    # files). Re-materialise before each run so -t dev-lakebase-<id>
+    # remains resolvable.
     begin_step "Start $APP_NAME"
+    ensure_instance_target "$TARGET" \
+        || die "failed to materialise DAB target '${TARGET}' before app start"
     databricks bundle run "$APP_RESOURCE_KEY" -t "$TARGET" "${_dab_var_overrides[@]}" \
         || die "failed to start app '${APP_NAME}'. Inspect the logs: databricks apps logs ${APP_NAME}"
     ok "app start requested"
@@ -729,6 +735,8 @@ if ! $NO_RUN; then
     _mcp_attempt=1
     _mcp_max_attempts=2
     while true; do
+        ensure_instance_target "$TARGET" \
+            || die "failed to materialise DAB target '${TARGET}' before MCP start"
         if databricks bundle run "$MCP_APP_RESOURCE_KEY" -t "$TARGET" "${_dab_var_overrides[@]}"; then
             ok "MCP app start requested"
             break

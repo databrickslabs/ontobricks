@@ -361,3 +361,25 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 45.78s ========
+
+## Re-materialise DAB instance target before bundle run
+
+Context: `make deploy` uploaded the bundle for `dev-lakebase-10x` but failed
+at app start with `no such target` because `databricks bundle deploy` drops the
+gitignored `resources/_generated_instance_target.yml`. Re-call
+`ensure_instance_target` before each `bundle run`.
+
+Changes:
+
+1. scripts/deploy.sh
+   Re-materialise the per-instance DAB target before starting the main app and
+   again before starting the MCP companion.
+2. tests/units/settings/test_deploy_instance_id.py
+   Assert step 8 re-ensures the target before each bundle run.
+
+Modified files:
+- scripts/deploy.sh
+- tests/units/settings/test_deploy_instance_id.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10582 passed, 324 skipped, 8 deselected, 39 warnings in 45.43s ========
