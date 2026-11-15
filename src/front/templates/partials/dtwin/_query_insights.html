@@ -1,16 +1,16 @@
 <!-- CSS: /static/query/css/query-sync.css (shared) -->
 <!-- JS: /static/query/js/query-sync.js (shared — loadInsights, renderInsights) -->
-<!-- Knowledge Graph Insights — standalone section on /dtwin/ -->
+<!-- Knowledge Graph Overview — standalone section on /dtwin/ -->
 <div class="content-section">
 
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="bi bi-bar-chart-line me-2"></i>Insights{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
-            <p class="text-muted mb-0 small">Content overview of the triple store: entity types and relationships</p>
+            <h4 class="mb-1"><i class="bi bi-bar-chart-line me-2"></i>Overview{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
+            <p class="text-muted mb-0 small">Content overview of the triple store, graph cache, and Intelligence materializations</p>
         </div>
         <div class="d-flex align-items-center gap-2">
             <button type="button" class="btn btn-sm btn-outline-secondary" id="insightRefreshBtn"
-                    title="Reload insights from the triple store">
+                    title="Reload overview from the triple store">
                 <i class="bi bi-arrow-clockwise me-1"></i>Refresh
             </button>
             <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
@@ -19,6 +19,9 @@
             </button>
         </div>
     </div>
+
+    <div class="card">
+        <div class="card-body">
 
     <!-- No data placeholder -->
     <div id="insightNoData" class="d-none">
@@ -32,13 +35,24 @@
     <!-- Loading spinner -->
     <div id="insightSectionLoading" class="text-center py-4 d-none">
         <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-        <span class="text-muted small">Loading triple store insights...</span>
+        <span class="text-muted small">Loading triple store overview...</span>
     </div>
 
     <!-- Stats content (reuses the same IDs as the sync-pane version) -->
     <div id="insightSectionContent" class="d-none">
         <!-- Summary cards -->
         <div class="row g-2 mb-3" id="insightsSummaryRow"></div>
+
+        <div id="insightsCacheBlock" class="mb-3">
+            <h6 class="fw-semibold mb-1"><i class="bi bi-lightning-charge me-1"></i>Graph cache</h6>
+            <p class="text-muted small mb-2" id="insightsCacheStatus"></p>
+            <div class="row g-2" id="insightsCacheRow"></div>
+        </div>
+
+        <div id="insightsMaterializedBlock" class="mb-3">
+            <h6 class="fw-semibold mb-2"><i class="bi bi-cpu me-1"></i>Materialized from Intelligence</h6>
+            <div class="row g-2" id="insightsMaterializedRow"></div>
+        </div>
 
         <!-- Entity types + Relationships side by side -->
         <div class="row g-3 mb-3">
@@ -63,4 +77,7 @@
 
     <!-- Error area -->
     <div id="insightSectionError" class="d-none"></div>
+
+        </div><!-- /.card-body -->
+    </div><!-- /.card -->
 </div>

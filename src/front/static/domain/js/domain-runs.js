@@ -193,6 +193,7 @@ window.showAnalyticsRunDetails = showAnalyticsRunDetails;
 
 function _syncBuildPageTab(tab) {
     const name = tab === 'runs' ? 'runs' : 'build';
+    document.getElementById('buildHeaderActions')?.classList.toggle('d-none', name === 'runs');
     const url = new URL(window.location.href);
     if (url.searchParams.get('section') === 'sync' || !url.searchParams.get('section')) {
         if (url.searchParams.get('tab') !== name) {

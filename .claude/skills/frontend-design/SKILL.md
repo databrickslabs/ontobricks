@@ -16,7 +16,11 @@ the work; it does not restate the visual rules.
 3. Add a failing structural or behavior contract.
 4. Reuse shared Bootstrap and `ob-*` components; do not add local visual
    overrides when the shared component already owns the state.
-5. Browser-test the changed page against the reference at desktop and mobile
+5. Keep the sidebar section layout: `.section-header` on the warm canvas, then
+   all body content inside one white `.card` (`.card-body` when needed).
+   Reference: Domain → Versions (`.cursor/11` → *Section Body Surface*).
+   Never leave tiles, tables, forms, or empty states bare on the canvas.
+6. Browser-test the changed page against the reference at desktop and mobile
    widths, including keyboard focus, overflow, and console or network errors.
-6. Run `uv run --frozen pytest -q -m "not scenario"`.
-7. Invoke the `changelog` skill.
+7. Run `uv run --frozen pytest -q -m "not scenario"`.
+8. Invoke the `changelog` skill.

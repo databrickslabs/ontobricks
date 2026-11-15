@@ -373,8 +373,16 @@ class TestGraphStats:
         cached = {
             "top_predicates": [{"uri": "p", "kind": "attribute"}],
             "analytics_job_blocked_reason": "",
+            "graph_cache": {"supported": True},
         }
         assert TwinGraphStats.cache_is_fresh(cached) is True
+
+    def test_cache_without_graph_cache_is_stale(self):
+        cached = {
+            "top_predicates": [{"uri": "p", "kind": "attribute"}],
+            "analytics_job_blocked_reason": "",
+        }
+        assert TwinGraphStats.cache_is_fresh(cached) is False
 
     def test_cache_with_types_but_zero_triples_is_stale(self):
         cached = {
@@ -420,6 +428,10 @@ class TestGraphStats:
         assert payload["analytics_job_available"] is False
         assert payload["analytics_job_blocked_reason"] == "not configured"
         assert payload["inferred_triples"] == 3
+        assert payload["graph_cache"]["supported"] is True
+        assert payload["graph_cache"]["backend"] == "lakebase"
+        assert payload["intelligence"]["inferred_triples"] == 3
+        assert payload["intelligence"]["communities"]["ready"] is False
 
     def test_relationship_count_never_goes_negative(self):
         with patch.object(DigitalTwin, "classify_predicates", return_value=[]):

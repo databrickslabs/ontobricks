@@ -362,6 +362,45 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 45.78s ========
 
+## Left sidebar transparent background and border removal
+
+Context: Style the left navigation sidebar without a background color and without an outer border, matching the visual language of the Level-2 second navbar (`#obSubnav`).
+
+Changes:
+
+1. src/front/static/global/css/sidebar-layout.css
+   Update `.sidebar-nav` to `background: transparent; border: none; border-radius: 0;`.
+2. tests/units/front/test_clarity_design_contract.py
+   Update contract test `test_sidebar_has_transparent_background_and_no_border` to assert transparent background and no border.
+3. .cursor/11-frontend-design.mdc
+   Update sidebar design rules to document the borderless, transparent rail treatment.
+
+Modified files:
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 45.90s ========
+
+## Sidebar collapse toggle: no hover highlight
+
+Context: The collapse/expand toggle at the top of the left sidebar highlighted its background on hover (`--db-hover-warm`). The user wants no hover highlight on this icon.
+
+Changes:
+
+1. src/front/static/global/css/sidebar-layout.css
+   Remove the `.sidebar-toggle:hover` background rule.
+2. tests/units/front/test_clarity_design_contract.py
+   Add `test_sidebar_toggle_has_no_hover_highlight` asserting no `.sidebar-toggle:hover` rule exists.
+
+Modified files:
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10581 passed, 324 skipped, 8 deselected, 39 warnings in 45.37s ========
+
 ## Re-materialise DAB instance target before bundle run
 
 Context: `make deploy` uploaded the bundle for `dev-lakebase-10x` but failed
@@ -383,3 +422,170 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10582 passed, 324 skipped, 8 deselected, 39 warnings in 45.43s ========
+
+## White card panel under section titles on bare pages
+
+Context: Domain → Versions already places body content on a white `.card`
+under the title (warm canvas around the header). Domain → Validation and
+several other sections left tiles/tables/forms floating on the warm canvas.
+Align those pages with the Versions pattern: title stays outside; content sits
+in a white card.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_validation.html
+   Wrap post-header body in `.card` / `.card-body`.
+2. src/front/templates/partials/domain/_domain_review.html
+   Wrap `#reviewBody` in a white card.
+3. src/front/templates/partials/domain/_domain_mytasks.html
+   Wrap `#domainMyTasksContainer` in a white card.
+4. src/front/templates/partials/domain/_domain_discussions.html
+   Wrap `#domainDiscussionsContainer` in a white card.
+5. src/front/templates/partials/mapping/_mapping_diagnostics.html
+   Wrap KPI tiles / empty / results in a white card.
+6. src/front/templates/partials/settings/_settings_teams.html
+   Wrap teams filters/matrix in a white card.
+7. src/front/templates/partials/settings/_settings_github.html
+   Wrap GitHub form in a white card.
+8. src/front/templates/partials/settings/_settings_schedule.html
+   Wrap schedules table in a white card.
+9. src/front/templates/partials/settings/_settings_runs.html
+   Move context filter into the existing runs card above the tab rail.
+10. src/front/templates/partials/dtwin/_query_api.html
+    Wrap API reference body in a white card.
+11. src/front/templates/settings.html
+    Wrap Locks and Logs includes in `.card` / `.card-body`.
+12. tests/units/front/test_section_content_white_panel.py
+    Contract that previously bare sections keep a white card under the title.
+13. tests/units/front/test_settings_runs_page.py
+    Allow optional content above the Runs tab rail inside the card.
+14. .cursor/11-frontend-design.mdc
+    Document the header-on-canvas / body-in-card rule for sidebar pages.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/domain/_domain_review.html
+- src/front/templates/partials/domain/_domain_mytasks.html
+- src/front/templates/partials/domain/_domain_discussions.html
+- src/front/templates/partials/mapping/_mapping_diagnostics.html
+- src/front/templates/partials/settings/_settings_teams.html
+- src/front/templates/partials/settings/_settings_github.html
+- src/front/templates/partials/settings/_settings_schedule.html
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/partials/dtwin/_query_api.html
+- src/front/templates/settings.html
+- tests/units/front/test_section_content_white_panel.py
+- tests/units/front/test_settings_runs_page.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10595 passed, 324 skipped, 8 deselected, 39 warnings in 44.57s ========
+
+## Document sidebar section body layout (white card under title)
+
+Context: The two-zone sidebar section layout (title on the warm canvas, body in
+one white `.card`, Domain → Versions as reference) must be part of the
+canonical frontend rules and the frontend-design skill so future sections
+follow it.
+
+Changes:
+
+1. .cursor/11-frontend-design.mdc
+   Add the *Section Body Surface (white card under the title)* subsection with
+   skeleton, rules, and contract test pointer.
+2. .claude/skills/frontend-design/SKILL.md
+   Add a procedure step requiring the header-on-canvas / body-in-card layout.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- .claude/skills/frontend-design/SKILL.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+## Graph/Overview layout and title, sidebar tooltips, and Build icon
+
+Context:
+1. Graph → Overview (`/dtwin/?section=insight`) previously had its title as "Insights" and its content was sitting bare on the canvas instead of inside a white card.
+2. The user requested the title to be "Overview".
+3. When the sidebar is collapsed, users need hover tooltips indicating the feature/sub-menu name.
+4. Replace the Build icon everywhere with something more relevant (`bi-hammer`) instead of `bi-fast-forward`.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_insights.html
+   Rename heading to "Overview", wrap body content inside a `.card` / `.card-body` panel.
+2. src/front/templates/partials/layout/_sidebar_nav.html
+   Add `data-sidebar-title="{{ item.label }}"` to every nav link.
+3. src/front/static/global/js/sidebar-nav.js
+   Implement `_updateTooltips()` using Bootstrap Tooltip (`placement: 'right'`, `trigger: 'hover'`, `container: 'body'`). Automatically enabled when collapsed, disabled when expanded, and hidden on click.
+4. src/front/config/menu_config.json
+   Change Build icon from `bi-fast-forward` to `bi-hammer`.
+5. src/front/templates/partials/dtwin/_query_build.html
+   Change Build icon in section header, action buttons, and tabs to `bi-hammer`.
+6. src/front/static/query/js/query-sync.js
+   Update "Go to Build" button icon to `bi-hammer`.
+7. tests/units/front/test_help_center_menu_sync.py
+   Assert consistent `bi-hammer` icon for Build.
+8. tests/units/front/test_section_content_white_panel.py
+   Add contracts verifying Overview title and white-card layout, and sidebar tooltips contract.
+9. .cursor/11-frontend-design.mdc
+   Document sidebar collapsed tooltips behavior.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_insights.html
+- src/front/templates/partials/layout/_sidebar_nav.html
+- src/front/static/global/js/sidebar-nav.js
+- src/front/config/menu_config.json
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/static/query/js/query-sync.js
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_section_content_white_panel.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10600 passed, 324 skipped, 8 deselected, 39 warnings in 47.13s ========
+
+## Build backend brand icon and Overview cache stats
+
+Context: Graph → Build needed the same large backend mark as Context → Configuration → Backend (Lakebase / Lakehouse / Neo4j). Graph → Overview only showed triple-store KPIs; users also need graph-cache companion counts (adjacency in/out, properties, entity search) and Intelligence materializations (inferred triples, communities).
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   Page header shows a large `.ob-brand-icon` next to the Build title.
+2. src/front/static/query/css/query-sync.css
+   Sizes `.build-backend-logo` like the Configuration backend cards, larger.
+3. src/front/static/query/js/query-sync.js
+   Sets the brand icon from the active backend; Overview renders cache + Intelligence KPI rows.
+4. src/front/static/query/js/query-databricks-build.js
+   Updates the Build header icon when Lakehouse panels are applied.
+5. src/front/templates/partials/dtwin/_query_insights.html
+   Adds Graph cache and Materialized from Intelligence blocks under the summary tiles.
+6. src/back/core/graphdb/interfaces/SearchCacheMixin.py
+   `companion_inventory` returns ready flags and `COUNT(*)` for adj in/out, props, and entity-search tables.
+7. src/back/objects/digitaltwin/TwinGraphStats.py
+   `/sync/stats` payload includes `graph_cache` and `intelligence`; stale session cache without `graph_cache` is refreshed.
+8. src/api/routers/internal/dtwin.py
+   Loads companion inventory and community totals in parallel with existing stats queries.
+9. tests/units/front/test_search_cache_ui.py
+   Contracts for the Build brand icon and Overview cache / Intelligence markup.
+10. tests/units/graphdb/test_search_cache.py
+    Companion inventory counts, missing tables, and Neo4j-style empty inventory.
+11. tests/units/dtwin/test_v090_twin_build_prepare.py
+    Stats cache freshness requires `graph_cache`; assemble exposes cache + Intelligence blocks.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/static/query/css/query-sync.css
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+- src/front/templates/partials/dtwin/_query_insights.html
+- src/back/core/graphdb/interfaces/SearchCacheMixin.py
+- src/back/objects/digitaltwin/TwinGraphStats.py
+- src/api/routers/internal/dtwin.py
+- tests/units/front/test_search_cache_ui.py
+- tests/units/graphdb/test_search_cache.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10606 passed, 324 skipped, 8 deselected, 39 warnings in 45.33s ========
+

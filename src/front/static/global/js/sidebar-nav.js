@@ -49,6 +49,7 @@ const SidebarNav = {
 
         document.querySelectorAll(`${navSelector} .nav-link[data-section]`).forEach(link => {
             link.addEventListener('click', async function(e) {
+                window.bootstrap?.Tooltip?.getInstance(this)?.hide();
                 e.preventDefault();
                 const section = this.dataset.section;
                 
@@ -167,6 +168,52 @@ const SidebarNav = {
         nav.classList.toggle('collapsed');
         const collapsed = nav.classList.contains('collapsed');
         try { localStorage.setItem(SidebarNav._STORAGE_KEY, collapsed ? '1' : '0'); } catch (_) { /* ignore */ }
+        SidebarNav._updateTooltips();
+    },
+
+    /**
+     * Update tooltips for collapsed sidebar navigation links.
+     * When collapsed, hover shows a tooltip with the feature name to the right.
+     * When expanded, tooltips are disabled so they do not duplicate the visible label.
+     */
+    _updateTooltips: function() {
+        const nav = document.querySelector('.sidebar-nav');
+        if (!nav) return;
+        const isCollapsed = nav.classList.contains('collapsed');
+        nav.querySelectorAll('.nav-link').forEach(link => {
+            let label = link.getAttribute('data-sidebar-title');
+            if (!label) {
+                const labelEl = link.querySelector('.nav-label');
+                label = labelEl ? labelEl.textContent.trim() : link.textContent.trim();
+                if (label) link.setAttribute('data-sidebar-title', label);
+            }
+            if (!label) return;
+
+            let tip = window.bootstrap?.Tooltip?.getInstance(link);
+            if (!tip && window.bootstrap?.Tooltip) {
+                tip = new window.bootstrap.Tooltip(link, {
+                    title: () => link.getAttribute('data-sidebar-title') || '',
+                    placement: 'right',
+                    trigger: 'hover',
+                    container: 'body',
+                });
+            }
+
+            if (tip) {
+                if (isCollapsed) {
+                    tip.enable();
+                } else {
+                    tip.hide();
+                    tip.disable();
+                }
+            } else {
+                if (isCollapsed) {
+                    link.setAttribute('title', label);
+                } else {
+                    link.removeAttribute('title');
+                }
+            }
+        });
     },
 
     /**
@@ -230,6 +277,8 @@ const SidebarNav = {
         } catch (_) {
             nav.classList.add('collapsed');
         }
+
+        SidebarNav._updateTooltips();
     }
 };
 

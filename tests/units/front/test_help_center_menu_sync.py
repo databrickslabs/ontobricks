@@ -22,8 +22,7 @@ _EXPLORER = Path("src/front/templates/partials/dtwin/_query_sigmagraph.html")
 _QUERY_SHELL = Path("src/front/templates/partials/dtwin/_query_query.html")
 _GRAPHQL = Path("src/front/templates/partials/dtwin/_query_graphql.html")
 _SIGMA_JS = Path("src/front/static/query/js/query-sigmagraph.js")
-_BUILD_LAKEBASE = Path("src/front/templates/partials/dtwin/_query_sync.html")
-_BUILD_LAKEHOUSE = Path("src/front/templates/partials/dtwin/_query_databricks_build.html")
+_BUILD_SHELL = Path("src/front/templates/partials/dtwin/_query_build.html")
 _SYNC_JS = Path("src/front/static/query/js/query-sync.js")
 _ONTOLOGY_DESIGNER = Path("src/front/templates/partials/ontology/_ontology_map.html")
 _MAPPING_DESIGNER = Path("src/front/templates/partials/mapping/_mapping_design.html")
@@ -124,19 +123,18 @@ def test_graph_management_order_is_build_overview_runs():
     assert discovery["items"][0]["id"] == "analytics"
 
 
-def test_build_uses_fast_forward_icon_consistently():
+def test_build_uses_hammer_icon_consistently():
     digitaltwin = _menus()["digitaltwin"]
     management = next(
         group for group in digitaltwin["groups"] if group["id"] == "digitaltwin-management"
     )
     build = next(item for item in management["items"] if item["id"] == "sync")
 
-    assert build["icon"] == "bi-fast-forward"
-    for template_path in (_BUILD_LAKEBASE, _BUILD_LAKEHOUSE):
-        template = template_path.read_text(encoding="utf-8")
-        assert '<i class="bi bi-fast-forward me-2"></i>' in template
-        assert '<i class="bi bi-fast-forward me-1"></i>Build' in template
-    assert '<i class="bi bi-fast-forward me-1"></i>Go to Build' in _SYNC_JS.read_text(
+    assert build["icon"] == "bi-hammer"
+    template = _BUILD_SHELL.read_text(encoding="utf-8")
+    assert '<i class="bi bi-hammer me-2"></i>' in template
+    assert '<i class="bi bi-hammer me-1"></i>Build' in template
+    assert '<i class="bi bi-hammer me-1"></i>Go to Build' in _SYNC_JS.read_text(
         encoding="utf-8"
     )
 

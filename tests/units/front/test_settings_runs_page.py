@@ -134,9 +134,10 @@ class TestRunsSection:
         section_start = html.index('id="runs-section"')
         section_end = html.index('<!-- Run details modals for Automation → Runs.')
         section = html[section_start:section_end]
+        # Context filter may sit inside the white card above the tab rail.
         pattern = re.compile(
             r'<div class="card h-100">\s*'
-            r'<div class="card-body p-0 ob-tabs-wrap">\s*'
+            r'<div class="card-body p-0 ob-tabs-wrap">[\s\S]*?'
             r'<ul class="nav nav-tabs ob-tabs nav-fill" id="settingsRunsTabs" role="tablist">[\s\S]*?</ul>\s*'
             r'<div class="tab-content p-3" id="settingsRunsTabContent">[\s\S]*?</div>\s*'
             r'</div>\s*</div>',

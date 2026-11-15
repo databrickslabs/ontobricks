@@ -75,3 +75,41 @@ class TestWiring:
 
     def test_domain_js_fallback_sends_field(self):
         assert FIELD in _read(DOMAIN_JS)
+
+
+class TestGraphPages:
+    BUILD_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_build.html"
+    INSIGHTS_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_insights.html"
+    SYNC_JS = REPO_ROOT / "src/front/static/query/js/query-sync.js"
+    SYNC_CSS = REPO_ROOT / "src/front/static/query/css/query-sync.css"
+    INFO_HTML = INFO_HTML
+
+    def test_build_header_uses_configuration_backend_brand_icon(self):
+        html = _read(self.BUILD_HTML)
+        assert 'id="buildBackendIcon"' in html
+        assert "ob-brand-icon" in html
+        assert "ob-icon-postgresql" in html
+        assert "build-backend-logo" in html
+        info = _read(self.INFO_HTML)
+        assert "ob-icon-postgresql" in info
+        assert "ob-icon-lakehouse" in info
+        assert "ob-icon-neo4j" in info
+        js = _read(self.SYNC_JS)
+        assert "buildBackendIcon" in js
+        assert "_setBackendBrandIcon" in js
+        css = _read(self.SYNC_CSS)
+        assert ".build-backend-logo" in css
+
+    def test_overview_lists_cache_companions_and_intelligence(self):
+        html = _read(self.INSIGHTS_HTML)
+        assert 'id="insightsCacheRow"' in html
+        assert 'id="insightsMaterializedRow"' in html
+        assert "Graph cache" in html
+        assert "Materialized from Intelligence" in html
+        js = _read(self.SYNC_JS)
+        assert "_renderInsightsCache" in js
+        assert "Adjacency out" in js
+        assert "Adjacency in" in js
+        assert "Properties" in js
+        assert "Inferred triples" in js
+        assert "Communities" in js

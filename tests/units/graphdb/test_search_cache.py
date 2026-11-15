@@ -286,3 +286,36 @@ class TestApiContracts:
         ).read_text(encoding="utf-8")
         assert "cache: Optional[bool] = None" in src
         assert 'params["cache"]' in src
+
+
+class TestCompanionInventory:
+    def test_empty_when_backend_has_no_adjacency(self):
+        store = _FakeStore()
+        store.supports_adjacency = False
+        assert store.companion_inventory("g") == []
+
+    def test_counts_ready_companions(self):
+        store = _FakeStore()
+
+        def execute_query(query: str):
+            name = query.rsplit("FROM", 1)[-1].strip()
+            return [{"cnt": {"g_adj_out": 11, "g_adj_in": 12, "g_props": 90,
+                             "g_entity_search": 80}.get(name, 0)}]
+
+        store.execute_query = execute_query
+        store.entity_search_asserted_table_id = lambda table_name: "g_entity_search_asserted"
+        inventory = {row["key"]: row for row in store.companion_inventory("g")}
+        assert inventory["adj_out"]["ready"] is True
+        assert inventory["adj_out"]["row_count"] == 11
+        assert inventory["adj_in"]["row_count"] == 12
+        assert inventory["props"]["row_count"] == 90
+        assert inventory["entity_search"]["row_count"] == 80
+        assert inventory["entity_search_asserted"]["ready"] is True
+        assert inventory["entity_search_asserted"]["row_count"] == 0
+
+    def test_missing_companion_is_not_ready(self):
+        store = _FakeStore(adj=False, search=False, props=False)
+        inventory = {row["key"]: row for row in store.companion_inventory("g")}
+        assert inventory["adj_out"]["ready"] is False
+        assert inventory["adj_out"]["row_count"] is None
+        assert inventory["props"]["ready"] is False

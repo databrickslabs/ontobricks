@@ -27,6 +27,9 @@
         </div>
     </div>
 
+    <div class="card">
+    <div class="card-body">
+
     {% if user_role and user_role != 'admin' %}
     <div class="alert alert-warning small">
         Only administrators can edit team memberships.
@@ -64,4 +67,7 @@
             Loading teams matrix...
         </div>
     </div>
+
+    </div><!-- /.card-body -->
+    </div><!-- /.card -->
 </div>

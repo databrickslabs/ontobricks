@@ -121,12 +121,23 @@ function _dbxBuildPollDelay(task) {
 
 function applyTripleStoreBackendPanels() {
     const backend = _tsxBackend();
+    if (typeof _setBackendBrandIcon === 'function') {
+        _setBackendBrandIcon(document.getElementById('buildBackendIcon'), backend);
+    }
     const lakePanel = document.getElementById('sync-lakebase-panel');
     const dbxPanel = document.getElementById('sync-databricks-panel');
     const isDbx = backend === 'databricks';
 
     if (lakePanel) lakePanel.classList.toggle('d-none', isDbx);
     if (dbxPanel) dbxPanel.classList.toggle('d-none', !isDbx);
+
+    const lakeActions = document.getElementById('sync-lakebase-actions');
+    const dbxActions = document.getElementById('sync-databricks-actions');
+    if (lakeActions) lakeActions.classList.toggle('d-none', isDbx);
+    if (dbxActions) {
+        dbxActions.classList.toggle('d-none', !isDbx);
+        dbxActions.classList.toggle('d-flex', isDbx);
+    }
 }
 
 function _updateDbxAdjacencyButton() {

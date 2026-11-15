@@ -1,6 +1,82 @@
-<!-- Graph → Management → Build: Build panel + build-run history tabs.
-     Backend-specific panels (Lakebase / Lakehouse) keep their own headers. -->
+<!-- Graph → Management → Build: Build panel + build-run history tabs. -->
 <div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex align-items-center gap-3">
+            <span class="build-backend-logo" id="buildBackendLogo" aria-hidden="true">
+                <span id="buildBackendIcon" class="ob-brand-icon ob-icon-postgresql"></span>
+            </span>
+            <div>
+                <h4 class="mb-1"><i class="bi bi-hammer me-2"></i>Build</h4>
+                <p class="text-muted mb-0 small" id="dbxBuildSubtitle">Triple store status and build execution</p>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2" id="buildHeaderActions">
+            <!-- Lakebase actions -->
+            <div id="sync-lakebase-actions" class="d-flex align-items-center gap-2">
+                <span id="syncStatusText" class="text-muted small"></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-sync-action="refresh-triple-store"
+                        title="Refresh status from the triple store">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+                {% set _dr = get_user_domain_role() %}
+                {% if _dr not in ('viewer', 'editor', 'none') %}
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none"
+                        id="syncAdjacencyRefreshBtn" data-sync-action="refresh-adjacency-only"
+                        title="Rebuild graph cache">
+                    <i class="bi bi-diagram-3 me-1"></i>Refresh cache
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none" disabled
+                        id="syncAdjacencyRefreshBtn"
+                        title="Only builders and admins can refresh the graph cache">
+                    <i class="bi bi-lock me-1"></i>Refresh cache
+                </button>
+                {% endif %}
+                {% include "partials/dtwin/_purge_inferences_button.html" %}
+                {% if _dr not in ('viewer', 'editor', 'none') %}
+                <button type="button" class="btn btn-sm btn-primary" id="syncStartBtn" data-sync-action="start-triple-store-sync" disabled>
+                    <i class="bi bi-hammer me-1"></i>Build
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled
+                        title="Only builders and admins can build a graph viewer">
+                    <i class="bi bi-lock me-1"></i> Build
+                </button>
+                {% endif %}
+            </div>
+
+            <!-- Databricks actions -->
+            <div id="sync-databricks-actions" class="d-none align-items-center gap-2">
+                <span id="dbxBuildStatusText" class="text-muted small"></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="dbxBuildRefreshBtn">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+                {% set _dr = get_user_domain_role() %}
+                {% if _dr not in ('viewer', 'editor', 'none') %}
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="dbxAdjacencyRefreshBtn"
+                        title="Rebuild graph cache">
+                    <i class="bi bi-diagram-3 me-1"></i>Refresh cache
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="dbxAdjacencyRefreshBtn" disabled
+                        title="Only builders and admins can refresh the graph cache">
+                    <i class="bi bi-lock me-1"></i>Refresh cache
+                </button>
+                {% endif %}
+                {% include "partials/dtwin/_purge_inferences_button.html" %}
+                {% if _dr not in ('viewer', 'editor', 'none') %}
+                <button type="button" class="btn btn-sm btn-primary" id="dbxBuildStartBtn" disabled>
+                    <i class="bi bi-hammer me-1"></i>Build
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Builders only">
+                    <i class="bi bi-lock me-1"></i>Build
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <div class="card h-100">
         <div class="card-body p-0 ob-tabs-wrap">
             <ul class="nav nav-tabs ob-tabs nav-fill" id="buildPageTabs" role="tablist">
@@ -8,7 +84,7 @@
                     <button class="nav-link active" id="buildTabBuildBtn" data-bs-toggle="tab"
                             data-bs-target="#buildPaneBuild" type="button" role="tab"
                             aria-controls="buildPaneBuild" aria-selected="true">
-                        <i class="bi bi-fast-forward me-1"></i>Build
+                        <i class="bi bi-hammer me-1"></i>Build
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">

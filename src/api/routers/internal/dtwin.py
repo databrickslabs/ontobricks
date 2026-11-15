@@ -1852,11 +1852,22 @@ async def triplestore_stats(
         # classification, the cheap analytics-job check) runs on the loop after.
         import asyncio
 
-        agg, entity_types, top_predicates, inferred_count = await asyncio.gather(
+        (
+            agg,
+            entity_types,
+            top_predicates,
+            inferred_count,
+            companions,
+            communities,
+        ) = await asyncio.gather(
             run_blocking(store.get_aggregate_stats, graph_name),
             run_blocking(store.get_type_distribution, graph_name),
             run_blocking(store.get_predicate_distribution, graph_name),
             run_blocking(store.get_inferred_triple_count, graph_name),
+            run_blocking(TwinGraphStats.companion_inventory, store, graph_name),
+            run_blocking(
+                TwinGraphStats.community_totals, domain, store, graph_name
+            ),
         )
 
         job_available, job_blocked_reason = analytics_job_configured(domain, settings)
@@ -1869,6 +1880,8 @@ async def triplestore_stats(
             inferred_count=inferred_count,
             job_available=job_available,
             job_blocked_reason=job_blocked_reason,
+            companions=companions,
+            communities=communities,
         )
         DigitalTwin(domain).set_ts_cache("stats", result)
         return result

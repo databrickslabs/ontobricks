@@ -497,7 +497,7 @@
                         {
                             "id": "sync",
                             "label": "Build",
-                            "icon": "bi-fast-forward",
+                            "icon": "bi-hammer",
                             "default": false,
                             "requires": null
                         },

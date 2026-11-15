@@ -63,15 +63,14 @@ body.full-width-layout {
 .sidebar-nav {
     width: 200px;
     min-width: 200px;
-    background: var(--db-surface-warm);
-    /* Framed card floating on the page, same language as the split-panel panes:
-       1px hairline, --db-radius-card on all four corners. The shell now owns
-       the 0.5rem outer gutter (padding + gap), so the nav aligns within it with
-       no margin of its own and simply fills the shell height. */
+    background: transparent;
+    /* Transparent rail with no outer border, matching the L2 second navbar (#obSubnav).
+       The shell owns the 0.5rem outer gutter (padding + gap), so the nav aligns
+       within it with no margin of its own and simply fills the shell height. */
     margin: 0;
     height: 100%;
-    border: 1px solid var(--db-border);
-    border-radius: var(--db-radius-card);
+    border: none;
+    border-radius: 0;
     padding: 0.5rem 0;
     flex-shrink: 0;
     overflow-y: auto;
@@ -180,10 +179,6 @@ body.full-width-layout {
     transition: background 0.15s ease;
     width: calc(100% - 0.8rem);
     overflow: hidden;
-}
-
-.sidebar-toggle:hover {
-    background: var(--db-hover-warm);
 }
 
 .sidebar-toggle i {

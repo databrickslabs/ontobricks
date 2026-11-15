@@ -7,8 +7,7 @@ import pytest
 pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SYNC_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_sync.html"
-DBX_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_databricks_build.html"
+BUILD_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_build.html"
 SYNC_JS = REPO_ROOT / "src/front/static/query/js/query-sync.js"
 DBX_JS = REPO_ROOT / "src/front/static/query/js/query-databricks-build.js"
 
@@ -19,28 +18,26 @@ def _read(path: Path) -> str:
 
 class TestAdjacencyButtonsExist:
     def test_build_panels_label_adjacency_refresh_as_refresh_cache(self):
-        for html in (_read(SYNC_HTML), _read(DBX_HTML)):
-            assert html.count("Refresh cache") == 2
-            assert ">Refresh adjacency" not in html
+        html = _read(BUILD_HTML)
+        assert html.count("Refresh cache") == 4
+        assert ">Refresh adjacency" not in html
 
     def test_sync_panel_has_refresh_adjacency_action(self):
-        html = _read(SYNC_HTML)
+        html = _read(BUILD_HTML)
         assert 'id="syncAdjacencyRefreshBtn"' in html
         assert 'data-sync-action="refresh-adjacency-only"' in html
         assert "btn btn-sm btn-outline-secondary" in html
 
     def test_databricks_panel_has_refresh_adjacency_action(self):
-        html = _read(DBX_HTML)
+        html = _read(BUILD_HTML)
         assert 'id="dbxAdjacencyRefreshBtn"' in html
         assert "btn btn-sm btn-outline-secondary" in html
 
     def test_both_buttons_are_role_gated_like_build(self):
-        sync_html = _read(SYNC_HTML)
-        dbx_html = _read(DBX_HTML)
-        for html in (sync_html, dbx_html):
-            assert "{% set _dr = get_user_domain_role() %}" in html
-            assert "{% if _dr not in ('viewer', 'editor', 'none') %}" in html
-            assert '<i class="bi bi-lock me-1"></i>' in html
+        html = _read(BUILD_HTML)
+        assert "{% set _dr = get_user_domain_role() %}" in html
+        assert "{% if _dr not in ('viewer', 'editor', 'none') %}" in html
+        assert '<i class="bi bi-lock me-1"></i>' in html
 
 
 class TestAdjacencyRefreshFlow:

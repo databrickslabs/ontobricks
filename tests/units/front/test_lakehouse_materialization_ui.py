@@ -30,6 +30,7 @@ NAVBAR_JS = REPO_ROOT / "src/front/static/global/js/navbar.js"
 SETTINGS_JS = REPO_ROOT / "src/front/static/config/js/settings.js"
 BUILD_JS = REPO_ROOT / "src/front/static/query/js/query-databricks-build.js"
 BUILD_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_databricks_build.html"
+BUILD_SHELL = REPO_ROOT / "src/front/templates/partials/dtwin/_query_build.html"
 
 SELECT_ID = "domainLakehouseMaterialization"
 SECTION_ID = "lakehouseMaterializationSection"
@@ -211,9 +212,10 @@ class TestTheBuildPageNamesTheStorageKind:
 
     def test_the_badge_exists_and_is_addressable(self):
         html = _read(BUILD_HTML)
+        shell = _read(BUILD_SHELL)
         assert 'id="dbxBuildStorageBadge"' in html
         assert 'id="dbxBuildStorageNote"' in html
-        assert 'id="dbxBuildSubtitle"' in html
+        assert 'id="dbxBuildSubtitle"' in shell
 
     def test_the_badge_names_both_kinds_explicitly(self):
         body = _function_body(

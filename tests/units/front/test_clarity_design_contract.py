@@ -656,15 +656,20 @@ def test_sidebar_layout_preserves_geometry_and_clarity_active_tokens():
     )
 
 
-def test_sidebar_is_a_framed_card_like_the_split_panel_panes():
-    """The shell supplies the gutter that exposes all four rounded corners."""
+def test_sidebar_has_transparent_background_and_no_border():
+    """Sidebar has transparent background and no border (same as second navbar)."""
     css = _read(SIDEBAR_LAYOUT_CSS)
     blocks = _rule_blocks_for_exact_class(css, ".sidebar-nav")
 
-    assert _any_block_has_declaration(
-        blocks, r"border-radius", r"var\(--db-radius-card\)"
-    )
-    assert _any_block_has_declaration(blocks, r"border", r"1px solid var\(--db-border\)")
+    assert _any_block_has_declaration(blocks, r"background", r"transparent")
+    assert _any_block_has_declaration(blocks, r"border", r"none")
+
+
+def test_sidebar_toggle_has_no_hover_highlight():
+    """The collapse/expand toggle must not change background on hover."""
+    css = _read(SIDEBAR_LAYOUT_CSS)
+
+    assert not re.search(r"\.sidebar-toggle:hover\s*\{", css)
 
 
 def test_sidebar_layout_centralizes_the_shared_outer_gutter():

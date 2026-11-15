@@ -251,6 +251,7 @@ function _setBackendBrandIcon(element, backend) {
 function _applyBuildGraphEngineUi(dtExist) {
     var dt = dtExist || {};
     var cfg = window.__TRIPLESTORE_CONFIG || {};
+    _setBackendBrandIcon(document.getElementById('buildBackendIcon'), _kgBackendKey());
     var eng = dt.graph_engine || cfg.graph_engine || 'lakebase';
     var pending = dt.pending === true;
     cfg.graph_engine = eng;
@@ -855,7 +856,7 @@ function updateKgReadyIndicators() {
             + '<span class="badge bg-secondary-subtle text-secondary border fw-normal">'
             + '<i class="bi bi-slash-circle me-1"></i>Graph not built</span>'
             + '<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 kg-go-build-btn">'
-            + '<i class="bi bi-fast-forward me-1"></i>Go to Build</button>'
+            + '<i class="bi bi-hammer me-1"></i>Go to Build</button>'
             + '</span>';
     }
 
@@ -1529,6 +1530,124 @@ let _insightsRelMax = 1;
 /**
  * Build the insights UI from the stats data.
  */
+function _insightKpiHtml(cards, colClass) {
+    var cols = colClass || 'col-md-4 col-lg-2';
+    return (cards || []).map(function (c) {
+        var hint = c.hint
+            ? '<div class="small text-muted">' + c.hint + '</div>'
+            : '';
+        return '<div class="' + cols + '">' +
+            '  <div class="ob-kpi-tile">' +
+            '    <div class="ob-kpi-tile-icon text-' + (c.color || 'secondary') + '"><i class="bi ' + c.icon + '"></i></div>' +
+            '    <div class="ob-kpi-tile-value">' + c.value + '</div>' +
+            '    <div class="ob-kpi-tile-label">' + c.label + '</div>' +
+            hint +
+            '  </div>' +
+            '</div>';
+    }).join('');
+}
+
+function _insightCacheStateLabel(cache) {
+    if (!cache || !cache.supported) {
+        return 'Search cache is only available for Lakehouse and Lakebase.';
+    }
+    if (!cache.enabled) {
+        return 'Off — live reads (adjacency, properties, and entity-search companions are not used).';
+    }
+    if (cache.state === 'ready') {
+        return 'On — using cached indexes (adjacency in/out, properties, entity search).';
+    }
+    return 'On — rebuild or Refresh cache required (live reads until then).';
+}
+
+function _companionCount(companions, key) {
+    var items = companions || [];
+    for (var i = 0; i < items.length; i++) {
+        if (items[i].key === key) return items[i];
+    }
+    return null;
+}
+
+function _companionValue(item) {
+    if (!item) return '—';
+    if (!item.ready) return 'Missing';
+    if (item.row_count == null) return '—';
+    return Number(item.row_count).toLocaleString();
+}
+
+function _renderInsightsCache(data) {
+    var block = document.getElementById('insightsCacheBlock');
+    var status = document.getElementById('insightsCacheStatus');
+    var row = document.getElementById('insightsCacheRow');
+    var cache = data.graph_cache || {};
+    if (status) status.textContent = _insightCacheStateLabel(cache);
+    if (!row) return;
+    if (!cache.supported) {
+        if (block) block.classList.remove('d-none');
+        row.innerHTML = '';
+        return;
+    }
+    var companions = cache.companions || [];
+    var specs = [
+        { key: 'adj_out', label: 'Adjacency out', icon: 'bi-box-arrow-right', color: 'primary' },
+        { key: 'adj_in', label: 'Adjacency in', icon: 'bi-box-arrow-in-left', color: 'info' },
+        { key: 'props', label: 'Properties', icon: 'bi-list-ul', color: 'success' },
+        { key: 'entity_search', label: 'Entity search', icon: 'bi-search', color: 'warning' },
+        { key: 'entity_search_asserted', label: 'Entity search (asserted)', icon: 'bi-funnel', color: 'secondary' },
+    ];
+    var cards = specs.map(function (spec) {
+        var item = _companionCount(companions, spec.key);
+        return {
+            label: spec.label,
+            value: _companionValue(item),
+            icon: spec.icon,
+            color: spec.color,
+            hint: item && item.table ? item.table : '',
+        };
+    });
+    row.innerHTML = _insightKpiHtml(cards, 'col-md-4 col-lg');
+}
+
+function _renderInsightsMaterialized(data) {
+    var row = document.getElementById('insightsMaterializedRow');
+    if (!row) return;
+    var intel = data.intelligence || {};
+    var communities = intel.communities || {};
+    var inferred = intel.inferred_triples;
+    if (inferred == null) inferred = data.inferred_triples;
+    var inferredLabel = inferred == null ? '—' : Number(inferred).toLocaleString();
+    var clusterCount = communities.ready
+        ? Number(communities.cluster_count || 0).toLocaleString()
+        : 'None';
+    var memberCount = communities.ready
+        ? Number(communities.node_count || 0).toLocaleString()
+        : '—';
+    var algo = communities.algorithm || '';
+    row.innerHTML = _insightKpiHtml([
+        {
+            label: 'Inferred triples',
+            value: inferredLabel,
+            icon: 'bi-lightbulb',
+            color: 'warning',
+            hint: 'Reasoning / IF-THEN writes',
+        },
+        {
+            label: 'Communities',
+            value: clusterCount,
+            icon: 'bi-people',
+            color: 'info',
+            hint: algo ? algo.replace(/_/g, ' ') : 'Intelligence → Communities',
+        },
+        {
+            label: 'Community members',
+            value: memberCount,
+            icon: 'bi-diagram-3',
+            color: 'primary',
+            hint: 'Nodes assigned to a cluster',
+        },
+    ], 'col-md-4');
+}
+
 function renderInsights(data) {
     const summaryRow = document.getElementById('insightsSummaryRow');
     if (summaryRow) {
@@ -1540,16 +1659,10 @@ function renderInsights(data) {
             { label: 'Type Assertions', value: (data.type_assertion_count || 0).toLocaleString(), icon: 'bi-tag', color: 'secondary' },
             { label: 'Labels', value: (data.label_count || 0).toLocaleString(), icon: 'bi-fonts', color: 'dark' },
         ];
-        summaryRow.innerHTML = cards.map(c =>
-            '<div class="col-md-4 col-lg-2">' +
-            '  <div class="ob-kpi-tile">' +
-            '    <div class="ob-kpi-tile-icon text-' + c.color + '"><i class="bi ' + c.icon + '"></i></div>' +
-            '    <div class="ob-kpi-tile-value">' + c.value + '</div>' +
-            '    <div class="ob-kpi-tile-label">' + c.label + '</div>' +
-            '  </div>' +
-            '</div>'
-        ).join('');
+        summaryRow.innerHTML = _insightKpiHtml(cards);
     }
+    _renderInsightsCache(data);
+    _renderInsightsMaterialized(data);
 
     _insightsEntityData = data.entity_types || [];
     _insightsEntityTotal = _insightsEntityData.reduce((s, t) => s + t.count, 0);

@@ -7,6 +7,20 @@
     position: relative;
 }
 
+#sync-section .build-backend-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    flex-shrink: 0;
+}
+
+#sync-section .build-backend-logo .ob-brand-icon {
+    width: 3.25rem;
+    height: 3.25rem;
+}
+
 /* Knowledge Graph readiness indicator (next to each sub-page title) */
 .kg-status-indicator .badge {
     font-size: 0.7rem;

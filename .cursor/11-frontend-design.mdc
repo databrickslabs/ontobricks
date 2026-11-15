@@ -294,6 +294,13 @@ modal, not a sixth sidebar family.
 
 Rules for sidebar pages:
 
+- Section body under the title sits on a **white card**: keep
+  `.section-header` on the warm canvas, then wrap the rest of the
+  section in `<div class="card"><div class="card-body">…</div></div>`
+  (or an equivalent `.card` workspace such as Versions /
+  `ob-tabs-wrap`). Do not leave tiles, tables, forms, or empty states
+  floating directly on the warm canvas. Reference: Domain → Versions
+  (good) vs a bare Validation layout (bad).
 - The sidebar **must** be the `_sidebar_nav.html` partial driven by
   `menu_config.json` — never hand-code `<nav class="sidebar-nav">` items.
 - Section ids are `<menu-item-id>-section`. The id must match the
@@ -364,7 +371,8 @@ keyboard handling.
   `ontobricks-sidebar-collapsed`. **Default state is collapsed** — do
   not change this default.
 - The collapse toggle button is injected automatically at the top of
-  the sidebar. Do not author your own toggle.
+  the sidebar. Do not author your own toggle. It has no hover highlight
+  (no `:hover` background); do not add one.
 - A `sidebarSectionChanged` `CustomEvent` (`detail: { section,
   targetSection }`) is dispatched on `document` after every switch.
   This is the official extension point — listen to it instead of
@@ -383,10 +391,10 @@ keyboard handling.
 
 - Sidebar width: `200px` expanded, `48px` collapsed (driven by
   `.sidebar-nav.collapsed`). Do not override per page.
-- The sidebar is a **framed card**, not a flush rail: `1px solid
-  var(--db-border)`, `var(--db-radius-card)` on all four corners,
+- The sidebar has no background (`background: transparent`) and no border
+  (`border: none`), matching the L2 second navbar (`#obSubnav`):
   `margin: 0`, `height: 100%`. The **shell** owns the 0.5rem outer
-  gutter (`.sidebar-layout { padding: 0.5rem; gap: 0.5rem; }`); do not
+  gutter (`.sidebar-layout { padding: 0.25rem 0.5rem 0.5rem; gap: 0.5rem; }`); do not
   put a 0.5rem margin on `.sidebar-nav` or size it with
   `calc(100% - 1rem)`. Don't reintroduce the `border-right`-only
   hairline. See *Desktop geometry, scroll, and bottom alignment*.
@@ -408,6 +416,11 @@ keyboard handling.
   the `data-domain-saved` body attributes.
 - Badges inside a nav-link are auto-wrapped into the `.nav-label`
   span by the collapse logic and hidden when collapsed.
+- When the sidebar is collapsed, hover tooltips (`placement: right`,
+  `trigger: hover`, `container: body`) indicate the feature name via
+  Bootstrap Tooltip, powered by `data-sidebar-title="{{ item.label }}"` on
+  each link. When expanded, tooltips are disabled so they do not duplicate
+  the visible label.
 
 **Don'ts**
 
@@ -579,7 +592,7 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   occupy the near-full inner rail height (approximately `40px` inside the
   `48px` / `3rem` outer rail) without touching the segmented-control border.
   The same stretch rule applies to all four workspace targets at every width.
-- The segmented control's left edge aligns exactly with the framed sidebar
+- The segmented control's left edge aligns exactly with the sidebar
   panel's left edge. Both use the shell's `0.5rem` horizontal outer gutter:
   `.sidebar-layout { padding: 0.25rem 0.5rem 0.5rem; }` and
   `#obSubnav .container-fluid { padding-left: 0.5rem !important; }`. The ID
@@ -667,6 +680,51 @@ exposes `window.OBBreadcrumb._updateChromeHeight()` for `navbar.js`.
 
 - ❌ Adding a breadcrumb trail to the L2 row or any page header.
 - ❌ Setting `--ob-chrome-height` from page code (see above).
+
+### Section Body Surface (white card under the title)
+
+Canonical reference: **Domain → Versions** (`partials/domain/_domain_versions.html`).
+Every sidebar section follows the same two-zone layout:
+
+1. **Title zone — on the warm canvas.** `.content-section` holds one
+   `.section-header` (title, subtitle, top-right actions). Nothing else
+   sits in the title zone and the title is never placed on a white surface.
+2. **Body zone — on a white card.** Everything below the header lives in one
+   `.card` (or an equivalent `.card` workspace such as `.card h-100` +
+   `ob-tabs-wrap`), with `.card-body` for padding when the content is not
+   already a card-integrated workspace.
+
+Skeleton:
+
+```html
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-<icon> me-2"></i>Section Title</h4>
+            <p class="text-muted mb-0 small">One-line description.</p>
+        </div>
+        <div class="d-flex gap-2"><!-- actions --></div>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <!-- tiles, tables, forms, empty / loading states -->
+        </div>
+    </div>
+</div>
+```
+
+Rules:
+
+- Never leave body content (tiles, tables, forms, placeholders, spinners,
+  empty states) directly under `.section-header` on the warm canvas.
+  Validation before the fix is the counter-example.
+- Do not paint `.content-section` or `.sidebar-content` white: that would
+  also whiten the title.
+- Do not nest a second white card around a body that already is a card
+  (Versions, `_domain_metadata`, Ontology Studio split shells). Full-height
+  split panes keep their existing `.card` / `ob-split-shell` structure.
+- The sidebar itself (`.sidebar-nav`) stays transparent.
+- Contract tests: `tests/units/front/test_section_content_white_panel.py`.
 
 ### Section / Partial Conventions
 
