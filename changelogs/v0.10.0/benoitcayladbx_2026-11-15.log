@@ -1,0 +1,157 @@
+## Patterns list: Patterns + How it works tabs
+
+Context: The Patterns list page showed only saved snapshots. Users needed an
+in-app explanation of the detection algorithm next to the saved runs. Added
+two `ob-tabs`: Patterns (saved cards) and How it works (English algorithm
+walkthrough).
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Card body uses `ob-tabs` / `nav-fill` with Patterns (default) and How it
+   works panes; How it works documents anchors, hops, binning, tokens,
+   adaptive levels, hashing, refine, min support, and UI outcomes.
+2. src/front/static/intelligence/css/intelligence.css
+   Light `.pat-how-it-works` heading/code sizing.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract for tab ids, `ob-tabs`, and How it works content.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10572 passed, 324 skipped, 8 deselected, 39 warnings in 48.57s ========
+
+## Communities: Communities + How it works tabs
+
+Context: Mirror the Patterns list tabs on Community detection so users can
+read how label-propagation clustering works next to the Detect / Preview UI.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_communities.html
+   Wrap the rail + preview in `ob-tabs` with Communities (default) and How
+   it works panes; How it works covers LPA, ranking, modularity, preview,
+   materialize, and the difference vs Patterns.
+2. src/front/static/intelligence/css/intelligence.css
+   Flex fill for `.comm-tabs-card` / active Communities pane so the layout
+   still stretches; `.comm-how-it-works` heading/code sizing.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract for tab ids, How it works copy, and CSS hooks.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10572 passed, 324 skipped, 8 deselected, 39 warnings in 44.67s ========
+
+## Scenarios: How it works tab + discuss button
+
+Context: Mirror Patterns/Communities on the Scenarios list with an in-app
+How it works walkthrough (scope, facts, reasoning, Results, Compare,
+Evaluate). Also add the ontology discussion header button on Scenarios;
+Compare already had it.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_sim_scenarios.html
+   `ob-tabs` with Scenarios (default) and How it works panes; discuss
+   button (`simDiscussBtn`) before Refresh / New scenario.
+2. src/front/static/intelligence/js/simulation.js
+   Bind `simDiscussBtn` to `openOntologyDiscussion()`.
+3. src/front/static/intelligence/css/intelligence.css
+   Shared how-it-works heading/code sizing for sim; How pane scroll.
+4. tests/units/front/test_intelligence_page_contract.py
+   Contract for Scenarios How it works tabs and copy.
+5. tests/units/front/test_intelligence_discuss_buttons.py
+   Cover `_sim_scenarios.html` / `simDiscussBtn` and CTA ordering.
+
+Modified files:
+- src/front/templates/partials/intelligence/_sim_scenarios.html
+- src/front/static/intelligence/js/simulation.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_intelligence_discuss_buttons.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10576 passed, 324 skipped, 8 deselected, 39 warnings in 46.01s ========
+
+## How it works tabs: business-friendly diagrams
+
+Context: The Patterns, Communities and Scenarios How it works tabs were too
+technical for business users. Each tab now leads with plain-language steps,
+an energy & utilities example (customers, contracts, meters, sites) and
+inline SVG concept diagrams; the previous algorithm text is kept in a
+collapsed "Technical details" section. Removed the non-existent "Class"
+scenario scope from the copy, and aligned the Compare wording with the
+actual "View difference" button.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Business walkthrough with two diagrams (looking around a customer by
+   hops; grouping look-alikes into patterns with min support), plain-word
+   settings, uses; technical text moved into `<details class="howto-tech">`.
+2. src/front/templates/partials/intelligence/_intel_communities.html
+   Business walkthrough with two diagrams (three grid communities with rare
+   bridging links; label propagation in three steps), usage steps, typical
+   uses, Patterns vs Communities; technical text collapsed.
+3. src/front/templates/partials/intelligence/_sim_scenarios.html
+   Business walkthrough with three diagrams (scenario journey; Set / Add /
+   Remove facts; Compare colour legend), Compare and Evaluate guidance,
+   scenario ideas; technical text collapsed; "View difference" wording.
+4. src/front/static/intelligence/css/intelligence.css
+   Shared `.howto-*` / `.hw-*` diagram styles on `--db-*` tokens (no inline
+   colours), green arrowhead variant, collapsible technical section styling.
+5. tests/units/front/test_intelligence_page_contract.py
+   Contracts for figures, accessible SVG titles, energy example, collapsed
+   technical details, no inline styles, and unique SVG ids across tabs.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/templates/partials/intelligence/_sim_scenarios.html
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 44.67s ========
+
+## Documentation: complete Intelligence guide
+
+Context: The user guide chapter was still titled "Simulation", missed the
+Compare / Evaluate flow as a page, kept stale "(Sidebar)" headings for
+Cohorts runs and simulation runs, and mentioned a class scope that the
+editor does not offer. Rewrote it as a full Intelligence chapter and synced
+the in-app Help Center and README.
+
+Changes:
+
+1. docs/user-guide.md
+   New "Step 4: Intelligence (Cohorts, Discovery & Simulation)" chapter:
+   overview table, prerequisites, shared page features, Cohorts,
+   Communities (plain words, usage, reading results, internals), Patterns
+   (steps, Detect settings table, reading a diagram, saved runs), choosing
+   between tools, Scenarios (scope and fact kinds, run pipeline, list,
+   editor, run history location), new Compare section (Graphs, Evaluate,
+   best practices), end-to-end energy example, limits and troubleshooting;
+   TOC anchor and feature inventory updated.
+2. src/front/templates/partials/layout/help_modal.html
+   Workflow step 6 rewritten in menu order (Cohorts, Communities, Patterns,
+   Scenarios, Compare incl. Evaluate) with a User Guide link; new Feature
+   Guide cards for Discovery and Simulation; glossary entries Community,
+   Pattern, Sandbox.
+3. README.md
+   "Discover and simulate (Intelligence)" summary and new guide anchor.
+
+Modified files:
+- docs/user-guide.md
+- src/front/templates/partials/layout/help_modal.html
+- README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 44.67s ========

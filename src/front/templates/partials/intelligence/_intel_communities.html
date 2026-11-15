@@ -32,77 +32,357 @@
         </div>
     </div>
 
-    <div class="comm-layout">
-        <aside class="comm-rail">
-            <div class="card comm-config-card">
-                <div class="card-body py-2 px-3">
-                    <label class="form-label small fw-semibold mb-1" for="commAlgorithm">Algorithm</label>
-                    <select class="form-select form-select-sm mb-2" id="commAlgorithm" disabled>
-                        <option value="label_propagation" selected>Label propagation (Databricks)</option>
-                    </select>
-                    <label class="form-label small fw-semibold mb-1" for="commClassFilter">Scope</label>
-                    <select class="form-select form-select-sm mb-2" id="commClassFilter">
-                        <option value="" selected>All entity types</option>
-                    </select>
-                    <p class="form-text small mb-0 text-muted">
-                        Detection runs on Databricks. Materialize writes to the graph.
-                    </p>
-                    <div id="commJobStatus" class="alert alert-warning small py-2 px-2 mt-2 mb-0 d-none" role="status"></div>
-                </div>
-            </div>
+    <div class="card comm-tabs-card">
+        <div class="card-body p-0 ob-tabs-wrap">
+            <ul class="nav nav-tabs ob-tabs nav-fill" id="commListTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="commListTabCommunitiesBtn" data-bs-toggle="tab"
+                            data-bs-target="#commListPaneCommunities" type="button" role="tab"
+                            aria-controls="commListPaneCommunities" aria-selected="true">
+                        <i class="bi bi-diagram-3 me-1"></i>Communities
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="commListTabHowBtn" data-bs-toggle="tab"
+                            data-bs-target="#commListPaneHow" type="button" role="tab"
+                            aria-controls="commListPaneHow" aria-selected="false">
+                        <i class="bi bi-info-circle me-1"></i>How it works
+                    </button>
+                </li>
+            </ul>
 
-            <div class="card comm-current-card">
-                <div class="card-body p-3">
-                    <div class="d-flex justify-content-between align-items-baseline mb-2 gap-2 flex-wrap">
-                        <h6 class="mb-0">Materialized (Explorer)</h6>
-                        <a class="small" href="/dtwin/?section=sigmagraph">
-                            <i class="bi bi-share me-1"></i>Open in Explorer
-                        </a>
-                    </div>
-                    <div id="commCurrentStats" class="comm-stats d-none" aria-live="polite"></div>
-                    <div id="commCurrentLoading" class="comm-current-loading d-none text-muted small" aria-live="polite">
-                        <div class="text-center">
-                            <div class="spinner-border spinner-border-sm text-primary mb-2" role="status" aria-hidden="true"></div>
-                            <p class="small text-muted mb-0">Loading materialized clusters…</p>
-                        </div>
-                    </div>
-                    <div id="commCurrentBody" class="comm-current-body">
-                        <p class="text-muted small mb-0">No materialized clusters yet.</p>
-                    </div>
-                </div>
-            </div>
-        </aside>
+            <div class="tab-content" id="commListTabContent">
+                <div class="tab-pane fade show active" id="commListPaneCommunities"
+                     role="tabpanel" aria-labelledby="commListTabCommunitiesBtn">
+                    <div class="comm-layout">
+                        <aside class="comm-rail">
+                            <div class="card comm-config-card">
+                                <div class="card-body py-2 px-3">
+                                    <label class="form-label small fw-semibold mb-1" for="commAlgorithm">Algorithm</label>
+                                    <select class="form-select form-select-sm mb-2" id="commAlgorithm" disabled>
+                                        <option value="label_propagation" selected>Label propagation (Databricks)</option>
+                                    </select>
+                                    <label class="form-label small fw-semibold mb-1" for="commClassFilter">Scope</label>
+                                    <select class="form-select form-select-sm mb-2" id="commClassFilter">
+                                        <option value="" selected>All entity types</option>
+                                    </select>
+                                    <p class="form-text small mb-0 text-muted">
+                                        Detection runs on Databricks. Materialize writes to the graph.
+                                    </p>
+                                    <div id="commJobStatus" class="alert alert-warning small py-2 px-2 mt-2 mb-0 d-none" role="status"></div>
+                                </div>
+                            </div>
 
-        <section class="comm-main">
-            <div class="card comm-preview-card">
-                <div class="card-body p-3">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="mb-0">Preview</h6>
-                    </div>
-                    <div id="commPreviewStats" class="comm-stats d-none mb-2" aria-live="polite"></div>
-                    <div id="commPreviewLoading" class="comm-preview-loading d-none text-muted small" aria-live="polite">
-                        <div class="text-center">
-                            <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
-                            <h6 class="fw-semibold mb-1" id="commPreviewLoadingTitle">Loading preview…</h6>
-                            <p class="small text-muted mb-0" id="commPreviewLoadingMsg">Fetching the last detection run…</p>
-                        </div>
-                    </div>
-                    <div id="commPreviewEmpty" class="comm-preview-empty text-muted small">
-                        <div class="text-center">
-                            <i class="bi bi-diagram-3 fs-1 text-muted d-block mb-2"></i>
-                            <h6 class="fw-semibold mb-1">Community graph preview</h6>
-                            <p class="small text-muted mb-0">Run <strong>Detect</strong> to draw the community graph.</p>
-                        </div>
-                    </div>
-                    <div id="commPreviewLayout" class="comm-preview-layout d-none">
-                        <div id="commPreviewCanvas" class="comm-preview-canvas"
-                             role="img" aria-label="Community detection preview graph"></div>
-                        <aside id="commPreviewDetails" class="comm-preview-details" aria-live="polite">
-                            <p class="text-muted small mb-0">Click a node to list the entities in its cluster.</p>
+                            <div class="card comm-current-card">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-baseline mb-2 gap-2 flex-wrap">
+                                        <h6 class="mb-0">Materialized (Explorer)</h6>
+                                        <a class="small" href="/dtwin/?section=sigmagraph">
+                                            <i class="bi bi-share me-1"></i>Open in Explorer
+                                        </a>
+                                    </div>
+                                    <div id="commCurrentStats" class="comm-stats d-none" aria-live="polite"></div>
+                                    <div id="commCurrentLoading" class="comm-current-loading d-none text-muted small" aria-live="polite">
+                                        <div class="text-center">
+                                            <div class="spinner-border spinner-border-sm text-primary mb-2" role="status" aria-hidden="true"></div>
+                                            <p class="small text-muted mb-0">Loading materialized clusters…</p>
+                                        </div>
+                                    </div>
+                                    <div id="commCurrentBody" class="comm-current-body">
+                                        <p class="text-muted small mb-0">No materialized clusters yet.</p>
+                                    </div>
+                                </div>
+                            </div>
                         </aside>
+
+                        <section class="comm-main">
+                            <div class="card comm-preview-card">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0">Preview</h6>
+                                    </div>
+                                    <div id="commPreviewStats" class="comm-stats d-none mb-2" aria-live="polite"></div>
+                                    <div id="commPreviewLoading" class="comm-preview-loading d-none text-muted small" aria-live="polite">
+                                        <div class="text-center">
+                                            <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
+                                            <h6 class="fw-semibold mb-1" id="commPreviewLoadingTitle">Loading preview…</h6>
+                                            <p class="small text-muted mb-0" id="commPreviewLoadingMsg">Fetching the last detection run…</p>
+                                        </div>
+                                    </div>
+                                    <div id="commPreviewEmpty" class="comm-preview-empty text-muted small">
+                                        <div class="text-center">
+                                            <i class="bi bi-diagram-3 fs-1 text-muted d-block mb-2"></i>
+                                            <h6 class="fw-semibold mb-1">Community graph preview</h6>
+                                            <p class="small text-muted mb-0">Run <strong>Detect</strong> to draw the community graph.</p>
+                                        </div>
+                                    </div>
+                                    <div id="commPreviewLayout" class="comm-preview-layout d-none">
+                                        <div id="commPreviewCanvas" class="comm-preview-canvas"
+                                             role="img" aria-label="Community detection preview graph"></div>
+                                        <aside id="commPreviewDetails" class="comm-preview-details" aria-live="polite">
+                                            <p class="text-muted small mb-0">Click a node to list the entities in its cluster.</p>
+                                        </aside>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade p-3" id="commListPaneHow"
+                     role="tabpanel" aria-labelledby="commListTabHowBtn">
+                    <div class="comm-how-it-works small">
+                        <p class="howto-lead mb-3">
+                            <strong>Communities find clusters</strong>: groups of entities that are much more
+                            connected to each other than to the rest of the graph, a bit like neighbourhoods
+                            in a city. Nobody defines the groups up front; they emerge from the links in your data.
+                        </p>
+                        <p class="howto-example mb-4">
+                            <strong>Energy example.</strong> Sites, meters and customers fed by the same substation
+                            are heavily linked together, and only loosely linked to other regions. Community
+                            detection puts each of these areas into its own community, for example
+                            <em>North grid</em>, <em>City centre</em> and <em>South grid</em>, without anyone
+                            listing which site belongs where.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">What a community looks like</h6>
+                        <figure class="howto-figure">
+                            <svg class="howto-svg" viewBox="0 0 720 250" role="img"
+                                 aria-labelledby="commHowFig1Title">
+                                <title id="commHowFig1Title">Three communities of substations, sites, meters and customers</title>
+                                <ellipse class="hw-group hw-grp-a" cx="140" cy="115" rx="118" ry="88"/>
+                                <ellipse class="hw-group hw-grp-b" cx="370" cy="110" rx="105" ry="85"/>
+                                <ellipse class="hw-group hw-grp-c" cx="602" cy="120" rx="108" ry="88"/>
+
+                                <line class="hw-edge" x1="85" y1="80" x2="165" y2="68"/>
+                                <line class="hw-edge" x1="85" y1="80" x2="110" y2="158"/>
+                                <line class="hw-edge" x1="165" y1="68" x2="110" y2="158"/>
+                                <line class="hw-edge" x1="165" y1="68" x2="198" y2="148"/>
+                                <line class="hw-edge" x1="110" y1="158" x2="198" y2="148"/>
+
+                                <line class="hw-edge" x1="322" y1="72" x2="410" y2="66"/>
+                                <line class="hw-edge" x1="322" y1="72" x2="340" y2="150"/>
+                                <line class="hw-edge" x1="410" y1="66" x2="340" y2="150"/>
+                                <line class="hw-edge" x1="410" y1="66" x2="422" y2="145"/>
+                                <line class="hw-edge" x1="340" y1="150" x2="422" y2="145"/>
+
+                                <line class="hw-edge" x1="556" y1="82" x2="646" y2="78"/>
+                                <line class="hw-edge" x1="556" y1="82" x2="570" y2="164"/>
+                                <line class="hw-edge" x1="646" y1="78" x2="570" y2="164"/>
+                                <line class="hw-edge" x1="646" y1="78" x2="652" y2="158"/>
+                                <line class="hw-edge" x1="570" y1="164" x2="652" y2="158"/>
+
+                                <line class="hw-edge hw-edge--bridge" x1="198" y1="148" x2="340" y2="150"/>
+                                <line class="hw-edge hw-edge--bridge" x1="422" y1="145" x2="570" y2="164"/>
+
+                                <circle class="hw-dot hw-grp-a" cx="85" cy="80" r="15"/>
+                                <circle class="hw-dot hw-grp-a" cx="165" cy="68" r="15"/>
+                                <circle class="hw-dot hw-grp-a" cx="110" cy="158" r="15"/>
+                                <circle class="hw-dot hw-grp-a" cx="198" cy="148" r="15"/>
+                                <circle class="hw-dot hw-grp-b" cx="322" cy="72" r="15"/>
+                                <circle class="hw-dot hw-grp-b" cx="410" cy="66" r="15"/>
+                                <circle class="hw-dot hw-grp-b" cx="340" cy="150" r="15"/>
+                                <circle class="hw-dot hw-grp-b" cx="422" cy="145" r="15"/>
+                                <circle class="hw-dot hw-grp-c" cx="556" cy="82" r="15"/>
+                                <circle class="hw-dot hw-grp-c" cx="646" cy="78" r="15"/>
+                                <circle class="hw-dot hw-grp-c" cx="570" cy="164" r="15"/>
+                                <circle class="hw-dot hw-grp-c" cx="652" cy="158" r="15"/>
+
+                                <text class="hw-title" x="85" y="84" text-anchor="middle">T</text>
+                                <text class="hw-title" x="165" y="72" text-anchor="middle">S</text>
+                                <text class="hw-title" x="110" y="162" text-anchor="middle">M</text>
+                                <text class="hw-title" x="198" y="152" text-anchor="middle">C</text>
+                                <text class="hw-title" x="322" y="76" text-anchor="middle">T</text>
+                                <text class="hw-title" x="410" y="70" text-anchor="middle">S</text>
+                                <text class="hw-title" x="340" y="154" text-anchor="middle">M</text>
+                                <text class="hw-title" x="422" y="149" text-anchor="middle">C</text>
+                                <text class="hw-title" x="556" y="86" text-anchor="middle">T</text>
+                                <text class="hw-title" x="646" y="82" text-anchor="middle">S</text>
+                                <text class="hw-title" x="570" y="168" text-anchor="middle">M</text>
+                                <text class="hw-title" x="652" y="162" text-anchor="middle">C</text>
+
+                                <text class="hw-title" x="140" y="222" text-anchor="middle">Community 1: North grid</text>
+                                <text class="hw-title" x="370" y="222" text-anchor="middle">Community 2: City centre</text>
+                                <text class="hw-title" x="602" y="222" text-anchor="middle">Community 3: South grid</text>
+                                <text class="hw-small" x="360" y="244" text-anchor="middle">T Substation · S Site · M Meter · C Customer · dashed line = rare link between areas</text>
+                            </svg>
+                            <figcaption>Many links inside each group, only a few between groups.</figcaption>
+                        </figure>
+
+                        <h6 class="fw-semibold mb-2">How the groups form</h6>
+                        <p class="text-muted mb-2">
+                            The method is a simple “follow your neighbours” game, repeated a few times:
+                        </p>
+                        <figure class="howto-figure">
+                            <svg class="howto-svg" viewBox="0 0 720 175" role="img"
+                                 aria-labelledby="commHowFig2Title">
+                                <title id="commHowFig2Title">Groups spread from neighbour to neighbour until they stop changing</title>
+                                <defs>
+                                    <marker id="commHowArrow" viewBox="0 0 10 10" refX="9" refY="5"
+                                            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                        <path class="hw-flow-head" d="M0,0 L10,5 L0,10 z"/>
+                                    </marker>
+                                </defs>
+                                <text class="hw-title" x="110" y="16" text-anchor="middle">1. Start</text>
+                                <text class="hw-title" x="360" y="16" text-anchor="middle">2. Copy your neighbours</text>
+                                <text class="hw-title" x="610" y="16" text-anchor="middle">3. Stable groups</text>
+
+                                <g transform="translate(5,25)">
+                                    <line class="hw-edge" x1="35" y1="40" x2="85" y2="25"/>
+                                    <line class="hw-edge" x1="35" y1="40" x2="70" y2="90"/>
+                                    <line class="hw-edge" x1="85" y1="25" x2="70" y2="90"/>
+                                    <line class="hw-edge hw-edge--bridge" x1="85" y1="25" x2="145" y2="40"/>
+                                    <line class="hw-edge" x1="145" y1="40" x2="195" y2="55"/>
+                                    <line class="hw-edge" x1="145" y1="40" x2="165" y2="100"/>
+                                    <line class="hw-edge" x1="195" y1="55" x2="165" y2="100"/>
+                                    <circle class="hw-dot hw-grp-a" cx="35" cy="40" r="12"/>
+                                    <circle class="hw-dot hw-grp-b" cx="85" cy="25" r="12"/>
+                                    <circle class="hw-dot hw-grp-c" cx="70" cy="90" r="12"/>
+                                    <circle class="hw-dot hw-grp-d" cx="145" cy="40" r="12"/>
+                                    <circle class="hw-dot hw-node" cx="195" cy="55" r="12"/>
+                                    <circle class="hw-dot hw-node--removed" cx="165" cy="100" r="12"/>
+                                </g>
+                                <path class="hw-flow" d="M222,75 L252,75" marker-end="url(#commHowArrow)"/>
+
+                                <g transform="translate(255,25)">
+                                    <line class="hw-edge" x1="35" y1="40" x2="85" y2="25"/>
+                                    <line class="hw-edge" x1="35" y1="40" x2="70" y2="90"/>
+                                    <line class="hw-edge" x1="85" y1="25" x2="70" y2="90"/>
+                                    <line class="hw-edge hw-edge--bridge" x1="85" y1="25" x2="145" y2="40"/>
+                                    <line class="hw-edge" x1="145" y1="40" x2="195" y2="55"/>
+                                    <line class="hw-edge" x1="145" y1="40" x2="165" y2="100"/>
+                                    <line class="hw-edge" x1="195" y1="55" x2="165" y2="100"/>
+                                    <circle class="hw-dot hw-grp-a" cx="35" cy="40" r="12"/>
+                                    <circle class="hw-dot hw-grp-a" cx="85" cy="25" r="12"/>
+                                    <circle class="hw-dot hw-grp-c" cx="70" cy="90" r="12"/>
+                                    <circle class="hw-dot hw-grp-d" cx="145" cy="40" r="12"/>
+                                    <circle class="hw-dot hw-grp-d" cx="195" cy="55" r="12"/>
+                                    <circle class="hw-dot hw-node--removed" cx="165" cy="100" r="12"/>
+                                </g>
+                                <path class="hw-flow" d="M472,75 L502,75" marker-end="url(#commHowArrow)"/>
+
+                                <g transform="translate(505,25)">
+                                    <line class="hw-edge" x1="35" y1="40" x2="85" y2="25"/>
+                                    <line class="hw-edge" x1="35" y1="40" x2="70" y2="90"/>
+                                    <line class="hw-edge" x1="85" y1="25" x2="70" y2="90"/>
+                                    <line class="hw-edge hw-edge--bridge" x1="85" y1="25" x2="145" y2="40"/>
+                                    <line class="hw-edge" x1="145" y1="40" x2="195" y2="55"/>
+                                    <line class="hw-edge" x1="145" y1="40" x2="165" y2="100"/>
+                                    <line class="hw-edge" x1="195" y1="55" x2="165" y2="100"/>
+                                    <circle class="hw-dot hw-grp-a" cx="35" cy="40" r="12"/>
+                                    <circle class="hw-dot hw-grp-a" cx="85" cy="25" r="12"/>
+                                    <circle class="hw-dot hw-grp-a" cx="70" cy="90" r="12"/>
+                                    <circle class="hw-dot hw-grp-d" cx="145" cy="40" r="12"/>
+                                    <circle class="hw-dot hw-grp-d" cx="195" cy="55" r="12"/>
+                                    <circle class="hw-dot hw-grp-d" cx="165" cy="100" r="12"/>
+                                </g>
+
+                                <text class="hw-small" x="110" y="160" text-anchor="middle">Everyone is its own group</text>
+                                <text class="hw-small" x="360" y="160" text-anchor="middle">Each takes the most common group around it</text>
+                                <text class="hw-small" x="610" y="160" text-anchor="middle">Nothing changes any more: done</text>
+                            </svg>
+                            <figcaption>Groups spread through dense areas and stop at the rare links between them.</figcaption>
+                        </figure>
+
+                        <h6 class="fw-semibold mb-2">Using it, step by step</h6>
+                        <ol class="text-muted mb-3">
+                            <li><strong>Detect</strong>: runs the grouping on Databricks. Optionally limit it to one
+                                entity type (for example only Sites).</li>
+                            <li><strong>Preview</strong>: browse the biggest communities, their size, and click one to
+                                list its members.</li>
+                            <li><strong>Read the quality score</strong> (modularity): the higher it is, the more clearly
+                                the groups stand apart. Use it to compare runs, not as a pass/fail.</li>
+                            <li><strong>Materialize</strong>: writes the communities into the knowledge graph so Graph
+                                Explorer can colour and collapse them. <strong>Clear graph</strong> removes them again.</li>
+                        </ol>
+
+                        <h6 class="fw-semibold mb-2">Typical uses</h6>
+                        <ul class="text-muted mb-3">
+                            <li>Find natural operating areas (grid zones, field-team territories).</li>
+                            <li>Spot entities that bridge two areas (a site shared by two networks), often worth a check.</li>
+                            <li>Isolate small disconnected islands that may reveal missing links in the data.</li>
+                        </ul>
+
+                        <h6 class="fw-semibold mb-2">Patterns or Communities?</h6>
+                        <ul class="text-muted mb-3">
+                            <li><strong>Patterns</strong> answer <em>“who looks alike?”</em>: similar profiles,
+                                even if they are never connected.</li>
+                            <li><strong>Communities</strong> answer <em>“who is connected together?”</em>: clusters of
+                                linked entities, whatever their profile.</li>
+                        </ul>
+
+                        <details class="howto-tech">
+                        <summary>Technical details</summary>
+
+                        <h6 class="fw-semibold mb-2">1. Build the undirected edge set</h6>
+                        <p class="mb-3 text-muted">
+                            From the Knowledge Graph <code>…_data</code> snapshot, the job builds an
+                            undirected neighbour list (entity–entity edges only). Optionally you can
+                            <strong>Scope</strong> the run to one ontology class; that filters which
+                            nodes are considered for community membership while still using the
+                            graph’s relationship structure.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">2. Label propagation (semi-synchronous LPA)</h6>
+                        <p class="mb-2 text-muted">
+                            The only algorithm in v1 is <strong>label propagation</strong> in portable SQL
+                            (Louvain is not practical in pure SQL on serverless compute):
+                        </p>
+                        <ul class="text-muted mb-3">
+                            <li><strong>Init</strong> — every node starts with its own label (itself).</li>
+                            <li><strong>Iterate</strong> — each step, a node adopts the most frequent label
+                                among its neighbours, counting its own current label as one vote.
+                                Ties break on the smallest label (deterministic).</li>
+                            <li><strong>Semi-synchronous</strong> — only half of the nodes update each
+                                iteration (parity of <code>md5(node)</code>). That avoids the classic
+                                two-colour oscillation of synchronous LPA on bipartite graphs
+                                (Customer → Order → Product).</li>
+                            <li><strong>Stop</strong> — when labels stop changing over a full parity
+                                cycle, or change falls below a tiny threshold, or after a max
+                                iteration cap (default 30). Unconverged runs are flagged, not failed.</li>
+                        </ul>
+
+                        <h6 class="fw-semibold mb-2">3. Rank communities by size</h6>
+                        <p class="mb-3 text-muted">
+                            Nodes that share a label form a community. Communities are ranked by size
+                            (descending) into dense integer ids (<code>c-1</code>, <code>c-2</code>, …)
+                            used everywhere in the UI and when materializing to the graph.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">4. Quality signal (modularity)</h6>
+                        <p class="mb-3 text-muted">
+                            The job reports <strong>modularity</strong>
+                            <code>Q = Σ_c (L_c / m − (D_c / 2m)²)</code>: how much denser the
+                            intra-community edges are than a random partition with the same degrees.
+                            Higher is better; it is a summary metric, not a hard filter.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">5. Preview (bounded)</h6>
+                        <p class="mb-3 text-muted">
+                            The UI never downloads every member. Preview samples the top communities
+                            by size (capped node/edge counts), shows KPIs (clusters, nodes, edges,
+                            size stats, modularity), and loads members on demand when you click a
+                            cluster (paged “Load more”).
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">6. Materialize into the graph</h6>
+                        <p class="mb-3 text-muted">
+                            <strong>Materialize</strong> writes the last Detect run into the triple store
+                            as cluster membership (and cluster metadata) so Graph Explorer can colour
+                            and collapse communities. That is a separate background task. Detect alone
+                            only updates the Delta preview tables; Clear graph removes the materialized
+                            partition without deleting the last Detect preview.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">How this differs from Patterns</h6>
+                        <ul class="text-muted mb-0">
+                            <li><strong>Communities</strong> — global connectivity partition; labels hop through the graph.</li>
+                            <li><strong>Patterns</strong> — recurring neighbourhood signatures rooted at one entity type (attributes + typed multi-hop shapes).</li>
+                        </ul>
+                        </details>
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
     </div>
 </div>

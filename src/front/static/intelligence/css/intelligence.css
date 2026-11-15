@@ -547,6 +547,240 @@ a.sim-uri-link:focus-visible {
     overflow: hidden;
 }
 
+#communities-section .comm-tabs-card {
+    flex: 1 1 0%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#communities-section .comm-tabs-card > .card-body.ob-tabs-wrap {
+    flex: 1 1 0%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#communities-section #commListTabContent {
+    flex: 1 1 0%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#communities-section #commListPaneCommunities.active {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-height: 0;
+    height: 100%;
+    padding: 0.75rem;
+    overflow: hidden;
+}
+
+#communities-section #commListPaneHow.active {
+    display: block !important;
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+#scenarios-section #simListPaneHow.active {
+    overflow-y: auto;
+}
+
+.comm-how-it-works h6,
+.sim-how-it-works h6,
+.pat-how-it-works h6 {
+    color: var(--db-text, #191817);
+}
+
+.comm-how-it-works code,
+.sim-how-it-works code,
+.pat-how-it-works code {
+    font-size: 0.8em;
+}
+
+/* Business-friendly concept diagrams in the How it works tabs */
+.howto-lead {
+    font-size: 0.95rem;
+    color: var(--db-text, #191817);
+}
+
+.howto-example {
+    background: var(--db-primary-light, rgba(79, 70, 229, 0.1));
+    border-left: 3px solid var(--db-primary, #4F46E5);
+    border-radius: var(--db-radius-control, 10px);
+    padding: 0.6rem 0.85rem;
+    color: var(--db-text, #191817);
+}
+
+.howto-figure {
+    margin: 0 0 1.25rem;
+    padding: 0.75rem;
+    background: var(--db-canvas-warm, #FAFAF9);
+    border: 1px solid var(--db-border, #ECEAE6);
+    border-radius: var(--db-radius-card, 14px);
+}
+
+.howto-figure figcaption {
+    margin-top: 0.5rem;
+    color: var(--db-text-muted, #6F6B65);
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.howto-svg {
+    display: block;
+    width: 100%;
+    max-width: 720px;
+    height: auto;
+    margin: 0 auto;
+}
+
+.howto-svg text {
+    font-family: inherit;
+    font-size: 12px;
+    fill: var(--db-text, #191817);
+}
+
+.howto-svg .hw-small {
+    font-size: 10.5px;
+    fill: var(--db-text-muted, #6F6B65);
+}
+
+.howto-svg .hw-title {
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.howto-svg .hw-node {
+    fill: var(--db-surface-warm, #FFFFFF);
+    stroke: var(--db-border, #ECEAE6);
+    stroke-width: 1.5;
+}
+
+.howto-svg .hw-node--anchor {
+    fill: var(--db-primary-light, rgba(79, 70, 229, 0.1));
+    stroke: var(--db-primary, #4F46E5);
+}
+
+.howto-svg .hw-node--muted {
+    fill: var(--db-canvas-warm, #FAFAF9);
+    stroke: var(--db-border, #ECEAE6);
+    stroke-dasharray: 4 3;
+}
+
+.howto-svg .hw-node--added {
+    fill: var(--db-status-success-soft-bg, #E7F7F0);
+    stroke: var(--db-status-success, #0E9F6E);
+}
+
+.howto-svg .hw-node--removed {
+    fill: var(--db-status-danger-soft-bg, #FDECEC);
+    stroke: var(--db-status-danger, #DC2626);
+}
+
+.howto-svg .hw-node--changed {
+    fill: var(--db-status-warning-soft-bg, #FDF3E3);
+    stroke: var(--db-status-warning, #B45309);
+}
+
+.howto-svg .hw-node--sandbox {
+    fill: var(--db-status-draft-soft-bg, #F3EDFE);
+    stroke: var(--db-status-draft, #7C3AED);
+}
+
+.howto-svg .hw-node--info {
+    fill: var(--db-status-info-soft-bg, #EAF0FE);
+    stroke: var(--db-status-info, #2563EB);
+}
+
+.howto-svg .hw-edge {
+    stroke: var(--db-text-muted, #6F6B65);
+    stroke-width: 1.4;
+    fill: none;
+}
+
+.howto-svg .hw-edge--added {
+    stroke: var(--db-status-success, #0E9F6E);
+    stroke-width: 2;
+}
+
+.howto-svg .hw-edge--removed {
+    stroke: var(--db-status-danger, #DC2626);
+    stroke-width: 2;
+    stroke-dasharray: 5 4;
+}
+
+.howto-svg .hw-edge--bridge {
+    stroke-dasharray: 4 4;
+}
+
+.howto-svg .hw-arrowhead {
+    fill: var(--db-text-muted, #6F6B65);
+}
+
+.howto-svg .hw-arrowhead--added {
+    fill: var(--db-status-success, #0E9F6E);
+}
+
+.howto-svg .hw-flow {
+    stroke: var(--db-primary, #4F46E5);
+    stroke-width: 2;
+    fill: none;
+}
+
+.howto-svg .hw-flow-head {
+    fill: var(--db-primary, #4F46E5);
+}
+
+.howto-svg .hw-ring {
+    fill: none;
+    stroke: var(--db-border, #ECEAE6);
+    stroke-width: 1.2;
+    stroke-dasharray: 3 4;
+}
+
+.howto-svg .hw-group {
+    stroke-width: 1.2;
+    stroke-dasharray: 5 4;
+}
+
+.howto-svg .hw-grp-a { fill: var(--db-status-info-soft-bg, #EAF0FE); stroke: var(--db-status-info, #2563EB); }
+.howto-svg .hw-grp-b { fill: var(--db-status-success-soft-bg, #E7F7F0); stroke: var(--db-status-success, #0E9F6E); }
+.howto-svg .hw-grp-c { fill: var(--db-status-warning-soft-bg, #FDF3E3); stroke: var(--db-status-warning, #B45309); }
+.howto-svg .hw-grp-d { fill: var(--db-status-draft-soft-bg, #F3EDFE); stroke: var(--db-status-draft, #7C3AED); }
+
+.howto-svg .hw-dot { stroke-width: 1.5; }
+
+.howto-svg .hw-strike {
+    stroke: var(--db-status-danger, #DC2626);
+    stroke-width: 1.5;
+}
+
+.howto-tech {
+    border-top: 1px solid var(--db-border, #ECEAE6);
+    padding-top: 0.75rem;
+    margin-top: 1rem;
+}
+
+.howto-tech > summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--db-text-secondary, #6B6864);
+    margin-bottom: 0.75rem;
+}
+
+.howto-tech > summary:focus-visible {
+    outline: none;
+    box-shadow: var(--db-focus-ring, 0 0 0 0.2rem rgba(79, 70, 229, 0.35));
+    border-radius: 4px;
+}
+
 .comm-layout {
     flex: 1 1 0%;
     display: flex;

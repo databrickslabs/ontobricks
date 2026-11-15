@@ -135,6 +135,13 @@ def test_communities_section_owns_detection():
     assert 'id="commCurrentLoading"' in comm
     assert 'id="commPreviewBody"' not in comm
     assert 'id="commPreviewClusters"' not in comm
+    assert 'id="commListTabs"' in comm
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in comm
+    assert 'id="commListPaneCommunities"' in comm
+    assert 'id="commListPaneHow"' in comm
+    assert "How it works" in comm
+    assert "Label propagation (semi-synchronous LPA)" in comm
+    assert "How this differs from Patterns" in comm
     # Detect lives in the top-right header actions, not in the algorithm card.
     header, _, rest = comm.partition('id="commDetectBtn"')
     assert 'section-header' in header
@@ -163,6 +170,9 @@ def test_communities_section_owns_detection():
     assert ".comm-current-loading" in css
     assert "#commDetectBtn.is-busy" in css
     assert "#commMaterializeBtn.is-busy" in css
+    assert ".comm-tabs-card" in css
+    assert "#commListPaneCommunities.active" in css
+    assert ".comm-how-it-works" in css
 
 
 def test_community_detection_runs_as_a_databricks_task():
@@ -355,6 +365,66 @@ def test_scenarios_list_shows_spinner_while_loading():
     assert "Loading scenarios" in html
     assert "_loadingBlock" in js
     assert "Loading scenarios…" in js
+
+
+def test_scenarios_list_has_how_it_works_tab():
+    html = _read(FRONT / "templates/partials/intelligence/_sim_scenarios.html")
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert 'id="simListTabs"' in html
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in html
+    assert 'id="simListPaneScenarios"' in html
+    assert 'id="simListPaneHow"' in html
+    assert "How it works" in html
+    assert "Hypothetical facts (operations)" in html
+    assert "Compare with the live graph" in html
+    assert "Evaluate (same Compare page)" in html
+    assert "Entity neighbourhood" in html
+    assert ".sim-how-it-works" in css
+
+
+@pytest.mark.parametrize(
+    "partial,min_figures,phrases",
+    [
+        (
+            "_intel_patterns_saved.html",
+            2,
+            ["Patterns find entities that look alike", "Group the look-alikes"],
+        ),
+        (
+            "_intel_communities.html",
+            2,
+            ["Communities find clusters", "How the groups form", "Patterns or Communities?"],
+        ),
+        (
+            "_sim_scenarios.html",
+            3,
+            ["A scenario is a safe", "three kinds of facts", "Compare with the real (live) graph"],
+        ),
+    ],
+)
+def test_how_it_works_tabs_have_business_diagrams(partial, min_figures, phrases):
+    html = _read(FRONT / "templates/partials/intelligence" / partial)
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert html.count('<figure class="howto-figure">') >= min_figures
+    assert html.count('class="howto-svg"') >= min_figures
+    assert 'role="img"' in html
+    assert "Energy example." in html
+    assert '<details class="howto-tech">' in html
+    assert "<summary>Technical details</summary>" in html
+    assert html.count("<details") == html.count("</details>")
+    assert "style=" not in html
+    for phrase in phrases:
+        assert phrase in html
+    for selector in (".howto-figure", ".howto-svg", ".howto-example", ".howto-tech"):
+        assert selector in css
+
+
+def test_how_it_works_svg_ids_are_unique_across_intelligence():
+    ids = []
+    for name in ("_intel_patterns_saved.html", "_intel_communities.html", "_sim_scenarios.html"):
+        html = _read(FRONT / "templates/partials/intelligence" / name)
+        ids += re.findall(r'id="((?:pat|comm|sim)How[^"]+)"', html)
+    assert len(ids) == len(set(ids))
 
 
 def test_scenarios_list_uses_data_quality_card_style():
@@ -813,6 +883,12 @@ def test_patterns_section_owns_discovery():
     assert "onclick=" not in disc
     assert "onclick=" not in detect_modal
     assert 'id="patSavedList"' in saved
+    assert 'id="patListTabs"' in saved
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in saved
+    assert 'id="patListPanePatterns"' in saved
+    assert 'id="patListPaneHow"' in saved
+    assert "How it works" in saved
+    assert "Adaptive detail levels" in saved
     assert "onclick=" not in saved
     assert "data-pat-pattern-id" in js_patterns
     assert "openSaved" in js_patterns

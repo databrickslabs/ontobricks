@@ -304,15 +304,15 @@
                                     </h2>
                                     <div id="hw6" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
+                                            <p>Learn from and experiment with a built graph. Communities, Patterns and Scenarios each have a <em>How it works</em> tab with business-friendly diagrams; every page header has the ontology discussion button.</p>
                                             <ul>
-                                                <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;)</li>
-                                                <li><strong>Runs</strong> &mdash; preview a saved cohort rule and materialise it to the graph or a Unity Catalog table</li>
-                                                <li><strong>Communities</strong> &mdash; run community detection (label propagation on a Databricks job, any graph size), preview the largest communities, then materialize the partition to the knowledge graph for Explorer</li>
-                                                <li><strong>Patterns</strong> &mdash; Scenarios-style list; <strong>Detect</strong> finds neighbourhood shapes on Databricks and auto-saves the whole run (every pattern’s diagram, KPIs and members) under the entity type + date/time</li>
-                                                <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Graph → Business rules, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed by comparing the materialised sandbox after-picture to its before-picture companion; <em>Explorer</em> opens that sandbox in the graph viewer</li>
-                                                <li><strong>Compare</strong> &mdash; overlay a ready sandbox on the current live graph (inferred or asserted only), on the same scope as the scenario: one colour-coded graph of unchanged, added (sandbox only) and removed (live only) triples, with exact counters and a details panel</li>
+                                                <li><strong>Cohorts</strong> (Configuration) &mdash; group entities with rules you define and can explain (&ldquo;which entities travel together?&rdquo;). The <em>Design</em> tab authors the rule; the <em>Runs</em> tab previews it and materialises it to the graph (<code>:inCohort</code>) or a Unity Catalog table. Cohorts are reusable scenario scopes</li>
+                                                <li><strong>Communities</strong> (Discovery) &mdash; find clusters of tightly connected entities (label propagation on a Databricks job, any graph size, optional entity-type scope). Preview the largest communities with modularity and convergence, then <em>Materialize</em> the partition so Explorer can colour and collapse it; <em>Clear graph</em> removes it</li>
+                                                <li><strong>Patterns</strong> (Discovery) &mdash; find entities that look alike. <em>New</em> opens the Detect dialog (entity, hops, numeric bins, min support, refine top-N), runs on Databricks and auto-saves the run under the entity type + date/time. Each pattern shows its support, detail level, a layered diagram (hover to highlight a path) and <em>Matching entities</em></li>
+                                                <li><strong>Scenarios</strong> (Simulation) &mdash; safe what-ifs on a private sandbox. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor: pick a scope (entity neighbourhood or cohort), add <em>Set / Add / Remove</em> facts (or let <em>Propose facts</em> draft them from plain language), tick the reasoning phases and rules, and run. <em>Results</em> lists triples added or removed (your fact vs inferred); <em>Explorer</em> opens the sandbox; <em>Purge</em> drops the sandbox and keeps the scenario as a draft</li>
+                                                <li><strong>Compare</strong> (Simulation) &mdash; pick a ready scenario and a live graph (inferred or asserted only). <em>Graphs</em> &rarr; <em>View difference</em> draws one colour-coded overlay (grey unchanged, amber modified, green added, red removed) with exact metrics and a details panel. <em>Evaluate</em> asks the same question to the live graph and the sandbox, adds a business-insights commentary, and builds a printable / PDF report</li>
                                             </ul>
-                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar Background Tasks hourglass. Simulation run history lives under <strong>Settings &rarr; Automation &rarr; Runs</strong> (Simulation tab).</p>
+                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar Background Tasks hourglass. Simulation run history lives under <strong>Settings &rarr; Automation &rarr; Runs</strong> (Simulation tab). Full guide: <a href="#help-docs/user-guide#step-4-intelligence-cohorts-discovery--simulation" data-help-jump="docs" data-help-doc="user-guide" data-help-anchor="step-4-intelligence-cohorts-discovery--simulation">Intelligence (User Guide)</a>.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -378,6 +378,20 @@
                                         <div class="help-feature-icon"><i class="bi bi-people-fill"></i></div>
                                         <h5>Cohort Discovery</h5>
                                         <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design and run them on the two tabs of <strong>Intelligence &rarr; Configuration &rarr; Cohorts</strong> (<em>Design</em> and <em>Runs</em>).</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-diagram-3"></i></div>
+                                        <h5>Communities &amp; Patterns</h5>
+                                        <p><strong>Intelligence &rarr; Discovery</strong>: <em>Communities</em> finds who is connected together (clusters you can materialize for Explorer); <em>Patterns</em> finds who looks alike (recurring neighbourhood profiles with diagrams and matching entities). Both run on Databricks.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-columns-gap"></i></div>
+                                        <h5>What-if Scenarios &amp; Compare</h5>
+                                        <p><strong>Intelligence &rarr; Simulation</strong>: change facts on a private sandbox, let your rules react, then <em>Compare</em> the result with today&rsquo;s live graph and <em>Evaluate</em> one business question on both, with an AI commentary and a PDF report.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -517,7 +531,10 @@
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
                                 <dt>Bridge</dt><dd>Cross-context link between entities of two different contexts.</dd>
                                 <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed on the <em>Design</em> tab of <em>Intelligence &rarr; Configuration &rarr; Cohorts</em>, run on its <em>Runs</em> tab.</dd>
+                                <dt>Community</dt><dd>A group of entities much more connected to each other than to the rest of the graph, found by <em>Intelligence &rarr; Discovery &rarr; Communities</em>. <em>Modularity</em> scores how clearly the groups stand apart.</dd>
+                                <dt>Pattern</dt><dd>A recurring neighbourhood profile shared by several entities of one type (same kinds of links, similar attribute ranges), found by <em>Intelligence &rarr; Discovery &rarr; Patterns</em>. Its <em>support</em> is how many entities share it.</dd>
                                 <dt>Simulation</dt><dd>A named what-if sandbox: a slice of the Knowledge Graph copied into an isolated table, patched with hypothetical triples, and re-reasoned &mdash; the live graph is never modified.</dd>
+                                <dt>Sandbox</dt><dd>The private copy of a graph slice a scenario writes to. <em>Compare</em> overlays a ready sandbox on the live graph; <em>Purge</em> drops it.</dd>
                                 <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the context Graph DB.</dd>
                                 <dt>Graph DB</dt><dd>Per-context engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>
                                 <dt>Neo4j</dt><dd>Optional Graph DB backend that stores the Knowledge Graph as a typed property graph (nodes, labels, relationships) instead of flat triples. Requires Neo4j 5.x (Aura recommended).</dd>

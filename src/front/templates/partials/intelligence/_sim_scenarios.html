@@ -5,6 +5,10 @@
             <p class="text-muted mb-0 small">What-if sandboxes: hypothetical facts reasoned over a copy of a graph slice. The live knowledge graph is never modified.</p>
         </div>
         <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn" id="simDiscussBtn"
+                    title="Open the ontology discussion" aria-label="Open the ontology discussion">
+                <i class="bi bi-chat-dots"></i>
+            </button>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="simRefreshBtn" title="Refresh">
                 <i class="bi bi-arrow-clockwise"></i>
             </button>
@@ -26,11 +30,330 @@
     {% endif %}
 
     <div class="card h-100">
-        <div class="card-body p-3">
-            <div id="simScenariosBody" class="sim-scenarios-list">
-                <div class="text-center text-muted py-4">
-                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    Loading scenarios…
+        <div class="card-body p-0 ob-tabs-wrap">
+            <ul class="nav nav-tabs ob-tabs nav-fill" id="simListTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="simListTabScenariosBtn" data-bs-toggle="tab"
+                            data-bs-target="#simListPaneScenarios" type="button" role="tab"
+                            aria-controls="simListPaneScenarios" aria-selected="true">
+                        <i class="bi bi-collection me-1"></i>Scenarios
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="simListTabHowBtn" data-bs-toggle="tab"
+                            data-bs-target="#simListPaneHow" type="button" role="tab"
+                            aria-controls="simListPaneHow" aria-selected="false">
+                        <i class="bi bi-info-circle me-1"></i>How it works
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="simListTabContent">
+                <div class="tab-pane fade show active p-3" id="simListPaneScenarios"
+                     role="tabpanel" aria-labelledby="simListTabScenariosBtn">
+                    <div id="simScenariosBody" class="sim-scenarios-list">
+                        <div class="text-center text-muted py-4">
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            Loading scenarios…
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade p-3" id="simListPaneHow"
+                     role="tabpanel" aria-labelledby="simListTabHowBtn">
+                    <div class="sim-how-it-works small">
+                        <p class="howto-lead mb-3">
+                            <strong>A scenario is a safe “what if”.</strong> You change a few facts on a
+                            <em>copy</em> of part of your knowledge graph, let your business rules react, and see
+                            what would change. Real data is never touched.
+                        </p>
+                        <p class="howto-example mb-4">
+                            <strong>Energy example.</strong> <em>“What if customer C-102 switched its contract to the
+                            Green tariff?”</em> In the scenario, your rules may then flag C-102 as
+                            <em>eligible for the green rebate</em> and drop its old <em>Standard plan</em> discount.
+                            You see both effects before deciding anything in real life.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">The journey of a scenario</h6>
+                        <figure class="howto-figure">
+                            <svg class="howto-svg" viewBox="0 0 720 150" role="img"
+                                 aria-labelledby="simHowFig1Title">
+                                <title id="simHowFig1Title">From the live graph to a list of changes, in five steps</title>
+                                <defs>
+                                    <marker id="simHowArrow" viewBox="0 0 10 10" refX="9" refY="5"
+                                            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                        <path class="hw-flow-head" d="M0,0 L10,5 L0,10 z"/>
+                                    </marker>
+                                </defs>
+                                <rect class="hw-node hw-node--info" x="5" y="25" width="125" height="58" rx="10"/>
+                                <text class="hw-title" x="67" y="50" text-anchor="middle">Live graph</text>
+                                <text class="hw-small" x="67" y="67" text-anchor="middle">read only</text>
+                                <rect class="hw-node hw-node--sandbox" x="152" y="25" width="125" height="58" rx="10"/>
+                                <text class="hw-title" x="214" y="50" text-anchor="middle">Copy a slice</text>
+                                <text class="hw-small" x="214" y="67" text-anchor="middle">private sandbox</text>
+                                <rect class="hw-node hw-node--changed" x="299" y="25" width="125" height="58" rx="10"/>
+                                <text class="hw-title" x="361" y="50" text-anchor="middle">Apply what-ifs</text>
+                                <text class="hw-small" x="361" y="67" text-anchor="middle">your facts</text>
+                                <rect class="hw-node hw-node--anchor" x="446" y="25" width="125" height="58" rx="10"/>
+                                <text class="hw-title" x="508" y="50" text-anchor="middle">Rules react</text>
+                                <text class="hw-small" x="508" y="67" text-anchor="middle">same rules as live</text>
+                                <rect class="hw-node hw-node--added" x="593" y="25" width="122" height="58" rx="10"/>
+                                <text class="hw-title" x="654" y="50" text-anchor="middle">See changes</text>
+                                <text class="hw-small" x="654" y="67" text-anchor="middle">added / removed</text>
+
+                                <path class="hw-flow" d="M131,54 L149,54" marker-end="url(#simHowArrow)"/>
+                                <path class="hw-flow" d="M278,54 L296,54" marker-end="url(#simHowArrow)"/>
+                                <path class="hw-flow" d="M425,54 L443,54" marker-end="url(#simHowArrow)"/>
+                                <path class="hw-flow" d="M572,54 L590,54" marker-end="url(#simHowArrow)"/>
+
+                                <text class="hw-small" x="67" y="110" text-anchor="middle">Customers,</text>
+                                <text class="hw-small" x="67" y="124" text-anchor="middle">contracts, meters</text>
+                                <text class="hw-small" x="214" y="110" text-anchor="middle">C-102 and what</text>
+                                <text class="hw-small" x="214" y="124" text-anchor="middle">is 2 steps around</text>
+                                <text class="hw-small" x="361" y="110" text-anchor="middle">Tariff:</text>
+                                <text class="hw-small" x="361" y="124" text-anchor="middle">Standard → Green</text>
+                                <text class="hw-small" x="508" y="110" text-anchor="middle">“Eligible for</text>
+                                <text class="hw-small" x="508" y="124" text-anchor="middle">green rebate”</text>
+                                <text class="hw-small" x="654" y="110" text-anchor="middle">+2 added</text>
+                                <text class="hw-small" x="654" y="124" text-anchor="middle">−1 removed</text>
+                            </svg>
+                            <figcaption>Everything after “Live graph” happens in the sandbox only.</figcaption>
+                        </figure>
+
+                        <h6 class="fw-semibold mb-2">Step 1: Choose what to copy (the scope)</h6>
+                        <ul class="text-muted mb-3">
+                            <li><strong>One entity and its surroundings</strong>: for example customer C-102 plus
+                                everything up to 2 steps away (its contracts, sites, meters).</li>
+                            <li><strong>A cohort</strong>: a saved group, for example <em>all customers fed by
+                                substation North-7</em>.</li>
+                        </ul>
+                        <p class="text-muted mb-3">
+                            Rules only see what was copied. If a rule needs a wider view (a total over all customers,
+                            say), widen the number of steps or use a cohort.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">Step 2: Describe your what-ifs (three kinds of facts)</h6>
+                        <figure class="howto-figure">
+                            <svg class="howto-svg" viewBox="0 0 720 160" role="img"
+                                 aria-labelledby="simHowFig2Title">
+                                <title id="simHowFig2Title">Set changes a value, Add creates a link, Remove deletes a link</title>
+                                <defs>
+                                    <marker id="simHowArrowAdd" viewBox="0 0 10 10" refX="9" refY="5"
+                                            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                        <path class="hw-arrowhead--added" d="M0,0 L10,5 L0,10 z"/>
+                                    </marker>
+                                </defs>
+                                <text class="hw-title" x="115" y="16" text-anchor="middle">Set: change a value</text>
+                                <rect class="hw-node hw-node--changed" x="30" y="32" width="170" height="70" rx="10"/>
+                                <text class="hw-title" x="115" y="54" text-anchor="middle">Contract K-77</text>
+                                <text class="hw-small" x="115" y="74" text-anchor="middle">tariff: Standard</text>
+                                <line class="hw-strike" x1="78" y1="70" x2="152" y2="70"/>
+                                <text class="hw-small" x="115" y="92" text-anchor="middle">tariff: Green</text>
+
+                                <text class="hw-title" x="360" y="16" text-anchor="middle">Add: create a link</text>
+                                <rect class="hw-node" x="255" y="45" width="90" height="44" rx="10"/>
+                                <text x="300" y="72" text-anchor="middle">C-102</text>
+                                <rect class="hw-node hw-node--added" x="375" y="45" width="95" height="44" rx="10"/>
+                                <text x="422" y="65" text-anchor="middle">Contract</text>
+                                <text class="hw-small" x="422" y="80" text-anchor="middle">K-90 (new)</text>
+                                <path class="hw-edge hw-edge--added" d="M346,67 L372,67" marker-end="url(#simHowArrowAdd)"/>
+                                <text class="hw-small" x="360" y="110" text-anchor="middle">C-102 holds K-90</text>
+
+                                <text class="hw-title" x="605" y="16" text-anchor="middle">Remove: delete a link</text>
+                                <rect class="hw-node" x="500" y="45" width="90" height="44" rx="10"/>
+                                <text x="545" y="72" text-anchor="middle">Meter M-55</text>
+                                <rect class="hw-node" x="625" y="45" width="90" height="44" rx="10"/>
+                                <text x="670" y="72" text-anchor="middle">Site S-12</text>
+                                <path class="hw-edge hw-edge--removed" d="M591,67 L622,67"/>
+                                <text class="hw-small" x="607" y="110" text-anchor="middle">M-55 no longer installed at S-12</text>
+
+                                <text class="hw-small" x="360" y="148" text-anchor="middle">Facts apply in the order you list them, inside the sandbox only.</text>
+                            </svg>
+                            <figcaption>Tip: type your idea in plain language and use “Propose facts” to draft them for you.</figcaption>
+                        </figure>
+
+                        <h6 class="fw-semibold mb-2">Step 3: Choose which rules react</h6>
+                        <p class="text-muted mb-3">
+                            Tick the same rule families you use on the live graph (business rules, IF-THEN rules,
+                            graph reasoning…). They run on the sandbox after your facts, so you see the
+                            <em>knock-on effects</em>, not only the facts you typed.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">Step 4: Run and read the results</h6>
+                        <p class="text-muted mb-3">
+                            A scenario goes <strong>Draft → Running → Ready</strong> (or <strong>Failed</strong> with a
+                            message). The <strong>Results</strong> tab lists what appeared and what disappeared, and
+                            tells you whether each change is <em>your fact</em> or was <em>inferred by a rule</em>
+                            (hover to see which rule).
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">Step 5: Compare with the real (live) graph</h6>
+                        <p class="text-muted mb-2">
+                            Go to <strong>Simulation → Compare</strong>, pick a <strong>Ready</strong> scenario and press
+                            <strong>View difference</strong>. One picture shows the scenario laid over today’s live data:
+                        </p>
+                        <figure class="howto-figure">
+                            <svg class="howto-svg" viewBox="0 0 720 240" role="img"
+                                 aria-labelledby="simHowFig3Title">
+                                <title id="simHowFig3Title">Compare colours: unchanged, changed, added and removed</title>
+                                <defs>
+                                    <marker id="simHowArrowCmp" viewBox="0 0 10 10" refX="9" refY="5"
+                                            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                        <path class="hw-arrowhead" d="M0,0 L10,5 L0,10 z"/>
+                                    </marker>
+                                    <marker id="simHowArrowCmpAdd" viewBox="0 0 10 10" refX="9" refY="5"
+                                            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                        <path class="hw-arrowhead--added" d="M0,0 L10,5 L0,10 z"/>
+                                    </marker>
+                                </defs>
+                                <path class="hw-edge hw-edge--added" d="M310,72 L195,140" marker-end="url(#simHowArrowCmpAdd)"/>
+                                <path class="hw-edge hw-edge--removed" d="M360,82 L360,138"/>
+                                <path class="hw-edge" d="M410,72 L525,140" marker-end="url(#simHowArrowCmp)"/>
+                                <text class="hw-small" x="225" y="100" text-anchor="middle">holds (new)</text>
+                                <text class="hw-small" x="400" y="115" text-anchor="middle">holds (gone)</text>
+                                <text class="hw-small" x="500" y="100" text-anchor="middle">owns</text>
+
+                                <rect class="hw-node hw-node--changed" x="285" y="30" width="150" height="52" rx="10"/>
+                                <text class="hw-title" x="360" y="52" text-anchor="middle">Customer C-102</text>
+                                <text class="hw-small" x="360" y="69" text-anchor="middle">rebate: eligible (was: no)</text>
+
+                                <rect class="hw-node hw-node--added" x="85" y="140" width="150" height="48" rx="10"/>
+                                <text class="hw-title" x="160" y="161" text-anchor="middle">Contract K-90</text>
+                                <text class="hw-small" x="160" y="177" text-anchor="middle">Green tariff</text>
+                                <rect class="hw-node hw-node--removed" x="285" y="140" width="150" height="48" rx="10"/>
+                                <text class="hw-title" x="360" y="161" text-anchor="middle">Contract K-77</text>
+                                <text class="hw-small" x="360" y="177" text-anchor="middle">Standard plan</text>
+                                <rect class="hw-node" x="485" y="140" width="150" height="48" rx="10"/>
+                                <text class="hw-title" x="560" y="161" text-anchor="middle">Site S-12</text>
+                                <text class="hw-small" x="560" y="177" text-anchor="middle">unchanged</text>
+
+                                <rect class="hw-node" x="110" y="212" width="14" height="14" rx="3"/>
+                                <text class="hw-small" x="130" y="223">Unchanged</text>
+                                <rect class="hw-node hw-node--changed" x="230" y="212" width="14" height="14" rx="3"/>
+                                <text class="hw-small" x="250" y="223">Changed</text>
+                                <rect class="hw-node hw-node--added" x="340" y="212" width="14" height="14" rx="3"/>
+                                <text class="hw-small" x="360" y="223">Added by the scenario</text>
+                                <rect class="hw-node hw-node--removed" x="505" y="212" width="14" height="14" rx="3"/>
+                                <text class="hw-small" x="525" y="223">Gone in the scenario</text>
+                            </svg>
+                            <figcaption>Grey stays the same, amber is modified, green is new, red disappears.</figcaption>
+                        </figure>
+                        <ul class="text-muted mb-3">
+                            <li><strong>Live graph (inferred)</strong> compares against today’s data <em>including</em> rule
+                                results; <strong>Live graph (asserted only)</strong> compares against the raw data only.</li>
+                            <li>Click any box or link to see exactly what changed, and which rule produced it.</li>
+                            <li>Compare uses today’s live data. If the live graph changed since your run, re-run the
+                                scenario to refresh it.</li>
+                        </ul>
+
+                        <h6 class="fw-semibold mb-2">Step 6: Ask a business question (Evaluate)</h6>
+                        <p class="text-muted mb-3">
+                            On the same Compare page, the <strong>Evaluate</strong> tab asks one question to both worlds,
+                            for example <em>“Which customers are eligible for the green rebate?”</em>. You get the live
+                            answer, the scenario answer, and an AI commentary on the difference.
+                            <strong>Open report</strong> bundles the facts, the Compare picture and both answers;
+                            <strong>Export PDF</strong> saves it to share with stakeholders.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">More scenario ideas</h6>
+                        <ul class="text-muted mb-3">
+                            <li><em>What if this meter is decommissioned?</em> Remove its links and see which sites lose
+                                monitoring.</li>
+                            <li><em>What if a site’s consumption doubles?</em> Set the new value and see which tariffs or
+                                alerts your rules trigger.</li>
+                            <li><em>What if this customer signs a second contract?</em> Add the contract and check bundle
+                                discounts or risk scores.</li>
+                        </ul>
+
+                        <details class="howto-tech">
+                        <summary>Technical details</summary>
+
+                        <h6 class="fw-semibold mb-2">1. Scope — which slice of the graph</h6>
+                        <p class="mb-2 text-muted">Choose how far the sandbox reaches (capped at 5&nbsp;000 entities / 250&nbsp;000 triples):</p>
+                        <ul class="text-muted mb-3">
+                            <li><strong>Entity neighbourhood</strong> — one entity URI and N hops of neighbours (default 2).</li>
+                            <li><strong>Cohort</strong> — members of a saved Cohort Discovery rule.</li>
+                        </ul>
+                        <p class="mb-3 text-muted">
+                            Only triples whose <em>subject</em> is in that set are copied (attributes and outgoing
+                            relationships). Rules later only see what was copied — widen hops or use a cohort
+                            scope if a rule needs a broader view.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">2. Copy into the sandbox</h6>
+                        <p class="mb-3 text-muted">
+                            In-scope triples are copied into an isolated store
+                            (<code>&lt;graph&gt;__sim_&lt;scenario id&gt;</code> on Lakebase/Delta, or a marker-labelled
+                            Neo4j graph). That copy is the <strong>before</strong> picture. Overlay keys remember every
+                            <code>(subject, predicate)</code> the sandbox owns, including predicates emptied by Remove.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">3. Hypothetical facts (operations)</h6>
+                        <p class="mb-2 text-muted">Facts are applied in list order, inside the sandbox only:</p>
+                        <ul class="text-muted mb-3">
+                            <li><strong>Set</strong> — replace every value of a predicate on a subject (e.g. a new credit score).</li>
+                            <li><strong>Add</strong> — assert an extra triple; existing values are kept.</li>
+                            <li><strong>Remove</strong> — retract one exact triple.</li>
+                        </ul>
+                        <p class="mb-3 text-muted">
+                            Subjects, predicates, and objects can be existing entities/attributes or new hypothetical
+                            ones (wizard + optional “Propose facts” from natural language). Extra entities pulled in by
+                            a fact are copied from live with one neighbour hop so rules can attach related meters,
+                            contracts, etc.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">4. Reasoning phases</h6>
+                        <p class="mb-3 text-muted">
+                            Tick the same engines as Knowledge Graph → Inference (Simple rules, graph reasoning,
+                            Complex / IF-THEN rules, OWL 2 RL). They run against the sandbox after facts are applied;
+                            conclusions are written into the sandbox too. If IF-THEN is ticked and rules cannot run,
+                            the scenario <strong>fails</strong> instead of finishing as ready with zero inferences.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">5. Results (sandbox before vs after)</h6>
+                        <p class="mb-3 text-muted">
+                            After a successful run the scenario is <strong>ready</strong>. Results list triples that
+                            <strong>appeared</strong> (your fact vs inferred — hover for the rule) and triples that
+                            <strong>disappeared</strong>. Counts are exact; long lists are capped for display.
+                            Statuses: <code>draft</code>, <code>running</code>, <code>ready</code>, <code>failed</code>.
+                            Purge drops the sandbox after-picture but keeps the scenario as a draft; delete removes
+                            the scenario and its sandbox.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">6. Compare with the live graph</h6>
+                        <p class="mb-2 text-muted">
+                            Open <strong>Simulation → Compare</strong>. Pick a <strong>ready</strong> scenario and a
+                            live source (<em>inferred</em> or <em>asserted only</em>), then press <strong>View difference</strong>.
+                            One overlay graph uses the same scope as the run:
+                        </p>
+                        <ul class="text-muted mb-2">
+                            <li><strong>Nodes</strong> — grey unchanged, amber modified (attributes/types/links), green added in sandbox, red removed from live.</li>
+                            <li><strong>Links</strong> — grey unchanged, green added (fact or inferred), red removed/overwritten.</li>
+                        </ul>
+                        <p class="mb-3 text-muted">
+                            Click a node or edge for details. Counters are exact; the drawing prioritises changes
+                            (about 400 entities / 1&nbsp;500 links). Unlike Results (before vs after of the same sandbox),
+                            Compare also reflects what the live graph did since the run — re-run the scenario to refresh
+                            the sandbox if live has moved on.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">7. Evaluate (same Compare page)</h6>
+                        <p class="mb-3 text-muted">
+                            The <strong>Evaluate</strong> tab asks Graph Chat the same question against live and the
+                            sandbox. When both answers succeed, a business-insights agent comments on the difference.
+                            <strong>Open report</strong> builds a printable summary (facts, Compare metrics/graph if
+                            you already ran Compare, both answers, analysis). <strong>Export PDF</strong> uses the
+                            browser print dialog.
+                        </p>
+
+                        <h6 class="fw-semibold mb-2">Isolation &amp; backends</h6>
+                        <ul class="text-muted mb-0">
+                            <li>The sandbox store refuses writes outside simulation tables — runs cannot touch the built graph or its caches.</li>
+                            <li>Needs a supported graph backend (Lakebase / Lakehouse / Neo4j) and a registry-saved context.</li>
+                            <li>New domain versions copy scenario specs as drafts; sandboxes are not copied — run again on the new version.</li>
+                        </ul>
+                        </details>
+                    </div>
                 </div>
             </div>
         </div>

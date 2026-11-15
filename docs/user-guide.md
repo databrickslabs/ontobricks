@@ -12,7 +12,7 @@
 - [Step 1: Design Ontology](#step-1-design-ontology)
 - [Step 2: Map Data Assets (Mapping)](#step-2-map-data-assets-mapping)
 - [Step 3: Graph (Sync & Explore)](#step-3-graph-sync--explore)
-- [Step 4: Simulation (What-if Sandboxes)](#step-4-simulation-what-if-sandboxes)
+- [Step 4: Intelligence (Cohorts, Discovery & Simulation)](#step-4-intelligence-cohorts-discovery--simulation)
 - [Context Management & Version Control](#context-management--version-control)
 - [Best Practices](#best-practices)
 - [GraphQL API](#graphql-api)
@@ -1313,15 +1313,114 @@ source triples safely.
 
 ---
 
-## Step 4: Simulation (What-if Sandboxes)
+## Step 4: Intelligence (Cohorts, Discovery & Simulation)
 
-**Intelligence** is the fifth workspace in the top navigation.
-**Configuration** authors cohort rules; **Discovery** finds communities and
-recurring neighbourhood patterns; **Simulation** runs what-if sandboxes.
+**Intelligence** is the workspace where you *learn from* and *experiment
+with* a built knowledge graph. It never changes your source data: Discovery
+results are previews until you explicitly materialise them, and simulations
+run on private copies.
 
-### Community detection
+### Overview
 
-**Intelligence → Discovery → Communities** runs label propagation on a
+The left sidebar has three groups:
+
+| Group | Page | Business question it answers | Writes to the live graph? |
+|-------|------|------------------------------|---------------------------|
+| **Configuration** | **Cohorts** | *Which entities belong together according to rules I define?* | Only when you **Materialise** a cohort run |
+| **Discovery** | **Communities** | *Which entities are tightly connected to each other?* | Only when you **Materialize** the partition |
+| **Discovery** | **Patterns** | *Which entities look alike (same kind of neighbourhood and profile)?* | Never (saved as a Unity Catalog snapshot) |
+| **Simulation** | **Scenarios** | *What would change if these facts were true?* | Never (private sandbox per scenario) |
+| **Simulation** | **Compare** | *How does a scenario differ from today's live graph, and what does it mean for the business?* | Never |
+
+**Before you start.** Intelligence needs a domain saved to the registry and a
+built knowledge graph (Knowledge Graph → **Build**). Communities and Patterns
+also need the *Compute large-graph metrics on Databricks* toggle in
+**Settings → Global**, because they run as serverless Databricks jobs; when a
+prerequisite is missing the page says why and the action button stays
+disabled. Simulation works on the **Lakebase**, **Lakehouse (Delta)** and
+**Neo4j** graph backends.
+
+**Common to every Intelligence page.**
+
+- **How it works tab.** Communities, Patterns and Scenarios each have two tabs:
+  the working view (Communities / Patterns / Scenarios) and **How it works**.
+  How it works explains the feature in business language with diagrams and an
+  energy & utilities example (customers, contracts, meters, sites), followed
+  by a collapsed **Technical details** section with the exact algorithm.
+- **Ontology discussion.** The chat-bubble button in the page header
+  (Communities, Patterns, Scenarios, Compare) opens the domain discussion so
+  you can comment on a finding with your team, optionally tagging an entity.
+- **Background tasks.** Long operations (Detect, Materialize, scenario Run)
+  run in the background. You can leave the page; follow progress in the navbar
+  **Background Tasks** hourglass and come back later.
+- **Shareable URLs.** Sections and opened items are in the URL
+  (`/intelligence/?section=patterns`, `?section=scenarios&simulation=<id>`),
+  so a refresh or a shared link reopens the same view.
+
+### Configuration → Cohorts
+
+**In plain words.** A cohort is a group of entities that you define with
+explicit, explainable rules, for example *customers who share the same
+substation and the same tariff family*. Unlike Communities and Patterns, you
+decide the grouping logic; OntoBricks applies it consistently.
+
+The page has two tabs:
+
+- **Design** — pick the target class, the linking paths (which relationships
+  connect members), the compatibility filters and the grouping type, then
+  **Save**. You can also describe the rule in natural language and let the
+  assistant draft it.
+- **Runs** — pick a saved rule, **Preview** the groups it finds on the live
+  graph, and **Materialise** them as `:inCohort` triples and/or a Unity
+  Catalog table. **Outputs** configures those targets. **Purge Inferences**
+  removes materialised cohort and reasoning triples.
+
+Saved cohorts are reused as a **scenario scope** in Simulation (for example
+*run this what-if on every customer of cohort North-7*). Full reference:
+[Cohort discovery](advanced_features.md#cohort-discovery).
+
+### Discovery → Communities
+
+**In plain words.** Communities finds *clusters*: groups of entities that are
+much more connected to each other than to the rest of the graph, like
+neighbourhoods in a city. Nobody defines the groups; they emerge from the
+links. *Energy example:* sites, meters and customers fed by the same
+substation end up in one community (*North grid*), another region forms
+another (*South grid*), without anyone listing which site belongs where.
+
+**How groups form.** Every entity starts in its own group. In each round,
+every entity adopts the group that is most common among its neighbours. Groups
+spread quickly through densely linked areas and stop at the few links between
+areas. When nothing changes any more, the groups are final.
+
+**Using the page.**
+
+1. Optionally choose a **Scope** (one entity type, for example only *Site*);
+   the default is all entity types. The algorithm is *Label propagation
+   (Databricks)*.
+2. Press **Detect**. The job runs in the background on Databricks.
+3. Read the **Preview**: size statistics, number of communities, modularity,
+   rounds, whether the run converged, and a graph of the largest communities.
+   Click a node to page through the entities of that community.
+4. Press **Materialize** to write the partition into the knowledge graph
+   (`Cluster` individuals and `:inCluster` membership). This replaces the
+   previous partition. The **Materialized (Explorer)** card shows what is
+   currently in the graph.
+5. Open **Explorer** to colour entities by community and collapse a community
+   into a single super-node. **Clear graph** removes the materialised
+   partition (the last Detect preview is kept).
+
+**Reading the results.**
+
+- **Modularity** is a quality score: the higher it is, the more clearly the
+  groups stand apart. Use it to compare runs, not as a pass/fail threshold.
+- **Not converged** means the run hit the round limit while a few entities
+  were still switching; the result is usable and flagged, not failed.
+- **Typical uses:** natural operating areas (grid zones, field-team
+  territories), entities that bridge two areas (worth a check), small
+  disconnected islands that reveal missing links in the data.
+
+**Under the hood.** Communities runs label propagation on a
 serverless Databricks job over the domain's `…_data` snapshot, so it works on
 graphs of any size. It needs the *Compute large-graph metrics on Databricks*
 toggle in Settings → Global and a built domain; when either is missing, the
@@ -1334,11 +1433,74 @@ cluster's entities. Nothing is written to the graph until **Materialize**,
 which replaces the previous partition (`Cluster` individuals and `:inCluster`
 membership) as a background task. **Clear graph** drops those triples.
 Explorer then colours and collapses that partition, looking up memberships
-only for the entities it draws.
+only for the entities it draws. The update is *semi-synchronous* (half of the
+entities update per round, chosen by a hash), which avoids the back-and-forth
+oscillation classic label propagation shows on bipartite graphs such as
+Customer → Contract → Meter; ties break on the smallest label so runs are
+deterministic. Communities are ranked by size into ids `c-1`, `c-2`, …
 
-### Pattern detection
+### Discovery → Patterns
 
-**Intelligence → Discovery → Patterns** finds recurring egocentric
+**In plain words.** Patterns finds entities that *look alike*: the same kind
+of connections and similar characteristics. Think of patterns as typical
+profiles discovered automatically. *Energy example:* among 10,000 customers,
+Patterns might find that 3,200 have a residential contract, a smart meter and
+high consumption, while 900 have a business contract with several meters.
+Each group is a pattern, and you can list the customers behind it.
+
+**How it works, step by step.**
+
+1. **Pick what to profile**: one entity type, for example *Customer*.
+2. **Look around each one**: OntoBricks follows relationships up to *Hops*
+   steps away (contracts, their tariff, sites, meters…).
+3. **Describe in simple terms**: numbers become ranges (a consumption of
+   4,812 kWh becomes *bin 7/8*, i.e. high), short category lists are kept
+   (*residential*, *business*), unique identifiers (ids, emails, dates) are
+   ignored so they cannot make every customer unique.
+4. **Group look-alikes**: customers with the same description share a
+   pattern; the number of customers in it is its **support**.
+5. **Simplify automatically**: if almost every customer is still unique,
+   finer details are dropped step by step until at least half of the
+   customers belong to a pattern.
+
+**Detect settings.** **New** on the Patterns list opens the *Detect patterns*
+dialog. Each field has an (i) tooltip.
+
+| Setting | Default | Range | Meaning |
+|---------|---------|-------|---------|
+| **Entity** | — (required) | any class | The entity type to profile (the *anchor*). |
+| **Hops** | 3 | 1–5 | How far to look around each entity. 2–3 is usually enough; more hops make patterns more specific. |
+| **Numeric bins** | 8 | 2–32 | How finely numbers are cut into ranges (quantiles). More bins mean stricter look-alikes. |
+| **Min support** | 3 | ≥ 1 | Smallest group size worth showing. Lower it to surface rare set-ups; raise it to keep dominant ones. |
+| **Refine top-N** | 0 (off) | ≥ 0 | Merges near-identical top-N patterns that differ only by relationship counts into one motif. |
+
+**Reading a pattern.** Open a saved run (or let **Detect** open it), pick a
+pattern in the picker, and read:
+
+- **KPIs**: support (how many entities), entity types, relationships, size.
+- **Detail** badge: the level that was used — *Exact*, *Neighbours (1 hop)*,
+  *Own attributes* or *Structure only*.
+- **Diagram**: the anchor type on the left, then columns for 1 hop, 2 hops, …
+  separated by dotted lanes. Each box is an entity type with its attribute
+  ranges as badges; each arrow is a relationship with its name and how many
+  links of that kind the entity typically has. Hover a box to highlight its
+  path (everything else fades); hover an arrow or a badge for an explanation.
+- **Matching entities**: opens a dialog listing the entities that share the
+  pattern, with links to Graph Explorer.
+
+**Saved runs.** Every Detect run is saved automatically to Unity Catalog
+(table `graph_pattern_saved_<slug>`) under a name built from the entity type
+and the local date/time (for example `Customer — 2026-11-14 14:06:32`). The
+list shows hops, number of patterns and save time; open a card to revisit it
+or delete it. A saved run is a frozen snapshot: it does not change when the
+graph changes; run **Detect** again to capture a new result.
+
+**Typical uses:** customer or asset segmentation, spotting unusual set-ups
+(rare patterns), checking data quality (an entity type that should look
+uniform but splits into many patterns), and seeding cohort rules or scenario
+ideas.
+
+**Under the hood.** Patterns finds recurring egocentric
 neighbourhood signatures for a **required** anchor entity type. **Detect**
 opens a dialog for entity type, hops, bins, min support, and refine top-N,
 then runs a dedicated Databricks job
@@ -1382,13 +1544,48 @@ attribute bins, frequency, optional refine, and run parameters (`hops`,
 separate product modes. Side-by-side compare and anomaly mode are out of
 scope for v1.
 
-**Simulation** lets you assert hypothetical facts on a copy of part of the
-graph, re-run reasoning, and see what would change — the live knowledge graph
-is never modified. Simulations are available on domains that use the
-**Lakebase**, **Lakehouse (Delta)**, or **Neo4j** graph backend and have been
-saved to the registry.
+### Patterns, Communities or Cohorts?
 
-### How it works
+| You want to… | Use |
+|--------------|-----|
+| Find **who looks alike** (similar profiles, even if never connected) | **Patterns** |
+| Find **who is connected together** (clusters of linked entities, whatever their profile) | **Communities** |
+| Group entities with **rules you define and can explain** | **Cohorts** |
+| Test **what would happen if** something changed | **Scenarios**, then **Compare** |
+
+They combine well: a rare pattern or a bridging community member is a good
+starting point for a scenario; a cohort is a ready-made scenario scope.
+
+### Simulation → Scenarios
+
+**In plain words.** A scenario is a safe *what if*. You change a few facts on
+a copy of part of your knowledge graph, let your business rules react, and
+see what would change — real data is never touched. *Energy example:* "What
+if customer C-102 switched its contract to the Green tariff?" In the
+scenario, your rules may flag C-102 as *eligible for the green rebate* and
+drop its *Standard plan* discount; you see both effects before deciding
+anything in real life.
+
+**Kinds of scenarios.** Every scenario combines a **scope** and one or more
+**facts**:
+
+| Scope | Example |
+|-------|---------|
+| **Entity neighbourhood**: one entity and what is up to *N* hops around it (default 2) | Customer C-102 with its contracts, sites and meters |
+| **Cohort**: every member of a saved Cohort rule | All customers fed by substation North-7 |
+
+| Fact | What it does | Example |
+|------|--------------|---------|
+| **Set** | Replaces every value of a property | Contract K-77 tariff = *Green* (was *Standard*) |
+| **Add** | Adds a value or a link, keeping existing ones | Customer C-102 *holds* new contract K-90 |
+| **Remove** | Deletes one exact value or link | Meter M-55 no longer *installed at* site S-12 |
+
+Common business questions this covers: tariff or plan changes, asset
+decommissioning ("what if this meter is removed?"), consumption shocks
+("what if a site's consumption doubles?"), new contracts or bundles, and
+detaching claims or incidents from a customer.
+
+#### How a scenario runs
 
 A simulation never edits your knowledge graph. Each run works on a private
 copy of a slice of the graph, called a **sandbox**:
@@ -1400,8 +1597,8 @@ Live knowledge graph ──(read only)──▶ 1. Scope ──▶ 2. Copy into 
 ```
 
 1. **Scope**: OntoBricks works out which entities are involved. That is an
-   entity and its neighbours up to *N* hops, the members of a cohort rule, or
-   every instance of a class. The live graph is only read in this step.
+   entity and its neighbours up to *N* hops, or the members of a cohort rule.
+   The live graph is only read in this step.
 2. **Copy into sandbox**: every triple whose subject is one of those entities
    (its attributes and its outgoing relationships) is copied into a separate
    table named `<graph>__sim_<scenario id>` (a Unity Catalog Delta table for
@@ -1425,33 +1622,9 @@ Live knowledge graph ──(read only)──▶ 1. Scope ──▶ 2. Copy into 
      an inferred triple shows the rule that produced it.
    - Every triple that disappeared is listed as **Removed**.
 
-**Compare with the live graph.** *Simulation → Sandbox → Compare* overlays a
-**ready** sandbox on the live graph **as it is now**, on the same scope. Pick a
-scenario, choose *Live graph (inferred)* or *Live graph (asserted only)*, then
-press **Compare**. One graph is drawn with distinct colour-coding for entities (nodes) and relationships (links):
-
-- **Nodes (Entities)**:
-  - **Grey**: unchanged — exists in both the live graph and sandbox with identical attributes and relationships;
-  - **Amber**: modified — exists in both, but has altered literal attributes, updated types (`rdf:type`), or modified links (click the entity to see the attribute diff in Details);
-  - **Green**: added — exists in the sandbox only (created by a hypothetical fact);
-  - **Red**: removed — exists in the live graph only (all relations removed or detached in the sandbox).
-- **Links (Relationships)**:
-  - **Grey**: unchanged — relationship present in both graphs;
-  - **Green**: added — relationship added in the sandbox (either asserted by a hypothetical fact patch or derived by a reasoning rule like IF-THEN; click to inspect the rule);
-  - **Red**: removed — relationship present in the live graph but retracted or overwritten in the sandbox.
-
-Click a node or an edge for its details (changed attributes, origin, the rule
-behind an inference). The counters above the graph are exact; the drawing is
-limited to about 400 entities and 1500 links, changes first. Unlike the
-Results tab (sandbox before vs after), Compare also shows what the live graph
-did since the run: re-run the scenario to refresh the sandbox.
-
-**Evaluate.** The **Evaluate** tab on the same page asks Graph Chat the same
-question against the live graph and the sandbox. When both answers succeed, a
-business-insights agent comments on the difference. **Open report** builds a
-printable summary: the scenario's hypothetical facts, the Compare metrics and
-graph (if you already ran Compare), both answers, and the analysis. **Export
-PDF** opens the browser print dialog — choose Save as PDF.
+Once a scenario is **ready**, go to
+[Simulation → Compare](#simulation--compare) to overlay it on today's live
+graph and evaluate its business impact.
 
 **Isolation.** The sandbox store refuses to write to any table that is not a
 simulation sandbox, so a run cannot touch the built graph, its inferences or
@@ -1460,8 +1633,8 @@ graph. Deleting a scenario drops its sandbox.
 
 **Limits.**
 - The scope is capped at 5000 entities and 250,000 copied triples. A larger
-  class or cohort fails the run with a message instead of being silently cut;
-  narrow the scope and run again.
+  neighbourhood or cohort fails the run with a message instead of being
+  silently cut; narrow the scope and run again.
 - Result lists keep the first 2000 rows, but the counts are always exact.
 
 **What a slice means for rules.** Ticked reasoning phases (IF-THEN, graph, …)
@@ -1473,23 +1646,9 @@ the customer. If IF-THEN is ticked and the rules cannot run (none in the
 domain, or a query error), the run **fails** with that message instead of
 finishing as ready with zero inferences. A rule that needs a
 global aggregate still will not fire on a neighbourhood slice — widen the
-hops or use a cohort or class scope in that case.
+hops or use a cohort scope in that case.
 
-### Cohorts (Sidebar)
-
-Design the grouping rules used as a simulation scope (and as a live graph
-materialisation). Pick the target class, the linking paths, the compatibility
-filters and the grouping type, then **Save**. Preview and write results
-from **Intelligence → Configuration → Cohorts → Runs**. See [Cohort discovery](advanced_features.md#cohort-discovery).
-
-### Run (Sidebar)
-
-Pick a saved cohort rule, **Preview** the groups it finds on the live graph,
-and **Materialise** them as `:inCohort` triples and/or a Unity Catalog table.
-**Outputs** configures those targets. This is the former Knowledge Graph
-Cohorts page.
-
-### Scenarios (Sidebar)
+#### Scenarios list
 
 Lists the saved scenarios of the active domain version with their scope,
 number of facts, status (`draft`, `running`, `ready`, `failed`) and the
@@ -1504,9 +1663,10 @@ scenario from its row. **New scenario** (or Explorer **Simulate from here**)
 opens the editor on the same Scenarios page (`?section=scenarios&simulation=`
 the scenario id). Refresh keeps that scenario; the back arrow (or the
 Scenarios sidebar item) returns to the list. The editor is not a separate
-sidebar item.
+sidebar item. The **How it works** tab next to the list explains scopes,
+facts, reasoning, Results, Compare and Evaluate with diagrams.
 
-### Scenario editor
+#### Scenario editor
 
 The editor has four tabs. **Save** and **Run** stay in the page header.
 Opening a scenario, or switching to a tab that still has to fetch facts,
@@ -1612,11 +1772,111 @@ Tip: in the Knowledge Graph Explorer, the entity details panel has a
 **Simulate from here** button that opens the editor pre-filled with that
 entity's neighbourhood and an empty *Set* fact.
 
-### Runs (Sidebar)
+#### Run history
 
 History of every simulation run on the domain version: start time, scenario,
-status, outcome, duration and who ran it. That history is stored in the
-registry with the domain version and is copied when you branch a new version.
+status, outcome, duration and who ran it. It lives under **Settings →
+Automation → Runs** (Simulation tab). That history is stored in the registry
+with the domain version and is copied when you branch a new version.
+
+### Simulation → Compare
+
+**In plain words.** Results (in the scenario editor) show what changed
+*inside* the sandbox, before vs after your facts. **Compare** answers the
+question decision-makers ask next: *how would our real graph, as it is today,
+differ if this scenario happened — and what does that mean for the
+business?* The page has a shared header and two tabs.
+
+**Header.** Pick the **Scenario** (only **ready** scenarios are listed) and
+the **Live graph** to compare against:
+
+- *Live graph (inferred)*: today's data **including** the conclusions of your
+  reasoning rules — the usual choice for business impact.
+- *Live graph (asserted only)*: the raw mapped data only — useful to isolate
+  what your rules contribute.
+
+#### Graphs tab
+
+Press **View difference**. OntoBricks reads the same scope from the live graph
+and from the sandbox and draws one overlay graph:
+
+- **Nodes (entities)**
+  - **Grey**: unchanged — same attributes and links in both.
+  - **Amber**: modified — present in both, with changed attributes, types
+    (`rdf:type`) or links (click to see the attribute diff).
+  - **Green**: added — exists in the sandbox only (created by a fact).
+  - **Red**: removed — exists in the live graph only (removed or detached in
+    the sandbox).
+- **Links (relationships)**
+  - **Grey**: present in both graphs.
+  - **Green**: added in the sandbox, either by your fact or inferred by a rule
+    (click to see which rule).
+  - **Red**: present in live but removed or overwritten in the sandbox.
+
+The **Metrics** panel shows exact counts (entities, live, sandbox, added,
+removed, unchanged). Click a node or a link for its details in **Selection &
+Guide**; the (?) next to the legend expands the colour guide. The drawing is
+limited to about 400 entities and 1500 links, changes first; the counts are
+always exact. The share button opens the sandbox in Graph Explorer.
+
+#### Evaluate tab
+
+Type a business question in **Prompt** (for example *"Which customers are
+eligible for the green rebate?"*) and press **Ask both**. Graph Chat answers
+the question twice, side by side: once on the live graph and once on the
+scenario sandbox, each with its expandable *Thinking process*. When both
+answers are ready, **Business insights** comments on the difference (impact,
+risks, follow-ups). **Open report** builds a printable summary — the
+scenario's facts, the Compare metrics and graph (if you already pressed View
+difference), both answers and the analysis — and **Export PDF** opens the
+browser print dialog (choose *Save as PDF*).
+
+#### Getting the most out of Compare
+
+1. **Run the scenario first**, then open Compare; a draft or failed scenario
+   is not listed.
+2. **Start with the Graphs tab** to see the size and shape of the impact:
+   many amber nodes means rules rippled through the graph; only green/red
+   near the scoped entity means a local change.
+3. **Click the green links** to check which rule produced each conclusion —
+   this is where unexpected knock-on effects show up.
+4. **Switch to *asserted only*** to separate the direct effect of your facts
+   from what your rules inferred.
+5. **Ask the business question in Evaluate**, then **Open report** and
+   export it to share with stakeholders.
+6. **Re-run when live data moved.** Compare uses today's live graph while the
+   sandbox reflects the moment of the run; if the graph was rebuilt since,
+   re-run the scenario before drawing conclusions.
+7. **Compare alternatives** by creating one scenario per option (for example
+   *Green tariff* vs *Time-of-use tariff*) and evaluating the same question
+   on each.
+
+### End-to-end example (energy & utilities)
+
+1. **Patterns** on *Customer* (Hops 2) reveals a pattern of 900 business
+   customers with several meters and a *Standard* tariff.
+2. **Communities** shows most of them sit in the *North grid* community.
+3. A **Cohort** rule *business customers on substation North-7* turns that
+   insight into an explicit, reusable group.
+4. A **Scenario** with the cohort as scope **Sets** their tariff to *Green*
+   and ticks the IF-THEN rules; the run flags 640 customers as *eligible for
+   the green rebate* and removes 410 *Standard plan* discounts.
+5. **Compare → Graphs** confirms the impact is limited to the cohort and
+   its contracts; **Evaluate** asks *"What is the yearly rebate cost?"* on
+   both graphs, and **Open report** produces the PDF for the pricing team.
+
+### Limits and troubleshooting
+
+| Symptom | Cause | What to do |
+|---------|-------|-----------|
+| Detect is disabled on Communities or Patterns | Domain not built, or *Compute large-graph metrics on Databricks* is off | Build the graph; enable the toggle in Settings → Global |
+| Patterns run shows *Structure only* | Profiles were too unique at finer levels | Lower **Numeric bins** or **Hops**, or accept the structural view |
+| Very few patterns | **Min support** too high | Lower it to surface rarer profiles |
+| Communities *not converged* | Round limit reached | Usable as is; Detect again after data changes |
+| Scenario run fails on scope size | More than 5000 entities or 250,000 triples | Reduce hops or use a smaller cohort |
+| Scenario ready but no inferences | Rules need data outside the slice | Widen hops or use a cohort scope; check the ticked rules |
+| Scenario missing from Compare | Not **ready** (draft, running, failed or purged) | Run it again |
+| Compare shows unexpected red/amber items | The live graph changed since the run | Re-run the scenario, then compare again |
 
 ---
 
@@ -3290,11 +3550,13 @@ After import you can:
 - **Unmap all**: Clear every entity and relationship mapping from both **Mapping → General** and **Mapping → Studio** via a shared confirmation dialog (`Unmap all`). Attribute exclusions stamped on ontology objects are re-evaluated after the wipe so the Studio canvas stays consistent.
 - **Mapping Diagnostics**: **Mapping → Diagnostics** lists only warnings and errors. Queries that return rows are informational (row count badge), not failures. Excluded attributes and relationship ID columns are not reported as missing, including Spark implicit aliases (`obj_id s` → `s`).
 
-### Simulation
-- **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
-- **Community detection**: **Intelligence → Discovery → Communities** previews a label-propagation partition computed on a Databricks job, then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer only visualises that partition.
-- **Pattern detection**: **Intelligence → Discovery → Patterns** lists saved neighbourhood snapshots; **Detect** finds recurring typed neighbourhoods on a Databricks job and opens the details pane; **Save** keeps a named snapshot in Unity Catalog (the graph is not changed).
+### Intelligence
 - **Cohort design and run**: **Intelligence → Configuration → Cohorts** is one page with two tabs. **Design** authors grouping rules; **Runs** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages and the old **Runs** entry redirect here.
+- **Community detection**: **Intelligence → Discovery → Communities** previews a label-propagation partition computed on a Databricks job (optional entity-type scope, modularity, convergence), then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer colours and collapses that partition; **Clear graph** removes it.
+- **Pattern detection**: **Intelligence → Discovery → Patterns** lists saved neighbourhood snapshots; **New** opens the Detect dialog (entity, hops, numeric bins, min support, refine top-N, each with an (i) tooltip), runs a Databricks job, saves the run automatically to Unity Catalog, and opens it. Each pattern shows KPIs, the detail level, a layered diagram with hover lineage highlight and relationship badges, and a **Matching entities** dialog. The graph is never changed.
+- **What-if sandboxes (Scenarios)**: Assert hypothetical facts (Set / Add / Remove) on a private copy of an entity neighbourhood or a cohort, re-run the ticked reasoning phases, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
+- **Compare and Evaluate**: **Intelligence → Simulation → Compare** overlays a ready sandbox on today's live graph (inferred or asserted only) with colour-coded nodes and links and exact metrics; **Evaluate** asks one question to both graphs, adds a business-insights commentary, and builds a printable / PDF report.
+- **How it works tabs**: Communities, Patterns and Scenarios each have a **How it works** tab with business-friendly diagrams, an energy & utilities example, and collapsed technical details. Every Intelligence page header has the **ontology discussion** button.
 
 ### Graph (Sync & Explore)
 - **Two Layers**: Every build materializes a Delta view (Unity Catalog, governance) and a Graph DB engine (Lakebase Postgres today; pluggable behind `GraphDBFactory`).

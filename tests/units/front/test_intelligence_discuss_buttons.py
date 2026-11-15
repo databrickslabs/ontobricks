@@ -1,4 +1,4 @@
-"""Discuss button wiring for Intelligence → Communities, Patterns and Compare.
+"""Discuss button wiring for Intelligence → Communities, Patterns, Scenarios, Compare.
 
 The button opens the shared domain discussion (window.openOntologyDiscussion,
 exported by comments-panel.js on every page). It is bound from JS by id, so
@@ -20,6 +20,7 @@ CASES = [
     ("_intel_communities.html", "commDiscussBtn", "intelligence-communities.js"),
     ("_intel_patterns_saved.html", "patSavedDiscussBtn", "intelligence-patterns.js"),
     ("_intel_patterns.html", "patDiscussBtn", "intelligence-patterns.js"),
+    ("_sim_scenarios.html", "simDiscussBtn", "simulation.js"),
     ("_sim_compare.html", "simCompareDiscussBtn", "simulation-compare.js"),
 ]
 
@@ -49,3 +50,8 @@ def test_button_is_bound_from_js_not_inline(partial, btn_id, js_name):
 def test_communities_discuss_sits_before_primary_cta():
     html = _read(PARTIALS / "_intel_communities.html")
     assert html.index('id="commDiscussBtn"') < html.index('id="commDetectBtn"')
+
+
+def test_scenarios_discuss_sits_before_primary_cta():
+    html = _read(PARTIALS / "_sim_scenarios.html")
+    assert html.index('id="simDiscussBtn"') < html.index('id="simNewBtn"')

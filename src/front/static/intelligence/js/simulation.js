@@ -37,6 +37,7 @@ const SimulationPage = {
             const el = document.getElementById(id);
             if (el) el.addEventListener('click', fn);
         };
+        on('simDiscussBtn', () => openOntologyDiscussion());
         on('simRefreshBtn', () => this.loadScenarios());
         on('simNewBtn', () => this.newScenario());
         const body = document.getElementById('simScenariosBody');

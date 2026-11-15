@@ -153,17 +153,22 @@ See the [SPARQL Playground guide](docs/user-guide.md#sparql-playground),
 [Get Started](docs/getting-started.md), and
 [Cohort Discovery](docs/advanced_features.md#cohort-discovery).
 
-### Simulate what-if scenarios
-The **Simulation** workspace copies an entity neighbourhood, a cohort or a class
-population into a private sandbox, applies hypothetical facts ("what if this
-customer's credit score drops to 300?"), re-runs your IF-THEN, graph and business
-rules there, and shows exactly which triples would be added or removed — the
-live knowledge graph is never modified. Start from **Scenarios → New scenario**
-or **Simulate from here** on any Explorer entity. After a run, pick the scenario
-in Explorer's **Graph** dropdown (or Results → **Explorer**) to walk the
-sandbox. Lakebase, Lakehouse (Delta), and Neo4j backends are supported; Neo4j
-supports graph-shaped IF-THEN rules (class and object-property atoms). See the
-[Simulation guide](docs/user-guide.md#step-4-simulation-what-if-sandboxes).
+### Discover and simulate (Intelligence)
+The **Intelligence** workspace turns a built graph into insight:
+**Cohorts** group entities with explainable rules, **Communities** finds
+tightly connected clusters, and **Patterns** finds entities that look alike
+(recurring neighbourhood profiles) — all computed on Databricks. **Scenarios**
+copies an entity neighbourhood or a cohort into a private sandbox, applies
+hypothetical facts ("what if this customer switches to the Green tariff?"),
+re-runs your IF-THEN, graph and business rules there, and shows exactly which
+triples would be added or removed — the live knowledge graph is never
+modified. **Compare** then overlays a ready scenario on today's live graph and
+asks the same business question to both, with an AI commentary and a PDF
+report. Start from **Scenarios → New scenario** or **Simulate from here** on
+any Explorer entity. Lakebase, Lakehouse (Delta), and Neo4j backends are
+supported. Each page has a **How it works** tab with business-friendly
+diagrams. See the
+[Intelligence guide](docs/user-guide.md#step-4-intelligence-cohorts-discovery--simulation).
 
 ### Publish to AI agents (MCP)
 Expose your knowledge graph to Cursor, Claude Desktop or the Databricks
