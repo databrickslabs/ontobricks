@@ -1,7 +1,7 @@
 /*
  * Settings → Automation → Runs (admin only).
  *
- * The cross-domain twin of Knowledge Graph → Management → Runs: one tab per
+ * The cross-domain twin of Graph → Build → Runs / Intelligence → Analytics → Runs: one tab per
  * run kind (build, analytics, simulation), spanning every domain in the
  * registry unless the Context filter narrows it, one page at a time.
  *

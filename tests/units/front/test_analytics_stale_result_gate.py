@@ -1,6 +1,6 @@
 """Analytics must not show a stored result for a graph that no longer exists.
 
-Drop the Unity Catalog objects and reopen **Knowledge Graph → Analytics** and
+Drop the Unity Catalog objects and reopen **Intelligence → Discovery → Analytics** and
 the page used to contradict itself: the "No Knowledge Graph has been built yet"
 banner appeared (the live probe correctly failed) while the KPI tiles, the
 distribution strip and the ranking chart stayed populated from the last
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ANALYTICS_JS = REPO_ROOT / "src/front/static/query/js/query-analytics.js"
-ANALYTICS_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_analytics.html"
+ANALYTICS_HTML = REPO_ROOT / "src/front/templates/partials/intelligence/_intel_analytics.html"
 
 FLAG = "_graphMissing"
 

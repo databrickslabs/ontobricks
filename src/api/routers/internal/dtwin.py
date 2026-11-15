@@ -1066,7 +1066,7 @@ async def get_graph_metrics_history(
     """Return the analytics run history (newest-first) for this domain.
 
     Spans every version unless ``version`` scopes it. Backs the analytics
-    table on Knowledge Graph → Management → Runs, which has no version
+    table on Intelligence → Analytics → Runs (and Settings → Runs), which has no version
     filter. Guarding on a version here would report an empty history for a
     domain whose current version is blank, even with rows on file for
     earlier ones.

@@ -155,3 +155,180 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 44.67s ========
+
+## Disable Intelligence write CTAs in read-only mode
+
+Context: On a read-only domain (no edit rights, non-DRAFT version, or
+Resume editing / another editor's lock), Patterns New, Communities Clear
+graph and Scenarios New stayed clickable because they were missing from
+``permissions.css``. The async edit-lock flip lands after page JS has
+already synced ``_canEdit``, so CSS gates are required.
+
+Changes:
+
+1. src/front/static/global/css/permissions.css
+   Gate ``#patDetectBtn``, ``#patDetectRunBtn``, ``#commClearBtn``,
+   ``#commDetectBtn``, ``#commMaterializeBtn``, ``#simNewBtn`` under
+   ``body:is(.read-only-version, .role-viewer, .read-only-locked)``.
+2. src/front/static/intelligence/js/simulation.js
+   ``_canEdit`` / ``_applyEditGate`` for New scenario; refuse
+   ``newScenario`` with a read-only toast.
+3. tests/units/front/test_view_mode_write_gates.py
+   Contract for the CSS gates and the Scenarios JS guard.
+
+Modified files:
+- src/front/static/global/css/permissions.css
+- src/front/static/intelligence/js/simulation.js
+- tests/units/front/test_view_mode_write_gates.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10582 passed, 324 skipped, 8 deselected, 39 warnings in 47.17s ========
+
+## Move Analytics to Intelligence; Overview under Graph Management
+
+Context: Graph/Analytics belonged with Discovery work rather than Graph
+Insight. The Insight group was removed; Overview stays on Graph under
+Management (after Build). Analytics is the first Discovery submenu item
+on Intelligence, with the panel/assets relocated accordingly.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Graph Management = Build, Overview, Runs; drop Insight group; put
+   Analytics first under Intelligence → Discovery.
+2. src/front/templates/partials/intelligence/_intel_analytics.html
+   Moved from partials/dtwin/_query_analytics.html; discuss uses
+   openOntologyDiscussion.
+3. src/front/templates/dtwin.html
+   Keep Overview; remove Analytics section/CSS/JS; keep Runs analytics
+   details modal.
+4. src/front/templates/intelligence.html
+   Host analytics section + query-analytics CSS/JS + Chart.js.
+5. src/front/static/query/js/query-analytics.js
+   Bootstrap __TRIPLESTORE_CONFIG; load on sidebarSectionChanged;
+   prefer openOntologyDiscussion after audit save.
+6. src/front/static/query/js/query.js
+   Drop analytics section hook (owned by query-analytics.js now).
+7. src/front/static/global/js/task-tracker.js
+   graph_analytics deep-link → /intelligence/?section=analytics.
+8. src/front/templates/partials/layout/help_modal.html
+   Help workflow lists Overview under Graph Management and Analytics
+   under Intelligence Discovery.
+9. docs/user-guide.md, docs/architecture.md, docs/development.md
+   Document the new menu homes.
+10. tests/units/front/*.py, tests/units/api/test_ui_rendering.py,
+    tests/e2e/dtwin/test_dtwin_flows.py
+    Contracts, paths, /intelligence workspace seeding, e2e notes.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/intelligence/_intel_analytics.html
+- src/front/templates/partials/dtwin/_query_analytics.html (deleted)
+- src/front/templates/dtwin.html
+- src/front/templates/intelligence.html
+- src/front/static/query/js/query-analytics.js
+- src/front/static/query/js/query.js
+- src/front/static/global/js/task-tracker.js
+- src/front/templates/partials/layout/help_modal.html
+- src/front/routes/intelligence.py
+- docs/user-guide.md
+- docs/architecture.md
+- docs/development.md
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_analytics_dashboard.py
+- tests/units/front/test_analytics_unavailable_metrics.py
+- tests/units/front/test_analytics_stale_result_gate.py
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/front/test_kg_section_headers.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/front/test_runs_page.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10583 passed, 324 skipped, 8 deselected, 39 warnings in 45.10s ========
+
+## Embed Runs tabs on Build and Analytics
+
+Context: Graph → Runs was a separate sidebar item with both build and
+analytics histories. Each producer now owns its history as a second
+`ob-tabs` pane (Cohorts Design/Runs pattern): Build keeps build runs only;
+Analytics keeps analytics runs. The Graph Runs sidebar item is gone;
+`?section=runs` redirects to Build → Runs.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   New Build shell: Build | Runs card-integrated tabs wrapping Lakebase /
+   Lakehouse panels and build-run history.
+2. src/front/templates/partials/domain/_domain_build_runs.html
+   Build-run table extracted from the old combined Runs page.
+3. src/front/templates/partials/domain/_domain_analytics_runs.html
+   Analytics-run table for Intelligence → Analytics → Runs.
+4. src/front/templates/partials/domain/_domain_runs.html
+   Removed (split into the two producer-owned partials).
+5. src/front/templates/partials/intelligence/_intel_analytics.html
+   Outer Analytics | Runs tabs; inner Dashboard / Health / AI Insights
+   stay under Analytics.
+6. src/front/templates/dtwin.html / intelligence.html
+   Wire the Build shell; drop Graph runs-section; host analytics-run
+   details modal + domain-runs.js on Intelligence.
+7. src/front/static/domain/js/domain-runs.js
+   Separate loaders/latches; Build and Analytics page tab chrome
+   (`?tab=runs`).
+8. src/front/config/menu_config.json / routes/dtwin.py
+   Remove Management → Runs; redirect legacy `section=runs`.
+9. docs + help + tests
+   Contracts, user guide, clarity/stretch/UI rendering updates.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/partials/domain/_domain_build_runs.html
+- src/front/templates/partials/domain/_domain_analytics_runs.html
+- src/front/templates/partials/domain/_domain_runs.html (deleted)
+- src/front/templates/partials/intelligence/_intel_analytics.html
+- src/front/templates/dtwin.html
+- src/front/templates/intelligence.html
+- src/front/static/domain/js/domain-runs.js
+- src/front/static/query/js/query-analytics.js
+- src/front/static/config/js/settings-runs.js
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/config/menu_config.json
+- src/front/routes/dtwin.py
+- src/api/routers/internal/dtwin.py
+- docs/user-guide.md
+- docs/development.md
+- tests/units/front/test_runs_page.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/api/test_ui_rendering.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10576 passed, 324 skipped, 8 deselected, 39 warnings in 46.36s ========
+
+## Add padding to Build page tab content
+
+Context: In Graph → Build (`/dtwin/?section=sync&tab=build`), the tab content
+container lacked padding, causing the header and content inside the Build tab
+to sit flush against the card's left border without margin or padding.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   Use standard card-integrated `.tab-content.p-3` container for
+   `#buildPageTabContent`, giving both the Build and Runs tab panes proper
+   padding from card edges.
+2. tests/units/front/test_clarity_design_contract.py
+   Assert `tab-content p-3` on the Build tab content container per the
+   design contract.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10576 passed, 324 skipped, 8 deselected, 39 warnings in 46.27s ========

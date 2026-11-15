@@ -41,6 +41,7 @@ def test_intelligence_menu_groups():
         ("cohorts", "Cohorts"),
     ]
     assert [(i["id"], i["label"]) for i in by_id["intelligence-discovery"]["items"]] == [
+        ("analytics", "Analytics"),
         ("communities", "Communities"),
         ("patterns", "Patterns"),
     ]
@@ -196,7 +197,11 @@ def test_community_detection_runs_as_a_databricks_task():
 
 def test_no_inline_scripts_or_styles():
     html = _read(PAGE)
+    # Analytics moved from Graph; it keeps the query-page onclick/style
+    # convention covered by test_analytics_dashboard.py.
     for partial in (FRONT / "templates/partials/intelligence").glob("*.html"):
+        if partial.name == "_intel_analytics.html":
+            continue
         html += _read(partial)
     scripts = re.findall(r"<script\b([^>]*)>", html)
     assert all("src=" in attrs or 'type="application/json"' in attrs for attrs in scripts)
@@ -832,6 +837,7 @@ def test_patterns_section_owns_discovery():
     assert _menu()["label"] == "Intelligence"
     groups = {g["id"]: g for g in _menu()["groups"]}
     assert [i["label"] for i in groups["intelligence-discovery"]["items"]] == [
+        "Analytics",
         "Communities",
         "Patterns",
     ]

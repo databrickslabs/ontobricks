@@ -108,6 +108,22 @@ def test_kg_viewer_buttons_use_menu_icons():
     assert "data-query-action=\"ontology\"" not in graphql_html
 
 
+def test_graph_management_order_is_build_overview_runs():
+    digitaltwin = _menus()["digitaltwin"]
+    management = next(
+        group for group in digitaltwin["groups"] if group["id"] == "digitaltwin-management"
+    )
+    assert [(i["id"], i["label"]) for i in management["items"]] == [
+        ("sync", "Build"),
+        ("insight", "Overview"),
+    ]
+    assert not any(g["id"] == "digitaltwin-insight" for g in digitaltwin["groups"])
+    discovery = next(
+        g for g in _menus()["intelligence"]["groups"] if g["id"] == "intelligence-discovery"
+    )
+    assert discovery["items"][0]["id"] == "analytics"
+
+
 def test_build_uses_fast_forward_icon_consistently():
     digitaltwin = _menus()["digitaltwin"]
     management = next(

@@ -1,0 +1,53 @@
+<!-- Analytics-run history — Intelligence → Discovery → Analytics → Runs tab.
+     JS: /static/domain/js/domain-runs.js (shared with Graph → Build → Runs). -->
+<div id="analyticsRunsPaneBody">
+    <div class="d-flex justify-content-end mb-3">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadAnalyticsRuns"
+                onclick="loadAnalyticsRuns()" title="Reload analytics runs from the registry">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Refresh
+        </button>
+    </div>
+
+    <div id="analyticsRunsLoading" class="text-center py-5" style="display:none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mt-2 small">Loading analytics runs from registry&hellip;</p>
+    </div>
+
+    <div id="analyticsRunsEmpty" class="text-center py-5" style="display:none;">
+        <i class="bi bi-graph-up-arrow text-muted fs-1"></i>
+        <p class="text-muted mt-2 mb-1">No analytics runs found</p>
+        <p class="text-muted small">Run an analysis (Intelligence &rarr; Discovery &rarr; Analytics) to start recording runs.</p>
+    </div>
+
+    <div id="analyticsRunsError" class="alert alert-warning m-3" role="alert" style="display:none;">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <span id="analyticsRunsErrorMessage"></span>
+    </div>
+
+    <div id="analyticsRunsTableWrapper" style="display:none;">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size:0.85rem">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date &amp; Time</th>
+                        <th>Scope</th>
+                        <th class="text-center">Version</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-end">Nodes</th>
+                        <th class="text-end">Edges</th>
+                        <th class="text-end">Components</th>
+                        <th class="text-end">Avg Degree</th>
+                        <th class="text-end">Density</th>
+                        <th class="text-end">Duration</th>
+                        <th class="text-center">Details</th>
+                    </tr>
+                </thead>
+                <tbody id="analyticsRunsTableBody">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

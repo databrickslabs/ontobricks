@@ -1,0 +1,41 @@
+<!-- Graph → Management → Build: Build panel + build-run history tabs.
+     Backend-specific panels (Lakebase / Lakehouse) keep their own headers. -->
+<div class="content-section">
+    <div class="card h-100">
+        <div class="card-body p-0 ob-tabs-wrap">
+            <ul class="nav nav-tabs ob-tabs nav-fill" id="buildPageTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="buildTabBuildBtn" data-bs-toggle="tab"
+                            data-bs-target="#buildPaneBuild" type="button" role="tab"
+                            aria-controls="buildPaneBuild" aria-selected="true">
+                        <i class="bi bi-fast-forward me-1"></i>Build
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="buildTabRunsBtn" data-bs-toggle="tab"
+                            data-bs-target="#buildPaneRuns" type="button" role="tab"
+                            aria-controls="buildPaneRuns" aria-selected="false">
+                        <i class="bi bi-list-check me-1"></i>Runs
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content p-3" id="buildPageTabContent">
+                <div class="tab-pane fade show active" id="buildPaneBuild" role="tabpanel"
+                     aria-labelledby="buildTabBuildBtn">
+                    <div id="sync-lakebase-panel">
+                        {% include "partials/dtwin/_query_sync.html" %}
+                    </div>
+                    <div id="sync-databricks-panel" class="d-none">
+                        {% include "partials/dtwin/_query_databricks_build.html" %}
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="buildPaneRuns" role="tabpanel"
+                     aria-labelledby="buildTabRunsBtn">
+                    {% include "partials/domain/_domain_build_runs.html" %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -110,7 +110,7 @@ def test_every_domain_llm_trigger_has_declarative_marker():
             "chatSendBtn",
             "assistant-suggestion",
         ],
-        "src/front/templates/partials/dtwin/_query_analytics.html": [
+        "src/front/templates/partials/intelligence/_intel_analytics.html": [
             "analyticsInterpretBtn",
         ],
     }

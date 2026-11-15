@@ -30,7 +30,7 @@ const TASK_TYPE_URLS = {
     'triplestore_sync': '/dtwin#sync',
     'registry_archive': '/dtwin#sync',
     'quality_checks': '/dtwin#quality',
-    'graph_analytics': '/dtwin#analytics',
+    'graph_analytics': '/intelligence/?section=analytics',
     'community_detection': '/intelligence/?section=communities',
     'community_materialize': '/intelligence/?section=communities',
     'pattern_detection': '/intelligence/?section=patterns',

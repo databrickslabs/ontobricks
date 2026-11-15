@@ -29,7 +29,13 @@ class _TagCollector(HTMLParser):
         self.tags.append((tag, d))
 
 
-_WORKSPACE_PAGE_PREFIXES = ("/ontology", "/mapping", "/domain", "/dtwin")
+_WORKSPACE_PAGE_PREFIXES = (
+    "/ontology",
+    "/mapping",
+    "/domain",
+    "/dtwin",
+    "/intelligence",
+)
 
 
 def ensure_loaded_domain(client) -> None:
@@ -644,11 +650,14 @@ class TestDigitalTwinPage:
         html = _html(client, "/dtwin/")
         assert _find(_tags(html), id_="sigmagraph-section") is not None
 
-    def test_runs_section_present(self, client):
-        """Runs lives on the Knowledge Graph page, which is the only menu
-        that declares it."""
+    def test_build_page_hosts_runs_tab(self, client):
+        """Build-run history lives under Graph → Build → Runs (not a sidebar item)."""
         html = _html(client, "/dtwin/")
-        assert _find(_tags(html), id_="runs-section") is not None
+        tags = _tags(html)
+        assert _find(tags, id_="runs-section") is None
+        assert _find(tags, id_="buildTabRunsBtn") is not None
+        assert _find(tags, id_="buildPaneRuns") is not None
+        assert _find(tags, id_="runsTableBody") is not None
 
     def test_sigma_script_loaded(self, client):
         html = _html(client, "/dtwin/")

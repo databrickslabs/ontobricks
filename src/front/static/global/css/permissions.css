@@ -240,6 +240,23 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .cohort-sample {
     cursor: not-allowed !important;
 }
 
+/* --- Intelligence writes: Detect / Materialize / Clear (Communities),
+       New Detect (Patterns), New scenario. Preview, Refresh, Explorer and
+       How it works stay interactive so a locked version remains
+       inspectable. These gates also cover the async edit-lock flip
+       (``body.read-only-locked``) that lands after page JS has already
+       run its initial ``_canEdit`` sync. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) #commDetectBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #commMaterializeBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #commClearBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #patDetectBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #patDetectRunBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #simNewBtn {
+    pointer-events: none !important;
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
 /* --- Cosmetic toggles: hide rather than just neutralise. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) .ontology-edit-btn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #mapToggleAssistant,

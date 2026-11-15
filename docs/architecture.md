@@ -3168,7 +3168,8 @@ storage.
 
 | UI Feature | JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
-| **Insight / Overview** | `query-sync.js` (stats panel), `query.js` | `GET /dtwin/sync/stats`, `GET /dtwin/sync/status` | REST | Spark SQL aggregates on the Delta view, or Postgres SQL aggregates on the Lakebase Graph DB |
+| **Overview** (Graph → Management) | `query-sync.js` (stats panel), `query.js` | `GET /dtwin/sync/stats`, `GET /dtwin/sync/status` | REST | Spark SQL aggregates on the Delta view, or Postgres SQL aggregates on the Lakebase Graph DB |
+| **Analytics** (Intelligence → Discovery) | `query-analytics.js` | `POST /dtwin/metrics/compute`, `GET /dtwin/metrics/latest`, `GET /dtwin/metrics/series` | REST | Serverless Databricks Lakeflow job over mapped triples; last result cached in registry `graph_analytics` |
 | **Graph Viewer** (Sigma.js viz) | `query-sigmagraph.js`, `query-d3graph.js` | `GET /dtwin/groups`, `POST /dtwin/sync/filter`, `GET /dtwin/sync/stats?refresh=true`, `POST /dtwin/clusters/detect`, `GET /dtwin/reasoning/inferred` | REST | Each `/sync/filter` call is a **SPARQL** under the hood, translated to **Spark SQL** (Delta) or **Postgres SQL** (Lakebase Graph DB) |
 | **Query → SPARQL playground** | `query-execute.js` | `POST /dtwin/execute` | **SPARQL** | `SparqlTranslator` → **Spark SQL** on the SQL Warehouse (Delta view); read-only safety gate blocks update verbs |
 | **GraphQL** | `query-graphql.js` | `GET /graphql/{domain}/schema`, `POST /graphql/{domain}`, `GET /graphql/settings/depth` | **GraphQL** | Schema generated from OWL; resolvers call `DomainQueryService` → SPARQL → **Spark SQL** |

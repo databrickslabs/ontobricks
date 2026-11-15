@@ -17,7 +17,7 @@ _KG_PAGES = [
     "src/front/templates/partials/dtwin/_query_insights.html",
     "src/front/templates/partials/dtwin/_query_reasoning.html",
     "src/front/templates/partials/ontology/_ontology_cohorts.html",
-    "src/front/templates/partials/dtwin/_query_analytics.html",
+    "src/front/templates/partials/intelligence/_intel_analytics.html",
 ]
 
 

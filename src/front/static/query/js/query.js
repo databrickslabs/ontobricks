@@ -241,11 +241,6 @@ async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain, init
                     loadInsights();
                 }
             }
-            if (section === 'analytics') {
-                if (typeof window.analyticsLoadTypes === 'function') {
-                    window.analyticsLoadTypes();
-                }
-            }
         }
     });
     

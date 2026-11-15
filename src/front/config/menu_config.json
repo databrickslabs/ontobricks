@@ -502,30 +502,9 @@
                             "requires": null
                         },
                         {
-                            "id": "runs",
-                            "label": "Runs",
-                            "icon": "bi-list-check",
-                            "default": false,
-                            "requires": null
-                        }
-                    ]
-                },
-                {
-                    "id": "digitaltwin-insight",
-                    "title": "Insight",
-                    "icon": "bi-bar-chart-line",
-                    "items": [
-                        {
                             "id": "insight",
                             "label": "Overview",
                             "icon": "bi-bar-chart-line",
-                            "default": false,
-                            "requires": null
-                        },
-                        {
-                            "id": "analytics",
-                            "label": "Analytics",
-                            "icon": "bi-graph-up-arrow",
                             "default": false,
                             "requires": null
                         }
@@ -612,6 +591,13 @@
                     "title": "Discovery",
                     "icon": "bi-diagram-3",
                     "items": [
+                        {
+                            "id": "analytics",
+                            "label": "Analytics",
+                            "icon": "bi-graph-up-arrow",
+                            "default": false,
+                            "requires": null
+                        },
                         {
                             "id": "communities",
                             "label": "Communities",

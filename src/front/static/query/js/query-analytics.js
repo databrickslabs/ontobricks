@@ -1,10 +1,19 @@
-/* Knowledge Graph -> Analytics section.
+/* Intelligence → Discovery → Analytics section.
  *
- * Paired with templates/partials/dtwin/_query_analytics.html.
- * The window.* functions at the bottom are called from query.js and
- * query-sigmagraph.js -- do not rename them without updating both.
+ * Paired with templates/partials/intelligence/_intel_analytics.html.
+ * Loads on sidebarSectionChanged('analytics'). The window.* helpers are
+ * also referenced from inline handlers in the partial — do not rename
+ * them without updating that markup.
  */
 (function () {
+    if (!window.__TRIPLESTORE_CONFIG) {
+        var _cfgEl = document.getElementById('triplestore-config');
+        if (_cfgEl) {
+            try { window.__TRIPLESTORE_CONFIG = JSON.parse(_cfgEl.textContent); }
+            catch (_) { window.__TRIPLESTORE_CONFIG = {}; }
+        }
+    }
+
     var _analyticsData = null;
     var _analyticsLastSections = null;
     var _charts = {};
@@ -158,7 +167,7 @@
                 + 'to build one before running analysis.'
                 + '<span class="d-block mt-1">Results from an earlier analysis are '
                 + 'no longer shown, because the graph they describe does not exist. '
-                + 'The run history is kept under <strong>KG → Management → Runs</strong>.</span></span>';
+                + 'The run history is kept under the <strong>Runs</strong> tab on this page.</span></span>';
             var section = document.getElementById('analyticsSection');
             var header = section && section.querySelector('.section-header');
             if (header) header.insertAdjacentElement('afterend', banner);
@@ -1307,10 +1316,8 @@
     function _setText(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
 
 
-    // Exposed so query.js can populate the dropdown on section activation.
-    // Also hydrates the page from the LAST stored analytics result (if any) —
-    // or, when a computation is still running in the background, re-shows the
-    // spinner and resumes waiting (so navigating away and back keeps progress).
+    // Populate the entity-type dropdown and hydrate the LAST stored result
+    // (or resume a still-running background job) on section activation.
     window.analyticsLoadTypes = function () {
         _loadEntityTypes().then(function () {
             window.analyticsResume();
@@ -1318,6 +1325,16 @@
             window.analyticsResume();
         });
     };
+
+    document.addEventListener('sidebarSectionChanged', function (e) {
+        if (e.detail && e.detail.section === 'analytics') {
+            window.analyticsLoadTypes();
+        }
+    });
+    if (document.getElementById('analytics-section')
+            && document.getElementById('analytics-section').classList.contains('active')) {
+        window.analyticsLoadTypes();
+    }
 
     // Run an immediate guard on load: if the config already tells us there is no graph,
     // disable the button right away without waiting for an API round-trip.
@@ -1527,7 +1544,8 @@
             }, 3000);
 
             // Open the discussion panel so the user can see the new comment
-            if (typeof openTwinDiscussion === 'function') openTwinDiscussion();
+            if (typeof openOntologyDiscussion === 'function') openOntologyDiscussion();
+            else if (typeof openTwinDiscussion === 'function') openTwinDiscussion();
 
         } catch (e) {
             if (typeof showNotification === 'function')

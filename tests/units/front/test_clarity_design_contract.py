@@ -40,7 +40,7 @@ ONTOLOGY_IMPORT_TEMPLATE = (
     REPO_ROOT / "src/front/templates/partials/ontology/_ontology_import.html"
 )
 DOMAIN_RUNS_TEMPLATE = (
-    REPO_ROOT / "src/front/templates/partials/domain/_domain_runs.html"
+    REPO_ROOT / "src/front/templates/partials/dtwin/_query_build.html"
 )
 ONTOLOGY_DATAQUALITY_CSS = (
     REPO_ROOT / "src/front/static/ontology/css/ontology-dataquality.css"
@@ -362,15 +362,15 @@ def test_ontology_import_uses_the_card_integrated_tab_pattern():
     assert "ob-tab-content" not in content_tag
 
 
-def test_domain_runs_uses_the_card_integrated_tab_pattern():
+def test_build_page_uses_the_card_integrated_tab_pattern():
     template = _read(DOMAIN_RUNS_TEMPLATE)
     assert '<div class="card h-100">' in template
     assert '<div class="card-body p-0 ob-tabs-wrap">' in template
     assert (
-        'class="nav nav-tabs ob-tabs nav-fill" id="runsTabs"'
+        'class="nav nav-tabs ob-tabs nav-fill" id="buildPageTabs"'
         in template
     )
-    anchor = template.index('id="runsTabContent"')
+    anchor = template.index('id="buildPageTabContent"')
     content_tag = template[template.rindex("<div", 0, anchor) : anchor]
     assert "tab-content p-3" in content_tag
     assert "ob-tab-content" not in content_tag

@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='intelligence/css/intelligence.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-cohorts.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-reasoning.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-analytics.css') }}?v={{ asset_version }}">
 {% endblock %}
 
 {% block content %}
@@ -19,6 +20,10 @@
         </div>
 
         <div class="sidebar-content">
+            <div id="analytics-section" class="sidebar-section">
+                {% include "partials/intelligence/_intel_analytics.html" %}
+            </div>
+
             <div id="communities-section" class="sidebar-section">
                 {% include "partials/intelligence/_intel_communities.html" %}
             </div>
@@ -63,6 +68,24 @@
 {% include "partials/intelligence/_sim_fact_wizard.html" %}
 {% include "partials/intelligence/_sim_insights_report_modal.html" %}
 
+<!-- Analytics run details (page level so the modal works from a tab pane) -->
+<div class="modal fade" id="analyticsRunDetailsModal" tabindex="-1" aria-labelledby="analyticsRunDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="analyticsRunDetailsModalLabel">
+                    <i class="bi bi-graph-up-arrow me-2"></i>Analytics run details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="analyticsRunDetailsBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script id="simulation-config" type="application/json">{{ simulation_ctx|tojson }}</script>
 <script id="triplestore-config" type="application/json">
 {
@@ -88,4 +111,8 @@
 <script defer src="{{ url_for('static', filename='intelligence/js/simulation-evaluate.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-cohorts.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-purge-inferences.js') }}?v={{ asset_version }}"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script defer src="{{ url_for('static', filename='global/js/runs-render.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='domain/js/domain-runs.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-analytics.js') }}?v={{ asset_version }}"></script>
 {% endblock %}

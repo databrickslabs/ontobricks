@@ -5,10 +5,10 @@ Merges two previously separate test files:
 
 * Basic sidebar checks (default section, Knowledge Graph nav link).
 * Full sidebar parity — every section declared in the template
-  (insight, dataquality, reasoning, sigmagraph, graphql, chat) must be
-  reachable via ``SidebarNav.switchTo()``.  A section added to the
+  (insight/Overview, dataquality, reasoning, sigmagraph, graphql, chat)
+  must be reachable via ``SidebarNav.switchTo()``.  A section added to the
   template without a matching ``#{section}-section`` ``<div>`` will
-  cause this suite to fail.
+  cause this suite to fail. Analytics lives under Intelligence → Discovery.
 """
 
 import json

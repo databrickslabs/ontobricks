@@ -91,6 +91,19 @@ class TestCssGates:
         assert _gated(_css(), "#cohortMaterializeBtn")
         assert _gated(_css(), "#cohortMaterializeNowBtn")
 
+    def test_intelligence_write_ctas_are_disabled(self):
+        """Patterns New, Communities Clear/Detect/Materialize, Scenarios New."""
+        css = _css()
+        for selector in (
+            "#patDetectBtn",
+            "#patDetectRunBtn",
+            "#commClearBtn",
+            "#commDetectBtn",
+            "#commMaterializeBtn",
+            "#simNewBtn",
+        ):
+            assert _gated(css, selector), selector
+
     def test_reasoning_materialise_is_status_open_but_view_mode_disabled(self):
         css = _css()
         assert (
@@ -173,6 +186,17 @@ class TestJsGuards:
         js = COHORT_JS.read_text(encoding="utf-8")
         assert "canEditOntology" in js.split("openMaterializeModal()")[1][:400]
         assert "canEditOntology" in js.split("async materialize()")[1][:400]
+
+    def test_simulation_new_scenario_refuses_when_cannot_edit(self):
+        js = (
+            REPO_ROOT / "src/front/static/intelligence/js/simulation.js"
+        ).read_text(encoding="utf-8")
+        assert "_canEdit" in js
+        assert "_applyEditGate" in js
+        assert "canEditOntology" in js
+        body = js.split("newScenario({", 1)[1][:500]
+        assert "_canEdit" in body
+        assert "read-only" in body
 
     def test_reasoning_materialise_refuses_when_cannot_refresh_graph(self):
         js = REASONING_JS.read_text(encoding="utf-8")

@@ -771,8 +771,8 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships, Sanity Checks), Advanced (Data Quality, Business Rules, Expr. & Axioms); General tabs (Informations, OWL); Studio **Export** (OWL); section divs, OntoViz script |
 | Mapping `/mapping` | Sidebar groups Design (General, Import, Studio, Manual) and Advanced (Auto-Map, Diagnostics); General tabs (Informations, R2RML); Studio **Export** (R2RML), mapping-core.js |
 | Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Documents, My Tasks, Discussions, Cockpit, Audit trail), section divs |
-| Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Explorer, Query, Chat), Build, Advanced (Data Quality, Inference, Analytics); Sigma.js script |
-| Intelligence `/intelligence/` | Sidebar groups: Configuration (Cohorts, Runs), Discovery (Communities, Patterns), Simulation (Scenarios, Compare, Runs); scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
+| Knowledge Graph `/dtwin/` | Sidebar section groups: Management (Build with Build/Runs tabs, Overview), Navigation (Explorer, Query, Chat), Compute (Data Quality, Business rules); Sigma.js script |
+| Intelligence `/intelligence/` | Sidebar groups: Configuration (Cohorts), Discovery (Analytics with Analytics/Runs tabs, Communities, Patterns), Simulation (Scenarios, Compare); scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
 | About `/about` | Page renders, contains "OntoBricks" |
 
 **Run:**

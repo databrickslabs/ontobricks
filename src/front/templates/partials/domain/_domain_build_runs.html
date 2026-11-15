@@ -1,0 +1,48 @@
+<!-- Build-run history — Graph → Management → Build → Runs tab.
+     JS: /static/domain/js/domain-runs.js (shared with Analytics → Runs). -->
+<div id="buildRunsPaneBody">
+    <div class="d-flex justify-content-end mb-3">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadBuildRuns"
+                onclick="loadBuildRuns()" title="Reload build runs from the registry">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Refresh
+        </button>
+    </div>
+
+    <div id="runsLoading" class="text-center py-5" style="display:none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mt-2 small">Loading build runs from registry&hellip;</p>
+    </div>
+
+    <div id="runsEmpty" class="text-center py-5" style="display:none;">
+        <i class="bi bi-list-check text-muted fs-1"></i>
+        <p class="text-muted mt-2 mb-1">No build runs found</p>
+        <p class="text-muted small">Build the context (Management &rarr; Build) to start recording runs.</p>
+    </div>
+
+    <div id="runsError" class="alert alert-warning m-3" role="alert" style="display:none;">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <span id="runsErrorMessage"></span>
+    </div>
+
+    <div id="runsTableWrapper" style="display:none;">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-end" style="width:8%;">ID</th>
+                        <th style="width:24%;">Date &amp; Time</th>
+                        <th class="text-center" style="width:16%;">Version</th>
+                        <th class="text-center" style="width:18%;">Status</th>
+                        <th class="text-end" style="width:18%;">Triples</th>
+                        <th class="text-center" style="width:16%;">Details</th>
+                    </tr>
+                </thead>
+                <tbody id="runsTableBody">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

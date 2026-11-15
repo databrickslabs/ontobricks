@@ -1,19 +1,16 @@
 /**
  * OntoBricks - domain-runs.js
- * Run history for Knowledge Graph > Management > Runs.
+ * Run history loaders for:
+ *   - Graph → Management → Build → Runs (build runs only)
+ *   - Intelligence → Discovery → Analytics → Runs (analytics runs only)
  *
- * Two independent tables: build runs from the registry's build_runs trace
- * (GET /domain/build-runs) and analytics runs from graph_analytics_runs
- * (GET /dtwin/metrics/history). They share no columns, so they are rendered
- * separately, and each load is isolated so one endpoint failing still leaves
- * the other table on screen.
- *
- * All rendering comes from RunsRender (global/js/runs-render.js), shared with
- * the cross-domain Runs page in Settings. This file owns only the fetching,
- * the element ids and the load latch.
+ * Rendering comes from RunsRender (global/js/runs-render.js), shared with
+ * Settings → Automation → Runs. This file owns fetching, element ids, load
+ * latches, and the Build / Analytics page tab chrome (?tab=runs).
  */
 
-let _runsLoaded = false;
+let _buildRunsLoaded = false;
+let _analyticsRunsLoaded = false;
 let _runsCache = [];
 let _analyticsRunsCache = [];
 
@@ -63,10 +60,6 @@ function _renderAnalyticsRunsTable() {
     wrapper.style.display = '';
 }
 
-// Returns true iff the fetch produced a renderable result (including a
-// genuinely empty run list — an empty domain is not a load failure), false
-// on any error path. loadDomainRuns() uses this to decide whether the
-// overall load may be latched via _runsLoaded.
 async function _loadBuildRuns() {
     const loading = document.getElementById('runsLoading');
     const empty = document.getElementById('runsEmpty');
@@ -101,7 +94,6 @@ async function _loadBuildRuns() {
     }
 }
 
-// Same success/failure contract as _loadBuildRuns() above.
 async function _loadAnalyticsRuns() {
     const loading = document.getElementById('analyticsRunsLoading');
     const empty = document.getElementById('analyticsRunsEmpty');
@@ -136,29 +128,30 @@ async function _loadAnalyticsRuns() {
     }
 }
 
-// Deliberately sequential awaits rather than a combinator that settles on the
-// first rejection: each loader owns its own error handling, and neither is
-// allowed to blank the other's table.
-//
-// _runsLoaded latches only when BOTH loaders actually succeeded, so the
-// sidebarSectionChanged listener below will retry on re-entry after a
-// failure instead of re-showing a stale error forever. A successful load
-// that happens to return zero rows for one or both tables still latches:
-// "no runs yet" is a real, current answer, not a failure to be retried on
-// every single visit to the section.
+async function loadBuildRuns() {
+    _buildRunsLoaded = await _loadBuildRuns();
+    return _buildRunsLoaded;
+}
+
+async function loadAnalyticsRuns() {
+    _analyticsRunsLoaded = await _loadAnalyticsRuns();
+    return _analyticsRunsLoaded;
+}
+
+// Back-compat alias used by older Refresh handlers / tests.
 async function loadDomainRuns() {
-    const buildOk = await _loadBuildRuns();
-    const analyticsOk = await _loadAnalyticsRuns();
-    _runsLoaded = buildOk && analyticsOk;
+    if (document.getElementById('runsTableBody')) {
+        await loadBuildRuns();
+    }
+    if (document.getElementById('analyticsRunsTableBody')) {
+        await loadAnalyticsRuns();
+    }
 }
 
 function showRunDetails(idx) {
     showRunDetailsObj(_runsCache[idx]);
 }
 
-// Render the build-run details popup for a run object directly (so other
-// views, e.g. the Audit trail timeline, can reuse the same modal without
-// depending on this file's internal _runsCache).
 function showRunDetailsObj(run) {
     if (!run) return;
 
@@ -175,6 +168,9 @@ function showRunDetailsObj(run) {
 }
 
 window.showRunDetailsObj = showRunDetailsObj;
+window.loadBuildRuns = loadBuildRuns;
+window.loadAnalyticsRuns = loadAnalyticsRuns;
+window.loadDomainRuns = loadDomainRuns;
 
 function showAnalyticsRunDetails(idx) {
     const run = _analyticsRunsCache[idx];
@@ -193,15 +189,114 @@ function showAnalyticsRunDetails(idx) {
 
 window.showAnalyticsRunDetails = showAnalyticsRunDetails;
 
+// ---- Build page tabs (Build | Runs) ------------------------------------
+
+function _syncBuildPageTab(tab) {
+    const name = tab === 'runs' ? 'runs' : 'build';
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('section') === 'sync' || !url.searchParams.get('section')) {
+        if (url.searchParams.get('tab') !== name) {
+            url.searchParams.set('tab', name);
+            if (!url.searchParams.get('section')) {
+                url.searchParams.set('section', 'sync');
+            }
+            window.history.replaceState(window.history.state, '', url);
+        }
+    }
+    if (name === 'runs' && !_buildRunsLoaded) {
+        loadBuildRuns();
+    }
+}
+
+function _showBuildPageTab(name) {
+    const tab = name === 'runs' ? 'runs' : 'build';
+    const btn = document.getElementById(
+        tab === 'runs' ? 'buildTabRunsBtn' : 'buildTabBuildBtn',
+    );
+    if (btn && typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+        try { bootstrap.Tab.getOrCreateInstance(btn).show(); } catch (_) { /* noop */ }
+    }
+    _syncBuildPageTab(tab);
+}
+
+function _initBuildPageTabs() {
+    if (!document.getElementById('buildPageTabs')) return;
+    document.getElementById('buildTabBuildBtn')?.addEventListener(
+        'shown.bs.tab', () => _syncBuildPageTab('build'),
+    );
+    document.getElementById('buildTabRunsBtn')?.addEventListener(
+        'shown.bs.tab', () => _syncBuildPageTab('runs'),
+    );
+}
+
+// ---- Analytics page tabs (Analytics | Runs) ----------------------------
+
+function _syncAnalyticsPageTab(tab) {
+    const name = tab === 'runs' ? 'runs' : 'analytics';
+    document.querySelectorAll('[data-analytics-page-actions="analytics"]').forEach(function (el) {
+        el.classList.toggle('d-none', name === 'runs');
+    });
+    const url = new URL(window.location.href);
+    const urlTab = name === 'runs' ? 'runs' : 'analytics';
+    if (url.searchParams.get('tab') !== urlTab) {
+        url.searchParams.set('tab', urlTab);
+        if (!url.searchParams.get('section')) {
+            url.searchParams.set('section', 'analytics');
+        }
+        window.history.replaceState(window.history.state, '', url);
+    }
+    if (name === 'runs' && !_analyticsRunsLoaded) {
+        loadAnalyticsRuns();
+    }
+}
+
+function _showAnalyticsPageTab(name) {
+    const tab = name === 'runs' ? 'runs' : 'analytics';
+    const btn = document.getElementById(
+        tab === 'runs' ? 'analyticsPageTabRunsBtn' : 'analyticsPageTabMainBtn',
+    );
+    if (btn && typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+        try { bootstrap.Tab.getOrCreateInstance(btn).show(); } catch (_) { /* noop */ }
+    }
+    _syncAnalyticsPageTab(tab);
+}
+
+function _initAnalyticsPageTabs() {
+    if (!document.getElementById('analyticsPageTabs')) return;
+    document.getElementById('analyticsPageTabMainBtn')?.addEventListener(
+        'shown.bs.tab', () => _syncAnalyticsPageTab('analytics'),
+    );
+    document.getElementById('analyticsPageTabRunsBtn')?.addEventListener(
+        'shown.bs.tab', () => _syncAnalyticsPageTab('runs'),
+    );
+}
+
 document.addEventListener('sidebarSectionChanged', function (e) {
-    if (e.detail && e.detail.section === 'runs' && !_runsLoaded) {
-        loadDomainRuns();
+    const section = e.detail && e.detail.section;
+    if (section === 'sync') {
+        const tab = new URLSearchParams(window.location.search).get('tab');
+        _showBuildPageTab(tab === 'runs' ? 'runs' : 'build');
+    }
+    if (section === 'analytics') {
+        const tab = new URLSearchParams(window.location.search).get('tab');
+        _showAnalyticsPageTab(tab === 'runs' ? 'runs' : 'analytics');
     }
 });
 
 document.addEventListener('DOMContentLoaded', function () {
-    if (document.getElementById('runs-section') &&
-        document.getElementById('runs-section').classList.contains('active')) {
-        loadDomainRuns();
+    _initBuildPageTabs();
+    _initAnalyticsPageTabs();
+
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get('section') || '';
+    const tab = params.get('tab');
+
+    if (document.getElementById('buildPageTabs')
+            && (section === 'sync' || document.getElementById('sync-section')?.classList.contains('active'))) {
+        _showBuildPageTab(tab === 'runs' ? 'runs' : 'build');
+    }
+    if (document.getElementById('analyticsPageTabs')
+            && (section === 'analytics' || document.getElementById('analytics-section')?.classList.contains('active'))) {
+        _showAnalyticsPageTab(tab === 'runs' ? 'runs' : 'analytics');
     }
 });

@@ -18,7 +18,7 @@ _TEMPLATES = (
     REPO_ROOT / "src/front/templates/partials/dtwin/_query_chat.html",
     REPO_ROOT / "src/front/templates/partials/dtwin/_query_dataquality.html",
     REPO_ROOT / "src/front/templates/partials/dtwin/_query_reasoning.html",
-    REPO_ROOT / "src/front/templates/partials/dtwin/_query_analytics.html",
+    REPO_ROOT / "src/front/templates/partials/intelligence/_intel_analytics.html",
     REPO_ROOT / "src/front/templates/partials/dtwin/_query_insights.html",
 )
 

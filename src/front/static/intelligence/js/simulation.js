@@ -40,6 +40,7 @@ const SimulationPage = {
         on('simDiscussBtn', () => openOntologyDiscussion());
         on('simRefreshBtn', () => this.loadScenarios());
         on('simNewBtn', () => this.newScenario());
+        this._applyEditGate();
         const body = document.getElementById('simScenariosBody');
         if (body) {
             body.addEventListener('click', (e) => {
@@ -56,6 +57,17 @@ const SimulationPage = {
                 else if (action === 'delete') this.deleteScenario(id);
             });
         }
+    },
+
+    _canEdit() {
+        return !(window.OB && typeof window.OB.canEditOntology === 'function'
+            && !window.OB.canEditOntology());
+    },
+
+    _applyEditGate() {
+        const btn = document.getElementById('simNewBtn');
+        if (!btn) return;
+        btn.disabled = !this.config.supported || !this._canEdit();
     },
 
     // -- API ---------------------------------------------------------------
@@ -289,6 +301,12 @@ const SimulationPage = {
     },
 
     newScenario({ entity, label, sync = true, replace = false } = {}) {
+        if (!this._canEdit()) {
+            if (typeof showNotification === 'function') {
+                showNotification('New scenario is unavailable — this version is read-only.', 'warning');
+            }
+            return;
+        }
         this._showEditorPane();
         if (window.SimulationWorkbench) {
             if (entity) SimulationWorkbench.seedFromEntity(entity, label);

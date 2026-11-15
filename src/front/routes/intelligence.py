@@ -1,4 +1,4 @@
-"""Frontend HTML route -- Intelligence page (communities, cohorts, patterns, simulation)."""
+"""Frontend HTML route -- Intelligence page (analytics, communities, cohorts, patterns, simulation)."""
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
