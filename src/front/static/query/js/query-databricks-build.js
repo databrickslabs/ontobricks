@@ -229,10 +229,39 @@ async function loadDatabricksBuildInfo() {
         dbxBuildReady = !!r.mapping_valid;
         const readinessCard = document.getElementById('dbxBuildReadinessCard');
         if (readinessCard) {
+            const canOfferAutoMap = !(window.OB && typeof window.OB.canEditOntology === 'function'
+                && !window.OB.canEditOntology());
+            const mappingBadge = dbxBuildReady
+                ? '<span class="badge bg-success bg-opacity-10 text-success border border-success">'
+                    + '<i class="bi bi-check-circle-fill me-1"></i>Ready</span>'
+                : '<span class="badge bg-danger text-white border border-danger">'
+                    + '<i class="bi bi-x-circle-fill me-1"></i>Not ready</span>';
+            const autoMapBtn = (!dbxBuildReady && canOfferAutoMap)
+                ? '<a href="/mapping/?section=autoassign"'
+                    + ' class="btn btn-sm btn-outline-primary py-0 px-2"'
+                    + ' id="dbxBuildAutoMapBtn"'
+                    + ' title="Open Mapping → Auto-Map to generate SQL mappings">'
+                    + '<i class="bi bi-lightning-charge me-1"></i>Auto-Map</a>'
+                : '';
+            const notReadyAlert = dbxBuildReady ? ''
+                : '<div class="alert alert-warning small mb-0 mt-2">'
+                    + '<div class="d-flex align-items-start gap-2">'
+                    + '<i class="bi bi-exclamation-triangle mt-1 flex-shrink-0"></i>'
+                    + '<div><strong>Mapping must be ready before you can build.</strong>'
+                    + '<ol class="mb-0 ps-3 mt-1">'
+                    + '<li>Run <strong>Auto-Map</strong> (or map manually in'
+                    + ' <a href="/mapping/?section=design">Studio</a>)'
+                    + ' so Mapping shows Ready.</li>'
+                    + '<li>Click <strong>Build</strong> to materialize the graph.</li>'
+                    + '</ol></div></div></div>';
             readinessCard.innerHTML =
-                '<h6 class="fw-semibold mb-2"><i class="bi bi-clipboard-check me-1"></i>Readiness</h6>' +
-                '<div class="small">Mapping: ' + (r.mapping_valid ? '<span class="text-success">Ready</span>' : '<span class="text-warning">Not ready</span>') +
-                '</div>';
+                '<h6 class="fw-semibold mb-2"><i class="bi bi-clipboard-check me-1"></i>Readiness Status</h6>'
+                + '<div class="d-flex align-items-center gap-2 flex-wrap">'
+                + '<span class="text-muted small"><i class="bi bi-diagram-2 me-1"></i>Mapping</span>'
+                + mappingBadge
+                + autoMapBtn
+                + '</div>'
+                + notReadyAlert;
         }
 
         const ts = data.triplestore_status || {};

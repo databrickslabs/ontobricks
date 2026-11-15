@@ -157,6 +157,14 @@ function _applyReadiness(data) {
             : '<span class="badge bg-danger text-white border border-danger"><i class="bi bi-x-circle-fill me-1"></i>Not ready</span>';
     }
 
+    var autoMapBtn = document.getElementById('syncAutoMapBtn');
+    if (autoMapBtn) {
+        var canOfferAutoMap = !(window.OB && typeof window.OB.canEditOntology === 'function'
+            && !window.OB.canEditOntology());
+        if (assignmentReady || !canOfferAutoMap) autoMapBtn.classList.add('d-none');
+        else autoMapBtn.classList.remove('d-none');
+    }
+
     var alertEl = document.getElementById('syncNotReadyAlert');
     if (alertEl) {
         if (syncIsReady) alertEl.classList.add('d-none');

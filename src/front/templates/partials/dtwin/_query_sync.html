@@ -108,13 +108,34 @@
                     </span>
                 </div>
                 <div id="syncReadinessContent" class="d-none">
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
                         <span class="text-muted small"><i class="bi bi-diagram-2 me-1"></i>Mapping</span>
                         <span id="syncMappingReadyBadge"></span>
+                        {% if _dr not in ('viewer', 'none') %}
+                        <a href="/mapping/?section=autoassign"
+                           class="btn btn-sm btn-outline-primary py-0 px-2 d-none"
+                           id="syncAutoMapBtn"
+                           title="Open Mapping → Auto-Map to generate SQL mappings">
+                            <i class="bi bi-lightning-charge me-1"></i>Auto-Map
+                        </a>
+                        {% endif %}
                     </div>
                     <div class="alert alert-warning small mb-0 mt-2 d-none" id="syncNotReadyAlert">
-                        <i class="bi bi-exclamation-triangle me-1"></i>
-                        Mapping must be ready before you can build.
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-exclamation-triangle mt-1 flex-shrink-0"></i>
+                            <div>
+                                <strong>Mapping must be ready before you can build.</strong>
+                                <ol class="mb-0 ps-3 mt-1">
+                                    <li>
+                                        Run <strong>Auto-Map</strong>
+                                        (or map manually in
+                                        <a href="/mapping/?section=design">Studio</a>)
+                                        so Mapping shows Ready.
+                                    </li>
+                                    <li>Click <strong>Build</strong> to materialize the graph.</li>
+                                </ol>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

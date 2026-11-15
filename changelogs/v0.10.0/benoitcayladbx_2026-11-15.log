@@ -332,3 +332,32 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10576 passed, 324 skipped, 8 deselected, 39 warnings in 46.27s ========
+
+## Propose Auto-Map when Build mapping is not ready
+
+Context: On Graph → Build, when Mapping readiness is Not ready, users had no
+in-page path to fix mappings before Build. Add an Auto-Map CTA beside the
+Mapping badge and a two-step not-ready alert (Auto-Map / Studio, then Build).
+Studio is linked to Mapping Studio (`/mapping/?section=design`).
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sync.html
+   Add `#syncAutoMapBtn` next to Mapping readiness; rewrite not-ready alert
+   with Auto-Map then Build steps and a Studio hyperlink.
+2. src/front/static/query/js/query-sync.js
+   Show `#syncAutoMapBtn` only when mapping is not ready and the user can edit.
+3. src/front/static/query/js/query-databricks-build.js
+   Mirror Mapping badge, Auto-Map CTA, and stepped not-ready alert (with Studio
+   link) on the Lakehouse Build readiness card.
+4. tests/units/front/test_build_automap_cta.py
+   Contract tests for Lakebase/Lakehouse Auto-Map CTA, step order, and Studio link.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+- tests/units/front/test_build_automap_cta.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 45.78s ========
