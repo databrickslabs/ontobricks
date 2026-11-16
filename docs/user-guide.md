@@ -1511,7 +1511,12 @@ categorical values, except identifier-like attributes with more than 20
 distinct values such as ids, emails or dates, which are ignored) and multi-hop
 relationships (full predicate URIs; hops walk the full graph, not an induced
 subgraph) are hashed into a canonical signature; patterns are ranked by
-support. Raise **Min support** to drop the long tail.
+support. Raise **Min support** to drop the long tail. Very high-degree shared
+nodes (for example a Country linked from thousands of customers) are not
+walked *through* during Detect — they still appear as neighbours in the
+signature, but expansion stops there so a hub cannot cross-link every anchor.
+Operators can read per-stage timings from the job summary (`stage_ms` in the
+run output / `_summary` table) when investigating a slow Detect.
 
 Hashing every attribute of a rich neighbourhood makes almost every anchor
 unique, so discovery picks the **detail level** automatically: it tries the

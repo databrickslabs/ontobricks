@@ -597,3 +597,54 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10647 passed, 333 skipped, 8 deselected, 39 warnings in 50.39s ========
+
+
+================================================================================
+Pattern detection performance (hub pruning, single-pass signatures, stage_ms)
+================================================================================
+
+Context:
+Detect on large graphs was slow: hop joins exploded through hubs before the
+frontier cap applied, types were re-joined every hop, signatures were
+recomputed per detail level, and shapes scanned every member. This change
+instruments stages, prunes hub expansion, denormalises types, hashes all
+detail levels in one pass, and builds non-refined shapes from one
+representative anchor — without changing pattern_id hashing.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   Per-stage timers (`stage_ms`); single-pass `_sigs` with collect_set;
+   `_dir` carries src_type/dst_type; `_reps` for shapes; narrowed refine
+   top-N; `--pattern-hub-degree` (default 5000) skips walking through hubs.
+2. resources/pattern_detection.job.yml
+   New job parameter `pattern_hub_degree`.
+3. src/back/core/graph_analysis/pattern/JobPatterns.py
+   Passes `pattern_hub_degree`; summary surfaces hub_degree / hub_count.
+4. tests/units/core/test_graph_analytics_job_sql.py
+   SQLite `collect_set` shim.
+5. tests/units/core/test_pattern_job_sql.py
+   Instrumentation, single-pass, denorm, rep-shape, and hub-pruning tests.
+6. tests/units/core/test_job_patterns.py
+   Asserts hub-degree job parameter.
+7. docs/architecture.md / docs/user-guide.md
+   Hub pruning and stage_ms notes.
+8. docs/superpowers/specs/2026-11-16-pattern-detection-performance-design.md
+   Spec marked implemented.
+9. docs/superpowers/plans/2026-11-16-pattern-detection-performance.md
+   Implementation plan.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- resources/pattern_detection.job.yml
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- tests/units/core/test_graph_analytics_job_sql.py
+- tests/units/core/test_pattern_job_sql.py
+- tests/units/core/test_job_patterns.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-16-pattern-detection-performance-design.md
+- docs/superpowers/plans/2026-11-16-pattern-detection-performance.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10661 passed, 333 skipped, 8 deselected, 39 warnings in 47.45s ========

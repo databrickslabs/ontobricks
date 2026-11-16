@@ -1475,7 +1475,19 @@ job-only gate as Community (analytics toggle +
    | `…_shapes` | shape tokens, support, refined / near-duplicate metadata |
    | `…_shape_edges` | typed edges the Discover diagram draws |
    | `…_preview_nodes` / `…_preview_edges` | capped preview |
-   | `…_summary` | counts, hops, bins, min_support, algorithm |
+   | `…_summary` | counts, hops, bins, min_support, algorithm, `stage_ms`, `hub_degree`, `hub_count` |
+
+   Performance notes (see
+   `docs/superpowers/specs/2026-11-16-pattern-detection-performance-design.md`):
+
+   - Neighbourhood expansion skips walking *through* nodes whose directed
+     degree exceeds `--pattern-hub-degree` (default 5 000; `0` disables). The
+     hub itself still contributes structural/attribute tokens.
+   - Endpoint types are denormalised onto the directed edge table once;
+     signatures for all detail levels are hashed in one aggregation; shapes
+     for non-refined runs use one representative member per pattern.
+   - The summary carries `stage_ms` (per-stage wall time) for operators
+     reading the job log / summary table.
 
 3. **Read back** — `GET /dtwin/patterns/latest` (top-N + stats + job gate);
    `GET /dtwin/patterns/{id}/shape` (tokens + layered diagram) and `/members`
