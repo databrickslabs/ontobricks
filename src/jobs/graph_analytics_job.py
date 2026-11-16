@@ -1431,25 +1431,38 @@ class PatternSQL(GraphAnalyticsSQL):
         return self._recreate(self.node_types, self.node_type_select_all())
 
     def build_directed_edges(self) -> List[str]:
-        """Directed URI edges both ways, keeping the predicate as ``via``."""
+        """Directed URI edges both ways, with endpoint types denormalised.
+
+        ``src_type`` / ``dst_type`` are joined once from ``node_types`` so each
+        hop can emit tokens without re-joining types on the exploded frontier.
+        Requires :meth:`build_node_types` to have run first.
+        """
         src = self.source_table
         excl = _in_list(self.excluded_predicates)
         uri = "(object LIKE 'http://%' OR object LIKE 'https://%')"
         return self._recreate(
             self.directed,
-            f"SELECT subject AS src, object AS dst, predicate AS via, "
+            f"SELECT e.src AS src, e.dst AS dst, e.via AS via, "
+            f"e.direction AS direction,\n"
+            f"       coalesce(st.type_uri, '') AS src_type,\n"
+            f"       coalesce(dt.type_uri, '') AS dst_type\n"
+            f"FROM (\n"
+            f"  SELECT subject AS src, object AS dst, predicate AS via, "
             f"'out' AS direction\n"
-            f"FROM {src}\n"
-            f"WHERE subject <> '' AND object <> '' AND subject <> object\n"
-            f"  AND {uri}\n"
-            f"  AND predicate NOT IN ({excl})\n"
-            f"UNION ALL\n"
-            f"SELECT object AS src, subject AS dst, predicate AS via, "
+            f"  FROM {src}\n"
+            f"  WHERE subject <> '' AND object <> '' AND subject <> object\n"
+            f"    AND {uri}\n"
+            f"    AND predicate NOT IN ({excl})\n"
+            f"  UNION ALL\n"
+            f"  SELECT object AS src, subject AS dst, predicate AS via, "
             f"'in' AS direction\n"
-            f"FROM {src}\n"
-            f"WHERE subject <> '' AND object <> '' AND subject <> object\n"
-            f"  AND {uri}\n"
-            f"  AND predicate NOT IN ({excl})",
+            f"  FROM {src}\n"
+            f"  WHERE subject <> '' AND object <> '' AND subject <> object\n"
+            f"    AND {uri}\n"
+            f"    AND predicate NOT IN ({excl})\n"
+            f") e\n"
+            f"LEFT JOIN {self.node_types} st ON st.n = e.src\n"
+            f"LEFT JOIN {self.node_types} dt ON dt.n = e.dst",
         )
 
     def build_literals(self) -> List[str]:
@@ -1551,13 +1564,15 @@ class PatternSQL(GraphAnalyticsSQL):
             f"WHERE s{i}.anchor = f.anchor AND s{i}.node = e.dst)\n"
             for i, t in enumerate(seen)
         )
-        # Ranked expansion, then frontier + tokens for survivors.
+        # Ranked expansion carries types from ``_dir`` (joined once upstream).
         expanded = f"{self.work_prefix}_exp_{int(hop)}"
         statements = self._recreate(
             expanded,
-            f"SELECT anchor, parent, node, via, direction FROM (\n"
+            f"SELECT anchor, parent, node, via, direction, parent_type, "
+            f"node_type FROM (\n"
             f"  SELECT f.anchor AS anchor, f.node AS parent, e.dst AS node,\n"
             f"         e.via AS via, e.direction AS direction,\n"
+            f"         e.src_type AS parent_type, e.dst_type AS node_type,\n"
             f"         ROW_NUMBER() OVER (\n"
             f"           PARTITION BY f.anchor ORDER BY e.via, e.dst\n"
             f"         ) AS rk\n"
@@ -1572,40 +1587,32 @@ class PatternSQL(GraphAnalyticsSQL):
             cur,
             f"SELECT DISTINCT anchor, node FROM {expanded}",
         )
-        # Structural tokens (kind = 's').
+        # Structural + neighbour-attribute tokens in one Delta commit.
         statements.append(
             f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
             f"SELECT e.anchor,\n"
-            f"       '{hop_lit}|' || e.via || '|' || coalesce(ty.type_uri, '') "
+            f"       '{hop_lit}|' || e.via || '|' || e.node_type "
             f"|| '|' || e.direction,\n"
             f"       's',\n"
             f"       {hop_lit}\n"
             f"FROM {expanded} e\n"
-            f"LEFT JOIN {self.node_types} ty ON ty.n = e.node"
-        )
-        # Neighbour attribute tokens (kind = 'na').
-        statements.append(
-            f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
+            f"UNION ALL\n"
             f"SELECT e.anchor,\n"
-            f"       '{hop_lit}|' || e.via || '|' || coalesce(ty.type_uri, '') "
+            f"       '{hop_lit}|' || e.via || '|' || e.node_type "
             f"|| '|' || e.direction || '|' || b.prop || '|' || b.bin_label,\n"
             f"       'na',\n"
             f"       {hop_lit}\n"
             f"FROM {expanded} e\n"
-            f"JOIN {self.bins_table} b ON b.n = e.node\n"
-            f"LEFT JOIN {self.node_types} ty ON ty.n = e.node"
+            f"JOIN {self.bins_table} b ON b.n = e.node"
         )
         # Typed edges (parent type -> child type) for the pattern diagram.
         statements.append(
             f"INSERT INTO {self.typed_edges} "
             f"(anchor, hop, parent_type, via, child_type, direction, cnt)\n"
-            f"SELECT e.anchor, {hop_lit}, coalesce(pt.type_uri, ''), e.via,\n"
-            f"       coalesce(ty.type_uri, ''), e.direction, COUNT(*)\n"
+            f"SELECT e.anchor, {hop_lit}, e.parent_type, e.via,\n"
+            f"       e.node_type, e.direction, COUNT(*)\n"
             f"FROM {expanded} e\n"
-            f"LEFT JOIN {self.node_types} ty ON ty.n = e.node\n"
-            f"LEFT JOIN {self.node_types} pt ON pt.n = e.parent\n"
-            f"GROUP BY e.anchor, coalesce(pt.type_uri, ''), e.via,\n"
-            f"         coalesce(ty.type_uri, ''), e.direction"
+            f"GROUP BY e.anchor, e.parent_type, e.via, e.node_type, e.direction"
         )
         statements.append(f"DROP TABLE IF EXISTS {expanded}")
         return statements
@@ -1964,13 +1971,14 @@ def _safe_count(scalar, query: str) -> Optional[int]:
 def _expand_neighbourhoods(execute, scalar, builder: PatternSQL, stage_ms: Dict[str, int]) -> None:
     """Stage everything the signatures hash: edges, bins, hop-by-hop tokens."""
     with _pattern_stage(stage_ms, "prep"):
+        # node_types before directed: ``_dir`` denormalises endpoint types.
+        for stmt in builder.build_node_types():
+            execute(stmt)
         for stmt in builder.build_directed_edges():
             execute(stmt)
         for stmt in builder.build_literals():
             execute(stmt)
         for stmt in builder.build_anchors():
-            execute(stmt)
-        for stmt in builder.build_node_types():
             execute(stmt)
     with _pattern_stage(stage_ms, "bins"):
         for stmt in builder.build_bins():

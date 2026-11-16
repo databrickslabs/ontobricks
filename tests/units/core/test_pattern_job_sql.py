@@ -103,6 +103,34 @@ def _run(triples, **kwargs):
     return runner, builder, stats
 
 
+class TestDenormalizedTypes:
+    def test_directed_edges_carry_endpoint_types(self):
+        runner, builder, _ = _run(alice_bob_carol(), hops=2, min_support=1)
+        rows = runner.rows(
+            f"SELECT src, dst, direction, src_type, dst_type FROM {builder.directed} "
+            f"WHERE via = '{HAS_ORDER}' AND direction = 'out' LIMIT 1"
+        )
+        assert rows[0]["src_type"] == CUSTOMER
+        assert rows[0]["dst_type"] == ORDER
+
+    def test_shape_edges_unchanged_after_denorm(self):
+        runner, _, _ = _run(alice_bob_carol())
+        pid = runner.scalar(
+            f"SELECT pattern_id FROM out WHERE anchor_uri = '{NS}Alice'"
+        )
+        edges = runner.rows(
+            "SELECT hop, parent_type, via, child_type, direction "
+            f"FROM out_shape_edges WHERE pattern_id = '{pid}' ORDER BY hop, via"
+        )
+        assert [
+            (e["hop"], e["parent_type"], e["via"], e["child_type"], e["direction"])
+            for e in edges
+        ] == [
+            (1, CUSTOMER, HAS_ORDER, ORDER, "out"),
+            (2, ORDER, HAS_PRODUCT, PRODUCT, "out"),
+        ]
+
+
 class TestSinglePassSignatures:
     def test_alice_bob_carol_ids_unchanged(self):
         runner, _, stats = _run(alice_bob_carol(), min_support=1)
