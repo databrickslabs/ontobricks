@@ -1324,3 +1324,61 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10774 passed, 333 skipped, 8 deselected, 39 warnings in 48.19s ========
+
+=== Pattern catalog save: constant statement count (was 2 warehouse queries per pattern) ===
+
+Context: on the 100M-triple `bigcustomers100m` domain Detect's Spark job takes
+about 5.5 min (stage_ms: prep 78s, hops 127s, signatures 45s), but the
+background task then sat in "Saving pattern catalog" for 55+ minutes. `save()`
+looped over every pattern of the run (46,754) and ran two sequential warehouse
+queries per pattern (`_shapes` and `_shape_edges`, ~200 ms each) to build each
+diagram. The earlier "catalog-only" save removed the member fan-out but kept
+this per-pattern loop; it was never measured on a run this large.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   `save()` now issues a constant number of statements: it reads the focus
+   plus the top `EAGER_DIAGRAMS` (100) patterns by support in bulk (shapes,
+   KPIs, edges: 3 queries), writes those rows with their diagram, and writes
+   every other pattern with ONE server-side `INSERT ... SELECT` over
+   `<out>_shapes` joined to aggregated `<out>_shape_edges` (KPIs computed in
+   the warehouse, `diagram_json` empty). `shape()` already rebuilds a missing
+   diagram from live Detect on first open and persists it. `_payload_from_rows`
+   extracted from `_live_shape_payload`; `_metrics_from` and
+   `_detect_pattern_ids` removed (replaced by `_eager_pattern_ids`).
+2. src/back/core/graph_analysis/pattern/saved_pattern_sql.py (new)
+   Pure SQL builders (`kpi_sql`, `insert_catalog_sql`, `insert_rest_sql`,
+   `sql_lit`), extracted to keep `SavedPatternStore` under the 800-LOC budget.
+3. src/back/core/graph_analysis/pattern/JobPatterns.py
+   `shapes_bulk_query`, `shape_edges_bulk_query` (per-pattern cap via
+   `ROW_NUMBER`), `fetch_shape_edges_for` (grouped by pattern, same legacy
+   `parent_via` fallback and missing-table contract as `fetch_shape_edges`;
+   fallback logic shared in `_edge_rows_with_fallback`).
+4. tests/units/core/test_saved_pattern_store.py, test_job_patterns.py
+   Statement count independent of pattern count (400 extra patterns),
+   SQL-computed KPIs equal the Python ones, lazy diagram beyond the eager cap
+   is drawn and persisted on first open, missing edges table, bulk edge reader
+   grouping / legacy fallback / missing table.
+5. docs/user-guide.md, docs/architecture.md: save behaviour and new module.
+
+Measured on the real warehouse (46,754 patterns, Detect output of
+`graph_patterns_bigcustomers100m_2`): the `INSERT ... SELECT` for all patterns
+takes 6 s; the three eager bulk reads take about 1.5 s each. Previous
+behaviour: 55+ min and still running.
+
+Behaviour note: patterns outside the focus + top-100 have no stored diagram
+until first opened; if a new Detect replaces the live tables before that, such
+a pattern shows its KPIs and shape tokens but no diagram.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/back/core/graph_analysis/pattern/saved_pattern_sql.py
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/core/test_job_patterns.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 10781 passed, 333 skipped, 8 deselected

@@ -1525,7 +1525,8 @@ lifecycle) are documented for operators — not separate product modes in v1.
 | `resources/pattern_detection.job.yml` | Bundle job `<app>-pattern-detection` |
 | `src/back/core/graph_analysis/pattern/JobPatterns.py` | Trigger the job and read bounded outputs |
 | `src/back/core/graph_analysis/pattern/pattern_diagram.py` | Shape-edge rows → layered diagram model |
-| `src/back/core/graph_analysis/pattern/SavedPatternStore.py` | Save, list, page, delete saved snapshots (Unity Catalog) |
+| `src/back/core/graph_analysis/pattern/SavedPatternStore.py` | Save, list, page, delete saved snapshots (Unity Catalog). Save = constant statement count: one `INSERT … SELECT` for every pattern + one INSERT for the focus and top-100 patterns' diagrams (`EAGER_DIAGRAMS`); other diagrams draw lazily on first open |
+| `src/back/core/graph_analysis/pattern/saved_pattern_sql.py` | Pure SQL builders for the saved catalog (`kpi_sql`, `insert_catalog_sql`, `insert_rest_sql`) |
 | `src/api/routers/internal/dtwin.py` | `/dtwin/patterns/*` endpoints |
 | `src/back/objects/digitaltwin/TwinAnalytics.py` | Job wiring and pattern entry points |
 | `src/back/objects/digitaltwin/PatternBackgroundTasks.py` | `pattern_detection` (Detect + catalog save), `pattern_save` |

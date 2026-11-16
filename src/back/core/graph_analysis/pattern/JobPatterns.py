@@ -20,7 +20,7 @@ import json
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence
 
 from back.core.errors import InfrastructureError
 from back.core.graph_analysis.pattern.pattern_diagram import (
@@ -150,6 +150,58 @@ def _missing_parent_via_column(exc: Exception) -> bool:
     )
 
 
+def shapes_bulk_query(out: str, pattern_ids: Sequence[str]) -> str:
+    """Shape rows (tokens, seed label, KPIs) for several patterns at once."""
+    ids = ", ".join(_sql_str(pid) for pid in pattern_ids)
+    return (
+        "SELECT pattern_id, support, hop_count, shape_json, seed_label "
+        f"FROM {out}_shapes WHERE pattern_id IN ({ids})"
+    )
+
+
+def shape_edges_bulk_query(
+    out: str, pattern_ids: Sequence[str], *, legacy: bool = False
+) -> str:
+    """Typed edges for several patterns, capped per pattern like the single query."""
+    cols = (
+        "hop, parent_type, via, child_type, member_count, edge_total"
+        if legacy
+        else "hop, parent_via, parent_type, via, child_type, member_count, edge_total"
+    )
+    ids = ", ".join(_sql_str(pid) for pid in pattern_ids)
+    return (
+        f"SELECT pattern_id, {cols} FROM ("
+        f"SELECT pattern_id, {cols}, ROW_NUMBER() OVER ("
+        "PARTITION BY pattern_id ORDER BY hop, member_count DESC, via) AS rk "
+        f"FROM {out}_shape_edges WHERE pattern_id IN ({ids})"
+        f") e WHERE rk <= {MAX_DIAGRAM_EDGES + 1} "
+        "ORDER BY pattern_id, hop, member_count DESC, via"
+    )
+
+
+def _edge_rows_with_fallback(
+    query: Callable[[str], Any],
+    build: Callable[[bool], str],
+    what: str,
+) -> list[dict[str, Any]] | None:
+    """Run an edge query; retry without ``parent_via`` on pre-``parent_via`` tables."""
+    try:
+        raw = list(query(build(False)) or [])
+    except Exception as exc:  # noqa: BLE001
+        if names_a_missing_object(exc):
+            return None
+        if not _missing_parent_via_column(exc):
+            raise
+        try:
+            raw = list(query(build(True)) or [])
+        except Exception as legacy_exc:  # noqa: BLE001
+            if names_a_missing_object(legacy_exc):
+                return None
+            raise
+        logger.info("shape_edges for %s lack parent_via; using legacy layout", what)
+    return [{**dict(row), "parent_via": str(row.get("parent_via") or "")} for row in raw]
+
+
 def fetch_shape_edges(
     query: Callable[[str], Any], out: str, pattern_id: str
 ) -> list[dict[str, Any]] | None:
@@ -159,23 +211,34 @@ def fetch_shape_edges(
     empty). Legacy rows get ``parent_via=""`` so the diagram still draws every
     hop; hop-2+ chains may splice until the pattern job is redeployed.
     """
-    try:
-        raw = list(query(shape_edges_query(out, pattern_id)) or [])
-    except Exception as exc:  # noqa: BLE001
-        if names_a_missing_object(exc):
-            return None
-        if not _missing_parent_via_column(exc):
-            raise
-        try:
-            raw = list(query(shape_edges_query(out, pattern_id, legacy=True)) or [])
-        except Exception as legacy_exc:  # noqa: BLE001
-            if names_a_missing_object(legacy_exc):
-                return None
-            raise
-        logger.info(
-            "shape_edges for %s lack parent_via; using legacy layout", pattern_id
-        )
-    return [{**dict(row), "parent_via": str(row.get("parent_via") or "")} for row in raw]
+    return _edge_rows_with_fallback(
+        query,
+        lambda legacy: shape_edges_query(out, pattern_id, legacy=legacy),
+        pattern_id,
+    )
+
+
+def fetch_shape_edges_for(
+    query: Callable[[str], Any], out: str, pattern_ids: Sequence[str]
+) -> dict[str, list[dict[str, Any]]] | None:
+    """Edge rows of several patterns in one query, grouped by ``pattern_id``.
+
+    Same contract as :func:`fetch_shape_edges` (``None`` = edges table missing).
+    """
+    ids = [str(pid) for pid in pattern_ids if pid]
+    if not ids:
+        return {}
+    rows = _edge_rows_with_fallback(
+        query,
+        lambda legacy: shape_edges_bulk_query(out, ids, legacy=legacy),
+        f"{len(ids)} patterns",
+    )
+    if rows is None:
+        return None
+    grouped: dict[str, list[dict[str, Any]]] = {pid: [] for pid in ids}
+    for row in rows:
+        grouped.setdefault(str(row.get("pattern_id") or ""), []).append(row)
+    return grouped
 
 
 def membership_batch_query(out: str, pattern_id: str, after_uri: str, limit: int) -> str:

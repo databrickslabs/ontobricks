@@ -221,3 +221,49 @@ def test_failed_run_raises_with_run_link():
     with pytest.raises(InfrastructureError) as exc:
         jp.run(class_filter=CUSTOMER)
     assert "https://run/2" in str(exc.value.detail)
+
+
+def test_bulk_edges_group_by_pattern_and_cap_each_pattern():
+    from back.core.graph_analysis.pattern.JobPatterns import (
+        MAX_DIAGRAM_EDGES,
+        fetch_shape_edges_for,
+        shape_edges_bulk_query,
+    )
+
+    sql = shape_edges_bulk_query("o", ["a", "b"])
+    assert "PARTITION BY pattern_id" in sql and f"rk <= {MAX_DIAGRAM_EDGES + 1}" in sql
+    rows = [
+        {"pattern_id": "a", "hop": 1, "via": "x"},
+        {"pattern_id": "b", "hop": 1, "via": "y"},
+        {"pattern_id": "a", "hop": 2, "via": "z"},
+    ]
+    grouped = fetch_shape_edges_for(lambda q: rows, "o", ["a", "b", "c"])
+    assert [r["via"] for r in grouped["a"]] == ["x", "z"]
+    assert [r["via"] for r in grouped["b"]] == ["y"]
+    assert grouped["c"] == []
+    assert grouped["a"][0]["parent_via"] == ""
+
+
+def test_bulk_edges_fall_back_to_legacy_tables_without_parent_via():
+    from back.core.graph_analysis.pattern.JobPatterns import fetch_shape_edges_for
+
+    seen: list[str] = []
+
+    def query(sql: str):
+        seen.append(sql)
+        if "parent_via" in sql:
+            raise RuntimeError("[UNRESOLVED_COLUMN] parent_via cannot be resolved")
+        return [{"pattern_id": "a", "hop": 1, "via": "x"}]
+
+    grouped = fetch_shape_edges_for(query, "o", ["a"])
+    assert grouped["a"][0]["parent_via"] == ""
+    assert len(seen) == 2
+
+
+def test_bulk_edges_missing_table_is_none():
+    from back.core.graph_analysis.pattern.JobPatterns import fetch_shape_edges_for
+
+    def query(sql: str):
+        raise RuntimeError("[TABLE_OR_VIEW_NOT_FOUND] o_shape_edges")
+
+    assert fetch_shape_edges_for(query, "o", ["a"]) is None

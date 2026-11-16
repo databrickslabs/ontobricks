@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -19,6 +20,9 @@ from back.core.graph_analysis.pattern.SavedPatternStore import (
 )
 
 pytestmark = pytest.mark.unit
+
+# The package re-exports the class under the module's name, so reach the module itself.
+_STORE_MODULE = sys.modules[SavedPatternStore.__module__]
 
 OUT = "out_tbl"
 SAVED = "saved_tbl"
@@ -87,7 +91,12 @@ class _Warehouse:
         return sql.replace(" USING DELTA", "").replace("current_timestamp()", "CURRENT_TIMESTAMP")
 
     def query(self, sql: str):
-        return [dict(r) for r in self.conn.execute(self._dialect(sql)).fetchall()]
+        try:
+            return [dict(r) for r in self.conn.execute(self._dialect(sql)).fetchall()]
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc):  # Delta's spelling of the same fact
+                raise RuntimeError(f"[TABLE_OR_VIEW_NOT_FOUND] {exc}") from exc
+            raise
 
     def execute(self, sql: str):
         self.statements.append(sql)
@@ -126,11 +135,78 @@ def test_save_writes_one_row_per_pattern_not_members(wh):
     assert by_pid[PID2] == 1
 
 
-def test_save_is_a_single_insert(wh):
+def test_save_issues_two_inserts_whatever_the_pattern_count(wh):
     wh.store().save(PID, "FR buyers")
     inserts = [s for s in wh.statements if s.lstrip().upper().startswith("INSERT")]
-    assert len(inserts) == 1
-    assert "UNION ALL" in inserts[0]
+    # eager rows (with diagrams) + one server-side INSERT … SELECT for the rest
+    assert len(inserts) == 2
+    assert "SELECT" in inserts[1].upper()
+
+
+def _add_patterns(wh, count: int) -> None:
+    rows = [(f"p{i:05d}", 1, 100 + i, f"seed {i}", "[]", 0, 1) for i in range(count)]
+    wh.conn.executemany("INSERT INTO out_tbl_shapes VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+    wh.conn.executemany(
+        "INSERT INTO out_tbl_shape_edges VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [(f"p{i:05d}", 1, "", CUSTOMER, "http://ex/hasOrder", "http://ex/Order", 1, 1)
+         for i in range(count)],
+    )
+    wh.conn.execute("UPDATE out_tbl_summary SET pattern_count = pattern_count + ?", (count,))
+    wh.conn.commit()
+
+
+def test_save_cost_does_not_grow_with_the_pattern_count(wh):
+    """A 46k-pattern run once took an hour: 2 warehouse queries per pattern."""
+    queries: list[str] = []
+    real = wh.query
+    wh.query = lambda sql: (queries.append(sql), real(sql))[1]  # type: ignore[assignment]
+    wh.store().save(PID, "small")
+    small = len(queries)
+    queries.clear()
+    _add_patterns(wh, 400)
+    result = wh.store().save(PID, "big")
+    assert result["pattern_count"] == 402
+    assert len(queries) <= small + 2
+    assert len(queries) < 20
+
+
+def test_save_stores_every_pattern_with_sql_computed_kpis(wh, monkeypatch):
+    monkeypatch.setattr(_STORE_MODULE, "EAGER_DIAGRAMS", 1)
+    store = wh.store()
+    sid = store.save(PID, "Customer")["saved_id"]
+    rows = {
+        r["pattern_id"]: r
+        for r in wh.query(f"SELECT * FROM {SAVED} WHERE saved_id = '{sid}'")
+    }
+    assert set(rows) == {PID, PID2}
+    assert rows[PID]["diagram_json"]  # focus pattern: eager diagram
+    assert not rows[PID2]["diagram_json"]  # beyond the eager cap
+    assert (rows[PID2]["type_count"], rows[PID2]["relation_count"]) == (2, 1)
+    assert (rows[PID]["type_count"], rows[PID]["relation_count"]) == (3, 2)
+    assert rows[PID2]["hop_count"] == 1 and rows[PID2]["support"] == 1
+    assert rows[PID2]["seed_label"] == "Customer · hasOrder"
+    assert rows[PID2]["pattern_count"] == 2
+
+
+def test_pattern_beyond_the_eager_cap_draws_on_first_open(wh, monkeypatch):
+    monkeypatch.setattr(_STORE_MODULE, "EAGER_DIAGRAMS", 1)
+    store = wh.store()
+    sid = store.save(PID, "Customer")["saved_id"]
+    shape = store.shape(sid, pattern_id=PID2)
+    assert shape is not None and shape["diagram"]["nodes"]
+    stored = wh.query(
+        f"SELECT diagram_json FROM {SAVED} WHERE saved_id = '{sid}' "
+        f"AND pattern_id = '{PID2}'"
+    )
+    assert stored[0]["diagram_json"]  # persisted: the next open is a plain read
+
+
+def test_save_without_shape_edges_table_still_writes_the_catalog(wh):
+    wh.conn.execute("DROP TABLE out_tbl_shape_edges")
+    wh.conn.commit()
+    result = wh.store().save(PID, "No edges")
+    assert result["pattern_count"] == 2
+    assert result["type_count"] == 1 and result["relation_count"] == 0
 
 
 def test_save_never_writes_to_the_graph(wh):

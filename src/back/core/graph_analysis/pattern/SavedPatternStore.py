@@ -29,15 +29,32 @@ from back.core.graph_analysis.pattern.JobPatterns import (
     DEFAULT_MEMBERS_PAGE,
     MEMBERS_PAGE_MAX,
     fetch_shape_edges,
+    fetch_shape_edges_for,
     shape_query,
+    shapes_bulk_query,
+)
+from back.core.graph_analysis.pattern.saved_pattern_sql import (
+    insert_catalog_sql,
+    insert_rest_sql,
+    kpi_sql,
+    sql_lit as _lit,
 )
 from back.core.graph_analysis.pattern.pattern_diagram import (
     build_pattern_diagram,
     local_label as _local_label,
 )
+from back.core.graph_analysis.preflight import names_a_missing_object
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Patterns whose diagram is built and stored at Save time: the focus pattern
+# plus the strongest others. Every pattern still gets its catalog row (KPIs,
+# seed label, shape tokens) from one server-side INSERT … SELECT; the rest
+# draw lazily the first time they are opened (see ``SavedPatternStore.shape``).
+# A run can hold tens of thousands of patterns, so nothing in Save may cost
+# one warehouse round-trip per pattern.
+EAGER_DIAGRAMS = 100
 
 _SAVED_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,80}$")
 
@@ -63,12 +80,6 @@ def slug_saved_id(label: str, pattern_id: str) -> str:
     base = (base or "pattern")[:40].strip("-") or "pattern"
     suffix = re.sub(r"[^a-z0-9]", "", (pattern_id or "").lower())[:8] or "00000000"
     return f"{base}-{suffix}"
-
-
-def _lit(value: str) -> str:
-    """Quote *value* as a Spark SQL string literal (escapes ``\\`` and ``'``)."""
-    escaped = (value or "").replace("\\", "\\\\").replace("'", "''")
-    return f"'{escaped}'"
 
 
 def _diagram_needs_rebuild(diagram: Any, hop_count: int) -> bool:
@@ -127,42 +138,43 @@ class SavedPatternStore:
         *pattern_id* is the pattern focused when Save ran (default selection on
         reopen). One row is written per pattern in ``_shapes`` — never the
         member list. Members stay on the live Detect table.
+
+        The number of warehouse statements is constant: one INSERT … SELECT
+        for the whole catalog, one INSERT for the few patterns whose diagram
+        is stored eagerly (:data:`EAGER_DIAGRAMS`), plus bulk reads for those.
         """
         label = (label or "").strip() or "Pattern"
         focus_id = (pattern_id or "").strip()
         if not focus_id:
             raise ValidationError("pattern_id is required")
         self._ensure_table()
-        pattern_ids = self._detect_pattern_ids(focus_id)
-        if not pattern_ids:
+        eager_ids = self._eager_pattern_ids(focus_id)
+        if not eager_ids:
             raise ValidationError(f"Unknown or empty pattern_id: {focus_id}")
-        live = self._live_metrics_map()
         summary = self._safe_rows(
             f"SELECT pattern_count, anchor_type, bins FROM {self._out}_summary"
         )
         stats = summary[0] if summary else {}
-        run_count = _as_int(stats.get("pattern_count")) or len(pattern_ids)
-        shapes: List[Dict[str, Any]] = []
-        total_size = 0
-        diagrams = 0
-        focus_metrics: Dict[str, int] = {}
-        for pid in pattern_ids:
-            metrics = self._metrics_from(live, pid, run_count)
-            if metrics["support"] <= 0:
-                continue
-            shape = self._live_shape_payload(pid, stats=stats) or {}
-            shapes.append({"pattern_id": pid, "metrics": metrics, "shape": shape})
-            total_size += metrics["support"]
-            if shape.get("diagram"):
-                diagrams += 1
-            if pid == focus_id:
-                focus_metrics = metrics
-        if not shapes:
+        run_count = _as_int(stats.get("pattern_count")) or self._shape_count()
+        eager = self._eager_shapes(eager_ids, stats, run_count)
+        if not eager:
             raise ValidationError(f"Unknown or empty pattern_id: {focus_id}")
         saved_id = self._allocate_saved_id(label, focus_id)
         try:
             self._execute(
-                self._insert_catalog_sql(saved_id, label, focus_id, shapes)
+                insert_catalog_sql(self._saved, saved_id, label, focus_id, eager)
+            )
+            self._execute(
+                insert_rest_sql(
+                    self._saved,
+                    self._out,
+                    saved_id,
+                    label,
+                    focus_id,
+                    run_count,
+                    skip=[item["pattern_id"] for item in eager],
+                    kpi=kpi_sql(self._out) if self._edges_available() else None,
+                )
             )
         except Exception:
             try:
@@ -172,20 +184,30 @@ class SavedPatternStore:
             except Exception:  # noqa: BLE001
                 pass
             raise
+        totals = self._safe_rows(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(support), 0) AS total "
+            f"FROM {self._saved} WHERE saved_id = {_lit(saved_id)}"
+        )
+        pattern_count = _as_int(totals[0].get("n")) if totals else len(eager)
+        total_size = _as_int(totals[0].get("total")) if totals else 0
+        diagrams = sum(1 for item in eager if item["shape"].get("diagram"))
         logger.info(
             "SavedPatternStore: saved %s (%d patterns, %d members by support, "
-            "%d diagrams)",
+            "%d eager diagrams)",
             saved_id,
-            len(shapes),
+            pattern_count,
             total_size,
             diagrams,
+        )
+        focus_metrics = next(
+            (item["metrics"] for item in eager if item["pattern_id"] == focus_id), {}
         )
         return {
             "saved_id": saved_id,
             "label": label,
             "pattern_id": focus_id,
             "size": total_size,
-            "pattern_count": len(shapes),
+            "pattern_count": pattern_count,
             "has_diagram": diagrams > 0,
             **focus_metrics,
         }
@@ -428,29 +450,34 @@ class SavedPatternStore:
         )
         return _as_int(rows[0].get("n")) if rows else 0
 
-    def _detect_pattern_ids(self, focus_id: str) -> List[str]:
-        """All pattern ids from the last Detect run (shapes), focus first if missing."""
+    def _shape_count(self) -> int:
+        rows = self._safe_rows(f"SELECT COUNT(*) AS n FROM {self._out}_shapes")
+        return _as_int(rows[0].get("n")) if rows else 0
+
+    def _eager_pattern_ids(self, focus_id: str) -> List[str]:
+        """Focus first, then the strongest patterns of the last Detect run.
+
+        Empty when *focus_id* is not a pattern of that run (never silently
+        save unrelated patterns).
+        """
         rows = self._safe_rows(
-            f"SELECT pattern_id FROM {self._out}_shapes "
-            "ORDER BY support DESC, pattern_id"
+            f"SELECT pattern_id FROM {self._out}_shapes WHERE support > 0 "
+            f"ORDER BY support DESC, pattern_id LIMIT {int(EAGER_DIAGRAMS)}"
         )
-        ids: List[str] = []
-        seen: set[str] = set()
+        ids = [focus_id]
         for row in rows:
             pid = str(row.get("pattern_id") or "").strip()
-            if not pid or pid in seen:
-                continue
-            seen.add(pid)
-            ids.append(pid)
-        if focus_id and focus_id not in seen:
-            # Unknown focus → reject (do not silently save unrelated patterns).
-            if self._output_size(focus_id) <= 0:
-                return []
-            ids.insert(0, focus_id)
-        elif focus_id and focus_id in seen:
-            ids = [focus_id] + [p for p in ids if p != focus_id]
-        elif not ids and focus_id and self._output_size(focus_id) > 0:
-            ids = [focus_id]
+            if pid and pid not in ids:
+                ids.append(pid)
+        in_top = any(str(r.get("pattern_id") or "") == focus_id for r in rows)
+        if in_top:
+            return ids
+        listed = self._safe_rows(
+            f"SELECT 1 AS n FROM {self._out}_shapes "
+            f"WHERE pattern_id = {_lit(focus_id)} LIMIT 1"
+        )
+        if not listed and self._output_size(focus_id) <= 0:
+            return []
         return ids
 
     def _member_count(self, saved_id: str) -> int:
@@ -590,21 +617,6 @@ class SavedPatternStore:
             }
         return out
 
-    def _metrics_from(
-        self, live: Dict[str, Dict[str, int]], pattern_id: str, run_count: int
-    ) -> Dict[str, int]:
-        metrics = dict(live.get(pattern_id) or {})
-        support = _as_int(metrics.get("support"))
-        if support <= 0:
-            support = self._output_size(pattern_id)
-        return {
-            "hop_count": _as_int(metrics.get("hop_count")),
-            "support": support,
-            "type_count": _as_int(metrics.get("type_count")) or 1,
-            "relation_count": _as_int(metrics.get("relation_count")),
-            "pattern_count": _as_int(metrics.get("pattern_count")) or run_count,
-        }
-
     def _enrich_missing_kpis(self, items: List[Dict[str, Any]]) -> None:
         """Fill / persist KPIs for rows saved before the snapshot columns existed."""
         missing = [item for item in items if self._kpis_incomplete(item)]
@@ -662,12 +674,6 @@ class SavedPatternStore:
         rows = self._safe_rows(shape_query(self._out, pattern_id))
         if not rows:
             return None
-        row = rows[0]
-        raw = str(row.get("shape_json") or "[]")
-        tokens = _parse_json(raw)
-        if not isinstance(tokens, list):
-            tokens = []
-        support = _as_int(row.get("support"))
         try:
             edge_rows = fetch_shape_edges(self._query, self._out, pattern_id)
         except Exception as exc:  # noqa: BLE001
@@ -682,6 +688,20 @@ class SavedPatternStore:
                 f"SELECT anchor_type, bins FROM {self._out}_summary"
             )
             stats = summary[0] if summary else {}
+        return self._payload_from_rows(pattern_id, rows[0], edge_rows, stats)
+
+    @staticmethod
+    def _payload_from_rows(
+        pattern_id: str,
+        row: Dict[str, Any],
+        edge_rows: Optional[List[Dict[str, Any]]],
+        stats: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        raw = str(row.get("shape_json") or "[]")
+        tokens = _parse_json(raw)
+        if not isinstance(tokens, list):
+            tokens = []
+        support = _as_int(row.get("support"))
         diagram = None
         if edge_rows is not None:
             try:
@@ -708,6 +728,66 @@ class SavedPatternStore:
             "diagram": diagram,
         }
 
+    def _edges_available(self) -> bool:
+        try:
+            self._query(f"SELECT 1 AS n FROM {self._out}_shape_edges LIMIT 1")
+        except Exception as exc:  # noqa: BLE001
+            if names_a_missing_object(exc):
+                return False
+            raise
+        return True
+
+    def _eager_shapes(
+        self, pattern_ids: List[str], stats: Dict[str, Any], run_count: int
+    ) -> List[Dict[str, Any]]:
+        """Metrics + shape/diagram for *pattern_ids*, read in three bulk queries."""
+        shape_rows = {
+            str(r.get("pattern_id") or ""): r
+            for r in self._safe_rows(shapes_bulk_query(self._out, pattern_ids))
+        }
+        has_edges = self._edges_available()
+        kpis = {
+            str(r.get("pattern_id") or ""): r
+            for r in (self._safe_rows(kpi_sql(self._out, pattern_ids)) if has_edges else [])
+        }
+        try:
+            edges = (
+                fetch_shape_edges_for(self._query, self._out, pattern_ids)
+                if has_edges
+                else None
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("SavedPatternStore: bulk shape_edges read failed: %s", exc)
+            edges = None
+        out: List[Dict[str, Any]] = []
+        for pid in pattern_ids:
+            row = shape_rows.get(pid) or {}
+            support = _as_int(row.get("support")) or self._output_size(pid)
+            if support <= 0:
+                continue
+            kpi = kpis.get(pid) or {}
+            shape = (
+                self._payload_from_rows(
+                    pid, row, (edges or {}).get(pid) if edges is not None else None, stats
+                )
+                if row
+                else {}
+            )
+            out.append(
+                {
+                    "pattern_id": pid,
+                    "shape": shape,
+                    "metrics": {
+                        "hop_count": _as_int(row.get("hop_count")),
+                        "support": support,
+                        "type_count": _as_int(kpi.get("type_count")) or 1,
+                        "relation_count": _as_int(kpi.get("relation_count")),
+                        "pattern_count": run_count,
+                    },
+                }
+            )
+        return out
+
     def _persist_shape(
         self,
         saved_id: str,
@@ -733,51 +813,6 @@ class SavedPatternStore:
                 pattern_id,
                 exc,
             )
-
-    def _insert_catalog_sql(
-        self,
-        saved_id: str,
-        label: str,
-        focus_id: str,
-        shapes: List[Dict[str, Any]],
-    ) -> str:
-        """One INSERT with one SELECT row per pattern (no member fan-out)."""
-        selects = []
-        for item in shapes:
-            pid = str(item["pattern_id"])
-            metrics = item["metrics"]
-            shape = item["shape"]
-            diagram = shape.get("diagram")
-            diagram_json = (
-                json.dumps(diagram, separators=(",", ":")) if diagram else ""
-            )
-            seed_label = str(shape.get("seed_label") or "")
-            shape_json = str(shape.get("shape_json") or "[]")
-            selects.append(
-                f"SELECT {_lit(saved_id)} AS saved_id, {_lit(label)} AS saved_label, "
-                f"{_lit(pid)} AS pattern_id, {_lit(focus_id)} AS focus_pattern_id, "
-                f"CAST(NULL AS STRING) AS anchor_uri, "
-                f"CAST(NULL AS STRING) AS anchor_label, "
-                f"CAST(NULL AS STRING) AS type_uri, "
-                f"{int(metrics['hop_count'])} AS hop_count, "
-                f"{int(metrics['support'])} AS support, "
-                f"{int(metrics['type_count'])} AS type_count, "
-                f"{int(metrics['relation_count'])} AS relation_count, "
-                f"{int(metrics['pattern_count'])} AS pattern_count, "
-                f"{_lit(seed_label)} AS seed_label, "
-                f"{_lit(shape_json)} AS shape_json, "
-                f"{_lit(diagram_json)} AS diagram_json, "
-                f"current_timestamp() AS saved_at"
-            )
-        body = "\nUNION ALL\n".join(selects)
-        return (
-            f"INSERT INTO {self._saved} "
-            "(saved_id, saved_label, pattern_id, focus_pattern_id, "
-            "anchor_uri, anchor_label, type_uri, hop_count, support, "
-            "type_count, relation_count, pattern_count, seed_label, "
-            "shape_json, diagram_json, saved_at)\n"
-            f"{body}"
-        )
 
     def _allocate_saved_id(self, label: str, pattern_id: str) -> str:
         base = slug_saved_id(label, pattern_id)

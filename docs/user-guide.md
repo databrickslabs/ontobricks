@@ -1540,8 +1540,11 @@ background task**: when Detect finishes with at least one pattern, OntoBricks
 writes the snapshot in Unity Catalog (table `graph_pattern_saved_<slug>` next
 to the Detect output) under a name built from the entity type and the local
 date/time (for example `Customer — 2026/11/14 14:06:32`). The save writes one
-row per pattern (KPIs, support, diagram) — not every matching entity — so it
-stays fast even on large Detect runs. You can list or delete those snapshots
+row per pattern (KPIs, support, shape) — not every matching entity — using a
+fixed number of warehouse statements, so it takes seconds even when a run holds
+tens of thousands of patterns. The diagram is stored up front for the focus
+pattern and the 100 strongest ones; any other pattern draws its diagram from
+the live Detect result the first time you open it (and keeps it afterwards). You can list or delete those snapshots
 on the Patterns list. The list uses the same card layout as Scenarios and
 shows hops, how many patterns that Detect run found, and when it was saved.
 **Patterns** uses the same list/details navigation as Scenarios: the list
