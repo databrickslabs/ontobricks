@@ -51,6 +51,20 @@ class _CollectList:
         return "\x1f".join(self.items)
 
 
+class _CollectSet:
+    """SQLite stand-in for Spark ``collect_set`` (dedupe; ``sort_array`` sorts later)."""
+
+    def __init__(self):
+        self.items = set()
+
+    def step(self, value):
+        if value is not None:
+            self.items.add(str(value))
+
+    def finalize(self):
+        return "\x1f".join(self.items)
+
+
 def _sort_array(blob):
     """SQLite stand-in for Spark ``sort_array`` over a ``collect_list`` blob."""
     if blob is None:
@@ -80,6 +94,7 @@ class SqliteRunner:
         )
         # Pattern signatures: md5(concat_ws('|', sort_array(collect_list(token)))).
         self.conn.create_aggregate("collect_list", 1, _CollectList)
+        self.conn.create_aggregate("collect_set", 1, _CollectSet)
         self.conn.create_function("sort_array", 1, _sort_array)
         self.conn.create_function("concat_ws", 2, _concat_ws)
         self.conn.execute(

@@ -103,6 +103,40 @@ def _run(triples, **kwargs):
     return runner, builder, stats
 
 
+class TestSinglePassSignatures:
+    def test_alice_bob_carol_ids_unchanged(self):
+        runner, _, stats = _run(alice_bob_carol(), min_support=1)
+        rows = {
+            r["anchor_uri"]: r["pattern_id"]
+            for r in runner.rows("SELECT anchor_uri, pattern_id FROM out")
+        }
+        assert rows[NS + "Alice"] == rows[NS + "Bob"]
+        assert rows[NS + "Alice"] != rows[NS + "Carol"]
+        assert stats["detail_level"] == "full"
+
+    def test_detail_level_fallback_still_picks_structure(self):
+        triples = _customers_with_one_order(12, **{TIER: lambda i: f"t{i}"})
+        runner, _, stats = _run(triples, min_support=3)
+        assert stats["detail_level"] == "structure"
+        assert stats["pattern_count"] == 1
+
+    def test_sigs_table_has_all_level_columns(self):
+        runner, builder, _ = _run(alice_bob_carol(), min_support=1)
+        cols = {
+            r[1]
+            for r in runner.conn.execute(
+                f"PRAGMA table_info({builder.signatures})"
+            ).fetchall()
+        }
+        assert cols >= {
+            "anchor_uri",
+            "sig_full",
+            "sig_neighbour",
+            "sig_own",
+            "sig_structure",
+        }
+
+
 class TestStageInstrumentation:
     def test_summary_carries_stage_ms_and_hub_columns(self):
         runner, _, stats = _run(alice_bob_carol())

@@ -1660,44 +1660,73 @@ class PatternSQL(GraphAnalyticsSQL):
             )
         return "1 = 1"
 
-    def build_signatures(self, level: str = "full") -> List[str]:
-        """Hash each anchor's tokens at *level* into ``pattern_id``.
+    @staticmethod
+    def sig_column(level: str) -> str:
+        """Column on ``_sigs`` that holds the hash for *level*."""
+        mapping = {
+            "full": "sig_full",
+            "neighbour": "sig_neighbour",
+            "own": "sig_own",
+            "structure": "sig_structure",
+        }
+        if level not in mapping:
+            raise ValueError(f"unknown pattern level: {level}")
+        return mapping[level]
 
-        ``full`` hashes the exact multiset (counts matter); coarser levels hash
-        the *set* of the kept tokens, so "has 2 orders" and "has 5 orders" share
-        a signature. Anchors with no token at that level hash the empty set.
+    def build_signatures(self) -> List[str]:
+        """One row per anchor with a hash for every detail level.
+
+        ``full`` hashes the exact multiset (``collect_list``); coarser levels
+        hash the set (``collect_set``), so "has 2 orders" and "has 5 orders"
+        share a signature. ``collect_set`` / ``collect_list`` skip NULLs, so an
+        anchor with no token at a level hashes the empty set.
         """
-        source = self.tokens
-        if level != "full":
-            source = (
-                f"(SELECT DISTINCT anchor, token FROM {self.tokens} t "
-                f"WHERE {self.level_filter(level)})"
-            )
         return self._recreate(
             self.signatures,
             f"SELECT a.n AS anchor_uri,\n"
-            f"       md5(concat_ws('|', sort_array(collect_list(t.token)))) "
-            f"AS pattern_id\n"
+            f"  md5(concat_ws('|', sort_array(collect_list(t.token)))) "
+            f"AS sig_full,\n"
+            f"  md5(concat_ws('|', sort_array(collect_set(\n"
+            f"    CASE WHEN {self.level_filter('neighbour')} "
+            f"THEN t.token END)))) AS sig_neighbour,\n"
+            f"  md5(concat_ws('|', sort_array(collect_set(\n"
+            f"    CASE WHEN {self.level_filter('own')} "
+            f"THEN t.token END)))) AS sig_own,\n"
+            f"  md5(concat_ws('|', sort_array(collect_set(\n"
+            f"    CASE WHEN {self.level_filter('structure')} "
+            f"THEN t.token END)))) AS sig_structure\n"
             f"FROM {self.anchors} a\n"
-            f"LEFT JOIN {source} t ON t.anchor = a.n\n"
+            f"LEFT JOIN {self.tokens} t ON t.anchor = a.n\n"
             f"GROUP BY a.n",
         )
 
-    def write_pattern_output(self) -> List[str]:
-        """Anchors whose pattern meets ``min_support``."""
+    def coverage_query(self, level: str) -> str:
+        """Anchors covered by patterns of size ``>= min_support`` at *level*."""
+        col = self.sig_column(level)
+        support = max(1, int(self.min_support))
+        return (
+            f"SELECT COALESCE(SUM(c), 0) AS n FROM (\n"
+            f"  SELECT COUNT(*) AS c FROM {self.signatures}\n"
+            f"  GROUP BY {col} HAVING COUNT(*) >= {support}\n"
+            f")"
+        )
+
+    def write_pattern_output(self, level: str) -> List[str]:
+        """Anchors whose *level* signature meets ``min_support``."""
+        col = self.sig_column(level)
         support = max(1, int(self.min_support))
         return self._recreate(
             self.output_table,
             f"SELECT s.anchor_uri AS anchor_uri,\n"
-            f"       s.pattern_id AS pattern_id,\n"
+            f"       s.{col} AS pattern_id,\n"
             f"       a.type_uri AS type_uri,\n"
             f"       a.label AS label\n"
             f"FROM {self.signatures} s\n"
             f"JOIN {self.anchors} a ON a.n = s.anchor_uri\n"
             f"JOIN (\n"
-            f"  SELECT pattern_id FROM {self.signatures}\n"
-            f"  GROUP BY pattern_id HAVING COUNT(*) >= {support}\n"
-            f") ok ON ok.pattern_id = s.pattern_id",
+            f"  SELECT {col} AS pattern_id FROM {self.signatures}\n"
+            f"  GROUP BY {col} HAVING COUNT(*) >= {support}\n"
+            f") ok ON ok.pattern_id = s.{col}",
         )
 
     def write_shapes(self, *, refined: bool, level: str = "full") -> List[str]:
@@ -1969,23 +1998,24 @@ def _expand_neighbourhoods(execute, scalar, builder: PatternSQL, stage_ms: Dict[
 
 
 def _choose_detail_level(execute, scalar, builder: PatternSQL) -> str:
-    """Write the pattern output at the finest level that explains enough anchors.
+    """Pick the finest detail level that covers enough anchors.
 
-    Walks ``PATTERN_LEVELS`` (finest first) and stops at the first level whose
-    patterns (groups of ``>= min_support`` anchors) cover ``min_coverage`` of
-    the anchors. The coarsest level is the floor and is always accepted.
+    Assumes ``builder.build_signatures()`` has already populated ``_sigs``.
+    Writes the pattern output once from the winning level. The coarsest level
+    is the floor and is always accepted.
     """
     total = int(scalar(builder.anchor_count_query()) or 0)
     for level in PATTERN_LEVELS:
-        for stmt in builder.build_signatures(level):
-            execute(stmt)
-        for stmt in builder.write_pattern_output():
-            execute(stmt)
-        covered = int(scalar(builder.output_anchor_count_query()) or 0)
+        covered = int(scalar(builder.coverage_query(level)) or 0)
         logger.info("pattern level %s covers %d of %d anchors", level, covered, total)
         if covered and covered >= builder.min_coverage * total:
+            for stmt in builder.write_pattern_output(level):
+                execute(stmt)
             return level
-    return PATTERN_LEVELS[-1]
+    floor = PATTERN_LEVELS[-1]
+    for stmt in builder.write_pattern_output(floor):
+        execute(stmt)
+    return floor
 
 
 def _run_pattern_stages(
@@ -2003,12 +2033,10 @@ def _run_pattern_stages(
     _expand_neighbourhoods(execute, scalar, builder, stage_ms)
 
     with _pattern_stage(stage_ms, "signatures"):
-        # Detail-level selection still rebuilds signatures per level (Task 2
-        # collapses that into one pass); time the whole choice as one stage.
+        for stmt in builder.build_signatures():
+            execute(stmt)
+    with _pattern_stage(stage_ms, "output"):
         level = _choose_detail_level(execute, scalar, builder)
-    # write_pattern_output already ran inside _choose_detail_level; record a
-    # zero-cost output stage so the summary key set stays stable across tasks.
-    stage_ms.setdefault("output", 0)
 
     # Refine merges multiplicity near-duplicates, which only exist when the
     # signature kept exact counts, i.e. at the finest level.
