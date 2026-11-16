@@ -132,27 +132,44 @@ function wrapDisabledVersionAction(button, reason) {
 let versionHeadingSequence = 0;
 
 function renderVersionCard(version, domainFolder) {
-    const status = VERSION_STATUS_MAP[String(version.status || 'DRAFT').toUpperCase()]
-        || VERSION_STATUS_MAP.DRAFT;
+    const statusKey = String(version.status || 'DRAFT').toUpperCase();
+    const status = VERSION_STATUS_MAP[statusKey] || VERSION_STATUS_MAP.DRAFT;
     const versionValue = String(version.version || '');
+    const statusSlug = (VERSION_STATUS_MAP[statusKey] ? statusKey : 'DRAFT').toLowerCase();
+
     const article = createVersionElement(
         'article',
-        'card dm-version-card' + (version.is_current ? ' is-loaded' : '')
+        'ob-rule-card dm-version-card mb-2' + (version.is_current ? ' is-loaded' : '')
     );
     article.setAttribute('role', 'listitem');
 
-    const body = createVersionElement('div', 'card-body');
-    const header = createVersionElement('div', 'dm-version-card-header');
-    const heading = createVersionElement('h5', 'mb-0', 'v' + versionValue);
+    // Big colored badge with the version covering all the left part
+    const badgeWrapper = createVersionElement(
+        'div',
+        'dm-version-badge status-' + statusSlug
+    );
+    const heading = createVersionElement('h5', 'dm-version-heading mb-0', 'v' + versionValue);
     heading.id = 'dmVersionHeading' + (++versionHeadingSequence);
     article.setAttribute('aria-labelledby', heading.id);
+    badgeWrapper.append(heading);
+
+    // Main content area matching Intelligence/Patterns list items
+    const content = createVersionElement(
+        'div',
+        'dm-version-card-content flex-grow-1 min-w-0 d-flex align-items-start justify-content-between'
+    );
+
+    const info = createVersionElement('div', 'flex-grow-1 min-w-0');
+
+    // Badges row: Status badge + Loaded + Latest
+    const header = createVersionElement('div', 'dm-version-card-header d-flex align-items-center gap-2 mb-1 flex-wrap');
     const statusBadge = createVersionElement(
         'span',
         'badge border ' + status.cls,
         status.label
     );
     prependVersionIcon(statusBadge, status.icon);
-    header.append(heading, statusBadge);
+    header.append(statusBadge);
     if (version.is_current) {
         header.append(createVersionElement('span', 'badge bg-primary', 'Loaded'));
     }
@@ -160,12 +177,18 @@ function renderVersionCard(version, domainFolder) {
         header.append(createVersionElement('span', 'badge bg-secondary', 'Latest'));
     }
 
+    // Description / label
     const description = createVersionElement(
-        'p',
-        'dm-version-card-description mt-2 mb-2',
+        'div',
+        'small fw-medium dm-version-card-description text-break mb-1',
         version.description || 'No description'
     );
-    const metadata = createVersionElement('div', 'dm-version-card-meta mb-3');
+
+    // Metadata line
+    const metadata = createVersionElement(
+        'div',
+        'dm-version-card-meta text-muted small mt-1 d-flex align-items-center gap-3 flex-wrap'
+    );
     [
         ['person', version.author || 'Unknown author'],
         ['clock', version.last_update || 'No update date'],
@@ -176,8 +199,15 @@ function renderVersionCard(version, domainFolder) {
         metadata.append(value);
     });
 
-    const actions = createVersionElement('div', 'dm-version-card-actions');
-    const transitionGroup = createVersionElement('div', 'dm-version-action-group');
+    info.append(header, description, metadata);
+
+    // Actions on the right
+    const actions = createVersionElement(
+        'div',
+        'dm-version-card-actions d-flex align-items-center gap-2 ms-2 flex-shrink-0 flex-wrap justify-content-end'
+    );
+
+    const transitionGroup = createVersionElement('div', 'dm-version-action-group btn-group btn-group-sm');
     (version.transitions || []).forEach(function (transition) {
         const button = createVersionActionButton({
             action: 'transition',
@@ -193,7 +223,7 @@ function renderVersionCard(version, domainFolder) {
         );
     });
 
-    const directActions = createVersionElement('div', 'dm-version-action-group');
+    const directActions = createVersionElement('div', 'dm-version-action-group btn-group btn-group-sm');
     if (!version.is_current) {
         directActions.append(createVersionActionButton({
             action: 'load',
@@ -232,8 +262,8 @@ function renderVersionCard(version, domainFolder) {
     }
 
     actions.append(transitionGroup, directActions);
-    body.append(header, description, metadata, actions);
-    article.append(body);
+    content.append(info, actions);
+    article.append(badgeWrapper, content);
     return article;
 }
 

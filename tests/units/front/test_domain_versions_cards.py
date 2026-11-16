@@ -676,3 +676,54 @@ def test_registry_delete_control_has_exactly_one_reachable_tab_stop():
         """,
         REGISTRY_JS,
     )
+
+
+def test_version_cards_use_patterns_list_style_and_status_colored_left_badge():
+    """Version cards must use Intelligence/Patterns ob-rule-card style with a big left status badge."""
+    _run_renderer_assertions(
+        r"""
+        ['DRAFT', 'IN-REVIEW', 'PUBLISHED'].forEach((status) => {
+            const card = context.renderVersionCard({
+                version: '4',
+                status: status,
+                description: 'Release 4',
+                transitions: [],
+                delete_control_visible: false
+            }, 'acme');
+
+            assert.ok(card.className.includes('ob-rule-card'), 'card must use ob-rule-card style');
+            assert.ok(card.className.includes('dm-version-card'), 'card must retain dm-version-card class');
+
+            // Left badge covering all the left part
+            const badge = card.children.find((c) => c.className.includes('dm-version-badge'));
+            assert.ok(badge, 'card must have a .dm-version-badge element covering the left part');
+            assert.equal(card.children[0], badge, 'the badge must be the first child on the left');
+
+            const expectedClass = 'status-' + status.toLowerCase();
+            assert.ok(
+                badge.className.includes(expectedClass),
+                `badge class should include ${expectedClass}, got: ${badge.className}`
+            );
+
+            // Version heading is inside the badge
+            const heading = badge.children.find((c) => c.tagName === 'H5');
+            assert.ok(heading, 'heading must be inside the left badge');
+            assert.equal(heading.textContent, 'v4');
+            assert.equal(card.attributes['aria-labelledby'], heading.id);
+        });
+        """
+    )
+
+
+def test_css_defines_big_colored_left_badge_and_patterns_card_style():
+    """CSS must define .dm-version-badge stretching full height with status-dependent background colors."""
+    css = CSS.read_text(encoding="utf-8")
+    assert ".dm-version-badge" in css
+    assert "align-self: stretch" in css
+    assert ".status-draft" in css
+    assert ".status-in-review" in css
+    assert ".status-published" in css
+    assert "var(--db-status-warning" in css or "--db-status-warning" in css
+    assert "var(--db-status-info" in css or "--db-status-info" in css
+    assert "var(--db-status-success" in css or "--db-status-success" in css
+

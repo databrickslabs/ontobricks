@@ -797,3 +797,42 @@ Live registry: `make bootstrap-lakebase` applied to `ontobricks_demo_10_registry
 principals have INSERT/SELECT on both tables.
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10751 passed, 333 skipped, 8 deselected, 39 warnings in 61.95s ========
+
+## Context / Versions list redesigned with Intelligence / Patterns style and left status badge
+
+Context:
+In Context → Versions, align the versions list card presentation with the
+`ob-rule-card` list style used in Intelligence → Patterns. Each version item
+features a prominent colored badge covering the entire left height of the card
+displaying the version number (`v1`, `v2`, etc.), with a background color that
+reflects its lifecycle status (Draft = warning/amber, In Review = info/blue,
+Published = success/green).
+
+Changes:
+
+1. src/front/static/domain/css/domain-versions.css
+   - Style `.dm-version-card` with `display: flex; align-items: stretch; padding: 0; overflow: hidden;`
+     and the standard `ob-rule-card` border, radius and hover focus rings.
+   - Define `.dm-version-badge` covering all the left part with status-driven
+     background colors (`.status-draft`, `.status-in-review`, `.status-published`).
+   - Define `.dm-version-heading` for the bold centered version text.
+   - Style `.dm-version-card-content`, `.dm-version-card-meta`, and responsive mobile wrapping.
+2. src/front/static/domain/js/domain-versions.js
+   - Update `renderVersionCard`:
+     - Wrap version number in `.dm-version-badge.status-<slug>` as the left block.
+     - Layout main body like Intelligence/Patterns: top badges row (Status, Loaded, Latest),
+       description, and metadata (author, update date, build state).
+     - Align actions on the right in compact `.btn-group.btn-group-sm` groups.
+3. tests/units/front/test_domain_versions_cards.py
+   - Add `test_version_cards_use_patterns_list_style_and_status_colored_left_badge` testing
+     the `ob-rule-card` class, left badge child order, status-slug class assignment, and heading binding.
+   - Add `test_css_defines_big_colored_left_badge_and_patterns_card_style` verifying the CSS contracts.
+
+Modified files:
+- src/front/static/domain/css/domain-versions.css
+- src/front/static/domain/js/domain-versions.js
+- tests/units/front/test_domain_versions_cards.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10755 passed, 333 skipped, 8 deselected, 39 warnings in 54.23s ========
+(`node --check` passes on domain-versions.js.)
