@@ -20,12 +20,14 @@ class TestNavigation:
         page.wait_for_load_state("domcontentloaded")
         assert "OntoBricks" in page.title()
 
+    @pytest.mark.needs_domain
     @pytest.mark.parametrize(
         "path,title_fragment",
         [
             ("/settings", "Settings"),
             ("/ontology", "Ontology"),
-            ("/mapping", "Mapping"),
+            # Legacy /mapping redirects into Graph → Management → Mapping.
+            ("/mapping", "Graph"),
             ("/domain", "Configuration"),
             ("/dtwin/", "Graph"),
             ("/about", "About"),

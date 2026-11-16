@@ -27,7 +27,7 @@ DATABRICKS_SQL_WAREHOUSE_ID=test-warehouse
 | `_set_env` | session | Injects mock env vars before the server starts |
 | `live_server` | session | Starts Uvicorn; yields the base URL `http://localhost:18765` |
 | `browser_instance` | session | Launches a headless Chromium browser (Playwright) |
-| `page` | function | Creates a fresh browser context + page per test |
+| `page` | function | Creates a fresh browser context + page per test. Tests marked `needs_domain` (module `pytestmark` or per test) get a session domain seeded first, in local mode too — otherwise `/dtwin`, `/mapping`, `/ontology` and `/domain` 303 to Home and assertions run against the landing page |
 
 ## Running
 
@@ -92,11 +92,13 @@ tests/e2e/
 | `test_write_flows.py` | `TestSettingsSaveSessionOnly` | `POST /settings/save` host round-trips through `GET /settings/current` |
 | | `TestSettingsSaveRouteContracts` | Route-contract checks (route mounted, CSRF honoured, error JSON-shaped) for `save-base-uri`, `set-default-emoji`, `save-registry-cache-ttl` |
 
-### `mapping/` — 6 tests
+### `mapping/` — 13 tests
 
 | File | Class | What it tests |
 |---|---|---|
-| `test_mapping_flows.py` | `TestMappingSidebar` | Studio tabs (`informations`, `visual`, `list`) via `SidebarNav.switchTo()`; R2RML import/export in the Studio toolbar; Batch Auto-Map and Diagnostics are modals |
+| `test_mapping_flows.py` | `TestMappingNavigation` | Graph → Management sidebar order is Build → Mapping → Overview (label "Mapping", no `information`/`manual` items); default tab is Informations; legacy `/mapping/`, `?section=information`, `?section=manual` land on `section=design` with the right `tab` |
+| | `TestMappingTabs` | Tab clicks sync `?tab=` and hide the shared bottom panel on Informations only; R2RML import/export on Informations; Auto-Map modal (skipped without an LLM endpoint); Build hosts the Diagnostics modal |
+| | `TestVisualListSelectionSync` | With an injected two-class ontology: Visual is centered on render; clicking a Visual node selects the List row and vice versa; `selectInTree` expands collapsed parents |
 
 ### `domain/` — 6 tests
 

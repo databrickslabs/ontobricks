@@ -111,6 +111,7 @@ def test_desktop_chrome_uses_equal_vertical_gutters(page, live_server, path):
     )
 
 
+@pytest.mark.needs_domain
 @pytest.mark.parametrize(
     "path,section",
     [
@@ -155,6 +156,7 @@ def test_desktop_page_title_box_aligns_with_sidebar_top(
     assert geometry["headerTop"] <= geometry["titleTop"] <= geometry["headerTop"] + 16
 
 
+@pytest.mark.needs_domain
 @pytest.mark.parametrize(
     "section,content_selector",
     [
@@ -190,6 +192,7 @@ def test_desktop_title_to_content_gap_matches_designer_reference(
     assert gap == pytest.approx(8, abs=1)
 
 
+@pytest.mark.needs_domain
 @pytest.mark.parametrize(
     "path,section,pane_selector,fixed_height",
     SIDEBAR_PRIMARY_PANES,
@@ -244,6 +247,7 @@ def test_sidebar_and_primary_pane_bottoms_align(
         ) == "auto"
 
 
+@pytest.mark.needs_domain
 @pytest.mark.parametrize(
     "path,section,pane_selector",
     [

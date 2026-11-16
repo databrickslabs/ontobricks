@@ -442,3 +442,127 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10630 passed, 326 skipped, 8 deselected, 39 warnings in 47.10s ========
+
+## Test & scenario review for the new Mapping UI (+ local e2e domain seeding)
+
+Context: Reviewed unit, e2e and scenario suites against the new Graph →
+Management → Mapping page (Informations / Visual / List tabs, Build →
+Mapping → Overview order, Visual↔List selection sync). Running the e2e
+suites locally (`ONTOBRICKS_E2E_FAKE_CREDS=1`) showed that every workspace
+URL (`/dtwin`, `/mapping`, `/ontology`, `/domain`) 303'd to Home because the
+`page` fixture only seeded a session domain in live mode — 85 local e2e
+failures, and the passing ones were partly asserting against the landing
+page. Fixing that surfaced a few real stale tests and one real mobile bug.
+
+Changes:
+1. tests/e2e/conftest.py, pytest.ini, pyproject.toml
+   New `needs_domain` marker: the `page` fixture seeds a session-only
+   domain (`ZzE2eLive`) for marked tests in local mode too (live mode
+   unchanged — it always seeds).
+2. tests/e2e/mapping/test_mapping_flows.py
+   Rewritten for the new UI (13 tests): sidebar order Build → Mapping →
+   Overview with label "Mapping" and no `information`/`manual` items;
+   default Informations tab; legacy `/mapping/`, `?section=information`,
+   `?section=manual` redirects land on the right `tab`; tab clicks sync
+   `?tab=` and hide the bottom panel on Informations only; R2RML
+   import/export; Auto-Map modal (skipped when no LLM endpoint); Build
+   Diagnostics modal; with an injected two-class ontology — Visual is
+   centered on render, Visual click selects the List row, List click
+   selects the Visual node, `selectInTree` expands collapsed parents.
+   Removed the stale `information` section parametrization.
+3. tests/e2e/navigation/test_navigation_flows.py,
+   tests/e2e/navigation/test_sidebar_bottom_alignment.py,
+   tests/e2e/dtwin/test_dtwin_flows.py, tests/e2e/domain/*.py,
+   tests/e2e/ontology/{class_crud,import,information,owl_export,
+   property_crud,sidebar}_flows.py
+   Marked `needs_domain` so they exercise the real workspace pages locally.
+4. tests/e2e/ontology/test_sidebar_flows.py
+   Stale section ids: dropped `design`, `if_then` → `designchecks`,
+   `if-then` (current Ontology menu).
+5. src/front/static/query/css/query-chat.css
+   `.graph-chat-header-actions` could not shrink (`flex: 0 0 auto`), so its
+   `flex-wrap` never applied and the Discuss button overflowed a 390px
+   viewport by 38px. Now `flex: 0 1 auto; min-width: 0; max-width: 100%`.
+6. tests/units/front/test_sidebar_content_stretch_contract.py
+   Contract for the chat header shrink/wrap fix.
+7. tests/e2e/scenarios/test_full_lifecycle.py,
+   tests/e2e/scenarios/test_scenario_01_generate_live.py
+   Scenario review: flows remain compatible (`/dtwin/?open=automap`,
+   Export button on the Informations tab, API-driven saves). Navigation now
+   targets `?section=design&tab=informations` explicitly; "Studio" wording
+   replaced by "Mapping".
+8. tests/e2e/README.md
+   Documented `needs_domain` and the new mapping e2e coverage.
+
+Modified files:
+- pyproject.toml
+- pytest.ini
+- src/front/static/query/css/query-chat.css
+- tests/e2e/README.md
+- tests/e2e/conftest.py
+- tests/e2e/domain/test_domain_flows.py
+- tests/e2e/domain/test_domain_versions_cards.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/navigation/test_navigation_flows.py
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+- tests/e2e/ontology/test_class_crud_flows.py
+- tests/e2e/ontology/test_import_flows.py
+- tests/e2e/ontology/test_information_flows.py
+- tests/e2e/ontology/test_owl_export_flows.py
+- tests/e2e/ontology/test_property_crud_flows.py
+- tests/e2e/ontology/test_sidebar_flows.py
+- tests/e2e/scenarios/test_full_lifecycle.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"` → ======== 10631 passed, 333 skipped, 8 deselected, 39 warnings in 53.50s ========
+- Local e2e (`ONTOBRICKS_E2E_FAKE_CREDS=1`), mapping + dtwin + navigation → 63 passed, 5 skipped (was 34 failed);
+  domain + ontology → all pass except 8 `test_domain_versions_cards.py` (502 console errors under fake creds — previously masked by the Home redirect, not related to Mapping).
+- Scenarios not run (opt-in; `fevm-ontobricks-int` CLI token expired — needs `databricks auth login --profile fevm-ontobricks-int`).
+
+## Explorer groups toggle + Intelligence Graph-ready badges
+
+Context: Graph → Explorer already had expand/collapse-all in the Groups popup
+and canvas menu, but Ontology → Studio exposes a single toolbar toggle.
+Intelligence section titles (except Analytics and Cohorts) had no Graph-ready
+badge, so users could not see whether the graph was built before running
+communities, patterns, or simulations.
+
+Changes:
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Added `#sgToggleAllGroupsBtn` in the Explorer toolbar (Studio-style single
+   collapse/expand toggle) next to zoom.
+2. src/front/static/query/js/query-sigmagraph.js
+   Wired `toggleAllGroups` to existing collapseAll/expandAll; the button flips
+   icon/title/aria-pressed and is disabled when no groups exist.
+3. Intelligence section titles now include `_kg_status_indicator.html`:
+   communities, patterns list/details, scenarios, workbench, compare.
+4. src/front/templates/intelligence.html + query-sync.js
+   Load query-sync.js so Intelligence badges fill. Pages without Build still
+   probe `/dtwin/sync/status`. Go to Build on Intelligence navigates to
+   `/dtwin/?section=sync`.
+5. Help Center + user-guide: Explorer toolbar groups toggle.
+6. Unit contracts for the toggle, Intelligence includes, and the status probe.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-sync.js
+- src/front/templates/intelligence.html
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/intelligence/_sim_scenarios.html
+- src/front/templates/partials/intelligence/_sim_workbench.html
+- src/front/templates/partials/intelligence/_sim_compare.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/front/test_explorer_clusters_readonly.py
+- tests/units/front/test_kg_section_headers.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10640 passed, 333 skipped, 8 deselected, 39 warnings in 51.37s ========

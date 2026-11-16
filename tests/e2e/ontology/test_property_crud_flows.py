@@ -28,6 +28,10 @@ from __future__ import annotations
 import json
 import uuid
 
+import pytest
+
+pytestmark = pytest.mark.needs_domain
+
 # Turtle with two data properties with explicit URIs.
 _PROP_OWL = """
 @prefix owl:  <http://www.w3.org/2002/07/owl#> .

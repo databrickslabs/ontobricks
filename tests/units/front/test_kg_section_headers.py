@@ -19,6 +19,12 @@ _TEMPLATES = (
     REPO_ROOT / "src/front/templates/partials/dtwin/_query_dataquality.html",
     REPO_ROOT / "src/front/templates/partials/dtwin/_query_reasoning.html",
     REPO_ROOT / "src/front/templates/partials/intelligence/_intel_analytics.html",
+    REPO_ROOT / "src/front/templates/partials/intelligence/_intel_communities.html",
+    REPO_ROOT / "src/front/templates/partials/intelligence/_intel_patterns.html",
+    REPO_ROOT / "src/front/templates/partials/intelligence/_intel_patterns_saved.html",
+    REPO_ROOT / "src/front/templates/partials/intelligence/_sim_scenarios.html",
+    REPO_ROOT / "src/front/templates/partials/intelligence/_sim_workbench.html",
+    REPO_ROOT / "src/front/templates/partials/intelligence/_sim_compare.html",
     REPO_ROOT / "src/front/templates/partials/dtwin/_query_insights.html",
 )
 
@@ -33,6 +39,12 @@ _TEMPLATES = (
         "dataquality",
         "reasoning",
         "analytics",
+        "communities",
+        "patterns-discover",
+        "patterns-saved",
+        "scenarios",
+        "workbench",
+        "compare",
         "insights",
     ),
 )

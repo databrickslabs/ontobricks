@@ -387,7 +387,33 @@ var SigmaGraph = (function () {
         return _groupMemberMap[id] || _groupMemberMap[type] || _groupMemberMap[_extractLocalName(id)] || _groupMemberMap[_extractLocalName(type)] || null;
     }
 
+    function _groupsAllCollapsed() {
+        return _groupsDefs.length > 0 && _groupsDefs.every(function (g) {
+            return _collapsedGroups.has(g.name);
+        });
+    }
+
+    function _applyExplorerGroupsToggle() {
+        var btn = document.getElementById('sgToggleAllGroupsBtn');
+        if (!btn) return;
+        var has = _groupsDefs.length > 0;
+        btn.disabled = !has;
+        var allCollapsed = has && _groupsAllCollapsed();
+        btn.classList.toggle('active', allCollapsed);
+        btn.setAttribute('aria-pressed', allCollapsed ? 'true' : 'false');
+        var icon = btn.querySelector('i');
+        if (allCollapsed) {
+            btn.title = 'Expand all groups';
+            if (icon) icon.className = 'bi bi-arrows-expand';
+        } else {
+            btn.title = 'Collapse all groups';
+            if (icon) icon.className = 'bi bi-arrows-collapse';
+        }
+        btn.setAttribute('aria-label', btn.title);
+    }
+
     function _populateGroupsPanel() {
+        _applyExplorerGroupsToggle();
         var container = document.getElementById('sgGroupsChips');
         if (!container) return;
         if (!_groupsDefs || _groupsDefs.length === 0) {
@@ -3758,6 +3784,15 @@ var SigmaGraph = (function () {
             _expandedInstanceMembers.clear();
             _populateGroupsPanel();
             SigmaGraph.refresh(true);
+        },
+
+        toggleAllGroups: function () {
+            if (!_groupsDefs.length) return;
+            if (_groupsAllCollapsed()) {
+                SigmaGraph.expandAllGroups();
+            } else {
+                SigmaGraph.collapseAllGroups();
+            }
         },
 
         reloadGroups: function () {

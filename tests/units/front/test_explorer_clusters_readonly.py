@@ -11,6 +11,17 @@ EXPLORER = REPO_ROOT / "src/front/templates/partials/dtwin/_query_sigmagraph.htm
 SIGMA_JS = REPO_ROOT / "src/front/static/query/js/query-sigmagraph.js"
 
 
+def test_explorer_toolbar_has_studio_style_groups_toggle():
+    html = EXPLORER.read_text(encoding="utf-8")
+    assert 'id="sgToggleAllGroupsBtn"' in html
+    assert 'data-sg-action="toggleAllGroups"' in html
+    js = SIGMA_JS.read_text(encoding="utf-8")
+    assert "function _applyExplorerGroupsToggle()" in js
+    assert "toggleAllGroups: function ()" in js
+    assert "SigmaGraph.expandAllGroups()" in js
+    assert "SigmaGraph.collapseAllGroups()" in js
+
+
 def test_explorer_has_no_detect_controls():
     html = EXPLORER.read_text(encoding="utf-8")
     assert "sgClusterAlgorithm" not in html

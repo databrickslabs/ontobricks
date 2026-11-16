@@ -236,6 +236,7 @@ markers = [
     "integration: Multi-module, in-proc backends",
     "contract: Schema/contract verification (subset of integration)",
     "e2e: Playwright browser flows (CI nightly only)",
+    "needs_domain: E2E test on a workspace page — the page fixture seeds a session domain (local mode too) so the URL does not 303 to Home",
     "eval: LLM agent quality evals (CNS T-M4)",
     "mcp: Exercises the MCP server (in-process or subprocess)",
     "db: Requires ephemeral Postgres (testcontainers)",

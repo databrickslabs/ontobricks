@@ -3185,6 +3185,7 @@ Open **Explorer** in the sidebar to explore the graph viewer interactively:
 - **Navigate** relationships — click an entity to see its attributes, values, and connected entities in the detail panel
 - **Graph** chooses the live asserted graph, the live inferred graph, or one ready simulation sandbox per scenario. Opening Explorer from the sidebar always selects **Live graph (inferred)**; an inbound link (for example Results → Explorer with `?simulation=`) keeps that sandbox.
 - **View** opens canvas help: entity and relationship labels, hide orphans, and quality rings
+- **Groups toggle** (toolbar, same control as Ontology → Studio) collapses or expands every ontology group on the canvas. The Groups popup and empty-canvas menu still list the same expand/collapse-all actions.
 
 ---
 

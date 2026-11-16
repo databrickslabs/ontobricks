@@ -15,6 +15,8 @@ import json
 
 import pytest
 
+pytestmark = pytest.mark.needs_domain
+
 
 DTWIN_SECTIONS = [
     "design",

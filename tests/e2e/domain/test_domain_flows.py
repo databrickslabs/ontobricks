@@ -7,6 +7,8 @@ tests bypass CSS by switching via ``SidebarNav.switchTo()`` directly.
 
 import pytest
 
+pytestmark = pytest.mark.needs_domain
+
 
 class TestDomainSidebar:
     @pytest.mark.parametrize(

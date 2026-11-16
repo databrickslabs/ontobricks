@@ -10,6 +10,8 @@ relationships, dataquality, if_then, axioms.
 
 import pytest
 
+pytestmark = pytest.mark.needs_domain
+
 
 class TestOntologySidebar:
     """Click each sidebar item and verify the correct section becomes visible."""
@@ -21,11 +23,11 @@ class TestOntologySidebar:
             "import",
             "wizard",
             "map",
-            "design",
             "entities",
             "relationships",
+            "designchecks",
             "dataquality",
-            "if_then",
+            "if-then",
             "axioms",
         ],
     )

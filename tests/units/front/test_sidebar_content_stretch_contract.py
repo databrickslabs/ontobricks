@@ -620,3 +620,13 @@ def test_affected_sidebar_components_use_scoped_internal_scroll_chains():
     for css_path, selectors in chains:
         for selector, declarations in selectors:
             _assert_declarations(css_path, selector, declarations)
+
+
+def test_graph_chat_header_actions_can_shrink_and_wrap_on_mobile():
+    # A non-shrinking actions row never wraps and pushes the Discuss button
+    # past a 390px viewport (horizontal page overflow).
+    _assert_declarations(
+        QUERY_CHAT_CSS,
+        ".graph-chat-header-actions",
+        {"flex": "0 1 auto", "min-width": "0", "max-width": "100%"},
+    )

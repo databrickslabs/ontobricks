@@ -27,7 +27,7 @@ The journey:
        reaches ``reviewing``, then POST ``/ontology/wizard/generate/complete``
        (the same call the Review Continue button makes) and poll the task
        until merge writes classes into the session
-    5. run **Auto-Map** from Graph → Management → Mapping (modal on Studio/Build; generates
+    5. run **Auto-Map** from Graph → Management → Mapping (modal on Mapping/Build; generates
        the SQL queries + column mappings for every entity/relationship)
     6. save the domain to the registry (clean create — must precede the build,
        which records itself against the registry domain)

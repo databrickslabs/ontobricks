@@ -18,6 +18,12 @@ _KG_PAGES = [
     "src/front/templates/partials/dtwin/_query_reasoning.html",
     "src/front/templates/partials/ontology/_ontology_cohorts.html",
     "src/front/templates/partials/intelligence/_intel_analytics.html",
+    "src/front/templates/partials/intelligence/_intel_communities.html",
+    "src/front/templates/partials/intelligence/_intel_patterns.html",
+    "src/front/templates/partials/intelligence/_intel_patterns_saved.html",
+    "src/front/templates/partials/intelligence/_sim_scenarios.html",
+    "src/front/templates/partials/intelligence/_sim_workbench.html",
+    "src/front/templates/partials/intelligence/_sim_compare.html",
 ]
 
 
@@ -67,6 +73,22 @@ def test_go_to_build_delegated_click_handler_present():
     js = SYNC_JS.read_text(encoding="utf-8")
     assert "kg-go-build-btn" in js
     assert 'data-section="sync"' in js
+    # Intelligence has no Build sidebar link — jump to Graph → Build.
+    assert "/dtwin/?section=sync" in js
+
+
+def test_intelligence_page_loads_query_sync_for_the_badge():
+    html = (REPO_ROOT / "src/front/templates/intelligence.html").read_text(
+        encoding="utf-8"
+    )
+    assert "query/js/query-sync.js" in html
+
+
+def test_pages_without_build_section_still_probe_graph_status():
+    js = SYNC_JS.read_text(encoding="utf-8")
+    body = js[js.index("document.addEventListener('DOMContentLoaded'"):]
+    assert "querySelector('[data-kg-status]')" in body
+    assert "checkTripleStoreStatus()" in body
 
 
 def test_kg_status_css_present():

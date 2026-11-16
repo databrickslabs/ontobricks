@@ -6,6 +6,14 @@
 const SYNC_TASK_KEY = 'ontobricks_sync_task';
 const ADJ_REFRESH_TASK_KEY = 'ontobricks_adjacency_refresh_task';
 
+(function _bootstrapTriplestoreConfig() {
+    if (window.__TRIPLESTORE_CONFIG) return;
+    var el = document.getElementById('triplestore-config');
+    if (!el) return;
+    try { window.__TRIPLESTORE_CONFIG = JSON.parse(el.textContent || '{}'); }
+    catch (_) { window.__TRIPLESTORE_CONFIG = {}; }
+})();
+
 function _syncTripleStoreBackend() {
     try {
         const el = document.getElementById('triplestore-config');
@@ -878,7 +886,11 @@ if (!window.__kgGoBuildWired) {
         if (!btn) return;
         e.preventDefault();
         var link = document.querySelector('[data-section="sync"]');
-        if (link) link.click();
+        if (link) {
+            link.click();
+            return;
+        }
+        window.location.href = '/dtwin/?section=sync';
     });
 }
 
@@ -1908,5 +1920,11 @@ document.addEventListener('DOMContentLoaded', async function() {
                 initSyncSection();
             }
         }
+    } else if (document.querySelector('[data-kg-status]')) {
+        // Intelligence (and any other page with the Graph-ready badge) has no
+        // Build section, so probe status and fill the indicators directly.
+        tripleStoreStatusPending = true;
+        updateKgReadyIndicators();
+        checkTripleStoreStatus();
     }
 });

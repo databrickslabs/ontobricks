@@ -31,7 +31,11 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    flex: 0 0 auto;
+    /* Must be able to shrink, otherwise its `flex-wrap` never kicks in and
+       the Discuss button overflows narrow (mobile) viewports. */
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
     padding-top: 0.1rem;
 }
 /* Header action buttons are plain `.btn-sm.btn-outline-danger` — the global
