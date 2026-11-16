@@ -108,8 +108,7 @@
 
     function fmtTime(iso) {
         if (!iso) return '';
-        const d = new Date(iso);
-        return isNaN(d.getTime()) ? esc(iso) : esc(d.toLocaleString());
+        return esc(formatDateTime(iso));
     }
 
     function tsVal(iso) {

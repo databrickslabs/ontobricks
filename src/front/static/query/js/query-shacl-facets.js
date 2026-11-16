@@ -266,7 +266,7 @@ function _shaclRenderModal(entityUri) {
     const lineage = data.lineage || [];
     _shaclSetText('shaclFacetsSubtitle',
         (lineage.length ? lineage.join(' → ') : classNames.join(', ')) + ' · ' + entityUri);
-    _shaclSetText('shaclFacetsCheckedAt', 'Checked at ' + entry.checkedAt.toLocaleTimeString());
+    _shaclSetText('shaclFacetsCheckedAt', 'Checked at ' + formatDateTime(entry.checkedAt));
 
     const facets = data.facets || [];
     if (!facets.length) {
@@ -446,7 +446,7 @@ function _shaclPanelInner(entityUri, shapeCount) {
             '<i class="bi ' + meta.icon + '" aria-hidden="true"></i> ' + s[status] + ' ' + meta.label + '</span>';
     });
     return '<div class="shacl-facets-summary mb-2">' + (chips || '<span class="small text-muted">No SHACL shape applies</span>') + '</div>' +
-        '<div class="small text-muted mb-2">Checked at ' + entry.checkedAt.toLocaleTimeString() + '</div>' +
+        '<div class="small text-muted mb-2">Checked at ' + formatDateTime(entry.checkedAt) + '</div>' +
         '<div class="d-flex gap-1">' +
         '<button type="button" class="btn btn-sm btn-outline-primary flex-grow-1" data-shacl-action="details" data-uri="' + safeUri + '">' +
         '<i class="bi bi-list-check me-1" aria-hidden="true"></i>Details</button>' +

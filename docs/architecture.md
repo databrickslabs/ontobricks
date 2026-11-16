@@ -1466,7 +1466,8 @@ job-only gate as Community (analytics toggle +
    `JobPatterns.run`, which triggers `<app>-pattern-detection` via
    `LakeflowRunner`.
 2. The job (`src/jobs/graph_analytics_job.py --task patterns`, `PatternSQL`)
-   expands anchors up to `hops`, bins attributes, hashes canonical
+   expands anchors up to `hops` along forward edges only (subject → object;
+   inbound relationships are never walked), bins attributes, hashes canonical
    signatures (finest detail level that covers >= 50% of anchors, down to
    structure-only), filters by `min_support`, optionally refines top-N
    multiplicity near-duplicates (`refine_top`), and writes:
@@ -1475,17 +1476,17 @@ job-only gate as Community (analytics toggle +
    |-------|---------|
    | `graph_patterns_<slug>` | anchor → `pattern_id`, support rank |
    | `…_shapes` | shape tokens, support, refined / near-duplicate metadata |
-   | `…_shape_edges` | typed edges the Discover diagram draws |
+   | `…_shape_edges` | typed edges the Discover diagram draws (includes `parent_via`; the UI still shows one box per type per hop) |
    | `…_preview_nodes` / `…_preview_edges` | capped preview |
    | `…_summary` | counts, hops, bins, min_support, algorithm, `stage_ms`, `hub_degree`, `hub_count` |
 
    Performance notes (see
    `docs/superpowers/specs/2026-11-16-pattern-detection-performance-design.md`):
 
-   - Neighbourhood expansion skips walking *through* nodes whose directed
+   - Neighbourhood expansion skips walking *through* nodes whose out-
      degree exceeds `--pattern-hub-degree` (default 5 000; `0` disables). The
      hub itself still contributes structural/attribute tokens.
-   - Endpoint types are denormalised onto the directed edge table once;
+   - Endpoint types are denormalised onto the forward edge table once;
      signatures for all detail levels are hashed in one aggregation; shapes
      for non-refined runs use one representative member per pattern.
    - The summary carries `stage_ms` (per-stage wall time) for operators
@@ -1494,16 +1495,22 @@ job-only gate as Community (analytics toggle +
 3. **Read back** — `GET /dtwin/patterns/latest` (top-N + stats + job gate);
    `GET /dtwin/patterns/{id}/shape` (tokens + layered diagram) and `/members`
    (paged ≤ 500).
-4. **Auto-save** — when Detect finishes, the UI calls `POST /dtwin/patterns/save`
-   (`pattern_save`) with an automatic label (`{entity type} — {YYYY-MM-DD HH:MM:SS}`).
-   `SavedPatternStore` snapshots the **entire** last Detect run (every pattern’s
-   members, KPIs and `diagram_json`) into `graph_pattern_saved_<slug>`. Several
-   saved runs coexist, keyed by `saved_id`. The RDF graph is not written.
+4. **Auto-save (same task)** — after a successful Detect with at least one
+   pattern, the `pattern_detection` background task snapshots the catalog
+   itself (`SavedPatternStore`, label `{entity type} — {YYYY/MM/DD HH:MM:SS}`).
+   One row per pattern lands in `graph_pattern_saved_<slug>` (KPIs, support,
+   seed label, shape tokens, `diagram_json`). Member lists are **not**
+   copied — the members modal reads them from the live Detect output while
+   that run is current. The task result carries `saved_id`. Several saved
+   runs coexist. The RDF graph is not written. `POST /dtwin/patterns/save`
+   remains for a manual re-save of the last Detect.
 5. **Saved** — Read-back: `GET /dtwin/patterns/saved` (list),
    `GET …/saved/{id}/patterns` (picker catalog),
-   `GET …/saved/{id}/members?pattern_id=` (paged),
+   `GET …/saved/{id}/members?pattern_id=` (paged from live Detect, or from
+   legacy member-row snapshots),
    `GET …/saved/{id}/shape?pattern_id=` (diagram), `DELETE …/saved/{id}`.
-   Snapshots survive the next Detect overwriting `graph_patterns_<slug>`.
+   Catalog and diagrams survive the next Detect; member lists for a new-style
+   save follow the live Detect output.
 
 `class_filter` for patterns is a **single** required anchor type; hops walk
 the full graph (not induced). `via` in shape records is the full predicate
@@ -1521,7 +1528,7 @@ lifecycle) are documented for operators — not separate product modes in v1.
 | `src/back/core/graph_analysis/pattern/SavedPatternStore.py` | Save, list, page, delete saved snapshots (Unity Catalog) |
 | `src/api/routers/internal/dtwin.py` | `/dtwin/patterns/*` endpoints |
 | `src/back/objects/digitaltwin/TwinAnalytics.py` | Job wiring and pattern entry points |
-| `src/back/objects/digitaltwin/TwinBackgroundTasks.py` | `pattern_detection`, `pattern_save` |
+| `src/back/objects/digitaltwin/PatternBackgroundTasks.py` | `pattern_detection` (Detect + catalog save), `pattern_save` |
 | `src/front/static/intelligence/js/intelligence-patterns.js` | Patterns list / details UI |
 
 ---

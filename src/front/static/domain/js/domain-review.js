@@ -640,10 +640,8 @@
 
     function formatTime(iso) {
         if (!iso) return '';
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return '';
         return '<span class="text-muted small">' +
-            escapeHtml(d.toLocaleString()) + '</span>';
+            escapeHtml(formatDateTime(iso)) + '</span>';
     }
 
     function spinner(text) {

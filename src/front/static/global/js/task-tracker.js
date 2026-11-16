@@ -576,7 +576,7 @@ function getTimeAgo(isoString) {
     if (diffSec < 60) return 'just now';
     if (diffMin < 60) return `${diffMin}m ago`;
     if (diffHour < 24) return `${diffHour}h ago`;
-    return date.toLocaleDateString();
+    return formatDateTime(date);
 }
 
 // escapeHtml is provided globally by utils.js

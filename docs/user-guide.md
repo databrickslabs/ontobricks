@@ -1484,9 +1484,10 @@ pattern in the picker, and read:
 - **Detail** badge: the level that was used — *Exact*, *Neighbours (1 hop)*,
   *Own attributes* or *Structure only*.
 - **Diagram**: the anchor type on the left, then columns for 1 hop, 2 hops, …
-  separated by dotted lanes. Each box is an entity type with its attribute
-  ranges as badges; each arrow is a relationship with its name and how many
-  links of that kind the entity typically has. Hover a box to highlight its
+  separated by dotted lanes. Each box is one entity type at that hop (the same
+  type never appears twice in one column). Each box shows its attribute ranges
+  as badges; each arrow is a relationship with its name and how many links of
+  that kind the entity typically has. Hover a box to highlight its
   path (everything else fades); hover an arrow or a badge for an explanation.
 - **Matching entities**: opens a dialog listing the entities that share the
   pattern, with links to Graph Explorer.
@@ -1494,9 +1495,11 @@ pattern in the picker, and read:
 **Saved runs.** Every Detect run is saved automatically to Unity Catalog
 (table `graph_pattern_saved_<slug>`) under a name built from the entity type
 and the local date/time (for example `Customer — 2026-11-14 14:06:32`). The
-list shows hops, number of patterns and save time; open a card to revisit it
-or delete it. A saved run is a frozen snapshot: it does not change when the
-graph changes; run **Detect** again to capture a new result.
+snapshot stores the pattern catalog, cardinalities and diagrams — not the
+member lists. The list shows hops, number of patterns and save time; open a
+card to revisit it or delete it. Catalog and diagrams stay frozen when the
+graph changes; matching entities follow the latest Detect output while those
+pattern ids are still current. Run **Detect** again to capture a new result.
 
 **Typical uses:** customer or asset segmentation, spotting unusual set-ups
 (rare patterns), checking data quality (an entity type that should look
@@ -1511,12 +1514,14 @@ then runs a dedicated Databricks job
 Communities / Analytics. Each anchor's attributes (numeric quantile bins;
 categorical values, except identifier-like attributes with more than 20
 distinct values such as ids, emails or dates, which are ignored) and multi-hop
-relationships (full predicate URIs; hops walk the full graph, not an induced
-subgraph) are hashed into a canonical signature; patterns are ranked by
-support. Raise **Min support** to drop the long tail. Very high-degree shared
-nodes (for example a Country linked from thousands of customers) are not
-walked *through* during Detect — they still appear as neighbours in the
-signature, but expansion stops there so a hub cannot cross-link every anchor.
+relationships (full predicate URIs) are hashed into a canonical signature;
+patterns are ranked by support. Relationships are followed in the direction
+they are asserted (subject → object): an anchor's outgoing relationships and
+those of its neighbours are walked, while inbound relationships (something
+pointing *at* an entity) are not. Raise **Min support** to drop the long tail.
+Very high-degree nodes with thousands of outgoing relationships are not walked
+*through* during Detect — they still appear as neighbours in the signature, but
+expansion stops there so a hub cannot pull in every entity behind it.
 Operators can read per-stage timings from the job summary (`stage_ms` in the
 run output / `_summary` table) when investigating a slow Detect.
 
@@ -1530,21 +1535,23 @@ next to the run stats. Select a pattern to see a layered diagram of that
 neighbourhood (entity type at hop 0, then 1 / 2 / 3 hops) and the list of
 matching entities. Optional **Refine top-N** merges near-duplicates that
 differ only by relationship multiplicity into a motif; it only applies at the
-**Exact** level. Nothing is written to the graph. When Detect finishes, the
-whole run is **saved automatically** in Unity Catalog (table
-`graph_pattern_saved_<slug>` next to the Detect output) under a name built from
-the entity type and the local date/time (for example `Customer — 2026-11-14 14:06:32`).
-You can list or delete those snapshots on the Patterns list. The list uses the
-same card layout as Scenarios and shows hops, how many patterns that Detect run
-found, and when it was saved. **Patterns** uses the same list/details
-navigation as Scenarios: the list shows saved cards; **New** (like New
-scenario) opens the details pane, auto-saves the run, and opens that snapshot
-(picker, diagrams, members) under the saved name; opening a card later shows
-the same snapshot (KPIs, diagrams and matching entities from save time, not a
-later Detect run). A saved
-snapshot does not change when the graph changes or when you run Detect again;
-run Detect again to capture a new result. A run from before the diagram table
-was added asks you to Detect again before it can draw.
+**Exact** level. Nothing is written to the graph. Detect and the catalog save run as **one
+background task**: when Detect finishes with at least one pattern, OntoBricks
+writes the snapshot in Unity Catalog (table `graph_pattern_saved_<slug>` next
+to the Detect output) under a name built from the entity type and the local
+date/time (for example `Customer — 2026/11/14 14:06:32`). The save writes one
+row per pattern (KPIs, support, diagram) — not every matching entity — so it
+stays fast even on large Detect runs. You can list or delete those snapshots
+on the Patterns list. The list uses the same card layout as Scenarios and
+shows hops, how many patterns that Detect run found, and when it was saved.
+**Patterns** uses the same list/details navigation as Scenarios: the list
+shows saved cards; **New** (like New scenario) opens the details pane,
+auto-saves the run, and opens that snapshot (picker and diagrams) under the
+saved name. Opening a card later restores the catalog and diagrams from save
+time; matching entities come from the live Detect output while those pattern
+ids are still current. Run Detect again to capture a new result. A run from
+before the diagram table was added asks you to Detect again before it can
+draw.
 
 Patterns vary by structure (attribute-heavy, 1-hop, multi-hop, fan-out),
 attribute bins, frequency, optional refine, and run parameters (`hops`,

@@ -220,9 +220,9 @@
                     <h6 class="fw-semibold mb-2">2. Expand the neighbourhood (Hops)</h6>
                     <p class="mb-3 text-muted">
                         From each anchor the job walks the graph up to the configured hop depth
-                        (default 3, range 1–5), following relationships in both directions
-                        (<code>out</code> and <code>in</code>). At every hop it records the parent type,
-                        the predicate (<code>via</code>), the child type, and the direction.
+                        (default 3, range 1–5), following relationships in the direction they are
+                        asserted (subject → object). Inbound relationships are not followed. At every
+                        hop it records the parent type, the predicate (<code>via</code>), and the child type.
                     </p>
 
                     <h6 class="fw-semibold mb-2">3. Bin attributes (Numeric bins)</h6>
@@ -242,9 +242,9 @@
                     <h6 class="fw-semibold mb-2">4. Build canonical tokens</h6>
                     <p class="mb-2 text-muted">Each anchor’s neighbourhood becomes a sorted bag of tokens, for example:</p>
                     <ul class="text-muted mb-3">
-                        <li><strong>Structure</strong> — <code>hop | relation | neighbour-type | direction</code></li>
+                        <li><strong>Structure</strong> — <code>hop | relation | neighbour-type</code></li>
                         <li><strong>Anchor attributes</strong> — <code>0 || anchor-type | self | property | bin</code></li>
-                        <li><strong>Neighbour attributes</strong> — <code>hop | relation | type | direction | property | bin</code></li>
+                        <li><strong>Neighbour attributes</strong> — <code>hop | relation | type | property | bin</code></li>
                     </ul>
 
                     <h6 class="fw-semibold mb-2">5. Adaptive detail levels</h6>
@@ -283,7 +283,8 @@
                     <h6 class="fw-semibold mb-2">Execution and storage</h6>
                     <p class="text-muted mb-0">
                         Detection runs as a Databricks job on the Knowledge Graph snapshot, not in the browser.
-                        Each Detect run is saved automatically to Unity Catalog; open a card to revisit it.
+                        Each Detect run is saved automatically to Unity Catalog as a pattern catalog
+                        (cardinalities and diagrams, not every member row); open a card to revisit it.
                     </p>
                     </details>
                 </div>

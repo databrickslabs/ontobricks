@@ -153,8 +153,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function fmtDate(iso) {
         if (!iso) return '';
-        const d = new Date(iso);
-        return isNaN(d.getTime()) ? String(iso) : d.toLocaleString();
+        return formatDateTime(iso);
     }
 
     function setText(id, val) {

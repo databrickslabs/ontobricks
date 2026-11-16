@@ -101,7 +101,7 @@ const NotificationCenter = {
         if (mins < 60) return mins + 'm ago';
         const hrs = Math.floor(mins / 60);
         if (hrs < 24) return hrs + 'h ago';
-        return date.toLocaleDateString();
+        return formatDateTime(date);
     },
 
     _renderList() {
@@ -341,6 +341,69 @@ function renderMarkdown(text) {
     return escapeHtml(src).replace(/\n/g, '<br>');
 }
 
+
+// ========== DATE / TIME FORMATTING ==========
+
+const _DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const _NAIVE_ISO_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?$/;
+
+function _pad2(n) {
+    return String(n).padStart(2, '0');
+}
+
+/**
+ * Parse a timestamp (ISO-8601 string, Date or epoch ms) into a Date.
+ * Naive ISO strings (no offset) are read as UTC, the convention used by every
+ * backend timestamp. Returns null when the value cannot be parsed.
+ */
+function _parseTimestamp(value) {
+    let d;
+    if (value instanceof Date) {
+        d = value;
+    } else if (typeof value === 'number') {
+        d = new Date(value);
+    } else if (typeof value === 'string') {
+        // Python isoformat() emits microseconds; keep milliseconds (Safari rejects more digits).
+        let s = value.trim().replace(/(\.\d{3})\d+/, '$1');
+        if (_NAIVE_ISO_RE.test(s)) s = s.replace(' ', 'T') + 'Z';
+        d = new Date(s);
+    } else {
+        return null;
+    }
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Display a timestamp as "YYYY/MM/DD HH:MM:SS" in the browser's local time zone.
+ * A bare date ("YYYY-MM-DD") is shown as "YYYY/MM/DD". Returns '' for empty
+ * input and the raw value when it cannot be parsed.
+ * @param {*} value - ISO-8601 string, Date or epoch ms
+ * @returns {string}
+ */
+function formatDateTime(value) {
+    if (value === null || value === undefined || value === '') return '';
+    if (typeof value === 'string' && _DATE_ONLY_RE.test(value.trim())) {
+        return value.trim().replace(/-/g, '/');
+    }
+    const d = _parseTimestamp(value);
+    if (!d) return String(value);
+    return formatDateOnly(d) + ' ' + _pad2(d.getHours()) + ':' + _pad2(d.getMinutes()) + ':' + _pad2(d.getSeconds());
+}
+
+/**
+ * Display a date as "YYYY/MM/DD" (no time), in the browser's local time zone.
+ * @param {*} value - ISO-8601 string, Date or epoch ms
+ * @returns {string}
+ */
+function formatDateOnly(value) {
+    if (value === null || value === undefined || value === '') return '';
+    if (typeof value === 'string' && _DATE_ONLY_RE.test(value.trim())) {
+        return value.trim().replace(/-/g, '/');
+    }
+    const d = _parseTimestamp(value);
+    if (!d) return String(value);
+    return d.getFullYear() + '/' + _pad2(d.getMonth() + 1) + '/' + _pad2(d.getDate());
+}
 
 // ========== STRING UTILITIES ==========
 
@@ -995,3 +1058,5 @@ window.fetchOnce = fetchOnce;
 window.fetchOnceInvalidate = fetchOnceInvalidate;
 window.fetchCached = fetchCached;
 window.fetchCachedInvalidate = fetchCachedInvalidate;
+window.formatDateTime = formatDateTime;
+window.formatDateOnly = formatDateOnly;

@@ -11,6 +11,7 @@ from back.objects.digitaltwin.explorer.GraphFind import GraphFind
 from back.objects.digitaltwin.cache.TwinStoreCache import TwinStoreCache
 from back.objects.digitaltwin.quality.SqlQualityChecks import SqlQualityChecks
 from back.objects.digitaltwin.quality.QualitySqlBuilder import QualitySqlBuilder
+from back.objects.digitaltwin.PatternBackgroundTasks import PatternBackgroundTasks
 from back.objects.digitaltwin.TwinBackgroundTasks import TwinBackgroundTasks
 from back.objects.digitaltwin.query.TwinMapping import TwinMapping
 from back.objects.digitaltwin.TwinAnalytics import TwinAnalytics
@@ -45,6 +46,7 @@ __all__ = [
     "NodeContextService",
     "NodeShaclResponse",
     "NodeShaclService",
+    "PatternBackgroundTasks",
     "QualitySqlBuilder",
     "SqlQualityChecks",
     "TwinAnalytics",

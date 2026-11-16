@@ -18,6 +18,7 @@ import pytest
 from back.core.errors import InfrastructureError
 from back.objects.digitaltwin.DetectRunHistory import DetectRunHistory
 from back.objects.digitaltwin.TwinAnalytics import TwinAnalytics
+from back.objects.digitaltwin.PatternBackgroundTasks import PatternBackgroundTasks
 from back.objects.digitaltwin.TwinBackgroundTasks import TwinBackgroundTasks
 
 pytestmark = pytest.mark.unit
@@ -181,8 +182,20 @@ class TestPatternRunRecording:
             "elapsed_ms": 900,
             "run_page_url": "https://dbx/run/3",
         }
-        with patch.object(TwinAnalytics, "detect_patterns", return_value=stats):
-            TwinBackgroundTasks.run_pattern_task(
+        job = MagicMock()
+        job.top_patterns.return_value = [{"id": "pat-1"}]
+        with patch.object(TwinAnalytics, "detect_patterns", return_value=stats), patch.object(
+            TwinAnalytics, "build_job_patterns", return_value=job
+        ), patch.object(
+            TwinAnalytics,
+            "save_pattern",
+            return_value={
+                "saved_id": "person-abc",
+                "label": "Person — 2026/11/16 16:40:00",
+                "pattern_id": "pat-1",
+            },
+        ) as save:
+            PatternBackgroundTasks.run_pattern_task(
                 tm, "t", _domain(), _settings(), "g",
                 class_filter="http://x/Person", hops=2, min_support=4,
             )
@@ -199,12 +212,30 @@ class TestPatternRunRecording:
         assert entry["duration_ms"] == 900
         assert entry["run_page_url"] == "https://dbx/run/3"
         tm.complete_task.assert_called_once()
+        result = tm.complete_task.call_args.kwargs["result"]
+        assert result["saved_id"] == "person-abc"
+        assert result["pattern_id"] == "pat-1"
+        save.assert_called_once()
+        assert "Person —" in save.call_args.args[2]
+
+    def test_zero_patterns_skips_auto_save(self, registry):
+        tm = MagicMock()
+        with patch.object(
+            TwinAnalytics, "detect_patterns",
+            return_value={"pattern_count": 0, "anchor_count": 10},
+        ), patch.object(TwinAnalytics, "save_pattern") as save:
+            PatternBackgroundTasks.run_pattern_task(
+                tm, "t", _domain(), _settings(), "g", class_filter="http://x/Person"
+            )
+        save.assert_not_called()
+        result = tm.complete_task.call_args.kwargs["result"]
+        assert "saved_id" not in result
 
     def test_failed_run_is_recorded_with_the_error_and_still_fails_the_task(self, registry):
         tm = MagicMock()
         boom = InfrastructureError("Pattern detection job failed", detail="cancelled")
         with patch.object(TwinAnalytics, "detect_patterns", side_effect=boom):
-            TwinBackgroundTasks.run_pattern_task(
+            PatternBackgroundTasks.run_pattern_task(
                 tm, "t", _domain(), _settings(), "g", class_filter=" http://x/Person "
             )
 
@@ -218,22 +249,54 @@ class TestPatternRunRecording:
     def test_a_failing_history_write_does_not_change_the_outcome(self, registry):
         registry.record_pattern_run.side_effect = RuntimeError("lakebase down")
         tm = MagicMock()
+        job = MagicMock()
+        job.top_patterns.return_value = [{"id": "pat-1"}]
         with patch.object(
             TwinAnalytics, "detect_patterns",
             return_value={"pattern_count": 1, "anchor_count": 2},
+        ), patch.object(
+            TwinAnalytics, "build_job_patterns", return_value=job
+        ), patch.object(
+            TwinAnalytics,
+            "save_pattern",
+            return_value={"saved_id": "s1", "label": "L", "pattern_id": "pat-1"},
         ):
-            TwinBackgroundTasks.run_pattern_task(
+            PatternBackgroundTasks.run_pattern_task(
                 tm, "t", _domain(), _settings(), "g", class_filter="http://x/Person"
             )
 
         tm.complete_task.assert_called_once()
         tm.fail_task.assert_not_called()
 
+    def test_save_failure_after_detect_fails_the_task_without_a_second_history_row(
+        self, registry
+    ):
+        tm = MagicMock()
+        job = MagicMock()
+        job.top_patterns.return_value = [{"id": "pat-1"}]
+        with patch.object(
+            TwinAnalytics, "detect_patterns",
+            return_value={"pattern_count": 1, "anchor_count": 2},
+        ), patch.object(
+            TwinAnalytics, "build_job_patterns", return_value=job
+        ), patch.object(
+            TwinAnalytics, "save_pattern", side_effect=RuntimeError("warehouse down")
+        ):
+            PatternBackgroundTasks.run_pattern_task(
+                tm, "t", _domain(), _settings(), "g", class_filter="http://x/Person"
+            )
+
+        assert registry.record_pattern_run.call_count == 1
+        _, _, entry = _recorded(registry, "record_pattern_run")
+        assert entry["status"] == "completed"
+        tm.fail_task.assert_called_once()
+        tm.complete_task.assert_not_called()
+
     def test_materialize_style_tasks_do_not_write_history(self, registry):
-        """Only Detect writes rows; Save/Materialize run through other tasks."""
+        """Standalone Save still exists for the API; it does not write Detect history."""
         tm = MagicMock()
         with patch.object(TwinAnalytics, "save_pattern", return_value={"label": "x", "size": 1}):
-            TwinBackgroundTasks.run_pattern_save_task(
+            PatternBackgroundTasks.run_pattern_save_task(
                 tm, "t", _domain(), _settings(), "g", pattern_id="p1", label="x"
             )
 

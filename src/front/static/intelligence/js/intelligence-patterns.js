@@ -75,7 +75,7 @@ const IntelligencePatterns = {
             saved.addEventListener('click', (e) => {
                 const del = e.target.closest('[data-pat-delete]');
                 if (del) {
-                    this.deleteSaved(del.dataset.patDelete);
+                    this.deleteSaved(del.dataset.patDelete, del);
                     return;
                 }
                 const open = e.target.closest('[data-pat-open]');
@@ -138,8 +138,7 @@ const IntelligencePatterns = {
 
     _fmtDate(iso) {
         if (!iso) return '–';
-        const d = new Date(iso);
-        return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString();
+        return formatDateTime(iso);
     },
 
     _plural(n, one, many) {
@@ -553,7 +552,7 @@ const IntelligencePatterns = {
         }
         if (subtitle) {
             subtitle.textContent = saved
-                ? 'Saved Detect run — all patterns, diagrams and members from when it was saved.'
+                ? 'Saved Detect run — pattern catalog, cardinalities and diagrams from when it was saved.'
                 : this.DISCOVER_SUBTITLE;
         }
     },
@@ -571,7 +570,7 @@ const IntelligencePatterns = {
             ? '<span class="badge bg-success">saved</span>'
             : '';
         // Always use the Detect picker — for a saved run, `latest.patterns` is
-        // the snapshotted catalog so every pattern (diagram + members) is reachable.
+        // the snapshotted catalog so every pattern (diagram + cardinality) is reachable.
         return `
             <div class="pat-detail-toolbar mb-3">
                 <div class="dropdown pat-pattern-picker">
@@ -809,8 +808,8 @@ const IntelligencePatterns = {
         const my = (y1 + y2) / 2 + lane * 0.45;
         const path = `M${x1},${y1} C${mx},${y1 + lane * 0.35} ${mx},${y2 + lane * 0.35} ${x2},${y2}`;
         const dashed = e.share < 1 ? ' stroke-dasharray="4 3"' : '';
-        // Arrow follows the RDF edge: "in" means the neighbour points at its parent.
-        const marker = e.direction === 'in' ? 'marker-start="url(#patArrowIn)"' : 'marker-end="url(#patArrow)"';
+        // Every edge is walked subject -> object, so the arrow always points at the child.
+        const marker = 'marker-end="url(#patArrow)"';
         const relName = e.via_label || this._shortLabel(e.via) || 'rel';
         const name = this._esc(relName);
         const viaTip = `Relationship “${relName}”. Full URI: ${e.via || relName}`;
@@ -902,7 +901,6 @@ const IntelligencePatterns = {
             + `viewBox="0 0 ${L.width} ${L.height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pattern diagram">`
             + '<defs>'
             + '<marker id="patArrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="pat-dg-arrow"/></marker>'
-            + '<marker id="patArrowIn" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" class="pat-dg-arrow"/></marker>'
             + '</defs>'
             + `${lanes}${heads}${edges}${nodes}</svg></div>`
             + '<p class="text-muted small mb-0 mt-1">Dashed: not every member has it · badge ×n: average per member · '
@@ -1101,6 +1099,7 @@ const IntelligencePatterns = {
         await this._populateScope();
         await this.loadLatest();
         if (this._busy) return;
+        // Detect now saves in the same task; still resume a legacy in-flight save.
         const running = await this._findRunningTask(['pattern_detection', 'pattern_save']);
         if (!running) return;
         if (running.task_type === 'pattern_detection') {
@@ -1150,10 +1149,15 @@ const IntelligencePatterns = {
         this._setBtnSpinner('patDetectBtn', true);
         this._setBusy(true);
         this._showLoading(true, 'Detecting patterns on Databricks…', 'Detecting…');
-        let ok = false;
         try {
             const task = await waitForTask(taskId, (t) => {
-                if (t && t.message) this._showLoading(true, t.message, 'Detecting…');
+                if (!t || !t.message) return;
+                const saving = /sav/i.test(t.message);
+                this._showLoading(
+                    true,
+                    t.message,
+                    saving ? 'Saving…' : 'Detecting…'
+                );
             });
             this._clearSavedView();
             await this.loadLatest();
@@ -1162,59 +1166,22 @@ const IntelligencePatterns = {
                 task.message || `${this._fmtNum(stats.pattern_count || 0)} patterns detected.`,
                 'success'
             );
-            ok = true;
+            const savedId = task && task.result && task.result.saved_id;
+            await this.refreshSaved();
+            if (savedId) {
+                await this.openSavedById(savedId, { sync: true, replace: true });
+            } else {
+                this._restoreDiscoverPreview();
+            }
         } catch (err) {
             await this.loadLatest();
             this._notify(err.message || 'Detection failed', 'danger');
+            this._restoreDiscoverPreview();
         } finally {
             this._setBtnSpinner('patDetectBtn', false);
             this._setBusy(false);
             this._showLoading(false);
         }
-        if (ok) await this._autoSaveAfterDetect();
-    },
-
-    _entityLabelForSave() {
-        const stats = (this.latest && this.latest.stats) || {};
-        const uri = (stats.class_filter && stats.class_filter[0])
-            || stats.anchor_type
-            || this._selectedClass()
-            || '';
-        if (!uri) return 'Pattern';
-        const classes = this.ontologyClasses || [];
-        const hit = classes.find((c) => (c.uri || c.id) === uri);
-        if (hit && (hit.label || hit.name)) return hit.label || hit.name;
-        const local = String(uri).split(/[#/]/).filter(Boolean).pop();
-        return local || 'Pattern';
-    },
-
-    _autoSaveLabel() {
-        const entity = this._entityLabelForSave();
-        const d = new Date();
-        const pad = (n) => String(n).padStart(2, '0');
-        const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} `
-            + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-        return `${entity} — ${stamp}`;
-    },
-
-    async _autoSaveAfterDetect() {
-        if (!this._canEdit()) {
-            this._restoreDiscoverPreview();
-            return;
-        }
-        const patterns = (this.latest && this.latest.patterns) || [];
-        const focus = this.selectedId || (patterns[0] && patterns[0].id);
-        if (!focus || !patterns.length) {
-            this._restoreDiscoverPreview();
-            return;
-        }
-        const savedId = await this._save(focus, this._autoSaveLabel());
-        if (savedId) {
-            // Open the snapshot so the user lands on diagrams + picker, not a blank overlay.
-            await this.openSavedById(savedId, { sync: true, replace: true });
-            return;
-        }
-        this._restoreDiscoverPreview();
     },
 
     async openDetectModal() {
@@ -1252,7 +1219,7 @@ const IntelligencePatterns = {
             });
             if (typeof refreshTasks === 'function') refreshTasks();
             this._notify('Pattern detection started on Databricks.', 'info');
-            // Auto-save opens the new snapshot (URL + details); do not overwrite with pattern=.
+            // One task: Detect + catalog save; opens the new snapshot on success.
             await this._awaitDetection(data.task_id);
         } catch (err) {
             this._setBtnSpinner('patDetectBtn', false);
@@ -1262,6 +1229,7 @@ const IntelligencePatterns = {
     },
 
     async _awaitSave(taskId, label) {
+        // Resume helper for a legacy in-flight `pattern_save` task only.
         this._setBusy(true);
         this._showLoading(true, 'Saving Detect run…', 'Saving…');
         try {
@@ -1277,27 +1245,6 @@ const IntelligencePatterns = {
         } finally {
             this._setBusy(false);
             this._showLoading(false);
-        }
-    },
-
-    async _save(patternId, label) {
-        if (this._busy || !this._canEdit()) return null;
-        const name = (label || '').trim() || this._autoSaveLabel();
-        this._setBusy(true);
-        this._showLoading(true, 'Saving Detect run…', 'Saving…');
-        try {
-            const data = await this._json('/dtwin/patterns/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pattern_id: patternId, label: name }),
-            });
-            if (typeof refreshTasks === 'function') refreshTasks();
-            return await this._awaitSave(data.task_id, name);
-        } catch (err) {
-            this._setBusy(false);
-            this._showLoading(false);
-            this._notify(err.message || 'Save failed', 'danger');
-            return null;
         }
     },
 
@@ -1391,7 +1338,7 @@ const IntelligencePatterns = {
         this.selectedId = saved.pattern_id || saved.id;
         this._showDetailsPane();
         if (sync) this.syncPatternUrl({ saved: saved.id }, { replace });
-        // Snapshot only: saved KPIs + members. Do not pull `/latest` values.
+        // Snapshot only: saved catalog + diagrams. Do not pull `/latest` values.
         await this._showPendingSaved();
     },
 
@@ -1443,12 +1390,26 @@ const IntelligencePatterns = {
         }
     },
 
-    async deleteSaved(savedId) {
+    async deleteSaved(savedId, triggerBtn = null) {
         if (!this._canEdit()) return;
+        const btn = triggerBtn || document.querySelector(`[data-pat-delete="${CSS.escape(savedId)}"]`);
+        if (btn && btn.classList.contains('is-busy')) return;
         const go = (typeof showDeleteConfirm === 'function')
             ? await showDeleteConfirm('Delete this saved pattern?')
             : true;
         if (!go) return;
+        const card = btn ? btn.closest('.pat-saved-card') : null;
+        const origHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('is-busy');
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            btn.setAttribute('title', 'Deleting…');
+            btn.setAttribute('aria-label', 'Deleting…');
+        }
+        if (card) {
+            card.classList.add('is-deleting');
+        }
         try {
             await this._json(`/dtwin/patterns/saved/${encodeURIComponent(savedId)}`, {
                 method: 'DELETE',
@@ -1460,6 +1421,16 @@ const IntelligencePatterns = {
                 await this.refreshSaved();
             }
         } catch (err) {
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('is-busy');
+                btn.innerHTML = origHtml || '<i class="bi bi-trash"></i>';
+                btn.setAttribute('title', 'Delete saved pattern');
+                btn.removeAttribute('aria-label');
+            }
+            if (card) {
+                card.classList.remove('is-deleting');
+            }
             this._notify(err.message || 'Delete failed', 'danger');
         }
     },

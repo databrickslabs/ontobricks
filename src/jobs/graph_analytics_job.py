@@ -1336,8 +1336,9 @@ class PatternSQL(GraphAnalyticsSQL):
     """SQL for egocentric neighbourhood signatures and optional motif refine.
 
     ``class_filter`` selects **anchor** nodes only; hop expansion walks the
-    full directed edge set so neighbours of other types still appear in the
-    signature. ``via`` is the full predicate URI (the UI local-names it).
+    forward edge set (subject -> object) so neighbours of other types still
+    appear in the signature. Inbound relations are never walked. ``via`` is
+    the full predicate URI (the UI local-names it).
     """
 
     hops: int = DEFAULT_PATTERN_HOPS
@@ -1391,7 +1392,7 @@ class PatternSQL(GraphAnalyticsSQL):
 
     @property
     def typed_edges(self) -> str:
-        """Per anchor: (hop, parent type, via, child type, direction) + count."""
+        """Per anchor: (hop, parent type, via, child type) + count."""
         return f"{self.work_prefix}_tedges"
 
     @property
@@ -1450,7 +1451,7 @@ class PatternSQL(GraphAnalyticsSQL):
         return self._recreate(self.node_types, self.node_type_select_all())
 
     def build_hubs(self) -> List[str]:
-        """Nodes whose directed degree exceeds ``hub_degree`` (empty when off)."""
+        """Nodes whose out-degree exceeds ``hub_degree`` (empty when off)."""
         thr = self.effective_hub_degree()
         if thr <= 0:
             return self._recreate(
@@ -1467,7 +1468,11 @@ class PatternSQL(GraphAnalyticsSQL):
         )
 
     def build_directed_edges(self) -> List[str]:
-        """Directed URI edges both ways, with endpoint types denormalised.
+        """Forward URI edges only (subject -> object), endpoint types denormalised.
+
+        Pattern walks follow relationships in their asserted direction; an
+        inbound relation (object -> subject) is never traversed. Each triple
+        is one row, so the table is half the size of a two-way edge list.
 
         ``src_type`` / ``dst_type`` are joined once from ``node_types`` so each
         hop can emit tokens without re-joining types on the exploded frontier.
@@ -1478,20 +1483,11 @@ class PatternSQL(GraphAnalyticsSQL):
         uri = "(object LIKE 'http://%' OR object LIKE 'https://%')"
         return self._recreate(
             self.directed,
-            f"SELECT e.src AS src, e.dst AS dst, e.via AS via, "
-            f"e.direction AS direction,\n"
+            f"SELECT e.src AS src, e.dst AS dst, e.via AS via,\n"
             f"       coalesce(st.type_uri, '') AS src_type,\n"
             f"       coalesce(dt.type_uri, '') AS dst_type\n"
             f"FROM (\n"
-            f"  SELECT subject AS src, object AS dst, predicate AS via, "
-            f"'out' AS direction\n"
-            f"  FROM {src}\n"
-            f"  WHERE subject <> '' AND object <> '' AND subject <> object\n"
-            f"    AND {uri}\n"
-            f"    AND predicate NOT IN ({excl})\n"
-            f"  UNION ALL\n"
-            f"  SELECT object AS src, subject AS dst, predicate AS via, "
-            f"'in' AS direction\n"
+            f"  SELECT subject AS src, object AS dst, predicate AS via\n"
             f"  FROM {src}\n"
             f"  WHERE subject <> '' AND object <> '' AND subject <> object\n"
             f"    AND {uri}\n"
@@ -1580,20 +1576,28 @@ class PatternSQL(GraphAnalyticsSQL):
         )
 
     def build_frontier_0(self) -> List[str]:
+        # The anchor was reached by no predicate: its incoming via is ''.
         return self._recreate(
             self.frontier(0),
-            f"SELECT n AS anchor, n AS node FROM {self.anchors}",
+            f"SELECT n AS anchor, n AS node, '' AS via FROM {self.anchors}",
         )
 
     def build_hop(self, hop: int) -> List[str]:
-        """Expand one hop and emit structural + neighbour-attribute tokens."""
+        """Expand one hop and emit structural + neighbour-attribute tokens.
+
+        The frontier holds ``(anchor, node, via)``: ``via`` is the predicate
+        that reached the node. A node reached through two predicates appears
+        twice, so each typed edge is attributed to the path it really hangs
+        off (``parent_via``). Tokens are de-duplicated per parent node, so the
+        token multiset (and therefore every pattern signature) is unchanged.
+        """
         prev = self.frontier(hop - 1)
         cur = self.frontier(hop)
         cap = max(1, int(self.frontier_cap))
         hop_lit = str(int(hop))
         # Shortest-distance shells: hop k only keeps nodes not already seen at
-        # hop k-1 or k-2 (edges run both ways, so a step from hop k-1 lands
-        # there or at hop k). Walking back says nothing new about the anchor.
+        # hop k-1 or k-2. Edges are forward-only, so this only bites on cycles
+        # (a walk that loops back to an earlier node adds nothing new).
         seen = [prev] + ([self.frontier(hop - 2)] if hop >= 2 else [])
         unseen = "".join(
             f"    AND NOT EXISTS (SELECT 1 FROM {t} s{i} "
@@ -1604,10 +1608,10 @@ class PatternSQL(GraphAnalyticsSQL):
         expanded = f"{self.work_prefix}_exp_{int(hop)}"
         statements = self._recreate(
             expanded,
-            f"SELECT anchor, parent, node, via, direction, parent_type, "
-            f"node_type FROM (\n"
-            f"  SELECT f.anchor AS anchor, f.node AS parent, e.dst AS node,\n"
-            f"         e.via AS via, e.direction AS direction,\n"
+            f"SELECT anchor, parent, parent_via, node, via, parent_type, node_type "
+            f"FROM (\n"
+            f"  SELECT f.anchor AS anchor, f.node AS parent, f.via AS parent_via,\n"
+            f"         e.dst AS node, e.via AS via,\n"
             f"         e.src_type AS parent_type, e.dst_type AS node_type,\n"
             f"         ROW_NUMBER() OVER (\n"
             f"           PARTITION BY f.anchor ORDER BY e.via, e.dst\n"
@@ -1623,38 +1627,43 @@ class PatternSQL(GraphAnalyticsSQL):
         # through: they never become the next frontier.
         statements += self._recreate(
             cur,
-            f"SELECT DISTINCT e.anchor AS anchor, e.node AS node\n"
+            f"SELECT DISTINCT e.anchor AS anchor, e.node AS node, e.via AS via\n"
             f"FROM {expanded} e\n"
             f"WHERE NOT EXISTS (\n"
             f"  SELECT 1 FROM {self.hubs} h WHERE h.n = e.node\n"
             f")",
         )
+        # One row per (anchor, parent, edge): the same edge seen through two
+        # incoming predicates of its parent must emit its tokens only once.
+        edges = (
+            f"(SELECT DISTINCT anchor, parent, node, via, node_type "
+            f"FROM {expanded})"
+        )
         # Structural + neighbour-attribute tokens in one Delta commit.
         statements.append(
             f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
-            f"SELECT e.anchor,\n"
-            f"       '{hop_lit}|' || e.via || '|' || e.node_type "
-            f"|| '|' || e.direction,\n"
+            f"SELECT d.anchor,\n"
+            f"       '{hop_lit}|' || d.via || '|' || d.node_type,\n"
             f"       's',\n"
             f"       {hop_lit}\n"
-            f"FROM {expanded} e\n"
+            f"FROM {edges} d\n"
             f"UNION ALL\n"
-            f"SELECT e.anchor,\n"
-            f"       '{hop_lit}|' || e.via || '|' || e.node_type "
-            f"|| '|' || e.direction || '|' || b.prop || '|' || b.bin_label,\n"
+            f"SELECT d.anchor,\n"
+            f"       '{hop_lit}|' || d.via || '|' || d.node_type "
+            f"|| '|' || b.prop || '|' || b.bin_label,\n"
             f"       'na',\n"
             f"       {hop_lit}\n"
-            f"FROM {expanded} e\n"
-            f"JOIN {self.bins_table} b ON b.n = e.node"
+            f"FROM {edges} d\n"
+            f"JOIN {self.bins_table} b ON b.n = d.node"
         )
-        # Typed edges (parent type -> child type) for the pattern diagram.
+        # Typed edges (parent node -> child node) for the pattern diagram.
         statements.append(
             f"INSERT INTO {self.typed_edges} "
-            f"(anchor, hop, parent_type, via, child_type, direction, cnt)\n"
-            f"SELECT e.anchor, {hop_lit}, e.parent_type, e.via,\n"
-            f"       e.node_type, e.direction, COUNT(*)\n"
+            f"(anchor, hop, parent_via, parent_type, via, child_type, cnt)\n"
+            f"SELECT e.anchor, {hop_lit}, e.parent_via, e.parent_type, e.via,\n"
+            f"       e.node_type, COUNT(*)\n"
             f"FROM {expanded} e\n"
-            f"GROUP BY e.anchor, e.parent_type, e.via, e.node_type, e.direction"
+            f"GROUP BY e.anchor, e.parent_via, e.parent_type, e.via, e.node_type"
         )
         statements.append(f"DROP TABLE IF EXISTS {expanded}")
         return statements
@@ -1667,8 +1676,8 @@ class PatternSQL(GraphAnalyticsSQL):
             f"kind VARCHAR(8), hop INT)",
             f"DROP TABLE IF EXISTS {self.typed_edges}",
             f"CREATE TABLE {self.typed_edges} (anchor VARCHAR(1024), hop INT, "
-            f"parent_type VARCHAR(1024), via VARCHAR(1024), "
-            f"child_type VARCHAR(1024), direction VARCHAR(8), cnt BIGINT)",
+            f"parent_via VARCHAR(1024), parent_type VARCHAR(1024), "
+            f"via VARCHAR(1024), child_type VARCHAR(1024), cnt BIGINT)",
         ]
         statements.append(
             f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
@@ -1867,13 +1876,13 @@ class PatternSQL(GraphAnalyticsSQL):
         return self._recreate(
             self.shape_edges_table,
             f"SELECT o.pattern_id AS pattern_id, t.hop AS hop,\n"
-            f"       t.parent_type AS parent_type, t.via AS via,\n"
-            f"       t.child_type AS child_type, t.direction AS direction,\n"
+            f"       t.parent_via AS parent_via, t.parent_type AS parent_type,\n"
+            f"       t.via AS via, t.child_type AS child_type,\n"
             f"       COUNT(*) AS member_count, SUM(t.cnt) AS edge_total\n"
             f"FROM {self.output_table} o\n"
             f"JOIN {self.typed_edges} t ON t.anchor = o.anchor_uri\n"
-            f"GROUP BY o.pattern_id, t.hop, t.parent_type, t.via, t.child_type, "
-            f"t.direction",
+            f"GROUP BY o.pattern_id, t.hop, t.parent_via, t.parent_type,\n"
+            f"         t.via, t.child_type",
         )
 
     def write_pattern_preview(self) -> List[str]:
@@ -1902,7 +1911,6 @@ class PatternSQL(GraphAnalyticsSQL):
             f"FROM {self.directed} e\n"
             f"JOIN {self.preview_nodes_table} a ON a.node_uri = e.src\n"
             f"JOIN {self.preview_nodes_table} b ON b.node_uri = e.dst\n"
-            f"WHERE e.direction = 'out'\n"
             f"ORDER BY e.src, e.dst\n"
             f"LIMIT {PATTERN_PREVIEW_MAX_EDGES}",
         )
@@ -2393,7 +2401,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--pattern-hub-degree", type=int, default=DEFAULT_PATTERN_HUB_DEGREE,
         help=(
-            "Do not expand through nodes with directed degree above this "
+            "Do not expand through nodes with out-degree above this "
             "(0=off; hub tokens are still emitted)"
         ),
     )

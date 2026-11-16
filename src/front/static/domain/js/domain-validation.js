@@ -437,10 +437,7 @@ function _dtBadge(flag, okText, failText, unknownText) {
 
 function _formatTimestamp(iso) {
     if (!iso) return null;
-    try {
-        var d = new Date(iso);
-        return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch (_) { return iso; }
+    return formatDateTime(iso);
 }
 
 function updateDtwinCard(data) {

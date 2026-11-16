@@ -855,16 +855,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function formatAbsoluteTime(isoStr) {
-        try {
-            const d = new Date(isoStr);
-            const pad = n => String(n).padStart(2, '0');
-            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
-            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
-                   pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) +
-                   ' (' + tz + ')';
-        } catch {
-            return isoStr;
-        }
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
+        return formatDateTime(isoStr) + ' (' + tz + ')';
     }
 
     function formatRelativeTime(isoStr) {

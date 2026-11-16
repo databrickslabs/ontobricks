@@ -1560,6 +1560,11 @@ a.sim-uri-link:focus-visible {
     cursor: pointer;
 }
 
+.pat-saved-card.is-deleting {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
 .pat-saved-card:focus-visible {
     outline: none;
     box-shadow: var(--db-focus-ring, 0 0 0 0.2rem rgba(79, 70, 229, 0.35));

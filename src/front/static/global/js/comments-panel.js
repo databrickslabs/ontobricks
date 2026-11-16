@@ -535,9 +535,7 @@
 
     function formatTime(iso) {
         if (!iso) return '';
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return '';
-        return esc(d.toLocaleString());
+        return esc(formatDateTime(iso));
     }
 
     function cssEsc(s) {

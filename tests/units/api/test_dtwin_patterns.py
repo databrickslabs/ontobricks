@@ -43,7 +43,7 @@ def wired(monkeypatch):
     monkeypatch.setattr(dtwin, "pattern_job_status", lambda d, s: (True, ""))
     monkeypatch.setattr(dtwin, "TwinAnalytics", MagicMock(return_value=dt))
     tasks = MagicMock()
-    monkeypatch.setattr(dtwin, "TwinBackgroundTasks", tasks)
+    monkeypatch.setattr(dtwin, "PatternBackgroundTasks", tasks)
     monkeypatch.setattr("back.core.task_manager.get_task_manager", lambda: tm)
     monkeypatch.setattr("threading.Thread", _Thread)
 
@@ -59,11 +59,15 @@ async def test_detect_starts_a_pattern_task(wired):
         _Request({"class_filter": "http://ex/Customer", "hops": 2}), "sm", "settings"
     )
     assert out["task_id"] == "t-1"
-    assert wired.tm.create_task.call_args.kwargs["task_type"] == "pattern_detection"
+    create_kw = wired.tm.create_task.call_args.kwargs
+    assert create_kw["task_type"] == "pattern_detection"
+    step_names = [s["name"] for s in create_kw["steps"]]
+    assert step_names == ["detect", "save"]
     wired.started[0]()
     kwargs = wired.tasks.run_pattern_task.call_args.kwargs
     assert kwargs["class_filter"] == "http://ex/Customer"
     assert kwargs["hops"] == 2
+    assert kwargs["auto_save"] is True
 
 
 async def test_detect_requires_class_filter(wired):

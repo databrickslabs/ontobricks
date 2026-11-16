@@ -12,6 +12,7 @@ PAGE = ROOT / "src/front/templates/domain.html"
 CSS = ROOT / "src/front/static/domain/css/domain-versions.css"
 JS = ROOT / "src/front/static/domain/js/domain-versions.js"
 REGISTRY_JS = ROOT / "src/front/static/registry/js/registry.js"
+UTILS_JS = ROOT / "src/front/static/global/js/utils.js"
 
 
 def _run_renderer_assertions(assertions: str, script: Path = JS) -> None:
@@ -63,6 +64,13 @@ const document = {
     getElementById: () => null
 };
 const context = vm.createContext({document, window: {}, console});
+// utils.js is a global script in the app: load its date/time formatter block first.
+const utilsSrc = fs.readFileSync(process.argv[2], 'utf8');
+vm.runInContext(
+    utilsSrc.slice(utilsSrc.indexOf('// ========== DATE / TIME FORMATTING'),
+                   utilsSrc.indexOf('// ========== STRING UTILITIES')),
+    context
+);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
 
 function allElements(root) {
@@ -71,7 +79,7 @@ function allElements(root) {
 
 """ + textwrap.dedent(assertions)
     result = subprocess.run(
-        ["node", "-e", runner, str(script)],
+        ["node", "-e", runner, str(script), str(UTILS_JS)],
         check=False,
         capture_output=True,
         text=True,

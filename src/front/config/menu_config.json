@@ -64,13 +64,6 @@
                             "icon": "bi-sliders",
                             "default": true,
                             "requires": null
-                        },
-                        {
-                            "id": "versions",
-                            "label": "Versions",
-                            "icon": "bi-123",
-                            "default": false,
-                            "requires": "domain_saved"
                         }
                     ]
                 },
@@ -87,9 +80,9 @@
                             "requires": "domain_saved"
                         },
                         {
-                            "id": "audit",
-                            "label": "Audit trail",
-                            "icon": "bi-journal-text",
+                            "id": "versions",
+                            "label": "Versions",
+                            "icon": "bi-123",
                             "default": false,
                             "requires": "domain_saved"
                         }
@@ -139,6 +132,13 @@
                             "id": "discussions",
                             "label": "Discussions",
                             "icon": "bi-chat-left-text",
+                            "default": false,
+                            "requires": "domain_saved"
+                        },
+                        {
+                            "id": "audit",
+                            "label": "Audit trail",
+                            "icon": "bi-journal-text",
                             "default": false,
                             "requires": "domain_saved"
                         }

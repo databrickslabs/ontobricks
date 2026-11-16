@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function () {
             el.textContent = 'No push since the app started' + (s.pending ? ' (' + s.pending + ' pending)' : '');
             return;
         }
-        const when = s.at ? new Date(s.at).toLocaleString() : '';
+        const when = formatDateTime(s.at);
         if (s.state === 'ok') {
             el.className = 'small text-success';
             el.innerHTML = '<i class="bi bi-check-circle me-1"></i>' + esc(s.target) + ' · ' + esc(when) +

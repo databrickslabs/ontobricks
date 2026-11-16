@@ -43,6 +43,7 @@ from back.objects.digitaltwin import (
     NodeShaclService,
     TwinAnalytics,
     TwinAssistantCache,
+    PatternBackgroundTasks,
     TwinBackgroundTasks,
     TwinDataQualityRun,
     TwinGraphAccess,
@@ -635,11 +636,14 @@ async def detect_patterns(
     task = tm.create_task(
         name="Pattern Detection",
         task_type="pattern_detection",
-        steps=[{"name": "detect", "description": "Detecting patterns on Databricks"}],
+        steps=[
+            {"name": "detect", "description": "Detecting patterns on Databricks"},
+            {"name": "save", "description": "Saving pattern catalog"},
+        ],
     )
 
     def run():
-        TwinBackgroundTasks.run_pattern_task(
+        PatternBackgroundTasks.run_pattern_task(
             tm,
             task.id,
             domain,
@@ -650,6 +654,7 @@ async def detect_patterns(
             bins=bins,
             min_support=min_support,
             refine_top=refine_top,
+            auto_save=True,
         )
 
     threading.Thread(target=run, daemon=True).start()
@@ -868,11 +873,11 @@ async def save_pattern(
     task = tm.create_task(
         name="Save Pattern",
         task_type="pattern_save",
-        steps=[{"name": "write", "description": "Saving pattern members"}],
+        steps=[{"name": "write", "description": "Saving pattern catalog"}],
     )
 
     def run():
-        TwinBackgroundTasks.run_pattern_save_task(
+        PatternBackgroundTasks.run_pattern_save_task(
             tm,
             task.id,
             domain,

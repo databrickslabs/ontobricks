@@ -348,31 +348,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Helpers ---
 
-    function _shortDate(iso) {
-        if (!iso) return '';
-        try {
-            const d = new Date(iso);
-            if (isNaN(d.getTime())) return '';
-            const now = new Date();
-            const pad = n => String(n).padStart(2, '0');
-            const date = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-            const time = pad(d.getHours()) + ':' + pad(d.getMinutes());
-            if (d.toDateString() === now.toDateString()) return 'Today ' + time;
-            const yesterday = new Date(now);
-            yesterday.setDate(yesterday.getDate() - 1);
-            if (d.toDateString() === yesterday.toDateString()) return 'Yesterday ' + time;
-            return date + ' ' + time;
-        } catch (_) { return ''; }
-    }
-
     function _formatVersionDates(lastUpdate, lastBuild) {
         if (!lastUpdate && !lastBuild) return '';
         let html = '<div class="registry-version-dates text-muted">';
         if (lastUpdate) {
-            html += '<div><i class="bi bi-pencil-square me-1"></i><span class="registry-date-label">Updated:</span> ' + escapeHtml(_shortDate(lastUpdate)) + '</div>';
+            html += '<div><i class="bi bi-pencil-square me-1"></i><span class="registry-date-label">Updated:</span> ' + escapeHtml(formatDateTime(lastUpdate)) + '</div>';
         }
         if (lastBuild) {
-            html += '<div><i class="bi bi-hammer me-1"></i><span class="registry-date-label">Built:</span> ' + escapeHtml(_shortDate(lastBuild)) + '</div>';
+            html += '<div><i class="bi bi-hammer me-1"></i><span class="registry-date-label">Built:</span> ' + escapeHtml(formatDateTime(lastBuild)) + '</div>';
         }
         html += '</div>';
         return html;

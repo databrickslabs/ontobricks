@@ -597,7 +597,7 @@ const PagesManager = {
         try {
             const d = new Date(iso);
             if (Number.isNaN(d.getTime())) return iso;
-            return d.toLocaleDateString();
+            return formatDateTime(iso);
         } catch (_) {
             return iso;
         }

@@ -118,13 +118,64 @@ def shape_query(out: str, pattern_id: str) -> str:
     )
 
 
-def shape_edges_query(out: str, pattern_id: str) -> str:
+def shape_edges_query(out: str, pattern_id: str, *, legacy: bool = False) -> str:
+    """Typed edges for one pattern's diagram.
+
+    ``legacy=True`` reads Detect tables written before ``parent_via`` existed
+    (those runs still have ``direction``). Callers should prefer the default
+    query and fall back via :func:`fetch_shape_edges`.
+    """
+    cols = (
+        "hop, parent_type, via, child_type, member_count, edge_total"
+        if legacy
+        else "hop, parent_via, parent_type, via, child_type, member_count, edge_total"
+    )
     return (
-        "SELECT hop, parent_type, via, child_type, direction, member_count, "
-        f"edge_total FROM {out}_shape_edges "
+        f"SELECT {cols} FROM {out}_shape_edges "
         f"WHERE pattern_id = {_sql_str(pattern_id)} "
         f"ORDER BY hop, member_count DESC, via LIMIT {MAX_DIAGRAM_EDGES + 1}"
     )
+
+
+def _missing_parent_via_column(exc: Exception) -> bool:
+    text = str(exc)
+    lowered = text.lower()
+    if "parent_via" not in lowered:
+        return False
+    return (
+        "unresolved_column" in lowered
+        or "no such column" in lowered
+        or "cannot be resolved" in lowered
+        or "does not exist" in lowered
+    )
+
+
+def fetch_shape_edges(
+    query: Callable[[str], Any], out: str, pattern_id: str
+) -> list[dict[str, Any]] | None:
+    """Load shape-edge rows, tolerating Detect tables without ``parent_via``.
+
+    Returns ``None`` when the edges table is missing, otherwise a list (possibly
+    empty). Legacy rows get ``parent_via=""`` so the diagram still draws every
+    hop; hop-2+ chains may splice until the pattern job is redeployed.
+    """
+    try:
+        raw = list(query(shape_edges_query(out, pattern_id)) or [])
+    except Exception as exc:  # noqa: BLE001
+        if names_a_missing_object(exc):
+            return None
+        if not _missing_parent_via_column(exc):
+            raise
+        try:
+            raw = list(query(shape_edges_query(out, pattern_id, legacy=True)) or [])
+        except Exception as legacy_exc:  # noqa: BLE001
+            if names_a_missing_object(legacy_exc):
+                return None
+            raise
+        logger.info(
+            "shape_edges for %s lack parent_via; using legacy layout", pattern_id
+        )
+    return [{**dict(row), "parent_via": str(row.get("parent_via") or "")} for row in raw]
 
 
 def membership_batch_query(out: str, pattern_id: str, after_uri: str, limit: int) -> str:
@@ -379,7 +430,7 @@ class JobPatterns:
         self, pattern_id: str, support: int, tokens: List[Any]
     ) -> Optional[Dict[str, Any]]:
         """Layered diagram, or ``None`` for runs older than the edges table."""
-        edge_rows = self._safe_rows(shape_edges_query(self._out, pattern_id))
+        edge_rows = fetch_shape_edges(self._query, self._out, pattern_id)
         if edge_rows is None:
             return None
         stats = self.summary() or {}

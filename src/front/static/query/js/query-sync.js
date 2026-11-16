@@ -503,8 +503,7 @@ function _applyDtExistence(data) {
     if (lastUpdateEl) {
         if (data.last_update) {
             try {
-                var dtu = new Date(data.last_update);
-                var fmtU = dtu.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                var fmtU = formatDateTime(data.last_update);
                 lastUpdateEl.innerHTML = '<i class="bi bi-info-circle-fill text-info me-1"></i>' + fmtU;
                 lastUpdateEl.className = '';
             } catch (_) { lastUpdateEl.textContent = data.last_update; lastUpdateEl.className = ''; }
@@ -517,8 +516,7 @@ function _applyDtExistence(data) {
     if (lastBuiltEl) {
         if (data.last_built) {
             try {
-                var dt = new Date(data.last_built);
-                var formatted = dt.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                var formatted = formatDateTime(data.last_built);
                 lastBuiltEl.innerHTML = '<i class="bi bi-check-circle-fill text-success me-1"></i>' + formatted;
                 lastBuiltEl.className = '';
             } catch (_) { lastBuiltEl.textContent = data.last_built; lastBuiltEl.className = ''; }

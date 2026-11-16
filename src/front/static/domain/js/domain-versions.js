@@ -191,8 +191,8 @@ function renderVersionCard(version, domainFolder) {
     );
     [
         ['person', version.author || 'Unknown author'],
-        ['clock', version.last_update || 'No update date'],
-        ['hammer', version.last_build || 'Not built']
+        ['clock', formatDateTime(version.last_update) || 'No update date'],
+        ['hammer', formatDateTime(version.last_build) || 'Not built']
     ].forEach(function (item) {
         const value = createVersionElement('span', '', item[1]);
         prependVersionIcon(value, item[0]);

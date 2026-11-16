@@ -156,6 +156,45 @@ def test_shape_diagram_is_none_for_runs_without_the_edges_table():
     assert jp.shape(pid, with_diagram=True)["diagram"] is None
 
 
+def test_shape_diagram_reads_legacy_edges_without_parent_via():
+    """Detect tables from before the parent_via column still draw hops."""
+    runner = SqliteRunner(alice_bob_carol())
+    builder = PatternSQL(
+        source_table="triples",
+        work_prefix="w",
+        output_table="out",
+        class_filter=[CUSTOMER],
+        hops=2,
+        min_support=1,
+    )
+    run_patterns(runner.execute, runner.scalar, builder, computed_at="t0", cleanup=False)
+    # Downgrade to the pre-parent_via layout the warehouse still has until
+    # the pattern job is redeployed.
+    rows = runner.rows(
+        "SELECT pattern_id, hop, parent_type, via, child_type, "
+        "member_count, edge_total FROM out_shape_edges"
+    )
+    runner.execute("DROP TABLE out_shape_edges")
+    runner.execute(
+        "CREATE TABLE out_shape_edges ("
+        "pattern_id TEXT, hop INT, parent_type TEXT, via TEXT, child_type TEXT, "
+        "member_count INT, edge_total INT, direction TEXT)"
+    )
+    for r in rows:
+        runner.execute(
+            "INSERT INTO out_shape_edges VALUES ("
+            f"'{r['pattern_id']}', {r['hop']}, '{r['parent_type']}', "
+            f"'{r['via']}', '{r['child_type']}', {r['member_count']}, "
+            f"{r['edge_total']}, 'out')"
+        )
+    jp = JobPatterns("triples", runner=_Runner(), query=_query(runner), output_table="out")
+    pid = jp.top_patterns(1)[0]["id"]
+    diagram = jp.shape(pid, with_diagram=True)["diagram"]
+    labels = {n["type_label"] for n in diagram["nodes"]}
+    assert {"Customer", "Order", "Product"} <= labels
+    assert len(diagram["edges"]) >= 2
+
+
 def test_summary_reports_the_detail_level_the_job_settled_on(detected):
     assert detected.summary()["detail_level"] == "full"
 

@@ -105,13 +105,24 @@ def _run(triples, **kwargs):
 
 
 COUNTRY_T = NS + "Country"
+REGION_T = NS + "Region"
 IN_COUNTRY = NS + "inCountry"
+HAS_REGION = NS + "hasRegion"
 FRANCE = NS + "France"
 
 
-def hub_country_fixture(n_customers: int = 6) -> List[Dict[str, str]]:
-    """Many customers point at one Country; walking through it cross-links them."""
+def hub_country_fixture(n_customers: int = 6, n_regions: int = 6) -> List[Dict[str, str]]:
+    """Customers point at one Country, which lists many Regions.
+
+    Walks are forward-only, so the hub is France's *outgoing* ``hasRegion``
+    fan-out: expanding through it from every customer would pull in every
+    region.
+    """
     rows = _entity(FRANCE, COUNTRY_T, "France")
+    for k in range(n_regions):
+        region = NS + f"Region{k}"
+        rows += _entity(region, REGION_T, f"Region{k}")
+        rows.append(_t(FRANCE, HAS_REGION, region))
     for i in range(n_customers):
         cust = NS + f"Cust{i}"
         rows += _entity(cust, CUSTOMER, f"Cust{i}", **{TIER: "gold"})
@@ -123,7 +134,7 @@ def hub_country_fixture(n_customers: int = 6) -> List[Dict[str, str]]:
 
 
 class TestHubPruning:
-    def test_threshold_zero_keeps_cross_customer_walk(self):
+    def test_threshold_zero_walks_through_the_hub(self):
         runner, _, stats = _run(
             hub_country_fixture(6), hops=2, min_support=1, hub_degree=0
         )
@@ -134,13 +145,13 @@ class TestHubPruning:
                 f"SELECT node FROM w_frontier_2 WHERE anchor = '{NS}Cust0'"
             )
         }
-        assert any(n.startswith(NS + "Cust") and n != NS + "Cust0" for n in f2)
+        assert any(n.startswith(NS + "Region") for n in f2)
 
     def test_low_threshold_stops_at_the_hub(self):
         runner, builder, stats = _run(
             hub_country_fixture(6), hops=2, min_support=1, hub_degree=3
         )
-        assert int(stats["hub_count"]) >= 1
+        assert int(stats["hub_count"]) == 1
         assert int(stats["hub_degree"]) == 3
         f2 = {
             r["node"]
@@ -148,8 +159,7 @@ class TestHubPruning:
                 f"SELECT node FROM w_frontier_2 WHERE anchor = '{NS}Cust0'"
             )
         }
-        assert FRANCE not in f2
-        assert not any(n.startswith(NS + "Cust") and n != NS + "Cust0" for n in f2)
+        assert not any(n.startswith(NS + "Region") for n in f2)
         tokens = runner.rows(
             f"SELECT token FROM {builder.tokens} "
             f"WHERE anchor = '{NS}Cust0' AND kind = 's' AND hop = 1"
@@ -204,8 +214,8 @@ class TestDenormalizedTypes:
     def test_directed_edges_carry_endpoint_types(self):
         runner, builder, _ = _run(alice_bob_carol(), hops=2, min_support=1)
         rows = runner.rows(
-            f"SELECT src, dst, direction, src_type, dst_type FROM {builder.directed} "
-            f"WHERE via = '{HAS_ORDER}' AND direction = 'out' LIMIT 1"
+            f"SELECT src, dst, src_type, dst_type FROM {builder.directed} "
+            f"WHERE via = '{HAS_ORDER}' LIMIT 1"
         )
         assert rows[0]["src_type"] == CUSTOMER
         assert rows[0]["dst_type"] == ORDER
@@ -216,15 +226,15 @@ class TestDenormalizedTypes:
             f"SELECT pattern_id FROM out WHERE anchor_uri = '{NS}Alice'"
         )
         edges = runner.rows(
-            "SELECT hop, parent_type, via, child_type, direction "
+            "SELECT hop, parent_type, via, child_type "
             f"FROM out_shape_edges WHERE pattern_id = '{pid}' ORDER BY hop, via"
         )
         assert [
-            (e["hop"], e["parent_type"], e["via"], e["child_type"], e["direction"])
+            (e["hop"], e["parent_type"], e["via"], e["child_type"])
             for e in edges
         ] == [
-            (1, CUSTOMER, HAS_ORDER, ORDER, "out"),
-            (2, ORDER, HAS_PRODUCT, PRODUCT, "out"),
+            (1, CUSTOMER, HAS_ORDER, ORDER),
+            (2, ORDER, HAS_PRODUCT, PRODUCT),
         ]
 
 
@@ -597,7 +607,7 @@ class TestShapeEdges:
             f"SELECT pattern_id FROM out WHERE anchor_uri = '{NS}{anchor_name}'"
         )
         return runner.rows(
-            "SELECT hop, parent_type, via, child_type, direction, member_count, "
+            "SELECT hop, parent_type, via, child_type, member_count, "
             f"edge_total FROM out_shape_edges WHERE pattern_id = '{pid}' "
             "ORDER BY hop, via"
         )
@@ -605,10 +615,10 @@ class TestShapeEdges:
     def test_edges_link_parent_and_child_types_per_hop(self):
         runner, _, _ = _run(alice_bob_carol())
         edges = self._edges(runner, "Alice")
-        assert [(e["hop"], e["parent_type"], e["via"], e["child_type"], e["direction"])
+        assert [(e["hop"], e["parent_type"], e["via"], e["child_type"])
                 for e in edges] == [
-            (1, CUSTOMER, HAS_ORDER, ORDER, "out"),
-            (2, ORDER, HAS_PRODUCT, PRODUCT, "out"),
+            (1, CUSTOMER, HAS_ORDER, ORDER),
+            (2, ORDER, HAS_PRODUCT, PRODUCT),
         ]
 
     def test_counts_members_and_neighbours(self):
@@ -626,23 +636,130 @@ class TestShapeEdges:
         assert back == []
 
 
-class TestShortestDistanceShells:
-    """Hop k only holds nodes exactly k steps away from the anchor."""
+HAS_CONTRACT = NS + "hasContract"
+CONTRACT = NS + "Contract"
 
-    def test_hop_three_does_not_step_back_to_hop_one(self):
-        # Alice -> O1 -> Phone <- O3 (Bob's order): hop 3 is O3, not O1 again.
-        runner, _, _ = _run(alice_bob_carol(), hops=3)
-        rows = runner.rows(
-            "SELECT hop, parent_type, child_type, direction FROM out_shape_edges "
-            "ORDER BY hop"
+
+class TestForwardOnlyWalk:
+    """Relations are followed subject -> object and never in reverse."""
+
+    def test_inbound_relation_is_not_walked(self):
+        # Only Order -> Customer (hasCustomer) exists: the customer has no
+        # outgoing relation, so its neighbourhood is empty.
+        triples = _entity(NS + "Cust0", CUSTOMER, "Cust0", **{TIER: "gold"})
+        triples += _entity(NS + "Ord0", ORDER, "Ord0")
+        triples.append(_t(NS + "Ord0", NS + "hasCustomer", NS + "Cust0"))
+        runner, _, stats = _run(triples, hops=2, min_support=1)
+        assert runner.rows(
+            f"SELECT node FROM w_frontier_1 WHERE anchor = '{NS}Cust0'"
+        ) == []
+        assert runner.rows("SELECT hop_count FROM out_shapes")[0]["hop_count"] == 0
+
+    def test_shared_contract_does_not_invent_reverse_hasContract(self):
+        """Addison-Martin bug: two customers share one Contract.
+
+        Old bidirectional walks did ``Customer -hasContract-> Contract
+        -hasContract(in)-> other Customer``, which drew a phantom
+        ``Contract → hasContract → Customer`` edge. Forward-only must keep
+        hop 2 empty for that path.
+        """
+        contract = NS + "Contract1"
+        triples = _entity(contract, CONTRACT, "Contract1")
+        for name in ("Addison", "Martin"):
+            cust = NS + name
+            triples += _entity(cust, CUSTOMER, name)
+            triples.append(_t(cust, HAS_CONTRACT, contract))
+        runner, _, _ = _run(triples, hops=2, min_support=1)
+
+        # Hop 1 reaches the shared contract; hop 2 must not walk back.
+        f1 = {r["node"] for r in runner.rows(
+            f"SELECT node FROM w_frontier_1 WHERE anchor = '{NS}Addison'")}
+        f2 = runner.rows(
+            f"SELECT node FROM w_frontier_2 WHERE anchor = '{NS}Addison'")
+        assert f1 == {contract}
+        assert f2 == []
+
+        edges = runner.rows(
+            "SELECT hop, parent_type, via, child_type FROM out_shape_edges "
+            "ORDER BY hop, via"
         )
-        assert (3, PRODUCT, ORDER, "in") in {
-            (r["hop"], r["parent_type"], r["child_type"], r["direction"]) for r in rows
-        }
+        assert [
+            (e["hop"], e["parent_type"], e["via"], e["child_type"]) for e in edges
+        ] == [
+            (1, CUSTOMER, HAS_CONTRACT, CONTRACT),
+        ]
+        assert not any(
+            e["parent_type"] == CONTRACT and e["child_type"] == CUSTOMER
+            for e in edges
+        )
+
+    def test_chain_hangs_off_the_predicate_that_reached_it(self):
+        """Addison-Martin, second shape: K0 is reached by hasContract with no
+        outgoing edge; Y0 is reached by hasPolicy and has hasContract -> Martin.
+
+        The hop-2 edge must hang off the hasPolicy Contract only. It must not
+        be drawn under the hasContract Contract, which never had that edge.
+        """
+        hp = NS + "hasPolicy"
+        k0, y0 = NS + "K0", NS + "Y0"
+        triples = _entity(NS + "Addison", CUSTOMER, "Addison")
+        triples += _entity(NS + "Martin", CUSTOMER, "Martin")
+        triples += _entity(k0, CONTRACT, "K0")
+        triples += _entity(y0, CONTRACT, "Y0")
+        triples.append(_t(NS + "Addison", HAS_CONTRACT, k0))
+        triples.append(_t(NS + "Addison", hp, y0))
+        triples.append(_t(y0, HAS_CONTRACT, NS + "Martin"))
+        runner, _, _ = _run(triples, hops=2, min_support=1)
+        pid = runner.scalar(
+            f"SELECT pattern_id FROM out WHERE anchor_uri = '{NS}Addison'"
+        )
+        edges = runner.rows(
+            "SELECT hop, parent_via, parent_type, via, child_type "
+            f"FROM out_shape_edges WHERE pattern_id = '{pid}' "
+            "ORDER BY hop, parent_via, via"
+        )
+        assert [
+            (e["hop"], e["parent_via"], e["parent_type"], e["via"], e["child_type"])
+            for e in edges
+        ] == [
+            (1, "", CUSTOMER, HAS_CONTRACT, CONTRACT),
+            (1, "", CUSTOMER, hp, CONTRACT),
+            (2, hp, CONTRACT, HAS_CONTRACT, CUSTOMER),
+        ]
+
+    def test_walk_stops_at_dead_ends(self):
+        # Alice -> O1 -> Phone -> (nothing): hop 3 is empty, nothing is
+        # reached by walking an edge backwards (Phone has an inbound Order).
+        runner, _, _ = _run(alice_bob_carol(), hops=3)
         frontier_1 = {r["node"] for r in runner.rows(
             f"SELECT node FROM w_frontier_1 WHERE anchor = '{NS}Alice'")}
-        frontier_3 = {r["node"] for r in runner.rows(
-            f"SELECT node FROM w_frontier_3 WHERE anchor = '{NS}Alice'")}
+        frontier_2 = {r["node"] for r in runner.rows(
+            f"SELECT node FROM w_frontier_2 WHERE anchor = '{NS}Alice'")}
+        frontier_3 = runner.rows(
+            f"SELECT node FROM w_frontier_3 WHERE anchor = '{NS}Alice'")
         assert frontier_1 == {NS + "O1", NS + "O2"}
-        assert frontier_3 == {NS + "O3", NS + "O4"}
-        assert not frontier_1 & frontier_3
+        assert frontier_2 == {NS + "Phone", NS + "Case"}
+        assert frontier_3 == []
+
+
+class TestShortestDistanceShells:
+    """Hop k only holds nodes not already reached at hops k-1 or k-2."""
+
+    def test_cycle_does_not_step_back_to_an_earlier_hop(self):
+        # Alice -> O1 -> Phone -> O1 (cycle): O1 is already hop 1, so hop 3
+        # must not revisit it.
+        triples = _entity(NS + "Alice", CUSTOMER, "Alice")
+        triples += _entity(NS + "O1", ORDER, "O1")
+        triples += _entity(NS + "Phone", PRODUCT, "Phone")
+        triples.append(_t(NS + "Alice", HAS_ORDER, NS + "O1"))
+        triples.append(_t(NS + "O1", HAS_PRODUCT, NS + "Phone"))
+        triples.append(_t(NS + "Phone", NS + "soldIn", NS + "O1"))
+        runner, _, _ = _run(triples, hops=3, min_support=1)
+
+        def frontier(hop):
+            return {r["node"] for r in runner.rows(
+                f"SELECT node FROM w_frontier_{hop} WHERE anchor = '{NS}Alice'")}
+
+        assert frontier(1) == {NS + "O1"}
+        assert frontier(2) == {NS + "Phone"}
+        assert frontier(3) == set()

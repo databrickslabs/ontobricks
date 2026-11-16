@@ -135,9 +135,9 @@
             lines.push("Task ID         : " + (task.id || ""));
             lines.push("Name            : " + (task.name || ""));
             lines.push("Status          : " + (task.status || ""));
-            if (task.created_at) lines.push("Created at      : " + task.created_at);
-            if (task.started_at) lines.push("Started at      : " + task.started_at);
-            if (task.completed_at) lines.push("Completed at    : " + task.completed_at);
+            if (task.created_at) lines.push("Created at      : " + formatDateTime(task.created_at));
+            if (task.started_at) lines.push("Started at      : " + formatDateTime(task.started_at));
+            if (task.completed_at) lines.push("Completed at    : " + formatDateTime(task.completed_at));
             const totalDur = _computeTaskDuration(task);
             if (totalDur) lines.push("Total duration  : " + totalDur);
             if (task.progress != null) lines.push("Progress        : " + task.progress + "%");
@@ -154,8 +154,8 @@
                     const status = (step.status || "pending").toUpperCase().padEnd(9, " ");
                     const desc = step.description || step.name || "Step " + (idx + 1);
                     lines.push("[" + num + "] " + status + " " + desc);
-                    if (step.started_at) lines.push("     started   : " + step.started_at);
-                    if (step.completed_at) lines.push("     completed : " + step.completed_at);
+                    if (step.started_at) lines.push("     started   : " + formatDateTime(step.started_at));
+                    if (step.completed_at) lines.push("     completed : " + formatDateTime(step.completed_at));
                     if (step.started_at) {
                         const duration = _formatTaskDuration(step.started_at, step.completed_at || null);
                         if (duration) {
@@ -184,7 +184,7 @@
             }
 
             lines.push(sep);
-            lines.push("Exported at     : " + new Date().toISOString());
+            lines.push("Exported at     : " + formatDateTime(new Date()));
             lines.push(sep);
             return lines.join("\n");
         }

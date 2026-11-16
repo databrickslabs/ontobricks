@@ -28,9 +28,7 @@ window.RunsRender = (function () {
 
     function fmtTs(iso) {
         if (!iso) return '—';
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return esc(iso);
-        return d.toLocaleString();
+        return esc(formatDateTime(iso));
     }
 
     function fmtDuration(secs) {

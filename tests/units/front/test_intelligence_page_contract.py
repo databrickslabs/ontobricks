@@ -867,8 +867,9 @@ def test_patterns_section_owns_discovery():
     assert "Anchor type" not in detect_modal
     assert "{% include \"partials/intelligence/_intel_patterns_detect_modal.html\" %}" in html
     js_patterns = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
-    assert "_autoSaveAfterDetect" in js_patterns
-    assert "_autoSaveLabel" in js_patterns
+    assert "_autoSaveAfterDetect" not in js_patterns
+    assert "_autoSaveLabel" not in js_patterns
+    assert "task.result.saved_id" in js_patterns
     assert "_restoreDiscoverPreview" in js_patterns
     assert "openSavedById(savedId" in js_patterns
     assert "openSaveModal" not in js_patterns
@@ -983,15 +984,17 @@ def test_patterns_section_owns_discovery():
     js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
     assert "/dtwin/patterns/detect" in js
     assert "/dtwin/patterns/latest" in js
-    assert "/dtwin/patterns/save" in js
     assert "waitForTask" in js
     assert "pattern_detection" in js
+    # Detect+save is one task; resume may still see a legacy pattern_save.
     assert "pattern_save" in js
     assert "showDeleteConfirm" in js
+    assert "is-deleting" in js
     assert "alert(" not in js
     assert "confirm(" not in js
     assert "prompt(" not in js
     css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".pat-saved-card.is-deleting" in css
     assert ".pat-layout" in css
     assert ".pat-rail" not in css
     assert ".pat-main" in css

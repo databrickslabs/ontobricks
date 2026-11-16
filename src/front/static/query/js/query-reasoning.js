@@ -379,10 +379,9 @@ const ReasoningModule = {
             detailText += ` (+ ${schemaInferred} schema/structural)`;
         document.getElementById('reportTotalDetails').textContent = detailText;
 
-        const ts = result.last_run || new Date().toISOString();
-        const d = new Date(ts);
+        const ts = result.last_run || new Date();
         document.getElementById('reportTimestamp').textContent =
-            `Executed at ${d.toLocaleString()}`;
+            `Executed at ${formatDateTime(ts)}`;
     },
 
     // ── Materialise (post-run) ───────────────────────────────────

@@ -2,9 +2,9 @@
 
 Pure: rows of ``<out>_shape_edges`` plus the pattern's shape tokens in, a small
 node / edge model the Patterns page draws as a layered diagram out. A node is a
-``(hop, type)`` pair, so one node stands for every neighbour of that type at
-that distance from the anchor; an edge carries how many members have it
-(``share``) and how many such neighbours a member has on average (``avg``).
+``(hop, type)`` pair: one box per entity type at each distance from the
+anchor. An edge carries how many members have it (``share``) and how many
+such neighbours a member has on average (``avg``).
 """
 
 from __future__ import annotations
@@ -23,7 +23,13 @@ def local_label(uri: str) -> str:
     return tail.rsplit("#", 1)[-1] or uri
 
 
-def node_id(hop: int, type_uri: str) -> str:
+def node_id(hop: int, type_uri: str, via: str = "") -> str:
+    """``hop|type`` — one node per entity type per hop column.
+
+    ``via`` is accepted for call-site compatibility and ignored: the diagram
+    never splits a type into multiple boxes in the same column.
+    """
+    del via
     return f"{int(hop)}|{type_uri or ''}"
 
 
@@ -39,16 +45,14 @@ def _attribute_of(token: str) -> Optional[tuple]:
     """``(node_id, prop, value)`` for an attribute token, else ``None``.
 
     Hop-0 tokens are ``0||type|self|prop|bin``; neighbour tokens are
-    ``hop|via|type|direction|prop|bin``. Structural tokens have 4 fields.
+    ``hop|via|type|prop|bin``. Structural tokens are ``hop|via|type``.
     """
     parts = str(token).split("|")
-    if len(parts) != 6 or not parts[4]:
-        return None
-    if parts[3] == "self":
+    if len(parts) == 6 and parts[3] == "self" and parts[4]:
         return node_id(0, parts[2]), parts[4], parts[5]
-    if not parts[0].isdigit():
-        return None
-    return node_id(int(parts[0]), parts[2]), parts[4], parts[5]
+    if len(parts) == 5 and parts[0].isdigit() and parts[3]:
+        return node_id(int(parts[0]), parts[2]), parts[3], parts[4]
+    return None
 
 
 def _node(nodes: Dict[str, Dict[str, Any]], hop: int, type_uri: str) -> str:
@@ -92,7 +96,6 @@ def build_pattern_diagram(
                 "target": target,
                 "via": via,
                 "via_label": local_label(via),
-                "direction": str(row.get("direction") or "out"),
                 "share": round(members / support, 3) if support else 0.0,
                 "avg": round(int(row.get("edge_total") or 0) / members, 2)
                 if members
