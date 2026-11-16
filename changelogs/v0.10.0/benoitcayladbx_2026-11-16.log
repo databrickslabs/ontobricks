@@ -566,3 +566,34 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10640 passed, 333 skipped, 8 deselected, 39 warnings in 51.37s ========
+
+## Fix Mapping Visual spinner that never stops
+
+Context: Graph → Mapping → Visual sometimes stayed on "Loading mapping
+design..." forever. The overlay defaulted to display:flex, Mapping section
+entry armed the spinner even for the Informations tab then returned early,
+and opening Visual before MappingState finished loading skipped init entirely.
+
+Changes:
+1. src/front/templates/partials/mapping/_mapping_design.html
+   Overlay starts with display:none / aria-hidden.
+2. src/front/static/global/css/mapping.css
+   Mapping designer overlay CSS default is display:none.
+3. src/front/static/mapping/js/mapping-init.js
+   Informations/List no longer arm the Visual spinner; ?tab=visual lets
+   MappingStudioTabs own init (avoids the Bootstrap .active race).
+4. src/front/static/mapping/js/mapping-design.js
+   Visual tab shown always calls initMappingDesigner (waits for MappingState);
+   loadMapLayout aborts after 8s; init finally always clears the overlay.
+5. tests/units/front/test_mapping_visual_spinner_hang.py
+   Regression contracts for the three hang modes.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/static/global/css/mapping.css
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/js/mapping-design.js
+- tests/units/front/test_mapping_visual_spinner_hang.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10647 passed, 333 skipped, 8 deselected, 39 warnings in 50.39s ========

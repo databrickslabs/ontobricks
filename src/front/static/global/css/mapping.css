@@ -47,7 +47,9 @@
     position: relative;
 }
 
-/* Designer Loading Overlay */
+/* Designer Loading Overlay — hidden until showMappingDesignerLoading(true).
+   Starting as display:flex left the Visual spinner stuck whenever init was
+   skipped (Informations default tab, or Visual opened before MappingState). */
 .mapping-designer-container .designer-loading-overlay {
     position: absolute;
     top: 0;
@@ -55,7 +57,7 @@
     right: 0;
     bottom: 0;
     background: rgba(255, 255, 255, 0.95);
-    display: flex;
+    display: none;
     flex-direction: column;
     align-items: center;
     justify-content: center;

@@ -102,21 +102,30 @@ function showMappingDesignerLoading(show) {
     const loadingEl = document.getElementById('mappingDesignerLoading');
     if (loadingEl) {
         loadingEl.style.display = show ? 'flex' : 'none';
+        loadingEl.setAttribute('aria-hidden', show ? 'false' : 'true');
     }
 }
 
 /**
- * Load saved map layout from the Ontology Designer
+ * Load saved map layout from the Ontology Designer.
+ * Hard-capped so a hung warehouse/session call cannot leave the Visual spinner on.
  */
 async function loadMapLayout() {
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
     try {
-        const response = await fetch('/domain/map-layout', { credentials: 'same-origin' });
+        const response = await fetch('/domain/map-layout', {
+            credentials: 'same-origin',
+            signal: ctrl ? ctrl.signal : undefined,
+        });
         const data = await response.json();
         if (data.success && data.layout) {
             return data.layout;
         }
     } catch (error) {
         console.log('[MappingMap] Could not load map layout:', error);
+    } finally {
+        if (timer) clearTimeout(timer);
     }
     return null;
 }
@@ -1037,11 +1046,11 @@ async function initMappingDesigner(opts) {
     } catch (error) {
         console.error('Error initializing mapping map:', error);
     } finally {
-        if (showLoading) {
-            setTimeout(() => {
-                showMappingDesignerLoading(false);
-            }, 500);
-        }
+        // Always clear — a prior show(true) can outlive a silent re-init
+        // (showLoading:false), and a hung overlay is worse than a brief flash.
+        const hide = () => showMappingDesignerLoading(false);
+        if (showLoading) setTimeout(hide, 500);
+        else hide();
     }
 }
 
@@ -4090,11 +4099,16 @@ const MappingStudioTabs = {
                         highlightMappingMapSelection(currentPanelType, currentPanelUri, null);
                     }
                 }, 80);
-            } else if (typeof initMappingDesigner === 'function'
-                    && typeof MappingState !== 'undefined' && MappingState.initialized) {
+            } else if (typeof initMappingDesigner === 'function') {
+                // Always start (and clear) the Visual spinner. Do not require
+                // MappingState.initialized yet — initMappingDesigner waits for it.
+                // Skipping here used to leave the CSS-default overlay stuck forever
+                // when the user opened Visual before MappingState finished loading.
+                if (typeof showMappingDesignerLoading === 'function') {
+                    showMappingDesignerLoading(true);
+                }
                 setTimeout(function () {
                     initMappingDesigner();
-                    if (typeof centerMappingDiagram === 'function') centerMappingDiagram(false);
                 }, 50);
             }
         }

@@ -294,35 +294,39 @@ const mappingSidebarConfig = {
                 }
                 if (tab === 'visual') {
                     MappingStudioTabs.show('visual');
+                    // show() → _onShown('visual') owns the spinner + init. Do not
+                    // also show the spinner here: MappingStudioTabs.current() can
+                    // still read "informations" until Bootstrap flips .active, and
+                    // the early-return below used to leave the overlay stuck on.
+                    document.dispatchEvent(new CustomEvent('sectionChange', { detail: { section: 'design' } }));
+                    return;
                 }
             }
-            // Show spinner immediately so the user never sees stale/empty content
+            // Informations / List do not own the canvas — never arm the Visual
+            // spinner for those tabs. Visual init is owned by MappingStudioTabs.
+            if (typeof MappingStudioTabs !== 'undefined'
+                    && MappingStudioTabs.current() !== 'visual') {
+                document.dispatchEvent(new CustomEvent('sectionChange', { detail: { section } }));
+                return;
+            }
+            // Legacy host without Studio tabs: keep the previous Visual init path.
             if (typeof showMappingDesignerLoading === 'function') {
                 showMappingDesignerLoading(true);
             }
-            // Add delay to ensure section is visible and container is ready
-            // Also wait for MappingState to be initialized
             const tryInitDesigner = (retries = 0) => {
                 const container = document.getElementById('mapping-map-container');
-                // Only the Visual tab owns the canvas; Informations / List skip it.
-                const visualActive = typeof MappingStudioTabs === 'undefined'
-                    || MappingStudioTabs.current() === 'visual';
-                if (!visualActive) return;
                 const isVisible = container && container.offsetParent !== null;
-                
+
                 if (isVisible && MappingState.initialized) {
                     initMappingDesigner();
                 } else if (retries < 10) {
-                    // Retry after a short delay (up to 10 times = 1 second total)
                     setTimeout(() => tryInitDesigner(retries + 1), 100);
                 } else {
-                    // Force init after max retries
                     console.warn('Mapping Page: Force initializing designer after timeout');
                     initMappingDesigner();
                 }
             };
-            
-            // Start with a small initial delay for CSS transitions
+
             setTimeout(() => tryInitDesigner(0), 50);
         }
         // Dispatch event for other modules
@@ -369,13 +373,12 @@ async function initializeDefaultSection() {
                     && MappingStudioTabs.current() === 'list'
                     && typeof ManualModule !== 'undefined') {
                 ManualModule.init();
-            } else if (typeof MappingStudioTabs === 'undefined'
-                    || MappingStudioTabs.current() === 'visual') {
-                // Informations (default) and List do not own the canvas; Visual
-                // initialises it lazily when its tab is shown.
-                if (typeof showMappingDesignerLoading === 'function') showMappingDesignerLoading(true);
-                if (typeof initMappingDesigner === 'function') initMappingDesigner();
+            } else if (typeof MappingStudioTabs !== 'undefined'
+                    && MappingStudioTabs.current() === 'visual') {
+                // Visual owns the canvas; _onShown also covers tab clicks.
+                MappingStudioTabs._onShown('visual');
             }
+            // Informations / List: do not arm the Visual spinner.
         }
     }
 }
