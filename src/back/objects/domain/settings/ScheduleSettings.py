@@ -196,11 +196,12 @@ class ScheduleSettings:
     ) -> Dict[str, Any]:
         """One page of registry-wide run history for the admin Runs page.
 
-        *kind* is ``"build"``, ``"analytics"``, or ``"simulation"``.
-        ``folder=None`` spans every domain. The kinds share every step but
-        the registry method, so they share one body rather than near-copies.
+        *kind* is ``"build"``, ``"analytics"``, ``"simulation"``,
+        ``"community"`` or ``"pattern"``. ``folder=None`` spans every domain.
+        The kinds share every step but the registry method, so they share one
+        body rather than near-copies.
         """
-        if kind not in ("build", "analytics", "simulation"):
+        if kind not in ("build", "analytics", "simulation", "community", "pattern"):
             raise ValidationError(f"Unknown run kind: {kind}")
         try:
             domain = _ss.get_domain(session_mgr)
@@ -215,6 +216,10 @@ class ScheduleSettings:
                 reader = svc.load_all_build_runs
             elif kind == "analytics":
                 reader = svc.load_all_graph_analytics_runs
+            elif kind == "community":
+                reader = svc.store.load_all_community_runs
+            elif kind == "pattern":
+                reader = svc.store.load_all_pattern_runs
             else:
                 reader = svc.store.load_all_simulation_runs
             runs, total = reader(folder=folder, limit=limit, offset=offset)

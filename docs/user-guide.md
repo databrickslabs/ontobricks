@@ -1002,7 +1002,9 @@ Run history is no longer a separate Graph sidebar item. Each producer owns its h
 
 Click **Details** on an analytics row to open a modal with the full scope (entity-type local names plus their raw URIs), the graph metrics, the run duration, the background task ID, and any error text if the run failed. The **Refresh** button on each Runs tab reloads that table only.
 
-> **Every domain at once.** These tabs are scoped to the domain you have loaded. From **Settings → Automation → Runs** (admin only) an admin sees build, analytics and simulation history across **every** domain in the registry, with a **Domain** column, a **Domain** filter that defaults to *All domains*, and page controls (25 / 50 / 100 rows). Both surfaces read the same registry tables, so a run shows up in both.
+> **Every domain at once.** These tabs are scoped to the domain you have loaded. From **Settings → Automation → Runs** (admin only) an admin sees build, analytics, community, pattern and simulation history across **every** domain in the registry, with a **Domain** column, a **Domain** filter that defaults to *All domains*, and page controls (25 / 50 / 100 rows). Both surfaces read the same registry tables, so a run shows up in both.
+
+**Community runs** and **Pattern runs** (Settings → Automation → Runs) list every Detect run on the Community and Patterns pages: one row per run that finished, **completed** or **failed**, newest first. Each row shows the scope (entity type or anchor type), the version, the status, the node and community counts (or anchors and patterns for Patterns), and the duration. **Details** opens the parameters, the counts, the error text if the run failed, and a link to the Databricks job run. Materialize and Save are not listed.
 
 ### Data Quality (Sidebar)
 

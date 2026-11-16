@@ -3019,10 +3019,11 @@ DELETE /settings/schedules/{schedule_id}
 
 ### Run History Endpoints
 
-Read the registry's build-run trace (`build_runs`) and analytics-run history
-(`graph_analytics_runs`). **All four are admin-only**, like every other
-`/settings` path. The first two back **Settings → Automation → Runs**; the last
-two are per-domain readers kept for programmatic use.
+Read the registry's build-run trace (`build_runs`), analytics-run history
+(`graph_analytics_runs`), community-detection history (`community_runs`) and
+pattern-detection history (`pattern_runs`). **All of them are admin-only**, like
+every other `/settings` path. The cross-domain readers back **Settings →
+Automation → Runs**; the per-domain readers are kept for programmatic use.
 
 #### List Build Runs (every domain, paginated)
 
@@ -3059,6 +3060,28 @@ Same contract and same response envelope as above, over analytics runs
 (`status`, `class_filter`, `node_count`, `edge_count`,
 `connected_components`, `avg_degree`, `density`, `duration_ms`,
 `computed_at`). Spans every version of every domain.
+
+#### List Community Runs (every domain, paginated)
+
+```http
+GET /settings/runs/community?domain=&limit=25&offset=0
+```
+
+Same contract and envelope. One row per community-detection run that finished,
+completed or failed (`status`, `class_filter`, `node_count`, `cluster_count`,
+`converged`, `duration_ms`, `error`, `run_page_url`, `computed_at`). Only Detect
+runs are recorded; Materialize is not.
+
+#### List Pattern Runs (every domain, paginated)
+
+```http
+GET /settings/runs/patterns?domain=&limit=25&offset=0
+```
+
+Same contract and envelope. One row per pattern-detection run that finished,
+completed or failed (`status`, `anchor_type`, `hop_count`, `min_support`,
+`detail_level`, `anchor_count`, `pattern_count`, `duration_ms`, `error`,
+`run_page_url`, `computed_at`). Saving a pattern is not recorded.
 
 #### Build Runs for One Domain
 

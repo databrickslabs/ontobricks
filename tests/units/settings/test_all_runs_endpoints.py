@@ -1,7 +1,8 @@
 """The cross-domain, paginated run-history endpoints behind
 Settings -> Automation -> Runs.
 
-``GET /settings/runs/build``, ``GET /settings/runs/analytics`` and
+``GET /settings/runs/build``, ``GET /settings/runs/analytics``,
+``GET /settings/runs/community``, ``GET /settings/runs/patterns`` and
 ``GET /settings/runs/simulation`` are the registry-wide counterparts of the
 per-domain readers: they span every domain unless a ``domain`` is given, and
 they page with ``limit`` / ``offset`` while reporting the full ``total`` so
@@ -26,8 +27,16 @@ SETTINGS_MODULE = "back.objects.domain.settings.SettingsService"
 
 BUILD_PATH = "/settings/runs/build"
 ANALYTICS_PATH = "/settings/runs/analytics"
+COMMUNITY_PATH = "/settings/runs/community"
+PATTERN_PATH = "/settings/runs/patterns"
 SIMULATION_PATH = "/settings/runs/simulation"
-ALL_PATHS = [BUILD_PATH, ANALYTICS_PATH, SIMULATION_PATH]
+ALL_PATHS = [
+    BUILD_PATH,
+    ANALYTICS_PATH,
+    COMMUNITY_PATH,
+    PATTERN_PATH,
+    SIMULATION_PATH,
+]
 
 
 class _FakeCfg:
@@ -64,6 +73,12 @@ class _FakeRegistryService:
         return self._record(folder, limit, offset)
 
     def load_all_graph_analytics_runs(self, *, folder=None, limit=25, offset=0):
+        return self._record(folder, limit, offset)
+
+    def load_all_community_runs(self, *, folder=None, limit=25, offset=0):
+        return self._record(folder, limit, offset)
+
+    def load_all_pattern_runs(self, *, folder=None, limit=25, offset=0):
         return self._record(folder, limit, offset)
 
     def load_all_simulation_runs(self, *, folder=None, limit=25, offset=0):

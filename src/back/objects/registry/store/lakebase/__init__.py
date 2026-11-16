@@ -23,6 +23,8 @@ Submodules
   — ontology/mapping change audit mixin.
 - :mod:`back.objects.registry.store.lakebase.BuildRuns`
   — Knowledge Graph build-run trace mixin.
+- :mod:`back.objects.registry.store.lakebase.DetectRuns`
+  — community and pattern detection run history mixin.
 - :mod:`back.objects.registry.store.lakebase.Simulations`
   — what-if simulation definitions and run trace mixin.
 - :mod:`back.objects.registry.store.lakebase.Catalog`
@@ -50,6 +52,7 @@ from .BuildRuns import BuildRuns
 from .Catalog import Catalog
 from .ChangeEvents import ChangeEvents
 from .Collab import Collab
+from .DetectRuns import DetectRuns
 from .Documents import Documents
 from .EditLocks import EditLocks
 from .GlobalConfig import GlobalConfig
@@ -65,6 +68,7 @@ __all__ = [
     "Catalog",
     "ChangeEvents",
     "Collab",
+    "DetectRuns",
     "Documents",
     "EditLocks",
     "GlobalConfig",

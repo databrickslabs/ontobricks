@@ -454,6 +454,12 @@ class TwinBackgroundTasks:
         The partition stays in the job's output tables; the client reads it
         through ``/dtwin/clusters/latest`` once the task completes.
         """
+        import time as _time
+
+        from back.objects.digitaltwin.DetectRunHistory import DetectRunHistory
+
+        class_filter_list = list(class_filter or [])
+        t0 = _time.time()
         try:
             tm.start_task(task_id, "Detecting communities...")
             tm.update_progress(task_id, 20, "Starting the Databricks community detection job")
@@ -467,6 +473,10 @@ class TwinBackgroundTasks:
             clusters = int(stats.get("cluster_count", 0) or 0)
             nodes = int(stats.get("node_count", 0) or 0)
             elapsed_ms = stats.get("elapsed_ms")
+            DetectRunHistory.record_community(
+                domain, settings, task_id=task_id, class_filter=class_filter_list,
+                started=t0, stats=stats,
+            )
             tm.complete_task(
                 task_id,
                 result={
@@ -485,6 +495,10 @@ class TwinBackgroundTasks:
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Community detection task failed: %s", exc)
+            DetectRunHistory.record_community(
+                domain, settings, task_id=task_id, class_filter=class_filter_list,
+                started=t0, error=_error_text(exc),
+            )
             tm.fail_task(task_id, _error_text(exc))
 
     @staticmethod
@@ -533,6 +547,12 @@ class TwinBackgroundTasks:
         refine_top: int = 0,
     ) -> None:
         """Run pattern discovery on the Databricks job in a worker thread."""
+        import time as _time
+
+        from back.objects.digitaltwin.DetectRunHistory import DetectRunHistory
+
+        anchor_type = (class_filter or "").strip()
+        t0 = _time.time()
         try:
             tm.start_task(task_id, "Detecting patterns...")
             tm.update_progress(task_id, 20, "Starting the Databricks pattern detection job")
@@ -549,6 +569,10 @@ class TwinBackgroundTasks:
             patterns = int(stats.get("pattern_count", 0) or 0)
             anchors = int(stats.get("anchor_count", 0) or 0)
             elapsed_ms = stats.get("elapsed_ms")
+            DetectRunHistory.record_pattern(
+                domain, settings, task_id=task_id, anchor_type=anchor_type,
+                hops=hops, min_support=min_support, started=t0, stats=stats,
+            )
             tm.complete_task(
                 task_id,
                 result={
@@ -566,6 +590,11 @@ class TwinBackgroundTasks:
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Pattern detection task failed: %s", exc)
+            DetectRunHistory.record_pattern(
+                domain, settings, task_id=task_id, anchor_type=anchor_type,
+                hops=hops, min_support=min_support, started=t0,
+                error=_error_text(exc),
+            )
             tm.fail_task(task_id, _error_text(exc))
 
     @staticmethod

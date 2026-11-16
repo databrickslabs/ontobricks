@@ -308,6 +308,58 @@ CREATE INDEX IF NOT EXISTS idx_graph_analytics_runs_domain_version
     ON graph_analytics_runs(domain_id, version, computed_at DESC);
 
 -- ----------------------------------------------------------------
+-- Community detection run history (append-only). One row per Detect
+-- task that finished, completed or failed; same shape and cap as
+-- ``graph_analytics_runs``. Backs Settings → Automation → Runs.
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS community_runs (
+    id                  bigserial PRIMARY KEY,
+    domain_id           uuid NOT NULL
+                        REFERENCES domains(id) ON DELETE CASCADE,
+    version             text NOT NULL,
+    status              text NOT NULL DEFAULT 'completed',  -- completed|failed
+    class_filter        jsonb NOT NULL DEFAULT '[]'::jsonb,
+    node_count          bigint NOT NULL DEFAULT 0,
+    cluster_count       integer NOT NULL DEFAULT 0,
+    converged           boolean NOT NULL DEFAULT true,
+    duration_ms         bigint NOT NULL DEFAULT 0,
+    task_id             text NOT NULL DEFAULT '',
+    error               text NOT NULL DEFAULT '',
+    run_page_url        text NOT NULL DEFAULT '',
+    computed_at         timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_runs_domain_version
+    ON community_runs(domain_id, version, computed_at DESC);
+
+-- ----------------------------------------------------------------
+-- Pattern detection run history (append-only). One row per Detect
+-- task that finished, completed or failed; same shape and cap as
+-- ``graph_analytics_runs``. Backs Settings → Automation → Runs.
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pattern_runs (
+    id                  bigserial PRIMARY KEY,
+    domain_id           uuid NOT NULL
+                        REFERENCES domains(id) ON DELETE CASCADE,
+    version             text NOT NULL,
+    status              text NOT NULL DEFAULT 'completed',  -- completed|failed
+    anchor_type         text NOT NULL DEFAULT '',
+    hop_count           integer NOT NULL DEFAULT 0,
+    min_support         integer NOT NULL DEFAULT 0,
+    detail_level        text NOT NULL DEFAULT '',
+    anchor_count        bigint NOT NULL DEFAULT 0,
+    pattern_count       integer NOT NULL DEFAULT 0,
+    duration_ms         bigint NOT NULL DEFAULT 0,
+    task_id             text NOT NULL DEFAULT '',
+    error               text NOT NULL DEFAULT '',
+    run_page_url        text NOT NULL DEFAULT '',
+    computed_at         timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pattern_runs_domain_version
+    ON pattern_runs(domain_id, version, computed_at DESC);
+
+-- ----------------------------------------------------------------
 -- Domain-version review / validation audit log (append-only).
 -- One immutable row per workflow decision or lifecycle change:
 -- submit-for-review, business-user sign-off (approve), request

@@ -122,9 +122,13 @@ class TestRunsSection:
             "settingsRunsTabContent",
             "srtab-btn-build",
             "srtab-btn-analytics",
+            "srtab-btn-community",
+            "srtab-btn-pattern",
             "srtab-btn-simulation",
             "srtab-build",
             "srtab-analytics",
+            "srtab-community",
+            "srtab-pattern",
             "srtab-simulation",
         ):
             assert _find(tags, id_=element_id) is not None
@@ -164,6 +168,8 @@ class TestRunsSection:
         for button_id, pane_id in (
             ("srtab-btn-build", "#srtab-build"),
             ("srtab-btn-analytics", "#srtab-analytics"),
+            ("srtab-btn-community", "#srtab-community"),
+            ("srtab-btn-pattern", "#srtab-pattern"),
             ("srtab-btn-simulation", "#srtab-simulation"),
         ):
             btn = _find(tags, id_=button_id)
@@ -174,7 +180,10 @@ class TestRunsSection:
         html = _html(client, "/settings")
         tags = _tags(html)
         active_panes = [
-            i for i in ("srtab-build", "srtab-analytics", "srtab-simulation")
+            i for i in (
+                "srtab-build", "srtab-analytics", "srtab-community",
+                "srtab-pattern", "srtab-simulation",
+            )
             if "active" in (_find(tags, id_=i).get("class") or "")
         ]
         assert active_panes == ["srtab-build"]
@@ -194,6 +203,18 @@ class TestRunsSection:
             "srAnalyticsErrorMessage",
             "srAnalyticsTableWrapper",
             "srAnalyticsTableBody",
+            "srCommunityLoading",
+            "srCommunityEmpty",
+            "srCommunityError",
+            "srCommunityErrorMessage",
+            "srCommunityTableWrapper",
+            "srCommunityTableBody",
+            "srPatternLoading",
+            "srPatternEmpty",
+            "srPatternError",
+            "srPatternErrorMessage",
+            "srPatternTableWrapper",
+            "srPatternTableBody",
             "srSimLoading",
             "srSimEmpty",
             "srSimError",
@@ -212,10 +233,14 @@ class TestRunsSection:
         html = _html(client, "/settings")
         build_pane = html.index('id="srtab-build"')
         analytics_pane = html.index('id="srtab-analytics"')
+        community_pane = html.index('id="srtab-community"')
+        pattern_pane = html.index('id="srtab-pattern"')
         simulation_pane = html.index('id="srtab-simulation"')
 
         assert build_pane < html.index('id="srBuildTableBody"') < analytics_pane
-        assert analytics_pane < html.index('id="srAnalyticsTableBody"') < simulation_pane
+        assert analytics_pane < html.index('id="srAnalyticsTableBody"') < community_pane
+        assert community_pane < html.index('id="srCommunityTableBody"') < pattern_pane
+        assert pattern_pane < html.index('id="srPatternTableBody"') < simulation_pane
         assert simulation_pane < html.index('id="srSimTableBody"')
 
     def test_all_tables_name_a_domain_column(self, client):
@@ -252,7 +277,7 @@ class TestDomainFilter:
 
 
 class TestPagination:
-    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srSim"])
+    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srCommunity", "srPattern", "srSim"])
     @pytest.mark.parametrize(
         "suffix",
         ["Pagination", "PagingControls", "PageInfo", "Prev", "Next", "PageSize"],
@@ -261,7 +286,7 @@ class TestPagination:
         html = _html(client, "/settings")
         assert _find(_tags(html), id_=f"{prefix}{suffix}") is not None
 
-    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srSim"])
+    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srCommunity", "srPattern", "srSim"])
     def test_the_rows_selector_sits_outside_the_hideable_paging_controls(
         self, client, prefix
     ):
@@ -278,7 +303,7 @@ class TestPagination:
 
         assert rows_select < controls < prev
 
-    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srSim"])
+    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srCommunity", "srPattern", "srSim"])
     def test_the_footer_starts_hidden_by_class_not_by_inline_style(
         self, client, prefix
     ):
@@ -333,7 +358,7 @@ class TestPagination:
 
         assert "ids.pagination).classList.add('d-none')" in slice_
 
-    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srSim"])
+    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srCommunity", "srPattern", "srSim"])
     def test_page_size_offers_25_50_100(self, client, prefix):
         html = _html(client, "/settings")
         select = html[html.index(f'id="{prefix}PageSize"'):]
@@ -350,6 +375,10 @@ class TestDetailsModals:
             "srRunDetailsBody",
             "srAnalyticsRunDetailsModal",
             "srAnalyticsRunDetailsBody",
+            "srCommunityRunDetailsModal",
+            "srCommunityRunDetailsBody",
+            "srPatternRunDetailsModal",
+            "srPatternRunDetailsBody",
             "srSimRunDetailsModal",
             "srSimRunDetailsBody",
         ],
@@ -363,6 +392,8 @@ class TestDetailsModals:
         [
             "srRunDetailsModal",
             "srAnalyticsRunDetailsModal",
+            "srCommunityRunDetailsModal",
+            "srPatternRunDetailsModal",
             "srSimRunDetailsModal",
         ],
     )
@@ -378,6 +409,8 @@ class TestDetailsModals:
         [
             "srRunDetailsModal",
             "srAnalyticsRunDetailsModal",
+            "srCommunityRunDetailsModal",
+            "srPatternRunDetailsModal",
             "srSimRunDetailsModal",
         ],
     )
@@ -480,6 +513,8 @@ class TestSettingsRunsScript:
         src = _read(_SETTINGS_JS)
         assert "/settings/runs/build" in src
         assert "/settings/runs/analytics" in src
+        assert "/settings/runs/community" in src
+        assert "/settings/runs/patterns" in src
         assert "/settings/runs/simulation" in src
 
     def test_it_populates_the_dropdown_from_the_existing_domains_endpoint(self):

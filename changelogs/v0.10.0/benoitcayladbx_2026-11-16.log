@@ -648,3 +648,113 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10661 passed, 333 skipped, 8 deselected, 39 warnings in 47.45s ========
+
+## Community and Pattern run history in Settings → Automation → Runs
+
+Context:
+Community detection and Pattern detection wrote no run history, so an
+admin could not see past Detect runs, their status, or their failures
+(Analytics, Build and Simulation already had one). Two new tabs on
+Settings → Automation → Runs list Detect runs across every domain. Scope
+was confirmed as those two tabs only (no Intelligence-page tabs). Storage
+is two new Lakebase tables. Events are Detect only, completed and failed
+rows, same as Analytics. Design: `docs/superpowers/specs/2026-11-16-analysis-run-history-design.md`.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/schema.sql
+   New `community_runs` and `pattern_runs` tables with
+   `(domain_id, version, computed_at DESC)` indexes, same shape and cap as
+   `graph_analytics_runs`.
+2. src/back/objects/registry/store/lakebase/DetectRuns.py (new)
+   Mixin for both tables driven by one `_KINDS` spec: lazy create
+   (information_schema check, fail-soft), record (best-effort, per-
+   `(domain, version)` cap of 100), cross-domain paged read with total.
+3. src/back/objects/registry/store/lakebase/store.py
+   Mixes in `DetectRuns`; per-kind lazy-create flags; both tables added to
+   `_KNOWN_TABLES`.
+4. src/back/objects/registry/store/lakebase/__init__.py
+   Exports `DetectRuns`.
+5. src/back/objects/registry/store/base.py
+   `CommunityRun` / `PatternRun` documented aliases (the architecture ratchet
+   caps the number of classes per file); no-op / `([], 0)` defaults for the
+   four store methods.
+6. src/back/objects/digitaltwin/DetectRunHistory.py (new)
+   `DetectRunHistory.record_community` / `record_pattern`: build the row from
+   the job summary (or the error) and append it through `svc.store`. Best-effort,
+   never changes the task outcome. Extracted from `TwinBackgroundTasks` to keep
+   it inside the 800-LOC class budget.
+7. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   `run_community_task` and `run_pattern_task` record one row on completion and
+   one on failure.
+8. src/back/objects/digitaltwin/__init__.py
+   Re-exports `DetectRunHistory`.
+9. src/back/objects/domain/settings/ScheduleSettings.py
+   `_all_runs_result` accepts kinds `community` and `pattern`.
+10. src/api/routers/internal/settings.py
+   `GET /settings/runs/community` and `GET /settings/runs/patterns`
+   (domain / limit / offset, same envelope as the other run readers).
+11. src/front/templates/partials/settings/_settings_runs.html
+   Two new tabs (Community runs, Pattern runs) with their own loading / empty
+   / error / table / pagination elements, between Analytics and Simulation.
+12. src/front/templates/settings.html
+   Two page-level details modals (`srCommunityRunDetailsModal`,
+   `srPatternRunDetailsModal`).
+13. src/front/static/config/js/settings-runs.js
+   Two descriptors in `TABS`, state, paging reset, load order, detail
+   builders and window handlers for both tabs.
+14. src/front/static/global/js/runs-render.js
+   `communityRunCells`, `communityRunDetailsHtml`, `patternRunCells`,
+   `patternRunDetailsHtml`, plus a job-run link helper.
+15. tests/units/registry/_v090_fake_pg.py
+   Registers the two new lazy-create flags with the scripted harness.
+16. tests/units/registry/test_v090_lakebase_detect_runs.py (new)
+   Lazy create, record binds and cap, no-op without table, cross-domain paging,
+   mapping and fail-soft reads for both tables.
+17. tests/units/dtwin/test_v090_detect_run_history.py (new)
+   Completed and failed rows for both tasks, failing write does not change the
+   outcome, missing scope skips the write, Save/Materialize write nothing.
+18. tests/units/settings/test_all_runs_endpoints.py
+   Community and pattern routes join the paging / domain-filter / not-configured
+   matrix.
+19. tests/units/front/test_settings_runs_page.py
+   Tab, pane, state-element, pagination, modal and script contracts for the two
+   new tabs.
+20. docs/user-guide.md, docs/api.md, docs/architecture.md
+   Runs tab description, the two endpoints, and the two new tables.
+21. docs/superpowers/specs/2026-11-16-analysis-run-history-design.md (new, gitignored)
+   Design record for this change.
+
+Decisions:
+- Lakebase is the only registry backend, so the tables live there; the base
+  store defaults are no-ops for any other backend.
+- Existing deployments get the tables lazily on first write or read; fresh
+  deployments get them from `schema.sql`.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/schema.sql
+- src/back/objects/registry/store/lakebase/DetectRuns.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/__init__.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/digitaltwin/DetectRunHistory.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/__init__.py
+- src/back/objects/domain/settings/ScheduleSettings.py
+- src/api/routers/internal/settings.py
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/settings.html
+- src/front/static/config/js/settings-runs.js
+- src/front/static/global/js/runs-render.js
+- tests/units/registry/_v090_fake_pg.py
+- tests/units/registry/test_v090_lakebase_detect_runs.py
+- tests/units/dtwin/test_v090_detect_run_history.py
+- tests/units/settings/test_all_runs_endpoints.py
+- tests/units/front/test_settings_runs_page.py
+- docs/user-guide.md
+- docs/api.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10750 passed, 333 skipped, 8 deselected, 39 warnings in 46.66s ========
+(Architecture ratchet green: class-per-file, re-exports, size budget. JS syntax checked with `node --check`.)

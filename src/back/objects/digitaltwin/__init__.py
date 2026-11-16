@@ -4,6 +4,7 @@ from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
 from back.objects.digitaltwin.models import DomainSnapshot
 from back.objects.digitaltwin.cohort.CohortService import CohortService
 from back.objects.digitaltwin.cohort.CohortEngineContext import CohortEngineContext
+from back.objects.digitaltwin.DetectRunHistory import DetectRunHistory
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 from back.objects.digitaltwin.explorer.GraphFilter import GraphFilter
 from back.objects.digitaltwin.explorer.GraphFind import GraphFind
@@ -35,6 +36,7 @@ __all__ = [
     "CohortEngineContext",
     "CohortService",
     "DataQualitySnapshot",
+    "DetectRunHistory",
     "DigitalTwin",
     "DomainSnapshot",
     "GraphFilter",

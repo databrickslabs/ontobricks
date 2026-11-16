@@ -67,6 +67,7 @@ from back.objects.registry.gitsync.GitHubMirrorHooks import GitHubMirrorHooks
 from .Collab import Collab
 from .Documents import Documents
 from .Analytics import Analytics
+from .DetectRuns import DetectRuns
 from .Bootstrap import Bootstrap
 from .BuildRuns import BuildRuns
 from .Simulations import Simulations
@@ -113,6 +114,8 @@ _KNOWN_TABLES = frozenset(
         "simulation_runs",
         "graph_analytics",
         "graph_analytics_runs",
+        "community_runs",
+        "pattern_runs",
         "domain_review_events",
         "domain_change_events",
         "domain_comments",
@@ -264,6 +267,7 @@ class LakebaseRegistryStore(
     Collab,
     EditLocks,
     Analytics,
+    DetectRuns,
     ReviewEvents,
     ChangeEvents,
     BuildRuns,
@@ -326,6 +330,10 @@ class LakebaseRegistryStore(
         # Guards the lazy ``CREATE TABLE IF NOT EXISTS graph_analytics_runs``
         # (append-only analysis run history; same pattern as above).
         self._graph_analytics_runs_ready = False
+        # Guards the lazy ``CREATE TABLE IF NOT EXISTS community_runs`` /
+        # ``pattern_runs`` (one flag per kind; same pattern as above).
+        self._community_runs_ready = False
+        self._pattern_runs_ready = False
         # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS status``
         # used to self-heal deployments created before the lifecycle status
         # column existed (same pattern as ``_build_runs_ready``).

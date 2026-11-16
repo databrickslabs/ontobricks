@@ -8,6 +8,8 @@
  * Backed by:
  *   - GET /settings/runs/build?domain=&limit=&offset=
  *   - GET /settings/runs/analytics?domain=&limit=&offset=
+ *   - GET /settings/runs/community?domain=&limit=&offset=
+ *   - GET /settings/runs/patterns?domain=&limit=&offset=
  *   - GET /settings/runs/simulation?domain=&limit=&offset=
  *   - GET /settings/registry/domains  (the filter's options)
  *
@@ -17,6 +19,9 @@
  * The tabs are loaded and rendered independently, so one endpoint failing
  * leaves the other tabs' tables on screen. All load on section entry, so
  * switching tabs never waits on a fetch.
+ *
+ * Community and Pattern tabs list Detect runs only (completed or failed),
+ * recorded by the background tasks; Materialize and Save are not listed.
  */
 
 (function () {
@@ -79,6 +84,58 @@
                 });
             }
         },
+        community: {
+            url: '/settings/runs/community',
+            label: 'community runs',
+            handler: 'showSettingsCommunityRunDetails',
+            ids: {
+                loading: 'srCommunityLoading',
+                empty: 'srCommunityEmpty',
+                emptyScope: 'srCommunityEmptyScope',
+                error: 'srCommunityError',
+                errorMessage: 'srCommunityErrorMessage',
+                wrapper: 'srCommunityTableWrapper',
+                tbody: 'srCommunityTableBody',
+                pagination: 'srCommunityPagination',
+                pagingControls: 'srCommunityPagingControls',
+                pageInfo: 'srCommunityPageInfo',
+                pageSize: 'srCommunityPageSize',
+                prev: 'srCommunityPrev',
+                next: 'srCommunityNext'
+            },
+            cells: function (run, idx) {
+                return RunsRender.communityRunCells(run, idx, {
+                    domain: true,
+                    handler: 'showSettingsCommunityRunDetails'
+                });
+            }
+        },
+        pattern: {
+            url: '/settings/runs/patterns',
+            label: 'pattern runs',
+            handler: 'showSettingsPatternRunDetails',
+            ids: {
+                loading: 'srPatternLoading',
+                empty: 'srPatternEmpty',
+                emptyScope: 'srPatternEmptyScope',
+                error: 'srPatternError',
+                errorMessage: 'srPatternErrorMessage',
+                wrapper: 'srPatternTableWrapper',
+                tbody: 'srPatternTableBody',
+                pagination: 'srPatternPagination',
+                pagingControls: 'srPatternPagingControls',
+                pageInfo: 'srPatternPageInfo',
+                pageSize: 'srPatternPageSize',
+                prev: 'srPatternPrev',
+                next: 'srPatternNext'
+            },
+            cells: function (run, idx) {
+                return RunsRender.patternRunCells(run, idx, {
+                    domain: true,
+                    handler: 'showSettingsPatternRunDetails'
+                });
+            }
+        },
         simulation: {
             url: '/settings/runs/simulation',
             label: 'simulation runs',
@@ -110,6 +167,8 @@
     const state = {
         build: { rows: [], total: 0, limit: DEFAULT_PAGE_SIZE, offset: 0 },
         analytics: { rows: [], total: 0, limit: DEFAULT_PAGE_SIZE, offset: 0 },
+        community: { rows: [], total: 0, limit: DEFAULT_PAGE_SIZE, offset: 0 },
+        pattern: { rows: [], total: 0, limit: DEFAULT_PAGE_SIZE, offset: 0 },
         simulation: { rows: [], total: 0, limit: DEFAULT_PAGE_SIZE, offset: 0 }
     };
 
@@ -242,12 +301,16 @@
     async function loadAll() {
         await loadTab('build');
         await loadTab('analytics');
+        await loadTab('community');
+        await loadTab('pattern');
         await loadTab('simulation');
     }
 
     function resetPaging() {
         state.build.offset = 0;
         state.analytics.offset = 0;
+        state.community.offset = 0;
+        state.pattern.offset = 0;
         state.simulation.offset = 0;
     }
 
@@ -284,6 +347,8 @@
         const builders = {
             build: RunsRender.buildRunDetailsHtml,
             analytics: RunsRender.analyticsRunDetailsHtml,
+            community: RunsRender.communityRunDetailsHtml,
+            pattern: RunsRender.patternRunDetailsHtml,
             simulation: RunsRender.simulationRunDetailsHtml
         };
         body.innerHTML = builders[kind](run);
@@ -298,6 +363,20 @@
         showDetails(
             'analytics', idx,
             'srAnalyticsRunDetailsBody', 'srAnalyticsRunDetailsModal'
+        );
+    };
+
+    window.showSettingsCommunityRunDetails = function (idx) {
+        showDetails(
+            'community', idx,
+            'srCommunityRunDetailsBody', 'srCommunityRunDetailsModal'
+        );
+    };
+
+    window.showSettingsPatternRunDetails = function (idx) {
+        showDetails(
+            'pattern', idx,
+            'srPatternRunDetailsBody', 'srPatternRunDetailsModal'
         );
     };
 
@@ -346,6 +425,8 @@
         el('btnReloadSettingsRuns')?.addEventListener('click', loadAll);
         wireTab('build');
         wireTab('analytics');
+        wireTab('community');
+        wireTab('pattern');
         wireTab('simulation');
 
         loadDomains();
