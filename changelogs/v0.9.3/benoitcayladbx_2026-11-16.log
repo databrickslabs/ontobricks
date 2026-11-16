@@ -1,0 +1,29 @@
+## Remove undocumented registry_transfer CLI docs (#227)
+
+Context: docs/advanced_features.md described scripts/registry_transfer.sh and
+src/cli/registry_transfer.py, which were never shipped (docs-only since Apr 2026).
+Issue #227 reported the gap. Doc correction already landed on 0.9.2 and 0.10.0;
+this backports it to the 0.9.3 milestone branch so published guidance matches
+shipped OBX UI + GitHub mirror paths only.
+
+Changes:
+
+1. docs/advanced_features.md
+   Drop the non-existent CLI zip / registry_transfer.sh workflow; keep OBX UI and
+   GitHub mirror; add Listing domains (Registry → Browse) and Large registries
+   workarounds (batch OBX by domain, or restore via GitHub).
+2. docs/README.md
+   Point the advanced-features index blurb at shipped transfer paths only.
+3. README.md
+   Remove registry_transfer CLI references from the top-level docs pointers.
+4. tests/units/api/test_help_api.py
+   Align Help API expectations with the corrected advanced_features content.
+
+Modified files:
+- docs/advanced_features.md
+- docs/README.md
+- README.md
+- tests/units/api/test_help_api.py
+- changelogs/v0.9.3/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9712 passed, 337 skipped, 8 deselected, 39 warnings in 52.75s

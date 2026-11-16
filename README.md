@@ -173,8 +173,8 @@ Every domain version carries a **DRAFT / IN-REVIEW / PUBLISHED** status enforced
 server-side. A **single editor** holds a DRAFT at a time (auto-releasing leases,
 admin take-over), a business-friendly **review workflow** collects sign-offs
 with a configurable quorum, and every decision is persisted append-only. Move
-domains between environments with the **OBX** export/import (UI or
-[CLI](docs/advanced_features.md#registry-import-and-export)).
+domains between environments with the **OBX** export/import or the
+[GitHub mirror](docs/advanced_features.md#registry-import-and-export).
 
 ### Pluggable graph engine
 Pick a backend **per domain**: **Lakebase (Postgres)** by default,
