@@ -103,6 +103,32 @@ def _run(triples, **kwargs):
     return runner, builder, stats
 
 
+class TestRepresentativeShapes:
+    def test_non_refined_shape_matches_member_union(self):
+        runner, _, _ = _run(alice_bob_carol(), min_support=1)
+        for row in runner.rows("SELECT pattern_id, shape_json, hop_count FROM out_shapes"):
+            assert row["shape_json"].startswith("[")
+            assert row["hop_count"] >= 0
+        shared = runner.rows(
+            "SELECT shape_json FROM out_shapes WHERE support = 2"
+        )[0]["shape_json"]
+        assert HAS_ORDER in shared
+        assert HAS_PRODUCT in shared
+
+    def test_refined_shape_still_merges(self):
+        runner, _, stats = _run(
+            multiplicity_fixture(), hops=2, min_support=1, refine_top=20
+        )
+        assert stats["refined"] == 1
+        assert runner.rows("SELECT support FROM out_shapes")[0]["support"] == 2
+
+    def test_reps_table_has_one_row_per_pattern(self):
+        runner, builder, _ = _run(alice_bob_carol(), min_support=1)
+        n_patterns = runner.scalar("SELECT COUNT(*) FROM out_shapes")
+        n_reps = runner.scalar(f"SELECT COUNT(*) FROM {builder.reps}")
+        assert n_reps == n_patterns
+
+
 class TestDenormalizedTypes:
     def test_directed_edges_carry_endpoint_types(self):
         runner, builder, _ = _run(alice_bob_carol(), hops=2, min_support=1)

@@ -1383,6 +1383,11 @@ class PatternSQL(GraphAnalyticsSQL):
         return f"{self.work_prefix}_tedges"
 
     @property
+    def reps(self) -> str:
+        """One representative anchor per pattern (``MIN(anchor_uri)``)."""
+        return f"{self.work_prefix}_reps"
+
+    @property
     def shapes_table(self) -> str:
         return f"{self.output_table}_shapes"
 
@@ -1412,6 +1417,7 @@ class PatternSQL(GraphAnalyticsSQL):
             self.refine_map,
             self.node_types,
             self.typed_edges,
+            self.reps,
         ]
         for h in range(max(0, int(self.hops)) + 1):
             tables.append(self.frontier(h))
@@ -1736,10 +1742,56 @@ class PatternSQL(GraphAnalyticsSQL):
             f") ok ON ok.pattern_id = s.{col}",
         )
 
+    def build_reps(self) -> List[str]:
+        """One ``MIN(anchor_uri)`` representative per pattern for shape tokens."""
+        return self._recreate(
+            self.reps,
+            f"SELECT pattern_id, MIN(anchor_uri) AS anchor\n"
+            f"FROM {self.output_table}\n"
+            f"GROUP BY pattern_id",
+        )
+
     def write_shapes(self, *, refined: bool, level: str = "full") -> List[str]:
-        """One row per pattern; the shape lists only tokens kept at *level*."""
+        """One row per pattern; the shape lists only tokens kept at *level*.
+
+        Non-refined runs read tokens from one representative member per pattern
+        (identical by construction). Refined runs keep the member-union join
+        because multiplicity-stripped members can still differ on attributes.
+        """
         refined_i = 1 if refined else 0
         keep = self.level_filter(level)
+        if refined:
+            hop_src = (
+                f"SELECT o.pattern_id AS pattern_id,\n"
+                f"         MAX(t.hop) AS hop_count\n"
+                f"  FROM {self.output_table} o\n"
+                f"  JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
+                f"  WHERE {keep}\n"
+                f"  GROUP BY o.pattern_id"
+            )
+            shape_inner = (
+                f"SELECT DISTINCT o.pattern_id AS pattern_id,\n"
+                f"           '\"' || t.token || '\"' AS qtok\n"
+                f"    FROM {self.output_table} o\n"
+                f"    JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
+                f"    WHERE {keep}"
+            )
+        else:
+            hop_src = (
+                f"SELECT r.pattern_id AS pattern_id,\n"
+                f"         MAX(t.hop) AS hop_count\n"
+                f"  FROM {self.reps} r\n"
+                f"  JOIN {self.tokens} t ON t.anchor = r.anchor\n"
+                f"  WHERE {keep}\n"
+                f"  GROUP BY r.pattern_id"
+            )
+            shape_inner = (
+                f"SELECT DISTINCT r.pattern_id AS pattern_id,\n"
+                f"           '\"' || t.token || '\"' AS qtok\n"
+                f"    FROM {self.reps} r\n"
+                f"    JOIN {self.tokens} t ON t.anchor = r.anchor\n"
+                f"    WHERE {keep}"
+            )
         return self._recreate(
             self.shapes_table,
             f"SELECT p.pattern_id AS pattern_id,\n"
@@ -1756,23 +1808,14 @@ class PatternSQL(GraphAnalyticsSQL):
             f"  GROUP BY pattern_id\n"
             f") p\n"
             f"LEFT JOIN (\n"
-            f"  SELECT o.pattern_id AS pattern_id,\n"
-            f"         MAX(t.hop) AS hop_count\n"
-            f"  FROM {self.output_table} o\n"
-            f"  JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
-            f"  WHERE {keep}\n"
-            f"  GROUP BY o.pattern_id\n"
+            f"  {hop_src}\n"
             f") h ON h.pattern_id = p.pattern_id\n"
             f"LEFT JOIN (\n"
             f"  SELECT pattern_id,\n"
             f"         '[' || concat_ws(',', sort_array(collect_list(qtok))) "
             f"|| ']' AS shape_json\n"
             f"  FROM (\n"
-            f"    SELECT DISTINCT o.pattern_id AS pattern_id,\n"
-            f"           '\"' || t.token || '\"' AS qtok\n"
-            f"    FROM {self.output_table} o\n"
-            f"    JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
-            f"    WHERE {keep}\n"
+            f"    {shape_inner}\n"
             f"  ) d\n"
             f"  GROUP BY pattern_id\n"
             f") sh ON sh.pattern_id = p.pattern_id\n"
@@ -1863,14 +1906,30 @@ class PatternSQL(GraphAnalyticsSQL):
         )
 
     def build_refine_map(self) -> List[str]:
-        """Map exact pattern_ids in the top-N to multiplicity-stripped ids."""
+        """Map exact pattern_ids in the top-N to multiplicity-stripped ids.
+
+        Only members of the top-N patterns by support are hashed; that is
+        enough for the remapping and avoids scanning every output anchor.
+        """
         top = max(0, int(self.refine_top))
-        # Stripped tokens: hop-0 attributes + distinct structural keys only.
+        topn = f"{self.work_prefix}_topn"
         stripped = f"{self.work_prefix}_stripped"
         statements = self._recreate(
+            topn,
+            f"SELECT pattern_id FROM (\n"
+            f"  SELECT pattern_id, COUNT(*) AS support,\n"
+            f"         ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, pattern_id) "
+            f"AS rk\n"
+            f"  FROM {self.output_table}\n"
+            f"  GROUP BY pattern_id\n"
+            f") ranked WHERE rk <= {top}",
+        )
+        # Stripped tokens: hop-0 attributes + distinct structural keys only.
+        statements += self._recreate(
             stripped,
             f"SELECT DISTINCT o.anchor_uri AS anchor, t.token AS token\n"
             f"FROM {self.output_table} o\n"
+            f"JOIN {topn} tn ON tn.pattern_id = o.pattern_id\n"
             f"JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
             f"WHERE t.kind IN ('a0', 's')",
         )
@@ -1883,22 +1942,14 @@ class PatternSQL(GraphAnalyticsSQL):
             f"FROM {stripped}\n"
             f"GROUP BY anchor",
         )
-        # Only remap anchors whose exact pattern is among the top-N by support.
         statements += self._recreate(
             self.refine_map,
             f"SELECT DISTINCT o.pattern_id AS old_id, r.refined_id AS new_id\n"
             f"FROM {self.output_table} o\n"
-            f"JOIN {refined_sigs} r ON r.anchor_uri = o.anchor_uri\n"
-            f"JOIN (\n"
-            f"  SELECT pattern_id FROM (\n"
-            f"    SELECT pattern_id, COUNT(*) AS support,\n"
-            f"           ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, pattern_id) "
-            f"AS rk\n"
-            f"    FROM {self.output_table}\n"
-            f"    GROUP BY pattern_id\n"
-            f"  ) ranked WHERE rk <= {top}\n"
-            f") topn ON topn.pattern_id = o.pattern_id",
+            f"JOIN {topn} tn ON tn.pattern_id = o.pattern_id\n"
+            f"JOIN {refined_sigs} r ON r.anchor_uri = o.anchor_uri",
         )
+        statements.append(f"DROP TABLE IF EXISTS {topn}")
         statements.append(f"DROP TABLE IF EXISTS {stripped}")
         statements.append(f"DROP TABLE IF EXISTS {refined_sigs}")
         return statements
@@ -2059,6 +2110,9 @@ def _run_pattern_stages(
         else:
             for stmt in builder.empty_refine_map():
                 execute(stmt)
+
+    for stmt in builder.build_reps():
+        execute(stmt)
 
     with _pattern_stage(stage_ms, "shapes"):
         for stmt in builder.write_shapes(refined=bool(refined), level=level):
