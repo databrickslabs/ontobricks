@@ -3,7 +3,7 @@
 ================================================================================
 
 Context:
-Lakebase is not offered in every region (GCP europe-west1, for example), and
+Lakebase is not offered in every cloud region yet, and
 a Lakebase project must live in the workspace's region. The registry is the
 only part of OntoBricks that needs Lakebase: the graph and the Explorer run on
 Delta with the Lakehouse backend, and the MCP server goes through the app's

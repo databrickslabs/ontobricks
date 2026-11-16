@@ -1,0 +1,28 @@
+================================================================================
+## Registry without Lakebase: generic region wording
+================================================================================
+
+Context:
+The SQLite registry docs, docstring and changelog named a specific cloud region
+as an example of one without Lakebase. Region availability changes over time
+and the example adds nothing, so the wording is now generic.
+
+Changes:
+
+1. changelogs/v0.9.3/hourdays_2026-11-14.log
+   "not offered in every region (<region>, for example)" becomes "not offered
+   in every cloud region yet".
+
+2. docs/deployment.md
+   Same rewording in "Regions without Lakebase".
+
+3. src/back/objects/registry/store/sqlite/SQLiteRegistryStore.py
+   Same rewording in the module docstring.
+
+Modified files:
+- changelogs/v0.9.3/hourdays_2026-11-14.log
+- changelogs/v0.9.3/hourdays_2026-11-16.log
+- docs/deployment.md
+- src/back/objects/registry/store/sqlite/SQLiteRegistryStore.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9768 passed, 339 skipped.

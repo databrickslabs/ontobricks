@@ -647,7 +647,7 @@ scripts/deploy.sh -t dev
 
 #### Regions without Lakebase (SQLite registry)
 
-Lakebase is not offered in every region (for example GCP `europe-west1`), and a
+Lakebase is not offered in every cloud region yet, and a
 Lakebase project must live in the workspace's region. In that case run the
 registry on **SQLite** and the graph on the **Lakehouse** (Delta) backend:
 

@@ -1,6 +1,6 @@
 """Registry store on an embedded SQLite file, for workspaces without Lakebase.
 
-Lakebase isn't offered in every region (for example GCP ``europe-west1``), and
+Lakebase isn't offered in every cloud region yet, and
 the registry is the only part of OntoBricks that needs it: the graph and the
 Explorer run on Delta with the ``databricks`` (Lakehouse) graph backend, and
 the MCP server goes through the app's REST API.
