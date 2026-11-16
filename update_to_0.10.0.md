@@ -4,7 +4,9 @@ This guide covers a fresh 0.10.0 install and an in-place upgrade from 0.9.x.
 Older lines must reach 0.9 first (`releases/ReleaseNotes_V0.9.0.md` and, for
 pre-0.8 registries, `scripts/migrations/upgrade_0.7_to_0.8.sql`).
 
-There is **no 0.9 → 0.10 warehouse registry DDL**. Schema migrations and
+The only **0.9 → 0.10 registry addition** is two Lakebase tables for Detect run
+history: `community_runs` and `pattern_runs` (see
+[Registry changes in 0.10.0](#registry-changes-in-0100)). Schema migrations and
 service-principal grants are applied automatically by the deployment path
 (`make deploy` / `scripts/update-deployed-app.sh` → Lakebase bootstrap). Any
 pending pre-0.9 objects are still created idempotently when missing.
@@ -75,7 +77,7 @@ Lakebase project/branch/database/schema, and DAB target. Changing
 ### Recommended automatic migration
 
 Redeploy with the existing apps. The deployment scripts apply code and any
-pending registry SQL automatically:
+pending registry SQL automatically (including the 0.10.0 tables below):
 
 ```bash
 scripts/update-deployed-app.sh <UI_APP_NAME> <MCP_APP_NAME>
@@ -90,11 +92,38 @@ make deploy
 `scripts/update-deployed-app.sh` does not rewrite `deploy.config.sh`. It reads
 warehouse, Lakebase, and `app.yaml` from the live apps, redeploys both, and
 runs Lakebase bootstrap. Bootstrap re-grants the app service principals and
-applies pending idempotent registry DDL when needed; there is nothing
-0.10-specific beyond that.
+applies pending idempotent registry DDL when needed. The 0.10-specific registry
+work is creating `community_runs` and `pattern_runs`.
 
 Do not change app names or DAB target. App names are immutable; a rename
 under the same Terraform state replaces the app.
+
+### Registry changes in 0.10.0
+
+| Object | Type | Purpose |
+|--------|------|---------|
+| `community_runs` | table + index `idx_community_runs_domain_version` | One row per community-detection (Detect) run that finished, completed or failed. Backs **Settings → Automation → Runs → Community runs**. |
+| `pattern_runs` | table + index `idx_pattern_runs_domain_version` | One row per pattern-detection (Detect) run that finished, completed or failed. Backs **Settings → Automation → Runs → Pattern runs**. |
+
+Both tables are created by Step 2b of `scripts/bootstrap/lakebase-perms.sh`
+(`CREATE TABLE IF NOT EXISTS`, so re-running is safe). The app service principal
+receives its grants from the same bootstrap run. The app also creates the tables
+lazily on first use, so a missing table never breaks a Detect run. It only
+leaves the Runs tabs empty until the table exists.
+
+Verify after the upgrade (read-only):
+
+```bash
+psql "$PGURL" -tAc "SELECT table_name FROM information_schema.tables
+  WHERE table_schema = '<LAKEBASE_SCHEMA>'
+    AND table_name IN ('community_runs', 'pattern_runs') ORDER BY 1"
+```
+
+Both names must be listed. If one is missing, run `make bootstrap-lakebase` as
+the schema owner (see Troubleshooting).
+
+Existing Detect runs from before the upgrade are not backfilled. Their history
+starts at the first Detect run on 0.10.0.
 
 ### After the code is live
 
@@ -122,6 +151,8 @@ under the same Terraform state replaces the app.
 
 2. Resource bindings (SQL warehouse, postgres) unchanged.
 3. `https://<UI_APP_URL>/healthz`.
+3a. `community_runs` and `pattern_runs` exist (query under
+   [Registry changes in 0.10.0](#registry-changes-in-0100)).
 4. Open an existing domain. Confirm MCP policy still loads, then a read-only
    MCP tool. UC reads should fail closed for users without table grants.
 
@@ -146,5 +177,10 @@ unrelated to this upgrade.
   `if_then` inference field/phase.
 - **`must be owner of table …`:** run bootstrap as the schema owner, or let
   the app SP perform ownership-aware DDL.
+- **Community or Pattern runs tab is empty after the upgrade:** check that
+  `community_runs` and `pattern_runs` exist (see
+  [Registry changes in 0.10.0](#registry-changes-in-0100)). If not, run
+  `make bootstrap-lakebase` as the schema owner, then run a Detect task. Runs
+  before the upgrade are not recorded.
 - **MCP cannot reach the UI:** redeploy once the UI URL is available so
   `ONTOBRICKS_URL` is rewritten into the MCP `app.yaml`.

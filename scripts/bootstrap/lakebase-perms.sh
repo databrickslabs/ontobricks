@@ -485,6 +485,47 @@ CREATE TABLE IF NOT EXISTS "${SCHEMA}".graph_analytics_runs (
 CREATE INDEX IF NOT EXISTS idx_graph_analytics_runs_domain_version
     ON "${SCHEMA}".graph_analytics_runs(domain_id, version, computed_at DESC);
 
+-- community_runs / pattern_runs (Detect run history, added in 0.10.0)
+CREATE TABLE IF NOT EXISTS "${SCHEMA}".community_runs (
+    id                  bigserial PRIMARY KEY,
+    domain_id           uuid NOT NULL
+                        REFERENCES "${SCHEMA}".domains(id) ON DELETE CASCADE,
+    version             text NOT NULL,
+    status              text NOT NULL DEFAULT 'completed',
+    class_filter        jsonb NOT NULL DEFAULT '[]'::jsonb,
+    node_count          bigint NOT NULL DEFAULT 0,
+    cluster_count       integer NOT NULL DEFAULT 0,
+    converged           boolean NOT NULL DEFAULT true,
+    duration_ms         bigint NOT NULL DEFAULT 0,
+    task_id             text NOT NULL DEFAULT '',
+    error               text NOT NULL DEFAULT '',
+    run_page_url        text NOT NULL DEFAULT '',
+    computed_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_community_runs_domain_version
+    ON "${SCHEMA}".community_runs(domain_id, version, computed_at DESC);
+
+CREATE TABLE IF NOT EXISTS "${SCHEMA}".pattern_runs (
+    id                  bigserial PRIMARY KEY,
+    domain_id           uuid NOT NULL
+                        REFERENCES "${SCHEMA}".domains(id) ON DELETE CASCADE,
+    version             text NOT NULL,
+    status              text NOT NULL DEFAULT 'completed',
+    anchor_type         text NOT NULL DEFAULT '',
+    hop_count           integer NOT NULL DEFAULT 0,
+    min_support         integer NOT NULL DEFAULT 0,
+    detail_level        text NOT NULL DEFAULT '',
+    anchor_count        bigint NOT NULL DEFAULT 0,
+    pattern_count       integer NOT NULL DEFAULT 0,
+    duration_ms         bigint NOT NULL DEFAULT 0,
+    task_id             text NOT NULL DEFAULT '',
+    error               text NOT NULL DEFAULT '',
+    run_page_url        text NOT NULL DEFAULT '',
+    computed_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_pattern_runs_domain_version
+    ON "${SCHEMA}".pattern_runs(domain_id, version, computed_at DESC);
+
 -- domain_review_events (validation/review audit log added after initial release)
 CREATE TABLE IF NOT EXISTS "${SCHEMA}".domain_review_events (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -651,7 +692,7 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
     );
 SQL
         then
-            echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, domains.mcp_policy, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
+            echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, domains.mcp_policy, build_runs, graph_analytics, graph_analytics_runs, community_runs, pattern_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
         else
             echo "  ⚠ schema migration failed — continuing (SP grants below may partially succeed)"
         fi

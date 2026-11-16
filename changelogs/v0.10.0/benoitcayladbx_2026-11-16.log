@@ -758,3 +758,42 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10750 passed, 333 skipped, 8 deselected, 39 warnings in 46.66s ========
 (Architecture ratchet green: class-per-file, re-exports, size budget. JS syntax checked with `node --check`.)
+
+## Bootstrap and preflight for the Detect run tables
+
+Context:
+The 0.10.0 deploy succeeded, but the Lakebase bootstrap reported "registry
+schema migrations already current; skipping DDL". The preflight's expected
+table list did not include `community_runs` / `pattern_runs`, so the
+bootstrap never created them. The app creates them lazily, but the
+migration path should own them, as every other registry table does.
+
+Changes:
+
+1. scripts/bootstrap/lakebase-perms.sh
+   Step 2b creates `community_runs` and `pattern_runs` (plus their
+   `(domain_id, version, computed_at DESC)` indexes), `CREATE TABLE IF NOT
+   EXISTS`. The applied-migrations echo lists both.
+2. scripts/_internal/_lakebase_preflight.py
+   `EXPECTED_TABLES` includes both tables, so the "already current" gate
+   sees them as pending until they exist.
+3. tests/units/scripts/test_lakebase_preflight.py
+   Asserts both tables are expected and created by Step 2b.
+4. update_to_0.10.0.md
+   Documents the two 0.10.0 registry objects, a read-only verification query,
+   a post-upgrade check, and a troubleshooting entry. Replaces the statements
+   that there is no 0.10 registry DDL.
+
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- scripts/_internal/_lakebase_preflight.py
+- tests/units/scripts/test_lakebase_preflight.py
+- update_to_0.10.0.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Live registry: `make bootstrap-lakebase` applied to `ontobricks_demo_10_registry_sc`
+(project `ontobricks-demo-10-registry`, branch `production`). Read-only check afterwards:
+`community_runs` and `pattern_runs` exist, both indexes exist, and both app service
+principals have INSERT/SELECT on both tables.
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10751 passed, 333 skipped, 8 deselected, 39 warnings in 61.95s ========
