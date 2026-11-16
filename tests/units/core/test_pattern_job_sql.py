@@ -11,6 +11,7 @@ from typing import Dict, List
 import pytest
 
 from jobs.graph_analytics_job import (
+    DEFAULT_PATTERN_HUB_DEGREE,
     PATTERN_ALGORITHM,
     RDF_TYPE,
     RDFS_LABEL,
@@ -101,6 +102,76 @@ def _run(triples, **kwargs):
         runner.execute, runner.scalar, builder, cleanup=False, computed_at="t0"
     )
     return runner, builder, stats
+
+
+COUNTRY_T = NS + "Country"
+IN_COUNTRY = NS + "inCountry"
+FRANCE = NS + "France"
+
+
+def hub_country_fixture(n_customers: int = 6) -> List[Dict[str, str]]:
+    """Many customers point at one Country; walking through it cross-links them."""
+    rows = _entity(FRANCE, COUNTRY_T, "France")
+    for i in range(n_customers):
+        cust = NS + f"Cust{i}"
+        rows += _entity(cust, CUSTOMER, f"Cust{i}", **{TIER: "gold"})
+        rows.append(_t(cust, IN_COUNTRY, FRANCE))
+        order = NS + f"Ord{i}"
+        rows += _entity(order, ORDER, f"Ord{i}")
+        rows.append(_t(cust, HAS_ORDER, order))
+    return rows
+
+
+class TestHubPruning:
+    def test_threshold_zero_keeps_cross_customer_walk(self):
+        runner, _, stats = _run(
+            hub_country_fixture(6), hops=2, min_support=1, hub_degree=0
+        )
+        assert int(stats["hub_count"]) == 0
+        f2 = {
+            r["node"]
+            for r in runner.rows(
+                f"SELECT node FROM w_frontier_2 WHERE anchor = '{NS}Cust0'"
+            )
+        }
+        assert any(n.startswith(NS + "Cust") and n != NS + "Cust0" for n in f2)
+
+    def test_low_threshold_stops_at_the_hub(self):
+        runner, builder, stats = _run(
+            hub_country_fixture(6), hops=2, min_support=1, hub_degree=3
+        )
+        assert int(stats["hub_count"]) >= 1
+        assert int(stats["hub_degree"]) == 3
+        f2 = {
+            r["node"]
+            for r in runner.rows(
+                f"SELECT node FROM w_frontier_2 WHERE anchor = '{NS}Cust0'"
+            )
+        }
+        assert FRANCE not in f2
+        assert not any(n.startswith(NS + "Cust") and n != NS + "Cust0" for n in f2)
+        tokens = runner.rows(
+            f"SELECT token FROM {builder.tokens} "
+            f"WHERE anchor = '{NS}Cust0' AND kind = 's' AND hop = 1"
+        )
+        assert any(
+            IN_COUNTRY in t["token"] and COUNTRY_T in t["token"] for t in tokens
+        )
+
+    def test_anchor_above_threshold_still_expands_at_hop_1(self):
+        rows = _entity(NS + "Star", CUSTOMER, "Star")
+        for i in range(5):
+            o = NS + f"O{i}"
+            rows += _entity(o, ORDER, f"O{i}")
+            rows.append(_t(NS + "Star", HAS_ORDER, o))
+        runner, _, _ = _run(rows, hops=1, min_support=1, hub_degree=2)
+        f1 = {
+            r["node"]
+            for r in runner.rows(
+                f"SELECT node FROM w_frontier_1 WHERE anchor = '{NS}Star'"
+            )
+        }
+        assert len(f1) == 5
 
 
 class TestRepresentativeShapes:
@@ -202,7 +273,7 @@ class TestStageInstrumentation:
         assert "output" in stage_ms
         assert "shapes" in stage_ms
         assert all(isinstance(v, int) and v >= 0 for v in stage_ms.values())
-        assert int(summary["hub_degree"]) == 0
+        assert int(summary["hub_degree"]) == DEFAULT_PATTERN_HUB_DEGREE
         assert int(summary["hub_count"]) == 0
         assert "stage_ms" in stats
 
@@ -306,6 +377,23 @@ class TestPatternCli:
         assert ns.task == "patterns"
         assert ns.pattern_hops == 2
         assert ns.refine_top == 10
+
+    def test_parse_args_pattern_hub_degree(self):
+        from jobs.graph_analytics_job import parse_args
+
+        ns = parse_args(
+            [
+                "--task",
+                "patterns",
+                "--source-table",
+                "c.s.t",
+                "--output-table",
+                "c.s.o",
+                "--class-filter",
+                CUSTOMER,
+            ]
+        )
+        assert ns.pattern_hub_degree == DEFAULT_PATTERN_HUB_DEGREE
 
 
 AGENT_ID = NS + "agentId"

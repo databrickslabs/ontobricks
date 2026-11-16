@@ -1285,6 +1285,9 @@ DEFAULT_PATTERN_BINS = 8
 DEFAULT_PATTERN_MIN_SUPPORT = 3
 DEFAULT_PATTERN_FRONTIER = 50_000
 DEFAULT_PATTERN_REFINE_TOP = 0
+#: Do not expand *through* a node whose directed out-degree exceeds this.
+#: The hub itself still contributes structural / attribute tokens. ``0`` disables.
+DEFAULT_PATTERN_HUB_DEGREE = 5_000
 #: A categorical attribute with more distinct values than this is identifier-like
 #: (email, phone, id, free text): it can never be shared by ``min_support``
 #: anchors, so it is left out of the signature instead of being binned.
@@ -1342,12 +1345,21 @@ class PatternSQL(GraphAnalyticsSQL):
     min_support: int = DEFAULT_PATTERN_MIN_SUPPORT
     frontier_cap: int = DEFAULT_PATTERN_FRONTIER
     refine_top: int = DEFAULT_PATTERN_REFINE_TOP
+    hub_degree: int = DEFAULT_PATTERN_HUB_DEGREE
     categorical_max_values: int = CATEGORICAL_MAX_VALUES
     min_coverage: float = DEFAULT_PATTERN_COVERAGE
+
+    def effective_hub_degree(self) -> int:
+        """Non-negative hub threshold; negatives are treated as ``0`` (off)."""
+        return max(0, int(self.hub_degree))
 
     @property
     def directed(self) -> str:
         return f"{self.work_prefix}_dir"
+
+    @property
+    def hubs(self) -> str:
+        return f"{self.work_prefix}_hubs"
 
     @property
     def literals(self) -> str:
@@ -1418,6 +1430,7 @@ class PatternSQL(GraphAnalyticsSQL):
             self.node_types,
             self.typed_edges,
             self.reps,
+            self.hubs,
         ]
         for h in range(max(0, int(self.hops)) + 1):
             tables.append(self.frontier(h))
@@ -1435,6 +1448,23 @@ class PatternSQL(GraphAnalyticsSQL):
     def build_node_types(self) -> List[str]:
         """Materialise :meth:`node_type_select_all` once for every hop."""
         return self._recreate(self.node_types, self.node_type_select_all())
+
+    def build_hubs(self) -> List[str]:
+        """Nodes whose directed degree exceeds ``hub_degree`` (empty when off)."""
+        thr = self.effective_hub_degree()
+        if thr <= 0:
+            return self._recreate(
+                self.hubs,
+                "SELECT CAST(NULL AS VARCHAR(1024)) AS n, "
+                "CAST(NULL AS BIGINT) AS degree WHERE 1 = 0",
+            )
+        return self._recreate(
+            self.hubs,
+            f"SELECT src AS n, COUNT(*) AS degree\n"
+            f"FROM {self.directed}\n"
+            f"GROUP BY src\n"
+            f"HAVING COUNT(*) > {thr}",
+        )
 
     def build_directed_edges(self) -> List[str]:
         """Directed URI edges both ways, with endpoint types denormalised.
@@ -1589,9 +1619,15 @@ class PatternSQL(GraphAnalyticsSQL):
             f") q\n"
             f"WHERE rk <= {cap}",
         )
+        # Hubs still emit tokens (expanded is unfiltered) but are not walked
+        # through: they never become the next frontier.
         statements += self._recreate(
             cur,
-            f"SELECT DISTINCT anchor, node FROM {expanded}",
+            f"SELECT DISTINCT e.anchor AS anchor, e.node AS node\n"
+            f"FROM {expanded} e\n"
+            f"WHERE NOT EXISTS (\n"
+            f"  SELECT 1 FROM {self.hubs} h WHERE h.n = e.node\n"
+            f")",
         )
         # Structural + neighbour-attribute tokens in one Delta commit.
         statements.append(
@@ -2027,6 +2063,8 @@ def _expand_neighbourhoods(execute, scalar, builder: PatternSQL, stage_ms: Dict[
             execute(stmt)
         for stmt in builder.build_directed_edges():
             execute(stmt)
+        for stmt in builder.build_hubs():
+            execute(stmt)
         for stmt in builder.build_literals():
             execute(stmt)
         for stmt in builder.build_anchors():
@@ -2149,8 +2187,10 @@ def _run_pattern_stages(
         "computed_at": computed_at,
         "elapsed_ms": int((time.time() - t0) * 1000),
         "stage_ms": stage_ms,
-        "hub_degree": 0,
-        "hub_count": 0,
+        "hub_degree": builder.effective_hub_degree(),
+        "hub_count": int(
+            _safe_count(scalar, f"SELECT COUNT(*) AS n FROM {builder.hubs}") or 0
+        ),
     }
     for stmt in builder.write_pattern_summary(stats):
         execute(stmt)
@@ -2351,6 +2391,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Max neighbours kept per anchor per hop",
     )
     parser.add_argument(
+        "--pattern-hub-degree", type=int, default=DEFAULT_PATTERN_HUB_DEGREE,
+        help=(
+            "Do not expand through nodes with directed degree above this "
+            "(0=off; hub tokens are still emitted)"
+        ),
+    )
+    parser.add_argument(
         "--refine-top", type=int, default=DEFAULT_PATTERN_REFINE_TOP,
         help="Collapse multiplicity near-duplicates among the top-N patterns (0=off)",
     )
@@ -2380,6 +2427,7 @@ def _run_selected_task(args, execute, scalar, *, excluded, class_filter, work_pr
             min_support=args.pattern_min_support,
             frontier_cap=args.pattern_frontier,
             refine_top=args.refine_top,
+            hub_degree=args.pattern_hub_degree,
         )
         stats = run_patterns(
             execute,

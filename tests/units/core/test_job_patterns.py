@@ -122,6 +122,7 @@ def test_run_passes_job_parameters_and_reads_summary(detected):
     assert params["class_filter"] == CUSTOMER
     assert params["pattern_hops"] == "2"
     assert params["refine_top"] == "5"
+    assert params["pattern_hub_degree"] == "5000"
     assert params["output_table"] == "out"
     assert params["computed_at"]
     assert stats["pattern_count"] == 2

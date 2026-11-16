@@ -51,6 +51,8 @@ resources:
               - "{{job.parameters.pattern_min_support}}"
               - "--pattern-frontier"
               - "{{job.parameters.pattern_frontier}}"
+              - "--pattern-hub-degree"
+              - "{{job.parameters.pattern_hub_degree}}"
               - "--refine-top"
               - "{{job.parameters.refine_top}}"
               - "--computed-at"
@@ -73,6 +75,8 @@ resources:
           default: "3"
         - name: pattern_frontier
           default: "50000"
+        - name: pattern_hub_degree
+          default: "5000"
         - name: refine_top
           default: "0"
         - name: computed_at

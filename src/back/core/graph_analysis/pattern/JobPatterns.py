@@ -181,6 +181,7 @@ class JobPatterns:
                 "pattern_bins": str(int(bins)),
                 "pattern_min_support": str(int(min_support)),
                 "pattern_frontier": "50000",
+                "pattern_hub_degree": "5000",
                 "refine_top": str(int(refine_top)),
                 "computed_at": datetime.now(timezone.utc).isoformat(),
             },
