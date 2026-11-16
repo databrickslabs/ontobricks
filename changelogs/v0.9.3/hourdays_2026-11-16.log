@@ -26,3 +26,48 @@ Modified files:
 - src/back/objects/registry/store/sqlite/SQLiteRegistryStore.py
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9768 passed, 339 skipped.
+
+================================================================================
+## SQLite fallback: say "not available to this app", not "on this workspace"
+================================================================================
+
+Context:
+The fallback-mode strings said Lakebase was "not available on this workspace".
+A test app can run without a Lakebase binding in a region that offers Lakebase
+(that is how the fallback is exercised), and the strings then made a false
+claim about the region. "Not available to this app" is true in both cases.
+
+Changes:
+
+1. src/front/templates/base.html
+   Navbar badge tooltip: "Lakebase is not available to this app".
+
+2. src/front/templates/partials/registry/_registry_configuration.html
+   Settings > Registry alert and the Lakehouse-default bullet reworded.
+
+3. src/front/templates/partials/domain/_domain_information.html
+   The disabled Lakebase card: "Not available to this app".
+
+4. src/front/static/global/js/utils.js
+   New Domain dialog: "not available to this app (SQLite fallback mode)".
+
+5. src/shared/fastapi/health.py
+   Health: "fallback mode: no Lakebase for this app".
+
+6. src/front/fastapi/dependencies.py
+   Docstring of registry_fallback().
+
+7. tests/units/front/test_registry_fallback_flag.py
+   New TestFallbackWordingIsAboutTheApp (badge, alert, card); the dialog and
+   health checks assert the new wording (red before, green after).
+
+Modified files:
+- src/front/templates/base.html
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/global/js/utils.js
+- src/shared/fastapi/health.py
+- src/front/fastapi/dependencies.py
+- tests/units/front/test_registry_fallback_flag.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9771 passed, 339 skipped.

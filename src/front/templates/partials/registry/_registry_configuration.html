@@ -5,7 +5,7 @@
             {% if registry_backend == "sqlite" %}
             <div class="alert alert-warning small py-2 my-2" role="alert" id="registryFallbackAlert">
                 <i class="bi bi-exclamation-triangle me-1"></i><strong>Fallback mode.</strong>
-                Lakebase is not available on this workspace, so the registry runs on SQLite: a single-instance store,
+                Lakebase is not available to this app, so the registry runs on SQLite: a single-instance store,
                 snapshotted to a Unity Catalog Volume after each change. It keeps OntoBricks running until Lakebase is
                 available; it is not the target architecture.
             </div>
@@ -104,7 +104,7 @@
                 <li>It is restored at startup from, and snapshotted after writes to,
                     <code>/Volumes/&lt;catalog&gt;/&lt;schema&gt;/&lt;volume&gt;/_registry/&lt;schema&gt;.sqlite</code>
                     on the registry Volume (override: <code>REGISTRY_SQLITE_SNAPSHOT_PATH</code>).</li>
-                <li>New domains default to the <strong>Lakehouse</strong> graph backend: there is no Lakebase graph in this workspace.</li>
+                <li>New domains default to the <strong>Lakehouse</strong> graph backend: this app has no Lakebase graph.</li>
             </ul>
             <div class="alert alert-warning small d-flex align-items-start mb-0 py-2 px-3" role="alert">
                 <i class="bi bi-exclamation-triangle me-2 mt-1"></i>

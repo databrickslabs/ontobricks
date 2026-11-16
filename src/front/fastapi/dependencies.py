@@ -150,7 +150,7 @@ def ui_branding_css_vars(context: dict) -> str:
 
 # Add custom globals to Jinja2 environment
 def registry_fallback() -> bool:
-    """True when the registry runs in SQLite fallback mode (no Lakebase on this workspace)."""
+    """True when the registry runs in SQLite fallback mode (the app runs without Lakebase)."""
     from back.objects.registry.store import RegistryFactory
 
     return RegistryFactory.backend_name() != "lakebase"

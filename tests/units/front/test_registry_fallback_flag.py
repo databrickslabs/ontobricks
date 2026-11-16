@@ -56,6 +56,7 @@ class TestHealthWording:
         monkeypatch.setattr(health, "_resolve_registry_cfg", lambda s: RegistryCfg(catalog="", schema="", volume=""))
         _status, detail = health._check_lakebase(get_settings())
         assert "fallback" in detail.lower()
+        assert "this workspace" not in detail
 
 
 class TestNewDomainDialog:
@@ -65,7 +66,7 @@ class TestNewDomainDialog:
 
     def test_dialog_marks_lakebase_unavailable_in_fallback(self):
         js = (TEMPLATES.parent / "static" / "global" / "js" / "utils.js").read_text()
-        assert "registryFallback === '1'" in js and "not available on this workspace" in js
+        assert "registryFallback === '1'" in js and "not available to this app" in js
 
 
 class TestLakebaseCardStaysDisabled:
@@ -82,3 +83,20 @@ class TestLakebaseCardStaysDisabled:
     def test_card_editability_sync_keeps_unavailable_disabled(self):
         js = (TEMPLATES.parent / "static" / "domain" / "js" / "domain-information.js").read_text()
         assert "option.disabled = readOnly || backendSelect.disabled || option.dataset.unavailable === '1';" in js
+
+
+class TestFallbackWordingIsAboutTheApp:
+    """The fallback describes the app, not the workspace: a test app can run without Lakebase in a region that has it
+    (16 Nov: films recorded that way told viewers the region had no Lakebase)."""
+
+    def test_badge_tooltip(self):
+        block = _navbar_fallback_block()
+        assert "not available to this app" in block and "this workspace" not in block
+
+    def test_settings_alert(self):
+        html = _render("partials/registry/_registry_configuration.html", registry_backend="sqlite", url_for=lambda *a, **k: "")
+        assert "not available to this app" in html and "this workspace" not in html
+
+    def test_domain_backend_card(self):
+        text = (TEMPLATES / "partials" / "domain" / "_domain_information.html").read_text()
+        assert "Not available to this app" in text and "Not available on this workspace" not in text

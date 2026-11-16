@@ -877,7 +877,7 @@ function showNewDomainDialog() {
                                 <ul class="mb-0 mt-1 ps-3">
                                     <li><strong>Lakehouse</strong> — graph stored as Delta tables in Unity Catalog (default).</li>
                                     ${document.body.dataset.registryFallback === '1'
-                                        ? '<li class="text-muted"><strong>Lakebase</strong> — not available on this workspace (SQLite fallback mode).</li>'
+                                        ? '<li class="text-muted"><strong>Lakebase</strong> — not available to this app (SQLite fallback mode).</li>'
                                         : '<li><strong>Lakebase</strong> — graph stored in a managed Postgres instance.</li>'}
                                     <li><strong>Neo4j</strong> — external native graph database (requires a connection).</li>
                                     <li><strong>No Backend</strong> — ontology only, no knowledge graph.</li>
