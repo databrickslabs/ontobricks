@@ -217,22 +217,26 @@ class TestBaseTemplate:
         assert settings_return_link.get("title") == "Back to context"
         assert settings_return_link.get("aria-label") == "Back to context"
 
-    def test_subnav_has_ontology_and_mapping_dropdowns(self, client):
-        """Ontology and Mapping are dropdowns in the L2 subnav."""
+    def test_subnav_has_ontology_and_graph_dropdowns(self, client):
+        """Ontology and Graph are dropdowns in the L2 subnav (Mapping is under Graph)."""
         html = _html(client, "/")
         tags = _tags(html)
         assert _find(tags, id_="subnavOntologyDropdown") is not None
-        assert _find(tags, id_="subnavMappingDropdown") is not None
+        assert _find(tags, id_="subnavKgDropdown") is not None
+        assert _find(tags, id_="subnavMappingDropdown") is None
 
     def test_navbar_has_ontology_link_under_domain(self, client):
         """Ontology appears as a sub-item under the Domain dropdown (navbar_hidden)."""
         html = _html(client, "/")
         assert "/ontology/" in html
 
-    def test_navbar_has_mapping_link_under_domain(self, client):
-        """Mapping appears as a sub-item under the Domain dropdown (navbar_hidden)."""
+    def test_navbar_has_graph_mapping_links(self, client):
+        """Mapping sections live under Graph (/dtwin/), not a top-level /mapping/ menu."""
         html = _html(client, "/")
-        assert "/mapping/" in html
+        assert "/dtwin/?section=design" in html
+        assert "/dtwin/?section=information" not in html
+        assert "/dtwin/?section=manual" not in html
+        assert 'id="subnavMappingDropdown"' not in html
 
     def test_navbar_has_settings_link(self, client):
         html = _html(client, "/")
@@ -509,31 +513,57 @@ class TestOntologyPage:
 
 
 # =====================================================
-# MAPPING PAGE
+# MAPPING (hosted under Graph /dtwin/)
 # =====================================================
 
 
-class TestMappingPage:
-    def test_title(self, client):
+class TestMappingUnderGraph:
+    """Mapping Studio (Informations / Visual / List) lives on the Graph page; /mapping/ redirects."""
+
+    def test_legacy_mapping_url_lands_on_graph(self, client):
         html = _html(client, "/mapping")
-        assert "Mapping" in _title_text(html)
+        assert "Graph" in _title_text(html)
 
     def test_sidebar_present(self, client):
-        html = _html(client, "/mapping")
+        html = _html(client, "/dtwin/")
         assert _find(_tags(html), class_="sidebar-nav") is not None
 
     @pytest.mark.parametrize(
         "section",
-        ["information", "import", "design", "manual", "autoassign", "diagnostics"],
+        ["design"],
     )
-    def test_sidebar_has_section_link(self, client, section):
-        html = _html(client, "/mapping")
+    def test_sidebar_has_mapping_section_link(self, client, section):
+        html = _html(client, "/dtwin/")
         tags = _tags(html)
         found = any(t == "a" and a.get("data-section") == section for t, a in tags)
         assert found, f"Sidebar link for section '{section}' not found"
 
+    def test_studio_has_visual_and_list_tabs(self, client):
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        assert _find(tags, id_="mappingStudioTabVisual") is not None
+        assert _find(tags, id_="mappingStudioTabList") is not None
+        assert _find(tags, id_="manualAssignmentTree") is not None
+        assert not any(t == "a" and a.get("data-section") == "manual" for t, a in tags)
+
+    def test_sidebar_has_no_import_or_automap_or_diagnostics_page(self, client):
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        assert not any(t == "a" and a.get("data-section") == "import" for t, a in tags)
+        assert not any(t == "a" and a.get("data-section") == "autoassign" for t, a in tags)
+        assert not any(t == "a" and a.get("data-section") == "diagnostics" for t, a in tags)
+        assert _find(tags, id_="import-section") is None
+        assert _find(tags, id_="autoassign-section") is None
+        assert _find(tags, id_="diagnostics-section") is None
+        assert _find(tags, id_="mappingImportR2RMLBtn") is not None
+        assert _find(tags, id_="information-section") is None
+        assert _find(tags, id_="mappingStudioPaneInformations") is not None
+        assert _find(tags, id_="autoAssignModal") is not None
+        assert _find(tags, id_="openAutoAssignModalBtn") is not None
+        assert _find(tags, id_="mappingDiagnosticsModal") is not None
+
     def test_mapping_core_script_loaded(self, client):
-        html = _html(client, "/mapping")
+        html = _html(client, "/dtwin/")
         assert any("mapping-core.js" in src for src in _script_srcs(html))
 
 

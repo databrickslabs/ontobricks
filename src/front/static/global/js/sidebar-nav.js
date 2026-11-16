@@ -76,7 +76,8 @@ const SidebarNav = {
                 if (targetSection) {
                     targetSection.classList.add('active');
                 }
-                
+
+                SidebarNav._clearInitialSectionStyle();
                 SidebarNav._pushSectionState(section);
 
                 document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
@@ -116,15 +117,49 @@ const SidebarNav = {
     },
 
     /**
+     * ``?tab=`` is owned by a specific section (Build/Runs on sync, GraphQL/SPARQL
+     * on graphql, …). Drop it when navigating away so URLs do not stick as
+     * ``?section=design&tab=build`` after leaving Build.
+     */
+    _TAB_OWNERS: {
+        sync: ['build', 'runs'],
+        graphql: ['graphql', 'sparql'],
+        analytics: ['analytics', 'runs'],
+        cohorts: ['design', 'runs'],
+        design: ['informations', 'visual', 'list']
+    },
+
+    /**
      * Update the URL query string to reflect the active section without a
      * full page reload, so that Back / Forward and bookmarks work.
      */
     _pushSectionState: function(section) {
         if (!section || !window.history || !window.history.pushState) return;
         const url = new URL(window.location);
-        if (url.searchParams.get('section') === section) return;
-        url.searchParams.set('section', section);
+        const prevSection = url.searchParams.get('section');
+        const tab = url.searchParams.get('tab');
+        const ownerTabs = SidebarNav._TAB_OWNERS[section];
+        let changed = false;
+        if (prevSection !== section) {
+            url.searchParams.set('section', section);
+            changed = true;
+        }
+        if (tab && (!ownerTabs || ownerTabs.indexOf(tab) === -1)) {
+            url.searchParams.delete('tab');
+            changed = true;
+        }
+        if (!changed) return;
         window.history.pushState({ section: section }, '', url);
+    },
+
+    /**
+     * Remove the pre-paint flash-prevention style from mapping-init-section.js
+     * (and similar). That style uses ``display: … !important`` and would otherwise
+     * permanently lock the first URL section on Graph after Mapping was merged in.
+     */
+    _clearInitialSectionStyle: function() {
+        const tempStyle = document.getElementById('initial-section-style');
+        if (tempStyle) tempStyle.remove();
     },
 
     /**
@@ -149,6 +184,7 @@ const SidebarNav = {
         if (link) link.classList.add('active');
         document.querySelectorAll('.sidebar-section').forEach(s => s.classList.remove('active'));
         target.classList.add('active');
+        SidebarNav._clearInitialSectionStyle();
         document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
             detail: { section: sectionName, targetSection: target }
         }));

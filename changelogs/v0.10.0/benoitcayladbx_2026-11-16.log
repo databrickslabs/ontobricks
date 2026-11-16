@@ -1,0 +1,444 @@
+## Fix Graph sidebar stuck on Mapping Studio (?section=design&tab=build)
+
+Context: After Mapping was hosted under Graph, clicking any Graph sidebar
+item appeared to stay on Studio with URL ``/dtwin/?section=design&tab=build``.
+Root cause: ``mapping-init-section.js`` injects a pre-paint ``display: … !important``
+style that was never cleared on Graph, locking the first URL section; and
+``SidebarNav._pushSectionState`` preserved Build's ``?tab=build`` when leaving
+``sync``, producing sticky ``design&tab=build`` URLs.
+
+Changes:
+
+1. src/front/static/global/js/sidebar-nav.js
+   Clear ``#initial-section-style`` on every section activation; drop foreign
+   ``?tab=`` params when navigating away from the section that owns them.
+2. src/front/static/mapping/js/mapping-init.js
+   Hosted-on-Graph bootstrap also clears the pre-paint style after SidebarNav
+   takes over (covers default Explorer landings).
+3. tests/units/front/test_sidebar_nav_section_url.py
+   Contracts for style clear + tab scrubbing.
+4. tests/e2e/dtwin/test_dtwin_flows.py
+   Sidebar parity includes Mapping sections (information/design/manual) + sync.
+
+Modified files:
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/mapping/js/mapping-init.js
+- tests/units/front/test_sidebar_nav_section_url.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10618 passed, 328 skipped, 8 deselected, 39 warnings in 48.36s ========
+
+## Mapping Studio Visual + List tabs (fold Manual into List)
+
+Context: Mapping Studio should host both the canvas and the former Manual
+tree. Added Visual | List tabs on Studio, moved Manual content into List,
+removed the Manual sidebar item, and deep-link ``?section=manual`` to
+``design&tab=list``.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_design.html
+   Studio section header + card with ``ob-tabs`` Visual / List; Visual keeps
+   canvas + panel; List includes the Manual body.
+2. src/front/templates/partials/mapping/_mapping_manual.html
+   List-tab body only (``#mappingStudioListRoot``); no standalone page chrome.
+3. src/front/config/menu_config.json
+   Remove Mapping → Manual sidebar item.
+4. src/front/templates/dtwin.html
+   Drop ``#manual-section``.
+5. src/front/static/mapping/js/mapping-design.js
+   ``MappingStudioTabs`` syncs ``?tab=visual|list`` and inits List/Manual.
+6. src/front/static/mapping/js/mapping-init.js / mapping-init-section.js
+   Legacy ``manual`` → Studio List; designer skips init while List is active.
+7. src/front/static/mapping/js/mapping-manual.js
+   Action delegation binds to ``#mappingStudioListRoot``.
+8. src/front/static/global/js/sidebar-nav.js
+   ``design`` owns ``visual`` / ``list`` tab query params.
+9. src/front/static/mapping/css/mapping-design.css
+   Studio tab panes fill remaining height.
+10. Help + docs + tests updated for Visual/List and no Manual menu.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/mapping/_mapping_manual.html
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/js/mapping-init-section.js
+- src/front/static/mapping/js/mapping-manual.js
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/mapping/css/mapping-design.css
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/development.md
+- tests/units/front/test_mapping_studio_tabs.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/e2e/mapping/test_mapping_flows.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10623 passed, 327 skipped, 8 deselected, 39 warnings in 44.83s ========
+
+## Share Mapping Studio bottom pane between Visual and List
+
+Context: Studio Visual and List each had their own mapping panel. List now
+reuses Visual's `#mappingRightPanel` so selecting an entity or relationship
+in either tab edits the same bottom pane.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_design.html
+   Split shell wraps both tab panes; shared `#mappingRightPanel` sits below
+   Visual and List.
+2. src/front/templates/partials/mapping/_mapping_manual.html
+   List tab is the tree only — no private bottom panel.
+3. src/front/static/mapping/js/mapping-manual.js
+   List selection opens `openEntityMappingFromDesign` /
+   `openRelationshipMappingFromDesign`.
+4. src/front/static/mapping/js/mapping-design.js
+   Single panel host (`#panelBody`); closing the pane also clears List
+   selection.
+5. src/front/static/mapping/css/mapping-design.css
+   Shared split pane fills remaining Studio height.
+6. tests/units/front/test_mapping_studio_tabs.py
+   Contract: `#mappingRightPanel` is outside the Visual tab pane.
+7. tests/units/front/test_manual_mapping_panel_host.py
+   List uses the shared Studio pane, not `#manualPanelBody`.
+8. docs/user-guide.md
+   Visual and List share the same bottom mapping pane.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/mapping/_mapping_manual.html
+- src/front/static/mapping/js/mapping-manual.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/css/mapping-design.css
+- tests/units/front/test_mapping_studio_tabs.py
+- tests/units/front/test_manual_mapping_panel_host.py
+- tests/units/front/test_no_llm_ui_gate.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10625 passed, 327 skipped, 8 deselected, 39 warnings in 46.86s ========
+
+## Pin Mapping Studio bottom pane to the shell bottom
+
+Context: After Visual and List started sharing `#mappingRightPanel`, the
+Visual top pane no longer flex-grew inside the column split shell, so the
+bottom panel floated mid-page instead of sticking to the page bottom like
+List.
+
+Changes:
+
+1. src/front/static/mapping/css/mapping-design.css
+   `#mappingStudioMainPane` and active Studio tab panes flex-fill above the
+   shared bottom panel.
+2. src/front/templates/partials/mapping/_mapping_design.html
+   Canvas wrapper is no longer a nested `ob-split-pane` (top pane is the
+   Visual|List host).
+3. tests/units/front/test_mapping_designer_split_layout.py
+   Contract that the Studio main pane fills remaining height above the
+   bottom panel.
+
+Modified files:
+- src/front/static/mapping/css/mapping-design.css
+- src/front/templates/partials/mapping/_mapping_design.html
+- tests/units/front/test_mapping_designer_split_layout.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10626 passed, 327 skipped, 8 deselected, 39 warnings in 45.26s ========
+
+## Add Studio Informations tab, Import R2RML button, and remove inner tab round corners
+
+Context: User requested an Informations tab in Mapping Studio containing the
+Mapping General informations content, an Import button above the tabs to
+import R2RML files, and pointed out that embedded tab pages had inner round
+corners.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_information_content.html
+   Extracted reusable General Informations markup (prerequisites, summary KPI
+   tiles, gauges, status, entity/relationship breakdown).
+2. src/front/templates/partials/mapping/_mapping_information.html
+   Includes `_mapping_information_content.html`.
+3. src/front/templates/partials/mapping/_mapping_design.html
+   Added first tab `Informations` before `Visual` and `List`, added R2RML
+   Import button (`#mappingImportR2RMLBtn`) next to Export in toolbar, and
+   file input (`#mappingStudioImportR2rmlFileInput`).
+4. src/front/static/mapping/css/mapping-design.css
+   Removed nested inner borders and `border-radius` on `#mappingStudioMainPane`
+   and `#mappingRightPanel` inside Studio tabs, eliminating inner rounded
+   corners inside the tabbed card.
+5. src/front/static/mapping/js/mapping-design.js
+   `MappingStudioTabs` supports `informations`, `visual`, and `list`; hides
+   the bottom mapping panel when on `Informations` and triggers status/gauge
+   refresh.
+6. src/front/static/mapping/js/mapping-import.js
+   Wired `#mappingImportR2RMLBtn` and `#mappingStudioImportR2rmlFileInput` to
+   import R2RML files via `importR2rmlContent()`.
+7. src/front/static/global/js/mapping-information.js
+   Updated status, gauge, and summary renderers to query all matching DOM
+   elements so both General and Studio Informations tabs stay synchronized.
+8. src/front/static/global/js/sidebar-nav.js
+   Added `informations` to `_TAB_OWNERS.design`.
+9. src/front/static/global/css/permissions.css
+   Gated `#mappingImportR2RMLBtn` and input in read-only / viewer modes.
+10. tests/units/front/test_mapping_studio_tabs.py
+    Contracts for Informations tab, Import/Export buttons, and clean embedding.
+11. docs/user-guide.md
+    Documented Studio Informations, Visual, and List tabs and Import action.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_information_content.html
+- src/front/templates/partials/mapping/_mapping_information.html
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/static/mapping/css/mapping-design.css
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-import.js
+- src/front/static/global/js/mapping-information.js
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_mapping_studio_tabs.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10628 passed, 327 skipped, 8 deselected, 39 warnings in 46.54s ========
+
+## Remove Mapping/General page; move Studio under Graph → Management
+
+Context: the Graph → Mapping → General page (Informations | R2RML tabs) is
+redundant now that Mapping Studio hosts an Informations tab. The Studio page
+moves into the Management group as its first item (before Build). The R2RML
+preview tab (Copy / Download / Regenerate) goes away with the General page;
+R2RML stays available through the Studio toolbar (Import / Export).
+
+Changes:
+1. src/front/config/menu_config.json
+   Removed the `digitaltwin-mapping` group. `digitaltwin-management` now lists
+   Studio (`design`) first, then Build (`sync`), then Overview (`insight`).
+2. src/front/templates/dtwin.html
+   Removed the `#information-section` (General) block and its includes of
+   `_mapping_information.html` / `_mapping_r2rml.html`.
+3. src/front/templates/partials/mapping/_mapping_information.html
+   Deleted (General page wrapper with Unmap all and Informations | R2RML tabs).
+4. src/front/templates/partials/mapping/_mapping_r2rml.html
+   Deleted (R2RML preview tab, Copy / Regenerate / Download, local import).
+5. src/front/templates/partials/mapping/_mapping_information_content.html
+   Now only the Studio Informations tab body.
+6. src/front/routes/dtwin.py, src/front/routes/mapping.py
+   Legacy `?section=information` and `/mapping/` redirect to
+   `/dtwin/?section=design&tab=informations`.
+7. src/front/static/mapping/js/mapping-init-section.js, mapping-init.js
+   Legacy `information` / `import` / `manual` deep links map to Studio tabs;
+   the Visual canvas initialises only when the Visual tab is active.
+8. src/front/static/mapping/js/mapping-r2rml.js
+   Reduced to export-only: `forceRegenerateR2RML()` and the
+   `#mappingExportR2RMLBtn` download handler.
+9. src/front/static/mapping/js/mapping-import.js
+   Reduced to the Studio Import flow (`#mappingImportR2RMLBtn`).
+10. src/front/static/global/js/mapping-information.js
+    Removed the legacy R2RML import/export block; Unmap all is wired to
+    `#resetMappingsDesignBtn` only.
+11. src/front/static/global/js/mapping-core.js
+    `autoGenerateR2RML` no longer writes to the removed `#r2rmlPreview`.
+12. src/front/static/global/css/mapping.css, src/front/static/global/css/pages.css
+    Removed General / R2RML preview styles.
+13. src/front/static/global/css/permissions.css
+    Read-only gates now target `#mappingImportR2RMLBtn`,
+    `#mappingStudioImportR2rmlFileInput` and `#resetMappingsDesignBtn`.
+14. src/front/templates/partials/layout/help_modal.html
+    Graph help describes Studio (Informations / Visual / List, Import / Export).
+15. Tests updated to the new structure:
+    tests/units/api/test_ui_rendering.py,
+    tests/units/front/test_mapping_r2rml_import_tab.py (rewritten for the
+    Studio toolbar), test_unmap_all_ui.py, test_view_mode_write_gates.py,
+    test_help_center_menu_sync.py, test_workspace_map_modal.py,
+    test_sidebar_content_stretch_contract.py, test_mapping_studio_tabs.py,
+    test_mapping_automap_modal.py, test_mapping_diagnostics_modal.py,
+    test_unloaded_workspace_redirect.py.
+16. tests/e2e/mapping/test_mapping_flows.py, tests/e2e/dtwin/test_dtwin_flows.py,
+    tests/e2e/scenarios/test_full_lifecycle.py, tests/e2e/scenarios/test_scenario_01_generate_live.py,
+    tests/e2e/README.md
+    Opt-in suites: General / R2RML preview replaced by Studio toolbar
+    checks (Import / Export download).
+17. docs/user-guide.md, docs/getting-started.md, docs/examples.md,
+    docs/api.md, docs/architecture.md, docs/development.md
+    Navigation paths moved to Graph → Management → Studio; the General / R2RML
+    tab sections are removed.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/front/templates/base.html
+- src/front/templates/partials/mapping/_mapping_information.html (deleted)
+- src/front/templates/partials/mapping/_mapping_r2rml.html (deleted)
+- src/front/templates/partials/mapping/_mapping_information_content.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/routes/dtwin.py
+- src/front/routes/mapping.py
+- src/front/static/mapping/js/mapping-init-section.js
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/js/mapping-r2rml.js
+- src/front/static/mapping/js/mapping-import.js
+- src/front/static/global/js/mapping-information.js
+- src/front/static/global/js/mapping-core.js
+- src/front/static/global/css/mapping.css
+- src/front/static/global/css/pages.css
+- src/front/static/global/css/permissions.css
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_mapping_r2rml_import_tab.py
+- tests/units/front/test_unmap_all_ui.py
+- tests/units/front/test_view_mode_write_gates.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_mapping_studio_tabs.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_mapping_diagnostics_modal.py
+- tests/units/front/test_unloaded_workspace_redirect.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/e2e/scenarios/test_full_lifecycle.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/e2e/README.md
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/examples.md
+- docs/api.md
+- docs/architecture.md
+- docs/development.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10623 passed, 326 skipped, 8 deselected, 39 warnings in 50.6s ========
+
+## Center diagram in Visual by default and fix Graph ready status badge legibility
+
+Context: In Mapping Studio's Visual tab, the diagram loaded at (0, 0) without
+centering or fitting to the canvas. Also, the "Graph ready · Lakebase" (and
+other backend) readiness badges rendered with low contrast and washed-out text/icons
+because global `.badge.bg-success { background-color: #28a745 !important; }`
+overrode the transparent background and paired with dark green text (`#198754`),
+while the brand mark and backend label were washed out by `opacity-75`.
+
+Changes:
+1. src/front/static/mapping/js/mapping-design.js
+   Implemented `centerMappingDiagram(animate)`: computes bounding box and
+   centroid of mapping nodes, scales and translates them to fit centered within
+   the visible container with comfortable padding. Called on initial map render,
+   on tab switch to Visual (`MappingStudioTabs._onShown`), in `resizeMapSvg()`,
+   on Reset Layout, and on the "Reset view" button click. Exposes
+   `window.centerMappingDiagram`.
+2. src/front/static/global/css/mapping.css
+   Removed legacy forced `.badge.bg-success { background-color: #28a745 !important; }`
+   and `.badge.bg-secondary` rules that broke Bootstrap subtle/opacity styling.
+3. src/front/static/query/js/query-sync.js
+   Updated `updateKgReadyIndicators()` to use `bg-success-subtle text-success-emphasis border border-success-subtle fw-medium`,
+   removed `opacity-75` from the backend label/icon, and updated related readiness badges
+   for consistent legibility.
+4. src/front/static/query/css/query-sync.css & src/front/static/global/css/components.css
+   Added clear flex-aligned `.kg-status-indicator .badge` sizing and `.ob-brand-icon`
+   dimensions across all subpages.
+5. src/front/static/domain/js/domain-validation.js
+   Updated existence and status badges to use subtle high-contrast styling.
+6. tests/units/front/test_mapping_studio_tabs.py
+   Added contract tests for `centerMappingDiagram` and Visual centering integration.
+7. tests/units/front/test_kg_readiness_indicator.py
+   Added contract assertions for subtle high-contrast readiness badge classes and visible backend brand mark.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/global/css/mapping.css
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/css/query-sync.css
+- src/front/static/global/css/components.css
+- src/front/static/domain/js/domain-validation.js
+- tests/units/front/test_mapping_studio_tabs.py
+- tests/units/front/test_kg_readiness_indicator.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10625 passed, 326 skipped, 8 deselected, 39 warnings in 46.67s ========
+
+## Rename Graph "Studio" menu to "Mapping" and move it under Build
+
+Context: The Graph → Management item previously labelled "Studio" (mapping workspace) is renamed "Mapping" for clarity, and moved so it sits directly after "Build" in the Management group. The menu item id (`design`) is unchanged, so existing `?section=design` deep links keep working. The Ontology "Studio" menu item is not affected.
+
+Changes:
+1. src/front/config/menu_config.json
+   Graph → Management order is now Build, Mapping (`design`, label "Mapping", icon bi-pencil), Overview.
+2. src/front/templates/partials/layout/help_modal.html
+   Graph workflow and Mapping help now name the item "Mapping" and state it sits right after Build.
+3. src/front/templates/dtwin.html
+   Section comment updated to "Management → Mapping".
+4. src/front/templates/partials/dtwin/_query_sync.html, src/front/static/query/js/query-databricks-build.js
+   Build "not ready" alert link text changed from "Studio" to "Mapping" (same `/dtwin/?section=design` target).
+5. Navigation paths in docs (user-guide, getting-started, examples, architecture, development, api) and code comments/docstrings (mapping.py, permissions.css, _mapping_design.html, dtwin.html) now read "Graph → Management → Mapping". The user-guide Step 2 heading and its TOC anchor were updated accordingly.
+6. tests/units/front/test_help_center_menu_sync.py
+   Management order assertion and Graph mapping label assertion updated.
+7. tests/units/front/test_build_automap_cta.py
+   Link text assertions updated to "Mapping".
+8. tests/e2e/dtwin/test_dtwin_flows.py, tests/e2e/mapping/test_mapping_flows.py, tests/e2e/scenarios/test_scenario_01_generate_live.py, tests/units/front/test_mapping_r2rml_import_tab.py, tests/units/front/test_unloaded_workspace_redirect.py
+   Docstrings and step labels updated to the new path.
+
+Note: the Mapping page header in `_mapping_design.html` still reads "Mapping Studio" (the page title, not the menu label); unchanged.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/dtwin.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/routes/mapping.py
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_build_automap_cta.py
+- tests/units/front/test_mapping_r2rml_import_tab.py
+- tests/units/front/test_unloaded_workspace_redirect.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- docs/user-guide.md, docs/getting-started.md, docs/examples.md, docs/architecture.md, docs/development.md, docs/api.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10625 passed, 326 skipped, 8 deselected, 39 warnings in 45.29s ========
+
+## Sync Visual ↔ List selection in Mapping Studio
+
+Context: Selecting an entity or relationship in Mapping → Visual only
+highlighted the canvas; the List tree stayed unselected. Selecting in List
+opened the shared panel but did not highlight the Visual node/link. Users
+expect both views to show the same selection.
+
+Changes:
+1. src/front/static/mapping/js/mapping-design.js
+   Added `highlightMappingMapSelection`, `highlightMappingListSelection` and
+   `syncMappingSelection`. `openEntityMappingFromDesign` /
+   `openRelationshipMappingFromDesign` now call `syncMappingSelection` so
+   both Visual and List stay in sync regardless of which view was clicked.
+   After a Visual redraw, and when switching back to the Visual or List tab,
+   the open panel's selection is restored.
+2. src/front/static/mapping/js/mapping-manual.js
+   Added `ManualModule.selectInTree(type, uri, name)` — highlights the tree
+   row, expands collapsed ancestors, scrolls into view, updates
+   `currentItem`, without re-opening the panel. `refresh()` restores the
+   previous selection after a tree rebuild.
+3. tests/units/front/test_manual_mapping_panel_host.py
+   Contract tests for the Visual↔List selection sync helpers and List
+   restore-on-refresh behaviour.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-manual.js
+- tests/units/front/test_manual_mapping_panel_host.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10630 passed, 326 skipped, 8 deselected, 39 warnings in 47.10s ========

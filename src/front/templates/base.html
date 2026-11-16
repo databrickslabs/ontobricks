@@ -245,15 +245,14 @@
         </div>
     </nav>
 
-    <!-- Level 2 contextual navigation — Ontology | Mapping | Graph | Context dropdown -->
+    <!-- Level 2 contextual navigation — Ontology | Graph | Intelligence | Context dropdown
+         Mapping Studio lives under Graph → Management (no top-level Mapping menu). -->
     {% set ontology_m = namespace(v=none) %}
-    {% set mapping_m  = namespace(v=none) %}
     {% set kg_m       = namespace(v=none) %}
     {% set intel_m      = namespace(v=none) %}
     {% set domain_m   = namespace(v=none) %}
     {% for m in menu_config.menus %}
         {% if m.id == 'ontology'   %}{% set ontology_m.v = m %}{% endif %}
-        {% if m.id == 'assignment' %}{% set mapping_m.v  = m %}{% endif %}
         {% if m.id == 'digitaltwin'%}{% set kg_m.v       = m %}{% endif %}
         {% if m.id == 'intelligence' %}{% set intel_m.v      = m %}{% endif %}
         {% if m.id == 'domain'     %}{% set domain_m.v   = m %}{% endif %}
@@ -335,32 +334,6 @@
                         <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
                         {% for item in group['items'] %}
                         <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}{% if item.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}" href="{{ ontology_m.v.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
-                        {% endfor %}
-                        {% endif %}
-                        {% endfor %}
-                    </ul>
-                </li>
-                {% endif %}
-                {% if mapping_m.v %}
-                <li class="ob-subnav-item dropdown">
-                    <a class="ob-subnav-link dropdown-toggle nav-requires-graph"
-                       href="{{ mapping_m.v.route }}"
-                       id="subnavMappingDropdown" role="button"
-                       data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ mapping_m.v.route }}"
-                       title="{{ mapping_m.v.label }}">
-                        <i class="bi {{ mapping_m.v.icon }}"></i>
-                        <span class="ob-subnav-label">{{ mapping_m.v.label }}</span>
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="subnavMappingDropdown">
-                        {% set vis = namespace(any=false) %}
-                        {% for group in mapping_m.v.groups %}
-                        {% if not group.sidebar_only|default(false) %}
-                        {% if vis.any %}<li><hr class="dropdown-divider"></li>{% endif %}
-                        {% set vis.any = true %}
-                        <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
-                        {% for item in group['items'] %}
-                        <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}{% if item.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}" href="{{ mapping_m.v.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
                         {% endfor %}
                         {% endif %}
                         {% endfor %}

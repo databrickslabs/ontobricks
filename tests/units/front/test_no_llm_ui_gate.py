@@ -96,15 +96,13 @@ def test_every_domain_llm_trigger_has_declarative_marker():
         "src/front/templates/partials/ontology/_ontology_business_rules.html": [
             'data-br-action="auto-generate"',
         ],
-        "src/front/templates/partials/mapping/_mapping_autoassign.html": [
+        "src/front/templates/partials/mapping/_mapping_autoassign_modal.html": [
             "startAutoAssignBtn",
             "reassignAttrsBtn",
         ],
         "src/front/templates/partials/mapping/_mapping_design.html": [
             "autoMapPanelBtn",
-        ],
-        "src/front/templates/partials/mapping/_mapping_manual.html": [
-            "manualAutoMapBtn",
+            "openAutoAssignModalBtn",
         ],
         "src/front/templates/partials/dtwin/_query_chat.html": [
             "chatSendBtn",

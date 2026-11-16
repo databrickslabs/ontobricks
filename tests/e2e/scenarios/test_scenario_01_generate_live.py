@@ -27,8 +27,8 @@ The journey:
        reaches ``reviewing``, then POST ``/ontology/wizard/generate/complete``
        (the same call the Review Continue button makes) and poll the task
        until merge writes classes into the session
-    5. run **Auto-Map** from the real Mapping page (the AI mapping wizard that
-       generates the SQL queries + column mappings for every entity/relationship)
+    5. run **Auto-Map** from Graph → Management → Mapping (modal on Studio/Build; generates
+       the SQL queries + column mappings for every entity/relationship)
     6. save the domain to the registry (clean create — must precede the build,
        which records itself against the registry domain)
     7. **Build the knowledge graph** (POST /dtwin/sync/start → CREATE VIEW +
@@ -351,8 +351,8 @@ class TestScenario1GenerateLive:
         _step(f"generated ontology with {len(classes)} classes: {class_names[:12]}")
 
         # ── 6. Auto-Map: generate SQL + column mappings from the real UI ─────
-        _step("opening the Mapping page and waiting for the ontology to hydrate")
-        page.goto(f"{base}/mapping?section=autoassign")
+        _step("opening Graph → Management → Mapping and waiting for the ontology to hydrate")
+        page.goto(f"{base}/dtwin/?open=automap")
         page.wait_for_load_state("domcontentloaded")
         page.wait_for_function(
             "() => typeof MappingState !== 'undefined' && MappingState.initialized"
@@ -361,8 +361,8 @@ class TestScenario1GenerateLive:
             " && typeof AutoAssignModule !== 'undefined'",
             timeout=60_000,
         )
-        # Let AutoAssignModule.init() (triggered by the section nav) hydrate its
-        # mapping config so start() sees the unassigned entities.
+        # Deep-link opens the Batch Auto-Map modal and init() hydrates mapping config.
+        page.wait_for_selector("#autoAssignModal.show", timeout=15_000)
         page.wait_for_timeout(1500)
 
         _step("starting Auto-Map → AI generates SQL + column mappings (can take minutes)")

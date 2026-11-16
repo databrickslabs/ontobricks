@@ -31,7 +31,7 @@ def test_domain_and_digitaltwin_icons_differ():
 def test_help_modal_walkthrough_uses_kg_icon():
     text = _HELP.read_text(encoding="utf-8")
     assert re.search(
-        rf'<i class="bi {_KG_ICON}[^"]*"></i>\s*<strong>5\. Graph</strong>',
+        rf'<i class="bi {_KG_ICON}[^"]*"></i>\s*<strong>4\. Graph</strong>',
         text,
     )
 

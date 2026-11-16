@@ -47,7 +47,7 @@ function _renderAssignmentLink(containerId, type, name) {
             const params = new URLSearchParams({ section: 'design', select: name, type: type });
             container.innerHTML = `
                 <div class="mb-2 small">
-                    <a href="/mapping/?${params.toString()}" title="View mapping for ${escapeHtml(name)}">
+                    <a href="/dtwin/?${params.toString()}" title="View mapping for ${escapeHtml(name)}">
                         <i class="bi bi-link-45deg"></i> View Mapping
                     </a>
                 </div>`;

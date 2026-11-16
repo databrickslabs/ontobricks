@@ -33,7 +33,7 @@
 
 .ob-workspace-map-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .ob-workspace-map-col {
@@ -157,6 +157,42 @@
 
 .ob-icon-neo4j {
     background-image: url("/static/global/img/neo4j-icon.svg");
+}
+
+/* Knowledge Graph readiness indicator (next to each sub-page title) */
+.kg-status-indicator .badge {
+    font-size: 0.72rem;
+    vertical-align: middle;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.35;
+    padding: 0.25em 0.55em;
+    font-weight: 500;
+}
+
+.kg-status-indicator .badge i.bi {
+    font-size: 0.78rem;
+    vertical-align: -0.05rem;
+}
+
+.kg-status-indicator .badge .ob-brand-icon {
+    width: 0.95em;
+    height: 0.95em;
+    vertical-align: -0.12em;
+    margin-left: 0.2rem;
+    margin-right: 0.2rem;
+}
+
+.kg-status-indicator .kg-status-spinner {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-width: 0.12em;
+    vertical-align: -0.05rem;
+}
+
+.kg-status-indicator .kg-go-build-btn {
+    font-size: 0.72rem;
+    line-height: 1.4;
 }
 
 /* Display utilities */

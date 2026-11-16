@@ -533,7 +533,7 @@ Click **Auto Layout** to organize the diagram, then **Center** to fit the view.
 
 #### Entity Mappings
 
-Go to **Mapping → Map** and click on each entity to map:
+Go to **Graph → Management → Mapping** and click on each entity to map:
 
 ##### Customer Entity
 
@@ -587,7 +587,7 @@ WHERE status = 'active'
 
 #### Relationship Mappings
 
-In **Mapping → Map**, click on each relationship to map:
+In **Graph → Management → Mapping**, click on each relationship to map:
 
 ##### hasContract
 

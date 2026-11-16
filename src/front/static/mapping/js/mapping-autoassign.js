@@ -8,7 +8,7 @@
 const AUTO_ASSIGN_TASK_KEY = 'ontobricks_autoassign_task';
 
 const AUTO_ASSIGN_PROGRESS_CFG = {
-    hostId: 'autoassign-section',
+    hostId: 'autoassign-modal-body',
     overlayId: 'autoAssignFormOverlay',
     overlayClass: 'task-progress-overlay',
     titleId: 'autoAssignOverlayTitle',
@@ -22,12 +22,122 @@ const AUTO_ASSIGN_PROGRESS_CFG = {
     subtitle: 'Generating SQL queries and column mappings with AI…',
 };
 
+function _drawAutoAssignGauge(canvasId, score) {
+    if (typeof window._drawMappingGauge === 'function') {
+        try { window._drawMappingGauge(canvasId, score); return; } catch (_) {}
+    }
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (score == null) {
+        if (canvas.parentElement) canvas.parentElement.style.opacity = '0.3';
+        return;
+    }
+    if (canvas.parentElement) canvas.parentElement.style.opacity = '1';
+    const val = Math.max(0, Math.min(100, Math.round(score)));
+    const color = val === 100 ? '#198754' : val >= 80 ? '#ffc107' : '#dc3545';
+    const cx = canvas.width / 2;
+    const cy = canvas.height - 4;
+    const r = Math.min(cx, cy) - 6;
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI, false);
+    ctx.strokeStyle = '#e9ecef';
+    ctx.stroke();
+    if (val > 0) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, Math.PI, Math.PI + (val / 100) * Math.PI, false);
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.fillStyle = color;
+    ctx.fillText(val + '%', cx, cy);
+}
+
 window.AutoAssignModule = {
     initialized: false,
     isRunning: false,
     isCancelled: false,
     results: [],
     currentTaskId: null,
+    _modalWired: false,
+
+    /**
+     * Open the Batch Auto-Map modal (Studio / Manual / Build).
+     */
+    open: async function() {
+        const modalEl = document.getElementById('autoAssignModal');
+        if (!modalEl || typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+            showNotification('Auto-Map dialog is not available on this page.', 'warning');
+            return;
+        }
+        this._wireModal(modalEl);
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        await this.ensureLoaded();
+        this.init();
+    },
+
+    _wireModal: function(modalEl) {
+        if (this._modalWired) return;
+        this._modalWired = true;
+        const self = this;
+        modalEl.addEventListener('shown.bs.modal', function() {
+            self._initWhenReady();
+        });
+        modalEl.addEventListener('hide.bs.modal', function() {
+            if (self.isRunning) {
+                showNotification(
+                    'Auto-Map is running in the background. Track progress in the navbar.',
+                    'info',
+                    4000
+                );
+            }
+        });
+    },
+
+    ensureLoaded: async function() {
+        if (typeof window.MappingState === 'undefined') {
+            window.MappingState = {
+                config: { entities: [], relationships: [] },
+                loadedOntology: null,
+                initialized: false,
+            };
+        }
+        if (!window.MappingState.loadedOntology) {
+            try {
+                const resp = await fetch('/ontology/load', { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (data.success && data.config) {
+                    window.MappingState.loadedOntology = data.config;
+                }
+            } catch (e) {
+                console.error('[AutoAssign] Error loading ontology:', e);
+            }
+        }
+        if (!window.MappingState.initialized || !window.MappingState.config?.entities?.length) {
+            try {
+                const resp = await fetch('/mapping/load', { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (data.success && data.config) {
+                    window.MappingState.config = data.config;
+                }
+            } catch (e) {
+                console.error('[AutoAssign] Error loading mappings:', e);
+            }
+        }
+        window.MappingState.initialized = true;
+    },
+
+    _initWhenReady: async function() {
+        await this.ensureLoaded();
+        this.init();
+    },
     
     /**
      * Disable sidebar menus that should not be accessed while auto-map runs.
@@ -108,6 +218,7 @@ window.AutoAssignModule = {
             const resp = await fetch('/domain/metadata', { credentials: 'same-origin' });
             const data = await resp.json();
             if (!data.success || !data.has_metadata) {
+                warningEl.classList.add('d-none');
                 warningEl.style.display = 'none';
                 return;
             }
@@ -119,6 +230,7 @@ window.AutoAssignModule = {
 
         const tables = metadata.tables || [];
         if (tables.length === 0) {
+            warningEl.classList.add('d-none');
             warningEl.style.display = 'none';
             return;
         }
@@ -140,6 +252,7 @@ window.AutoAssignModule = {
 
         const totalMissing = tablesNoDesc.length + columnsNoDesc.length;
         if (totalMissing === 0) {
+            warningEl.classList.add('d-none');
             warningEl.style.display = 'none';
             return;
         }
@@ -174,6 +287,7 @@ window.AutoAssignModule = {
                     </div>
                 </div>
             </div>`;
+        warningEl.classList.remove('d-none');
         warningEl.style.display = 'block';
     },
 
@@ -811,20 +925,18 @@ window.AutoAssignModule = {
     }
 };
 
-// Initialize when autoassign section becomes active
-document.addEventListener('sectionChange', function(e) {
-    if (e.detail?.section === 'autoassign') {
-        // Add delay and retry logic
-        const tryInit = (retries = 0) => {
-            if (MappingState.initialized && MappingState.loadedOntology) {
-                AutoAssignModule.init();
-            } else if (retries < 10) {
-                setTimeout(() => tryInit(retries + 1), 100);
-            } else {
-                console.warn('AutoAssignModule: Force init after timeout');
-                AutoAssignModule.init();
-            }
-        };
-        setTimeout(() => tryInit(0), 50);
-    }
+// Deep-link / resume: /dtwin/?open=automap (legacy /mapping/?open=automap redirects) or a saved running task opens the modal.
+document.addEventListener('DOMContentLoaded', function() {
+    const params = new URLSearchParams(window.location.search);
+    const openAutomap = params.get('open') === 'automap'
+        || window.__OB_OPEN_MAPPING_AUTOMAP === true
+        || window.location.hash === '#automap'
+        || window.location.hash === '#autoassign'
+        || params.get('section') === 'autoassign';
+    window.__OB_OPEN_MAPPING_AUTOMAP = false;
+    const hasSavedTask = !!sessionStorage.getItem(AUTO_ASSIGN_TASK_KEY);
+    if (!openAutomap && !hasSavedTask) return;
+    setTimeout(function() {
+        if (typeof AutoAssignModule !== 'undefined') AutoAssignModule.open();
+    }, 300);
 });

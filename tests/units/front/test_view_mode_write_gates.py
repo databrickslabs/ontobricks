@@ -16,7 +16,6 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PERMISSIONS_CSS = REPO_ROOT / "src/front/static/global/css/permissions.css"
 PERMISSIONS_JS = REPO_ROOT / "src/front/static/global/js/permissions.js"
-INFO_HTML = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_information.html"
 DESIGN_HTML = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_design.html"
 INFO_JS = REPO_ROOT / "src/front/static/global/js/mapping-information.js"
 SYNC_JS = REPO_ROOT / "src/front/static/query/js/query-sync.js"
@@ -64,14 +63,6 @@ def _gated(css: str, selector: str) -> bool:
 
 
 class TestCssGates:
-    def test_unmap_all_information_is_disabled_not_hidden(self):
-        css = _css()
-        assert _gated(css, "#resetMappingsBtn")
-        # Must not be under the display:none ontology-edit-btn hide rule only.
-        html = INFO_HTML.read_text(encoding="utf-8")
-        assert 'id="resetMappingsBtn"' in html
-        assert "ontology-edit-btn" not in html.split('id="resetMappingsBtn"')[0][-80:]
-
     def test_unmap_all_designer_is_disabled(self):
         assert _gated(_css(), "#resetMappingsDesignBtn")
         assert 'id="resetMappingsDesignBtn"' in DESIGN_HTML.read_text(encoding="utf-8")

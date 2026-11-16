@@ -94,11 +94,10 @@
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step"><span class="help-step-num">3</span><div><strong>Ontology</strong><br><small>Design entities &amp; relationships (OWL)</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">4</span><div><strong>Mapping</strong><br><small>Map ontology to UC tables (R2RML)</small></div></div>
+                                <div class="help-step"><span class="help-step-num">4</span><div><strong>Graph</strong><br><small>Map (R2RML), build, explore, query</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Graph</strong><br><small>Synchronize, explore, query</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">6</span><div><strong>Intelligence</strong><br><small>Communities, cohorts, patterns, and what-if sandboxes</small></div></div>
+                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Intelligence</strong><br><small>Communities, cohorts, patterns, and what-if sandboxes</small></div></div>
                             </div>
                         </section>
 
@@ -148,7 +147,7 @@
                                     <div class="help-step-badge">4</div>
                                     <div>
                                         <h5><i class="bi bi-shuffle me-2"></i>Map your data &amp; Sync</h5>
-                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Studio</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Graph &rarr; Build</strong> and click <em>Build</em> &mdash; triples are materialized into your triple store.</p>
+                                        <p>Open <strong>Graph &rarr; Management &rarr; Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using <em>Mapping</em> (<em>Visual</em> or <em>List</em> tabs &mdash; click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via the <em>Auto-Map</em> button (opens the Batch Auto-Map dialog) &rarr; <em>Map All</em>. Once mappings are in place, go to <strong>Graph &rarr; Build</strong> and click <em>Build</em> &mdash; triples are materialized into your triple store.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
@@ -249,38 +248,26 @@
                                     </div>
                                 </div>
 
-                                <!-- Mapping -->
+                                <!-- Graph (includes Mapping) -->
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw4">
-                                            <i class="bi bi-shuffle me-2"></i><strong>4. Mapping</strong> &mdash; connect ontology to Databricks tables
+                                            <i class="bi bi-radar me-2"></i><strong>4. Graph</strong> &mdash; map, materialize &amp; explore
                                         </button>
                                     </h2>
                                     <div id="hw4" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
-                                            <p>Several complementary interfaces:</p>
+                                            <p class="mb-2"><strong>Mapping</strong> (Management sidebar group, right after Build) — connect ontology to Databricks tables:</p>
                                             <ul>
-                                                <li><strong>Studio</strong> &mdash; force-directed graph of your ontology. Click nodes to open the mapping panel (Wizard / SQL / Mapping tabs). Use <strong>Export</strong> (top right) to download the generated R2RML.</li>
-                                                <li><strong>Manual</strong> &mdash; tree grouped by mapping status (unmapped, partial, mapped)</li>
-                                                <li><strong>Auto-Map</strong> &mdash; LLM generates SQL mappings for every entity and relationship in one shot</li>
-                                                <li><strong>Import</strong> &mdash; load mappings from a file</li>
-                                                <li><strong>Diagnostics</strong> &mdash; consistency checks on the mapping</li>
+                                                <li><em>Informations</em> &mdash; mapping status overview and completion gauges</li>
+                                                <li><em>Visual</em> &mdash; force-directed canvas; <em>List</em> &mdash; tree by mapping status. Click an item to open the mapping panel (Wizard / SQL / Mapping tabs).</li>
+                                                <li><strong>Import</strong> / <strong>Export</strong> (top right) &mdash; load an R2RML file, or download the generated R2RML.</li>
+                                                <li><strong>Auto-Map</strong> (Studio toolbar, or Build) &mdash; opens a dialog where the LLM generates SQL mappings for every entity and relationship in one shot</li>
+                                                <li><strong>Diagnostics</strong> (Build) &mdash; opens when mappings are not ready to inspect consistency issues and schema drift</li>
                                             </ul>
                                             <p>In the mapping panel, the <em>Mapping</em> tab lets you assign columns as <strong>ID</strong>, <strong>Label</strong> or a specific <strong>attribute</strong>, with a live data preview.</p>
-                                            <div class="alert alert-warning small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Mappings store the query <em>without</em> a <code>LIMIT</code> &mdash; the preview limit only affects the UI.</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Knowledge Graph -->
-                                <div class="accordion-item">
-                                    <h2 class="accordion-header">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw5">
-                                            <i class="bi bi-radar me-2"></i><strong>5. Graph</strong> &mdash; materialize &amp; explore
-                                        </button>
-                                    </h2>
-                                    <div id="hw5" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
-                                        <div class="accordion-body">
+                                            <div class="alert alert-warning small mb-3"><i class="bi bi-exclamation-triangle me-1"></i> Mappings store the query <em>without</em> a <code>LIMIT</code> &mdash; the preview limit only affects the UI.</div>
+                                            <p class="mb-2"><strong>Management / Navigation / Compute</strong>:</p>
                                             <ul>
                                                 <li><strong>Build</strong> (Build / Runs tabs) &mdash; trigger a synchronization and browse build-run history</li>
                                                 <li><strong>Overview</strong> &mdash; entity &amp; relationship counts, last sync timestamp, quality status</li>
@@ -299,7 +286,7 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw6">
-                                            <i class="bi bi-sliders2-vertical me-2"></i><strong>6. Intelligence</strong> &mdash; communities, cohorts, patterns, sandboxes
+                                            <i class="bi bi-sliders2-vertical me-2"></i><strong>5. Intelligence</strong> &mdash; communities, cohorts, patterns, sandboxes
                                         </button>
                                     </h2>
                                     <div id="hw6" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
@@ -431,7 +418,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Why do I see grey/disabled menu items?</button></h2>
-                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved context</em>. Create/load a context from the Registry (a load always opens <em>Configuration</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Graph then become enabled.</div></div>
+                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved context</em>. Create/load a context from the Registry (a load always opens <em>Configuration</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology and Graph (including Mapping) then become enabled.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Auto-Map is running &mdash; can I leave the page?</button></h2>
@@ -474,7 +461,7 @@
                             </div>
                             <div class="help-trouble">
                                 <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Auto-Map failed on some entities.&rdquo;</h5>
-                                <p>Open <strong>Mapping &rarr; Auto-Map</strong> &mdash; the report table shows which entities failed and why. For entities with missing attribute mappings only, click <em>Re-Assign Missing Attributes</em> to retry just those.</p>
+                                <p>Open <strong>Auto-Map</strong> from Studio or Manual &mdash; the report table shows which entities failed and why. For entities with missing attribute mappings only, click <em>Re-Assign Missing Attributes</em> to retry just those.</p>
                             </div>
                             <div class="help-trouble">
                                 <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Sync is very slow.&rdquo;</h5>

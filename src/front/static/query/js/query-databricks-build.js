@@ -248,11 +248,20 @@ async function loadDatabricksBuildInfo() {
                 : '<span class="badge bg-danger text-white border border-danger">'
                     + '<i class="bi bi-x-circle-fill me-1"></i>Not ready</span>';
             const autoMapBtn = (!dbxBuildReady && canOfferAutoMap)
-                ? '<a href="/mapping/?section=autoassign"'
+                ? '<button type="button"'
                     + ' class="btn btn-sm btn-outline-primary py-0 px-2"'
                     + ' id="dbxBuildAutoMapBtn"'
-                    + ' title="Open Mapping → Auto-Map to generate SQL mappings">'
-                    + '<i class="bi bi-lightning-charge me-1"></i>Auto-Map</a>'
+                    + ' onclick="if (typeof AutoAssignModule !== \'undefined\') AutoAssignModule.open();"'
+                    + ' title="Open Batch Auto-Map to generate SQL mappings">'
+                    + '<i class="bi bi-lightning-charge me-1"></i>Auto-Map</button>'
+                : '';
+            const diagBtn = !dbxBuildReady
+                ? '<button type="button"'
+                    + ' class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1"'
+                    + ' id="dbxBuildMappingDiagBtn"'
+                    + ' onclick="if (typeof MappingDiagnostics !== \'undefined\') MappingDiagnostics.open();"'
+                    + ' title="Open Mapping Diagnostics">'
+                    + '<i class="bi bi-shield-check me-1"></i>Diagnostics</button>'
                 : '';
             const notReadyAlert = dbxBuildReady ? ''
                 : '<div class="alert alert-warning small mb-0 mt-2">'
@@ -260,9 +269,10 @@ async function loadDatabricksBuildInfo() {
                     + '<i class="bi bi-exclamation-triangle mt-1 flex-shrink-0"></i>'
                     + '<div><strong>Mapping must be ready before you can build.</strong>'
                     + '<ol class="mb-0 ps-3 mt-1">'
-                    + '<li>Run <strong>Auto-Map</strong> (or map manually in'
-                    + ' <a href="/mapping/?section=design">Studio</a>)'
+                    + '<li>Run <button type="button" class="btn btn-link btn-sm p-0 align-baseline text-decoration-none fw-semibold" onclick="if (typeof AutoAssignModule !== \'undefined\') AutoAssignModule.open();">Auto-Map</button> (or map manually in'
+                    + ' <a href="/dtwin/?section=design">Mapping</a>)'
                     + ' so Mapping shows Ready.</li>'
+                    + '<li>View <button type="button" class="btn btn-link btn-sm p-0 align-baseline text-decoration-none fw-semibold" onclick="if (typeof MappingDiagnostics !== \'undefined\') MappingDiagnostics.open();">Diagnostics</button> to inspect mapping issues or schema drift.</li>'
                     + '<li>Click <strong>Build</strong> to materialize the graph.</li>'
                     + '</ol></div></div></div>';
             readinessCard.innerHTML =
@@ -271,6 +281,7 @@ async function loadDatabricksBuildInfo() {
                 + '<span class="text-muted small"><i class="bi bi-diagram-2 me-1"></i>Mapping</span>'
                 + mappingBadge
                 + autoMapBtn
+                + diagBtn
                 + '</div>'
                 + notReadyAlert;
         }

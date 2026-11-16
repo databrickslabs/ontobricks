@@ -2222,13 +2222,16 @@ GET /ontology/axioms/get-by-type/<axiom_type>
 
 ### Mapping Endpoints
 
-#### Get Mapping Page
+#### Get Mapping Page (redirect)
 
 ```http
 GET /mapping/
 ```
 
-Returns the mapping configuration HTML page.
+Legacy HTML entry point. Redirects (303) into **Graph → Management → Mapping**
+(`/dtwin/?section=design&tab=informations` by default, preserving query string such as
+`?open=automap`). Mapping JSON APIs remain under
+`/mapping/*` (see below).
 
 #### Get Tables
 

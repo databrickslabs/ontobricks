@@ -24,7 +24,7 @@ let lastFetchErrorAt = 0;
 const TASK_TYPE_URLS = {
     'ontology_generate_detect': '/ontology#wizard',
     'ontology_generate_complete': '/ontology#wizard',
-    'auto_assign': '/mapping#autoassign',
+    'auto_assign': '/dtwin/?open=automap',
     'metadata_load': '/domain#metadata',
     'metadata_update': '/domain#metadata',
     'triplestore_sync': '/dtwin#sync',

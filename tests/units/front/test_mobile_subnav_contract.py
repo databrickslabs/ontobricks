@@ -46,10 +46,11 @@ def test_mobile_subnav_keeps_controls_but_hides_their_visual_labels():
         css,
         flags=re.DOTALL,
     )
-    # Five workspace links plus Save and Close keep their accessible text in
-    # the DOM while CSS hides only the visual label on mobile. Versions now
-    # lives in the vN crumb, which shows only the version number.
-    assert html.count('class="ob-subnav-label"') == 7
+    # Four workspace links (Context, Ontology, Graph, Intelligence) plus Save
+    # and Close keep their accessible text in the DOM while CSS hides only the
+    # visual label on mobile. Versions lives in the vN crumb (number only).
+    # Mapping is under Graph, not a separate L2 target.
+    assert html.count('class="ob-subnav-label"') == 6
 
 
 def test_mobile_subnav_compacts_padding_without_horizontal_scrolling():
@@ -75,7 +76,6 @@ def test_icon_only_mobile_subnav_controls_have_tooltips():
     for element_id in (
         "subnavDomainDropdown",
         "subnavOntologyDropdown",
-        "subnavMappingDropdown",
         "subnavKgDropdown",
         "subnavSimDropdown",
     ):

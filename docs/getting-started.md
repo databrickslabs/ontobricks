@@ -311,13 +311,13 @@ Load Unity Catalog tables from **Context → Data Assets → Add Data Asset**
 (catalog and schema picker). Editors and Builders can do this with `CAN_USE`;
 they do not need `CAN_MANAGE`. Viewers cannot import or remove sources.
 
-Then map those tables on the **Mapping** page:
+Then map those tables under **Graph → Mapping**:
 
-1. Go to the **Mapping** page (click on "Mapping" in the navbar)
+1. Open **Graph** in the navbar, then the **Mapping** sidebar group
 2. Your ontology must be loaded (indicated by green checkmark)
 
 #### Visual Mapping (Studio)
-1. Click **Studio** in the sidebar to use the visual mapping interface
+1. Click **Studio** under Mapping to use the visual mapping interface
 2. Click on entities to open the mapping dialog:
    - Enter a SQL query that returns entity data (e.g., `SELECT * FROM main.default.person`)
    - Click **Test Query** to validate and preview results
@@ -331,13 +331,12 @@ Then map those tables on the **Mapping** page:
    - Select source and target ID columns from results
    - Click "Save Mapping"
 
-#### Manual Mapping
-1. Click **Manual** in the sidebar for advanced mapping options
+#### List mapping
+1. In **Studio**, open the **List** tab for a tree of entities/relationships by mapping status
 
 #### R2RML Output
-1. Open **Mapping → Studio** and click **Export** (top right) to download the generated R2RML
-2. You can also view or copy the mapping under **Mapping → Export**
-3. Copy or download as needed
+1. Open **Graph → Management → Mapping** and click **Export** (top right) to download the generated R2RML
+2. To load an existing R2RML file instead, use **Import** in the same toolbar
 
 4. Click **Validate** (in navbar) to verify all mappings are complete
 
@@ -476,7 +475,7 @@ scripts/setup.sh
 ### Sync or Graph Viewer Fails
 
 - Ensure both Ontology and Mapping have green checkmarks in the navbar
-- Check that the R2RML mapping is generated (visible in Mapping → Export)
+- Check that the R2RML mapping is generated (download it from Graph → Management → Mapping → Export)
 - Verify the SQL Warehouse is running and accessible
 - Check browser console for any errors
 

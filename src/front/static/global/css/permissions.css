@@ -164,10 +164,10 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #importRdfsFileInpu
 body:is(.read-only-version, .role-viewer, .read-only-locked) .fibo-domain-cb,
 body:is(.read-only-version, .role-viewer, .read-only-locked) .cdisc-domain-cb,
 body:is(.read-only-version, .role-viewer, .read-only-locked) .iof-domain-cb,
-/* --- Mapping > Import: R2RML imports. */
-body:is(.read-only-version, .role-viewer, .read-only-locked) #importR2rmlLocalBtn,
-body:is(.read-only-version, .role-viewer, .read-only-locked) #importR2rmlFileInput,
-/* --- Mapping > Designer / Manual: reset, auto-map, save, bulk
+/* --- Graph → Management → Mapping: R2RML import. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingImportR2RMLBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingStudioImportR2rmlFileInput,
+/* --- Graph → Management → Mapping / List: reset, auto-map, save, bulk
        exclude/include. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #resetPanelBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #autoMapPanelBtn,
@@ -177,11 +177,14 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #manualAutoMapBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #manualSavePanelBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingAutoExclude,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingIncludeExcluded,
-/* --- Mapping > General / Designer: Unmap all. Kept visible (not
+/* --- Graph → Management → Mapping: Unmap all. Kept visible (not
        hidden via ``.ontology-edit-btn``) so the operator sees the control
        is unavailable rather than wondering where it went. */
-body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsDesignBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #openAutoAssignModalBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #openAutoAssignModalManualBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #startAutoAssignBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #reassignAttrsBtn,
 /* --- Ontology > Studio: Business View delete control. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #studioDeleteViewBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) .studio-view-rename,

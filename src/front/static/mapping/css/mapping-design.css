@@ -470,3 +470,56 @@
 .mapping-map-context-item.mapping-map-context-warning:hover {
     background: #f1f5f9;
 }
+
+/* Studio Visual | List tabs — top pane grows so the shared bottom panel
+   sticks to the page/shell bottom (same for Visual and List). */
+#design-section .ob-tabs-wrap {
+    min-height: 0;
+}
+#mappingStudioMainPane {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#mappingStudioTabContent {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+#mappingStudioTabContent > .tab-pane.active {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+#mappingStudioPaneVisual > .d-flex,
+#mappingStudioPaneList > #mappingStudioListRoot {
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
+}
+
+/* Clean tabbed-card embedding: remove nested inner card borders/radii so
+   the embedded tab content fills the outer card seamlessly without round corners inside the tab. */
+#design-section .mapping-designer-container.ob-split-shell--column {
+    gap: 0;
+}
+#design-section #mappingStudioMainPane {
+    border: none;
+    border-radius: 0;
+}
+#design-section .mapping-right-panel {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    border-top: 1px solid var(--db-border);
+}
+#design-section .ob-split-shell--column > .detail-panel-resize-handle {
+    margin-top: -1px;
+    margin-bottom: -1px;
+    height: 2px;
+}

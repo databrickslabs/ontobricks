@@ -769,7 +769,7 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Registry modal (`/?open=registry`) | Navbar boxes icon (`bi-boxes`) → Browse + Bridges modal |
 | Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Runs — admin only, all domains); Developer → API |
 | Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships, Sanity Checks), Advanced (Data Quality, Business Rules, Expr. & Axioms); General tabs (Informations, OWL); Studio **Export** (OWL); section divs, OntoViz script |
-| Mapping `/mapping` | Sidebar groups Design (General, Import, Studio, Manual) and Advanced (Auto-Map, Diagnostics); General tabs (Informations, R2RML); Studio **Export** (R2RML), mapping-core.js |
+| Mapping `/mapping` | Graph → Management → Mapping (Informations, Visual, List tabs); toolbar Import / Export (R2RML); Auto-Map and Diagnostics modals; mapping-core.js, mapping-import.js, mapping-r2rml.js |
 | Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Documents, My Tasks, Discussions, Cockpit, Audit trail), section divs |
 | Knowledge Graph `/dtwin/` | Sidebar section groups: Management (Build with Build/Runs tabs, Overview), Navigation (Explorer, Query, Chat), Compute (Data Quality, Business rules); Sigma.js script |
 | Intelligence `/intelligence/` | Sidebar groups: Configuration (Cohorts), Discovery (Analytics with Analytics/Runs tabs, Communities, Patterns), Simulation (Scenarios, Compare); scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
@@ -1505,8 +1505,8 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 | `/`, `/about`, `/settings` (HTML), `/access-denied`, status endpoints for navbar | `front/routes/home.py` | `home.html`, `about.html`, `settings.html`, `access_denied.html` | Landing, about, settings **page shell**, consolidated `/navbar/state`, session/ontology status |
 | `/settings/*` (API) | `api/routers/internal/settings.py` | (mostly JSON) | Load/save Databricks config, test connection, permissions helpers |
 | `/ontology/*` | `front/routes/ontology.py` | `ontology.html`, fragments | Ontology editor, SHACL, industry catalogs, **agent**-backed flows (chat, OWL generation, icons) |
-| `/mapping/*` | `front/routes/mapping.py` | mapping templates | R2RML / table–ontology mapping UI |
-| `/dtwin/*` | `front/routes/dtwin.py` | dtwin templates | SPARQL, graph exploration, triple-store–backed "graph viewer" UI |
+| `/mapping/` (HTML) | `front/routes/mapping.py` | redirect | Legacy Mapping URL → `/dtwin/?section=…` (API stays under `/mapping/*` via `api/routers/internal/mapping.py`) |
+| `/dtwin/*` | `front/routes/dtwin.py` | `dtwin.html` + mapping partials | Graph UI: Mapping (General/Studio Visual+List), Build, Explorer, Query, Chat, Compute |
 | `/domain/*` | `front/routes/domain.py` | domain templates | Domain JSON in UC volumes, versioning, metadata, documents |
 | `/registry/` | `front/routes/registry.py` | redirects to `/?open=registry` | Opens Registry modal (Browse + Bridges) on Home |
 | `/resolve` | `front/routes/resolve.py` | — (redirect) | Entity URI resolution — finds the owning domain and redirects to the graph viewer |
@@ -1518,7 +1518,7 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 
 #### 3.4 Menu and client-side navigation
 
-- **Declarative menu:** `src/front/config/menu_config.json` defines sections (Domain, Ontology, Mapping, Graph, …), **routes** (e.g. `/domain/`), top-level Bootstrap Icons, groups, items, and `navbar_actions` (e.g. `domainSave`). The server can expose this to the client or the client can load it; either way it is the **source of truth** for section IDs, icons, and default tabs. When changing a top-level `icon`, also update any hardcoded labels such as the help walkthrough; `tests/units/front/test_knowledge_graph_icon.py` guards that Domain ≠ Graph.
+- **Declarative menu:** `src/front/config/menu_config.json` defines sections (Context/Domain, Ontology, Graph, Intelligence, …), **routes** (e.g. `/domain/`), top-level Bootstrap Icons, groups, items, and `navbar_actions` (e.g. `domainSave`). Mapping is a **group under Graph** (`digitaltwin-mapping`: General / Studio); Studio hosts Visual + List tabs. The server can expose this to the client or the client can load it; either way it is the **source of truth** for section IDs, icons, and default tabs. When changing a top-level `icon`, also update any hardcoded labels such as the help walkthrough; `tests/units/front/test_knowledge_graph_icon.py` guards that Domain ≠ Graph.
 - **JavaScript:** under `src/front/static/global/js/` (sidebar, navbar, domain actions). Pages load shared layout partials from templates and drive **in-page tabs** via menu item IDs rather than full page loads for every interaction.
 
 #### 3.5 Core UI concerns (conceptual)

@@ -23,7 +23,6 @@ WHITE_PANEL_PARTIALS = (
     "partials/domain/_domain_mytasks.html",
     "partials/domain/_domain_discussions.html",
     "partials/domain/_domain_versions.html",
-    "partials/mapping/_mapping_diagnostics.html",
     "partials/settings/_settings_teams.html",
     "partials/settings/_settings_github.html",
     "partials/settings/_settings_schedule.html",

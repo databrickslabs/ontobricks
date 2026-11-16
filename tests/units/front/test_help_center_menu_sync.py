@@ -58,15 +58,15 @@ def test_knowledge_graph_workflow_uses_current_item_labels():
     assert all_items["sigmagraph"] == "Explorer"
     assert all_items["graphql"] == "Query"
 
-    hw5_start = html.index('id="hw5"')
-    hw5_end = html.index("</div>\n                                </div>", hw5_start)
-    hw5_body = html[hw5_start:hw5_end]
+    hw4_start = html.index('id="hw4"')
+    hw4_end = html.index("</div>\n                                </div>", hw4_start)
+    hw4_body = html[hw4_start:hw4_end]
 
-    assert "<strong>Explorer</strong>" in hw5_body
-    assert "<strong>Query</strong>" in hw5_body
+    assert "<strong>Explorer</strong>" in hw4_body
+    assert "<strong>Query</strong>" in hw4_body
     # Every real digitaltwin item must be mentioned so the guide can't silently drift again.
     for label in all_items.values():
-        assert label in hw5_body, f"Knowledge Graph workflow doc is missing '{label}'"
+        assert label in hw4_body, f"Knowledge Graph workflow doc is missing '{label}'"
 
 
 def test_explorer_uses_share_icon_consistently():
@@ -114,6 +114,7 @@ def test_graph_management_order_is_build_overview_runs():
     )
     assert [(i["id"], i["label"]) for i in management["items"]] == [
         ("sync", "Build"),
+        ("design", "Mapping"),
         ("insight", "Overview"),
     ]
     assert not any(g["id"] == "digitaltwin-insight" for g in digitaltwin["groups"])
@@ -149,13 +150,13 @@ def test_ontology_and_mapping_designers_use_pencil_icon():
     )
     mapping_designer = next(
         item
-        for group in menus["assignment"]["groups"]
+        for group in menus["digitaltwin"]["groups"]
         for item in group["items"]
         if item["id"] == "design"
     )
 
     assert ontology_designer["label"] == "Studio"
-    assert mapping_designer["label"] == "Studio"
+    assert mapping_designer["label"] == "Mapping"
     assert ontology_designer["icon"] == "bi-pencil"
     assert mapping_designer["icon"] == "bi-pencil"
     assert '<i class="bi bi-pencil me-2"></i>Ontology Studio' in _ONTOLOGY_DESIGNER.read_text(
@@ -206,7 +207,7 @@ def test_intelligence_pipeline_uses_menu_label():
     assert _menus()["intelligence"]["label"] == "Intelligence"
     html = _help_html()
     assert "<strong>Intelligence</strong>" in html
-    assert "<strong>6. Intelligence</strong>" in html
+    assert "<strong>5. Intelligence</strong>" in html
 
 
 def test_simulation_workflow_follows_menu_order():
@@ -257,13 +258,20 @@ def _menu_item_ids(menu_id: str) -> set[str]:
 def test_owl_and_r2rml_are_designer_exports_not_sidebar_items():
     """OWL and Mapping R2RML live on Studio toolbars, not as sidebar sections."""
     ontology_ids = _menu_item_ids("ontology")
-    mapping_ids = _menu_item_ids("assignment")
+    mapping_ids = {
+        item["id"]
+        for group in _menus()["digitaltwin"]["groups"]
+        if group["id"] == "digitaltwin-management"
+        for item in group["items"]
+    }
     ontology_group_ids = {g["id"] for g in _menus()["ontology"]["groups"]}
 
     assert "owl" not in ontology_ids
     assert "ontology-w3c" not in ontology_group_ids
     assert "r2rml" not in mapping_ids
     assert "sparksql" not in mapping_ids
+    assert "information" not in _menu_item_ids("digitaltwin")
+    assert "design" in mapping_ids
 
     ontology_designer = _ONTOLOGY_DESIGNER.read_text(encoding="utf-8")
     mapping_designer = _MAPPING_DESIGNER.read_text(encoding="utf-8")

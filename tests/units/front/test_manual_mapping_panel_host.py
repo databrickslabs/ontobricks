@@ -1,14 +1,8 @@
-"""The entity/relationship panel is shared by two hosts, so ownership is tracked.
+"""Studio Visual and List share one mapping pane (`#panelBody`).
 
-The Designer right panel (`#panelBody`) and the Manual Mapping bottom panel
-(`#manualPanelBody`) both render the same markup, which uses page-global `ep*` /
-`rp*` element ids. Two consequences the code must respect:
-
-1. `runEntityPanelQuery()` / `runRelPanelQuery()` discard their response unless
-   `currentPanelType` matches. Manual Mapping never set it, so the preview query
-   returned, was dropped, and the Mapping tab spun forever (GitHub issue #145).
-2. Only one host may hold the markup at a time — a leftover copy in the other
-   host shadows the live one on every `getElementById` lookup.
+The panel markup uses page-global `ep*` / `rp*` element ids, so only one host
+may hold it. List opens the Visual pane via `openEntityMappingFromDesign` /
+`openRelationshipMappingFromDesign`.
 """
 
 import re
@@ -21,6 +15,8 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DESIGN_JS = REPO_ROOT / "src/front/static/mapping/js/mapping-design.js"
 MANUAL_JS = REPO_ROOT / "src/front/static/mapping/js/mapping-manual.js"
+DESIGN_HTML = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_design.html"
+MANUAL_HTML = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_manual.html"
 
 
 def _design() -> str:
@@ -99,29 +95,54 @@ class TestPanelOwnershipIsReleased:
         assert "releaseMappingPanel()" in body
         assert "currentPanelType = null" not in body, "must not duplicate the reset"
 
-    def test_manual_close_releases_the_shared_panel(self):
+    def test_list_close_uses_the_shared_studio_panel(self):
         body = _method_body(_manual(), "closePanel")
-        assert "releaseMappingPanel()" in body
-
-    def test_manual_close_survives_a_missing_manual_section(self):
-        """closeActiveMappingPanel() can reach it from the Designer side."""
-        body = _method_body(_manual(), "closePanel")
-        assert "if (container) container.classList.remove" in body
-        assert "document.getElementById('manualSavePanelBtn').disabled" not in body
-        assert "document.getElementById('manualPanelItemName').textContent" not in body
+        assert "closeMappingPanel()" in body
+        assert "manualPanelBody" not in body
 
 
 class TestActiveHostIsClosed:
-    def test_close_dispatches_to_the_owning_host(self):
+    def test_close_dispatches_to_the_shared_panel(self):
         body = _function_body(_design(), "closeActiveMappingPanel")
-        assert "currentPanelHostId === 'manualPanelBody'" in body
-        assert "ManualModule.closePanel()" in body
         assert "closeMappingPanel()" in body
+        assert "manualPanelBody" not in body
 
     def test_auto_map_closes_the_host_that_owns_the_panel(self):
-        """Manual Mapping has its own Auto-Map button sharing this poll loop."""
         body = _function_body(_design(), "_pollAndSaveResult")
         assert "closeActiveMappingPanel()" in body
+
+    def test_close_clears_list_selection(self):
+        body = _function_body(_design(), "closeMappingPanel")
+        assert "manualAssignmentTree" in body
+        assert "ManualModule.currentItem" in body
+
+
+class TestVisualAndListSelectionStayInSync:
+    def test_open_entity_syncs_both_views(self):
+        body = _function_body(_design(), "openEntityMappingFromDesign")
+        assert "syncMappingSelection(" in body
+        assert "'entity'" in body
+
+    def test_open_relationship_syncs_both_views(self):
+        body = _function_body(_design(), "openRelationshipMappingFromDesign")
+        assert "syncMappingSelection(" in body
+        assert "'relationship'" in body
+
+    def test_sync_helpers_exist(self):
+        js = _design()
+        assert "function syncMappingSelection(" in js
+        assert "function highlightMappingMapSelection(" in js
+        assert "function highlightMappingListSelection(" in js
+
+    def test_list_has_select_in_tree_without_opening_panel(self):
+        body = _method_body(_manual(), "selectInTree")
+        assert "manual-tree-node-content.selected" in body
+        assert "openPanel" not in body
+        assert "openEntityMappingFromDesign" not in body
+
+    def test_list_refresh_restores_selection(self):
+        body = _method_body(_manual(), "refresh")
+        assert "selectInTree(" in body
 
 
 class TestStaleResponseGuardStillApplies:
@@ -136,14 +157,17 @@ class TestStaleResponseGuardStillApplies:
         assert "currentPanelType !== 'relationship'" in body
 
 
-class TestManualApplyUsesLivePanelState:
-    """Manual Apply must persist the column selections owned by the shared panel."""
+class TestListUsesSharedPane:
+    def test_list_markup_has_no_private_bottom_pane(self):
+        html = MANUAL_HTML.read_text(encoding="utf-8")
+        assert "manualBottomPanel" not in html
+        assert "manualPanelBody" not in html
 
-    def test_column_selection_enables_apply_in_the_manual_host(self):
-        body = _function_body(_design(), "markMappingPanelDirty")
-        assert "currentPanelHostId === 'manualPanelBody'" in body
-        assert "manualSavePanelBtn" in body
-        assert "disabled = false" in body
+    def test_studio_bottom_pane_is_outside_the_visual_tab(self):
+        html = DESIGN_HTML.read_text(encoding="utf-8")
+        visual = html[html.index("mappingStudioPaneVisual") : html.index("mappingStudioPaneList")]
+        assert "mappingRightPanel" not in visual
+        assert "id=\"mappingRightPanel\"" in html
 
     def test_entity_apply_uses_state_instead_of_removed_summary_elements(self):
         body = _method_body(_manual(), "saveMapping")

@@ -1,74 +1,27 @@
-<!-- Manual Mapping Section - Tree View with Bottom Panel -->
-<!-- JS: /static/mapping/js/mapping-manual.js -->
-<!-- CSS: /static/mapping/css/mapping-manual.css (loaded in main template) -->
-<div class="content-section">
-<div class="section-header d-flex justify-content-between align-items-center mb-4">
-    <div class="me-auto">
-        <h4 class="mb-1"><i class="bi bi-list-nested me-2"></i>Manual Mapping</h4>
-        <p class="text-muted mb-0 small">Manually configure SQL queries and column mappings for each entity and relationship</p>
-    </div>
-    <div class="d-flex gap-2">
-        <div class="btn-group btn-group-sm">
-            <button type="button" class="btn btn-outline-secondary" data-action="manual-expand-all" title="Expand All">
-                <i class="bi bi-arrows-expand"></i>
-            </button>
-            <button type="button" class="btn btn-outline-secondary" data-action="manual-collapse-all" title="Collapse All">
-                <i class="bi bi-arrows-collapse"></i>
-            </button>
-        </div>
-        <button type="button" class="btn btn-sm btn-outline-primary" data-action="manual-refresh" title="Refresh">
-            <i class="bi bi-arrow-clockwise"></i> Refresh
-            </button>
-        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-                title="Open the mappings discussion" onclick="openMappingDiscussion()">
-            <i class="bi bi-chat-dots"></i>
-        </button>
-        </div>
-</div>
-<div class="card h-100 border-0 shadow-sm d-flex flex-column">
-    <div class="card-body p-0 flex-grow-1 d-flex flex-column mapping-manual-main-card-body">
-        <div id="manual-container" class="manual-vertical-container">
-            <!-- Tree View (top) -->
-            <div class="manual-tree-pane">
-                <p class="text-muted small mb-3 px-3 pt-3">View mapping status by category. Click on an item to configure its mapping.</p>
-                <div id="manualAssignmentTree" class="px-3 pb-3">
-                    <div class="text-muted small">Loading...</div>
-                </div>
+<!-- Mapping Studio → List tab body (tree only). The mapping pane is shared
+     with Visual (`#mappingRightPanel` in `_mapping_design.html`).
+     JS: /static/mapping/js/mapping-manual.js
+     CSS: /static/mapping/css/mapping-manual.css -->
+<div id="mappingStudioListRoot" class="h-100 d-flex flex-column">
+    <div class="d-flex align-items-center justify-content-between gap-2 px-3 pt-3 pb-2 flex-shrink-0">
+        <p class="text-muted small mb-0">View mapping status by category. Click an item to configure its mapping.</p>
+        <div class="d-flex gap-2 flex-shrink-0">
+            <div class="btn-group btn-group-sm" role="group" aria-label="List expand collapse">
+                <button type="button" class="btn btn-outline-secondary" data-action="manual-expand-all" title="Expand All" aria-label="Expand all">
+                    <i class="bi bi-arrows-expand"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-action="manual-collapse-all" title="Collapse All" aria-label="Collapse all">
+                    <i class="bi bi-arrows-collapse"></i>
+                </button>
             </div>
-            
-            <!-- Bottom Detail Panel - Same layout as Designer panel -->
-            <div class="manual-bottom-panel" id="manualBottomPanel">
-                <div class="panel-header">
-                    <h6 id="manualPanelTitle"><i class="bi bi-box"></i> <span id="manualPanelItemName">Select an item above</span></h6>
-                </div>
-                <div class="panel-body" id="manualPanelBody">
-                    <div class="text-muted small text-center py-4">
-                        <i class="bi bi-hand-index"></i> Click on an entity or relationship above to configure its mapping
-                    </div>
-                </div>
-                <div class="panel-footer" id="manualPanelFooter">
-                    <div class="d-flex flex-column justify-content-between h-100">
-                        <div class="d-flex flex-column gap-2">
-                            <button type="button" class="btn btn-outline-secondary btn-sm panel-action-btn" id="manualResetBtn" data-action="manual-reset-panel" title="Remove mapping">
-                                <i class="bi bi-arrow-counterclockwise"></i> Unmap
-                            </button>
-                            <button type="button" class="btn btn-outline-primary btn-sm panel-action-btn"
-                                    id="manualAutoMapBtn" data-action="manual-auto-map" data-requires-llm
-                                    title="Generate SQL, execute, and auto-map columns">
-                                <span class="spinner-border spinner-border-sm d-none me-1" role="status"></span>
-                                <i class="bi bi-lightning-charge"></i> Auto-Map
-                            </button>
-                        </div>
-                        <div class="d-flex flex-column gap-2">
-                            <button type="button" class="btn btn-secondary btn-sm panel-action-btn" data-action="manual-close-panel">Cancel</button>
-                            <button type="button" class="btn btn-dark btn-sm panel-action-btn" id="manualSavePanelBtn" data-action="manual-save-mapping" disabled>
-                                <i class="bi bi-check-circle"></i> Apply
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-action="manual-refresh" title="Refresh list">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
         </div>
     </div>
-</div>
+    <div class="flex-grow-1 min-h-0 overflow-auto" id="manual-container">
+        <div id="manualAssignmentTree" class="px-3 pb-3">
+            <div class="text-muted small">Loading...</div>
+        </div>
+    </div>
 </div>

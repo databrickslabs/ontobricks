@@ -75,6 +75,16 @@ def test_kg_status_css_present():
     assert ".kg-go-build-btn" in css
 
 
+def test_ready_badge_has_high_contrast_classes_and_visible_icon():
+    js = SYNC_JS.read_text(encoding="utf-8")
+    ready_slice = js[js.index("else if (tripleStoreHasData)") : js.index("else if (tripleStoreStatusUnknown)")]
+    assert "bg-success-subtle" in ready_slice
+    assert "text-success-emphasis" in ready_slice
+    assert "border-success-subtle" in ready_slice
+    # Must not have opacity-75 washing out backend brand mark and text
+    assert "opacity-75" not in ready_slice
+
+
 class TestAnUnreachableEngineIsNotAMissingGraph:
     """`has_data` is tri-state; null means "we could not check".
 

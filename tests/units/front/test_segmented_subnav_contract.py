@@ -69,7 +69,6 @@ def test_workspace_targets_are_grouped_before_context_and_actions():
     ids = [
         "subnavDomainDropdown",
         "subnavOntologyDropdown",
-        "subnavMappingDropdown",
         "subnavKgDropdown",
         "subnavSimDropdown",
     ]
@@ -175,7 +174,6 @@ def test_active_target_disables_only_its_dropdown():
     for element_id in (
         "subnavDomainDropdown",
         "subnavOntologyDropdown",
-        "subnavMappingDropdown",
         "subnavKgDropdown",
         "subnavSimDropdown",
     ):

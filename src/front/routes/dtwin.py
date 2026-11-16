@@ -43,6 +43,9 @@ async def query_page(
     # Runs moved under Build as a tab (build history only).
     if request.query_params.get("section") == "runs":
         return RedirectResponse("/dtwin/?section=sync&tab=runs", status_code=303)
+    # Mapping → General was removed; its Informations tab now lives in Studio.
+    if request.query_params.get("section") == "information":
+        return RedirectResponse("/dtwin/?section=design&tab=informations", status_code=303)
 
     ont = domain_session.ontology or {}
     props = ont.get("properties", [])

@@ -771,7 +771,7 @@ Long-running operations use the **TaskManager** pattern (`src/back/core/task_man
 |-----------|-------------|-------------|
 | `triplestore_sync` | Knowledge Graph → Build | Generates and writes triples to Delta and the domain's configured Graph DB engine (Lakebase, Delta, or Neo4j) |
 | `quality_checks` | Knowledge Graph → Quality | Runs all quality checks sequentially with per-check progress |
-| `auto_assign` | Mapping → Auto-Map | Batch-maps entities and relationships via LLM; splits large jobs into chunks of `AUTO_ASSIGN_CHUNK_SIZE` with cooldown between chunks to avoid rate limits |
+| `auto_assign` | Graph → Management → Mapping → Auto-Map (modal) | Batch-maps entities and relationships via LLM; splits large jobs into chunks of `AUTO_ASSIGN_CHUNK_SIZE` with cooldown between chunks to avoid rate limits |
 **How it works:**
 1. Frontend sends a `POST` to start the task; backend creates a `TaskManager` task and spawns a `threading.Thread`
 2. Frontend stores the `task_id` in `sessionStorage` and polls `/tasks/{task_id}` for progress
@@ -3153,7 +3153,7 @@ and the engine that ultimately runs (column **Engine**).
 
 | UI Feature | JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
-| Mapping designer / manual mapping | `mapping-design.js`, `mapping-manual.js` | `/mapping/...` | REST | `R2RMLGenerator` |
+| Mapping designer / manual mapping | `mapping-design.js`, `mapping-manual.js` (hosted on `/dtwin/?section=design|manual`) | `/mapping/...` | REST | `R2RMLGenerator` |
 | Auto-Map (LLM) | `mapping-autoassign.js`, agent `AutoAssignment` | `/mapping/auto-assign/...` | REST → LLM | Databricks AI Gateway or FM API; agent samples UC tables via Spark SQL and preloads the same ready parsed-document corpus as Generate |
 | Diagnostics | `mapping-diagnostics.js` | `/mapping/diagnostics/*` | REST | Python validator |
 | Source schema drift | `mapping-design.js`, `mapping-diagnostics.js` | `GET /mapping/schema-drift` | REST | One `DESCRIBE` per distinct source table via `UnityCatalog.get_table_columns` |

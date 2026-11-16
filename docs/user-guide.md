@@ -10,7 +10,7 @@
 - [Pages](#pages)
 - [Application Workflow](#application-workflow)
 - [Step 1: Design Ontology](#step-1-design-ontology)
-- [Step 2: Map Data Assets (Mapping)](#step-2-map-data-assets-mapping)
+- [Step 2: Map Data Assets (Graph → Management → Mapping)](#step-2-map-data-assets-graph--management--mapping)
 - [Step 3: Graph (Sync & Explore)](#step-3-graph-sync--explore)
 - [Step 4: Intelligence (Cohorts, Discovery & Simulation)](#step-4-intelligence-cohorts-discovery--simulation)
 - [Context Management & Version Control](#context-management--version-control)
@@ -161,9 +161,10 @@ mutually exclusive behavior:
 - On non-Settings pages with a loaded domain, it shows the normal domain
   context + four-workspace rail.
 - On non-Settings pages with no loaded domain, it remains hidden.
-- Hitting a workspace URL (`/domain/`, `/ontology/`, `/mapping/`, `/dtwin/`)
-  with no domain in session immediately redirects to Home. Settings, About,
-  and Home stay reachable without a domain.
+- Hitting a workspace URL (`/domain/`, `/ontology/`, `/dtwin/`) with no
+  domain in session immediately redirects to Home. Legacy `/mapping/` URLs
+  redirect into Graph → Management → Mapping when a domain is loaded, or Home when not.
+  Settings, About, and Home stay reachable without a domain.
 
 Clicking **Back to domain** opens the same Workspace Map modal used by the
 domain context target. If JavaScript is unavailable, it safely falls back to
@@ -253,7 +254,7 @@ If `Employé` inherits from `Personne` and `Personne` has `habiteÀ → Ville`, 
 
 **Instance IRI scope**
 
-By default every mapped class mints its own instance URIs (`…/Azienda/{id}`), so a parent and a subclass mapped with the same ID become two separate nodes. Set **Domain → General → Instance IRI scope** to **Per hierarchy** to mint instance URIs from the root class instead (`…/Parte/{id}` for an `Azienda`). A parent and a subclass that share an ID then become one node carrying both types and all their relationships. Sibling subclasses under the same root must use distinct IDs, otherwise their instances merge; Mapping → Diagnostics flags mapped siblings with an `identity_scope` warning. Changing the scope requires rebuilding the Knowledge Graph.
+By default every mapped class mints its own instance URIs (`…/Azienda/{id}`), so a parent and a subclass mapped with the same ID become two separate nodes. Set **Domain → General → Instance IRI scope** to **Per hierarchy** to mint instance URIs from the root class instead (`…/Parte/{id}` for an `Azienda`). A parent and a subclass that share an ID then become one node carrying both types and all their relationships. Sibling subclasses under the same root must use distinct IDs, otherwise their instances merge; Graph → Build → Diagnostics flags mapped siblings with an `identity_scope` warning. Changing the scope requires rebuilding the Knowledge Graph.
 
 **Select**
 
@@ -760,9 +761,12 @@ Open **Ontology → General** and switch to the **OWL** tab to preview the gener
 
 ---
 
-## Step 2: Map Data Assets (Mapping)
+## Step 2: Map Data Assets (Graph → Management → Mapping)
 
-Navigate to the **Mapping** page by clicking "Mapping" in the navigation bar.
+Open **Graph** in the navigation bar, then open **Mapping** in the **Management**
+sidebar group (right after **Build**). The Mapping page has three tabs:
+**Informations** (overview), **Visual** (canvas) and **List** (tree). Legacy
+`/mapping/`, `section=information` and Manual URLs redirect here.
 
 > **Note**: You must have an ontology loaded before creating mappings. The "Ontology" indicator in the navbar should show a green checkmark.
 
@@ -770,17 +774,15 @@ Users with an **Editor** or **Builder** role on the current domain can browse
 Unity Catalog and import, update, or remove data sources. `CAN_MANAGE` is only
 required for shared application configuration such as SQL Warehouse selection.
 
-### General (Sidebar)
-
-Click **General** in the sidebar to view the current mapping status:
-- Summary of mapped vs unmapped entities
-- Summary of mapped vs unmapped relationships
-- Count of mapped attributes across all entities
-- Overall completion percentage and status
-
 ### Mapping Studio
 
-Click **Studio** in the sidebar to use the visual mapping interface. This view provides an interactive force-directed graph of your ontology with color-coded mapping status:
+Click **Mapping** in the sidebar to access the mapping workspace. It provides three tabs:
+
+- **Informations**: Overview metrics, prerequisite checks (Data Assets and Ontology), completion gauges for Entities, Attributes, and Relationships, mapping status, and detailed entity / relationship breakdown.
+- **Visual**: Interactive force-directed graph of your ontology with color-coded mapping status.
+- **List**: Category-grouped tree view of entities and relationships with Expand All / Collapse All.
+
+Visual and List share the same bottom mapping panel, which sticks to the bottom of the card. Above the tabs, toolbar actions include **Unmap all**, **Auto-Map**, **Import** (import an R2RML `.ttl` / `.rdf` file), **Export** (export R2RML mapping), and **Discuss**.
 
 - **Green nodes**: Fully assigned entities (all attributes mapped)
 - **Orange nodes**: Partially assigned entities (some attributes missing)
@@ -840,9 +842,9 @@ SELECT person1_id as source_id, person2_id as target_id
 FROM main.default.person_collaboration
 ```
 
-### Manual Mapping (Sidebar)
+### Studio → List tab
 
-Click **Manual** in the sidebar for a tree-based view of all entities and relationships organized by mapping status. The bottom panel shares the same UI and functionality as the Studio view panel — clicking an item opens the same Wizard/SQL/Mapping tabs.
+Open **Studio → List** for a tree-based view of all entities and relationships organized by mapping status. Visual and List share the same bottom mapping pane — clicking an item opens the Wizard / SQL / Mapping tabs there.
 
 #### Excluding and Including Attributes
 
@@ -869,14 +871,14 @@ Two bulk-action buttons are available at the top of the attributes table:
 
 **Effect on the Auto-Map KPI page:** The Attribute gauge and tile count only included attributes. If you have 14 attributes and exclude 1, the tile shows `13 / 13` (100%) rather than `13 / 14`.
 
-### Auto-Map (Sidebar)
+### Auto-Map (Modal)
 
-Click **Auto-Map** in the sidebar to batch-assign all unmapped entities and relationships:
+Open **Auto-Map** from the Studio toolbar (or from Graph → Build when mappings are not ready) to batch-assign all unmapped entities and relationships:
 
-1. The page shows counts of unassigned entities and relationships, including how many are excluded (`· N excl.`).
+1. The dialog shows counts of unassigned entities and relationships, including how many are excluded (`· N excl.`).
 2. If tables or columns are missing `COMMENT` descriptions, a **metadata quality warning** is displayed with a collapsible list and a link to the Context → Data Assets editor. Poor descriptions reduce LLM mapping accuracy.
 3. Click **Start Auto-Map** to launch an asynchronous task. Loaded **Unity Catalog metric views** are mapped with metric-aware SQL (dimensions projected, measures wrapped in `MEASURE()`, `GROUP BY` the dimensions — never `SELECT *`).
-4. Progress is tracked with a progress bar — you can navigate away and return later.
+4. Progress is tracked with a progress bar — you can navigate away and return later; deep-link `/dtwin/?open=automap` reopens the dialog.
 5. Results are displayed in a report table showing success/failure per item.
 
 **Live agent activity**: while the run is in progress, expand **Agent activity log** in the progress overlay to watch the agent work item by item — which tool it called, what it got back, and how long each step took. The log refreshes roughly every 1.5 seconds and keeps growing until the run ends, so a long auto-map is no longer a silent progress bar.
@@ -899,12 +901,12 @@ A green checkmark appears in the navbar when all mappings are complete.
 
 ### Mapping Diagnostics
 
-**Mapping → Diagnostics** lists only failed or warning checks. Entities and
-relationships whose queries return rows are not treated as failures; the row
-count stays on the item as information. Excluded (unmapped) attributes and
-relationship ID columns are skipped — they do not raise a missing-column
-issue. Spark implicit aliases such as ``obj_id s`` are treated as column
-``s``.
+**Diagnostics** opens as a modal from Graph → Build when mappings are not
+ready. It lists only failed or warning checks. Entities and relationships
+whose queries return rows are not treated as failures; the row count stays on
+the item as information. Excluded (unmapped) attributes and relationship ID
+columns are skipped — they do not raise a missing-column issue. Spark
+implicit aliases such as ``obj_id s`` are treated as column ``s``.
 
 ### Source Schema Drift
 
@@ -932,7 +934,7 @@ covers those.
 
 ### R2RML Output
 
-Open **Mapping → General** and switch to the **R2RML** tab to preview the generated R2RML in Turtle format. Use **Copy**, **Download** or **Regenerate** from that tab. **Studio** also offers **Export** (top right) to download the same R2RML.
+Open **Graph → Management → Mapping** and click **Export** (top right) to download the generated R2RML in Turtle format. **Import** (same toolbar) loads an R2RML `.ttl` / `.rdf` file back into the mappings.
 
 ---
 
@@ -2488,7 +2490,7 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 
 ### Step 2: Create Mappings (Mapping)
 
-1. Open **Mapping** → **Studio**
+1. Open **Graph → Management → Mapping**
 2. Click on each entity to configure its mapping:
 
 **Entity Mappings:**
@@ -2781,7 +2783,7 @@ import. The repository must already be configured and claimed in Settings.
 **Problem**: Error when validating mappings
 
 **Solutions**:
-- Ensure all ontology classes are mapped (via Mapping → Studio)
+- Ensure all ontology classes are mapped (via Graph → Management → Mapping)
 - Check all object properties have relationship mappings
 - Verify all entity attributes are assigned to SQL columns (check for orange indicators in Studio view)
 - Use Auto-Map → Re-Assign Missing Attributes to fix incomplete attribute mappings
@@ -2958,7 +2960,7 @@ applied:
 - When Unity Catalog reports no column changes the refresh is applied silently —
   the dialog only appears when there is something to decide.
 - If any column was dropped, the dialog warns that mappings bound to it will
-  break, so run **Mapping → Diagnostics** afterwards.
+  break, so run **Graph → Build → Diagnostics** afterwards.
 
 Your own column comments survive a refresh: a comment you typed in OntoBricks is
 carried over whenever the column still exists upstream.
@@ -3046,7 +3048,7 @@ links.
 
 ### Step 5: Auto-Map Data Mappings
 
-Navigate to **Mapping** in the top navbar, then open **Auto-Map** in the sidebar.
+Open **Graph → Management → Mapping** and click **Auto-Map** in the toolbar, or use the Auto-Map button on Graph → Build when mappings are not ready.
 
 Auto-Map uses the LLM to automatically generate SQL queries that map each ontology entity and relationship to your Databricks tables.
 
@@ -3540,14 +3542,14 @@ After import you can:
 - **Metadata Quality Warning**: The Auto-Map page detects tables and columns with missing `COMMENT` descriptions and displays a collapsible warning. Poor metadata quality reduces LLM mapping accuracy; a direct link opens the Context → Data Assets editor.
 - **Re-Assign Missing Attributes**: Targeted re-mapping for entities that have some included attributes unmapped (excluded attributes are ignored by this check).
 - **Column Names with Spaces / Special Characters**: The auto-mapping agent is instructed to backtick-quote unsafe column names and alias them to safe `snake_case` names. The R2RML generator double-quotes column names (per R2RML spec §7.4) in `rr:column` values and `rr:template` column references whenever a name is not a plain SQL identifier.
-- **Unity Catalog table names**: Mapping SQL must use `catalog.schema.table` or separately quoted segments (`` `catalog`.`schema`.`table` ``). A single pair of backticks around the full three-level name is rewritten on save/submit and flagged by Mapping → Diagnostics (`uc_fqn_quoting`).
+- **Unity Catalog table names**: Mapping SQL must use `catalog.schema.table` or separately quoted segments (`` `catalog`.`schema`.`table` ``). A single pair of backticks around the full three-level name is rewritten on save/submit and flagged by Graph → Build → Diagnostics (`uc_fqn_quoting`).
 - **Preview Limit**: Control the number of preview rows displayed in the Mapping grid; SQL is stored without LIMIT clause.
-- **Unified Panel UI**: Studio and Manual views share the same panel design (tabs, forms, tables) for a consistent experience.
+- **Unified Panel UI**: Studio Visual and List share the same bottom mapping pane (tabs, forms, tables).
 - **SQL Query Testing**: Test and validate SQL queries directly in the mapping interface before saving.
 - **Relationship Direction**: Control forward, reverse, or bidirectional relationships with visual indicators.
 - **R2RML Generation**: Automatic generation of W3C-compliant R2RML mappings from visual configuration. Excluded attributes are never emitted as `rr:predicateObjectMap` triples.
-- **Unmap all**: Clear every entity and relationship mapping from both **Mapping → General** and **Mapping → Studio** via a shared confirmation dialog (`Unmap all`). Attribute exclusions stamped on ontology objects are re-evaluated after the wipe so the Studio canvas stays consistent.
-- **Mapping Diagnostics**: **Mapping → Diagnostics** lists only warnings and errors. Queries that return rows are informational (row count badge), not failures. Excluded attributes and relationship ID columns are not reported as missing, including Spark implicit aliases (`obj_id s` → `s`).
+- **Unmap all**: Clear every entity and relationship mapping from **Graph → Management → Mapping** via a shared confirmation dialog (`Unmap all`). Attribute exclusions stamped on ontology objects are re-evaluated after the wipe so the Studio canvas stays consistent.
+- **Mapping Diagnostics**: **Graph → Build → Diagnostics** lists only warnings and errors. Queries that return rows are informational (row count badge), not failures. Excluded attributes and relationship ID columns are not reported as missing, including Spark implicit aliases (`obj_id s` → `s`).
 
 ### Intelligence
 - **Cohort design and run**: **Intelligence → Configuration → Cohorts** is one page with two tabs. **Design** authors grouping rules; **Runs** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages and the old **Runs** entry redirect here.

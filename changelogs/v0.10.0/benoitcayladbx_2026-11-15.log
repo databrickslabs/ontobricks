@@ -589,3 +589,279 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10606 passed, 324 skipped, 8 deselected, 39 warnings in 45.33s ========
 
+## Move Mapping R2RML import into General → R2RML
+
+Context: Mapping had a dedicated Import sidebar page for R2RML files. Import belongs with the R2RML preview/export surface under General, so the Import page is removed and the controls live in the R2RML tab.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_r2rml.html
+   Hosts Import button, replace warning, result banner, and file input next to Copy / Download / Regenerate.
+2. src/front/templates/partials/mapping/_mapping_import.html
+   Removed — Import is no longer a sidebar section.
+3. src/front/templates/mapping.html
+   Drops the `#import-section` include.
+4. src/front/config/menu_config.json
+   Removes Mapping → Design → Import menu item (Ontology Import unchanged).
+5. src/front/static/mapping/js/mapping-init-section.js
+   Legacy `?section=import` opens General and flags the R2RML tab.
+6. src/front/static/mapping/js/mapping-r2rml.js
+   Activates the R2RML tab when the legacy import deep-link flag is set.
+7. src/front/static/mapping/js/mapping-import.js
+   After a successful parse, refreshes the R2RML preview from returned Turtle or regenerate.
+8. src/front/templates/partials/mapping/_mapping_information.html
+   General subtitle mentions R2RML import.
+9. src/front/templates/partials/layout/help_modal.html
+   Workflow copy points Import at General → R2RML.
+10. tests/units/front/test_mapping_r2rml_import_tab.py
+    Contracts for menu removal, R2RML-tab import controls, and help copy.
+11. tests/units/api/test_ui_rendering.py
+    Mapping sidebar no longer expects Import; asserts R2RML import button exists.
+12. tests/units/front/test_sidebar_content_stretch_contract.py
+    Drops Mapping Import section/partial from the stretch inventory.
+13. tests/e2e/mapping/test_mapping_flows.py
+    Sidebar sections without Import; covers R2RML-tab Import button.
+14. tests/e2e/README.md
+    Documents the Mapping sidebar without Import.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_r2rml.html
+- src/front/templates/partials/mapping/_mapping_import.html (deleted)
+- src/front/templates/mapping.html
+- src/front/config/menu_config.json
+- src/front/static/mapping/js/mapping-init-section.js
+- src/front/static/mapping/js/mapping-r2rml.js
+- src/front/static/mapping/js/mapping-import.js
+- src/front/templates/partials/mapping/_mapping_information.html
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_mapping_r2rml_import_tab.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10608 passed, 324 skipped, 8 deselected, 39 warnings in 48.08s ========
+
+## Move Batch Auto-Map into a modal popup
+
+Context: Mapping → Auto-Map was a full sidebar page. Batch Auto-Map belongs next to Studio / Manual editing, and Graph → Build already offered an Auto-Map CTA. Converted Auto-Map into a Bootstrap modal opened from Studio, Manual, and Build; removed the Auto-Map page.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_autoassign_modal.html
+   New modal-xl scrollable dialog with gauges, Map All / Cancel / Re-Assign, report, and progress host.
+2. src/front/templates/partials/mapping/_mapping_autoassign.html
+   Deleted — Auto-Map is no longer a sidebar section.
+3. src/front/templates/mapping.html
+   Includes the modal; drops `#autoassign-section`.
+4. src/front/config/menu_config.json
+   Removes Mapping → Advanced → Auto-Map.
+5. src/front/templates/partials/mapping/_mapping_design.html
+   Studio header Auto-Map button opens the modal.
+6. src/front/templates/partials/mapping/_mapping_manual.html
+   Manual header Auto-Map button opens the modal.
+7. src/front/static/mapping/js/mapping-autoassign.js
+   `AutoAssignModule.open()`, modal host for progress, deep-link `/mapping/?open=automap`, block close while running.
+8. src/front/static/mapping/js/mapping-init.js / mapping-init-section.js
+   Section-nav guard no longer special-cases autoassign; legacy `?section=autoassign` opens Studio + modal.
+9. src/front/templates/partials/dtwin/_query_sync.html
+   Build Auto-Map CTA links to `/mapping/?open=automap`.
+10. src/front/static/query/js/query-databricks-build.js
+    Lakehouse Build readiness Auto-Map CTA uses the same deep-link.
+11. src/front/static/global/js/task-tracker.js
+    Resume deep-link for `auto_assign` opens the modal.
+12. src/front/static/global/css/permissions.css
+    View-mode disables the new open / Map All / Re-Assign controls.
+13. src/front/templates/partials/layout/help_modal.html
+    Help copy points Auto-Map at the Studio/Manual/Build dialog.
+14. tests/units/front/test_mapping_automap_modal.py
+    Contracts for menu removal, modal markup, Studio/Manual buttons, Build deep-link.
+15. tests/units/front/test_build_automap_cta.py / test_no_llm_ui_gate.py / test_sidebar_content_stretch_contract.py / test_ui_rendering.py
+    Updated for modal + removed page.
+16. tests/e2e/mapping/test_mapping_flows.py / scenarios/test_scenario_01_generate_live.py / e2e/README.md
+    E2E opens the modal via deep-link / Studio button.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_autoassign_modal.html
+- src/front/templates/partials/mapping/_mapping_autoassign.html (deleted)
+- src/front/templates/mapping.html
+- src/front/config/menu_config.json
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/mapping/_mapping_manual.html
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/js/mapping-init-section.js
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/global/js/task-tracker.js
+- src/front/static/global/css/permissions.css
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_build_automap_cta.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/e2e/README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10611 passed, 324 skipped, 8 deselected, 39 warnings in 46.51s ========
+
+## Auto-Map popup alignment and Mapping Diagnostics popup in Graph/Build
+
+Context:
+1. In the Batch Auto-Map modal, align the Auto-Map button on the top right next to the close button.
+2. In Graph → Build, clicking Auto-Map opens the modal in place without navigating away; running it allows closing/dismissing while it runs in the background, updating Build readiness when complete.
+3. Convert Mapping Diagnostics into a popup modal window and remove the Diagnostics page from the Mapping sidebar. In Graph/Build, when mapping is not ready, provide a Diagnostics button that opens this popup.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_autoassign_modal.html
+   Header action buttons aligned top-right (`ms-auto` container with Close button). Added "Run in background" button.
+2. src/front/static/mapping/js/mapping-autoassign.js
+   Self-contained canvas arc gauge fallback; `ensureLoaded` hydrates ontology and mappings on any page; modal can be dismissed while running in background; on completion refreshes Build readiness.
+3. src/front/templates/partials/mapping/_mapping_diagnostics_modal.html
+   New Diagnostics modal popup window with Run Diagnostics, KPI tiles, and issues accordion.
+4. src/front/templates/partials/mapping/_mapping_diagnostics.html
+   Removed — Diagnostics is no longer a sidebar section.
+5. src/front/templates/mapping.html
+   Drops `#diagnostics-section` and includes `_mapping_diagnostics_modal.html`.
+6. src/front/config/menu_config.json
+   Removes Mapping → Advanced → Diagnostics (leaving Design: General, Studio, Manual).
+7. src/front/templates/dtwin.html
+   Includes `_mapping_autoassign_modal.html`, `_mapping_diagnostics_modal.html`, `mapping-diagnostics.css`, and modal scripts.
+8. src/front/templates/partials/dtwin/_query_sync.html
+   When mapping is not ready, shows Auto-Map button (opens modal in place) and Diagnostics button (opens diagnostics modal in place).
+9. src/front/static/query/js/query-sync.js
+   Toggles Diagnostics button alongside Auto-Map button based on mapping readiness.
+10. src/front/static/query/js/query-databricks-build.js
+    Lakehouse readiness renders Auto-Map and Diagnostics buttons opening modals in place.
+11. src/front/static/mapping/js/mapping-diagnostics.js
+    Exposes `window.MappingDiagnostics.open()`, runs diagnostics automatically on modal open.
+12. src/front/static/mapping/js/mapping-init-section.js
+    Legacy `?section=diagnostics` deep-link opens the diagnostics modal.
+13. src/front/templates/partials/layout/help_modal.html
+    Help copy updated for Build diagnostics and modal Auto-Map.
+14. tests/units/front/test_mapping_diagnostics_modal.py
+    Contracts for menu removal, modal markup, dtwin inclusion, and Build readiness buttons.
+15. tests/units/front/test_mapping_automap_modal.py / test_build_automap_cta.py / test_section_content_white_panel.py / test_sidebar_content_stretch_contract.py / test_ui_rendering.py / test_button_design_contract.py / tests/e2e/mapping/test_mapping_flows.py / tests/e2e/README.md
+    Updated contracts and tests.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_autoassign_modal.html
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/templates/partials/mapping/_mapping_diagnostics_modal.html
+- src/front/templates/partials/mapping/_mapping_diagnostics.html (deleted)
+- src/front/templates/mapping.html
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/mapping/js/mapping-diagnostics.js
+- src/front/static/mapping/js/mapping-init-section.js
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_mapping_diagnostics_modal.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_build_automap_cta.py
+- tests/units/front/test_section_content_white_panel.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_button_design_contract.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10612 passed, 324 skipped, 8 deselected, 39 warnings in 44.40s ========
+
+
+
+## Move Mapping under Graph and remove top-level Mapping menu
+
+Context: Mapping (General, Studio, Manual) was a separate L2 workspace. Fold it
+into a Mapping sidebar group on Graph, drop the top-level Mapping menu / column,
+and keep legacy `/mapping/` URLs as redirects into `/dtwin/?section=…`. Docs and
+inline comments updated to match.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Remove `assignment` menu; add `digitaltwin-mapping` (General / Studio / Manual)
+   as the first Graph sidebar group.
+2. src/front/templates/dtwin.html
+   Host Mapping sections, CSS, scripts, and init; keep Auto-Map / Diagnostics modals.
+3. src/front/templates/mapping.html
+   Deleted — HTML entry is a redirect only.
+4. src/front/routes/mapping.py
+   Legacy `/mapping/` → `/dtwin/?section=information` (preserves query string).
+5. src/front/templates/base.html
+   Remove L2 Mapping dropdown (`subnavMappingDropdown`).
+6. src/front/templates/partials/layout/_workspace_map_modal.html
+   Four columns (Context, Ontology, Graph, Intelligence); Mapping items under Graph.
+7. src/front/static/global/css/components.css
+   Workspace map grid uses 4 columns.
+8. src/front/static/mapping/js/mapping-init.js
+   Hosted-on-Graph mode: `MappingPageHooks` + `sidebarSectionChanged`; query.js owns SidebarNav.
+9. src/front/static/query/js/query.js
+   Wire `onBeforeSectionChange` through MappingPageHooks (Auto-Map gate / autosave).
+10. Deep-links and CTAs
+    Studio / Assign / Auto-Map task resume → `/dtwin/?…` (Build, task-tracker,
+    ontology panels, domain validation).
+11. Help + docs
+    help_modal, user-guide, getting-started, development, architecture, api,
+    examples — Graph → Mapping navigation; Diagnostics/Auto-Map as modals.
+12. Inline comments
+    navbar.js, mapping-init.js, mapping-import.js, mapping-autoassign.js,
+    permissions.css — no longer refer to a top-level Mapping page.
+13. Tests
+    Workspace map, subnav, help sync, UI rendering, unload redirects, e2e mapping
+    flows updated for Graph-hosted Mapping.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/front/templates/mapping.html (deleted)
+- src/front/routes/mapping.py
+- src/front/templates/base.html
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/global/css/components.css
+- src/front/static/global/css/permissions.css
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/task-tracker.js
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/js/mapping-import.js
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/static/query/js/query.js
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/domain/js/domain-validation.js
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/development.md
+- docs/architecture.md
+- docs/api.md
+- docs/examples.md
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_mapping_diagnostics_modal.py
+- tests/units/front/test_mapping_r2rml_import_tab.py
+- tests/units/front/test_unloaded_workspace_redirect.py
+- tests/units/front/test_build_automap_cta.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_inherited_relations_ui.py
+- tests/units/front/test_mapping_designer_split_layout.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_knowledge_graph_icon.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10613 passed, 324 skipped, 8 deselected, 39 warnings in 45.80s ========

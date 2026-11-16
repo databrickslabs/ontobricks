@@ -96,7 +96,7 @@ tests/e2e/
 
 | File | Class | What it tests |
 |---|---|---|
-| `test_mapping_flows.py` | `TestMappingSidebar` | Design + Advanced sections (`information`, `import`, `design`, `manual`, `autoassign`, `diagnostics`) become visible via `SidebarNav.switchTo()` |
+| `test_mapping_flows.py` | `TestMappingSidebar` | Studio tabs (`informations`, `visual`, `list`) via `SidebarNav.switchTo()`; R2RML import/export in the Studio toolbar; Batch Auto-Map and Diagnostics are modals |
 
 ### `domain/` — 6 tests
 

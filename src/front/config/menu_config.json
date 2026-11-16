@@ -247,79 +247,6 @@
         },
 
         {
-            "id": "assignment",
-            "label": "Mapping",
-            "icon": "bi-shuffle",
-            "route": "/mapping/",
-            "requires_domain_saved": true,
-            "navbar_hidden": true,
-            "status_indicator": null,
-            "navbar_actions": [],
-            "groups": [
-                {
-                    "id": "assignment-design",
-                    "title": "Design",
-                    "icon": "bi-link-45deg",
-                    "items": [
-                        {
-                            "id": "information",
-                            "label": "General",
-                            "icon": "bi-info-circle",
-                            "default": true,
-                            "requires": null,
-                            "disabled_during": "autoassign"
-                        },
-                        {
-                            "id": "import",
-                            "label": "Import",
-                            "icon": "bi-box-arrow-in-down",
-                            "default": false,
-                            "requires": null,
-                            "hidden_in_view_mode": true
-                        },
-                        {
-                            "id": "design",
-                            "label": "Studio",
-                            "icon": "bi-pencil",
-                            "default": false,
-                            "requires": null,
-                            "disabled_during": "autoassign"
-                        },
-                        {
-                            "id": "manual",
-                            "label": "Manual",
-                            "icon": "bi-list-nested",
-                            "default": false,
-                            "requires": null,
-                            "disabled_during": "autoassign"
-                        }
-                    ]
-                },
-                {
-                    "id": "assignment-advanced",
-                    "title": "Advanced",
-                    "icon": "bi-tools",
-                    "items": [
-                        {
-                            "id": "autoassign",
-                            "label": "Auto-Map",
-                            "icon": "bi-lightning-charge",
-                            "default": false,
-                            "requires": null,
-                            "hidden_in_view_mode": true
-                        },
-                        {
-                            "id": "diagnostics",
-                            "label": "Diagnostics",
-                            "icon": "bi-shield-check",
-                            "default": false
-                        }
-                    ]
-                }
-            ]
-        },
-
-        {
             "id": "settings",
             "label": "Settings",
             "icon": "bi-gear",
@@ -500,6 +427,14 @@
                             "icon": "bi-hammer",
                             "default": false,
                             "requires": null
+                        },
+                        {
+                            "id": "design",
+                            "label": "Mapping",
+                            "icon": "bi-pencil",
+                            "default": false,
+                            "requires": null,
+                            "disabled_during": "autoassign"
                         },
                         {
                             "id": "insight",

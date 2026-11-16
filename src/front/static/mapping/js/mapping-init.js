@@ -1,6 +1,8 @@
 /**
  * OntoBricks - mapping-init.js
- * Mapping page initialization - extracted from mapping.html per code_instructions.txt
+ * Mapping sections initialization (hosted under Graph / dtwin.html).
+ * When `#sigmagraph-section` is present, SidebarNav is owned by query.js and
+ * this module registers MappingPageHooks + listens for sidebarSectionChanged.
  */
 
 // =====================================================
@@ -253,11 +255,11 @@ function autoSelectMappingItem(itemName, itemType) {
     setTimeout(() => trySelect(0), 600);
 }
 
-// Common SidebarNav configuration for Mapping
+// Common SidebarNav configuration for Mapping (also used when hosted under Graph)
 const mappingSidebarConfig = {
     onBeforeSectionChange: async function(section) {
-        // Block navigation to other sections while auto-map is running
-        if (typeof AutoAssignModule !== 'undefined' && AutoAssignModule.isRunning && section !== 'autoassign') {
+        // Block navigation while batch Auto-Map is running in the modal
+        if (typeof AutoAssignModule !== 'undefined' && AutoAssignModule.isRunning) {
             showNotification('Please wait until Auto-Map finishes before switching sections.', 'warning');
             return false;
         }
@@ -269,7 +271,31 @@ const mappingSidebarConfig = {
         return true; // Allow switch
     },
     onSectionChange: function(section, targetSection) {
+        // Legacy Manual sidebar → Studio List tab
+        if (section === 'manual') {
+            if (typeof SidebarNav !== 'undefined' && SidebarNav.switchTo) {
+                window.__OB_MAPPING_STUDIO_TAB = 'list';
+                SidebarNav.switchTo('design');
+                return;
+            }
+            section = 'design';
+            window.__OB_MAPPING_STUDIO_TAB = 'list';
+        }
         if (section === 'design') {
+            if (typeof MappingStudioTabs !== 'undefined') {
+                MappingStudioTabs.init();
+                const tab = window.__OB_MAPPING_STUDIO_TAB
+                    || new URLSearchParams(window.location.search).get('tab');
+                window.__OB_MAPPING_STUDIO_TAB = null;
+                if (tab === 'list' || tab === 'manual') {
+                    MappingStudioTabs.show('list');
+                    document.dispatchEvent(new CustomEvent('sectionChange', { detail: { section: 'design' } }));
+                    return;
+                }
+                if (tab === 'visual') {
+                    MappingStudioTabs.show('visual');
+                }
+            }
             // Show spinner immediately so the user never sees stale/empty content
             if (typeof showMappingDesignerLoading === 'function') {
                 showMappingDesignerLoading(true);
@@ -278,6 +304,10 @@ const mappingSidebarConfig = {
             // Also wait for MappingState to be initialized
             const tryInitDesigner = (retries = 0) => {
                 const container = document.getElementById('mapping-map-container');
+                // Only the Visual tab owns the canvas; Informations / List skip it.
+                const visualActive = typeof MappingStudioTabs === 'undefined'
+                    || MappingStudioTabs.current() === 'visual';
+                if (!visualActive) return;
                 const isVisible = container && container.offsetParent !== null;
                 
                 if (isVisible && MappingState.initialized) {
@@ -295,30 +325,21 @@ const mappingSidebarConfig = {
             // Start with a small initial delay for CSS transitions
             setTimeout(() => tryInitDesigner(0), 50);
         }
-        if (section === 'manual' && typeof ManualModule !== 'undefined') {
-            // Add delay and retry logic to ensure section is visible and data is loaded
-            const tryInitManual = (retries = 0) => {
-                const container = document.getElementById('manualAssignmentTree');
-                const isVisible = container && container.offsetParent !== null;
-                
-                if (isVisible && MappingState.initialized && MappingState.loadedOntology) {
-                    ManualModule.init();
-                } else if (retries < 10) {
-                    // Retry after a short delay (up to 10 times = 1 second total)
-                    setTimeout(() => tryInitManual(retries + 1), 100);
-                } else {
-                    // Force init after max retries
-                    console.warn('Mapping Page: Force initializing Manual module after timeout');
-                    ManualModule.init();
-                }
-            };
-            
-            setTimeout(() => tryInitManual(0), 50);
-        }
         // Dispatch event for other modules
         document.dispatchEvent(new CustomEvent('sectionChange', { detail: { section } }));
     }
 };
+
+// Hooks for Graph page (query.js owns SidebarNav; Mapping listens via these)
+window.MappingPageHooks = {
+    onBeforeSectionChange: mappingSidebarConfig.onBeforeSectionChange,
+    onSectionChange: mappingSidebarConfig.onSectionChange
+};
+
+function _isMappingHostedOnGraph() {
+    return !!(document.getElementById('sigmagraph-section')
+        && document.getElementById('design-section'));
+}
 
 // Initialize the default section after page data is loaded
 async function initializeDefaultSection() {
@@ -337,10 +358,24 @@ async function initializeDefaultSection() {
         
         // Trigger the section initialization
         if (sectionId === 'design') {
-            if (typeof showMappingDesignerLoading === 'function') showMappingDesignerLoading(true);
-            if (typeof initMappingDesigner === 'function') initMappingDesigner();
-        } else if (sectionId === 'manual' && typeof ManualModule !== 'undefined') {
-            ManualModule.init();
+            const tab = window.__OB_MAPPING_STUDIO_TAB
+                || new URLSearchParams(window.location.search).get('tab');
+            if ((tab === 'list' || tab === 'manual') && typeof MappingStudioTabs !== 'undefined') {
+                MappingStudioTabs.show('list');
+            } else if (tab === 'visual' && typeof MappingStudioTabs !== 'undefined') {
+                // show() → _onShown('visual') initialises the canvas once data is ready.
+                MappingStudioTabs.show('visual');
+            } else if (typeof MappingStudioTabs !== 'undefined'
+                    && MappingStudioTabs.current() === 'list'
+                    && typeof ManualModule !== 'undefined') {
+                ManualModule.init();
+            } else if (typeof MappingStudioTabs === 'undefined'
+                    || MappingStudioTabs.current() === 'visual') {
+                // Informations (default) and List do not own the canvas; Visual
+                // initialises it lazily when its tab is shown.
+                if (typeof showMappingDesignerLoading === 'function') showMappingDesignerLoading(true);
+                if (typeof initMappingDesigner === 'function') initMappingDesigner();
+            }
         }
     }
 }
@@ -348,17 +383,51 @@ async function initializeDefaultSection() {
 // Run initialization when DOM is ready
 function _bootstrapMappingPage() {
     const urlParams = new URLSearchParams(window.location.search);
-    const initialSection = urlParams.get('section');
+    let initialSection = urlParams.get('section');
+    if (initialSection === 'information' || initialSection === 'import') {
+        initialSection = 'design';
+        window.__OB_MAPPING_STUDIO_TAB = 'informations';
+    }
+    if (initialSection === 'autoassign') initialSection = urlParams.get('fallback') || 'design';
+    if (initialSection === 'diagnostics') initialSection = urlParams.get('fallback') || 'design';
+    if (initialSection === 'manual') {
+        initialSection = 'design';
+        window.__OB_MAPPING_STUDIO_TAB = 'list';
+    }
     const selectItem = urlParams.get('select');
     const selectType = urlParams.get('type') || 'entity';
+    const hostedOnGraph = _isMappingHostedOnGraph();
 
-    SidebarNav.init(mappingSidebarConfig);
     setTimeout(initializeMappingPage, 100);
 
-    if (initialSection) {
-        navigateToInitialSection(initialSection);
+    if (hostedOnGraph) {
+        // Graph page owns SidebarNav (query.js). Mapping reacts via hooks + event.
+        document.addEventListener('sidebarSectionChanged', function (e) {
+            const section = e.detail && e.detail.section;
+            if (!section) return;
+            mappingSidebarConfig.onSectionChange(section, e.detail.targetSection);
+        });
+        // Drop the pre-paint flash style once SidebarNav has taken over (it also
+        // clears on section change; this covers the default Explorer landing).
+        if (typeof SidebarNav !== 'undefined' && SidebarNav._clearInitialSectionStyle) {
+            setTimeout(function () { SidebarNav._clearInitialSectionStyle(); }, 350);
+        } else {
+            setTimeout(function () {
+                const tempStyle = document.getElementById('initial-section-style');
+                if (tempStyle) tempStyle.remove();
+            }, 350);
+        }
+        // When deep-linking into a mapping section, init that section after load
+        if (initialSection === 'design') {
+            setTimeout(initializeDefaultSection, 400);
+        }
     } else {
-        setTimeout(initializeDefaultSection, 200);
+        SidebarNav.init(mappingSidebarConfig);
+        if (initialSection) {
+            navigateToInitialSection(initialSection);
+        } else {
+            setTimeout(initializeDefaultSection, 200);
+        }
     }
 
     if (selectItem) {

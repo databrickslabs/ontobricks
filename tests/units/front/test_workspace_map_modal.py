@@ -20,7 +20,6 @@ COMPONENTS_CSS = REPO_ROOT / "src/front/static/global/css/components.css"
 _COLUMN_ICONS = {
     "domain": "bi-box",
     "ontology": "bi-bezier2",
-    "assignment": "bi-shuffle",
     "digitaltwin": "bi-radar",
     "intelligence": "bi-sliders2-vertical",
 }
@@ -45,17 +44,17 @@ def test_base_includes_workspace_map_modal():
     assert 'partials/layout/_workspace_map_modal.html' in _read(BASE_HTML)
 
 
-def test_modal_root_and_five_columns():
+def test_modal_root_and_four_columns():
     html = _render_modal()
     assert 'id="workspaceMapModal"' in html
     assert "modal-dialog-centered modal-xl" in html
     assert re.findall(r'data-workspace-map-col="([^"]+)"', html) == [
         "domain",
         "ontology",
-        "assignment",
         "digitaltwin",
         "intelligence",
     ]
+    assert "assignment" not in re.findall(r'data-workspace-map-col="([^"]+)"', html)
 
 
 def test_column_icons_match_menu_config():
@@ -79,6 +78,8 @@ def test_representative_workspace_routes_are_rendered():
     assert "/domain/?section=information" in html
     assert "/ontology/?section=map" in html
     assert "/dtwin/?section=sigmagraph" in html
+    assert "/dtwin/?section=design" in html
+    assert "/dtwin/?section=manual" not in html
 
 
 def test_domain_sidebar_only_w3c_items_are_omitted():
@@ -90,24 +91,22 @@ def test_domain_sidebar_only_w3c_items_are_omitted():
     assert "/domain/?section=r2rml" not in domain_column
 
 
-def test_mapping_and_kg_items_carry_graph_gate():
+def test_graph_and_intelligence_items_carry_graph_gate():
     html = _render_modal()
-    mapping_column = html.split('data-workspace-map-col="assignment"', 1)[1].split(
-        'data-workspace-map-col="digitaltwin"', 1
-    )[0]
     kg_column = html.split('data-workspace-map-col="digitaltwin"', 1)[1].split(
         'data-workspace-map-col="intelligence"', 1
     )[0]
     sim_column = html.split('data-workspace-map-col="intelligence"', 1)[1]
-    assert "nav-requires-graph" in mapping_column
     assert "nav-requires-graph" in kg_column
     assert "nav-requires-graph" in sim_column
+    assert "/dtwin/?section=design" in kg_column
 
 
 def test_workspace_map_css_uses_shell_tokens():
     css = _read(COMPONENTS_CSS)
     assert ".ob-workspace-map-grid" in css
     assert ".ob-workspace-map-item.is-current" in css
+    assert "repeat(4, minmax(0, 1fr))" in css
     block = css[css.index("Workspace map modal") : css.index("/* Local color")]
     assert "--db-hover-indigo" in block
     assert "--db-primary-light" in block

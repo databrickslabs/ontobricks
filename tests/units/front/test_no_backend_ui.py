@@ -258,14 +258,12 @@ class TestTheMcpTabRehydratesUnderTheConstraint:
 
 
 class TestTheNavbarDisablesGraphFeatures:
-    def test_the_mapping_and_kg_subnav_tabs_are_marked(self):
+    def test_the_kg_subnav_tab_is_marked(self):
         html = _read(BASE_HTML)
-        mapping = html[html.index('id="subnavMappingDropdown"') - 300 :
-                       html.index('id="subnavMappingDropdown"')]
         kg = html[html.index('id="subnavKgDropdown"') - 300 :
                   html.index('id="subnavKgDropdown"')]
-        assert "nav-requires-graph" in mapping
         assert "nav-requires-graph" in kg
+        assert 'id="subnavMappingDropdown"' not in html
 
     def test_the_navbar_defines_and_calls_the_gate(self):
         js = _read(NAVBAR_JS)

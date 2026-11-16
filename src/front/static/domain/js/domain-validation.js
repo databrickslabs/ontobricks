@@ -429,10 +429,10 @@ function updateMappingCard(data) {
 function _dtBadge(flag, okText, failText, unknownText) {
     var s = 'style="font-size:.65rem;"';
     if (flag === true)
-        return '<span class="badge bg-success bg-opacity-10 text-success border border-success" ' + s + '><i class="bi bi-check-circle-fill me-1"></i>' + okText + '</span>';
+        return '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" ' + s + '><i class="bi bi-check-circle-fill text-success me-1"></i>' + okText + '</span>';
     if (flag === false)
-        return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + failText + '</span>';
-    return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
+        return '<span class="badge bg-secondary-subtle text-secondary-emphasis border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + failText + '</span>';
+    return '<span class="badge bg-secondary-subtle text-secondary-emphasis border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
 }
 
 function _formatTimestamp(iso) {
@@ -613,12 +613,12 @@ function updateDtwinCard(data) {
         var psTblExistsEl = document.getElementById('psDtLakebaseTableExists');
         if (psTblExistsEl) {
             if (dt.lakebase_table_exists === true) {
-                psTblExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
+                psTblExistsEl.innerHTML = '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size:.65rem;"><i class="bi bi-check-circle-fill text-success me-1"></i>Exists</span>';
             } else if (dt.lakebase_table_exists === false) {
-                psTblExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                psTblExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             } else {
                 // null/undefined → live probe could not reach Lakebase
-                psTblExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+                psTblExistsEl.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
                 var psSp = psTblExistsEl.querySelector('span');
                 if (psSp) psSp.title = dt.lakebase_check_error
                     ? String(dt.lakebase_check_error)
@@ -628,14 +628,14 @@ function updateDtwinCard(data) {
         var psUcExistsEl = document.getElementById('psDtLakebaseSyncedUcExists');
         if (psUcExistsEl) {
             if (dt.lakebase_synced_uc_exists === true) {
-                psUcExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
+                psUcExistsEl.innerHTML = '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size:.65rem;"><i class="bi bi-check-circle-fill text-success me-1"></i>Exists</span>';
             } else if (dt.lakebase_synced_uc_exists === false) {
-                psUcExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                psUcExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             } else if (hasUcName) {
                 // name is configured but existence probe didn't return yet / failed
-                psUcExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+                psUcExistsEl.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
             } else {
-                psUcExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                psUcExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             }
         }
     }
@@ -672,13 +672,13 @@ function updateMissingItems(data) {
 
     entitiesList.innerHTML = unmappedEntities.length > 0
         ? unmappedEntities.map(function(e) {
-            return '<li class="list-group-item d-flex justify-content-between align-items-center py-1"><span><i class="bi bi-box text-muted me-1"></i> ' + (e.label || e.name) + '</span><a href="/mapping/" class="btn btn-outline-primary btn-sm py-0">Assign</a></li>';
+            return '<li class="list-group-item d-flex justify-content-between align-items-center py-1"><span><i class="bi bi-box text-muted me-1"></i> ' + (e.label || e.name) + '</span><a href="/dtwin/?section=design" class="btn btn-outline-primary btn-sm py-0">Assign</a></li>';
         }).join('')
         : '<li class="list-group-item text-success py-1"><i class="bi bi-check me-1"></i> All entities assigned</li>';
 
     relationshipsList.innerHTML = unmappedRelationships.length > 0
         ? unmappedRelationships.map(function(r) {
-            return '<li class="list-group-item d-flex justify-content-between align-items-center py-1"><span><i class="bi bi-arrow-left-right text-muted me-1"></i> ' + (r.label || r.name) + '</span><a href="/mapping/" class="btn btn-outline-primary btn-sm py-0">Assign</a></li>';
+            return '<li class="list-group-item d-flex justify-content-between align-items-center py-1"><span><i class="bi bi-arrow-left-right text-muted me-1"></i> ' + (r.label || r.name) + '</span><a href="/dtwin/?section=design" class="btn btn-outline-primary btn-sm py-0">Assign</a></li>';
         }).join('')
         : '<li class="list-group-item text-success py-1"><i class="bi bi-check me-1"></i> All relationships assigned</li>';
 }

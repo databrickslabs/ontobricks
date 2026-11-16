@@ -153,7 +153,7 @@ function _applyReadiness(data) {
     var badgeEl = document.getElementById('syncMappingReadyBadge');
     if (badgeEl) {
         badgeEl.innerHTML = assignmentReady
-            ? '<span class="badge bg-success bg-opacity-10 text-success border border-success"><i class="bi bi-check-circle-fill me-1"></i>Ready</span>'
+            ? '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle"><i class="bi bi-check-circle-fill text-success me-1"></i>Ready</span>'
             : '<span class="badge bg-danger text-white border border-danger"><i class="bi bi-x-circle-fill me-1"></i>Not ready</span>';
     }
 
@@ -163,6 +163,12 @@ function _applyReadiness(data) {
             && !window.OB.canEditOntology());
         if (assignmentReady || !canOfferAutoMap) autoMapBtn.classList.add('d-none');
         else autoMapBtn.classList.remove('d-none');
+    }
+
+    var mappingDiagBtn = document.getElementById('syncMappingDiagBtn');
+    if (mappingDiagBtn) {
+        if (assignmentReady) mappingDiagBtn.classList.add('d-none');
+        else mappingDiagBtn.classList.remove('d-none');
     }
 
     var alertEl = document.getElementById('syncNotReadyAlert');
@@ -359,13 +365,13 @@ function _applyBuildGraphEngineUi(dtExist) {
         var tblExistsEl = document.getElementById('dtLakebaseTableExists');
         if (tblExistsEl) {
             if (dt.lakebase_table_exists === true) {
-                tblExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
+                tblExistsEl.innerHTML = '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size:.65rem;"><i class="bi bi-check-circle-fill text-success me-1"></i>Exists</span>';
             } else if (dt.lakebase_table_exists === false) {
-                tblExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                tblExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             } else if (pending) {
                 tblExistsEl.innerHTML = _archSpinnerBadge('Loading');
             } else {
-                tblExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+                tblExistsEl.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
                 var sp = tblExistsEl.querySelector('span');
                 if (sp) sp.title = dt.lakebase_check_error
                     ? String(dt.lakebase_check_error)
@@ -375,15 +381,15 @@ function _applyBuildGraphEngineUi(dtExist) {
         var ucExistsEl = document.getElementById('dtLakebaseSyncedUcExists');
         if (ucExistsEl) {
             if (dt.lakebase_synced_uc_exists === true) {
-                ucExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
+                ucExistsEl.innerHTML = '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size:.65rem;"><i class="bi bi-check-circle-fill text-success me-1"></i>Exists</span>';
             } else if (dt.lakebase_synced_uc_exists === false) {
-                ucExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                ucExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             } else if (pending) {
                 ucExistsEl.innerHTML = _archSpinnerBadge('Loading');
             } else if (hasUcName) {
-                ucExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+                ucExistsEl.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
             } else {
-                ucExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                ucExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             }
         }
 
@@ -409,10 +415,10 @@ function _applyDtExistence(data) {
     function _badge(flag, okText, failText, unknownText) {
         var s = 'style="font-size:.65rem;"';
         if (flag === true)
-            return '<span class="badge bg-success bg-opacity-10 text-success border border-success" ' + s + '><i class="bi bi-check-circle-fill me-1"></i>' + okText + '</span>';
+            return '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" ' + s + '><i class="bi bi-check-circle-fill text-success me-1"></i>' + okText + '</span>';
         if (flag === false)
-            return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + failText + '</span>';
-        return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
+            return '<span class="badge bg-secondary-subtle text-secondary-emphasis border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + failText + '</span>';
+        return '<span class="badge bg-secondary-subtle text-secondary-emphasis border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
     }
 
     var pending = data && data.pending === true;
@@ -831,29 +837,29 @@ function updateKgReadyIndicators() {
     var backend = _kgBackendLabel();
     var html;
     if (syncIsRunning) {
-        html = '<span class="badge bg-warning-subtle text-warning border border-warning fw-normal">'
+        html = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-medium">'
             + '<span class="spinner-border spinner-border-sm me-1 kg-status-spinner"></span>Building…</span>';
     } else if (tripleStoreStatusPending) {
         // Status probe deferred off the first paint; confirming in background.
-        html = '<span class="badge bg-secondary-subtle text-secondary border fw-normal" '
+        html = '<span class="badge bg-secondary-subtle text-secondary-emphasis border fw-medium" '
             + 'title="Confirming the graph status in the background…">'
             + '<span class="spinner-border spinner-border-sm me-1 kg-status-spinner"></span>Checking…</span>';
     } else if (tripleStoreHasData) {
-        html = '<span class="badge bg-success bg-opacity-10 text-success border border-success fw-normal" '
+        html = '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle fw-medium" '
             + 'title="The Knowledge Graph is built and ready to use (backend: ' + backend + ').">'
-            + '<i class="bi bi-check-circle-fill me-1"></i>Graph ready'
-            + '<span class="opacity-75 ms-1">·' + _kgBackendIconMarkup() + backend + '</span></span>';
+            + '<i class="bi bi-check-circle-fill text-success me-1"></i>Graph ready'
+            + '<span class="ms-1">·' + _kgBackendIconMarkup() + backend + '</span></span>';
     } else if (tripleStoreStatusUnknown) {
         // The probe could not reach the engine, so we do not know either way.
         // Offering "Go to Build" here would invite a needless rebuild.
-        html = '<span class="badge bg-warning-subtle text-warning border border-warning fw-normal" '
+        html = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-medium" '
             + 'title="Could not reach the ' + backend + ' backend to check the graph. '
             + 'This is a connection problem, not a missing graph — retry in a moment.">'
             + '<i class="bi bi-question-circle me-1"></i>Status unavailable'
-            + '<span class="opacity-75 ms-1">·' + _kgBackendIconMarkup() + backend + '</span></span>';
+            + '<span class="ms-1">·' + _kgBackendIconMarkup() + backend + '</span></span>';
     } else {
         html = '<span class="kg-not-built d-inline-flex align-items-center gap-2">'
-            + '<span class="badge bg-secondary-subtle text-secondary border fw-normal">'
+            + '<span class="badge bg-secondary-subtle text-secondary-emphasis border fw-medium">'
             + '<i class="bi bi-slash-circle me-1"></i>Graph not built</span>'
             + '<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 kg-go-build-btn">'
             + '<i class="bi bi-hammer me-1"></i>Go to Build</button>'

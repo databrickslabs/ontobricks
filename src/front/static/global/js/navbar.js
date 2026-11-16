@@ -124,7 +124,7 @@ function initSubnavActiveState() {
 }
 
 /**
- * The current L2 area (Context / Ontology / Mapping / KG) already has its
+ * The current L2 area (Context / Ontology / Graph / Intelligence) already has its
  * sections in the left sidebar, so the matching L2 dropdown is redundant.
  * Drop Bootstrap dropdown wiring and the menu, keep a static active tab.
  */
@@ -218,7 +218,7 @@ window.applyBrandLogo = applyBrandLogo;
 
 
 /**
- * Refresh all three workflow indicators (Ontology, Mapping, Knowledge Graph)
+ * Refresh workflow indicators (Ontology / Mapping readiness / Knowledge Graph)
  * in the top navbar. Call this single function after any change that could
  * affect one or more of these statuses.
  *
@@ -399,13 +399,13 @@ function applyDomainInfo(data) {
     // UC-save is no longer required for basic navigation.
     updateMenusForDomainStatus(hasDomain);
 
-    // Ontology-only ("No Backend") domains have no graph, so Mapping and
+    // Ontology-only ("No Backend") domains have no graph, so Graph (incl. Mapping) and
     // Knowledge Graph are disabled entirely.
     updateMenusForGraphBackend(hasDomain ? (data.info && data.info.graph_backend) : null);
 }
 
 /**
- * Disable Mapping + Knowledge Graph navigation for "No Backend" domains.
+ * Disable Graph (incl. Mapping) + Intelligence navigation for "No Backend" domains.
  * @param {string|null} backend - The per-domain graph backend, or null.
  */
 function updateMenusForGraphBackend(backend) {

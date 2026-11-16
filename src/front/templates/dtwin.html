@@ -22,9 +22,20 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/query.css') }}">
 <!-- Ontology map styles for read-only viewer modal -->
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-map.css') }}?v={{ asset_version }}">
+<!-- Mapping section styles (Studio lives under Graph → Management) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-shared-panels.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='global/css/mapping.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-design.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-shared.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-manual.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-diagnostics.css') }}?v={{ asset_version }}">
 {% endblock %}
 
 {% block content %}
+<!-- Pre-render section switcher (avoids flash; also remaps legacy Mapping deep-links) -->
+<script src="{{ url_for('static', filename='mapping/js/mapping-init-section.js') }}?v={{ asset_version }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+
 <div class="container-fluid px-0">
     <div class="sidebar-layout">
         <!-- Left Sidebar Menu (driven by menu_config.json) -->
@@ -35,6 +46,11 @@
         
         <!-- Right Content Area -->
         <div class="sidebar-content">
+            <!-- Management → Mapping (Informations | Visual | List tabs; List embeds former Manual) -->
+            <div id="design-section" class="sidebar-section">
+                {% include "partials/mapping/_mapping_design.html" %}
+            </div>
+
             <!-- Build Section (Build | Runs tabs; Lakebase / Delta panels inside Build) -->
             <div id="sync-section" class="sidebar-section">
                 {% include "partials/dtwin/_query_build.html" %}
@@ -109,6 +125,9 @@
     </div>
 </div>
 
+{% include "partials/mapping/_mapping_autoassign_modal.html" %}
+{% include "partials/mapping/_mapping_diagnostics_modal.html" %}
+
 <!-- All scripts use defer: page paints immediately, scripts run in order after HTML parsing.
      CDN libs (D3, Graphology, Sigma, GraphiQL) are lazy-loaded on first use by their modules. -->
 <script defer src="{{ url_for('static', filename='query/js/query.js') }}?v={{ asset_version }}"></script>
@@ -140,4 +159,18 @@
 <script defer src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 <!-- Read-only ontology model viewer modal (D3.js) -->
 <script defer src="{{ url_for('static', filename='query/js/query-ontology-viewer.js') }}?v={{ asset_version }}"></script>
+<!-- Mapping modules (Studio: Informations / Visual / List + Auto-Map / Diagnostics modals) -->
+<script defer src="{{ url_for('static', filename='global/js/mapping-core.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='global/js/ontology-inheritance.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='global/js/mapping-information.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='mapping/js/mapping-design.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='mapping/js/mapping-shared.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='mapping/js/mapping-entity-modal.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='mapping/js/mapping-relationship-modal.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='mapping/js/mapping-import.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='mapping/js/mapping-r2rml.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='mapping/js/mapping-manual.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='mapping/js/mapping-autoassign.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='mapping/js/mapping-diagnostics.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='mapping/js/mapping-init.js') }}?v={{ asset_version }}"></script>
 {% endblock %}

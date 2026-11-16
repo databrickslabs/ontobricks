@@ -212,6 +212,13 @@ async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain, init
     var pendingQueryTab = initialQueryTab;
 
     SidebarNav.init({
+        onBeforeSectionChange: async function(section) {
+            if (window.MappingPageHooks
+                && typeof window.MappingPageHooks.onBeforeSectionChange === 'function') {
+                return await window.MappingPageHooks.onBeforeSectionChange(section);
+            }
+            return true;
+        },
         onSectionChange: async function(section, targetSection, nav) {
             if (section === 'sigmagraph') {
                 if (typeof SigmaGraph !== 'undefined') {
