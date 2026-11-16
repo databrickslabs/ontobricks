@@ -5,6 +5,7 @@ executed on SQLite. Spark-only functions (``collect_list``, ``sort_array``,
 ``concat_ws``) are shimmed in :class:`SqliteRunner`.
 """
 
+import json
 from typing import Dict, List
 
 import pytest
@@ -100,6 +101,39 @@ def _run(triples, **kwargs):
         runner.execute, runner.scalar, builder, cleanup=False, computed_at="t0"
     )
     return runner, builder, stats
+
+
+class TestStageInstrumentation:
+    def test_summary_carries_stage_ms_and_hub_columns(self):
+        runner, _, stats = _run(alice_bob_carol())
+        summary = _summary(runner)
+        stage_ms = json.loads(summary["stage_ms"])
+        assert "prep" in stage_ms
+        assert "bins" in stage_ms
+        assert "signatures" in stage_ms
+        assert "output" in stage_ms
+        assert "shapes" in stage_ms
+        assert all(isinstance(v, int) and v >= 0 for v in stage_ms.values())
+        assert int(summary["hub_degree"]) == 0
+        assert int(summary["hub_count"]) == 0
+        assert "stage_ms" in stats
+
+    def test_instrumentation_survives_a_failed_row_count(self):
+        # Only instrumentation frontier COUNTs must fail; algorithm COUNTs stay.
+        runner = SqliteRunner(alice_bob_carol())
+        builder = _builder()
+        real_scalar = runner.scalar
+
+        def flaky(query: str):
+            if "frontier" in query.lower() and "count" in query.lower():
+                raise RuntimeError("boom")
+            return real_scalar(query)
+
+        runner.scalar = flaky
+        stats = run_patterns(
+            runner.execute, runner.scalar, builder, cleanup=False, computed_at="t0"
+        )
+        assert stats["pattern_count"] >= 1
 
 
 class TestAliceBobCarol:

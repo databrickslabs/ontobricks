@@ -239,6 +239,8 @@ class JobPatterns:
             ],
             "computed_at": str(row.get("computed_at") or ""),
             "elapsed_ms": elapsed_ms,
+            "hub_degree": int(row.get("hub_degree", 0) or 0),
+            "hub_count": int(row.get("hub_count", 0) or 0),
         }
 
     def top_patterns(self, limit: int = DEFAULT_TOP_PATTERNS) -> List[Dict[str, Any]]:

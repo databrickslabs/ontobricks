@@ -31,8 +31,9 @@ import json
 import logging
 import re
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, Iterator, List, Optional
 
 logger = logging.getLogger("ontobricks.jobs.graph_analytics")
 
@@ -1793,6 +1794,9 @@ class PatternSQL(GraphAnalyticsSQL):
         return statements
 
     def write_pattern_summary(self, stats: Dict[str, object]) -> List[str]:
+        stage_ms = stats.get("stage_ms") or {}
+        if not isinstance(stage_ms, str):
+            stage_ms = json.dumps(stage_ms, sort_keys=True)
         columns = [
             f"'{sql_escape(str(stats.get('anchor_type', '') or ''))}' AS anchor_type",
             f"{int(stats['anchor_count'])} AS anchor_count",
@@ -1807,6 +1811,9 @@ class PatternSQL(GraphAnalyticsSQL):
             f"'{sql_escape(str(stats['source_table']))}' AS source_table",
             f"'{sql_escape(str(stats.get('computed_at', '') or ''))}' AS computed_at",
             f"{int(stats.get('elapsed_ms', 0) or 0)} AS elapsed_ms",
+            f"'{sql_escape(str(stage_ms))}' AS stage_ms",
+            f"{int(stats.get('hub_degree', 0) or 0)} AS hub_degree",
+            f"{int(stats.get('hub_count', 0) or 0)} AS hub_count",
         ]
         return self._recreate(
             self.summary_table, "SELECT " + ",\n       ".join(columns)
@@ -1906,26 +1913,59 @@ def run_patterns(
             _drop_work_tables(execute, builder)
 
 
-def _expand_neighbourhoods(execute, builder: PatternSQL) -> None:
+@contextmanager
+def _pattern_stage(stage_ms: Dict[str, int], name: str) -> Iterator[None]:
+    """Record wall time for one pattern-job stage into *stage_ms*."""
+    t0 = time.time()
+    try:
+        yield
+    finally:
+        stage_ms[name] = int((time.time() - t0) * 1000)
+
+
+def _safe_count(scalar, query: str) -> Optional[int]:
+    """``COUNT(*)`` for instrumentation; never fails the run."""
+    try:
+        return int(scalar(query) or 0)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("pattern stage count failed: %s", exc)
+        return None
+
+
+def _expand_neighbourhoods(execute, scalar, builder: PatternSQL, stage_ms: Dict[str, int]) -> None:
     """Stage everything the signatures hash: edges, bins, hop-by-hop tokens."""
-    for stmt in builder.build_directed_edges():
-        execute(stmt)
-    for stmt in builder.build_literals():
-        execute(stmt)
-    for stmt in builder.build_anchors():
-        execute(stmt)
-    for stmt in builder.build_node_types():
-        execute(stmt)
-    for stmt in builder.build_bins():
-        execute(stmt)
-    for stmt in builder.init_tokens():
-        execute(stmt)
-    for stmt in builder.build_frontier_0():
-        execute(stmt)
-    for h in range(1, max(0, int(builder.hops)) + 1):
-        for stmt in builder.build_hop(h):
+    with _pattern_stage(stage_ms, "prep"):
+        for stmt in builder.build_directed_edges():
             execute(stmt)
-        logger.info("pattern hop %d expanded", h)
+        for stmt in builder.build_literals():
+            execute(stmt)
+        for stmt in builder.build_anchors():
+            execute(stmt)
+        for stmt in builder.build_node_types():
+            execute(stmt)
+    with _pattern_stage(stage_ms, "bins"):
+        for stmt in builder.build_bins():
+            execute(stmt)
+    with _pattern_stage(stage_ms, "tokens_init"):
+        for stmt in builder.init_tokens():
+            execute(stmt)
+        for stmt in builder.build_frontier_0():
+            execute(stmt)
+    for h in range(1, max(0, int(builder.hops)) + 1):
+        stage = f"hop_{h}"
+        with _pattern_stage(stage_ms, stage):
+            for stmt in builder.build_hop(h):
+                execute(stmt)
+        n = _safe_count(scalar, f"SELECT COUNT(*) AS n FROM {builder.frontier(h)}")
+        if n is not None:
+            logger.info(
+                "pattern stage %s: %sms, rows(frontier)=%s",
+                stage,
+                stage_ms[stage],
+                n,
+            )
+        else:
+            logger.info("pattern stage %s: %sms", stage, stage_ms[stage])
 
 
 def _choose_detail_level(execute, scalar, builder: PatternSQL) -> str:
@@ -1959,28 +1999,40 @@ def _run_pattern_stages(
         raise ValueError("class_filter is required for pattern detection")
 
     t0 = time.time()
-    _expand_neighbourhoods(execute, builder)
-    level = _choose_detail_level(execute, scalar, builder)
+    stage_ms: Dict[str, int] = {}
+    _expand_neighbourhoods(execute, scalar, builder, stage_ms)
+
+    with _pattern_stage(stage_ms, "signatures"):
+        # Detail-level selection still rebuilds signatures per level (Task 2
+        # collapses that into one pass); time the whole choice as one stage.
+        level = _choose_detail_level(execute, scalar, builder)
+    # write_pattern_output already ran inside _choose_detail_level; record a
+    # zero-cost output stage so the summary key set stays stable across tasks.
+    stage_ms.setdefault("output", 0)
 
     # Refine merges multiplicity near-duplicates, which only exist when the
     # signature kept exact counts, i.e. at the finest level.
     refined = 0
-    if int(builder.refine_top) > 0 and level == PATTERN_LEVELS[0]:
-        for stmt in builder.build_refine_map():
-            execute(stmt)
-        for stmt in builder.apply_refine_map():
-            execute(stmt)
-        refined = 1
-    else:
-        for stmt in builder.empty_refine_map():
-            execute(stmt)
+    with _pattern_stage(stage_ms, "refine"):
+        if int(builder.refine_top) > 0 and level == PATTERN_LEVELS[0]:
+            for stmt in builder.build_refine_map():
+                execute(stmt)
+            for stmt in builder.apply_refine_map():
+                execute(stmt)
+            refined = 1
+        else:
+            for stmt in builder.empty_refine_map():
+                execute(stmt)
 
-    for stmt in builder.write_shapes(refined=bool(refined), level=level):
-        execute(stmt)
-    for stmt in builder.write_shape_edges():
-        execute(stmt)
-    for stmt in builder.write_pattern_preview():
-        execute(stmt)
+    with _pattern_stage(stage_ms, "shapes"):
+        for stmt in builder.write_shapes(refined=bool(refined), level=level):
+            execute(stmt)
+    with _pattern_stage(stage_ms, "shape_edges"):
+        for stmt in builder.write_shape_edges():
+            execute(stmt)
+    with _pattern_stage(stage_ms, "preview"):
+        for stmt in builder.write_pattern_preview():
+            execute(stmt)
 
     pattern_count = int(scalar(builder.pattern_count_query()) or 0)
     # With patterns: the anchors they cover. Without: the whole population.
@@ -2006,6 +2058,9 @@ def _run_pattern_stages(
         "source_table": builder.source_table,
         "computed_at": computed_at,
         "elapsed_ms": int((time.time() - t0) * 1000),
+        "stage_ms": stage_ms,
+        "hub_degree": 0,
+        "hub_count": 0,
     }
     for stmt in builder.write_pattern_summary(stats):
         execute(stmt)
