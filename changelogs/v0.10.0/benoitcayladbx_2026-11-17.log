@@ -946,3 +946,52 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 49.59s
+
+
+## Patterns diagram — relationship tooltip shows min/max/count, not just avg
+
+Context:
+A diagram edge showed only the average number of neighbours per matching
+entity (the ×N badge). Add the per-entity min/max range and the number of
+matching entities to that badge's tooltip (tooltip only — the badge text is
+unchanged).
+
+Changes:
+1. src/jobs/graph_analytics_job.py
+   write_shape_edges() now also aggregates MIN(t.cnt) AS edge_min and
+   MAX(t.cnt) AS edge_max (per-member neighbour counts) into <out>_shape_edges.
+2. src/back/core/graph_analysis/pattern/JobPatterns.py
+   Factored the edge column list into _edge_cols(legacy, stats); shape_edges_query
+   and shape_edges_bulk_query gained a stats flag that adds edge_min/edge_max.
+   _edge_rows_with_fallback now degrades through a ladder: full → without
+   min/max stats → legacy (no parent_via), so tables written before these
+   columns still draw. Added _missing_named_column / _missing_edge_stats_column
+   helpers.
+3. src/back/core/graph_analysis/pattern/pattern_diagram.py
+   build_pattern_diagram() adds count (members with the edge) and, when the row
+   carries them, min/max to each edge.
+4. src/front/static/intelligence/js/intelligence-patterns.js
+   _diagramEdge() appends "Range min–max per entity, across N matching entities"
+   to the avg badge tooltip when min/max are present.
+5. Tests: test_pattern_diagram.py (count + min/max), test_job_patterns.py
+   (stats column in query + min/max fallback), test_pattern_job_sql.py
+   (edge_min/edge_max emitted by the job), test_pattern_diagram_hover.py
+   (tooltip copy).
+
+Note:
+<out>_shape_edges schema changes, produced by the Databricks pattern job → a
+redeploy + Detect re-run is required before min/max appear. Runs produced
+before the change omit the range (tooltip keeps just the average).
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- src/back/core/graph_analysis/pattern/pattern_diagram.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/core/test_pattern_diagram.py
+- tests/units/core/test_job_patterns.py
+- tests/units/core/test_pattern_job_sql.py
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10834 passed, 333 skipped, 8 deselected, 44 warnings in 59.79s

@@ -956,11 +956,16 @@ const IntelligencePatterns = {
         const chipW = (text) => Math.max(22, String(text).length * 6.2 + 10);
         const chips = [];
         if (Number(e.avg) > 0) {
-            chips.push({
-                text: `×${e.avg}`,
-                kind: 'avg',
-                tip: `Average neighbours of this type per matching entity (×${e.avg}).`,
-            });
+            let avgTip = `Average neighbours of this type per matching entity (×${e.avg}).`;
+            if (e.min != null && e.max != null) {
+                avgTip += ` Range ${this._fmtNum(e.min)}–${this._fmtNum(e.max)} per entity`;
+                if (e.count != null) {
+                    avgTip += `, across ${this._fmtNum(e.count)} matching `
+                        + `entit${Number(e.count) === 1 ? 'y' : 'ies'}`;
+                }
+                avgTip += '.';
+            }
+            chips.push({ text: `×${e.avg}`, kind: 'avg', tip: avgTip });
         }
         if (e.share < 1) {
             const pct = Math.round(e.share * 100);

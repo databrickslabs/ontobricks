@@ -227,6 +227,31 @@ def test_failed_run_raises_with_run_link():
     assert "https://run/2" in str(exc.value.detail)
 
 
+def test_shape_edges_query_includes_per_member_min_max():
+    from back.core.graph_analysis.pattern.JobPatterns import shape_edges_query
+
+    sql = shape_edges_query("o", "p")
+    assert "edge_min" in sql and "edge_max" in sql
+    assert "edge_min" not in shape_edges_query("o", "p", stats=False)
+
+
+def test_edges_fall_back_when_min_max_columns_absent():
+    """Tables written before per-member min/max still draw, minus those stats."""
+    from back.core.graph_analysis.pattern.JobPatterns import fetch_shape_edges
+
+    seen: list[str] = []
+
+    def query(sql: str):
+        seen.append(sql)
+        if "edge_min" in sql:
+            raise RuntimeError("[UNRESOLVED_COLUMN] edge_min cannot be resolved")
+        return [{"pattern_id": "a", "hop": 1, "via": "x", "parent_via": "pv"}]
+
+    rows = fetch_shape_edges(query, "o", "a")
+    assert rows[0]["via"] == "x" and rows[0]["parent_via"] == "pv"
+    assert len(seen) == 2
+
+
 def test_bulk_edges_group_by_pattern_and_cap_each_pattern():
     from back.core.graph_analysis.pattern.JobPatterns import (
         MAX_DIAGRAM_EDGES,

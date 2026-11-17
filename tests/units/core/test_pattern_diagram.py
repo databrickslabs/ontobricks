@@ -16,8 +16,9 @@ CUSTOMER, ORDER, PRODUCT = NS + "Customer", NS + "Order", NS + "Product"
 CONTRACT = NS + "Contract"
 
 
-def _row(hop, parent, via, child, members=4, total=8, parent_via=""):
-    return {
+def _row(hop, parent, via, child, members=4, total=8, parent_via="",
+         edge_min=None, edge_max=None):
+    row = {
         "hop": hop,
         "parent_via": parent_via,
         "parent_type": parent,
@@ -26,6 +27,11 @@ def _row(hop, parent, via, child, members=4, total=8, parent_via=""):
         "member_count": members,
         "edge_total": total,
     }
+    if edge_min is not None:
+        row["edge_min"] = edge_min
+    if edge_max is not None:
+        row["edge_max"] = edge_max
+    return row
 
 
 def _diagram(rows, tokens=(), support=4, bins=8):
@@ -69,6 +75,20 @@ def test_nodes_are_hop_and_type_and_edges_follow_the_walk():
     assert first["via_label"] == "hasOrder"
     assert first["share"] == 1.0 and first["avg"] == 2.0
     assert second["share"] == 0.5 and second["avg"] == 1.0
+    # count = members having the edge; min/max absent when the job didn't emit.
+    assert first["count"] == 4 and second["count"] == 2
+    assert "min" not in first and "max" not in first
+
+
+def test_edge_carries_per_member_min_max_when_present():
+    d = _diagram(
+        [_row(1, CUSTOMER, NS + "hasOrder", ORDER, members=4, total=10,
+              edge_min=1, edge_max=5)]
+    )
+    edge = d["edges"][0]
+    assert edge["count"] == 4
+    assert edge["min"] == 1 and edge["max"] == 5
+    assert edge["avg"] == 2.5
 
 
 def test_same_type_at_two_hops_gives_two_nodes():

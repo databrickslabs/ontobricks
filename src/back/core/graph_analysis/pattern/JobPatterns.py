@@ -128,18 +128,27 @@ def shape_query(out: str, pattern_id: str) -> str:
     )
 
 
-def shape_edges_query(out: str, pattern_id: str, *, legacy: bool = False) -> str:
+def _edge_cols(legacy: bool, stats: bool) -> str:
+    base = (
+        "hop, parent_type, via, child_type, member_count, edge_total"
+        if legacy
+        else "hop, parent_via, parent_type, via, child_type, member_count, edge_total"
+    )
+    # Per-member min/max neighbour counts, absent on tables written before they
+    # were added: read defensively and fall back to the base column set.
+    return f"{base}, edge_min, edge_max" if stats else base
+
+
+def shape_edges_query(
+    out: str, pattern_id: str, *, legacy: bool = False, stats: bool = True
+) -> str:
     """Typed edges for one pattern's diagram.
 
     ``legacy=True`` reads Detect tables written before ``parent_via`` existed
     (those runs still have ``direction``). Callers should prefer the default
     query and fall back via :func:`fetch_shape_edges`.
     """
-    cols = (
-        "hop, parent_type, via, child_type, member_count, edge_total"
-        if legacy
-        else "hop, parent_via, parent_type, via, child_type, member_count, edge_total"
-    )
+    cols = _edge_cols(legacy, stats)
     return (
         f"SELECT {cols} FROM {out}_shape_edges "
         f"WHERE pattern_id = {_sql_str(pattern_id)} "
@@ -147,16 +156,25 @@ def shape_edges_query(out: str, pattern_id: str, *, legacy: bool = False) -> str
     )
 
 
-def _missing_parent_via_column(exc: Exception) -> bool:
-    text = str(exc)
-    lowered = text.lower()
-    if "parent_via" not in lowered:
+def _missing_named_column(exc: Exception, name: str) -> bool:
+    lowered = str(exc).lower()
+    if name not in lowered:
         return False
     return (
         "unresolved_column" in lowered
         or "no such column" in lowered
         or "cannot be resolved" in lowered
         or "does not exist" in lowered
+    )
+
+
+def _missing_parent_via_column(exc: Exception) -> bool:
+    return _missing_named_column(exc, "parent_via")
+
+
+def _missing_edge_stats_column(exc: Exception) -> bool:
+    return _missing_named_column(exc, "edge_min") or _missing_named_column(
+        exc, "edge_max"
     )
 
 
@@ -170,14 +188,10 @@ def shapes_bulk_query(out: str, pattern_ids: Sequence[str]) -> str:
 
 
 def shape_edges_bulk_query(
-    out: str, pattern_ids: Sequence[str], *, legacy: bool = False
+    out: str, pattern_ids: Sequence[str], *, legacy: bool = False, stats: bool = True
 ) -> str:
     """Typed edges for several patterns, capped per pattern like the single query."""
-    cols = (
-        "hop, parent_type, via, child_type, member_count, edge_total"
-        if legacy
-        else "hop, parent_via, parent_type, via, child_type, member_count, edge_total"
-    )
+    cols = _edge_cols(legacy, stats)
     ids = ", ".join(_sql_str(pid) for pid in pattern_ids)
     return (
         f"SELECT pattern_id, {cols} FROM ("
@@ -191,24 +205,41 @@ def shape_edges_bulk_query(
 
 def _edge_rows_with_fallback(
     query: Callable[[str], Any],
-    build: Callable[[bool], str],
+    build: Callable[[bool, bool], str],
     what: str,
 ) -> list[dict[str, Any]] | None:
-    """Run an edge query; retry without ``parent_via`` on pre-``parent_via`` tables."""
-    try:
-        raw = list(query(build(False)) or [])
-    except Exception as exc:  # noqa: BLE001
-        if names_a_missing_object(exc):
-            return None
-        if not _missing_parent_via_column(exc):
-            raise
+    """Run an edge query, degrading on tables that predate newer columns.
+
+    Retry ladder: full → without per-member min/max stats → without
+    ``parent_via`` (legacy layout). A missing object aborts (returns ``None``).
+    """
+    def _run(legacy: bool, stats: bool) -> list[dict[str, Any]] | None:
         try:
-            raw = list(query(build(True)) or [])
-        except Exception as legacy_exc:  # noqa: BLE001
-            if names_a_missing_object(legacy_exc):
+            return list(query(build(legacy, stats)) or [])
+        except Exception as exc:  # noqa: BLE001
+            if names_a_missing_object(exc):
                 return None
             raise
-        logger.info("shape_edges for %s lack parent_via; using legacy layout", what)
+
+    try:
+        raw = _run(False, True)
+    except Exception as exc:  # noqa: BLE001
+        if _missing_edge_stats_column(exc):
+            logger.info("shape_edges for %s lack min/max stats; omitting them", what)
+            try:
+                raw = _run(False, False)
+            except Exception as no_pv_exc:  # noqa: BLE001
+                if not _missing_parent_via_column(no_pv_exc):
+                    raise
+                logger.info("shape_edges for %s lack parent_via; using legacy", what)
+                raw = _run(True, False)
+        elif _missing_parent_via_column(exc):
+            logger.info("shape_edges for %s lack parent_via; using legacy layout", what)
+            raw = _run(True, False)
+        else:
+            raise
+    if raw is None:
+        return None
     return [{**dict(row), "parent_via": str(row.get("parent_via") or "")} for row in raw]
 
 
@@ -223,7 +254,9 @@ def fetch_shape_edges(
     """
     return _edge_rows_with_fallback(
         query,
-        lambda legacy: shape_edges_query(out, pattern_id, legacy=legacy),
+        lambda legacy, stats: shape_edges_query(
+            out, pattern_id, legacy=legacy, stats=stats
+        ),
         pattern_id,
     )
 
@@ -240,7 +273,9 @@ def fetch_shape_edges_for(
         return {}
     rows = _edge_rows_with_fallback(
         query,
-        lambda legacy: shape_edges_bulk_query(out, ids, legacy=legacy),
+        lambda legacy, stats: shape_edges_bulk_query(
+            out, ids, legacy=legacy, stats=stats
+        ),
         f"{len(ids)} patterns",
     )
     if rows is None:

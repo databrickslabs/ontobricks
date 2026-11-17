@@ -3,8 +3,9 @@
 Pure: rows of ``<out>_shape_edges`` plus the pattern's shape tokens in, a small
 node / edge model the Patterns page draws as a layered diagram out. A node is a
 ``(hop, type)`` pair: one box per entity type at each distance from the
-anchor. An edge carries how many members have it (``share``) and how many
-such neighbours a member has on average (``avg``).
+anchor. An edge carries how many members have it (``share`` / ``count``) and
+how many such neighbours a member has on average (``avg``), plus the per-member
+min/max range (``min`` / ``max``) when the job emitted it.
 """
 
 from __future__ import annotations
@@ -90,18 +91,26 @@ def build_pattern_diagram(
         via = str(row.get("via") or "")
         source = _node(nodes, hop - 1, str(row.get("parent_type") or ""))
         target = _node(nodes, hop, str(row.get("child_type") or ""))
-        edges.append(
-            {
-                "source": source,
-                "target": target,
-                "via": via,
-                "via_label": local_label(via),
-                "share": round(members / support, 3) if support else 0.0,
-                "avg": round(int(row.get("edge_total") or 0) / members, 2)
-                if members
-                else 0.0,
-            }
-        )
+        edge = {
+            "source": source,
+            "target": target,
+            "via": via,
+            "via_label": local_label(via),
+            "share": round(members / support, 3) if support else 0.0,
+            "avg": round(int(row.get("edge_total") or 0) / members, 2)
+            if members
+            else 0.0,
+            # Members (of this pattern) that have this relationship.
+            "count": members,
+        }
+        # Per-member min/max neighbour counts, present only on runs produced
+        # after the job started emitting them.
+        edge_min = row.get("edge_min")
+        edge_max = row.get("edge_max")
+        if edge_min is not None and edge_max is not None:
+            edge["min"] = int(edge_min)
+            edge["max"] = int(edge_max)
+        edges.append(edge)
     for token in tokens:
         attr = _attribute_of(token)
         if attr is None or attr[0] not in nodes:

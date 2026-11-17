@@ -98,6 +98,9 @@ def test_relationship_and_badge_carry_tooltip_copy():
     edge = _method(js, "_diagramEdge")
     assert "data-pat-tip=" in edge
     assert "Average neighbours of this type per matching entity" in edge
+    # The avg tooltip also reports the per-entity min/max range and the count.
+    assert "Range ${this._fmtNum(e.min)}–${this._fmtNum(e.max)} per entity" in edge
+    assert "across ${this._fmtNum(e.count)} matching" in edge
     assert "Share of matching entities that have this relationship" in edge
     assert "Relationship" in edge
     tip_bind = _method(js, "_bindDiagramTooltips")

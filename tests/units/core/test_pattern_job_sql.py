@@ -611,8 +611,8 @@ class TestShapeEdges:
         )
         return runner.rows(
             "SELECT hop, parent_type, via, child_type, member_count, "
-            f"edge_total FROM out_shape_edges WHERE pattern_id = '{pid}' "
-            "ORDER BY hop, via"
+            f"edge_total, edge_min, edge_max FROM out_shape_edges "
+            f"WHERE pattern_id = '{pid}' ORDER BY hop, via"
         )
 
     def test_edges_link_parent_and_child_types_per_hop(self):
@@ -630,6 +630,9 @@ class TestShapeEdges:
         # Alice and Bob share the pattern, two orders each.
         assert hop1["member_count"] == 2
         assert hop1["edge_total"] == 4
+        # Per-member neighbour counts: both members have exactly 2 → min=max=2.
+        assert hop1["edge_min"] == 2
+        assert hop1["edge_max"] == 2
 
     def test_walk_never_steps_back_onto_the_anchor(self):
         runner, _, _ = _run(alice_bob_carol(), hops=3)
