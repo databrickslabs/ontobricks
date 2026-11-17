@@ -15,6 +15,8 @@ let mappingMapZoom = null;
 let mappingMapNodes = [];
 let mappingMapHasCentered = false;
 let isMappingResizing = false;
+/** Bumps on every initMappingDesigner call so a superseded concurrent run aborts. */
+let mappingDesignerInitSeq = 0;
 
 const MAPPING_PANEL_DEFAULT_HEIGHT = 320;
 const MAPPING_PANEL_MIN_HEIGHT = 200;
@@ -134,6 +136,7 @@ async function loadMapLayout() {
  * Initialize the mapping designer (D3.js Designer)
  */
 async function initMappingDesigner(opts) {
+    const seq = ++mappingDesignerInitSeq;
     const showLoading = !(opts && opts.showLoading === false);
     if (showLoading) {
         showMappingDesignerLoading(true);
@@ -151,6 +154,7 @@ async function initMappingDesigner(opts) {
             attempts++;
         }
     }
+    if (seq !== mappingDesignerInitSeq) return;
     
     const container = document.getElementById('mapping-map-container');
     if (!container) {
@@ -160,13 +164,13 @@ async function initMappingDesigner(opts) {
     }
     
     try {
-        // Clear previous map content (keep the loading overlay and its spinner SVG)
-        const existingSvg = container.querySelector(':scope > svg');
-        if (existingSvg) existingSvg.remove();
-        const existingLegend = container.querySelector('.mapping-map-legend');
-        if (existingLegend) existingLegend.remove();
-        const existingEmpty = container.querySelector('.map-empty-message');
-        if (existingEmpty) existingEmpty.remove();
+        // Clear every previous canvas layer (keep the loading overlay). A concurrent
+        // init used to leave a second SVG behind because only the first was removed
+        // — that ghost layer showed duplicate "Not Mapped" relationship paths until
+        // a later re-init happened to clear one of them.
+        container.querySelectorAll(':scope > svg').forEach(el => el.remove());
+        container.querySelectorAll(':scope > .mapping-map-legend').forEach(el => el.remove());
+        container.querySelectorAll(':scope > .map-empty-message').forEach(el => el.remove());
         
         // Get ontology data from MappingState; if missing, try fetching it once
         if (!MappingState.loadedOntology) {
@@ -181,6 +185,7 @@ async function initMappingDesigner(opts) {
                 console.warn('Mapping Designer: On-demand ontology fetch failed:', e);
             }
         }
+        if (seq !== mappingDesignerInitSeq) return;
         if (!MappingState.loadedOntology) {
             container.innerHTML += `
                 <div class="map-empty-message text-center text-muted py-5">
@@ -230,6 +235,7 @@ async function initMappingDesigner(opts) {
         // in the background so it never blocks the spinner.  Once it resolves, re-render
         // to pick up any drift indicators on nodes and panels.
         const savedLayout = await loadMapLayout();
+        if (seq !== mappingDesignerInitSeq) return;
         if (!mappingDriftLoaded) {
             loadSchemaDrift().then(() => {
                 if (mappingMapInitialized) initMappingDesigner({ showLoading: false });
@@ -419,7 +425,8 @@ async function initMappingDesigner(opts) {
             linkIndexMap.set(key, idx + 1);
         });
         
-        // Create SVG
+        // Create SVG (abort if a newer init superseded this run while we awaited)
+        if (seq !== mappingDesignerInitSeq) return;
         const width = container.clientWidth;
         const height = container.clientHeight;
         
@@ -3101,13 +3108,11 @@ function resetEntityPanel() {
     const classUri = document.getElementById('panelEntityClass')?.value;
     if (!classUri) return;
     
-    // Remove the mapping from state
-    const existingIndex = MappingState.config.entities.findIndex(m => m.ontology_class === classUri);
-    if (existingIndex >= 0) {
+    // Remove the mapping from state (exclusions are kept - see unmapMappingEntry)
+    if (unmapMappingEntry(MappingState.config.entities, 'ontology_class', classUri, 'ontology_class_label')) {
         const classInfo = MappingState.loadedOntology?.classes?.find(c => c.uri === classUri);
         const className = classInfo ? (classInfo.label || classInfo.name) : 'Entity';
         
-        MappingState.config.entities.splice(existingIndex, 1);
         showNotification(`Mapping for "${className}" removed`, 'success', 2000);
         
         // Save and refresh
@@ -3181,13 +3186,11 @@ function resetRelPanel() {
     const propertyUri = document.getElementById('panelPropertyUri')?.value;
     if (!propertyUri) return;
     
-    // Remove the mapping from state
-    const existingIndex = MappingState.config.relationships.findIndex(m => m.property === propertyUri);
-    if (existingIndex >= 0) {
+    // Remove the mapping from state (exclusions are kept - see unmapMappingEntry)
+    if (unmapMappingEntry(MappingState.config.relationships, 'property', propertyUri, 'property_label')) {
         const propertyInfo = MappingState.loadedOntology?.properties?.find(p => p.uri === propertyUri);
         const propertyName = propertyInfo ? (propertyInfo.label || propertyInfo.name) : 'Relationship';
         
-        MappingState.config.relationships.splice(existingIndex, 1);
         showNotification(`Mapping for "${propertyName}" removed`, 'success', 2000);
         
         // Save and refresh
@@ -3697,20 +3700,8 @@ function contextMenuUnassignEntity(entityData) {
     const uri = entityData.uri;
     const displayName = entityData.label || entityData.name;
 
-    const existingIndex = MappingState.config.entities.findIndex(m => m.ontology_class === uri);
-    if (existingIndex >= 0) {
-        const excl = MappingState.config.entities[existingIndex].excluded_attributes;
-        if (excl && excl.length > 0) {
-            // Keep a stub so attribute exclusions survive the unmap.
-            MappingState.config.entities[existingIndex] = {
-                ontology_class: uri,
-                ontology_class_label: MappingState.config.entities[existingIndex].ontology_class_label || '',
-                sql_query: '',
-                excluded_attributes: [...excl]
-            };
-        } else {
-            MappingState.config.entities.splice(existingIndex, 1);
-        }
+    // Exclusions (hidden item, excluded attributes) survive the unmap.
+    if (unmapMappingEntry(MappingState.config.entities, 'ontology_class', uri, 'ontology_class_label')) {
         showNotification(`Mapping for "${displayName}" removed`, 'success', 2000);
         autoSaveMappings();
         refreshMappingDesign();
@@ -3746,19 +3737,8 @@ function contextMenuUnassignRelationship(relData) {
     const uri = relData.uri;
     const displayName = relData.label || relData.name;
 
-    const existingIndex = MappingState.config.relationships.findIndex(m => m.property === uri);
-    if (existingIndex >= 0) {
-        const excl = MappingState.config.relationships[existingIndex].excluded_attributes;
-        if (excl && excl.length > 0) {
-            MappingState.config.relationships[existingIndex] = {
-                property: uri,
-                property_label: MappingState.config.relationships[existingIndex].property_label || '',
-                sql_query: '',
-                excluded_attributes: [...excl]
-            };
-        } else {
-            MappingState.config.relationships.splice(existingIndex, 1);
-        }
+    // Exclusions (hidden item, excluded attributes) survive the unmap.
+    if (unmapMappingEntry(MappingState.config.relationships, 'property', uri, 'property_label')) {
         showNotification(`Mapping for "${displayName}" removed`, 'success', 2000);
         autoSaveMappings();
         refreshMappingDesign();
@@ -4050,11 +4030,23 @@ const MappingStudioTabs = {
             ? 'mappingStudioTabList'
             : (name === 'visual' ? 'mappingStudioTabVisual' : 'mappingStudioTabInformations');
         const btn = document.getElementById(btnId);
-        if (btn && typeof bootstrap !== 'undefined' && bootstrap.Tab) {
-            try { bootstrap.Tab.getOrCreateInstance(btn).show(); } catch (_) { /* noop */ }
-        }
         MappingStudioTabs._syncUrl(name);
-        MappingStudioTabs._onShown(name);
+        // Bootstrap Tab.show() fires shown.bs.tab → _onShown. Calling _onShown
+        // here as well used to schedule two concurrent Visual inits and leave a
+        // ghost SVG of duplicate "Not Mapped" relationship paths.
+        if (btn && typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+            if (btn.classList.contains('active')) {
+                MappingStudioTabs._onShown(name);
+            } else {
+                try {
+                    bootstrap.Tab.getOrCreateInstance(btn).show();
+                } catch (_) {
+                    MappingStudioTabs._onShown(name);
+                }
+            }
+        } else {
+            MappingStudioTabs._onShown(name);
+        }
     },
 
     _onShown: function (tab) {

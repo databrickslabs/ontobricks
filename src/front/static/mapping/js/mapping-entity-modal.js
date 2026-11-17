@@ -375,8 +375,7 @@ async function removeEntityMappingByClass(classUri) {
         icon: 'trash'
     });
     if (confirmed) {
-        const idx = MappingState.config.entities.indexOf(mapping);
-        MappingState.config.entities.splice(idx, 1);
+        unmapMappingEntry(MappingState.config.entities, 'ontology_class', classUri, 'ontology_class_label');
         autoSaveMappings();
         showNotification(`Mapping for "${mapping.ontology_class_label}" removed`, 'info', 3000);
     }

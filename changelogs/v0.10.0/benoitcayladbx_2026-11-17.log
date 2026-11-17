@@ -362,3 +362,96 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10806 passed, 333 skipped, 8 deselected in 50.02s (run on the working tree, which also included unrelated uncommitted edits in the shacl/digitaltwin/reasoning modules)
+
+## Stop ghost Not Mapped relationship paths on Mapping Visual
+
+Context:
+Opening Mapping Studio → Visual could render a duplicate canvas for a few
+seconds. `MappingStudioTabs.show()` called `_onShown` both directly and via
+Bootstrap `shown.bs.tab`, scheduling two concurrent `initMappingDesigner` runs.
+Each appended an SVG, but cleanup only removed the first `:scope > svg`,
+leaving a ghost layer until a later re-init cleared one of them.
+Note: this was first suspected to explain the red "not mapped" relationships,
+but it did not; the real cause is fixed in the "Keep hidden entities and
+relationships when unmapping" section below.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   - `show()` only calls `_onShown` when the tab is already active (otherwise
+     Bootstrap's `shown.bs.tab` owns the call).
+   - `initMappingDesigner` uses a sequence token so superseded concurrent runs
+     abort after awaits.
+   - Clears all canvas SVGs/legends/empty messages, not just the first SVG.
+2. tests/units/front/test_mapping_visual_ghost_links.py (new)
+   Contract tests for the double-`_onShown` guard, multi-SVG cleanup, and
+   init sequence token.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- tests/units/front/test_mapping_visual_ghost_links.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10809 passed, 333 skipped, 8 deselected in 49.43s
+
+## Keep hidden entities and relationships when unmapping
+
+Context:
+After an unmap, new red ("not mapped") relationships appeared and hidden (grey)
+entities/relationships were lost. An exclusion (`excluded`, `excluded_attributes`)
+lives on the same entry as the SQL mapping, so every unmap path that spliced the
+entry out of `MappingState.config` also un-hid the item; relationships attached
+to a no-longer-excluded entity then turned red. "Unmap all" posted an empty
+config to `/mapping/save` and `/mapping/clear` wiped every exclusion
+server-side, so all hidden items came back red (and the loss was persisted,
+which also explains seeing them red on a later first load).
+Behaviour change: "Unmap all" now keeps exclusions (it used to clear them).
+
+Changes:
+
+1. src/back/objects/mapping/reset.py (new)
+   - `exclusion_stubs()` reduces entries to key + label + exclusion flags.
+   - `reset_mappings(domain, keep_exclusions)` deletes the mappings and, when
+     asked, keeps those stubs. Extracted from `Mapping` (size-budget ratchet).
+2. src/back/objects/mapping/Mapping.py
+   - `reset_mapping(keep_exclusions=False)` delegates to `reset_mappings`.
+3. src/api/routers/internal/mapping.py
+   - `POST /mapping/reset` and `POST /mapping/clear` accept
+     `keep_exclusions` (default `false`, so existing callers are unchanged).
+4. src/front/static/global/js/mapping-core.js
+   - New shared `unmapMappingEntry()`: removes a plain mapping, or reduces an
+     entry carrying exclusions to a stub (key, label, empty SQL, exclusions).
+5. src/front/static/mapping/js/mapping-design.js,
+   src/front/static/mapping/js/mapping-manual.js,
+   src/front/static/mapping/js/mapping-entity-modal.js,
+   src/front/static/mapping/js/mapping-relationship-modal.js
+   - All 8 unmap paths (panel reset, context menu, manual list reset, modal
+     remove) use `unmapMappingEntry()` instead of splicing.
+6. src/front/static/global/js/mapping-information.js
+   - `resetAllMappings()` no longer posts an empty config; it calls
+     `/mapping/clear?keep_exclusions=true`, reloads `/mapping/load`, and
+     re-stamps excluded flags. Confirm dialog says hidden items stay hidden.
+7. tests/units/mapping/test_mapping_reset_keeps_exclusions.py (new),
+   tests/units/front/test_mapping_unmap_keeps_exclusions.py (new)
+   - Backend reset behaviour, endpoint flag, helper behaviour under node,
+     "Unmap all" call sequence, and a guard against new splice sites.
+8. docs/api.md, docs/user-guide.md
+   - Documented `keep_exclusions` and the new unmap behaviour.
+
+Modified files:
+- src/back/objects/mapping/reset.py
+- src/back/objects/mapping/Mapping.py
+- src/api/routers/internal/mapping.py
+- src/front/static/global/js/mapping-core.js
+- src/front/static/global/js/mapping-information.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-manual.js
+- src/front/static/mapping/js/mapping-entity-modal.js
+- src/front/static/mapping/js/mapping-relationship-modal.js
+- tests/units/mapping/test_mapping_reset_keeps_exclusions.py
+- tests/units/front/test_mapping_unmap_keeps_exclusions.py
+- docs/api.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected in 55.73s (working tree also contains unrelated uncommitted edits in the shacl/digitaltwin/reasoning modules)

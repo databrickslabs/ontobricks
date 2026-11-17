@@ -509,9 +509,7 @@ window.ManualModule = {
         
         if (type === 'entity') {
             // Remove entity mapping from state
-            const existingIndex = MappingState.config.entities.findIndex(m => m.ontology_class === uri);
-            if (existingIndex >= 0) {
-                MappingState.config.entities.splice(existingIndex, 1);
+            if (unmapMappingEntry(MappingState.config.entities, 'ontology_class', uri, 'ontology_class_label')) {
                 showNotification(`Mapping for "${displayName}" removed`, 'success', 2000);
                 autoSaveMappings();
             } else {
@@ -519,9 +517,7 @@ window.ManualModule = {
             }
         } else {
             // Remove relationship mapping from state
-            const existingIndex = MappingState.config.relationships.findIndex(m => m.property === uri);
-            if (existingIndex >= 0) {
-                MappingState.config.relationships.splice(existingIndex, 1);
+            if (unmapMappingEntry(MappingState.config.relationships, 'property', uri, 'property_label')) {
                 showNotification(`Mapping for "${displayName}" removed`, 'success', 2000);
                 autoSaveMappings();
             } else {

@@ -71,18 +71,30 @@ async def save_mapping(
 
 @router.post("/reset")
 async def reset_mapping_endpoint(
+    keep_exclusions: bool = False,
     session_mgr: SessionManager = Depends(get_session_manager),
 ):
-    """Reset mapping configuration."""
+    """Reset mapping configuration.
+
+    Query:
+        keep_exclusions: when ``true`` the user's exclusions (hidden entities and
+            relationships, excluded attributes) survive; only the mappings are
+            deleted. Defaults to ``false`` (wipe everything).
+    """
     domain = get_domain(session_mgr)
-    Mapping(domain).reset_mapping()
+    Mapping(domain).reset_mapping(keep_exclusions=keep_exclusions)
     return {"success": True, "message": "Mapping reset"}
 
 
 @router.post("/clear")
-async def clear_mapping(session_mgr: SessionManager = Depends(get_session_manager)):
+async def clear_mapping(
+    keep_exclusions: bool = False,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
     """Clear all mapping data from session (delegates to reset)."""
-    return await reset_mapping_endpoint(session_mgr)
+    return await reset_mapping_endpoint(
+        keep_exclusions=keep_exclusions, session_mgr=session_mgr
+    )
 
 
 # ===========================================

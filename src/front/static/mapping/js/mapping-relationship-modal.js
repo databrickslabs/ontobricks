@@ -509,8 +509,7 @@ async function removeRelationshipMappingByProperty(propertyUri) {
         icon: 'trash'
     });
     if (confirmed) {
-        const idx = MappingState.config.relationships.indexOf(mapping);
-        MappingState.config.relationships.splice(idx, 1);
+        unmapMappingEntry(MappingState.config.relationships, 'property', propertyUri, 'property_label');
         autoSaveMappings();
         showNotification(`Mapping for "${mapping.property_label}" removed`, 'info', 3000);
     }

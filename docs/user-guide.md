@@ -3036,7 +3036,7 @@ After import you can:
 - **SQL Query Testing**: Test and validate SQL queries directly in the mapping interface before saving.
 - **Relationship Direction**: Control forward, reverse, or bidirectional relationships with visual indicators.
 - **R2RML Generation**: Automatic generation of W3C-compliant R2RML mappings from visual configuration. Excluded attributes are never emitted as `rr:predicateObjectMap` triples.
-- **Unmap all**: Clear every entity and relationship mapping from **Graph → Management → Mapping** via a shared confirmation dialog (`Unmap all`). Attribute exclusions stamped on ontology objects are re-evaluated after the wipe so the Studio canvas stays consistent.
+- **Unmap all**: Clear every entity and relationship mapping from **Graph → Management → Mapping** via a shared confirmation dialog (`Unmap all`). Hidden (excluded) entities and relationships and excluded attributes are **kept**: only the mappings are deleted, so hidden items stay grey instead of turning red ("not mapped"). The same holds when you unmap a single entity or relationship — an excluded item stays excluded.
 - **Mapping Diagnostics**: **Graph → Build → Diagnostics** lists only warnings and errors. Queries that return rows are informational (row count badge), not failures. Excluded attributes and relationship ID columns are not reported as missing, including Spark implicit aliases (`obj_id s` → `s`).
 
 ### Intelligence

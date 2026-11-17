@@ -2420,8 +2420,14 @@ POST /mapping/parse-r2rml
 #### Reset Mappings
 
 ```http
-POST /mapping/reset
+POST /mapping/reset?keep_exclusions=false
 ```
+
+Deletes every entity and relationship mapping and the generated R2RML. `POST /mapping/clear` is an alias with the same query parameter.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `keep_exclusions` | `false` | When `true`, hidden (excluded) entities/relationships and excluded attributes survive as exclusion-only entries; only the mappings are removed. The Studio's **Unmap all** sends `true`. |
 
 #### Download R2RML
 

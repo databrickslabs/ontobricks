@@ -227,6 +227,40 @@ function _stampExcludedFlags() {
 }
 
 /**
+ * Unmap one entity/relationship from a mapping list, keeping its exclusions.
+ *
+ * `excluded` (hidden/grey) and `excluded_attributes` live on the very same
+ * entry as the SQL mapping. Splicing the entry out therefore also un-hid the
+ * item, and every relationship attached to a no-longer-excluded entity turned
+ * red ("not mapped"). When the entry carries an exclusion it is reduced to a
+ * stub (key + label + exclusions, empty SQL) instead of being removed.
+ *
+ * @param {Array}  entries    MappingState.config.entities / .relationships
+ * @param {string} keyField   'ontology_class' or 'property'
+ * @param {string} uri        URI of the item to unmap
+ * @param {string} labelField 'ontology_class_label' or 'property_label'
+ * @returns {boolean} true when an entry existed (the caller should autosave)
+ */
+function unmapMappingEntry(entries, keyField, uri, labelField) {
+    const idx = entries.findIndex(m => m[keyField] === uri);
+    if (idx < 0) return false;
+    const entry = entries[idx];
+    const hasExcludedAttrs = Array.isArray(entry.excluded_attributes)
+        && entry.excluded_attributes.length > 0;
+    if (!entry.excluded && !hasExcludedAttrs) {
+        entries.splice(idx, 1);
+        return true;
+    }
+    const stub = { [keyField]: uri };
+    if (entry[labelField]) stub[labelField] = entry[labelField];
+    stub.sql_query = '';
+    if (entry.excluded) stub.excluded = true;
+    if (hasExcludedAttrs) stub.excluded_attributes = entry.excluded_attributes.slice();
+    entries[idx] = stub;
+    return true;
+}
+
+/**
  * Check loaded ontology status
  */
 async function checkLoadedOntology() {

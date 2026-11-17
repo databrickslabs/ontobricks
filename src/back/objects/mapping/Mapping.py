@@ -24,6 +24,7 @@ from back.core.w3c.rdf_utils import uri_local_name
 from back.core.w3c.r2rml.InstanceIdentity import InstanceIdentity
 from back.core.errors import InfrastructureError, ValidationError
 from back.objects.session import is_valid_session_id
+from back.objects.mapping.reset import reset_mappings
 
 logger = get_logger(__name__)
 
@@ -941,17 +942,9 @@ class Mapping:
                         meta=meta,
                     )
 
-    def reset_mapping(self) -> None:
-        domain = self._domain
-        domain.assignment["entities"] = []
-        domain.assignment["relationships"] = []
-        domain.assignment["r2rml_output"] = ""
-        domain.clear_generated_content()
-        domain.record_change(
-            "mapping_reset", entity_type="mapping",
-            summary="All mappings reset",
-        )
-        domain.save()
+    def reset_mapping(self, keep_exclusions: bool = False) -> None:
+        """Delete all mappings; ``keep_exclusions`` keeps hidden items (see ``reset``)."""
+        reset_mappings(self._domain, keep_exclusions=keep_exclusions)
 
     def generate_r2rml(self) -> str:
         """Generate R2RML from current mapping configuration.
