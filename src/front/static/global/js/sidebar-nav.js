@@ -196,13 +196,22 @@ const SidebarNav = {
     },
 
     /**
+     * Apply collapsed preference to the nav + html class (pre-paint twin).
+     */
+    _applyCollapsed: function(collapsed) {
+        const nav = document.querySelector('.sidebar-nav');
+        if (nav) nav.classList.toggle('collapsed', collapsed);
+        document.documentElement.classList.toggle('ob-sidebar-collapsed', collapsed);
+    },
+
+    /**
      * Toggle the sidebar collapsed state
      */
     toggleCollapse: function() {
         const nav = document.querySelector('.sidebar-nav');
         if (!nav) return;
-        nav.classList.toggle('collapsed');
-        const collapsed = nav.classList.contains('collapsed');
+        const collapsed = !nav.classList.contains('collapsed');
+        SidebarNav._applyCollapsed(collapsed);
         try { localStorage.setItem(SidebarNav._STORAGE_KEY, collapsed ? '1' : '0'); } catch (_) { /* ignore */ }
         SidebarNav._updateTooltips();
     },
@@ -295,24 +304,27 @@ const SidebarNav = {
         });
 
         // Inject toggle button at the top of the sidebar
-        if (nav.querySelector('.sidebar-toggle')) return;
-        const btn = document.createElement('button');
-        btn.className = 'sidebar-toggle';
-        btn.type = 'button';
-        btn.title = 'Collapse / Expand sidebar';
-        btn.innerHTML = '<i class="bi bi-layout-sidebar-inset"></i>';
-        btn.addEventListener('click', () => SidebarNav.toggleCollapse());
-        nav.insertBefore(btn, nav.firstChild);
+        if (!nav.querySelector('.sidebar-toggle')) {
+            const btn = document.createElement('button');
+            btn.className = 'sidebar-toggle';
+            btn.type = 'button';
+            btn.title = 'Collapse / Expand sidebar';
+            btn.innerHTML = '<i class="bi bi-layout-sidebar-inset"></i>';
+            btn.addEventListener('click', () => SidebarNav.toggleCollapse());
+            nav.insertBefore(btn, nav.firstChild);
+        }
 
-        // Restore saved state (default: collapsed)
+        // Restore saved state (default: collapsed). Prefer the html class already
+        // set by sidebar-collapse-init.js so first paint and JS stay aligned.
+        let collapsed = document.documentElement.classList.contains('ob-sidebar-collapsed');
         try {
             const saved = localStorage.getItem(SidebarNav._STORAGE_KEY);
-            if (saved !== '0') {
-                nav.classList.add('collapsed');
-            }
+            collapsed = saved !== '0';
         } catch (_) {
-            nav.classList.add('collapsed');
+            collapsed = true;
         }
+        SidebarNav._applyCollapsed(collapsed);
+        document.documentElement.classList.add('ob-sidebar-ready');
 
         SidebarNav._updateTooltips();
     }

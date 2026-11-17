@@ -324,3 +324,41 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10800 passed, 333 skipped, 8 deselected, 44 warnings in 48.61s
+
+## Stop sidebar expand-then-collapse flash on page load
+
+Context:
+The sidebar defaults to collapsed, but CSS painted it expanded (200px) and
+only applied `.collapsed` on DOMContentLoaded, so the width transition
+animated expanded→collapsed on every new page. The collapse preference is
+now applied before first paint, and width transitions are suppressed until
+the restore has run.
+
+Changes:
+
+1. src/front/static/global/js/sidebar-collapse-init.js (new)
+   Synchronous pre-paint script that sets `html.ob-sidebar-collapsed` from
+   localStorage (default collapsed).
+2. src/front/templates/base.html
+   Loads the pre-paint script in `<head>` without defer.
+3. src/front/static/global/css/sidebar-layout.css
+   Collapsed geometry honours `html.ob-sidebar-collapsed`; transitions are
+   disabled until `html.ob-sidebar-ready`.
+4. src/front/static/global/js/sidebar-nav.js
+   `_applyCollapsed` keeps the nav `.collapsed` class and the html class in
+   sync; toggle and restore use it; marks the page ready after restore.
+5. tests/units/front/test_sidebar_collapse_prepaint.py (new)
+   Contract tests for the pre-paint script, CSS hooks, and toggle sync.
+6. .cursor/11-frontend-design.mdc
+   Documents the pre-paint collapse contract.
+
+Modified files:
+- src/front/static/global/js/sidebar-collapse-init.js
+- src/front/templates/base.html
+- src/front/static/global/css/sidebar-layout.css
+- src/front/static/global/js/sidebar-nav.js
+- tests/units/front/test_sidebar_collapse_prepaint.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10806 passed, 333 skipped, 8 deselected in 50.02s (run on the working tree, which also included unrelated uncommitted edits in the shacl/digitaltwin/reasoning modules)

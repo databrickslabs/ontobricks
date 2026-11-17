@@ -200,12 +200,23 @@ body.full-width-layout {
 
 /* ==========================================================================
    Sidebar Collapsed State
+   ``html.ob-sidebar-collapsed`` is set by sidebar-collapse-init.js before
+   first paint so the rail never flashes expanded→collapsed. ``.collapsed``
+   on the nav is kept in sync by SidebarNav for the same visual rules.
+   Until ``ob-sidebar-ready``, suppress width transitions so preference
+   restore cannot animate.
    ========================================================================== */
+html:not(.ob-sidebar-ready) .sidebar-nav {
+    transition: none;
+}
+
+html.ob-sidebar-collapsed .sidebar-nav,
 .sidebar-nav.collapsed {
     width: 48px;
     min-width: 48px;
 }
 
+html.ob-sidebar-collapsed .sidebar-nav .sidebar-title,
 .sidebar-nav.collapsed .sidebar-title {
     opacity: 0;
     height: 0;
@@ -215,20 +226,24 @@ body.full-width-layout {
     overflow: hidden;
 }
 
+html.ob-sidebar-collapsed .sidebar-nav .nav-link,
 .sidebar-nav.collapsed .nav-link {
     justify-content: center;
     padding: 0.45rem 0;
     gap: 0;
 }
 
+html.ob-sidebar-collapsed .sidebar-nav .nav-link .nav-label,
 .sidebar-nav.collapsed .nav-link .nav-label {
     display: none;
 }
 
+html.ob-sidebar-collapsed .sidebar-nav .nav-link .badge,
 .sidebar-nav.collapsed .nav-link .badge {
     display: none;
 }
 
+html.ob-sidebar-collapsed .sidebar-nav .sidebar-toggle,
 .sidebar-nav.collapsed .sidebar-toggle {
     justify-content: center;
     padding: 0.45rem 0;
@@ -236,6 +251,7 @@ body.full-width-layout {
     width: 100%;
 }
 
+html.ob-sidebar-collapsed .sidebar-nav .sidebar-toggle .sidebar-toggle-label,
 .sidebar-nav.collapsed .sidebar-toggle .sidebar-toggle-label {
     display: none;
 }

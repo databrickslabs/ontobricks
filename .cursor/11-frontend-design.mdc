@@ -369,7 +369,11 @@ keyboard handling.
   and on `popstate` (Back / Forward work).
 - Collapsed/expanded state is persisted in `localStorage` under
   `ontobricks-sidebar-collapsed`. **Default state is collapsed** — do
-  not change this default.
+  not change this default. Preference is applied before first paint by
+  synchronous `global/js/sidebar-collapse-init.js` (sets
+  `html.ob-sidebar-collapsed`); `sidebar-nav.js` keeps `.sidebar-nav.collapsed`
+  in sync. Do not remove the pre-paint script or reintroduce a flash of
+  the expanded rail on load.
 - The collapse toggle button is injected automatically at the top of
   the sidebar. Do not author your own toggle. It has no hover highlight
   (no `:hover` background); do not add one.
