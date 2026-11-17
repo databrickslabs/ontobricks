@@ -48,7 +48,7 @@
                            data-workspace-map-item
                            {% if item.default|default(false) %}data-workspace-map-default="true"{% endif %}
                            href="{{ item.route if item.route else menu.route ~ '?section=' ~ item.id }}">
-                            <i class="bi {{ item.icon }}"></i>
+                            {% if 'ob-brand-icon' in item.icon %}<i class="{{ item.icon }}" aria-hidden="true"></i>{% else %}<i class="bi {{ item.icon }}" aria-hidden="true"></i>{% endif %}
                             <span>{{ item.label }}</span>
                         </a>
                         {% endfor %}

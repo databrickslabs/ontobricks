@@ -306,7 +306,7 @@
                         <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> <span{% if ns.first_group %} id="domainSectionName"{% endif %}>{{ group.title }}</span></h6></li>
                         {% set ns.first_group = false %}
                         {% for item in group['items'] %}
-                        <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ domain_m.v.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
+                        <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ domain_m.v.route }}?section={{ item.id }}">{% if 'ob-brand-icon' in item.icon %}<i class="{{ item.icon }}" aria-hidden="true"></i>{% else %}<i class="bi {{ item.icon }}" aria-hidden="true"></i>{% endif %} {{ item.label }}</a></li>
                         {% endfor %}
                         {% endif %}
                         {% endfor %}

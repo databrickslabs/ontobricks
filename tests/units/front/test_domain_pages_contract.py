@@ -27,11 +27,16 @@ def test_menu_has_pages_under_metadata():
     ids = [i["id"] for i in meta["items"]]
     assert "documents" in ids
     assert "pages" in ids
-    assert ids.index("pages") > ids.index("documents")
+    # Genie Pages sits directly under Unity Catalog (metadata), before Documents.
+    assert ids.index("pages") == ids.index("metadata") + 1
+    assert ids.index("pages") < ids.index("documents")
     pages = next(i for i in meta["items"] if i["id"] == "pages")
-    assert pages["label"] == "Pages"
+    assert pages["label"] == "Genie Pages"
     assert pages["requires"] == "domain_saved"
-    assert pages["icon"] == "bi-journal-richtext"
+    assert pages["icon"] == "ob-brand-icon ob-icon-genie"
+    metadata = next(i for i in meta["items"] if i["id"] == "metadata")
+    assert metadata["label"] == "Unity Catalog"
+    assert metadata["icon"] == "ob-brand-icon ob-icon-unity-catalog"
 
 
 def test_domain_shell_includes_pages_section_and_assets():
@@ -64,6 +69,7 @@ def test_pages_partial_has_search_first_controls():
     assert "Genie Pages search" in html
     assert "Pages for Ontology Generate" in html
     assert "Ontology → Generate" in html or "Ontology &rarr; Generate" in html
+    assert 'class="ob-brand-icon ob-icon-genie me-2"' in html
     # Must not use a native <form> submit (reloads /domain/ → General).
     assert "<form" not in html.lower()
     assert 'type="submit"' not in html

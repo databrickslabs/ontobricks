@@ -95,8 +95,15 @@
                     "items": [
                         {
                             "id": "metadata",
-                            "label": "Data Assets",
-                            "icon": "bi-database",
+                            "label": "Unity Catalog",
+                            "icon": "ob-brand-icon ob-icon-unity-catalog",
+                            "default": false,
+                            "requires": "domain_saved"
+                        },
+                        {
+                            "id": "pages",
+                            "label": "Genie Pages",
+                            "icon": "ob-brand-icon ob-icon-genie",
                             "default": false,
                             "requires": "domain_saved"
                         },
@@ -104,13 +111,6 @@
                             "id": "documents",
                             "label": "Documents",
                             "icon": "bi-file-earmark-text",
-                            "default": false,
-                            "requires": "domain_saved"
-                        },
-                        {
-                            "id": "pages",
-                            "label": "Pages",
-                            "icon": "bi-journal-richtext",
                             "default": false,
                             "requires": "domain_saved"
                         }

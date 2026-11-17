@@ -121,6 +121,58 @@ def test_databricks_settings_uses_official_databricks_icon():
     ) in css
 
 
+def test_context_menu_uses_official_genie_and_unity_catalog_icons():
+    """Context → Metadata menu: Pages = Genie mark, Data Assets → Unity Catalog."""
+    menus = json.loads(_MENU.read_text(encoding="utf-8"))["menus"]
+    domain = next(menu for menu in menus if menu["id"] == "domain")
+    meta = next(group for group in domain["groups"] if group["id"] == "domain-metadata")
+    items = {item["id"]: item for item in meta["items"]}
+
+    assert items["pages"]["icon"] == "ob-brand-icon ob-icon-genie"
+    assert items["metadata"]["label"] == "Unity Catalog"
+    assert items["metadata"]["icon"] == "ob-brand-icon ob-icon-unity-catalog"
+
+    css = _CSS.read_text(encoding="utf-8")
+    assert (
+        '.ob-icon-genie {\n'
+        '    background-image: url("/static/global/img/genie-icon.svg");\n'
+        "}"
+    ) in css
+    assert (
+        '.ob-icon-unity-catalog {\n'
+        '    background-image: url("/static/global/img/unity-catalog-icon.svg");\n'
+        "}"
+    ) in css
+
+    for filename in ("genie-icon.svg", "unity-catalog-icon.svg"):
+        asset = _IMG / filename
+        assert asset.is_file()
+        svg = asset.read_text(encoding="utf-8")
+        assert "<svg" in svg
+        assert "#" in svg, f"{filename} must define a brand color"
+
+    # Subnav dropdown: brand icons must share the Bootstrap Icons 20px column.
+    nav_css = _NAV_CSS.read_text(encoding="utf-8")
+    assert (
+        ".ob-subnav .dropdown-menu .dropdown-item .bi,\n"
+        ".ob-subnav .dropdown-menu .dropdown-item .ob-brand-icon {"
+    ) in nav_css
+    brand_slot = nav_css[
+        nav_css.index(
+            "/* Brand marks share the same 20px column as Bootstrap Icons so labels align. */"
+        ) :
+        nav_css.index(
+            "}",
+            nav_css.index(
+                ".ob-subnav .dropdown-menu .dropdown-item .ob-brand-icon {\n"
+                "    height: 0.95rem;"
+            ),
+        )
+    ]
+    assert "height: 0.95rem;" in brand_slot
+    assert "flex-shrink: 0;" in brand_slot
+
+
 def test_lakehouse_dynamic_icons_use_lakehouse_modifier():
     build_js = _BUILD_JS.read_text(encoding="utf-8")
     validation_js = _VALIDATION_JS.read_text(encoding="utf-8")

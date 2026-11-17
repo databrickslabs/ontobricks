@@ -159,6 +159,14 @@
     background-image: url("/static/global/img/neo4j-icon.svg");
 }
 
+.ob-icon-genie {
+    background-image: url("/static/global/img/genie-icon.svg");
+}
+
+.ob-icon-unity-catalog {
+    background-image: url("/static/global/img/unity-catalog-icon.svg");
+}
+
 /* Knowledge Graph readiness indicator (next to each sub-page title) */
 .kg-status-indicator .badge {
     font-size: 0.72rem;

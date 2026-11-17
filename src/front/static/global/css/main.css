@@ -608,13 +608,20 @@ body {
     transition: all 0.2s ease;
 }
 
-.ob-subnav .dropdown-menu .dropdown-item .bi {
+.ob-subnav .dropdown-menu .dropdown-item .bi,
+.ob-subnav .dropdown-menu .dropdown-item .ob-brand-icon {
     font-size: 0.95rem;
     width: 20px;
     min-width: 20px;
     text-align: center;
     opacity: 1;
     margin-right: 0;
+}
+
+/* Brand marks share the same 20px column as Bootstrap Icons so labels align. */
+.ob-subnav .dropdown-menu .dropdown-item .ob-brand-icon {
+    height: 0.95rem;
+    flex-shrink: 0;
 }
 
 .ob-subnav .dropdown-menu .dropdown-item:hover,

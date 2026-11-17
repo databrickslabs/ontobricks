@@ -53,3 +53,144 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10782 passed, 333 skipped, 8 deselected, 39 warnings in 50.11s ========
+
+## Use official Genie and Unity Catalog icons in Context menu
+
+Context:
+The Context → Metadata menu used generic Bootstrap Icons for Pages
+(`bi-journal-richtext`) and Data Assets (`bi-database`). Replace them with
+the official Databricks Genie and Unity Catalog brand marks, and rename the
+Data Assets item to Unity Catalog so the menu matches product naming.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Pages icon → `ob-brand-icon ob-icon-genie`; Data Assets → Unity Catalog
+   with `ob-brand-icon ob-icon-unity-catalog`.
+2. src/front/static/global/img/genie-icon.svg (new)
+   Official Databricks Genie SVG for Context → Pages.
+3. src/front/static/global/img/unity-catalog-icon.svg (new)
+   Official Unity Catalog SVG for Context → Unity Catalog.
+4. src/front/static/global/css/components.css
+   CSS modifiers `.ob-icon-genie` and `.ob-icon-unity-catalog`.
+5. src/front/static/global/css/sidebar-layout.css
+   Sidebar sizing for brand icons beside Bootstrap Icons.
+6. src/front/templates/partials/layout/_sidebar_nav.html
+   Render `ob-brand-icon` without the `bi` prefix (same pattern as Settings).
+7. src/front/templates/base.html
+   Context subnav dropdown items support brand icons.
+8. src/front/templates/partials/layout/_workspace_map_modal.html
+   Workspace map items support brand icons.
+9. src/front/templates/partials/domain/_domain_pages.html
+   Section header uses the Genie brand icon.
+10. src/front/templates/partials/domain/_domain_metadata.html
+    Section title/icon: Unity Catalog + official UC mark.
+11. tests/units/front/test_domain_pages_contract.py
+    Menu + header contracts for Genie / Unity Catalog icons and label.
+12. tests/units/front/test_backend_brand_icons.py
+    Asset + CSS contract for the new brand icons.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/static/global/img/genie-icon.svg
+- src/front/static/global/img/unity-catalog-icon.svg
+- src/front/static/global/css/components.css
+- src/front/static/global/css/sidebar-layout.css
+- src/front/templates/partials/layout/_sidebar_nav.html
+- src/front/templates/base.html
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- src/front/templates/partials/domain/_domain_pages.html
+- src/front/templates/partials/domain/_domain_metadata.html
+- tests/units/front/test_domain_pages_contract.py
+- tests/units/front/test_backend_brand_icons.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10791 passed, 333 skipped, 8 deselected in 48.57s
+
+## Align Genie and Unity Catalog sidebar icons with siblings
+
+Context:
+The brand icons added for Context → Metadata (Unity Catalog, Pages) rendered
+narrower than the Bootstrap icons in the sidebar because a local override set
+their width to 1em. The labels therefore sat left of the Documents label. The
+override is removed so the brand icons use the shared 20px icon slot.
+
+Changes:
+
+1. src/front/static/global/css/sidebar-layout.css
+   Removed the `.sidebar-nav .nav-link .ob-brand-icon` override (width/height/min-width 1em) so brand icons inherit the 20px `.sidebar-nav .nav-link i` slot.
+
+Modified files:
+- src/front/static/global/css/sidebar-layout.css
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10791 passed, 333 skipped, 8 deselected, 44 warnings in 48.77s
+
+## Align Context dropdown brand icons with Bootstrap Icons
+
+Context:
+In the Context subnav dropdown, Genie (Pages) and Unity Catalog icons used the
+default 1em brand-icon box while sibling items used a 20px Bootstrap Icons
+column, so icons and labels (Unity Catalog, Pages) sat left of Documents and
+the rest. The sidebar was already correct.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   Subnav dropdown `.ob-brand-icon` shares the same 20px column as `.bi`
+   (width/min-width 20px, height 0.95rem) so icons and labels left-align.
+2. tests/units/front/test_backend_brand_icons.py
+   Contract for the shared subnav brand-icon column.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_backend_brand_icons.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10800 passed, 333 skipped, 8 deselected, 44 warnings in 48.30s
+
+## Rename Context → Pages to Genie Pages
+
+Context:
+The Context menu entry and section header were labelled "Pages" while the
+item is specifically the Genie Knowledge Pages search and selection. Rename
+both to "Genie Pages" so the label matches the Genie brand icon and the
+Ontology Generate wording.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Context → Metadata item `pages` label "Pages" → "Genie Pages" (drives the sidebar, subnav dropdown and workspace map).
+2. src/front/templates/partials/domain/_domain_pages.html
+   Section header title "Pages" → "Genie Pages".
+3. tests/units/front/test_domain_pages_contract.py
+   Menu label contract updated to "Genie Pages".
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/domain/_domain_pages.html
+- tests/units/front/test_domain_pages_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10800 passed, 333 skipped, 8 deselected, 44 warnings in 48.48s
+
+## Move Genie Pages under Unity Catalog in Context → Metadata
+
+Context:
+In the Context → Metadata menu, Genie Pages sat after Documents. Move it
+directly under Unity Catalog so the two data sources (UC assets and Genie
+pages) are grouped before Documents.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Reordered Metadata items: metadata (Unity Catalog) → pages (Genie Pages) → documents.
+2. tests/units/front/test_domain_pages_contract.py
+   Order contract now asserts pages directly follows metadata and precedes documents.
+
+Modified files:
+- src/front/config/menu_config.json
+- tests/units/front/test_domain_pages_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10800 passed, 333 skipped, 8 deselected, 44 warnings in 48.61s
