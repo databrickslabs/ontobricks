@@ -514,3 +514,35 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10806 passed, 333 skipped, 8 deselected, 44 warnings in 49.48s
+
+## Close Dependabot alerts for dnspython, oauthlib, and opentelemetry-api
+
+Context:
+Open Dependabot alerts #318/#325 (oauthlib), #326/#327 (opentelemetry-api),
+and #328/#329 (dnspython) reported vulnerable transitive floors in both
+`uv.lock` and `src/mcp-server/uv.lock`. oauthlib 4.x was previously blocked
+by databricks-sql-connector 4.4–4.6 (`oauthlib<4`); connector 4.7.0+ allows
+`oauthlib>=3.1,<5`, so the floor can finally move to 4.0.1.
+
+Changes:
+
+1. pyproject.toml
+   Raised databricks-sql-connector floor to >=4.7.0; set constraint floors
+   oauthlib>=4.0.1, opentelemetry-api>=1.45.2, dnspython>=2.9.2.
+2. uv.lock
+   Locked databricks-sql-connector 4.9.0, oauthlib 4.0.1, dnspython 2.9.2,
+   opentelemetry-api/sdk 1.45.2 (+ semantic-conventions 0.66b2).
+3. src/mcp-server/pyproject.toml
+   Raised dnspython and opentelemetry-api constraint floors to the patched
+   advisories (#328/#326).
+4. src/mcp-server/uv.lock
+   Locked dnspython 2.9.2 and opentelemetry-api 1.45.2.
+
+Modified files:
+- pyproject.toml
+- uv.lock
+- src/mcp-server/pyproject.toml
+- src/mcp-server/uv.lock
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 50.02s

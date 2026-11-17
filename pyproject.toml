@@ -29,9 +29,10 @@ dependencies = [
     "jinja2>=3.1.0",
     "aiofiles>=23.0.0",
     # The Kernel extra provides the supported native Statement Execution API
-    # backend required by Lakehouse Real-Time warehouses. Version 4.4.0 also
-    # raises the Thrift security floor to thrift 0.24.0.
-    "databricks-sql-connector[kernel]>=4.4.0",
+    # backend required by Lakehouse Real-Time warehouses. Version 4.7.0+ also
+    # allows oauthlib 4.x (security floor for GHSA-3jp2-3mrg-2vxc / #325 and
+    # GHSA-7984-qgvg-3j9c / #318); 4.4–4.6 still pin oauthlib<4.0.0.
+    "databricks-sql-connector[kernel]>=4.7.0",
     "databricks-sdk>=0.20.0",
     # pyarrow>=23.0.1: Arrow C++ IPC use-after-free (CVE-2026-25087 /
     # GHSA-rgxp-2hwp-jwgg). The Python binding doesn't expose the affected
@@ -159,9 +160,10 @@ constraint-dependencies = [
     # skipped on direct calls (GHSA-7xgj-8392-5q4r, Dependabot #262).
     # Transitive alt distribution of fastmcp.
     "fastmcp-slim>=3.4.10",
-    # opentelemetry-api>=1.45.1: unbounded tracestate parsing
-    # (GHSA-xcq7-p3pf-p88h, Dependabot #258). Transitive via mlflow.
-    "opentelemetry-api>=1.45.1",
+    # opentelemetry-api>=1.45.2: quadratic-time traceparent parsing DoS
+    # (GHSA-mf5v-w3w3-f6cg, Dependabot #327) plus the earlier unbounded
+    # tracestate fix (GHSA-xcq7-p3pf-p88h). Transitive via mlflow.
+    "opentelemetry-api>=1.45.2",
     # urllib3 2.8.0: HTTPS proxy TLS override (GHSA-8988-9cw3-xx77),
     # unbounded chunk-size line (GHSA-vxq7-64xx-v4gw), Deflate stream loop
     # (GHSA-gh4c-6fx4-qh6g).
@@ -179,9 +181,11 @@ constraint-dependencies = [
     # attacker-controlled segments before rejecting them (Dependabot #312,
     # medium). Transitive via authlib/fastmcp-slim.
     "joserfc>=1.7.6",
-    # oauthlib 4.0.0 (GHSA-xpv3-w29h-x7cv, GHSA-hj66-6f7g-4r5v, Dependabot
-    # #175/#176/#282/#318) cannot be applied: databricks-sql-connector
-    # 4.4–4.6 pins oauthlib>=3.1.0,<4.0.0.
+    # oauthlib>=4.0.1: device-flow bearer leak (GHSA-3jp2-3mrg-2vxc, #325)
+    # and attacker-supplied client_id grant confusion (GHSA-7984-qgvg-3j9c,
+    # #318), plus earlier GHSA-xpv3-w29h-x7cv / GHSA-hj66-6f7g-4r5v.
+    # Unblocked by databricks-sql-connector>=4.7.0 (oauthlib>=3.1,<5).
+    "oauthlib>=4.0.1",
     # idna 3.13 closes bypass of CVE-2024-3651 mitigation (GHSA-65pc-fj4g-8rjx):
     #   specially crafted inputs to idna.encode() could still reach quadratic-time path.
     "idna>=3.13",
@@ -218,9 +222,10 @@ constraint-dependencies = [
     # Dependabot #299) plus the 1.9.0 JAR/SSRF, nonce, audience,
     # alg-confusion, and empty-signature series. Transitive via databricks-sdk.
     "authlib>=1.9.1",
-    # dnspython>=2.9.0: from_wire_parser() excessive CPU
-    # (GHSA-45c3-73f7-pv4m, Dependabot #292). Transitive via email-validator.
-    "dnspython>=2.9.0",
+    # dnspython>=2.9.2: excessive memory/CPU (GHSA-vvf4-9x63-8xvv,
+    # Dependabot #329) plus earlier from_wire_parser() CPU
+    # (GHSA-45c3-73f7-pv4m, #292). Transitive via email-validator.
+    "dnspython>=2.9.2",
     # cryptography>=50.0.0: PKCS#7 Bleichenbacher oracle (GHSA-g6cj-pr64-35w5),
     # exponential path-building (GHSA-jwv3-5hgf-82ww), wildcard DNS NC
     # (GHSA-m2h6-j472-rp4c). mlflow 3.16.1 allows cryptography<51.
