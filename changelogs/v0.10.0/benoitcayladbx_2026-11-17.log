@@ -546,3 +546,294 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 50.02s
+
+## Community detection: rename "Clear graph" to "Purge" + entity-type icons in Scope
+
+Context:
+In Intelligence → Discovery → Community detection, the destructive
+"Clear graph" button was renamed to "Purge" for consistency with the rest of
+the app (Simulation workbench, Domain documents, Purge Inferences), and the
+Scope dropdown (entity-type filter) now shows each ontology class with its
+entity-type icon so the list is easier to scan.
+
+Changes:
+1. src/front/templates/partials/intelligence/_intel_communities.html
+   Renamed the #commClearBtn label from "Clear graph" to "Purge" (icon switched
+   to bi-trash3); added a 🌐 glyph to the default "All entity types" option in
+   the Scope select; updated the two "How it works" mentions of "Clear graph"
+   to "Purge". The button id is unchanged (write-gate contract preserved).
+2. src/front/static/intelligence/js/intelligence-communities.js
+   _populateScope now reads cls.emoji || cls.icon (fallback 📦) and prefixes
+   each Scope option label with the entity-type icon.
+3. src/front/templates/partials/layout/help_modal.html
+   Communities bullet: "Clear graph" → "Purge".
+4. docs/intelligence.md, docs/user-guide.md
+   Community detection references: "Clear graph" → "Purge".
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/static/intelligence/js/intelligence-communities.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/intelligence.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 52.70s
+
+## Community detection: relocate Purge and Materialize buttons
+
+Context:
+Following the Purge rename, the two action buttons were moved out of the busy
+top-right header into the panes they act on, and Purge gained a proper
+enable/disable gate. Purge now sits in the "Materialized (Explorer)" card (the
+pane it clears) and is disabled when there is nothing materialized or the user
+lacks write permission. Materialize now sits in the Algorithm/config card (the
+pane that configures the run it publishes).
+
+Changes:
+1. src/front/templates/partials/intelligence/_intel_communities.html
+   Removed #commClearBtn and #commMaterializeBtn from the section header.
+   Placed #commClearBtn (Purge) in the Materialized (Explorer) card header next
+   to "Open in Explorer", starting disabled. Placed #commMaterializeBtn
+   (full-width) in the Algorithm config card under the "Detection runs on
+   Databricks" note. Button ids unchanged (write-gate CSS contract preserved).
+2. src/front/static/intelligence/js/intelligence-communities.js
+   Added _syncClearEnabled(): Purge is disabled unless the user can edit, no
+   action is running, and at least one cluster is materialized (this.current).
+   _applyEditGate and _setBusy now call it; loadCurrent calls it after
+   (re)loading the materialized partition and resets this.current to null on
+   error so Purge disables.
+3. tests/units/front/test_intelligence_page_contract.py
+   Relaxed the Materialize class assertion to tolerate extra classes (w-100);
+   added contract that Materialize and Purge live outside the header (in the
+   algorithm / materialized panes).
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/static/intelligence/js/intelligence-communities.js
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 49.40s
+
+## Patterns (details): ordinal names in the pattern picker
+
+Context:
+In Intelligence → Patterns (details), the pattern picker dropdown named each
+pattern after its seed entity (e.g. "CON0000078"), which is opaque. The picker
+now uses stable ordinal names — Pattern #1, Pattern #2, … — matching the order
+of the run catalog. The seed/matching entities remain fully accessible through
+the "Matching entities" button (unchanged).
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Added _patternDisplayName(patternId) returning "Pattern #N" from the 1-based
+   index in latest.patterns. _patternMenuHtml now labels each option
+   "Pattern #<i+1>"; _toolbarHtml prefers _patternDisplayName for the selected
+   toggle label (entity label kept only as a fallback when the pattern is not
+   in the current catalog).
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 49.16s
+
+## Patterns (details): collapsible per-pattern bar chart
+
+Context:
+Above the pattern diagram and below the picker, Patterns (details) now shows a
+bar chart of all patterns in the run (X axis) against the number of matching
+entities each has (Y axis) — the same support values shown in the picker. The
+chart can be collapsed/expanded from a link in its top-right corner.
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Added _patternsChartHtml(selectedId): an inline-SVG bar chart (one bar per
+   pattern, height ∝ support, value + "#N" labels, selected bar highlighted,
+   bars clickable/keyboard-focusable to open that pattern). Rendered in
+   _detailsHtml between the toolbar and #patDetailBody. Added _toggleChart() and
+   a _chartCollapsed state kept across re-renders; wired the top-right
+   [data-pat-chart-toggle] link and bar Enter/Space activation into the
+   #patDetails delegation.
+2. src/front/static/intelligence/css/intelligence.css
+   Added .pat-chart-card/head/title/toggle/body/svg/axis and
+   .pat-chart-bar(+--active) styles using the --db-* tokens.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract assertions for _patternsChartHtml, pat-chart-card,
+   data-pat-chart-toggle, _toggleChart, and the .pat-chart-card/.pat-chart-bar
+   CSS.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 49.21s
+
+## Patterns (details): run-level KPIs (Patterns count + Coverage), drop Types/Relations
+
+Context:
+The detail toolbar KPIs were per-pattern (Types, Relations) and of limited
+value next to the diagram. They are replaced by two run-level KPIs to the right
+of the picker: the number of patterns detected in the run, and the percentage
+of entities (of the anchor type) that follow at least one pattern. Hops is
+kept.
+
+Changes:
+1. src/back/core/graph_analysis/pattern/JobPatterns.py
+   Added covered_count_query() and a covered_count field in summary() —
+   SUM(support) over _shapes. In the egocentric-signature algorithm each anchor
+   has exactly one signature, so this is the distinct count of anchors that
+   follow a kept pattern. Flows through latest().stats to the UI.
+2. src/front/static/intelligence/js/intelligence-patterns.js
+   _detailsHtml now renders KPIs: Hops, Patterns (_patternCount), Coverage
+   (_coveragePct). _patternCount reads the saved-snapshot per-row pattern_count,
+   else live stats.pattern_count, else the list length. _coveragePct =
+   covered_count / anchor_count (capped 100%); "—" for saved snapshots (no
+   entity universe stored) or when the universe is unknown. _kpiTile gained an
+   optional title (tooltip). Removed the Types/Relations tiles and the now
+   unused typeCount/relationCount/nodes/edges derivations.
+3. tests/units/core/test_job_patterns.py
+   Assert covered_count == sum(support) in the latest-stats test.
+4. tests/units/front/test_intelligence_page_contract.py
+   Contract: Patterns/Coverage KPIs present, Types/Relations removed,
+   _patternCount/_coveragePct present.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/core/test_job_patterns.py
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 49.13s
+
+## Patterns bar chart: axis titles
+
+Context:
+The per-pattern bar chart had no explicit axis labels. Added "Patterns" under
+the X axis and a rotated "Matching entities" on the Y axis so the chart is
+self-explanatory.
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   _patternsChartHtml: added LEFT margin and extra bottom room, shifted bars and
+   the baseline, and drew two <text class="pat-chart-axis-title"> elements
+   (X="Patterns", Y rotated "Matching entities").
+2. src/front/static/intelligence/css/intelligence.css
+   Added .pat-chart-axis-title styling (small, muted, semibold).
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract: pat-chart-axis-title and both axis-title texts present.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 50.30s
+
+## Intelligence: spinner on every inline loading message
+
+Context:
+A few inline "Loading…" messages were plain text. They now show the usual
+spinner image, consistent with the rest of the app.
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Added a shared _loadingHtml(msg) (spinner + message); _membersLoadingHtml now
+   delegates to it; the pattern-detail "Loading…" and the saved-run
+   "Loading saved Detect run…" placeholders use it instead of bare text.
+2. src/front/static/intelligence/js/intelligence-communities.js
+   The members "Load more" busy state now prepends a small spinner.
+3. src/front/static/intelligence/css/intelligence.css
+   Sized the spinner for the new .pat-inline-loading alongside
+   .pat-members-loading.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/js/intelligence-communities.js
+- src/front/static/intelligence/css/intelligence.css
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 50.30s
+
+## Patterns: fix empty Coverage KPI + make axis labels visible
+
+Context:
+Two follow-up issues. (1) Coverage was always "—": after Detect the UI opens
+the auto-saved run, and _coveragePct() blanked the KPI for any saved view. The
+saved snapshot does not store the entity universe, but the just-computed run
+stats (anchor_count, covered_count) are available at that moment. (2) The bar
+chart axis titles were drawn as SVG <text> and were not reliably visible.
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Coverage: _awaitDetection captures this._freshRunStats before opening the
+   saved run; _showPendingSaved sets this.latest.stats from it (then clears it),
+   so Coverage/Patterns reflect the run just detected. _coveragePct no longer
+   hard-returns "—" for saved views — it shows the percentage whenever the
+   run's anchor_count is known, else "—" (e.g. a saved run opened cold from a
+   deep link). Axis labels: _patternsChartHtml now renders HTML labels
+   (.pat-chart-ylabel "Matching entities", .pat-chart-xlabel "Patterns") around
+   the SVG instead of SVG <text>, guaranteeing visibility; SVG margins reverted.
+2. src/front/static/intelligence/css/intelligence.css
+   .pat-chart-axis-title now uses color (HTML); added .pat-chart-plot,
+   .pat-chart-ylabel (vertical writing-mode) and .pat-chart-xlabel.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract updated to the HTML axis labels (pat-chart-xlabel/ylabel + texts).
+
+Known limitation:
+A saved run opened cold (not immediately after Detect) shows Coverage "—"
+because the entity universe is not persisted in the saved catalog. Persisting
+anchor_count in the saved snapshot is a possible follow-up.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 58.47s
+
+## Patterns: persist the entity universe so Coverage works on saved runs
+
+Context:
+Coverage was still empty because the detail view is a saved run, and the saved
+catalog did not store the entity universe (anchor_count) — so the percentage
+could not be computed. The universe is now persisted into the saved snapshot
+and exposed as run-level stats, so Coverage renders on saved runs too.
+
+Changes:
+1. src/back/core/graph_analysis/pattern/saved_pattern_sql.py
+   Added anchor_count to _SAVED_COLUMNS and to both INSERTs (catalog SELECT and
+   the bulk rest INSERT, via a new anchor_count parameter).
+2. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   Added anchor_count to _KPI_COLUMNS (auto-migrates existing saved tables) and
+   the CREATE TABLE DDL. save() reads anchor_count from the run summary (via a
+   separate, column-tolerant query) and threads it into the per-pattern metrics
+   and insert_rest_sql. patterns() now selects max(anchor_count), sums support
+   for covered, and returns a run-level stats block
+   {anchor_count, covered_count, pattern_count}.
+3. src/front/static/intelligence/js/intelligence-patterns.js
+   _showPendingSaved prefers the snapshot's own stats (when anchor_count is
+   present) and otherwise falls back to the freshly-computed run stats.
+4. tests/units/core/test_saved_pattern_store.py
+   Fixture summary gained anchor_count; asserts patterns().stats carries
+   anchor_count / covered_count / pattern_count.
+
+Note:
+Runs saved before this change have no stored anchor_count → Coverage stays "—"
+for them; re-running Detect produces a snapshot with the universe. A browser
+hard refresh is needed to pick up the new static assets.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/saved_pattern_sql.py
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/core/test_saved_pattern_store.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 51.77s

@@ -67,6 +67,8 @@ def test_latest_returns_stats_patterns_and_preview(detected):
     stats = out["stats"]
     assert stats["pattern_count"] == 2
     assert stats["anchor_count"] == 3
+    # Egocentric signatures partition the anchors → covered == sum(support).
+    assert stats["covered_count"] == 3
     assert len(out["patterns"]) == 2
     supports = sorted(p["support"] for p in out["patterns"])
     assert supports == [1, 2]

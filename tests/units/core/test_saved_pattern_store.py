@@ -64,11 +64,12 @@ class _Warehouse:
         )
         self.conn.execute(
             "CREATE TABLE out_tbl_summary "
-            "(pattern_count INT, hop_count INT, anchor_type TEXT, bins INT)"
+            "(pattern_count INT, hop_count INT, anchor_type TEXT, bins INT, "
+            "anchor_count INT)"
         )
         self.conn.execute(
-            "INSERT INTO out_tbl_summary VALUES (?, ?, ?, ?)",
-            (2, 3, CUSTOMER, 8),
+            "INSERT INTO out_tbl_summary VALUES (?, ?, ?, ?, ?)",
+            (2, 3, CUSTOMER, 8, 4),
         )
         self.conn.execute(
             "CREATE TABLE out_tbl_shape_edges "
@@ -395,7 +396,13 @@ def test_catalog_survives_a_new_detect_run(wh):
     wh.conn.commit()
     assert store.members(sid)["total"] == 0  # members live on Detect only
     assert len(store.list_saved()) == 1
-    assert store.patterns(sid)["count"] == 2
+    catalog = store.patterns(sid)
+    assert catalog["count"] == 2
+    # Run-level coverage stats are persisted in the snapshot (anchor_count=4,
+    # covered = support 2 + 1 = 3).
+    assert catalog["stats"]["anchor_count"] == 4
+    assert catalog["stats"]["covered_count"] == 3
+    assert catalog["stats"]["pattern_count"] == 2
     assert store.shape(sid, pattern_id=PID)["diagram"]["nodes"]
 
 

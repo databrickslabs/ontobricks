@@ -74,6 +74,16 @@ def summary_query(out: str) -> str:
     return f"SELECT * FROM {out}_summary"
 
 
+def covered_count_query(out: str) -> str:
+    """Anchors that belong to a kept pattern.
+
+    In the egocentric-signature algorithm every anchor has exactly one
+    signature, so each anchor is in at most one kept pattern — the sum of per
+    pattern ``support`` is the distinct count of anchors that follow a pattern.
+    """
+    return f"SELECT SUM(support) AS covered FROM {out}_shapes"
+
+
 def top_patterns_query(out: str, limit: int) -> str:
     return (
         "SELECT pattern_id, support, hop_count, seed_label, refined, "
@@ -339,9 +349,12 @@ class JobPatterns:
             elapsed_ms = int(elapsed_raw) if elapsed_raw is not None else None
         except (TypeError, ValueError):
             elapsed_ms = None
+        covered_rows = self._safe_rows(covered_count_query(self._out)) or []
+        covered = int((covered_rows[0] or {}).get("covered", 0) or 0) if covered_rows else 0
         return {
             "anchor_type": str(row.get("anchor_type") or ""),
             "anchor_count": int(row.get("anchor_count", 0) or 0),
+            "covered_count": covered,
             "pattern_count": int(row.get("pattern_count", 0) or 0),
             "hop_count": int(row.get("hop_count", 0) or 0),
             "bins": int(row.get("bins", 0) or 0),

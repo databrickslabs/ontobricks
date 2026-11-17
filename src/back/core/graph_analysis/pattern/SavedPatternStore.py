@@ -64,6 +64,7 @@ _KPI_COLUMNS = (
     ("type_count", "INT"),
     ("relation_count", "INT"),
     ("pattern_count", "INT"),
+    ("anchor_count", "INT"),
 )
 
 _SHAPE_COLUMNS = (
@@ -154,7 +155,13 @@ class SavedPatternStore:
         summary = self._safe_rows(
             f"SELECT pattern_count, anchor_type, bins FROM {self._out}_summary"
         )
-        stats = summary[0] if summary else {}
+        stats = dict(summary[0]) if summary else {}
+        # Read separately: the column may be missing on older summary tables.
+        anchor_rows = self._safe_rows(
+            f"SELECT anchor_count FROM {self._out}_summary"
+        )
+        anchor_count = _as_int(anchor_rows[0].get("anchor_count")) if anchor_rows else 0
+        stats["anchor_count"] = anchor_count
         run_count = _as_int(stats.get("pattern_count")) or self._shape_count()
         eager = self._eager_shapes(eager_ids, stats, run_count)
         if not eager:
@@ -174,6 +181,7 @@ class SavedPatternStore:
                     run_count,
                     skip=[item["pattern_id"] for item in eager],
                     kpi=kpi_sql(self._out) if self._edges_available() else None,
+                    anchor_count=anchor_count,
                 )
             )
         except Exception:
@@ -271,12 +279,15 @@ class SavedPatternStore:
             "max(hop_count) AS hop_count, max(type_count) AS type_count, "
             "max(relation_count) AS relation_count, "
             "max(focus_pattern_id) AS focus_pattern_id, "
+            "max(anchor_count) AS anchor_count, "
             "max(support) AS size "
             f"FROM {self._saved} WHERE saved_id = {_lit(saved_id)} "
             "GROUP BY pattern_id ORDER BY support DESC, pattern_id"
         )
         patterns = []
         focus = ""
+        anchor_count = 0
+        covered = 0
         for row in rows:
             pid = str(row.get("id") or "")
             if not pid:
@@ -284,11 +295,14 @@ class SavedPatternStore:
             if not focus:
                 focus = str(row.get("focus_pattern_id") or "") or pid
             label = str(row.get("label") or "") or pid[:8]
+            support = _as_int(row.get("support")) or _as_int(row.get("size"))
+            covered += support
+            anchor_count = max(anchor_count, _as_int(row.get("anchor_count")))
             patterns.append(
                 {
                     "id": pid,
                     "label": label,
-                    "support": _as_int(row.get("support")) or _as_int(row.get("size")),
+                    "support": support,
                     "hop_count": _as_int(row.get("hop_count")),
                     "type_count": _as_int(row.get("type_count")),
                     "relation_count": _as_int(row.get("relation_count")),
@@ -300,6 +314,12 @@ class SavedPatternStore:
             "focus_pattern_id": focus,
             "patterns": patterns,
             "count": len(patterns),
+            # Run-level stats so the UI can show the Coverage KPI on a saved run.
+            "stats": {
+                "anchor_count": anchor_count,
+                "covered_count": covered,
+                "pattern_count": len(patterns),
+            },
         }
 
     def members(
@@ -405,7 +425,7 @@ class SavedPatternStore:
             "anchor_uri STRING, anchor_label STRING, type_uri STRING, "
             "hop_count INT, support INT, type_count INT, relation_count INT, "
             "pattern_count INT, seed_label STRING, shape_json STRING, "
-            "diagram_json STRING, saved_at TIMESTAMP) USING DELTA"
+            "diagram_json STRING, saved_at TIMESTAMP, anchor_count INT) USING DELTA"
         )
         self._migrate_extra_columns()
         self._table_ready = True
@@ -783,6 +803,7 @@ class SavedPatternStore:
                         "type_count": _as_int(kpi.get("type_count")) or 1,
                         "relation_count": _as_int(kpi.get("relation_count")),
                         "pattern_count": run_count,
+                        "anchor_count": _as_int(stats.get("anchor_count")),
                     },
                 }
             )

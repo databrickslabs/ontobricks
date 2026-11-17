@@ -125,7 +125,7 @@ def test_communities_section_owns_detection():
     assert 'id="commDetectBtn"' in comm
     assert 'class="btn btn-sm btn-primary"' in comm
     assert 'id="commMaterializeBtn"' in comm
-    assert 'class="btn btn-sm btn-secondary"' in comm
+    assert 'btn btn-sm btn-secondary' in comm
     assert 'id="commExplorerBtn"' in comm
     assert 'href="/dtwin/?section=sigmagraph"' in comm
     assert 'id="commPreviewCanvas"' in comm
@@ -147,6 +147,10 @@ def test_communities_section_owns_detection():
     header, _, rest = comm.partition('id="commDetectBtn"')
     assert 'section-header' in header
     assert 'id="commAlgorithm"' in rest
+    # Materialize lives in the algorithm card; Purge lives in the Materialized card.
+    assert 'id="commMaterializeBtn"' in rest
+    assert 'id="commClearBtn"' not in header
+    assert 'id="commClearBtn"' in rest
     js = _read(FRONT / "static/intelligence/js/intelligence-communities.js")
     assert "/dtwin/clusters/detect" in js
     assert "/dtwin/clusters/materialize" in js
@@ -953,6 +957,17 @@ def test_patterns_section_owns_discovery():
     assert "/members`" in js or "/members" in js
     assert "/shape`" in js
     assert "this._diagramSvg(shape.diagram)" in js
+    # Details: collapsible per-pattern bar chart (X=patterns, Y=matching entities).
+    assert "_patternsChartHtml" in js
+    assert "this._patternsChartHtml(" in js
+    assert "pat-chart-card" in js
+    assert "data-pat-chart-toggle" in js
+    assert "_toggleChart" in js
+    assert "pat-chart-axis-title" in js
+    assert "pat-chart-xlabel" in js
+    assert "pat-chart-ylabel" in js
+    assert ">Patterns</div>" in js
+    assert ">Matching entities</span>" in js
     assert 'class="pat-dg-edge-name"' in js
     assert "pat-dg-edge-badge" in js
     assert 'width="100%"' in js
@@ -963,6 +978,13 @@ def test_patterns_section_owns_discovery():
     assert "_renderStats" not in js
     assert "this._kpiTile('Detail'" not in js
     assert "this._kpiTile('Refined'" not in js
+    # KPIs: run-level Patterns count + Coverage %, no per-pattern Types/Relations.
+    assert "this._kpiTile('Patterns'" in js
+    assert "this._kpiTile('Coverage'" in js
+    assert "this._kpiTile('Types'" not in js
+    assert "this._kpiTile('Relations'" not in js
+    assert "_patternCount" in js
+    assert "_coveragePct" in js
     assert "Matching entities" in js
     assert "data-pat-members" in js
     assert "openMembersModal" in js
@@ -1001,6 +1023,8 @@ def test_patterns_section_owns_discovery():
     assert ".pat-detail-body" in css
     assert "max-height: min(32rem, 58vh)" not in css
     assert ".pat-members-btn" in css
+    assert ".pat-chart-card" in css
+    assert ".pat-chart-bar" in css
     assert ".pat-form-info" in css
     assert "height: var(--pat-chip-h" in css.split(".pat-members-btn", 1)[1].split("}", 1)[0]
     assert 'class="pat-kpi-row pat-detail-kpis"' in js

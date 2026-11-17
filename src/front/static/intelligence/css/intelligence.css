@@ -1340,6 +1340,118 @@ a.sim-uri-link:focus-visible {
     text-transform: none;
 }
 
+/* Per-pattern matching-entities bar chart (above the diagram). */
+.pat-chart-card {
+    border: 1px solid var(--db-border, #ECEAE6);
+    border-radius: var(--db-radius-card, 14px);
+    background: var(--db-surface-warm, #fff);
+    padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.pat-chart-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.pat-chart-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--db-text-muted, #6F6B65);
+}
+
+.pat-chart-toggle {
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.pat-chart-card.is-collapsed {
+    padding-bottom: 0.5rem;
+}
+
+.pat-chart-body {
+    margin-top: 0.4rem;
+    width: 100%;
+    overflow-x: auto;
+}
+
+.pat-chart-svg {
+    display: block;
+    font-family: inherit;
+}
+
+.pat-chart-axis {
+    stroke: var(--db-border, #ECEAE6);
+    stroke-width: 1;
+}
+
+.pat-chart-axis-title {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--db-text-muted, #6F6B65);
+    letter-spacing: 0.02em;
+}
+
+.pat-chart-plot {
+    display: flex;
+    align-items: stretch;
+    gap: 0.25rem;
+}
+
+.pat-chart-plot .pat-chart-svg {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.pat-chart-ylabel {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    align-self: center;
+    white-space: nowrap;
+}
+
+.pat-chart-xlabel {
+    text-align: center;
+    margin-top: 0.15rem;
+}
+
+.pat-chart-bar {
+    cursor: pointer;
+}
+
+.pat-chart-bar-rect {
+    fill: var(--db-primary-light, rgba(79, 70, 229, 0.18));
+    stroke: rgba(var(--db-primary-rgb, 79, 70, 229), 0.35);
+    stroke-width: 1;
+    transition: fill 0.15s ease;
+}
+
+.pat-chart-bar:hover .pat-chart-bar-rect {
+    fill: rgba(var(--db-primary-rgb, 79, 70, 229), 0.35);
+}
+
+.pat-chart-bar--active .pat-chart-bar-rect {
+    fill: var(--db-primary, #4F46E5);
+    stroke: var(--db-primary, #4F46E5);
+}
+
+.pat-chart-bar-value {
+    font-size: 0.65rem;
+    font-weight: 600;
+    fill: var(--db-text, #191817);
+}
+
+.pat-chart-bar-label {
+    font-size: 0.65rem;
+    fill: var(--db-text-muted, #6F6B65);
+}
+
+.pat-chart-bar--active .pat-chart-bar-label {
+    fill: var(--db-primary, #4F46E5);
+    font-weight: 600;
+}
+
 .pat-diagram {
     flex: 1 1 0%;
     width: 100%;
@@ -1367,7 +1479,8 @@ a.sim-uri-link:focus-visible {
     font-family: inherit;
 }
 
-.pat-members-loading .spinner-border {
+.pat-members-loading .spinner-border,
+.pat-inline-loading .spinner-border {
     width: 1.75rem;
     height: 1.75rem;
 }

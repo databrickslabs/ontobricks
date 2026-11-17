@@ -88,11 +88,16 @@ const IntelligenceCommunities = {
     },
 
     _applyEditGate() {
-        const editable = this._canEdit();
-        const clearBtn = document.getElementById('commClearBtn');
-        if (clearBtn) clearBtn.disabled = !editable;
+        this._syncClearEnabled();
         this._syncDetectEnabled();
         this._syncMaterializeEnabled();
+    },
+
+    _syncClearEnabled() {
+        const btn = document.getElementById('commClearBtn');
+        if (!btn) return;
+        const hasMaterialized = !!(this.current && (this.current.clusters || []).length);
+        btn.disabled = !this._canEdit() || this._busy || !hasMaterialized;
     },
 
     _syncDetectEnabled() {
@@ -111,6 +116,7 @@ const IntelligenceCommunities = {
 
     _setBusy(busy) {
         this._busy = busy;
+        this._syncClearEnabled();
         this._syncDetectEnabled();
         this._syncMaterializeEnabled();
     },
@@ -465,7 +471,10 @@ const IntelligenceCommunities = {
         if (!box || !state) return;
         const list = box.querySelector('.comm-member-list');
         const more = box.querySelector('.comm-member-more');
-        if (more) more.innerHTML = '<span class="small text-muted">Loading…</span>';
+        if (more) {
+            more.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>'
+                + '<span class="small text-muted">Loading…</span>';
+        }
         try {
             const page = await this._json(
                 `/dtwin/clusters/${state.clusterId}/members?offset=${state.loaded}&limit=${this.MEMBERS_PAGE}`
@@ -688,11 +697,15 @@ const IntelligenceCommunities = {
         if (!select || select.dataset.ready) return;
         const classes = await this._ensureOntologyClasses();
         const options = classes
-            .map((cls) => ({ uri: cls.uri || cls.id || '', name: cls.label || cls.name || this._shortLabel(cls.uri) }))
+            .map((cls) => ({
+                uri: cls.uri || cls.id || '',
+                name: cls.label || cls.name || this._shortLabel(cls.uri),
+                icon: cls.emoji || cls.icon || '📦',
+            }))
             .filter((c) => c.uri)
             .sort((a, b) => String(a.name).localeCompare(String(b.name)));
         select.insertAdjacentHTML('beforeend', options.map(
-            (c) => `<option value="${this._esc(c.uri)}">${this._esc(c.name)}</option>`
+            (c) => `<option value="${this._esc(c.uri)}">${this._esc(c.icon)} ${this._esc(c.name)}</option>`
         ).join(''));
         select.dataset.ready = '1';
     },
@@ -875,12 +888,15 @@ const IntelligenceCommunities = {
                     ? 'Open Graph Explorer to colour and collapse clusters'
                     : 'Materialize a partition before opening Explorer';
             }
+            this._syncClearEnabled();
         } catch (err) {
+            this.current = null;
             this._renderStats('commCurrentStats', null, '');
             const body = document.getElementById('commCurrentBody');
             if (body) {
                 body.innerHTML = `<p class="text-muted small mb-0">${this._esc(err.message)}</p>`;
             }
+            this._syncClearEnabled();
         } finally {
             this._showCurrentLoading(false);
         }

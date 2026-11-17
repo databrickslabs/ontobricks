@@ -179,7 +179,7 @@ When nothing changes any more, the groups are final.
    previous partition. The **Materialized (Explorer)** card shows what is
    currently in the graph.
 5. Open **Explorer** to colour entities by community and collapse a community
-   into a single super-node. **Clear graph** removes the materialised
+   into a single super-node. **Purge** removes the materialised
    partition (the last Detect preview is kept).
 
 **Reading the results.**

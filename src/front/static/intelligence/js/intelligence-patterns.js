@@ -60,8 +60,20 @@ const IntelligencePatterns = {
                     this.openMembersModal();
                     return;
                 }
+                if (e.target.closest('[data-pat-chart-toggle]')) {
+                    e.preventDefault();
+                    this._toggleChart();
+                    return;
+                }
                 const opt = e.target.closest('[data-pat-id]');
                 if (opt && opt.dataset.patId) this.selectPattern(opt.dataset.patId);
+            });
+            details.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                const bar = e.target.closest('.pat-chart-bar[data-pat-id]');
+                if (!bar) return;
+                e.preventDefault();
+                this.selectPattern(bar.dataset.patId);
             });
         }
         const membersBody = document.getElementById('patMembersModalBody');
@@ -332,17 +344,49 @@ const IntelligencePatterns = {
         }[level] || level || '—';
     },
 
-    _kpiTile(label, value) {
+    _kpiTile(label, value, title = '') {
+        const tip = title ? ` title="${this._esc(title)}"` : '';
         return `<div class="col">`
-            + `<div class="sim-kpi-tile pat-kpi-compact">`
+            + `<div class="sim-kpi-tile pat-kpi-compact"${tip}>`
             + `<span class="sim-kpi-value">${this._esc(String(value ?? '—'))}</span>`
             + `<span class="sim-kpi-label">${this._esc(label)}</span>`
             + `</div></div>`;
     },
 
+    // Total patterns in the run: saved snapshots carry it per row; live runs
+    // report it in the summary stats; fall back to the (possibly capped) list.
+    _patternCount() {
+        const patterns = (this.latest && this.latest.patterns) || [];
+        const first = patterns[0];
+        if (first && first.pattern_count != null) return Number(first.pattern_count) || 0;
+        const stats = (this.latest && this.latest.stats) || {};
+        if (stats.pattern_count != null) return Number(stats.pattern_count) || 0;
+        return patterns.length;
+    },
+
+    // Share of the entity universe (anchors of the type) that follow a pattern.
+    // Needs the run's entity universe (anchor_count); unknown → "—".
+    _coveragePct() {
+        const stats = (this.latest && this.latest.stats) || {};
+        const anchor = Number(stats.anchor_count) || 0;
+        if (!anchor) return '—';
+        const covered = stats.covered_count != null
+            ? Number(stats.covered_count)
+            : ((this.latest.patterns || []).reduce((s, p) => s + (Number(p.support) || 0), 0));
+        return `${Math.min(100, Math.round((covered / anchor) * 100))}%`;
+    },
+
     _patternOf(patternId) {
         const patterns = (this.latest && this.latest.patterns) || [];
         return patterns.find((p) => p.id === patternId) || null;
+    },
+
+    // Stable ordinal name for the picker ("Pattern #1", #2, …). The seed
+    // entities stay reachable through the "Matching entities" button.
+    _patternDisplayName(patternId) {
+        const patterns = (this.latest && this.latest.patterns) || [];
+        const idx = patterns.findIndex((p) => p.id === patternId);
+        return idx >= 0 ? `Pattern #${idx + 1}` : '';
     },
 
     _supportOf(patternId) {
@@ -352,8 +396,8 @@ const IntelligencePatterns = {
 
     _patternMenuHtml(selectedId) {
         const patterns = (this.latest && this.latest.patterns) || [];
-        return patterns.map((p) => {
-            const label = p.label || (p.id || '').slice(0, 8);
+        return patterns.map((p, i) => {
+            const label = `Pattern #${i + 1}`;
             const active = p.id === selectedId ? ' active' : '';
             return `<li><button type="button" class="dropdown-item pat-pattern-option${active}" `
                 + `data-pat-id="${this._esc(p.id)}">`
@@ -419,7 +463,7 @@ const IntelligencePatterns = {
         if (!details) return;
         this._members = null;
         details.innerHTML = this._toolbarHtml(patternId)
-            + '<div id="patDetailBody"><p class="text-muted small mb-0">Loading…</p></div>';
+            + `<div id="patDetailBody">${this._loadingHtml('Loading…')}</div>`;
         try {
             const shapeUrl = savedId
                 ? `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/shape?pattern_id=${encodeURIComponent(patternId)}`
@@ -559,7 +603,8 @@ const IntelligencePatterns = {
 
     _toolbarHtml(selectedId, kpisHtml = '', opts = {}) {
         const current = this._patternOf(selectedId);
-        const label = opts.label
+        const label = this._patternDisplayName(selectedId)
+            || opts.label
             || (current && (current.label || current.id.slice(0, 8)))
             || 'Pattern';
         const support = opts.support != null
@@ -620,30 +665,103 @@ const IntelligencePatterns = {
                 ? '<p class="text-muted small mb-0">No diagram in this snapshot'
                     + ' — Save again from a Detect run that includes the neighbourhood diagram.</p>'
                 : '<p class="text-muted small mb-0">Re-run <strong>Detect</strong> to draw this pattern.</p>');
-        const nodes = (shape.diagram && shape.diagram.nodes) || [];
-        const edges = (shape.diagram && shape.diagram.edges) || [];
-        // Prefer snapshotted KPI columns when present; else derive from diagram.
-        const typeCount = Number(shape._typeCount) || nodes.length || 0;
-        const relationCount = Number(shape._relationCount) || edges.length || 0;
         const kpis = this._kpiTile('Hops', this._fmtNum(shape.hop_count))
-            + this._kpiTile('Types', this._fmtNum(typeCount))
-            + this._kpiTile('Relations', this._fmtNum(relationCount));
+            + this._kpiTile('Patterns', this._fmtNum(this._patternCount()),
+                'Patterns detected in this run')
+            + this._kpiTile('Coverage', this._coveragePct(),
+                'Share of entities of this type that follow at least one pattern');
         const current = this._patternOf(shape.pattern_id || this.selectedId);
         return `
             ${this._toolbarHtml(shape.pattern_id || this.selectedId, kpis, {
                 label: (current && current.label) || shape.seed_label || shape._savedLabel,
                 support: shape.support != null ? shape.support : (current && current.support),
             })}
+            ${this._patternsChartHtml(shape.pattern_id || this.selectedId)}
             <div id="patDetailBody" class="pat-detail-body">
                 <div class="pat-diagram">${diagram}</div>
             </div>`;
     },
 
-    _membersLoadingHtml() {
-        return '<div class="pat-members-loading text-center text-muted py-4">'
+    // Bar chart above the diagram: X = each pattern, Y = matching entities
+    // (the support count shown in the picker). Click a bar to open it.
+    // Collapsible via the top-right link; state is kept across re-renders.
+    _patternsChartHtml(selectedId) {
+        const patterns = (this.latest && this.latest.patterns) || [];
+        if (!patterns.length) return '';
+        const collapsed = !!this._chartCollapsed;
+        const max = Math.max(1, ...patterns.map((p) => Number(p.support) || 0));
+        const SLOT = 54;
+        const BAR = 30;
+        const PLOT = 120;
+        const TOP = 18;
+        const LEFT = 4;
+        const BASE = TOP + PLOT;
+        const H = BASE + 24;     // room for the #N labels under each bar
+        const W = Math.max(LEFT + patterns.length * SLOT + 8, 220);
+        const bars = patterns.map((p, i) => {
+            const v = Number(p.support) || 0;
+            const h = max > 0 ? Math.round((v / max) * PLOT) : 0;
+            const x = LEFT + i * SLOT + (SLOT - BAR) / 2 + 4;
+            const y = BASE - h;
+            const active = p.id === selectedId ? ' pat-chart-bar--active' : '';
+            return `<g class="pat-chart-bar${active}" data-pat-id="${this._esc(p.id)}"`
+                + ` role="button" tabindex="0" aria-label="Pattern #${i + 1}: ${this._esc(this._fmtNum(v))} entities">`
+                + `<title>Pattern #${i + 1} — ${this._esc(this._fmtNum(v))} entities</title>`
+                + `<rect class="pat-chart-bar-rect" x="${x}" y="${y}" width="${BAR}" height="${Math.max(h, 1)}" rx="3"></rect>`
+                + `<text class="pat-chart-bar-value" x="${x + BAR / 2}" y="${y - 4}" text-anchor="middle">${this._esc(this._fmtNum(v))}</text>`
+                + `<text class="pat-chart-bar-label" x="${x + BAR / 2}" y="${BASE + 16}" text-anchor="middle">#${i + 1}</text>`
+                + `</g>`;
+        }).join('');
+        return `
+            <div class="pat-chart-card mb-3${collapsed ? ' is-collapsed' : ''}">
+                <div class="pat-chart-head">
+                    <span class="pat-chart-title">Matching entities per pattern</span>
+                    <a href="#" class="pat-chart-toggle small" data-pat-chart-toggle role="button"
+                       aria-expanded="${collapsed ? 'false' : 'true'}">
+                        <i class="bi ${collapsed ? 'bi-chevron-down' : 'bi-chevron-up'} me-1" aria-hidden="true"></i>${collapsed ? 'Expand' : 'Collapse'}
+                    </a>
+                </div>
+                <div class="pat-chart-body"${collapsed ? ' hidden' : ''}>
+                    <div class="pat-chart-plot">
+                        <span class="pat-chart-axis-title pat-chart-ylabel">Matching entities</span>
+                        <svg class="pat-chart-svg" viewBox="0 0 ${W} ${H}" width="100%" height="${H}"
+                             preserveAspectRatio="xMidYMid meet" role="img"
+                             aria-label="Bar chart of matching entities per pattern">
+                            <line class="pat-chart-axis" x1="${LEFT}" y1="${BASE}" x2="${W}" y2="${BASE}"></line>
+                            ${bars}
+                        </svg>
+                    </div>
+                    <div class="pat-chart-axis-title pat-chart-xlabel">Patterns</div>
+                </div>
+            </div>`;
+    },
+
+    _toggleChart() {
+        this._chartCollapsed = !this._chartCollapsed;
+        const card = document.querySelector('#patDetails .pat-chart-card');
+        if (!card) return;
+        const collapsed = this._chartCollapsed;
+        card.classList.toggle('is-collapsed', collapsed);
+        const body = card.querySelector('.pat-chart-body');
+        if (body) body.toggleAttribute('hidden', collapsed);
+        const link = card.querySelector('[data-pat-chart-toggle]');
+        if (link) {
+            link.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            link.innerHTML = `<i class="bi ${collapsed ? 'bi-chevron-down' : 'bi-chevron-up'} me-1" aria-hidden="true"></i>`
+                + (collapsed ? 'Expand' : 'Collapse');
+        }
+    },
+
+    // Shared inline loader: the usual spinner image + a message.
+    _loadingHtml(msg) {
+        return '<div class="pat-inline-loading text-center text-muted py-4">'
             + '<div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>'
-            + '<p class="small mb-0">Loading matching entities…</p>'
+            + `<p class="small mb-0">${this._esc(msg || 'Loading…')}</p>`
             + '</div>';
+    },
+
+    _membersLoadingHtml() {
+        return this._loadingHtml('Loading matching entities…');
     },
 
     _membersListHtml(members) {
@@ -1169,6 +1287,9 @@ const IntelligencePatterns = {
             const savedId = task && task.result && task.result.saved_id;
             await this.refreshSaved();
             if (savedId) {
+                // The run's universe/coverage is not stored in the saved
+                // snapshot — carry the just-computed stats into the saved view.
+                this._freshRunStats = (this.latest && this.latest.stats) || null;
                 await this.openSavedById(savedId, { sync: true, replace: true });
             } else {
                 this._restoreDiscoverPreview();
@@ -1356,7 +1477,7 @@ const IntelligencePatterns = {
         if (body) body.classList.remove('d-none');
         const details = document.getElementById('patDetails');
         if (details) {
-            details.innerHTML = '<p class="text-muted small mb-0">Loading saved Detect run…</p>';
+            details.innerHTML = this._loadingHtml('Loading saved Detect run…');
         }
         try {
             // Restore the full Detect catalog from the snapshot (not live /latest).
@@ -1365,11 +1486,19 @@ const IntelligencePatterns = {
             );
             if (this._viewingSavedId !== saved.id) return;
             const patterns = catalog.patterns || [];
+            // Prefer the snapshot's own universe (runs saved since anchor_count
+            // was persisted); otherwise fall back to the just-computed run
+            // stats; else Coverage shows "—".
+            const snapStats = (catalog.stats && Number(catalog.stats.anchor_count))
+                ? catalog.stats
+                : null;
             this.latest = {
                 ...(this.latest || {}),
                 patterns,
+                stats: snapStats || this._freshRunStats || null,
                 job_available: true,
             };
+            this._freshRunStats = null;
             const focus = saved.pattern_id
                 || catalog.focus_pattern_id
                 || (patterns[0] && patterns[0].id)
