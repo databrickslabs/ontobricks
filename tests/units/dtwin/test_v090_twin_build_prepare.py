@@ -252,6 +252,10 @@ class TestInferredMaterialize:
     def test_uri_triples_drops_literal_objects(self):
         assert TwinInferredMaterialize.uri_triples([_GOOD, _LITERAL, {}]) == [_GOOD]
 
+    def test_writable_triples_keeps_literal_objects(self):
+        kept = TwinInferredMaterialize.writable_triples([_GOOD, _LITERAL, {}])
+        assert kept == [_GOOD, {**_LITERAL, "object": "42"}]
+
     def test_missing_task_id_is_rejected(self):
         with pytest.raises(ValidationError):
             TwinInferredMaterialize.run(

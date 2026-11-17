@@ -455,3 +455,62 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected in 55.73s (working tree also contains unrelated uncommitted edits in the shacl/digitaltwin/reasoning modules)
+
+## Fix numeric set-attribute literals for Postgres Lakebase
+
+Context:
+Applying business rule ActiveContract100Points on Jacob Martin (CUST0000037)
+failed with "Business rule 'ActiveContract100Points' failed to run". Postgres
+rejected `object = 100` with `operator does not exist: text = integer`, because
+set-attribute consequents such as `loyaltypoints(?x, 100)` emitted a bare integer
+into the flat triple `object` column (text), both in the SELECT and in the
+exact-dedup NOT EXISTS.
+
+Changes:
+
+1. src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py
+   `_literal_object_sql` quotes bare numeric tokens as string literals (`'100'`)
+   for the text object column; built-in comparisons stay unquoted via
+   `literal_sql` / `_resolve_arg`.
+2. tests/units/reasoning/test_if_then_to_shacl_regression.py
+   Contract flipped: numeric set-attribute objects must be quoted; asserts no bare
+   integer in the SELECT or NOT EXISTS.
+
+Modified files:
+- src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py
+- tests/units/reasoning/test_if_then_to_shacl_regression.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10800 passed, 333 skipped, 8 deselected, 44 warnings in 51.01s
+
+## Materialise set-attribute literals from entity business rules
+
+Context:
+Entity business-rule runs (ActiveContract100Points / PendingContract10KPoints on
+Jacob Martin) inferred loyaltypoints triples but wrote nothing: the write path
+filtered through `uri_triples`, which drops literal objects, so set-attribute
+consequents never reached the graph. Replace semantics are applied so a new
+literal value supersedes the previous one.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+   Added `writable_triples` (URI subject/predicate, non-empty object: literal or URI).
+   `uri_triples` is unchanged and still feeds the batch Delta/graph path.
+2. src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+   Materialises through `writable_triples`; before insert, clears prior `(s, p, *)`
+   for literal attributes via `delete_subject_predicate` when the store exposes it,
+   otherwise selects the current objects and deletes them exactly via `delete_triples`.
+3. tests/units/dtwin/test_entity_business_rules.py
+   Covers literal set-attribute materialisation and the replace pairs.
+4. tests/units/dtwin/test_v090_twin_build_prepare.py
+   `writable_triples` keeps literal objects; `uri_triples` remains URI-only.
+
+Modified files:
+- src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- tests/units/dtwin/test_entity_business_rules.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10806 passed, 333 skipped, 8 deselected, 44 warnings in 49.48s

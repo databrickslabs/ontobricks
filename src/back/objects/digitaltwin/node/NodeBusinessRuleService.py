@@ -190,10 +190,15 @@ class NodeBusinessRuleService:
     async def _materialize_inferred(
         svc: Any, requested: str, entity_uri: str, inferred_triples: Any
     ):
-        """Write inferred URI triples; return ``(triples, written_count)``."""
+        """Write inferred triples (URI or literal objects); return ``(triples, written)``.
+
+        Set-attribute consequents carry a literal object; those used to be
+        dropped by the URI-only filter.  Literal writes use replace semantics
+        (delete existing ``(s, p, *)`` then insert) when the store supports it.
+        """
         from back.core.reasoning import InferredTriple, ReasoningResult
 
-        triples = TwinInferredMaterialize.uri_triples(
+        triples = TwinInferredMaterialize.writable_triples(
             [
                 {"subject": t.subject, "predicate": t.predicate, "object": t.object}
                 for t in inferred_triples
@@ -201,6 +206,7 @@ class NodeBusinessRuleService:
         )
         if not triples:
             return triples, 0
+        NodeBusinessRuleService._replace_literal_attributes(svc, triples)
         inferred = [
             InferredTriple(
                 subject=t["subject"],
@@ -226,6 +232,91 @@ class NodeBusinessRuleService:
                 "Writing inferred triples to the graph failed", detail=str(exc)
             ) from exc
         return triples, written
+
+    @staticmethod
+    def _literal_attribute_pairs(
+        triples: List[Dict[str, Any]],
+    ) -> List[Dict[str, str]]:
+        """Unique ``(subject, predicate)`` pairs for literal-object triples."""
+        from back.core.helpers import is_uri
+
+        pairs: List[Dict[str, str]] = []
+        seen = set()
+        for t in triples:
+            if is_uri(t.get("object", "")):
+                continue
+            key = (t["subject"], t["predicate"])
+            if key in seen:
+                continue
+            seen.add(key)
+            pairs.append({"subject": t["subject"], "predicate": t["predicate"]})
+        return pairs
+
+    @staticmethod
+    def _graph_table_for(svc: Any) -> str:
+        getter = getattr(svc, "_get_graph_name", None)
+        if callable(getter):
+            name = getter() or ""
+            if name:
+                return name
+        return getattr(svc, "table", "") or getattr(svc, "_table", "") or ""
+
+    @staticmethod
+    def _replace_literal_attributes(svc: Any, triples: List[Dict[str, Any]]) -> None:
+        """Delete prior ``(s, p, *)`` rows for set-attribute (literal object) triples."""
+        store = getattr(svc, "_store", None)
+        if store is None:
+            return
+        pairs = NodeBusinessRuleService._literal_attribute_pairs(triples)
+        if not pairs:
+            return
+        table = NodeBusinessRuleService._graph_table_for(svc)
+        if not table:
+            logger.warning(
+                "nodes/business-rule: cannot replace literal attributes — no graph table"
+            )
+            return
+        deleter = getattr(store, "delete_subject_predicate", None)
+        if callable(deleter):
+            deleter(table, pairs)
+            return
+        # FlatStore (live): exact-delete current objects, then insert replaces them.
+        NodeBusinessRuleService._replace_via_exact_delete(store, table, pairs)
+
+    @staticmethod
+    def _replace_via_exact_delete(store: Any, table: str, pairs: List[Dict[str, str]]) -> None:
+        delete_triples = getattr(store, "delete_triples", None)
+        execute = getattr(store, "execute_query", None)
+        sql_ref = getattr(store, "sql_table_reference", None)
+        if not all(callable(fn) for fn in (delete_triples, execute, sql_ref)):
+            return
+        from back.core.helpers import SQL_DIALECT_POSTGRES, sql_literal
+
+        relation = sql_ref(table)
+        to_delete: List[Dict[str, str]] = []
+        for pair in pairs:
+            s = sql_literal(pair["subject"], SQL_DIALECT_POSTGRES)
+            p = sql_literal(pair["predicate"], SQL_DIALECT_POSTGRES)
+            rows = (
+                execute(
+                    f"SELECT subject, predicate, object FROM {relation} "
+                    f"WHERE subject = {s} AND predicate = {p}"
+                )
+                or []
+            )
+            for row in rows:
+                obj = row.get("object", "")
+                if obj is None or obj == "":
+                    continue
+                to_delete.append(
+                    {
+                        "subject": str(row.get("subject", "") or ""),
+                        "predicate": str(row.get("predicate", "") or ""),
+                        "object": str(obj),
+                    }
+                )
+        if to_delete:
+            delete_triples(table, to_delete)
 
     @staticmethod
     def _reasoning_target(

@@ -24,6 +24,12 @@ VIP_RULE = {
     "antecedent": "Customer(?c) ^ hasOrder(?c, ?o) ^ Order(?o)",
     "consequent": "VIP(?c)",
 }
+POINTS_RULE = {
+    "name": "ActiveContract100Points",
+    "description": "Active contract grants 100 loyalty points",
+    "antecedent": "Customer(?c)",
+    "consequent": "loyaltypoints(?c, 100)",
+}
 ORDER_RULE = {
     "name": "FlagOrder",
     "antecedent": "Order(?o) ^ amount(?o, ?a) ^ builtin:greaterThan(?a, 100)",
@@ -41,7 +47,11 @@ CLASSES = [
         "name": "Customer",
         "uri": "https://example.com/Customer",
         "parent": "Person",
-        "business_rules": [{"name": "VipCustomer"}, {"name": "Gone"}],
+        "business_rules": [
+            {"name": "VipCustomer"},
+            {"name": "ActiveContract100Points"},
+            {"name": "Gone"},
+        ],
     },
     {"name": "Order", "uri": "https://example.com/Order"},
 ]
@@ -161,7 +171,11 @@ def _domain(rules=None):
         domain_folder="c360",
         current_version="1",
         ontology={"base_uri": BASE, "classes": CLASSES},
-        if_then_rules=rules if rules is not None else [VIP_RULE, PERSON_RULE],
+        if_then_rules=(
+            rules
+            if rules is not None
+            else [VIP_RULE, POINTS_RULE, PERSON_RULE]
+        ),
         get_classes=lambda: CLASSES,
     )
 
@@ -212,6 +226,7 @@ class _FakeStore:
         self.rows = rows
         self.queries = []
         self.inserted = []
+        self.deleted_pairs = []
 
     def sql_table_reference(self, table_name):
         return "g"
@@ -223,6 +238,10 @@ class _FakeStore:
     def insert_triples(self, table_name, triples):
         self.inserted.extend(triples)
         return len(triples)
+
+    def delete_subject_predicate(self, table_name, pairs):
+        self.deleted_pairs.extend(pairs)
+        return len(pairs)
 
 
 async def test_run_business_rule_scopes_inference_and_materialises(monkeypatch):
@@ -268,6 +287,35 @@ async def test_run_business_rule_without_new_facts_writes_nothing(monkeypatch):
     assert result["materialized_count"] == 0
     assert result["graph_target"] == "live"
     assert store.inserted == []
+
+
+async def test_run_business_rule_materialises_literal_set_attribute(monkeypatch):
+    """Set-attribute consequents (literal objects) must be written, not URI-filtered away."""
+    rows = [
+        {
+            "subject": ENTITY,
+            "predicate": BASE + "loyaltypoints",
+            "object": "100",
+        }
+    ]
+    store = _FakeStore(rows)
+    _patch_store(monkeypatch, store)
+
+    result = await NodeContextService.run_business_rule(
+        _domain(),
+        object(),
+        entity_uri=ENTITY,
+        rule_name="ActiveContract100Points",
+    )
+
+    assert result["inferred_count"] == 1
+    assert result["materialized_count"] == 1
+    assert store.inserted == rows
+    # Replace semantics: clear prior (s, p, *) before inserting the new literal.
+    assert store.deleted_pairs == [
+        {"subject": ENTITY, "predicate": BASE + "loyaltypoints"}
+    ]
+    assert result["triples"][0]["object"] == "100"
 
 
 async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):

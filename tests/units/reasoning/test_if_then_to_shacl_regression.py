@@ -394,14 +394,19 @@ class TestSetAttribute:
         # Exact (s, p, o) de-dup: fires on a changed value, no-ops when identical.
         assert "AND a2.object = 'high'" in sql
 
-    def test_numeric_literal_is_unquoted(self):
+    def test_numeric_literal_is_quoted_for_text_object_column(self):
+        """Flat-table ``object`` is text; bare integers break Postgres (text = int)."""
         rule = {
             "name": "set_score",
             "antecedent": "Customer(?x)",
             "consequent": "hasScore(?x, 42)",
         }
         sql = self.b.build_inference_sql("triples", self._params(rule))
-        assert "'http://ex.org#hasScore' AS predicate, 42 AS object" in sql
+        assert "'http://ex.org#hasScore' AS predicate, '42' AS object" in sql
+        assert "AND a2.object = '42'" in sql
+        # Must not emit a bare integer that Postgres rejects against text.
+        assert ", 42 AS object" not in sql
+        assert "object = 42" not in sql
 
     def test_materialisation_is_delete_then_insert(self):
         sql = self.b.build_materialization_sql("triples", self._params(SET_ATTRIBUTE))

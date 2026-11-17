@@ -26,10 +26,21 @@ def _literal_object_sql(token: str) -> Optional[str]:
     literal in the object position.  Returns the SQL literal, or ``None`` when
     *token* is a variable (``?z``) — i.e. an unbound relationship object — so
     the caller keeps its ``''`` fallback.
+
+    Flat-table ``object`` is text (Spark string / Postgres ``text``).  Bare
+    numeric tokens must therefore be emitted as quoted string literals
+    (``'100'``), not untyped integers — otherwise Postgres rejects
+    ``object = 100`` with ``operator does not exist: text = integer``.
+    Built-in comparisons still use :meth:`RuleBuiltinRegistry.literal_sql`
+    (unquoted) via ``_resolve_arg``.
     """
-    if token and not token.startswith("?"):
-        return RuleBuiltinRegistry.literal_sql(token)
-    return None
+    if not token or token.startswith("?"):
+        return None
+    sql = RuleBuiltinRegistry.literal_sql(token)
+    # Quote bare numerics for the text object column.
+    if sql and not (sql.startswith("'") and sql.endswith("'")):
+        return f"'{sql}'"
+    return sql
 
 
 def _has_literal_assignment(cons_atoms: List[Dict]) -> bool:
