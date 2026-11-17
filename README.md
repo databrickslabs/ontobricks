@@ -5,7 +5,7 @@
 <h1 align="center">OntoBricks 0.10.0</h1>
 
 <p align="center">
-  <strong>Turn your Databricks tables into a living knowledge graph — in four clicks.</strong>
+  <strong>Design, build, understand and test your knowledge store — on Databricks.</strong>
 </p>
 
 <p align="center">
@@ -29,24 +29,22 @@
 <tr>
 <td>
 
-### What's new in 0.9.0
+### What's new in 0.10.0
 
-- **Lakehouse//RT graph queries**: Knowledge Graph reads can run on a serverless Lakehouse//RT warehouse, while builds keep a classic or serverless one.
-- **Three-stage Ontology Generate**: detect entities, lock the catalog, then complete relations, attributes and axioms. The result is appended to your ontology instead of replacing it.
-- **Knowledge Store**: parsed documents live in Lakebase and are shared by Generate and Mapping. No Volume grants are needed.
-- **Unity Catalog Metric Views**: Metric Views import as data assets with dimension/measure roles; Auto-Map emits `MEASURE(...)` SQL.
-- **Entity Data Quality Checks**: right-click a node in Explorer, or call it from MCP, to check that entity against every SHACL shape that applies, with gauges for each dimension.
-- **Entity business rules**: attach Simple (IF/THEN) and Complex (SPARQL CONSTRUCT) rules to a class, then run them on one entity from Explorer or MCP.
-- **Databricks Jobs as class actions**: trigger a workspace Job for an entity next to Unity Catalog functions.
-- **SPARQL playground**: query the graph in SPARQL and inspect the generated SQL.
-- **GitHub domain mirror**: push the domain configuration (OWL, R2RML, SHACL, rules) to a GitHub repository and restore it from there.
-- **OBX Import as**: rename a domain on import; a renamed copy does not reuse the previous graph objects.
-- **Faster Explorer**: indexed search, paged expansion and no blocking `COUNT(*)` on first load.
-- **Ontology Studio**: the renamed Designer adds multi-select, Business Views, cross-domain import, and OWL/R2RML export from the canvas.
-- **Load opens Configuration**: opening a context from Home, the navbar, Registry, or Versions lands on Configuration instead of staying on the current page.
-- **Security hardening**: stricter CSRF, a `/health` that leaks no internals, dialect-aware SQL escaping and sanitised Markdown.
+- **What-if simulation sandboxes**: build scenarios with hypothetical facts (add, remove, or set), written by hand, through a fact wizard, or with the natural-language agent. Run them in an isolated sandbox, explore the result in Explorer, and compare it with the live graph.
+- **Simulation API**: create, run and read scenarios over REST (`/api/v1/simulations`), and query a ready sandbox through the graph endpoints.
+- **Graph Chat and search in the viewer**: search the graph and ask questions about it from Explorer.
+- **Patterns and communities at scale**: community detection and pattern detection handle larger graphs.
+- **JSON-LD everywhere it matters**: OWL import and export, SPARQL `CONSTRUCT`/`DESCRIBE` results, and the MCP `describe_ontology` tool.
+- **Pluggable graph backends**: Delta, Lakebase and Neo4j sit behind shared capability interfaces, so each engine exposes what it supports and nothing more.
+- **Live Data Quality runs**: bulk checks run on a view-backed snapshot and show a live activity log.
+- **Auto-Map for metric views**: Auto-Map emits Unity Catalog metric-view SQL.
+- **Typed SPARQL filters**: value `FILTER`s on typed literals compile to SQL.
+- **MCP improvements**: end-user identity is forwarded past the Apps proxy, and graph tools work without a sticky session.
+- **Safer mapping edits**: unmapping keeps hidden entities and relationships, and set-attribute literals are materialised on entities.
+- **Dependency security floors**: raised for several Dependabot advisories (oauthlib, dnspython, opentelemetry-api, authlib and others).
 
-Full details are in the [Release Notes](releases/ReleaseNotes_V0.9.0.md).
+Full details are in the [documentation](docs/README.md#whats-new-in-0100).
 
 </td>
 </tr>
