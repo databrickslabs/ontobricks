@@ -114,7 +114,7 @@ Modified files:
 - README.md
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
-Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10790 passed, 333 skipped, 8 deselected, 44 warnings in 49.37s ========
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10800 passed, 333 skipped, 8 deselected, 44 warnings in 53.54s ======== (final full run, after the coverage tests were added; an earlier run recorded 10790)
 
 ## Document W3C JSON-LD as a first-class standard
 
