@@ -1923,6 +1923,8 @@ class PatternSQL(GraphAnalyticsSQL):
         columns = [
             f"'{sql_escape(str(stats.get('anchor_type', '') or ''))}' AS anchor_type",
             f"{int(stats['anchor_count'])} AS anchor_count",
+            f"{int(stats.get('population_count', stats['anchor_count']) or 0)} "
+            "AS population_count",
             f"{int(stats['pattern_count'])} AS pattern_count",
             f"{int(stats['hop_count'])} AS hop_count",
             f"{int(stats['bins'])} AS bins",
@@ -2171,19 +2173,19 @@ def _run_pattern_stages(
             execute(stmt)
 
     pattern_count = int(scalar(builder.pattern_count_query()) or 0)
+    # Whole population of the anchor type (every entity of this type that
+    # entered the computation), independent of pattern coverage. This is the
+    # denominator for the Coverage KPI (covered / population).
+    population_count = int(scalar(builder.anchor_count_query()) or 0)
     # With patterns: the anchors they cover. Without: the whole population.
     anchor_count = int(
-        scalar(
-            builder.output_anchor_count_query()
-            if pattern_count
-            else builder.anchor_count_query()
-        )
-        or 0
-    )
+        scalar(builder.output_anchor_count_query()) or 0
+    ) if pattern_count else population_count
 
     stats: Dict[str, object] = {
         "anchor_type": builder.class_filter[0],
         "anchor_count": anchor_count,
+        "population_count": population_count,
         "pattern_count": pattern_count,
         "hop_count": max(0, int(builder.hops)),
         "bins": int(builder.bins),

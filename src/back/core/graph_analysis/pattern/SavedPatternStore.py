@@ -65,6 +65,7 @@ _KPI_COLUMNS = (
     ("relation_count", "INT"),
     ("pattern_count", "INT"),
     ("anchor_count", "INT"),
+    ("population_count", "INT"),
 )
 
 _SHAPE_COLUMNS = (
@@ -156,12 +157,19 @@ class SavedPatternStore:
             f"SELECT pattern_count, anchor_type, bins FROM {self._out}_summary"
         )
         stats = dict(summary[0]) if summary else {}
-        # Read separately: the column may be missing on older summary tables.
+        # Read separately: the columns may be missing on older summary tables.
         anchor_rows = self._safe_rows(
             f"SELECT anchor_count FROM {self._out}_summary"
         )
         anchor_count = _as_int(anchor_rows[0].get("anchor_count")) if anchor_rows else 0
         stats["anchor_count"] = anchor_count
+        pop_rows = self._safe_rows(
+            f"SELECT population_count FROM {self._out}_summary"
+        )
+        population_count = (
+            _as_int(pop_rows[0].get("population_count")) if pop_rows else 0
+        )
+        stats["population_count"] = population_count
         run_count = _as_int(stats.get("pattern_count")) or self._shape_count()
         eager = self._eager_shapes(eager_ids, stats, run_count)
         if not eager:
@@ -182,6 +190,7 @@ class SavedPatternStore:
                     skip=[item["pattern_id"] for item in eager],
                     kpi=kpi_sql(self._out) if self._edges_available() else None,
                     anchor_count=anchor_count,
+                    population_count=population_count,
                 )
             )
         except Exception:
@@ -280,6 +289,7 @@ class SavedPatternStore:
             "max(relation_count) AS relation_count, "
             "max(focus_pattern_id) AS focus_pattern_id, "
             "max(anchor_count) AS anchor_count, "
+            "max(population_count) AS population_count, "
             "max(support) AS size "
             f"FROM {self._saved} WHERE saved_id = {_lit(saved_id)} "
             "GROUP BY pattern_id ORDER BY support DESC, pattern_id"
@@ -287,6 +297,7 @@ class SavedPatternStore:
         patterns = []
         focus = ""
         anchor_count = 0
+        population_count = 0
         covered = 0
         for row in rows:
             pid = str(row.get("id") or "")
@@ -298,6 +309,9 @@ class SavedPatternStore:
             support = _as_int(row.get("support")) or _as_int(row.get("size"))
             covered += support
             anchor_count = max(anchor_count, _as_int(row.get("anchor_count")))
+            population_count = max(
+                population_count, _as_int(row.get("population_count"))
+            )
             patterns.append(
                 {
                     "id": pid,
@@ -317,6 +331,7 @@ class SavedPatternStore:
             # Run-level stats so the UI can show the Coverage KPI on a saved run.
             "stats": {
                 "anchor_count": anchor_count,
+                "population_count": population_count,
                 "covered_count": covered,
                 "pattern_count": len(patterns),
             },
@@ -425,7 +440,8 @@ class SavedPatternStore:
             "anchor_uri STRING, anchor_label STRING, type_uri STRING, "
             "hop_count INT, support INT, type_count INT, relation_count INT, "
             "pattern_count INT, seed_label STRING, shape_json STRING, "
-            "diagram_json STRING, saved_at TIMESTAMP, anchor_count INT) USING DELTA"
+            "diagram_json STRING, saved_at TIMESTAMP, anchor_count INT, "
+            "population_count INT) USING DELTA"
         )
         self._migrate_extra_columns()
         self._table_ready = True
@@ -804,6 +820,7 @@ class SavedPatternStore:
                         "relation_count": _as_int(kpi.get("relation_count")),
                         "pattern_count": run_count,
                         "anchor_count": _as_int(stats.get("anchor_count")),
+                        "population_count": _as_int(stats.get("population_count")),
                     },
                 }
             )

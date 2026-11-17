@@ -354,6 +354,7 @@ class JobPatterns:
         return {
             "anchor_type": str(row.get("anchor_type") or ""),
             "anchor_count": int(row.get("anchor_count", 0) or 0),
+            "population_count": int(row.get("population_count", 0) or 0),
             "covered_count": covered,
             "pattern_count": int(row.get("pattern_count", 0) or 0),
             "hop_count": int(row.get("hop_count", 0) or 0),

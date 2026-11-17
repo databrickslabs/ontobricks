@@ -837,3 +837,62 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 51.77s
+
+
+## Patterns Coverage KPI — correct denominator (true type population)
+
+Context:
+The Coverage KPI read Coverage = covered_count / anchor_count, but the pattern
+job sets anchor_count to the *covered* anchor count whenever at least one
+pattern exists (it is only the full population when no pattern is found). Since
+covered_count = SUM(support) is that same covered set, Coverage was ~always
+100% and meaningless. Coverage must be "entities of the type that follow a
+pattern / total entities of that type", so the job now persists the full type
+population separately and every layer threads it through.
+
+Changes:
+1. src/jobs/graph_analytics_job.py
+   _run_pattern_stages now computes population_count = anchor_count_query()
+   (COUNT of all anchors of the type) unconditionally and adds it to the run
+   stats. write_pattern_summary writes a new population_count column into
+   <out>_summary.
+2. src/back/core/graph_analysis/pattern/JobPatterns.py
+   summary() exposes population_count (defaults to 0 when the column is absent
+   on older summary tables, so Coverage shows "—" rather than a false 100%).
+3. src/back/core/graph_analysis/pattern/saved_pattern_sql.py
+   Added population_count to _SAVED_COLUMNS and to both INSERTs (catalog SELECT
+   and bulk rest INSERT, via a new population_count parameter).
+4. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   Added population_count to _KPI_COLUMNS (auto-migrates existing saved tables)
+   and the CREATE TABLE DDL. save() reads population_count from the summary and
+   threads it into the per-pattern metrics and insert_rest_sql. patterns() now
+   selects max(population_count) and returns it in the run-level stats block.
+5. src/front/static/intelligence/js/intelligence-patterns.js
+   _coveragePct() now divides covered_count by population_count (the true
+   universe). _showPendingSaved prefers the snapshot stats only when
+   population_count is present.
+6. tests/units/core/test_job_patterns.py,
+   tests/units/core/test_pattern_job_sql.py,
+   tests/units/core/test_saved_pattern_store.py
+   Assert population_count end-to-end, incl. the min_support=2 case where
+   population_count (3) differs from anchor_count (2 covered).
+
+Note:
+This changes the <out>_summary schema produced by the Databricks pattern job,
+so the job must be redeployed (make deploy) and a Detect re-run before the new
+denominator exists. Runs saved before the change have no population_count →
+Coverage stays "—"; re-running Detect fixes it. A browser hard refresh is
+needed to pick up the new static asset.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- src/back/core/graph_analysis/pattern/saved_pattern_sql.py
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/core/test_job_patterns.py
+- tests/units/core/test_pattern_job_sql.py
+- tests/units/core/test_saved_pattern_store.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 65.55s

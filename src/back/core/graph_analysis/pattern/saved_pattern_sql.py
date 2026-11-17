@@ -13,7 +13,7 @@ _SAVED_COLUMNS = (
     "(saved_id, saved_label, pattern_id, focus_pattern_id, "
     "anchor_uri, anchor_label, type_uri, hop_count, support, "
     "type_count, relation_count, pattern_count, seed_label, "
-    "shape_json, diagram_json, saved_at, anchor_count)"
+    "shape_json, diagram_json, saved_at, anchor_count, population_count)"
 )
 
 
@@ -78,7 +78,8 @@ def insert_catalog_sql(
             f"{sql_lit(str(shape.get('shape_json') or '[]'))} AS shape_json, "
             f"{sql_lit(diagram_json)} AS diagram_json, "
             "current_timestamp() AS saved_at, "
-            f"{int(metrics.get('anchor_count', 0) or 0)} AS anchor_count"
+            f"{int(metrics.get('anchor_count', 0) or 0)} AS anchor_count, "
+            f"{int(metrics.get('population_count', 0) or 0)} AS population_count"
         )
     body = "\nUNION ALL\n".join(selects)
     return f"INSERT INTO {saved} {_SAVED_COLUMNS}\n{body}"
@@ -95,6 +96,7 @@ def insert_rest_sql(
     skip: List[str],
     kpi: Optional[str],
     anchor_count: int = 0,
+    population_count: int = 0,
 ) -> str:
     """Catalog rows for every other pattern, computed inside the warehouse.
 
@@ -121,7 +123,8 @@ def insert_rest_sql(
         "THEN k.type_count ELSE 1 END AS INT), "
         "CAST(COALESCE(k.relation_count, 0) AS INT), "
         f"{int(run_count)}, COALESCE(s.seed_label, ''), "
-        f"COALESCE(s.shape_json, '[]'), '', current_timestamp(), {int(anchor_count)} "
+        f"COALESCE(s.shape_json, '[]'), '', current_timestamp(), "
+        f"{int(anchor_count)}, {int(population_count)} "
         f"FROM {out}_shapes s "
         f"LEFT JOIN ({kpi}) k ON k.pattern_id = s.pattern_id "
         f"WHERE s.support > 0{exclude}"

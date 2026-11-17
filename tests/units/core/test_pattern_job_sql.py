@@ -572,7 +572,10 @@ class TestDetailLevels:
     def test_stays_exact_when_exact_patterns_explain_enough(self):
         runner, _, stats = _run(alice_bob_carol(), min_support=2)
         assert stats["detail_level"] == "full"
+        # Only 2 of the 3 anchors are covered (one signature falls below
+        # min_support); population_count keeps the full universe of 3.
         assert stats["anchor_count"] == 2
+        assert stats["population_count"] == 3
 
     def test_coarser_levels_ignore_multiplicity(self):
         # Dana has 2 orders, Eve has 5: different multisets, same set.

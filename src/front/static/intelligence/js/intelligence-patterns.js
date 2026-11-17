@@ -364,16 +364,17 @@ const IntelligencePatterns = {
         return patterns.length;
     },
 
-    // Share of the entity universe (anchors of the type) that follow a pattern.
-    // Needs the run's entity universe (anchor_count); unknown → "—".
+    // Share of the entity universe (all entities of the type) that follow a
+    // pattern = covered_count / population_count. Needs the run's total
+    // population; unknown (runs saved before it was persisted) → "—".
     _coveragePct() {
         const stats = (this.latest && this.latest.stats) || {};
-        const anchor = Number(stats.anchor_count) || 0;
-        if (!anchor) return '—';
+        const universe = Number(stats.population_count) || 0;
+        if (!universe) return '—';
         const covered = stats.covered_count != null
             ? Number(stats.covered_count)
             : ((this.latest.patterns || []).reduce((s, p) => s + (Number(p.support) || 0), 0));
-        return `${Math.min(100, Math.round((covered / anchor) * 100))}%`;
+        return `${Math.min(100, Math.round((covered / universe) * 100))}%`;
     },
 
     _patternOf(patternId) {
@@ -1486,10 +1487,10 @@ const IntelligencePatterns = {
             );
             if (this._viewingSavedId !== saved.id) return;
             const patterns = catalog.patterns || [];
-            // Prefer the snapshot's own universe (runs saved since anchor_count
-            // was persisted); otherwise fall back to the just-computed run
-            // stats; else Coverage shows "—".
-            const snapStats = (catalog.stats && Number(catalog.stats.anchor_count))
+            // Prefer the snapshot's own universe (runs saved since
+            // population_count was persisted); otherwise fall back to the
+            // just-computed run stats; else Coverage shows "—".
+            const snapStats = (catalog.stats && Number(catalog.stats.population_count))
                 ? catalog.stats
                 : null;
             this.latest = {
