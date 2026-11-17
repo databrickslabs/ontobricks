@@ -46,7 +46,8 @@ release until this documentation is published.
 
 | Guide | What you'll find |
 |-------|------------------|
-| [User Guide](user-guide.md) | Context General (cockpit), Configuration, Studio, Documents, staged Generate, mapping, Explorer quality/rules/jobs, SPARQL, GitHub mirror. Ends with the [feature inventory](user-guide.md#feature-inventory) |
+| [User Guide](user-guide.md) | Context General (cockpit), Configuration, Studio, Documents, staged Generate, mapping, Explorer quality/rules/jobs, SPARQL, GitHub mirror. Ends with the [feature inventory](user-guide.md#feature-inventory). Intelligence is summarised as [Step 4](user-guide.md#step-4-intelligence-cohorts-discovery--simulation) |
+| [Intelligence](intelligence.md) | Cohorts, Analytics, Communities, Patterns, Scenarios, Compare / Evaluate, run history, energy walkthrough |
 | [Advanced features](advanced_features.md) | [Ontology specifics](advanced_features.md#ontology-specifics) (`name` vs `label`, URI minting, `ontobricks:` vocabulary), [registry import and export](advanced_features.md#registry-import-and-export) (OBX, GitHub mirror), [cohort discovery](advanced_features.md#cohort-discovery) |
 | [MCP](mcp.md) | MCP server, Playground, clients, [Unity Catalog + Genie One registration](mcp.md#register-the-mcp-in-unity-catalog-and-genie-one) |
 

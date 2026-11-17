@@ -1,8 +1,9 @@
 # Advanced features
 
-Deeper topics beyond the day-to-day flow in the [User Guide](user-guide.md):
-how OntoBricks models an ontology, how domains move between environments
-(OBX and GitHub mirror), and constraint-based cohort discovery.
+Deeper topics beyond the day-to-day flow in the [User Guide](user-guide.md)
+and the [Intelligence](intelligence.md) operator guide: how OntoBricks models
+an ontology, how domains move between environments (OBX and GitHub mirror),
+and constraint-based cohort discovery.
 
 <!-- toc -->
 **Contents**

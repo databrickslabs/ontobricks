@@ -168,7 +168,7 @@ report. Start from **Scenarios → New scenario** or **Simulate from here** on
 any Explorer entity. Lakebase, Lakehouse (Delta), and Neo4j backends are
 supported. Each page has a **How it works** tab with business-friendly
 diagrams. See the
-[Intelligence guide](docs/user-guide.md#step-4-intelligence-cohorts-discovery--simulation).
+[Intelligence guide](docs/intelligence.md).
 
 ### Publish to AI agents (MCP)
 Expose your knowledge graph to Cursor, Claude Desktop or the Databricks

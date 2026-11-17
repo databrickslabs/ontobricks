@@ -28,6 +28,7 @@ These walkthroughs take you from raw tables to an explorable graph viewer. Each 
   - [Step 2: Map Data Assets](#step-2-map-data-assets)
   - [Step 3: Explore the Data (Knowledge Graph)](#step-3-explore-the-data-knowledge-graph)
   - [Graph Viewer](#graph-viewer)
+  - [Intelligence (after the graph is built)](#intelligence-after-the-graph-is-built)
   - [Reference](#reference)
 <!-- /toc -->
 
@@ -406,6 +407,9 @@ unzip d2rq-0.8.1.zip
 3. **Include lifecycle events**: births, marriages, deaths
 4. **Connect to other ontologies**: Use FOAF, Schema.org
 5. **Build a visualization**: Create a family tree visualization from the RDF data
+6. **Intelligence**: After Build, run **Communities** on `Person` (family
+   clusters) or a **Scenario** that **Sets** a parent link — see
+   [Intelligence](intelligence.md)
 
 ### Summary
 
@@ -678,6 +682,23 @@ After synchronization, switch to the **Graph Viewer** tab to see an interactive 
 - **Click**: Select a node to see all its attributes, values, and relationships in the detail panel
 - **Find**: Search for specific entities by name or URI
 - **Filters**: Narrow down the graph by entity type, field, and relationship depth
+
+### Intelligence (after the graph is built)
+
+With the customer-journey graph built, open **Intelligence** (full guide:
+[Intelligence](intelligence.md)):
+
+1. **Analytics** — Run Analysis scoped to *Customer*. PageRank should surface
+   high-volume customers; betweenness may highlight customers that sit between
+   call-centre and contract clusters.
+2. **Communities** — Detect, then Materialize. Explorer **View** can colour
+   customers by cluster (for example a “high-touch” neighbourhood of callers
+   and claims).
+3. **Patterns** — New → Entity *Customer*, Hops 2. Look for a residential
+   vs business neighbourhood signature, then open **Matching entities**.
+4. **Scenarios** — From Explorer, **Simulate from here** on one Customer.
+   **Set** a contract tariff and Run. **Compare → Evaluate** asks the same
+   question to live vs sandbox (for example *which rebate applies?*).
 
 ---
 

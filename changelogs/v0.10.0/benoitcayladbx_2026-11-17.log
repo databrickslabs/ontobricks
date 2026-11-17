@@ -1,0 +1,55 @@
+## Intelligence operator guide in Help Center and Sphinx
+
+Context:
+The User Guide buried Intelligence as Step 4 of a long workflow, the Help
+Center catalog and docs hub did not list it as its own topic, and the Sphinx
+toctree still pointed at satellite files that had been folded into host
+guides (`features.md`, `cohort_discovery.md`, `get-started.md`). Operators
+could not find Cohorts, Analytics, Communities, Patterns, Scenarios or
+Compare in the published documentation.
+
+Changes:
+
+1. docs/intelligence.md (new)
+   Operator guide for every Intelligence page: overview, prerequisites,
+   Cohorts, Analytics, Communities, Patterns, when to use which, Scenarios
+   (list + editor), Compare / Evaluate, run history, energy end-to-end
+   example, troubleshooting. Concrete examples throughout.
+2. docs/user-guide.md
+   Step 4 is a map plus links to `intelligence.md`. Analytics section points
+   at the operator how-to and keeps the chart/job reference.
+3. src/api/routers/internal/help.py
+   Catalog slug `intelligence` under Using OntoBricks (after User Guide).
+4. src/front/templates/partials/layout/help_modal.html
+   Resources list and workflow step 5 link to the Intelligence guide.
+5. docs/README.md, docs/getting-started.md, docs/advanced_features.md,
+   docs/examples.md, README.md
+   Hub, next steps, advanced intro, customer-journey / family-tree examples,
+   and the product README all point at `docs/intelligence.md`.
+6. docs/sphinx/index.rst, docs/sphinx/guides/{intelligence,advanced-features,backend}.md,
+   docs/sphinx/guides/get-started.md
+   Sphinx topic toctree matches the Help Center catalog. Get Started include
+   path is `getting-started.md`. Dead satellite pages stay on disk but are
+   no longer in the toctree.
+7. tests/units/api/test_help_api.py
+   Catalog and markdown assertions for the Intelligence guide.
+
+Modified files:
+- docs/intelligence.md (new)
+- docs/user-guide.md
+- docs/README.md
+- docs/getting-started.md
+- docs/advanced_features.md
+- docs/examples.md
+- README.md
+- src/api/routers/internal/help.py
+- src/front/templates/partials/layout/help_modal.html
+- docs/sphinx/index.rst
+- docs/sphinx/guides/intelligence.md (new)
+- docs/sphinx/guides/advanced-features.md (new)
+- docs/sphinx/guides/backend.md (new)
+- docs/sphinx/guides/get-started.md
+- tests/units/api/test_help_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10782 passed, 333 skipped, 8 deselected, 39 warnings in 50.11s ========

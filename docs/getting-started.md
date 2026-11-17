@@ -488,6 +488,7 @@ scripts/setup.sh
 ## Next Steps
 
 - Read the [User Guide](user-guide.md) for detailed instructions
+- After a first Build, use **[Intelligence](intelligence.md)** to score the graph (Analytics), find clusters (Communities) and look-alikes (Patterns), then run what-if **Scenarios** without touching live data
 - See the [Architecture](architecture.md) for technical details
 - Check [Deployment](deployment.md) for Databricks Apps deployment
 - Explore the [MCP Server](mcp.md) for Databricks Playground integration

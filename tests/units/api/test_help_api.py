@@ -170,12 +170,19 @@ class TestHelpDocsIndex:
             for cat in response.json()["categories"]
             for doc in cat["docs"]
         }
-        assert {"backend", "advanced-features", "development"} <= slugs
+        assert {"backend", "advanced-features", "development", "intelligence"} <= slugs
 
         backend = client.get("/api/help/docs/backend").json()["markdown"]
         assert "Neo4j" in backend and "Aura" in backend and "Lakebase" in backend
         advanced = client.get("/api/help/docs/advanced-features").json()["markdown"]
         assert "Cohort" in advanced and "Registry → Browse" in advanced
+        intelligence = client.get("/api/help/docs/intelligence").json()["markdown"]
+        assert "Cohorts" in intelligence
+        assert "Analytics" in intelligence
+        assert "Communities" in intelligence
+        assert "Patterns" in intelligence
+        assert "Scenarios" in intelligence
+        assert "Compare" in intelligence
 
 
 class TestHelpCatalogIntegrity:
