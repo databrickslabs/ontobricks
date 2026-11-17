@@ -334,12 +334,9 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     async def describe_ontology(domain_name: Optional[str] = None) -> str:
         """Describe the selected domain's ontology structure.
 
-        Returns a structured summary (classes and their attachments) plus the
-        raw OWL/Turtle document, which carries the full class, attribute and
-        relationship (domain/range) detail. This is the ground truth for the
-        ontology *schema* — it does not touch the graph store, so it works even
-        for an ontology-only domain that has never been built. For such a
-        domain this is the only tool available.
+        Returns a class inventory plus the raw OWL document in JSON-LD
+        (attributes, relationships, domain/range). Schema-only — works for
+        ontology-only domains with no built graph.
 
         Args:
             domain_name: Registry domain name, or omit to use the selected one.
@@ -349,7 +346,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             return blocked
         name = session.selected_domain_name
         await session.ensure_registry()
-        params = {**session.registry_params(), "domain_name": name}
+        params = {**session.registry_params(), "domain_name": name, "format": "json-ld"}
 
         async with session.client() as client:
             owl_data = await _http._get(client, API_V1_DOMAIN_ONTOLOGY, params=params)
@@ -386,7 +383,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             lines.append("")
 
         if owl_content:
-            lines.append("OWL (Turtle)")
+            lines.append("OWL (JSON-LD)")
             lines.append("-" * 50)
             lines.append(owl_content)
         else:

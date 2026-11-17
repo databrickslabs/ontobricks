@@ -424,7 +424,7 @@ other graph backends retain their native or iterative traversal.
 | Menu Item | Description |
 |-----------|-------------|
 | **General** | Basic ontology settings (name, URI) |
-| **Import** | Import OWL, RDFS, FIBO, CDISC, IOF standards |
+| **Import** | Import OWL (Turtle / RDF/XML / JSON-LD), RDFS, FIBO, CDISC, IOF standards |
 | **Generate** | Three-stage wizard: detect entities from metadata and the Knowledge Store, review the catalog, then complete relations, attributes, and axioms (append-only merge) |
 | **Studio** | Interactive force-directed ontology graph (View dropdown filters Business Views) |
 | **Groups** | Manage entity groupings |

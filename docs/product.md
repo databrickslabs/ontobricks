@@ -106,7 +106,7 @@ flowchart LR
 | MCP Server     | Exposes knowledge-graph tools to the Databricks Playground and LLM clients |
 
 
-**Standards bridge:** OntoBricks uses W3C semantic web standards internally (OWL, R2RML, SPARQL) but translates everything to Spark SQL for execution. Users never need to learn RDF.
+**Standards bridge:** OntoBricks uses W3C semantic web standards internally (OWL, JSON-LD, R2RML, SPARQL, SHACL) but translates everything to Spark SQL for execution. Users never need to learn RDF; APIs and MCP can still exchange ontologies and graph results as JSON-LD.
 
 ---
 
@@ -193,7 +193,7 @@ flowchart LR
 | Capability            | Description                                               |
 | --------------------- | --------------------------------------------------------- |
 | Unity Catalog Storage | Save and load domains to UC Volumes with version control |
-| Import/Export         | Import OWL, RDFS, R2RML; export OWL and R2RML             |
+| Import/Export         | Import OWL (Turtle, RDF/XML, JSON-LD), RDFS, R2RML; export OWL (Turtle or JSON-LD) and R2RML |
 | Secret-Safe Design    | Domains never store tokens, passwords, or query results  |
 
 
@@ -231,7 +231,7 @@ flowchart LR
 OntoBricks is the **only** solution that combines all of the following in a single application:
 
 - Databricks-native (deploys as an App, uses UC + SQL Warehouse)
-- W3C standards-based (OWL, R2RML, SPARQL)
+- W3C standards-based (OWL, JSON-LD, R2RML, SPARQL, SHACL)
 - LLM-automated (ontology generation + data mapping)
 - Graph-visualizing (interactive graph viewer)
 - Industry-standard ready (FIBO, CDISC, IOF)
@@ -251,7 +251,7 @@ OntoBricks is the **only** solution that combines all of the following in a sing
 | **Industry compliance**     | Requires Protege or TopBraid + manual import + custom integration         | One-click import of FIBO, CDISC, IOF directly from the Databricks platform |
 | **Knowledge sharing**       | ER diagrams in Confluence, tribal knowledge in meetings                   | Versioned ontology domains in Unity Catalog, shareable across teams       |
 | **Data quality**            | Manual spot-checks or custom validation scripts                           | Automated quality checks against formal ontology constraints               |
-| **Vendor lock-in**          | Proprietary formats (Palantir, Stardog) or platform-specific (Snowflake)  | Open standards (OWL, R2RML, SPARQL) -- export and reuse anywhere           |
+| **Vendor lock-in**          | Proprietary formats (Palantir, Stardog) or platform-specific (Snowflake)  | Open standards (OWL, JSON-LD, R2RML, SPARQL) -- export and reuse anywhere  |
 | **Skill barrier**           | Requires RDF/SPARQL expertise or graph DB skills                          | Visual designer + LLM automation -- domain experts contribute directly     |
 
 
@@ -318,7 +318,7 @@ databricks apps deploy --app-name ontobricks
 
 ### Summary
 
-OntoBricks is a **Graph Viewer Builder for Databricks** that brings **graph database capabilities and formal reasoning** to the Lakehouse — without requiring separate graph infrastructure. It transforms relational tables stored in Unity Catalog into a structured graph viewer by leveraging semantic web standards (OWL, R2RML, RDF), a Lakebase Postgres graph engine, OWL 2 RL reasoning, and LLM-powered automation.
+OntoBricks is a **Graph Viewer Builder for Databricks** that brings **graph database capabilities and formal reasoning** to the Lakehouse — without requiring separate graph infrastructure. It transforms relational tables stored in Unity Catalog into a structured graph viewer by leveraging semantic web standards (OWL, JSON-LD, R2RML, RDF), a Lakebase Postgres graph engine, OWL 2 RL reasoning, and LLM-powered automation.
 
 Users can design ontologies visually or import industry standards (FIBO for finance, CDISC for clinical data, IOF for manufacturing), map ontology entities to Databricks tables, materialize the result into a Delta-backed triple store mirrored on Lakebase Postgres, run **formal reasoning** (OWL 2 RL deductive closure, IF-THEN rules, transitive/symmetric inference), and explore the graph viewer through interactive visualization. The entire pipeline — from raw tables to a reasoned, queryable graph viewer — can be completed in as few as four clicks thanks to LLM-driven ontology generation and automatic data mapping.
 

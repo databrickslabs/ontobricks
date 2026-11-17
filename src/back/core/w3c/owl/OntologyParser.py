@@ -29,6 +29,29 @@ def _if_then_rule_nodes(graph: Graph) -> Dict[Any, None]:
     return dict.fromkeys(s for c in rule_classes for s in graph.subjects(RDF.type, c))
 
 
+_OWL_TERMINATORS = (".", "]", ">", "}")
+
+
+def _salvage_truncated_owl(owl_content: str) -> str:
+    """Drop an incomplete trailing Turtle statement; leave JSON-LD untouched."""
+    content_stripped = owl_content.strip()
+    if not content_stripped or content_stripped[:1] in ("{", "["):
+        return owl_content
+    if any(content_stripped.endswith(t) for t in _OWL_TERMINATORS):
+        return owl_content
+    lines = content_stripped.split("\n")
+    while lines and not (
+        any(lines[-1].strip().endswith(t) for t in (".", "]", "}"))
+        or lines[-1].strip() == ""
+        or lines[-1].strip().startswith("#")
+    ):
+        lines.pop()
+    if not lines:
+        return owl_content
+    logger.warning("Content appeared truncated, removed incomplete statements")
+    return "\n".join(lines)
+
+
 class OntologyParser:
     """Parse OWL ontologies to extract classes and properties."""
 
@@ -36,37 +59,17 @@ class OntologyParser:
         """Initialize the parser with OWL content.
 
         Args:
-            owl_content: OWL content (Turtle, RDF/XML, etc.)
+            owl_content: OWL content (Turtle, RDF/XML, JSON-LD, etc.)
         """
         self.graph = Graph()
-
-        # Check for truncated content (common with LLM generation)
-        content_stripped = owl_content.strip()
-        if content_stripped and not (
-            content_stripped.endswith(".")
-            or content_stripped.endswith("]")
-            or content_stripped.endswith(">")
-        ):
-            # Content appears truncated - try to salvage by removing incomplete last line
-            lines = content_stripped.split("\n")
-            # Remove lines until we find one ending with a valid terminator
-            while lines and not (
-                lines[-1].strip().endswith(".")
-                or lines[-1].strip().endswith("]")
-                or lines[-1].strip() == ""
-                or lines[-1].strip().startswith("#")
-            ):
-                lines.pop()
-            if lines:
-                owl_content = "\n".join(lines)
-                logger.warning(
-                    "Content appeared truncated, removed incomplete statements"
-                )
+        owl_content = _salvage_truncated_owl(owl_content)
 
         from back.core.w3c.rdf_utils import parse_rdf_flexible
 
         try:
-            self.graph = parse_rdf_flexible(owl_content, formats=("turtle", "xml"))
+            self.graph = parse_rdf_flexible(
+                owl_content, formats=("turtle", "xml", "json-ld")
+            )
         except ValueError as e:
             raise ValidationError("Failed to parse OWL content", detail=str(e)) from e
 

@@ -70,11 +70,12 @@ The stack shows how each layer builds upon the previous:
 
 | Layer | Standard | Role in OntoBricks |
 |-------|----------|-------------------|
-| **Query** | SPARQL | Semantic query language (used internally for SQL generation) |
+| **Query** | SPARQL | Semantic query language (used internally for SQL generation); CONSTRUCT/DESCRIBE can return JSON-LD |
 | **Validation** | SHACL | Shapes Constraint Language for data quality validation |
 | **Mapping** | R2RML | Maps tables to RDF triples |
 | **Rules** | IF-THEN | Horn-clause rules for inference and violation detection |
 | **Ontology** | OWL/RDFS | Defines classes and properties |
+| **Exchange** | JSON-LD | W3C JSON for Linked Data — OWL import/export, SPARQL graph results, MCP `describe_ontology` |
 | **Data** | RDF | Triple data model (S, P, O) |
 | **Storage** | SQL | Delta view (Spark SQL) + Lakebase Postgres flat triple table |
 
@@ -105,7 +106,7 @@ The stack shows how each layer builds upon the previous:
 - **Form-based interface** for detailed class/property definition
 - Classes defined as `owl:Class`
 - Properties defined as `owl:ObjectProperty` (relationships) or `owl:DatatypeProperty` (attributes)
-- Stored in Turtle (.ttl) format
+- Serialized as Turtle (default) or [JSON-LD](https://www.w3.org/TR/json-ld11/)
 
 **Generated OWL Example**:
 ```turtle
@@ -122,9 +123,24 @@ The stack shows how each layer builds upon the previous:
 ```
 
 **OntoBricks Components**:
-- `OntologyGenerator` (`src/back/core/w3c/owl/OntologyGenerator.py`) - Generates OWL from UI configuration
-- `OntologyParser` (`src/back/core/w3c/owl/OntologyParser.py`) - Parses existing OWL files
+- `OntologyGenerator` (`src/back/core/w3c/owl/OntologyGenerator.py`) - Generates OWL from UI configuration (Turtle or JSON-LD)
+- `OntologyParser` (`src/back/core/w3c/owl/OntologyParser.py`) - Parses existing OWL files (Turtle, RDF/XML, JSON-LD)
+- `serialize_graph` (`src/back/core/w3c/owl/iri.py`) - Shared Turtle / JSON-LD serialization
 - `OntoViz` (`src/front/static/global/ontoviz/ontoviz.js`) - Visual ontology designer
+
+### 2b. JSON-LD (JSON for Linked Data)
+
+**What it is**: A W3C Recommendation that encodes RDF as JSON with a `@context`, so web apps and LLM agents can consume linked data without a Turtle parser.
+
+**How OntoBricks uses it**:
+- OWL export/import via `format=json-ld` (`GET /api/v1/domain/ontology`, `GET /export-owl`, ontology import)
+- SPARQL `CONSTRUCT` / `DESCRIBE` via `output_format=json-ld` on `POST /api/v1/query`
+- MCP tool `describe_ontology` returns the ontology document as JSON-LD
+- Defaults remain Turtle (OWL) and tabular rows (SPARQL SELECT)
+
+**OntoBricks Components**:
+- `serialize_graph(..., "json-ld")` — builds `@context` from graph namespaces
+- `SparqlQueryRunner.execute_local_query(..., output_format="json-ld")`
 
 ### 3. R2RML (RDB to RDF Mapping Language)
 
@@ -1694,11 +1710,12 @@ Shapes are organized into six data quality categories:
 |----------|---------|---------|
 | RDF | 1.1 | Data model |
 | OWL | 2 | Ontology language |
+| JSON-LD | 1.1 | RDF serialization for APIs and agents |
 | R2RML | W3C Rec | Mapping language |
 | SPARQL | 1.1 | Query language |
 | IF-THEN | W3C Sub | Rule language |
 | SHACL | W3C Rec | Data quality validation |
-| Turtle | 1.1 | RDF serialization |
+| Turtle | 1.1 | RDF serialization (default OWL export) |
 
 ---
 
@@ -2092,6 +2109,7 @@ See [API Documentation](api.md) for complete endpoint reference.
 - **RDF 1.1 Primer**: https://www.w3.org/TR/rdf11-primer/
 - **OWL 2 Web Ontology Language**: https://www.w3.org/TR/owl2-overview/
 - **OWL 2 Profiles (RL, EL, QL)**: https://www.w3.org/TR/owl2-profiles/
+- **JSON-LD 1.1**: https://www.w3.org/TR/json-ld11/
 - **IF-THEN**: https://www.w3.org/submissions/IF-THEN/
 - **SHACL**: https://www.w3.org/TR/shacl/
 - **R2RML: RDB to RDF Mapping Language**: https://www.w3.org/TR/r2rml/
@@ -3084,6 +3102,7 @@ constraints, and rule definitions:
 | **R2RML** | Maps relational tables → RDF; consumed by `SparqlTranslator` to lift SPARQL to Spark SQL | `back/core/w3c/r2rml/` |
 | **SHACL** | Constraint validation over RDF (data quality) | `back/core/w3c/shacl/SHACLService.py` |
 | **OWL / RDFS** | Schema definition + entailment (`OWLRLReasoner` materializes derived triples) | `back/core/w3c/owl/`, `back/core/reasoning/OWLRLReasoner.py` |
+| **JSON-LD** | RDF serialization for OWL exchange and SPARQL graph results (APIs, MCP) | `back/core/w3c/owl/iri.py`, `SparqlQueryRunner` |
 | **IF-THEN** | Authoring syntax for business rules; transpiled to SHACL-AF and compiled to SQL via `ShaclFlatSqlBackend` (Spark SQL on Delta, Postgres SQL on Lakebase). The `query_dialect` flag on `GraphBackend` reserves a slot for a future Cypher backend. | `back/core/reasoning/shacl_rules/` |
 
 ---
@@ -3237,7 +3256,7 @@ traffic. Data-plane routes are fail-closed when no user identity is forwarded.
 | `list_domains` | `GET /api/v1/domains` | REST | UC Volume listing |
 | `list_domain_versions` | `GET /api/v1/domain/versions` | REST | UC Volume listing |
 | `get_design_status` | `GET /api/v1/domain/design-status` | REST | Python aggregator |
-| `describe_ontology` | `GET /api/v1/domain/ontology` + `GET /api/v1/domain/classes` | REST | Ontology schema only (no graph): structured class summary + raw OWL/Turtle |
+| `describe_ontology` | `GET /api/v1/domain/ontology?format=json-ld` + `GET /api/v1/domain/classes` | REST | Ontology schema only (no graph): structured class summary + raw OWL/JSON-LD |
 | `select_domain` | `GET /api/v1/digitaltwin/status` + `GET /api/v1/domain/classes` | REST | MaterializedStore status (Spark SQL) or GraphDB status; class attachments cached for `[Context]` blocks |
 | `list_entity_types` | `GET /api/v1/digitaltwin/stats` | REST | **Spark SQL** GROUP BY on the triple view (Delta) or GraphDB MATCH counts |
 | `describe_entity` | `GET /api/v1/digitaltwin/triples/find` | REST | SPARQL-style BFS internally → **Spark SQL** (Delta) or **Cypher** (GraphDB) |

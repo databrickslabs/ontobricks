@@ -455,8 +455,17 @@ class Ontology:
         axioms=None,
         expressions=None,
         groups=None,
+        output_format: str = "turtle",
     ):
-        return Owl.generate_owl(data, constraints, if_then_rules, axioms, expressions, groups)
+        return Owl.generate_owl(
+            data,
+            constraints,
+            if_then_rules,
+            axioms,
+            expressions,
+            groups,
+            output_format=output_format,
+        )
 
     @staticmethod
     def parse_owl(content, extract_advanced=True):

@@ -751,7 +751,7 @@ Industry-standard modules are fetched directly from their official servers/repos
 
 ### Preview OWL Output
 
-Open **Ontology → General** and switch to the **OWL** tab to preview the generated OWL in Turtle format. Use **Copy**, **Download** or **Regenerate** from that tab. **Studio** also offers **Export** (top right) to download the same OWL.
+Open **Ontology → General** and switch to the **OWL** tab to preview the generated OWL in Turtle format (default). Use **Copy**, **Download** or **Regenerate** from that tab. **Studio** also offers **Export** (top right) to download the same OWL. REST clients and MCP can request the same document as W3C [JSON-LD](https://www.w3.org/TR/json-ld11/) via `format=json-ld` on `GET /api/v1/domain/ontology` or `GET /export-owl`.
 
 ### Save Your Ontology
 
@@ -2768,8 +2768,8 @@ OntoBricks supports multiple ways to create or bootstrap an ontology: from scrat
 
 | Method | Source | Formats | Use Case |
 |--------|--------|---------|----------|
-| **OWL** | Local file or Unity Catalog Volume | `.ttl`, `.owl`, `.rdf`, `.xml` | Load an existing OWL ontology |
-| **RDFS** | Local file or Unity Catalog Volume | `.ttl`, `.rdf`, `.xml`, `.rdfs`, `.n3`, `.nt` | Load an RDF Schema |
+| **OWL** | Local file or Unity Catalog Volume | `.ttl`, `.owl`, `.rdf`, `.xml`, `.jsonld`, `.json` | Load an existing OWL ontology (Turtle, RDF/XML, or JSON-LD) |
+| **RDFS** | Local file or Unity Catalog Volume | `.ttl`, `.rdf`, `.xml`, `.rdfs`, `.n3`, `.nt`, `.jsonld` | Load an RDF Schema |
 | **FIBO** | EDM Council spec server | RDF/XML, Turtle | Financial industry ontology |
 | **CDISC** | PhUSE GitHub repository | RDF/XML, Turtle | Clinical data standards |
 | **IOF** | IOF GitHub repository | RDF/XML | Digital manufacturing ontology |
@@ -2785,9 +2785,9 @@ Import an ontology written in the **Web Ontology Language (OWL)**.
 #### From a Local File
 
 1. Open **Ontology > Import > OWL**.
-2. Click **Choose File** and select an OWL file (`.ttl`, `.owl`, `.rdf`, `.xml`).
+2. Click **Choose File** and select an OWL file (`.ttl`, `.owl`, `.rdf`, `.xml`, `.jsonld`, `.json`).
 3. Click **Import**.
-4. OntoBricks parses the file and loads all classes, properties, constraints, IF-THEN rules, and axioms.
+4. OntoBricks parses the file (Turtle, RDF/XML, or JSON-LD) and loads all classes, properties, constraints, IF-THEN rules, and axioms.
 
 OntoBricks keeps the ontology IRI and label from the file, full IRIs for
 external `rdfs:subClassOf`, domain, and range references, language tags on
@@ -3010,7 +3010,7 @@ After import you can:
 - **SHACL Data Quality Shapes**: Define data quality rules using W3C SHACL — six categories (completeness, cardinality, uniqueness, consistency, conformance, structural), Turtle round-trip (generate/import), and SQL compilation for triple store execution.
 - **Conditional data quality rules**: Guard a conformance or consistency rule with an optional IF block — *IF `status` = active AND `amount` > 1000, THEN `email` must match the pattern*. Conditions use property/operator/value rows, plus `exists` / `does not exist` on relationships, and compile to a SHACL-AF `sh:SPARQLTarget` on export.
 - **OWL Axioms**: Express class relationships, property chains, and complex expressions (equivalent, disjoint, union, intersection).
-- **OWL Generation**: Automatic generation of W3C-compliant OWL/Turtle from visual design. **Ontology → Generate** also reads Unity Catalog **metric views**: dimension columns are entity evidence, measures are never proposed as classes. The Generate source list badges metric views the same way as Context → Data Assets.
+- **OWL Generation**: Automatic generation of W3C-compliant OWL (Turtle by default; JSON-LD on request) from visual design. **Ontology → Generate** also reads Unity Catalog **metric views**: dimension columns are entity evidence, measures are never proposed as classes. The Generate source list badges metric views the same way as Context → Data Assets.
 - **LLM-Powered Auto-Map Icons**: Automatically assign emoji icons to entities based on their names using the LLM saved in **Context → Configuration → AI** (Ontology Studio toolbar). Entities that still use the default icon are mapped immediately; if every entity already has a custom icon, the toolbar asks for confirmation before remapping all of them. Unavailable when **No LLM** is selected.
 - **Ontology Studio (D3 Graph)**: Force-directed graph view of the full ontology under **Ontology → Studio**. Selecting an entity or relationship shows its URI under the name in the side panel. Click an entity to select it, open its panel, and highlight its 1-hop neighbourhood (connected links + neighbours dimmed). The toolbar **Select** toggle (bounding-box icon) turns click-to-toggle and empty-canvas marquee on without holding a modifier; Ctrl/Cmd-click and Ctrl/Cmd-drag still work when the toggle is off. Ctrl/Cmd-click toggles an entity in a multi-selection without opening the panel. Ctrl/Cmd-drag on empty canvas draws a marquee that replaces the selection with every entity inside the rectangle (an empty marquee leaves the current set). Plain drag on empty canvas still pans; Escape clears a multi-selection (after connection mode, if any). Dragging one selected node moves the whole set. Right-click a multi-selection offers **Create Business View** and **Delete N entities** only — Create Business View writes `Auto_Selection` (numeric suffix on collision) with exactly the selected entities plus object-property/inheritance links whose both endpoints are selected, then opens Business Views. Single-entity right-click still creates `Auto_<entity>` plus the 1-hop neighbourhood. Click a relationship to highlight its two endpoints. Subclasses show dashed inherited outgoing relations from ancestor object-properties (read-only; Mapping reuses the declaring class’s mapping). Toggle inheritance links and the OntoViz-style dotted canvas grid (both persisted). Search any entity by name to pan/zoom to it with neighbourhood highlight. Metadata-only saves (label, icon, reference, relationship direction) refresh visible nodes in place; topology changes still rebuild the map.
 - **Import Entity (Studio)**: The Studio header **Import entity** button copies entities from another registry domain (latest version). A modal lists the source entities with their 1-hop related entities (opt-in), previews the entity/relationship counts, flags name conflicts (keep existing or rename), and imports the selection with attributes, icon, description, resolvable parent, and the relationships whose endpoints are imported or already exist. Source URIs are kept (rename rewrites the local name under the source namespace) and each copy records `importedFrom`. Mappings, rules, constraints and groups are not imported.
@@ -3088,7 +3088,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Context → Configuration — Knowledge Graph fields**: Triple-store FQN and Graph DB table name (e.g. Lakebase `g_<domain>_v<version>`) refresh when the domain name is **committed** (blur / `change`) or the version changes, so previews match naming rules before save. When the backend is Neo4j, a required **Neo4j connection** dropdown lists Settings profiles (no per-domain database override).
 - **Duplicate context names**: Save to registry is blocked when the sanitized name already exists (`/domain/check-name` + guard on **Save**); inline validation clears when the name is cleared or the check errors.
 - **Navbar context identity**: Top bar name/version invalidate cached `/navbar/state` (and related caches) after domain mutations so reloads and navigations do not show stale labels for up to 15 seconds.
-- **Import/Export**: Import OWL and RDFS ontologies, import industry-standard ontologies (FIBO, CDISC, IOF, HL7 FHIR R4/R4B/R5), import/export R2RML mappings, and export OWL files.
+- **Import/Export**: Import OWL (Turtle, RDF/XML, JSON-LD) and RDFS ontologies, import industry-standard ontologies (FIBO, CDISC, IOF, HL7 FHIR R4/R4B/R5), import/export R2RML mappings, and export OWL as Turtle or JSON-LD.
 - **Registry OBX Export/Import**: Export one or more registry domains to a portable `.obx` file directly from **Registry → Browse** with per-domain version-mode selection (Latest / Active / All / Choose). Import with per-domain selection checkboxes plus conflict resolution (Skip / Add missing versions / Rename). Existing local versions are never replaced; the highest newly written version starts as DRAFT. An integer `format_version` field ensures backward compatibility as the format evolves.
 - **GitHub Repository Mirror**: One GitHub repository per instance (**Settings → GitHub**) receives a commit on every registry save, organised by domain and version, with the OWL and R2RML Turtle files next to the JSON sources (ontology, rules, mappings, layouts, options). Restore with **Import → Load from GitHub repository**. See [Configuration → GitHub](#configuration--github-repository-mirror).
 - **Project Save/Load**: Save and load projects as JSON for backup or sharing.

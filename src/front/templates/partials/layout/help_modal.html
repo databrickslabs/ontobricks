@@ -243,7 +243,7 @@
                                                 <li><strong>Business Rules (IF-THEN)</strong> &mdash; author inference rules using the graphical D3 editor</li>
                                                 <li><strong>Expr. &amp; Axioms</strong> &mdash; equivalent, disjoint, union, inverse, property chains...</li>
                                             </ul>
-                                            <p>Export the generated OWL/Turtle from <strong>Studio</strong> with <strong>Export</strong> (top right).</p>
+                                            <p>Export the generated OWL/Turtle from <strong>Studio</strong> with <strong>Export</strong> (top right). REST and MCP also serve OWL as W3C <strong>JSON-LD</strong> when callers pass <code>format=json-ld</code>.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -406,7 +406,7 @@
                             <div class="accordion help-accordion" id="helpFaqAccordion">
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">What is an ontology, really?</button></h2>
-                                    <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">An ontology is a formal description of the concepts (classes/entities), their properties (attributes), and the relationships between them in a context. OntoBricks expresses ontologies in the W3C <strong>OWL</strong> standard and materializes data as RDF triples.</div></div>
+                                    <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">An ontology is a formal description of the concepts (classes/entities), their properties (attributes), and the relationships between them in a context. OntoBricks expresses ontologies in the W3C <strong>OWL</strong> standard (Turtle or <strong>JSON-LD</strong>) and materializes data as RDF triples.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">Do I have to write OWL or SPARQL by hand?</button></h2>
@@ -512,6 +512,7 @@
                                 <dt>Attribute / Data Property</dt><dd>A scalar value attached to an entity (e.g. <em>email</em>, <em>birthDate</em>).</dd>
                                 <dt>Relationship / Object Property</dt><dd>A link between two entities (e.g. <em>Customer placedOrder Order</em>).</dd>
                                 <dt>OWL</dt><dd>W3C Web Ontology Language &mdash; the vocabulary OntoBricks uses to describe the ontology.</dd>
+                                <dt>JSON-LD</dt><dd>W3C JSON for Linked Data &mdash; RDF encoded as JSON with a <code>@context</code>. Used for OWL import/export, SPARQL CONSTRUCT/DESCRIBE results, and the MCP <code>describe_ontology</code> tool.</dd>
                                 <dt>RDF / Triple</dt><dd>Subject-Predicate-Object statement &mdash; the native data model of the triple store.</dd>
                                 <dt>R2RML</dt><dd>W3C standard for mapping relational data (SQL tables) to RDF triples.</dd>
                                 <dt>SHACL</dt><dd>W3C Shapes Constraint Language &mdash; used for data quality validation.</dd>
@@ -576,7 +577,9 @@
                                         <h5><i class="bi bi-globe me-2"></i>W3C standards</h5>
                                         <ul class="list-unstyled mb-0">
                                             <li><a href="https://www.w3.org/TR/owl2-overview/" target="_blank" rel="noopener">OWL 2 <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.w3.org/TR/json-ld11/" target="_blank" rel="noopener">JSON-LD 1.1 <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                             <li><a href="https://www.w3.org/TR/r2rml/" target="_blank" rel="noopener">R2RML <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.w3.org/TR/sparql11-query/" target="_blank" rel="noopener">SPARQL 1.1 <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                             <li><a href="https://www.w3.org/TR/shacl/" target="_blank" rel="noopener">SHACL <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                             <li><a href="https://www.w3.org/submissions/IF-THEN/" target="_blank" rel="noopener">IF-THEN <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                         </ul>

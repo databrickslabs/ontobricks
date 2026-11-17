@@ -9,7 +9,7 @@ from typing import List, Dict
 
 from back.core.logging import get_logger
 from back.core.w3c.owl.OntologyRdfExtras import OntologyRdfExtras
-from back.core.w3c.owl.iri import serialize_turtle
+from back.core.w3c.owl.iri import serialize_graph
 from shared.config.constants import ONTOBRICKS_NS
 
 logger = get_logger(__name__)
@@ -91,12 +91,8 @@ class OntologyGenerator:
         self.graph.bind("ontobricks", ONTOBRICKS_NS)
         self.graph.bind(self._domain_prefix, self.ns)
 
-    def generate(self) -> str:
-        """Generate OWL content.
-
-        Returns:
-            OWL content as string (Turtle format)
-        """
+    def generate(self, output_format: str = "turtle") -> str:
+        """Generate OWL content (``turtle`` or ``json-ld``)."""
         # Create ontology
         ontology_uri = URIRef(self.base_uri.rstrip("#"))
         self.graph.add((ontology_uri, RDF.type, OWL.Ontology))
@@ -140,8 +136,7 @@ class OntologyGenerator:
             self.graph, self.rdf_extras, live_subjects=live_subjects
         )
 
-        # Serialize to Turtle format
-        return serialize_turtle(self.graph)
+        return serialize_graph(self.graph, output_format)
 
     @staticmethod
     def _local_name(ref: str) -> str:

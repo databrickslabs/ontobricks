@@ -52,3 +52,16 @@ class TestParseRdfFlexible:
         turtle = "@prefix owl: <http://www.w3.org/2002/07/owl#> . <http://t.org> a owl:Ontology ."
         graph = parse_rdf_flexible(turtle, formats=("turtle",))
         assert len(graph) > 0
+
+    def test_jsonld_format(self):
+        jsonld = """
+        {
+          "@context": {
+            "owl": "http://www.w3.org/2002/07/owl#"
+          },
+          "@id": "http://test.org/ont",
+          "@type": "owl:Ontology"
+        }
+        """
+        graph = parse_rdf_flexible(jsonld, formats=("json-ld",))
+        assert len(graph) > 0

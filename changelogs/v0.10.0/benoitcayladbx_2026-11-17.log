@@ -54,6 +54,107 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10782 passed, 333 skipped, 8 deselected, 39 warnings in 50.11s ========
 
+## JSON-LD Interop Phase 1 (OWL export/import, SPARQL CONSTRUCT, MCP)
+
+Context:
+OntoBricks already spoke RDF via Turtle/RDF-XML, but external systems and LLM
+agents prefer JSON-LD. Phase 1 adds JSON-LD as an opt-in serialization for OWL
+export/import, SPARQL CONSTRUCT/DESCRIBE results, and the MCP describe_ontology
+tool, without changing default Turtle / tabular-row behaviour.
+
+Changes:
+
+1. src/back/core/w3c/owl/iri.py
+   Added serialize_graph(turtle|json-ld) with shared IRI-safe escaping; serialize_turtle delegates to it.
+2. src/back/core/w3c/owl/OntologyGenerator.py
+   generate(output_format=...) serializes via serialize_graph.
+3. src/back/objects/ontology/Owl.py, Ontology.py
+   generate_owl accepts output_format (turtle default, json-ld).
+4. src/api/routers/internal/ontology.py
+   GET /export-owl?format=turtle|json-ld.
+5. src/back/core/w3c/owl/OntologyParser.py
+   Accepts json-ld; extracted _salvage_truncated_owl so JSON documents are not mangled.
+6. src/back/core/w3c/sparql/SparqlQueryRunner.py, DomainQueryService.py
+   output_format=json-ld for CONSTRUCT/DESCRIBE; ValidationError on SELECT/ASK.
+7. src/api/routers/v1.py
+   QueryModel.output_format; response may include jsonld.
+8. src/api/routers/domains.py
+   GET /domain/ontology?format=json-ld; helper _owl_document_for_domain.
+9. src/mcp-server/server/tools.py
+   describe_ontology requests and displays OWL (JSON-LD).
+10. tests/units/ontology/test_owl_jsonld.py, test_rdf_utils.py
+    Export/import isomorphic round-trip and parse_rdf_flexible json-ld case.
+11. tests/units/core/test_sparql_jsonld.py
+    CONSTRUCT json-ld, limit, SELECT rejection, rows default.
+12. tests/units/mcp/test_domain_policy_gating.py
+    Mock ontology payload and assertions updated for JSON-LD.
+13. docs/api.md, docs/mcp.md, docs/architecture.md, docs/user-guide.md, README.md
+    Document format=json-ld / output_format and MCP JSON-LD behaviour.
+
+Modified files:
+- src/back/core/w3c/owl/iri.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/objects/ontology/Owl.py
+- src/back/objects/ontology/Ontology.py
+- src/api/routers/internal/ontology.py
+- src/api/routers/domains.py
+- src/api/routers/v1.py
+- src/back/core/w3c/sparql/SparqlQueryRunner.py
+- src/back/core/w3c/sparql/DomainQueryService.py
+- src/mcp-server/server/tools.py
+- tests/units/ontology/test_owl_jsonld.py
+- tests/units/ontology/test_rdf_utils.py
+- tests/units/core/test_sparql_jsonld.py
+- tests/units/mcp/test_domain_policy_gating.py
+- docs/api.md
+- docs/mcp.md
+- docs/architecture.md
+- docs/user-guide.md
+- README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10790 passed, 333 skipped, 8 deselected, 44 warnings in 49.37s ========
+
+## Document W3C JSON-LD as a first-class standard
+
+Context:
+Phase 1 JSON-LD interop landed in code; product-facing docs still presented
+OntoBricks as OWL/Turtle-first. Surface JSON-LD as an explicit W3C standard in
+the README, architecture, product, user guide, Help Center, About page, and
+Sphinx API overview so operators and agents discover the format.
+
+Changes:
+
+1. README.md
+   Standards bullet and GitHub-mirror note now cite W3C JSON-LD with API/MCP usage.
+2. docs/architecture.md
+   Stack table, Key Standards (new JSON-LD section), External Standards table,
+   References, and Supporting W3C standards list.
+3. docs/product.md, docs/user-guide.md, docs/getting-started.md
+   Import/export formats and standards bridge copy include JSON-LD.
+4. docs/sphinx/index.rst, overview/architecture.rst, api/app.core.w3c.rst
+   Sphinx overview and W3C API page document Turtle/JSON-LD serialization helpers.
+5. src/front/templates/partials/layout/help_modal.html
+   Glossary entry, W3C resources links (JSON-LD + SPARQL), FAQ, export hint.
+6. src/front/templates/about.html
+   Capabilities list and Resources link to JSON-LD 1.1.
+
+Modified files:
+- README.md
+- docs/architecture.md
+- docs/product.md
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/sphinx/index.rst
+- docs/sphinx/overview/architecture.rst
+- docs/sphinx/api/app.core.w3c.rst
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/about.html
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q tests/units/api/test_help_api.py -m "not scenario"` → 41 passed in 1.68s
+
 ## Use official Genie and Unity Catalog icons in Context menu
 
 Context:
@@ -125,6 +226,35 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10791 passed, 333 skipped, 8 deselected, 44 warnings in 48.77s
+
+## JSON-LD coverage tests (API, MCP, Help Center)
+
+Context:
+Core JSON-LD behaviour and docs were in place; route-level, MCP request,
+and Help Center contract coverage was thin. Add focused unit tests for the
+gaps without redoing the existing round-trip suite.
+
+Changes:
+
+1. tests/units/api/test_external_api.py
+   GET /domain/ontology format=json-ld + invalid format; SPARQL query
+   forwards output_format=json-ld and returns jsonld payload.
+2. tests/units/front/test_help_center_jsonld.py (new)
+   Help glossary, W3C JSON-LD link, FAQ copy, About page capability/spec.
+3. tests/units/ontology/test_owl_jsonld.py
+   serialize_graph rejects unsupported formats; JSON-LD salvage leaves
+   documents intact.
+4. tests/units/mcp/test_domain_policy_gating.py
+   describe_ontology asserts format=json-ld on the ontology GET params.
+
+Modified files:
+- tests/units/api/test_external_api.py
+- tests/units/front/test_help_center_jsonld.py
+- tests/units/ontology/test_owl_jsonld.py
+- tests/units/mcp/test_domain_policy_gating.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q tests/units/api/test_external_api.py::TestDomainOntologyGET tests/units/api/test_external_api.py::TestAPIv1Query::test_query_jsonld_output_format_forwarded tests/units/front/test_help_center_jsonld.py tests/units/ontology/test_owl_jsonld.py tests/units/mcp/test_domain_policy_gating.py::test_describe_ontology_is_allowed_on_an_ontology_only_domain -m "not scenario"` → 15 passed
 
 ## Align Context dropdown brand icons with Bootstrap Icons
 

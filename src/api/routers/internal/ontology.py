@@ -312,12 +312,22 @@ async def import_owl(
 
 
 @router.get("/export-owl")
-async def export_owl(session_mgr: SessionManager = Depends(get_session_manager)):
-    """Export ontology to OWL/TTL format."""
+async def export_owl(
+    format: str = "turtle",
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Export ontology to OWL (Turtle or JSON-LD)."""
     domain = get_domain(session_mgr)
 
     if not domain.get_classes():
         raise NotFoundError("No ontology to export")
+
+    fmt = (format or "turtle").strip().lower()
+    if fmt not in ("turtle", "json-ld"):
+        raise ValidationError(
+            f"Unsupported export format: {format}",
+            detail="Supported formats: turtle, json-ld",
+        )
 
     with map_route_errors("OWL export failed", logger):
         owl_content = Ontology.generate_owl(
@@ -327,8 +337,9 @@ async def export_owl(session_mgr: SessionManager = Depends(get_session_manager))
             domain.axioms,
             domain.expressions,
             domain.groups,
+            output_format=fmt,
         )
-        return {"success": True, "owl_content": owl_content, "format": "turtle"}
+        return {"success": True, "owl_content": owl_content, "format": fmt}
 
 
 @router.get("/get-loaded-ontology")

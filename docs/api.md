@@ -355,17 +355,19 @@ Execute a SPARQL query against a domain's ontology.
     "project_path": "/Volumes/catalog/schema/volume/domain.json",
     "query": "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10",
     "limit": 100,
-    "engine": "local"
+    "engine": "local",
+    "output_format": "rows"
 }
 ```
 
 **Parameters:**
 - `project_path` (required): Path to the domain JSON file in Unity Catalog
 - `query` (required): SPARQL query string
-- `limit` (optional): Maximum number of results (default: 100)
+- `limit` (optional): Maximum number of results (default: 100). For `CONSTRUCT`/`DESCRIBE` with `output_format=json-ld`, this truncates triples (not complete subgraphs).
 - `engine` (optional): Query engine - `local` (RDFLib) or `spark` (default: `local`)
+- `output_format` (optional): `rows` (default tabular bindings) or `json-ld` (`CONSTRUCT`/`DESCRIBE` only; rejected for `SELECT`/`ASK`)
 
-**Response:**
+**Response (rows):**
 ```json
 {
     "success": true,
@@ -376,6 +378,24 @@ Execute a SPARQL query against a domain's ontology.
         "columns": ["s", "p", "o"],
         "count": 1,
         "engine": "local"
+    }
+}
+```
+
+**Response (`output_format=json-ld` on CONSTRUCT/DESCRIBE):**
+```json
+{
+    "success": true,
+    "data": {
+        "results": [],
+        "columns": [],
+        "count": 3,
+        "engine": "local",
+        "format": "json-ld",
+        "jsonld": {
+            "@context": {"ex": "http://example.org/"},
+            "@graph": [{"@id": "ex:entity1", "@type": "ex:Person"}]
+        }
     }
 }
 ```
@@ -774,10 +794,12 @@ Check backend type, table name, data availability, and triple count.
 
 #### `GET /api/v1/domain/ontology`
 
-Return the domain's OWL ontology in Turtle format.
+Return the domain's OWL ontology. Defaults to Turtle; pass `format=json-ld` for JSON-LD.
 
 **Parameters:**
-- `project_name` (query, optional): Domain name in the registry
+- `domain_name` (query, optional): Context name in the registry
+- `domain_version` (query, optional): Context version (latest if omitted)
+- `format` (query, optional): `turtle` (default) or `json-ld`
 
 ---
 
@@ -2922,9 +2944,9 @@ Check backend type, table name, data availability, and triple count.
 GET /api/v1/domain/ontology
 ```
 
-**Query Parameters:** `project_name` (optional)
+**Query Parameters:** `domain_name` (optional), `domain_version` (optional), `format` (`turtle` default, or `json-ld`)
 
-Return the domain's OWL ontology in Turtle format.
+Return the domain's OWL ontology in Turtle or JSON-LD.
 
 #### R2RML Mapping
 

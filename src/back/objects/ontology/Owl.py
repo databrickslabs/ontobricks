@@ -53,6 +53,7 @@ class Owl:
         axioms=None,
         expressions=None,
         groups=None,
+        output_format: str = "turtle",
     ):
         """Generate OWL from ontology configuration.
 
@@ -63,6 +64,7 @@ class Owl:
             axioms: list of OWL axioms (optional)
             expressions: list of OWL class expressions (optional)
             groups: list of entity group definitions (optional)
+            output_format: ``turtle`` (default) or ``json-ld``
 
         Returns:
             str: Generated OWL content
@@ -80,7 +82,7 @@ class Owl:
             groups=groups,
             rdf_extras=data.get("rdf_extras"),
         )
-        return generator.generate()
+        return generator.generate(output_format=output_format)
 
     @staticmethod
     def parse_owl(content, extract_advanced=True):

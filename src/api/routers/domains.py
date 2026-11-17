@@ -585,12 +585,43 @@ async def get_domain_classes(
 # ---------------------------------------------------------------------------
 
 
+def _owl_document_for_domain(domain: Any, fmt: str) -> str:
+    """Serialize the domain ontology as Turtle (cached) or JSON-LD."""
+    from back.objects.ontology import Ontology
+
+    kwargs = dict(
+        data=domain.ontology,
+        constraints=domain.constraints,
+        if_then_rules=domain.if_then_rules,
+        axioms=domain.axioms,
+        expressions=domain.expressions,
+        groups=domain.groups,
+    )
+    if fmt == "json-ld":
+        try:
+            return Ontology.generate_owl(**kwargs, output_format="json-ld")
+        except Exception as e:
+            logger.exception("OWL JSON-LD generation failed: %s", e)
+            raise InfrastructureError(f"OWL generation failed: {e}") from e
+
+    domain.ensure_generated_content()
+    owl_content = domain.generated.get("owl", "")
+    if owl_content:
+        return owl_content
+    try:
+        owl_content = Ontology.generate_owl(**kwargs)
+        domain.generated["owl"] = owl_content
+        return owl_content
+    except Exception as e:
+        logger.exception("OWL generation failed: %s", e)
+        raise InfrastructureError(f"OWL generation failed: {e}") from e
+
+
 @router.get(
     "/domain/ontology",
     response_model=OWLResponse,
-    summary="Get context ontology (OWL/Turtle)",
-    description="Return the context's ontology serialized as OWL in Turtle format. "
-    "Includes the full OWL document, base URI, and class/property counts.",
+    summary="Get context ontology (OWL)",
+    description="Return the context ontology as OWL (Turtle default, or JSON-LD).",
 )
 async def get_domain_ontology(
     domain_name: Optional[str] = Query(
@@ -610,9 +641,20 @@ async def get_domain_ontology(
     registry_volume: Optional[str] = Query(
         None, description="Override registry volume"
     ),
+    format: str = Query(
+        "turtle",
+        description="Serialization format: turtle (default) or json-ld",
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
+    fmt = (format or "turtle").strip().lower()
+    if fmt not in ("turtle", "json-ld"):
+        raise ValidationError(
+            f"Unsupported ontology format: {format}",
+            detail="Supported formats: turtle, json-ld",
+        )
+
     domain = DigitalTwin.resolve_domain(
         domain_name,
         session_mgr,
@@ -628,40 +670,21 @@ async def get_domain_ontology(
     if not classes:
         raise ValidationError("Context has no ontology classes defined")
 
-    domain.ensure_generated_content()
-    owl_content = domain.generated.get("owl", "")
-
-    if not owl_content:
-        try:
-            from back.objects.ontology import Ontology
-
-            owl_content = Ontology.generate_owl(
-                domain.ontology,
-                domain.constraints,
-                domain.if_then_rules,
-                domain.axioms,
-                domain.expressions,
-                domain.groups,
-            )
-            domain.generated["owl"] = owl_content
-        except Exception as e:
-            logger.exception("OWL generation failed: %s", e)
-            raise InfrastructureError(f"OWL generation failed: {e}") from e
-
+    owl_content = _owl_document_for_domain(domain, fmt)
     if not owl_content:
         raise InfrastructureError("Could not generate OWL content")
 
     base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
     logger.info(
-        "API: returning OWL for context '%s' (%d classes, %d properties)",
+        "API: returning OWL (%s) for context '%s' (%d classes, %d properties)",
+        fmt,
         domain.domain_folder or "(session)",
         len(classes),
         len(properties),
     )
-
     return OWLResponse(
         success=True,
-        format="turtle",
+        format=fmt,
         content=owl_content,
         base_uri=base_uri,
         class_count=len(classes),

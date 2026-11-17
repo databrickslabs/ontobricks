@@ -36,11 +36,13 @@ class DomainQueryService:
         query: str,
         limit: int = 100,
         engine: str = "local",
+        output_format: str = "rows",
     ) -> Dict[str, Any]:
         """Execute a SPARQL query against domain data.
 
         Raises:
-            ValidationError: No R2RML mapping or unsupported engine.
+            ValidationError: No R2RML mapping, unsupported engine, or unsupported
+                ``output_format``.
             InfrastructureError: Query execution failure.
         """
         from back.objects.domain.payload import resolve_domain_slice  # deferred: w3c↔objects cycle
@@ -60,6 +62,7 @@ class DomainQueryService:
                 query=query,
                 rdf_content=r2rml,
                 limit=limit,
+                output_format=output_format,
             )
             if not result.get("success"):
                 raise InfrastructureError(

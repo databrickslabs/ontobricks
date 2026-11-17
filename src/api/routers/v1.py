@@ -99,6 +99,15 @@ class QueryModel(DomainPathModel):
         description="Query execution engine: 'local' (RDFLib) or 'spark' (Databricks SQL)",
         examples=["local", "spark"],
     )
+    output_format: str = Field(
+        "rows",
+        description=(
+            "Result encoding: 'rows' (default tabular binding list) or "
+            "'json-ld' (CONSTRUCT/DESCRIBE only). Note: limit truncates "
+            "triples, not complete subgraphs."
+        ),
+        examples=["rows", "json-ld"],
+    )
 
 
 class ValidateQueryModel(BaseModel):
@@ -380,17 +389,23 @@ async def execute_query(
 
     domain_data = service.load_domain_from_uc(data.domain_path, host, token)
     result = service.execute_sparql_query(
-        domain_data, data.query, data.limit, data.engine
+        domain_data,
+        data.query,
+        data.limit,
+        data.engine,
+        output_format=data.output_format,
     )
 
-    return SuccessResponse(
-        data={
-            "results": result.get("results", []),
-            "columns": result.get("columns", []),
-            "count": result.get("count", 0),
-            "engine": result.get("engine", data.engine),
-        }
-    )
+    payload = {
+        "results": result.get("results", []),
+        "columns": result.get("columns", []),
+        "count": result.get("count", 0),
+        "engine": result.get("engine", data.engine),
+    }
+    if "jsonld" in result:
+        payload["jsonld"] = result["jsonld"]
+        payload["format"] = result.get("format", "json-ld")
+    return SuccessResponse(data=payload)
 
 
 @router.post("/query/validate", response_model=SuccessResponse)

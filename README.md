@@ -21,7 +21,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/runs%20on-Databricks%20Apps-FF3621.svg" alt="Databricks Apps">
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python">
-  <img src="https://img.shields.io/badge/standards-OWL%20·%20R2RML%20·%20SPARQL-6E4AFF.svg" alt="Standards">
+  <img src="https://img.shields.io/badge/standards-OWL%20·%20JSON--LD%20·%20R2RML%20·%20SPARQL-6E4AFF.svg" alt="Standards">
   <img src="https://img.shields.io/badge/AI-MCP%20ready-10B981.svg" alt="MCP ready">
 </p>
 
@@ -74,8 +74,10 @@ months-long integration project.
   already have: Unity Catalog, SQL Warehouse, AI Gateway or Model Serving,
   and Lakebase. Your
   triples stay in your Lakehouse.
-- **Standards under the hood, simplicity on top.** OWL, R2RML and SPARQL power
-  the engine; everything executes as Spark SQL. Your users never touch RDF.
+- **Standards under the hood, simplicity on top.** W3C **OWL**, **JSON-LD**,
+  **R2RML**, **SPARQL**, and **SHACL** power the engine; everything executes as
+  Spark SQL. Your users never touch RDF. Ontologies import/export as Turtle or
+  JSON-LD; SPARQL `CONSTRUCT`/`DESCRIBE` can return JSON-LD for APIs and agents.
 - **Built for the AI era.** Publish any domain to LLM agents over the Model
   Context Protocol (MCP) and let them reason over governed, explainable
   business semantics.
@@ -190,7 +192,8 @@ rather than false success. Move
 domains between environments with the **OBX** export/import or the
 [GitHub mirror](docs/advanced_features.md#registry-import-and-export) — one
 commit per save, organised by domain and version, with OWL and R2RML Turtle
-files alongside the JSON sources
+files alongside the JSON sources. REST and MCP also expose OWL as
+[JSON-LD](https://www.w3.org/TR/json-ld11/) when callers ask for it
 ([Settings → GitHub](docs/user-guide.md#configuration--github-repository-mirror)).
 
 ### Pluggable graph engine
