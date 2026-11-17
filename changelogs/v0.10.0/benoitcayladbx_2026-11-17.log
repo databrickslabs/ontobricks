@@ -918,3 +918,31 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 51.14s
+
+
+## Patterns bar chart — show each bar's share of the type population
+
+Context:
+On top of each bar the chart already shows the entity count; add the
+percentage of the total type population below it, in parentheses
+(bar value / population_count).
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   _patternsChartHtml() now reads stats.population_count and, when known,
+   renders a second label "(X%)" under each bar's value (X = support /
+   population). Raised the top headroom (TOP 18 → 30) to fit two stacked
+   labels; aria-label and <title> now include the percentage. The percentage
+   is omitted when the population is unknown (older runs).
+2. src/front/static/intelligence/css/intelligence.css
+   Added .pat-chart-bar-pct (muted, slightly smaller than the value).
+3. tests/units/front/test_intelligence_page_contract.py
+   Assert pat-chart-bar-pct is present in JS and CSS.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 49.59s

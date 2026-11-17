@@ -1442,6 +1442,12 @@ a.sim-uri-link:focus-visible {
     fill: var(--db-text, #191817);
 }
 
+.pat-chart-bar-pct {
+    font-size: 0.6rem;
+    font-weight: 500;
+    fill: var(--db-text-muted, #6F6B65);
+}
+
 .pat-chart-bar-label {
     font-size: 0.65rem;
     fill: var(--db-text-muted, #6F6B65);

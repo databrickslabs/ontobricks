@@ -988,6 +988,8 @@ def test_patterns_section_owns_discovery():
     assert "_entityCount" in js
     assert "_patternCount" in js
     assert "_coveragePct" in js
+    # Each bar also shows its share of the type population in parentheses.
+    assert "pat-chart-bar-pct" in js
     assert "Matching entities" in js
     assert "data-pat-members" in js
     assert "openMembersModal" in js
@@ -1028,6 +1030,7 @@ def test_patterns_section_owns_discovery():
     assert ".pat-members-btn" in css
     assert ".pat-chart-card" in css
     assert ".pat-chart-bar" in css
+    assert ".pat-chart-bar-pct" in css
     assert ".pat-form-info" in css
     assert "height: var(--pat-chip-h" in css.split(".pat-members-btn", 1)[1].split("}", 1)[0]
     assert 'class="pat-kpi-row pat-detail-kpis"' in js

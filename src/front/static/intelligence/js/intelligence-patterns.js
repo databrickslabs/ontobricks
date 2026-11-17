@@ -700,11 +700,12 @@ const IntelligencePatterns = {
         const patterns = (this.latest && this.latest.patterns) || [];
         if (!patterns.length) return '';
         const collapsed = !!this._chartCollapsed;
+        const universe = Number((this.latest && this.latest.stats || {}).population_count) || 0;
         const max = Math.max(1, ...patterns.map((p) => Number(p.support) || 0));
         const SLOT = 54;
         const BAR = 30;
         const PLOT = 120;
-        const TOP = 18;
+        const TOP = 30;          // room for the value + (percentage) above bars
         const LEFT = 4;
         const BASE = TOP + PLOT;
         const H = BASE + 24;     // room for the #N labels under each bar
@@ -715,11 +716,21 @@ const IntelligencePatterns = {
             const x = LEFT + i * SLOT + (SLOT - BAR) / 2 + 4;
             const y = BASE - h;
             const active = p.id === selectedId ? ' pat-chart-bar--active' : '';
+            // Share of all entities of the type this pattern accounts for.
+            const pct = universe ? Math.round((v / universe) * 100) : null;
+            const aria = pct != null
+                ? `Pattern #${i + 1}: ${this._fmtNum(v)} entities (${pct}%)`
+                : `Pattern #${i + 1}: ${this._fmtNum(v)} entities`;
+            const pctText = pct != null
+                ? `<text class="pat-chart-bar-pct" x="${x + BAR / 2}" y="${y - 4}" text-anchor="middle">(${pct}%)</text>`
+                : '';
+            const valueY = pct != null ? y - 15 : y - 4;
             return `<g class="pat-chart-bar${active}" data-pat-id="${this._esc(p.id)}"`
-                + ` role="button" tabindex="0" aria-label="Pattern #${i + 1}: ${this._esc(this._fmtNum(v))} entities">`
-                + `<title>Pattern #${i + 1} — ${this._esc(this._fmtNum(v))} entities</title>`
+                + ` role="button" tabindex="0" aria-label="${this._esc(aria)}">`
+                + `<title>${this._esc(aria)}</title>`
                 + `<rect class="pat-chart-bar-rect" x="${x}" y="${y}" width="${BAR}" height="${Math.max(h, 1)}" rx="3"></rect>`
-                + `<text class="pat-chart-bar-value" x="${x + BAR / 2}" y="${y - 4}" text-anchor="middle">${this._esc(this._fmtNum(v))}</text>`
+                + `<text class="pat-chart-bar-value" x="${x + BAR / 2}" y="${valueY}" text-anchor="middle">${this._esc(this._fmtNum(v))}</text>`
+                + pctText
                 + `<text class="pat-chart-bar-label" x="${x + BAR / 2}" y="${BASE + 16}" text-anchor="middle">#${i + 1}</text>`
                 + `</g>`;
         }).join('');
