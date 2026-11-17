@@ -364,6 +364,14 @@ const IntelligencePatterns = {
         return patterns.length;
     },
 
+    // Total number of entities of the type in the run (the Coverage
+    // denominator). Unknown (runs saved before it was persisted) → "—".
+    _entityCount() {
+        const stats = (this.latest && this.latest.stats) || {};
+        const universe = Number(stats.population_count) || 0;
+        return universe ? this._fmtNum(universe) : '—';
+    },
+
     // Share of the entity universe (all entities of the type) that follow a
     // pattern = covered_count / population_count. Needs the run's total
     // population; unknown (runs saved before it was persisted) → "—".
@@ -667,6 +675,8 @@ const IntelligencePatterns = {
                     + ' — Save again from a Detect run that includes the neighbourhood diagram.</p>'
                 : '<p class="text-muted small mb-0">Re-run <strong>Detect</strong> to draw this pattern.</p>');
         const kpis = this._kpiTile('Hops', this._fmtNum(shape.hop_count))
+            + this._kpiTile('Entities', this._entityCount(),
+                'Total entities of this type in the run')
             + this._kpiTile('Patterns', this._fmtNum(this._patternCount()),
                 'Patterns detected in this run')
             + this._kpiTile('Coverage', this._coveragePct(),

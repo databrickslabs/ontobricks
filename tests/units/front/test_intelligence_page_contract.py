@@ -978,11 +978,14 @@ def test_patterns_section_owns_discovery():
     assert "_renderStats" not in js
     assert "this._kpiTile('Detail'" not in js
     assert "this._kpiTile('Refined'" not in js
-    # KPIs: run-level Patterns count + Coverage %, no per-pattern Types/Relations.
+    # KPIs: Entities (type population) + run-level Patterns count + Coverage %,
+    # no per-pattern Types/Relations.
+    assert "this._kpiTile('Entities'" in js
     assert "this._kpiTile('Patterns'" in js
     assert "this._kpiTile('Coverage'" in js
     assert "this._kpiTile('Types'" not in js
     assert "this._kpiTile('Relations'" not in js
+    assert "_entityCount" in js
     assert "_patternCount" in js
     assert "_coveragePct" in js
     assert "Matching entities" in js

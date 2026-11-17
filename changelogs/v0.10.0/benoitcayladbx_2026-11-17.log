@@ -896,3 +896,25 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 65.55s
+
+
+## Patterns — add "Entities" KPI (type population)
+
+Context:
+After exposing the true type population for the Coverage KPI, surface it
+directly: a new KPI badge next to the dropdown shows the total number of
+entities of the type in the run (the Coverage denominator).
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Added _entityCount() (reads stats.population_count, "—" when unknown) and a
+   new "Entities" KPI tile in _detailsHtml, placed between Hops and Patterns.
+2. tests/units/front/test_intelligence_page_contract.py
+   Assert the Entities KPI tile and _entityCount helper are present.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-17.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10831 passed, 333 skipped, 8 deselected, 44 warnings in 51.14s
