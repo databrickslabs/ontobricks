@@ -45,41 +45,22 @@
     font-size: 0.85rem;
 }
 
+/* Panel chrome (border / radius / shadow / fill) is owned by the shared
+   Bootstrap ``.card`` rules in main.css — do not redeclare them here. */
 .graph-chat-container {
     --gc-user-start: var(--db-primary);
     --gc-user-end:   var(--db-primary-dark);
     --gc-bot-bg:     #ffffff;
     --gc-bot-border: #e9ecef;
-    --gc-panel-bg:   #ffffff;
     --gc-shadow-sm:  0 1px 2px rgba(15, 23, 42, 0.06);
     --gc-shadow-md:  0 4px 14px rgba(15, 23, 42, 0.08);
-    --gc-radius:     16px;
 
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;                /* crucial: allow inner overflow:auto */
-    border: 1px solid #e4e8ef;
-    border-radius: var(--gc-radius);
-    background: var(--gc-panel-bg);
-    box-shadow: var(--gc-shadow-md);
     overflow: hidden;
     position: relative;
-}
-
-.graph-chat-container::before {
-    content: "";
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(
-        90deg,
-        var(--db-primary) 0%,
-        var(--db-primary-dark) 45%,
-        var(--db-status-info) 100%
-    );
-    z-index: 2;
-    opacity: 0.9;
 }
 
 
@@ -935,7 +916,6 @@
         overflow: visible;
     }
 
-    .graph-chat-container { border-radius: 12px; }
     .graph-chat-messages { padding: 0.9rem; }
     .graph-chat-messages .assistant-msg { max-width: 92%; }
 }

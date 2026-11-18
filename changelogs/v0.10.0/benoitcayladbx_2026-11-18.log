@@ -264,3 +264,62 @@ Modified files:
 Tests:
 - Playwright on local Home: Bridges tile shows the count, no page errors.
 - `uv run --frozen pytest -q -m "not scenario"`: 10,863 passed, 334 skipped, 8 deselected.
+
+## Prefetch Contexts on Home so the popup opens warm
+
+Context: Opening Contexts from Home felt slow because the table waited on
+the heavy GET /settings/registry call and competed with bridges +
+list-projects. Goal A: first open feels instant.
+
+Changes:
+1. src/front/static/registry/js/registry.js
+   Prefetch domains on Home ungated by registry config; set
+   #homeCountContexts from that response; defer bridges until domains settle.
+2. src/front/static/home/js/home.js
+   Drop loadContextCount() and its GET /domain/list-projects call.
+3. tests/units/front/test_registry_modal_loading.py
+   Contract tests for Home prefetch order and no list-projects in home.js.
+4. docs/superpowers/specs/2026-11-18-home-contexts-instant-open-design.md
+   Design for the instant-open change.
+5. docs/superpowers/plans/2026-11-18-home-contexts-instant-open.md
+   Implementation plan.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+- src/front/static/home/js/home.js
+- tests/units/front/test_registry_modal_loading.py
+- docs/superpowers/specs/2026-11-18-home-contexts-instant-open-design.md
+- docs/superpowers/plans/2026-11-18-home-contexts-instant-open.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10865 passed, 334 skipped, 8 deselected, 44 warnings in 54.95s
+
+## Align Graph Chat panel with shared card surface
+
+Context: Graph Chat (`/dtwin/?section=chat`) used a custom
+`.graph-chat-container` chrome — 3px top accent stripe ending in
+`--db-status-info` (blue), harder border `#e4e8ef`, 16px radius, and a soft
+shadow — that diverged from every other sidebar section's Bootstrap `.card`
+(`.cursor/11` §Section Body Surface). Align the panel with the shared card
+tokens and drop the accent stripe.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_chat.html
+   Add `.card` to the chat body container; use canonical `mb-4` on the
+   section header.
+2. src/front/static/query/css/query-chat.css
+   Remove the `::before` top stripe and stop overriding card border /
+   radius / shadow / fill; keep flex + overflow layout only.
+3. tests/units/front/test_section_content_white_panel.py
+   Include `_query_chat.html` in the white-panel partials contract.
+4. tests/units/front/test_button_design_contract.py
+   Add contract that the chat panel carries `.card`, has no `::before`
+   stripe / `--db-status-info`, and does not redeclare card chrome.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/static/query/css/query-chat.css
+- tests/units/front/test_section_content_white_panel.py
+- tests/units/front/test_button_design_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10867 passed, 334 skipped, 8 deselected, 44 warnings in 49.77s

@@ -30,6 +30,7 @@ WHITE_PANEL_PARTIALS = (
     "partials/dtwin/_query_api.html",
     "partials/dtwin/_query_build.html",
     "partials/dtwin/_query_insights.html",
+    "partials/dtwin/_query_chat.html",
 )
 
 

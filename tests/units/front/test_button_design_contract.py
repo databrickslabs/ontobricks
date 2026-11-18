@@ -215,6 +215,31 @@ def test_graph_chat_buttons_use_clarity_tokens():
     )
 
 
+def test_graph_chat_panel_defers_to_shared_card_surface():
+    """Graph Chat body must look like other sidebar cards — no custom chrome.
+
+    The panel used a 3px ``::before`` stripe ending in ``--db-status-info``
+    (blue) plus a harder border / shadow / 16px radius that diverged from
+    ``.card`` in ``main.css`` (``.cursor/11`` §Section Body Surface).
+    """
+    css = _read(CHAT_CSS)
+    html = _read(
+        REPO_ROOT / "src/front/templates/partials/dtwin/_query_chat.html"
+    )
+
+    assert re.search(r'class="[^"]*\bcard\b[^"]*\bgraph-chat-container\b', html) or re.search(
+        r'class="[^"]*\bgraph-chat-container\b[^"]*\bcard\b', html
+    ), "graph-chat-container must also carry the shared .card class"
+    assert "graph-chat-container::before" not in css
+    assert "--db-status-info" not in css
+
+    container_blocks = _blocks_for_selector(css, ".graph-chat-container")
+    for prop in ("border", "border-radius", "box-shadow", "background"):
+        assert not _has_declaration(container_blocks, prop, r"."), (
+            f".graph-chat-container must not override .card {prop}"
+        )
+
+
 def test_settings_header_buttons_carry_the_small_size():
     """Section headers use `btn-sm`; without it these were 110px tall on a
     phone."""
