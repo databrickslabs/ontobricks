@@ -323,3 +323,86 @@ Modified files:
 - tests/units/front/test_button_design_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10867 passed, 334 skipped, 8 deselected, 44 warnings in 49.77s
+
+## Home tagline wording
+
+Context: The Home subtitle now opens with "Build" to state the product's
+creation role alongside exploration and governance.
+
+Changes:
+1. src/front/templates/home.html
+   Hero tagline: "Explore and govern…" → "Build, explore and govern…".
+
+Modified files:
+- src/front/templates/home.html
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10867 passed, 334 skipped, 8 deselected, 44 warnings in 52.48s
+
+## Show app version next to Home title
+
+Context: The Home hero showed only the logo and title. The version was
+removed earlier with the Registry move; it is restored next to the title
+so the running release is visible on the landing page.
+
+Changes:
+1. src/front/templates/home.html
+   Render "v{{ app_version }}" after the brand title inside the hero h1.
+2. src/front/static/global/css/pages.css
+   Add .home-hero-version (smaller, muted, aligned with the title).
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   Contract test: version span sits inside the hero h1 and is styled.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/global/css/pages.css
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10868 passed, 334 skipped, 8 deselected, 44 warnings in 49.84s
+
+## Home bottom credit: Databricks Labs project
+
+Context: The Home page had no attribution for the project's home on
+Databricks Labs. A centered credit line at the bottom links to the
+databrickslabs GitHub organisation.
+
+Changes:
+1. src/front/templates/home.html
+   Add a centered "OntoBricks is a Databricks Labs project." line with a link
+   to https://github.com/databrickslabs, placed after the resources strip.
+2. src/front/static/home/css/home.css
+   Add .home-labs-credit and link styles (centered, muted text, primary link).
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   Contract test: credit line sits after the resources strip, before the modals,
+   and links to the databrickslabs organisation.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/home/css/home.css
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10869 passed, 334 skipped, 8 deselected, 44 warnings in 50.14s
+
+## GitHub issues navbar icon and 100% powered by Databricks credit
+
+Context: Users can now file issues directly on the GitHub tracker from
+the top navbar. The bottom attribution now highlights that the solution
+is 100% powered by Databricks with a link to databricks.com.
+
+Changes:
+1. src/front/templates/base.html
+   Add a #navReportIssue icon button in the navbar right items (<i class="bi bi-bug"></i>)
+   linking to https://github.com/databrickslabs/ontobricks/issues (target _blank).
+2. src/front/templates/home.html
+   Update the bottom credit line to: "OntoBricks is a Databricks Labs project &mdash;
+   the solution is 100% powered by Databricks." with links to https://github.com/databrickslabs
+   and https://www.databricks.com.
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   Contract tests for #navReportIssue navbar placement and the enhanced
+   home credit text and links.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/templates/home.html
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10870 passed, 334 skipped, 8 deselected, 44 warnings in 50.41s

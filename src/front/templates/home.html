@@ -14,9 +14,9 @@
 <div class="home-hero">
     <h1>
         <img data-brand-icon src="{{ ui_branding_for().logo_url }}" alt="{{ ui_branding_for().app_title }}" width="56" height="56" class="me-2 align-middle">
-        <span data-brand-title>{{ ui_branding_for().app_title }}</span>
+        <span data-brand-title>{{ ui_branding_for().app_title }}</span> <span class="home-hero-version">v{{ app_version }}</span>
     </h1>
-    <p class="tagline">Explore and govern your organization's knowledge &mdash; one trusted, connected view of your business data.</p>
+    <p class="tagline">Build, explore and govern your organization's knowledge &mdash; one trusted, connected view of your business data.</p>
 </div>
 
 <!-- Launch tiles: each tile opens the 80% Registry modal on its section -->
@@ -127,6 +127,13 @@
         </a>
     </div>
 </section>
+
+<p class="home-labs-credit">
+    OntoBricks is a
+    <a href="https://github.com/databrickslabs" target="_blank" rel="noopener noreferrer">Databricks Labs</a>
+    project &mdash; the solution is 100% powered by
+    <a href="https://www.databricks.com" target="_blank" rel="noopener noreferrer">Databricks</a>.
+</p>
 
 <!-- 80% Registry modal (opened by the launch tiles) -->
 <div class="modal fade" id="homeRegistryModal" tabindex="-1" aria-labelledby="homeRegistryModalLabel" aria-hidden="true">

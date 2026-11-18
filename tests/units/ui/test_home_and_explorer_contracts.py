@@ -28,6 +28,44 @@ def test_home_is_the_registry_tabs_without_gateway():
     assert 'id="mappingCount"' not in html
 
 
+def test_home_shows_app_version_next_to_title():
+    html = _HOME.read_text(encoding="utf-8")
+    title_start = html.index("<h1>")
+    title_end = html.index("</h1>", title_start)
+    hero_title = html[title_start:title_end]
+    assert 'class="home-hero-version"' in hero_title
+    assert "v{{ app_version }}" in hero_title
+    assert ".home-hero-version" in (
+        _FRONT / "static" / "global" / "css" / "pages.css"
+    ).read_text(encoding="utf-8")
+
+
+def test_home_has_centered_databrickslabs_credit_at_bottom():
+    html = _HOME.read_text(encoding="utf-8")
+    credit_start = html.index('class="home-labs-credit"')
+    credit = html[credit_start:html.index("</p>", credit_start)]
+    assert "https://github.com/databrickslabs" in credit
+    assert "Databricks Labs" in credit
+    assert "https://www.databricks.com" in credit
+    assert "100% powered by" in credit
+    # Sits after the resources strip, before the modals.
+    assert credit_start > html.index('class="home-resources"')
+    assert credit_start < html.index('id="homeRegistryModal"')
+    assert ".home-labs-credit" in (
+        _FRONT / "static" / "home" / "css" / "home.css"
+    ).read_text(encoding="utf-8")
+
+
+def test_navbar_has_report_issue_link():
+    base_html = (_FRONT / "templates" / "base.html").read_text(encoding="utf-8")
+    assert 'id="navReportIssue"' in base_html
+    assert 'href="https://github.com/databrickslabs/ontobricks/issues"' in base_html
+    assert "bi-bug" in base_html
+    # Placed in the right-aligned nav items
+    ms_auto_pos = base_html.index('class="navbar-nav ms-auto"')
+    assert base_html.index('id="navReportIssue"') > ms_auto_pos
+
+
 def test_home_has_resources_strip_with_help_website_github():
     html = _HOME.read_text(encoding="utf-8")
     assert 'id="homeOpenHelp"' in html

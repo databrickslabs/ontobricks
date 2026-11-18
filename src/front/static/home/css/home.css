@@ -127,6 +127,25 @@
 /* --------------------------------------------------------------------------
    Resources strip — Help · Website · GitHub
    -------------------------------------------------------------------------- */
+/* Centered credit line at the bottom of Home */
+.home-labs-credit {
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--db-text-muted);
+    margin: 2rem 0 1rem;
+}
+
+.home-labs-credit a {
+    color: var(--db-primary);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.home-labs-credit a:hover,
+.home-labs-credit a:focus-visible {
+    text-decoration: underline;
+}
+
 .home-resources {
     margin: 0.5rem 0 2rem;
 }

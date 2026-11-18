@@ -213,6 +213,13 @@
     color: var(--db-primary);
 }
 
+.home-hero-version {
+    font-size: 0.4em;
+    font-weight: 300;
+    opacity: 0.6;
+    vertical-align: middle;
+}
+
 .home-hero .tagline {
     font-size: 1.1rem;
     color: var(--db-text-muted);
