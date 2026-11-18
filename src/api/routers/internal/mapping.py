@@ -661,10 +661,10 @@ async def start_auto_assign(
             data.get("schema_context") or {}
         )
     except ValidationError as exc:
+        # Surface the actionable reason (e.g. no UC metadata loaded) — do not
+        # wrap it in a vague "schema context could not be resolved" message.
         logger.warning("Auto-assign: %s", exc.message)
-        raise ValidationError(
-            "Schema context could not be resolved", detail=exc.message
-        ) from exc
+        raise
     logger.info(
         "Auto-assign: schema_context — %d table(s)",
         len(schema_context.get("tables", [])),
@@ -778,12 +778,7 @@ async def single_auto_assign(
     if not warehouse_id:
         raise ValidationError("No SQL warehouse configured")
 
-    try:
-        schema_context = Mapping(domain).resolve_auto_assign_schema_context(None)
-    except ValidationError as exc:
-        raise ValidationError(
-            "Schema context could not be resolved", detail=exc.message
-        ) from exc
+    schema_context = Mapping(domain).resolve_auto_assign_schema_context(None)
 
     client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
 

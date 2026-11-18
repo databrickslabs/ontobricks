@@ -20,7 +20,7 @@
 }
 
 .pages-title-link {
-    color: var(--db-primary, #4F46E5);
+    color: var(--db-primary, #737373);
     cursor: pointer;
 }
 

@@ -433,8 +433,7 @@
                             "label": "Mapping",
                             "icon": "bi-pencil",
                             "default": false,
-                            "requires": null,
-                            "disabled_during": "autoassign"
+                            "requires": null
                         },
                         {
                             "id": "insight",

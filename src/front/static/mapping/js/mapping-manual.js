@@ -45,6 +45,39 @@ window.ManualModule = {
     },
     
     /**
+     * Rebuild the tree while an Auto-Map streams results: keep collapsed
+     * nodes and scroll positions, and pulse the rows that just changed.
+     */
+    refreshLive: function(changedUris) {
+        const container = document.getElementById('manualAssignmentTree');
+        if (!this.initialized || !container) return;
+        const nodeKey = node => {
+            const root = node.closest('.root-node');
+            return `${root ? root.dataset.status : ''}/${node.dataset.category || node.dataset.status || ''}`;
+        };
+        const collapsed = new Set();
+        container.querySelectorAll('.manual-tree-toggle[data-expanded="false"]').forEach(btn => {
+            collapsed.add(nodeKey(btn.closest('.manual-tree-node')));
+        });
+        const scrolled = [];
+        for (let el = container; el; el = el.parentElement) {
+            if (el.scrollTop > 0) scrolled.push([el, el.scrollTop]);
+        }
+
+        this.refresh();
+
+        container.querySelectorAll('.manual-tree-toggle').forEach(btn => {
+            if (collapsed.has(nodeKey(btn.closest('.manual-tree-node')))) this.toggleNode(btn);
+        });
+        scrolled.forEach(([el, top]) => { el.scrollTop = top; });
+        const changed = new Set(changedUris || []);
+        if (typeof window.flashLiveMapped !== 'function') return;
+        container.querySelectorAll('.manual-tree-node.item-node').forEach(li => {
+            if (changed.has(li.dataset.uri)) window.flashLiveMapped(li);
+        });
+    },
+
+    /**
      * Build and render the mapping tree
      */
     buildTree: function() {
@@ -100,6 +133,8 @@ window.ManualModule = {
                 emoji: cls.emoji || '📦',
                 mapped: !!mapping && !!mapping.sql_query
             };
+            item.partial = item.mapped && typeof window.entityAttributeStatus === 'function'
+                && window.entityAttributeStatus(cls, mapping) === 'partial';
             if (cls.excluded) {
                 excludedEntities.push(item);
             } else if (item.mapped) {
@@ -250,6 +285,8 @@ window.ManualModule = {
         let statusBadge;
         if (parentStatus === 'excluded') {
             statusBadge = '<span class="manual-status-badge excluded">Excluded</span>';
+        } else if (parentStatus === 'assigned' && item.partial) {
+            statusBadge = '<span class="manual-status-badge partial" title="Some attributes have no column">Partial</span>';
         } else if (parentStatus === 'assigned') {
             statusBadge = '<span class="manual-status-badge assigned">Mapped</span>';
         } else {

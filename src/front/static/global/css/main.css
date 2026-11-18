@@ -7,36 +7,36 @@
    CSS Custom Properties (Variables)
    ========================================================================== */
 :root {
-    /* Clarity accent */
-    --db-primary: #4F46E5;
-    --db-primary-dark: #4338CA;
-    --db-primary-darker: #3730A3;
-    --db-primary-light: rgba(79, 70, 229, 0.1);
+    /* Brand primary (factory neutral gray; runtime override via #uiBrandingTokens) */
+    --db-primary: #737373;
+    --db-primary-dark: #626262;
+    --db-primary-darker: #515151;
+    --db-primary-light: rgba(115, 115, 115, 0.1);
     /* Softer filled wells (L2 Context badge): darker than --db-primary-light,
        so the control can drop its hard primary outline. Tracks brand RGB. */
     --db-primary-soft: rgba(var(--db-primary-rgb), 0.18);
     --db-primary-soft-hover: rgba(var(--db-primary-rgb), 0.28);
-    --db-primary-rgb: 79, 70, 229;
+    --db-primary-rgb: 115, 115, 115;
     --db-on-primary: #FFFFFF;
-    --db-primary-selected-text: #3730A3;
-    --db-hover: rgba(79, 70, 229, 0.06);
-    --db-focus: rgba(79, 70, 229, 0.18);
+    --db-primary-selected-text: #686868;
+    --db-hover: rgba(115, 115, 115, 0.06);
+    --db-focus: rgba(115, 115, 115, 0.18);
 
     /* Aurora accent + derived cinematic tokens (Aurora Pro).
        Server-rendered #uiBrandingTokens overrides the hex/rgb values below
        per request; the linear-gradient()/radial-gradient() compositions
        stay static here and simply re-read whichever hex is currently in
        scope via var(). */
-    --db-aurora: #22A7C8;
-    --db-aurora-rgb: 34, 167, 200;
-    --db-aurora-dark: #1D8EAA;
-    --db-gradient-end: #3A79E2;
+    --db-aurora: #6B6B6B;
+    --db-aurora-rgb: 107, 107, 107;
+    --db-aurora-dark: #5B5B5B;
+    --db-gradient-end: #6F6F6F;
     --db-gradient-primary: linear-gradient(120deg, var(--db-primary), var(--db-gradient-end));
     --db-gradient-rail: linear-gradient(180deg, var(--db-primary), var(--db-aurora));
     --db-halo: radial-gradient(circle at 30% 20%, rgba(var(--db-aurora-rgb), 0.35), transparent 60%);
 
     /* Warm neutral surfaces */
-    --db-canvas-warm: #F6F6FE; /* derived: Primary at 5% alpha on white (Aurora Pro) */
+    --db-canvas-warm: #F8F8F8; /* derived: Primary at 5% alpha on white (Aurora Pro) */
     --db-surface-warm: #FFFFFF;
     --db-line-soft: #F4F2EF;
     --db-hover-warm: #F3F2F0;
@@ -936,7 +936,7 @@ body {
 .card {
     border: 1px solid var(--db-border);
     border-radius: var(--db-radius-card);
-    box-shadow: var(--db-shadow-sm);
+    box-shadow: none;
     background: var(--db-surface-warm);
 }
 

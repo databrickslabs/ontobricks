@@ -198,6 +198,7 @@ def run_agent(
     documents: Optional[list] = None,
     on_step: Optional[Callable[[str, int], None]] = None,
     max_iterations: Optional[int] = None,
+    on_mapping: Optional[Callable[[str, dict], None]] = None,
 ) -> AgentResult:
     """Run the auto-mapping agent.
 
@@ -221,10 +222,6 @@ def run_agent(
         len(relationships),
         iteration_limit,
     )
-    logger.debug(
-        "run_agent: metadata tables=%d", len((metadata or {}).get("tables", []))
-    )
-
     ctx = ToolContext(
         host=host.rstrip("/"),
         token=token,
@@ -234,6 +231,7 @@ def run_agent(
         entity_mappings=list(entity_mappings or []),
         relationships=list(relationship_mappings or []),
         documents=list(documents or []),
+        on_mapping=on_mapping,
     )
 
     result = AgentResult(success=False)

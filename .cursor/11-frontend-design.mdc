@@ -42,14 +42,14 @@ other tokens are **fixed** — they are not overridden at runtime.
 
 | Role | Token | CSS static default |
 |------|-------|--------------------|
-| Brand primary *(configurable)* | `--db-primary` | `#4F46E5` |
-| Primary dark / darker *(configurable)* | `--db-primary-dark`, `--db-primary-darker` | `#4338CA`, `#3730A3` |
-| Primary tint *(configurable)* | `--db-primary-light` | `rgba(79, 70, 229, 0.1)` |
+| Brand primary *(configurable)* | `--db-primary` | `#737373` |
+| Primary dark / darker *(configurable)* | `--db-primary-dark`, `--db-primary-darker` | `#626262`, `#515151` |
+| Primary tint *(configurable)* | `--db-primary-light` | `rgba(115, 115, 115, 0.1)` |
 | Primary soft fill *(derived from RGB)* | `--db-primary-soft`, `--db-primary-soft-hover` | `rgba(var(--db-primary-rgb), 0.18)` / `0.28` |
-| Primary RGB components *(configurable)* | `--db-primary-rgb` | `79, 70, 229` |
-| Hover well *(configurable)* | `--db-hover-indigo` | `rgba(79, 70, 229, 0.08)` |
-| Focus ring *(configurable)* | `--db-focus-ring` | `0 0 0 0.2rem rgba(79, 70, 229, 0.35)` |
-| Shadow primary *(configurable)* | `--db-shadow-primary` | `0 8px 20px rgba(79, 70, 229, 0.35)` |
+| Primary RGB components *(configurable)* | `--db-primary-rgb` | `115, 115, 115` |
+| Hover well *(configurable)* | `--db-hover-indigo` | `rgba(115, 115, 115, 0.06)` |
+| Focus ring *(configurable)* | `--db-focus-ring` | `0 0 0 0.2rem rgba(115, 115, 115, 0.18)` |
+| Shadow primary *(configurable)* | `--db-shadow-primary` | `0 8px 20px rgba(115, 115, 115, 0.35)` |
 | On-primary foreground *(configurable)* | `--db-on-primary` | `#FFFFFF` |
 | Selected text *(configurable)* | `--db-primary-selected-text` | derived dark variant |
 | Warm canvas / surface / line *(fixed)* | `--db-canvas-warm`, `--db-surface-warm`, `--db-line-soft` | `#FAFAF9`, `#FFFFFF`, `#F4F2EF` |
@@ -75,8 +75,9 @@ Configuration → UI**. The runtime theme system follows these rules:
   family: dark, darker, light/alpha variants, RGB components, hover well, focus
   ring, shadow, and a WCAG-contrast–safe `--db-on-primary` foreground (white or
   near-black, ≥ 4.5:1 ratio).
-- `#4F46E5` is the factory default; it is **not** an immutable runtime color.
-  Any valid hex is accepted after admin save.
+- `#737373` is the factory default; it is **not** an immutable runtime color.
+  Any valid hex is accepted after admin save. The factory Aurora accent is
+  `#6B6B6B`.
 - The server injects these values as a `<style id="uiBrandingTokens">` block
   placed **after** the static CSS loads and **before** any `{% block extra_css
   %}` — this ensures no flash of unstyled primary color on first paint.
@@ -147,8 +148,9 @@ surface: `#obSubnav` is transparent and its segmented workspace control uses
 - `--db-halo` and `--db-canvas-warm` are the only Aurora-aware page-level
   treatments; forms, tables, and modals stay flat `--db-surface-warm` with no
   gradients.
-- Resting cards (`.card`) now carry `--db-shadow-sm` in addition to their
-  1px border — previously the shadow was overlay-only.
+- Resting cards (`.card`) stay flat: 1px border only, `box-shadow: none`.
+  Elevation (`--db-shadow-*`) is reserved for floating surfaces
+  (dropdowns, modals, overlays, transient toasts).
 
 ### Accent Use and Button Hierarchy
 
@@ -1190,6 +1192,12 @@ loading spinner — leave it as is.
   spinner. The override lives once in `main.css`.
 - ❌ Redrawing the brand spinner SVG (`loading-spinner.svg` / the
   `.ob-spinner-svg` rings + diamond) in page code.
+- ❌ Wrapping spinners and loading text in a separate background container
+  (e.g. Bootstrap `.alert-secondary`, rounded grey boxes, or bordered wells).
+  Spinners and loading labels must sit seamlessly on the parent surface
+  (transparent background, muted/standard text). Never use a separate
+  background (in rounded boxes) for spinners or loading states anywhere in
+  the app.
 
 ### Popups, Modals, Confirmations & Notifications
 

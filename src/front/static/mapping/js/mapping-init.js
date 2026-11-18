@@ -258,10 +258,17 @@ function autoSelectMappingItem(itemName, itemType) {
 // Common SidebarNav configuration for Mapping (also used when hosted under Graph)
 const mappingSidebarConfig = {
     onBeforeSectionChange: async function(section) {
-        // Block navigation while batch Auto-Map is running in the modal
+        // While Auto-Map runs, Mapping Studio (Visual / List) must stay
+        // reachable so operators can watch live green/yellow results.
+        // Other Graph sections stay blocked until the run ends.
         if (typeof AutoAssignModule !== 'undefined' && AutoAssignModule.isRunning) {
-            showNotification('Please wait until Auto-Map finishes before switching sections.', 'warning');
-            return false;
+            if (section !== 'design' && section !== 'manual') {
+                showNotification(
+                    'Please wait until Auto-Map finishes before switching sections.',
+                    'warning'
+                );
+                return false;
+            }
         }
         // Auto-save to registry when leaving the design section (mirrors ontology designer)
         const currentSection = typeof SidebarNav !== 'undefined' ? SidebarNav.getActiveSection() : null;

@@ -611,8 +611,8 @@ a.sim-uri-link:focus-visible {
 }
 
 .howto-example {
-    background: var(--db-primary-light, rgba(79, 70, 229, 0.1));
-    border-left: 3px solid var(--db-primary, #4F46E5);
+    background: var(--db-primary-light, rgba(115, 115, 115, 0.1));
+    border-left: 3px solid var(--db-primary, #737373);
     border-radius: var(--db-radius-control, 10px);
     padding: 0.6rem 0.85rem;
     color: var(--db-text, #191817);
@@ -664,8 +664,8 @@ a.sim-uri-link:focus-visible {
 }
 
 .howto-svg .hw-node--anchor {
-    fill: var(--db-primary-light, rgba(79, 70, 229, 0.1));
-    stroke: var(--db-primary, #4F46E5);
+    fill: var(--db-primary-light, rgba(115, 115, 115, 0.1));
+    stroke: var(--db-primary, #737373);
 }
 
 .howto-svg .hw-node--muted {
@@ -729,13 +729,13 @@ a.sim-uri-link:focus-visible {
 }
 
 .howto-svg .hw-flow {
-    stroke: var(--db-primary, #4F46E5);
+    stroke: var(--db-primary, #737373);
     stroke-width: 2;
     fill: none;
 }
 
 .howto-svg .hw-flow-head {
-    fill: var(--db-primary, #4F46E5);
+    fill: var(--db-primary, #737373);
 }
 
 .howto-svg .hw-ring {
@@ -777,7 +777,7 @@ a.sim-uri-link:focus-visible {
 
 .howto-tech > summary:focus-visible {
     outline: none;
-    box-shadow: var(--db-focus-ring, 0 0 0 0.2rem rgba(79, 70, 229, 0.35));
+    box-shadow: var(--db-focus-ring, 0 0 0 0.2rem rgba(115, 115, 115, 0.35));
     border-radius: 4px;
 }
 
@@ -1195,9 +1195,9 @@ a.sim-uri-link:focus-visible {
 
 .pat-pattern-toggle:hover,
 .pat-pattern-toggle:focus {
-    border-color: var(--db-primary, #4F46E5);
+    border-color: var(--db-primary, #737373);
     outline: none;
-    box-shadow: var(--db-focus-ring, 0 0 0 0.2rem rgba(79, 70, 229, 0.35));
+    box-shadow: var(--db-focus-ring, 0 0 0 0.2rem rgba(115, 115, 115, 0.35));
 }
 
 /* Saved snapshot: fixed label, not a Discover picker. */
@@ -1234,7 +1234,7 @@ a.sim-uri-link:focus-visible {
 
 .pat-form-info:hover,
 .pat-form-info:focus {
-    color: var(--db-primary, #4F46E5);
+    color: var(--db-primary, #737373);
 }
 
 .pat-support-badge {
@@ -1246,9 +1246,9 @@ a.sim-uri-link:focus-visible {
     box-sizing: border-box;
     padding: 0 0.4rem;
     border-radius: var(--db-radius-chip, 999px);
-    background: var(--db-primary-light, rgba(79, 70, 229, 0.1));
-    color: var(--db-primary, #4F46E5);
-    border: 1px solid rgba(var(--db-primary-rgb, 79, 70, 229), 0.25);
+    background: var(--db-primary-light, rgba(115, 115, 115, 0.1));
+    color: var(--db-primary, #737373);
+    border: 1px solid rgba(var(--db-primary-rgb, 115, 115, 115), 0.25);
     font-size: 0.7rem;
     font-weight: 600;
     line-height: 1;
@@ -1421,19 +1421,19 @@ a.sim-uri-link:focus-visible {
 }
 
 .pat-chart-bar-rect {
-    fill: var(--db-primary-light, rgba(79, 70, 229, 0.18));
-    stroke: rgba(var(--db-primary-rgb, 79, 70, 229), 0.35);
+    fill: var(--db-primary-light, rgba(115, 115, 115, 0.18));
+    stroke: rgba(var(--db-primary-rgb, 115, 115, 115), 0.35);
     stroke-width: 1;
     transition: fill 0.15s ease;
 }
 
 .pat-chart-bar:hover .pat-chart-bar-rect {
-    fill: rgba(var(--db-primary-rgb, 79, 70, 229), 0.35);
+    fill: rgba(var(--db-primary-rgb, 115, 115, 115), 0.35);
 }
 
 .pat-chart-bar--active .pat-chart-bar-rect {
-    fill: var(--db-primary, #4F46E5);
-    stroke: var(--db-primary, #4F46E5);
+    fill: var(--db-primary, #737373);
+    stroke: var(--db-primary, #737373);
 }
 
 .pat-chart-bar-value {
@@ -1454,7 +1454,7 @@ a.sim-uri-link:focus-visible {
 }
 
 .pat-chart-bar--active .pat-chart-bar-label {
-    fill: var(--db-primary, #4F46E5);
+    fill: var(--db-primary, #737373);
     font-weight: 600;
 }
 
@@ -1498,7 +1498,7 @@ a.sim-uri-link:focus-visible {
 }
 
 .pat-dg-anchor {
-    stroke: var(--db-primary, #4F46E5);
+    stroke: var(--db-primary, #737373);
     stroke-width: 2;
 }
 
@@ -1555,7 +1555,7 @@ a.sim-uri-link:focus-visible {
 }
 
 .pat-dg-edge-badge-bg {
-    fill: var(--db-primary, #4F46E5);
+    fill: var(--db-primary, #737373);
 }
 
 .pat-dg-tip {
@@ -1613,21 +1613,21 @@ a.sim-uri-link:focus-visible {
 }
 
 .pat-dg-node-g.is-focus .pat-dg-node {
-    stroke: var(--db-primary, #4F46E5);
+    stroke: var(--db-primary, #737373);
     stroke-width: 2.5;
 }
 
 .pat-diagram-svg.is-hovering .pat-dg-edge.is-on {
-    stroke: var(--db-primary, #4F46E5);
+    stroke: var(--db-primary, #737373);
     stroke-width: 2.2;
 }
 
 .pat-diagram-svg.is-hovering .pat-dg-edge-label.is-on .pat-dg-edge-name {
-    fill: var(--db-primary, #4F46E5);
+    fill: var(--db-primary, #737373);
 }
 
 .pat-diagram-svg.is-hovering .pat-dg-node-g.is-on:not(.is-focus) .pat-dg-node {
-    stroke: var(--db-primary, #4F46E5);
+    stroke: var(--db-primary, #737373);
     stroke-width: 1.8;
 }
 
@@ -1657,7 +1657,7 @@ a.sim-uri-link:focus-visible {
 
 .pat-member-link {
     font-weight: 500;
-    color: var(--db-primary, #4F46E5);
+    color: var(--db-primary, #737373);
     text-decoration: none;
 }
 
@@ -1686,5 +1686,5 @@ a.sim-uri-link:focus-visible {
 
 .pat-saved-card:focus-visible {
     outline: none;
-    box-shadow: var(--db-focus-ring, 0 0 0 0.2rem rgba(79, 70, 229, 0.35));
+    box-shadow: var(--db-focus-ring, 0 0 0 0.2rem rgba(115, 115, 115, 0.35));
 }

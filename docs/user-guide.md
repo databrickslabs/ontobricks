@@ -883,6 +883,8 @@ Open **Auto-Map** from the Studio toolbar (or from Graph → Build when mappings
 
 **Live agent activity**: while the run is in progress, expand **Agent activity log** in the progress overlay to watch the agent work item by item — which tool it called, what it got back, and how long each step took. The log refreshes roughly every 1.5 seconds and keeps growing until the run ends, so a long auto-map is no longer a silent progress bar.
 
+**Live results in Visual and List**: click **Run in background** to close the dialog, then open **Graph → Mapping** (Visual / List) while the run continues — other Graph sections stay locked until Auto-Map finishes. Each entity or relationship turns green (fully mapped) or yellow/orange (mapped, some attributes have no column — shown as **Partial** in List) as soon as the agent submits it, and briefly pulses so you can follow progress step by step. Zoom, pan and collapsed List groups are kept. Items from a chunk that fails go back to *Not mapped*, and the final server state is reloaded when the run ends. Mapping edits are not saved while Auto-Map runs, because the run's final save would overwrite them.
+
 **Cancelling a run**: **Cancel** stops the agent at the next item boundary instead of at the end of the batch. Everything already mapped is kept, and the run is recorded as cancelled.
 
 **Execution report in the Audit Trail**: every auto-map run — completed, failed, or cancelled — writes an **Auto-mapping agent run** entry on the **Mapping** tab of **Context → Governance → Audit trail**, with the status, the entity/relationship counts, the duration, and the full ordered step list the overlay showed live. Like the individual mapping change entries, it appears once the domain version has been saved to the registry.
@@ -2055,7 +2057,7 @@ every user on the next page load. They are not stored in a domain version.
 | **Application title** | The name shown in the navbar, browser tab, and `alt=` text. | 1–60 characters (trimmed, Unicode code points). Default: `OntoBricks`. |
 | **Brand icon** | SVG, PNG, JPEG, WebP, or GIF uploaded as the favicon and navbar logo. | Max 1 MB. Default: the built-in OntoBricks logo. |
 | **Default entity icon** | Emoji used for new ontology classes. | Any emoji. Default: 📦. Saved immediately when you pick a new icon (no **Save** click). |
-| **Primary color** | Hex color (`#RRGGBB`) for buttons, active navigation, focus rings, and highlights. | Any valid 6-digit uppercase hex. Default: `#4F46E5`. |
+| **Primary color** | Hex color (`#RRGGBB`) for buttons, active navigation, focus rings, and highlights. | Any valid 6-digit uppercase hex. Default: `#737373`. |
 
 #### Derived palette
 
@@ -2086,7 +2088,7 @@ is not yet affected until you save.
 - **Reset icon** (the dedicated button in the Branding card) reverts only the
   icon draft back to the built-in default logo, leaving any unsaved title or
   color edits intact. The icon is not persisted until you click **Save**.
-- **Default** restores `OntoBricks`, `#4F46E5`, and the built-in logo as a
+- **Default** restores `OntoBricks`, `#737373`, and the built-in logo as a
   **local preview**, and immediately restores the factory default entity icon
   (📦) in the registry. You must still click **Save** to persist title, color,
   and logo.

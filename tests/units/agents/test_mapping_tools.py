@@ -117,3 +117,39 @@ class TestRelationshipMappingDedup:
         stored_sql = ctx.relationships[0]["sql_query"]
         assert "AS source_id" in stored_sql
         assert "AS target_id" in stored_sql
+
+
+@pytest.mark.unit
+class TestOnMappingHook:
+    """Accepted submits are streamed to ``ctx.on_mapping`` (live Auto-Map view)."""
+
+    def test_entity_and_relationship_submits_fire_the_hook(self, ctx):
+        seen = []
+        ctx.on_mapping = lambda kind, mapping: seen.append((kind, mapping))
+        tool_submit_entity_mapping(
+            ctx,
+            class_uri="http://test.org/ontology#Viewer",
+            class_name="Viewer",
+            sql_query="SELECT viewer_id AS ID, name AS Label FROM c.s.viewer",
+            id_column="ID",
+            label_column="Label",
+        )
+        tool_submit_relationship_mapping(
+            ctx,
+            property_uri="http://test.org/ontology#belongsTo",
+            property_name="belongsTo",
+            sql_query="SELECT viewer_id AS source_id, segment_id AS target_id FROM c.s.viewer",
+            source_id_column="source_id",
+            target_id_column="target_id",
+            domain="http://test.org/ontology#Viewer",
+            range_class="http://test.org/ontology#Segment",
+        )
+        assert [k for k, _ in seen] == ["entity", "relationship"]
+        assert seen[0][1] is ctx.entity_mappings[0]
+        assert seen[1][1] is ctx.relationships[0]
+
+    def test_rejected_submit_does_not_fire_the_hook(self, ctx):
+        seen = []
+        ctx.on_mapping = lambda kind, mapping: seen.append(kind)
+        tool_submit_entity_mapping(ctx, class_uri="", class_name="X", sql_query="")
+        assert seen == []

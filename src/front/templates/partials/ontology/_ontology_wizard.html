@@ -62,7 +62,7 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="wizard-tab-metadata" data-bs-toggle="tab" data-bs-target="#wizard-pane-metadata"
                         type="button" role="tab" aria-controls="wizard-pane-metadata" aria-selected="true">
-                    <i class="bi bi-database"></i> Data Assets
+                    <i class="ob-brand-icon ob-icon-unity-catalog" aria-hidden="true"></i> Unity Catalog Assets
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -74,7 +74,7 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="wizard-tab-pages" data-bs-toggle="tab" data-bs-target="#wizard-pane-pages"
                         type="button" role="tab" aria-controls="wizard-pane-pages" aria-selected="false">
-                    <i class="bi bi-journal-richtext"></i> Pages
+                    <i class="ob-brand-icon ob-icon-genie" aria-hidden="true"></i> Genie Pages
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -90,7 +90,7 @@
 
             <!-- Data Sources Tab -->
             <div class="tab-pane fade show active" id="wizard-pane-metadata" role="tabpanel" aria-labelledby="wizard-tab-metadata">
-                <h6 class="mb-2"><i class="bi bi-database"></i> Data Assets</h6>
+                <h6 class="mb-2"><i class="ob-brand-icon ob-icon-unity-catalog" aria-hidden="true"></i> Unity Catalog Assets</h6>
                     <p class="text-muted small mb-3">Select the tables, views, and metric views whose schema will be sent to the AI model for entity detection.</p>
                 <div id="wizardMetadataStatus">
                     <div class="d-flex align-items-center text-muted">
@@ -134,7 +134,7 @@
                 </div>
                 <div id="wizardNoMetadata" class="alert alert-info mt-3 ob-hidden">
                     <i class="bi bi-info-circle me-2"></i>
-                    No data assets loaded. You can still detect entities from documents or guidelines alone, or load data assets in <a href="/domain/#metadata">Data Assets</a>.
+                    No data assets loaded. You can still detect entities from documents or guidelines alone, or load Unity Catalog assets in <a href="/domain/#metadata">Unity Catalog Assets</a>.
                 </div>
             </div>
 
@@ -176,7 +176,7 @@
 
             <!-- Genie Pages Tab (from Context → Pages selection) -->
             <div class="tab-pane fade" id="wizard-pane-pages" role="tabpanel" aria-labelledby="wizard-tab-pages">
-                <h6 class="mb-2"><i class="bi bi-journal-richtext"></i> Genie Pages</h6>
+                <h6 class="mb-2"><i class="ob-brand-icon ob-icon-genie" aria-hidden="true"></i> Genie Pages</h6>
                 <p class="text-muted small mb-3">
                     These Unity Catalog Knowledge Pages were curated under
                     <a href="/domain/?section=pages">Context &gt; Pages</a>.

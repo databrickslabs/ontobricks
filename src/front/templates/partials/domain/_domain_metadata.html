@@ -30,8 +30,11 @@
         </p>
         
         <!-- Current Data Sources Status -->
-        <div id="metadataStatus" class="alert alert-secondary mb-4">
-            <span id="metadataStatusText">No data assets loaded</span>
+        <div id="metadataStatus" class="mb-4">
+            <div id="metadataStatusText" class="text-muted small d-flex align-items-center gap-2">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <span>Loading data assets…</span>
+            </div>
         </div>
 
         <!-- Description quality warning (rendered dynamically by checkMetadataQuality) -->

@@ -98,7 +98,7 @@ def test_settings_js_mirrors_aurora_derivation_in_deriveBrandPalette():
 
 def test_settings_js_ui_branding_defaults_include_aurora():
     js = _read(SETTINGS_JS)
-    assert "aurora_color: '#22A7C8'" in js
+    assert "aurora_color: '#6B6B6B'" in js
 
 
 def test_settings_js_saves_aurora_via_formdata():

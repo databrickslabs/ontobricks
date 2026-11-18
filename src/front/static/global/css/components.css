@@ -896,7 +896,8 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.95);
+    /* Opaque so the previous form/screen never shows through while a task runs. */
+    background: var(--db-surface-warm);
     display: flex;
     justify-content: center;
     align-items: flex-start;

@@ -140,17 +140,22 @@ def _strip_fences(text: str) -> str:
 # (`databricks-claude-sonnet-5`, and the user's own
 # `benoit_cayla.ontobricks-todrop.monclaudesonnetamoi`) intermittently
 # return a JSON-schema-constrained value ENCODED AS A STRING rather than the
-# raw JSON value the schema demands — e.g. a list-typed field comes back as
-# `"[{...}]"` instead of `[{...}]`, or the entire payload comes back as a
-# JSON string holding the real object as its value (`content =
-# "{\"attributes\": [...]}"`). This is an endpoint/transport quirk, not a
-# free-text/prose answer, so the tolerance below is narrow and
-# deterministic: exactly ONE extra `json.loads` is attempted on a `str`
-# value, and its result is used ONLY if it is already the expected type.
-# No loop, no regex/prose extraction — anything else (not a `str` to begin
-# with, a second decode that raises, or a second decode that still isn't
-# `expected`) falls through unchanged and is rejected by the caller's own
-# existing type check, exactly as before this fix.
+# raw JSON value the schema demands. Observed shapes:
+#   * whole payload is a JSON string of the object
+#     (`content = "{\"attributes\": [...]}"`);
+#   * a list-typed field is a JSON string of the bare array
+#     (`{"attributes": "[{...}]"}`);
+#   * a list-typed field is a JSON string of the *whole page object*
+#     (`{"attributes": "{\"attributes\": [...], \"has_more\": false}"}`)
+#     — this last shape used to raise ``output must contain a 'attributes'
+#     list`` because only the bare-array unwrap was accepted.
+# This is an endpoint/transport quirk, not a free-text/prose answer, so the
+# tolerance below is narrow and deterministic: exactly ONE extra
+# `json.loads` is attempted on a `str` value, and its result is used ONLY
+# if it is already the expected type (or, for list fields, a dict that
+# carries that same key as a list). No loop, no regex/prose extraction —
+# anything else falls through unchanged and is rejected by the caller's
+# existing type check.
 # ---------------------------------------------------------------------------
 
 
@@ -460,11 +465,26 @@ def build_axioms_response_format(closed_ids: Iterable[str]) -> Dict[str, Any]:
 def _require_list(data: Dict[str, Any], key: str) -> List[Dict[str, Any]]:
     raw = data.get(key)
     if isinstance(raw, str):
-        # Field-level double-encoding quirk (see module note above): the
-        # list-typed field came back as a JSON string holding the real
-        # array as its value. One extra decode; accepted only if it
-        # yields a list.
-        raw = _unwrap_double_encoded(raw, expected=list)
+        # Field-level double-encoding quirk (see module note above). Two
+        # observed shapes after ONE extra json.loads of the field string:
+        #   (a) a bare array — ``{"attributes": "[{...}]"}``
+        #   (b) the whole page object re-wrapped — ``{"attributes":
+        #       "{\"attributes\": [...], \"has_more\": false}"}``
+        # Shape (b) is what produced live ``output must contain a
+        # 'attributes' list`` rejects when only (a) was tolerated.
+        as_list = _unwrap_double_encoded(raw, expected=list)
+        if isinstance(as_list, list):
+            raw = as_list
+        else:
+            as_obj = _unwrap_double_encoded(raw, expected=dict)
+            if isinstance(as_obj, dict):
+                inner = as_obj.get(key)
+                if isinstance(inner, list):
+                    raw = inner
+                    # Promote pagination flag when only the inner object
+                    # carried it (outer often omits ``has_more``).
+                    if "has_more" in as_obj and "has_more" not in data:
+                        data["has_more"] = as_obj["has_more"]
     if not isinstance(raw, list):
         raise SchemaValidationError(f"output must contain a '{key}' list")
     for item in raw:

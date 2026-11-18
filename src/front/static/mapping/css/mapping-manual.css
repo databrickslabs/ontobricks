@@ -177,6 +177,20 @@
     color: #0f5132;
 }
 
+.manual-status-badge.partial {
+    background: #fff3cd;
+    color: #664d03;
+}
+
+.manual-tree-node.item-node.live-mapped > .manual-tree-node-content {
+    animation: manual-live-mapped 2.5s ease-out;
+}
+
+@keyframes manual-live-mapped {
+    0%   { background-color: rgba(25, 135, 84, 0.35); }
+    100% { background-color: transparent; }
+}
+
 .manual-status-badge.not-assigned {
     background: #f8d7da;
     color: #842029;

@@ -906,7 +906,7 @@ function _getBrandPrimaryColor() {
     const value = getComputedStyle(document.documentElement)
         .getPropertyValue('--db-primary')
         .trim();
-    return value || '#4F46E5';
+    return value || '#737373';
 }
 
 /**

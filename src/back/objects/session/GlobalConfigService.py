@@ -21,6 +21,7 @@ from typing import Any, Dict, Optional, Tuple
 from back.core.logging import get_logger
 from back.core.helpers import (
     DEFAULT_APP_TITLE,
+    DEFAULT_AURORA_COLOR,
     DEFAULT_PRIMARY_COLOR,
     normalize_ui_branding,
 )
@@ -692,6 +693,7 @@ class GlobalConfigService:
                 "version": 1,
                 "app_title": DEFAULT_APP_TITLE,
                 "primary_color": DEFAULT_PRIMARY_COLOR,
+                "aurora_color": DEFAULT_AURORA_COLOR,
                 "logo_data_url": "",
             },
             "use_cloud_fetch": True,

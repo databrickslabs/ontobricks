@@ -176,8 +176,8 @@ def _strip_root_palette_block(css_text: str) -> str:
 
 def test_main_css_declares_clarity_primary_and_warm_tokens():
     css = _read(MAIN_CSS)
-    # Contract keeps canonical uppercase hex for the primary indigo token.
-    assert re.search(r"--db-primary\s*:\s*#4F46E5\s*;", css)
+    # Contract keeps canonical uppercase hex for the factory primary token.
+    assert re.search(r"--db-primary\s*:\s*#737373\s*;", css)
     # Regression coverage from review fix: muted text token must remain accessible.
     assert re.search(r"--db-text-muted\s*:\s*#6F6B65\s*;", css)
 
@@ -535,10 +535,24 @@ def test_main_css_declares_aurora_gradient_tokens():
     )
 
 
-def test_resting_cards_now_carry_the_soft_shadow():
+def test_resting_cards_stay_flat_without_shadow():
     css = _read(MAIN_CSS)
     card_blocks = _rule_blocks_for_exact_class(css, ".card")
-    assert _any_block_has_declaration(card_blocks, r"box-shadow", r"var\(--db-shadow-sm\)")
+    assert _any_block_has_declaration(card_blocks, r"box-shadow", r"none")
+
+
+def test_task_progress_overlay_is_opaque():
+    """Auto-Map / Ontology Generate overlays must fully hide the previous screen."""
+    css = _read(COMPONENTS_CSS)
+    for selector in (".task-progress-overlay", ".wizard-form-overlay"):
+        blocks = _rule_blocks_for_exact_selector(css, selector)
+        assert blocks, f"missing rule for {selector}"
+        assert _any_block_has_declaration(
+            blocks, r"background", r"var\(--db-surface-warm\)"
+        )
+        assert not _any_block_has_declaration(
+            blocks, r"background", r"rgba\(\s*255\s*,\s*255\s*,\s*255\s*,\s*0\.[0-9]+\s*\)"
+        )
 
 
 def test_sidebar_active_rail_uses_the_aurora_gradient():
@@ -554,7 +568,7 @@ def test_nav_hover_indigo_token_is_lighter_than_active_fill():
     """Hover tint must stay below the 0.12 active fill so the two read apart."""
     css = _read(MAIN_CSS)
     hover_match = re.search(
-        r"--db-hover\s*:\s*rgba\(\s*79\s*,\s*70\s*,\s*229\s*,\s*(0\.[0-9]+)\s*\)\s*;",
+        r"--db-hover\s*:\s*rgba\(\s*115\s*,\s*115\s*,\s*115\s*,\s*(0\.[0-9]+)\s*\)\s*;",
         css,
     )
     assert hover_match, "--db-hover token missing"
@@ -863,15 +877,15 @@ def test_ontology_map_highlight_reads_primary_token_from_css():
     assert "--db-primary" in js
     assert "getComputedStyle(document.documentElement)" in js
     # Keep exactly one explicit fallback literal scoped to the helper.
-    assert js.count("#4F46E5") == 1
-    assert "return value || '#4F46E5';" in js
+    assert js.count("#737373") == 1
+    assert "return value || '#737373';" in js
 
 
 def test_frontend_design_rule_documents_new_palette_and_immutable_structure():
     rule_text = _read(FRONTEND_RULE)
 
     required_statements = [
-        "#4F46E5",
+        "#737373",
         "warm",
         "filled primary",
         "semantic tinted status",

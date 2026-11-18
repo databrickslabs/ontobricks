@@ -147,8 +147,11 @@ async function loadMetadataStatus() {
     const statusText = document.getElementById('metadataStatusText');
     const previewDiv = document.getElementById('metadataPreview');
     
-    statusDiv.className = 'alert alert-secondary mb-4';
-    statusText.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Loading data assets…';
+    if (statusDiv) statusDiv.className = 'mb-4';
+    if (statusText) {
+        statusText.className = 'text-muted small d-flex align-items-center gap-2';
+        statusText.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span><span>Loading data assets…</span>';
+    }
     
     try {
         const response = await fetch('/domain/metadata', { credentials: 'same-origin' });
@@ -168,12 +171,14 @@ async function loadMetadataStatus() {
                 ? [...locations][0]
                 : locations.size > 1 ? `${locations.size} locations` : '';
             
-            statusDiv.className = 'alert alert-success mb-4';
-            statusText.innerHTML = `
-                <strong>Data assets loaded:</strong> 
-                ${locationDisplay ? `<strong>${locationDisplay}</strong> - ` : ''}
-                ${tableCount} table${tableCount !== 1 ? 's' : ''}
-            `;
+            if (statusDiv) statusDiv.className = 'mb-4';
+            if (statusText) {
+                statusText.className = 'small d-flex align-items-center gap-2';
+                statusText.innerHTML = `
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                    <span><strong>Data assets loaded:</strong> ${locationDisplay ? `<strong>${locationDisplay}</strong> — ` : ''}${tableCount} table${tableCount !== 1 ? 's' : ''}</span>
+                `;
+            }
             
             // Initialize table selections (all selected by default)
             tableSelections = {};
@@ -190,8 +195,11 @@ async function loadMetadataStatus() {
         } else {
             metadataCache = null;
             tableSelections = {};
-            statusDiv.className = 'alert alert-secondary mb-4';
-            statusText.innerHTML = '<i class="bi bi-info-circle"></i> No data assets loaded';
+            if (statusDiv) statusDiv.className = 'mb-4';
+            if (statusText) {
+                statusText.className = 'text-muted small d-flex align-items-center gap-2';
+                statusText.innerHTML = '<i class="bi bi-info-circle"></i><span>No data assets loaded</span>';
+            }
             previewDiv.classList.add('d-none');
             const warningEl = document.getElementById('metadataDescriptionWarning');
             if (warningEl) warningEl.style.display = 'none';
@@ -200,8 +208,11 @@ async function loadMetadataStatus() {
         }
     } catch (error) {
         console.error('Error loading metadata status:', error);
-        statusDiv.className = 'alert alert-warning mb-4';
-        statusText.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error loading data assets status';
+        if (statusDiv) statusDiv.className = 'mb-4';
+        if (statusText) {
+            statusText.className = 'text-danger small d-flex align-items-center gap-2';
+            statusText.innerHTML = '<i class="bi bi-exclamation-triangle"></i><span>Error loading data assets status</span>';
+        }
     }
 }
 

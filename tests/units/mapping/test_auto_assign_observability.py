@@ -419,3 +419,74 @@ class TestCooperativeCancellation:
         assert calls == []
         assert recorded[0]["status"] == "cancelled"
         assert recorded[0]["stats"]["entities"] == 0
+
+
+class TestLivePerItemMappings:
+    """Each agent submit is visible on ``task.result`` before its chunk ends."""
+
+    def test_submitted_mapping_is_published_mid_chunk(self):
+        task = _FakeTask()
+        tm = _FakeTaskManager()
+        mid_chunk = {}
+
+        def agent(**kwargs):
+            uri = kwargs["ontology"]["entities"][0]["uri"]
+            kwargs["on_mapping"]("entity", {"ontology_class": uri, "sql_query": "SELECT 1"})
+            mid_chunk.setdefault(uri, dict(task.result))
+            return _agent_result([uri], [])
+
+        entities = [_entity("http://x/A"), _entity("http://x/B")]
+        _run(agent, entities=entities, tm=tm, task=task, recorded=[])
+
+        first = mid_chunk["http://x/A"]
+        assert first["entities_assigned"] == 1
+        assert [m["ontology_class"] for m in first["live_entity_mappings"]] == ["http://x/A"]
+        second = mid_chunk["http://x/B"]
+        assert [m["ontology_class"] for m in second["live_entity_mappings"]] == [
+            "http://x/A",
+            "http://x/B",
+        ]
+
+    def test_out_of_chunk_submits_are_ignored(self):
+        task = _FakeTask()
+        tm = _FakeTaskManager()
+        mid_chunk = {}
+
+        def agent(**kwargs):
+            kwargs["on_mapping"]("entity", {"ontology_class": "http://x/Other"})
+            mid_chunk["result"] = dict(task.result)
+            return _agent_result(["http://x/A"], [])
+
+        _run(agent, entities=[_entity("http://x/A")], tm=tm, task=task, recorded=[])
+
+        assert mid_chunk["result"]["live_entity_mappings"] == []
+
+    def test_failed_chunk_rolls_back_its_live_submissions(self):
+        task = _FakeTask()
+        tm = _FakeTaskManager()
+        calls = {"n": 0}
+        before_second = {}
+
+        def agent(**kwargs):
+            calls["n"] += 1
+            uri = kwargs["ontology"]["entities"][0]["uri"]
+            if calls["n"] == 2:
+                before_second["result"] = dict(task.result)
+                return _agent_result([uri], [])
+            kwargs["on_mapping"]("entity", {"ontology_class": uri})
+            return SimpleNamespace(
+                success=False,
+                error="endpoint down",
+                entity_mappings=[],
+                relationship_mappings=[],
+                steps=[],
+                iterations=1,
+                usage={},
+                stats={},
+            )
+
+        entities = [_entity("http://x/A"), _entity("http://x/B")]
+        _run(agent, entities=entities, tm=tm, task=task, recorded=[])
+
+        assert before_second["result"]["live_entity_mappings"] == []
+        assert before_second["result"]["entities_assigned"] == 0

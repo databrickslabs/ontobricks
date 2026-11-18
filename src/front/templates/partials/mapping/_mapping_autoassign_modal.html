@@ -39,6 +39,12 @@
                     <strong>Auto-Map</strong> will automatically generate SQL queries and map columns for all unmapped entities and relationships using the AI wizard.
                 </div>
 
+                <!-- Preparing status (spinner while ontology / mappings / metadata load) -->
+                <div id="autoAssignPreparing" class="mb-3 d-none text-muted small align-items-center gap-2">
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span id="autoAssignPreparingText">Preparing Auto-Map…</span>
+                </div>
+
                 <!-- Metadata quality warning (rendered dynamically by AutoAssignModule.checkMetadataQuality) -->
                 <div id="metadataQualityWarning" class="mb-4 d-none"></div>
 

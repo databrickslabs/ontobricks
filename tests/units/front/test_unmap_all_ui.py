@@ -36,3 +36,9 @@ def test_reset_restores_button_html_in_finally():
     assert "finally {" in js
     assert "btn.innerHTML = originalHTML" in js
     assert "btn.disabled = false" in js
+
+
+def test_unmap_all_refreshes_visual_and_list():
+    """After clearing, MappingState alone is not enough — Visual/List must recolour."""
+    js = INFO_JS.read_text(encoding="utf-8")
+    assert "refreshMappingLiveStatus" in js

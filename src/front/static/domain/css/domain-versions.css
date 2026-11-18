@@ -42,7 +42,7 @@
 
 .dm-version-card:hover {
     border-color: var(--db-primary, var(--bs-primary, #4f46e5));
-    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, 79, 70, 229), 0.1);
+    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, 115, 115, 115), 0.1);
 }
 
 .dm-version-card.is-loaded {

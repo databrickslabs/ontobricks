@@ -6,7 +6,7 @@ default values.
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
     from agents.agent_mapping_pge.contracts import EvalReport, SourceModel
@@ -39,6 +39,9 @@ class ToolContext:
     documents: list = field(
         default_factory=list
     )  # Pre-loaded doc content: [{"name": str, "content": str}]
+    # Called as on_mapping("entity" | "relationship", mapping) after each
+    # accepted submit, so a running batch can stream per-item results.
+    on_mapping: Optional[Callable[[str, dict], None]] = None
 
     # Auto-icon-assign fields
     icon_results: dict = field(default_factory=dict)

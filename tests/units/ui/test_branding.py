@@ -43,17 +43,20 @@ def contrast_ratio(left: str, right: str) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
-def test_default_branding_is_ontobricks_indigo():
+def test_default_branding_is_ontobricks_neutral_gray():
     branding = normalize_ui_branding({})
     assert branding.app_title == "OntoBricks"
-    assert branding.primary_color == "#4F46E5"
+    assert branding.primary_color == "#737373"
+    assert branding.aurora_color == "#6B6B6B"
     assert branding.logo_url == "/static/global/img/favicon.svg"
-    assert branding.palette.primary_rgb == "79, 70, 229"
+    assert branding.palette.primary_rgb == "115, 115, 115"
+    assert branding.palette.aurora == "#6B6B6B"
 
 
 def test_defaults_constants_are_exposed():
     assert DEFAULT_APP_TITLE == "OntoBricks"
-    assert DEFAULT_PRIMARY_COLOR == "#4F46E5"
+    assert DEFAULT_PRIMARY_COLOR == "#737373"
+    assert DEFAULT_AURORA_COLOR == "#6B6B6B"
     assert DEFAULT_LOGO_PATH == "/static/global/img/favicon.svg"
 
 
@@ -119,15 +122,20 @@ def test_serialization_is_immutable_and_complete():
     assert payload["palette"]["primary_rgb"] == "18, 52, 86"
 
 
-def test_aurora_is_derived_from_primary_when_omitted():
+def test_factory_primary_pairs_with_factory_aurora_when_omitted():
+    branding = normalize_ui_branding({"primary_color": DEFAULT_PRIMARY_COLOR})
+    assert branding.aurora_color == DEFAULT_AURORA_COLOR
+    assert branding.palette.aurora == DEFAULT_AURORA_COLOR
+
+
+def test_aurora_is_derived_from_chromatic_primary_when_omitted():
     branding = normalize_ui_branding({"primary_color": "#4F46E5"})
     assert branding.aurora_color != ""
     assert branding.palette.aurora == branding.aurora_color
-    # Acceptance from the design spec: for the factory primary, the derived
-    # hue must land close to the factory Aurora constant's hue (~192 deg).
-    factory_hue, _, _ = _rgb_to_hsl_for_test(DEFAULT_AURORA_COLOR)
+    # Indigo primary still derives toward cyan/teal (~192 deg).
+    reference_hue, _, _ = _rgb_to_hsl_for_test("#22A7C8")
     derived_hue, _, _ = _rgb_to_hsl_for_test(branding.aurora_color)
-    diff = abs(factory_hue - derived_hue)
+    diff = abs(reference_hue - derived_hue)
     assert min(diff, 360 - diff) <= 15
 
 

@@ -8,8 +8,8 @@ import re
 from typing import Any, Mapping
 
 DEFAULT_APP_TITLE = "OntoBricks"
-DEFAULT_PRIMARY_COLOR = "#4F46E5"
-DEFAULT_AURORA_COLOR = "#22A7C8"
+DEFAULT_PRIMARY_COLOR = "#737373"
+DEFAULT_AURORA_COLOR = "#6B6B6B"
 DEFAULT_LOGO_PATH = "/static/global/img/favicon.svg"
 
 _DARK_TEXT = "#111827"
@@ -114,10 +114,10 @@ _BLACK_RGB = (0, 0, 0)
 def _derive_aurora_hex(primary_rgb: tuple[int, int, int]) -> str:
     """Rotate Primary's hue toward the cyan/teal family for the Aurora accent.
 
-    The -51 degree shift and saturation/lightness clamps are tuned so the
-    factory Primary (#4F46E5) lands within a few degrees of the factory
-    Aurora constant (#22A7C8) — see
-    ``test_aurora_is_derived_from_primary_when_omitted``.
+    Chromatic primaries get a -51° hue shift with saturation/lightness clamps.
+    The achromatic factory Primary (#737373) cannot rotate meaningfully, so
+    callers should pass ``DEFAULT_AURORA_COLOR`` explicitly (see
+    ``derive_brand_palette``) rather than relying on this rotation.
     """
     hue, saturation, lightness = _rgb_to_hsl(primary_rgb)
     hue = (hue + _AURORA_HUE_SHIFT_DEG) % 360
@@ -299,6 +299,10 @@ def derive_brand_palette(
             aurora_hex = _normalize_hex_color(aurora_color)
         except ValueError as exc:
             raise ValueError(f"Invalid aurora color: {exc}") from exc
+    elif normalized == DEFAULT_PRIMARY_COLOR:
+        # Factory primary is neutral gray — hue rotation is meaningless, so
+        # pair it with the explicit factory Aurora instead of deriving.
+        aurora_hex = DEFAULT_AURORA_COLOR
     else:
         aurora_hex = _derive_aurora_hex(rgb)
     aurora_rgb = _hex_to_rgb(aurora_hex)

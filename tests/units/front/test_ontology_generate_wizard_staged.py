@@ -89,6 +89,24 @@ def test_documents_tab_button_labelled_documents():
     assert "Knowledge Store" not in label
 
 
+def test_wizard_tabs_use_unity_catalog_and_genie_labels_and_icons():
+    """Sub-menu: Data Assets → Unity Catalog Assets (UC mark); Pages → Genie Pages (Genie mark)."""
+    html = _read(HTML)
+    m_uc = re.search(
+        r'id="wizard-tab-metadata"[^>]*>(.*?)</button>', html, re.DOTALL
+    )
+    m_genie = re.search(
+        r'id="wizard-tab-pages"[^>]*>(.*?)</button>', html, re.DOTALL
+    )
+    assert m_uc and m_genie
+    assert "ob-icon-unity-catalog" in m_uc.group(1)
+    assert "Unity Catalog Assets" in m_uc.group(1)
+    assert "Data Assets" not in m_uc.group(1)
+    assert "ob-icon-genie" in m_genie.group(1)
+    assert "Genie Pages" in m_genie.group(1)
+    assert "bi-journal-richtext" not in m_genie.group(1)
+
+
 def test_pages_tab_loads_context_selection_and_posts_pages():
     """Generate wizard Pages tab mirrors Context → Pages with unselect."""
     html = _read(HTML)

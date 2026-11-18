@@ -505,15 +505,61 @@ class TestFieldLevelDoubleEncodingTolerance:
         result = schemas.parse_attributes_payload(payload)
         assert result["attributes"][0]["label"] == "orderDate"
 
+    def test_attributes_field_double_encoded_page_object_is_unwrapped(self):
+        # Live residual shape (Claude under response_format): the list field
+        # holds a JSON *string* of the whole page object, not a bare array.
+        # This is exactly the ``output must contain a 'attributes' list``
+        # failure seen on Ontology Generate complete.
+        page = {
+            "attributes": [
+                {"label": "orderDate", "domain": "cand-6", "datatype": "xsd:date"}
+            ],
+            "has_more": True,
+        }
+        payload = json.dumps({"attributes": json.dumps(page)})
+        result = schemas.parse_attributes_payload(payload)
+        assert result["attributes"][0]["label"] == "orderDate"
+        assert result["has_more"] is True
+
     def test_relations_field_double_encoded_string_is_unwrapped(self):
         inner = [{"label": "placesOrder", "domain": "cls-Customer-a1", "range": "cand-6"}]
         payload = json.dumps({"relations": json.dumps(inner)})
         result = schemas.parse_relations_payload(payload)
         assert result["relations"][0]["label"] == "placesOrder"
 
+    def test_relations_field_double_encoded_page_object_is_unwrapped(self):
+        page = {
+            "relations": [
+                {
+                    "label": "placesOrder",
+                    "domain": "cls-Customer-a1",
+                    "range": "cand-6",
+                }
+            ],
+            "has_more": False,
+        }
+        payload = json.dumps({"relations": json.dumps(page)})
+        result = schemas.parse_relations_payload(payload)
+        assert result["relations"][0]["label"] == "placesOrder"
+
     def test_axioms_field_double_encoded_string_is_unwrapped(self):
         inner = [{"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}]
         payload = json.dumps({"axioms": json.dumps(inner)})
+        result = schemas.parse_axioms_payload(payload)
+        assert result["axioms"][0]["kind"] == "subClassOf"
+
+    def test_axioms_field_double_encoded_page_object_is_unwrapped(self):
+        page = {
+            "axioms": [
+                {
+                    "kind": "subClassOf",
+                    "subject": "cand-6",
+                    "object": "cls-Customer-a1",
+                }
+            ],
+            "has_more": False,
+        }
+        payload = json.dumps({"axioms": json.dumps(page)})
         result = schemas.parse_axioms_payload(payload)
         assert result["axioms"][0]["kind"] == "subClassOf"
 

@@ -1,0 +1,426 @@
+## Accept nested page-object double-encoding in Ontology Generate completion
+
+Context:
+Ontology Generate → Complete failed live with
+`output must contain a 'attributes' list` after ~37s. Relations had passed;
+the attributes page from Claude under `response_format` json_schema came
+back as a stringified *page object* inside the list field
+(`{"attributes": "{\"attributes\": [...], \"has_more\": false}"}`). The
+parser already unwrapped a stringified bare array, but not this nested
+shape — same residual transport quirk documented for Sonnet endpoints.
+
+Changes:
+
+1. src/agents/agent_owl_generator/schemas.py
+   `_require_list` now accepts one extra decode of a field string into
+   either a list or a dict carrying that same key as a list (and promotes
+   inner `has_more` when the outer object omitted it). Reject-only /
+   single-decode policy unchanged for anything else.
+2. tests/units/agents/test_owl_generator_schemas.py
+   Added page-object double-encoding cases for attributes, relations, and
+   axioms.
+
+Modified files:
+- src/agents/agent_owl_generator/schemas.py
+- tests/units/agents/test_owl_generator_schemas.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10875 passed, 333 skipped, 8 deselected, 44 warnings in 52.19s
+
+## Surface missing UC metadata clearly on Auto-Map start
+
+Context:
+Clicking Auto-Map from Graph → Build showed a vague
+`Error: Schema context could not be resolved`. The real cause was empty
+`domain.metadata` (no Unity Catalog tables loaded); the API wrapped that
+actionable ValidationError, and the modal did not pre-check metadata.
+
+Changes:
+
+1. src/api/routers/internal/mapping.py
+   Stop wrapping resolve_auto_assign_schema_context failures — re-raise the
+   original message (e.g. load metadata first).
+2. src/front/static/mapping/js/mapping-autoassign.js
+   Block Start when /domain/metadata has no tables; show a Load metadata
+   alert; prefer result.detail in start/startPartial error toasts.
+3. tests/units/front/test_mapping_automap_modal.py
+   Contract asserts for the missing-metadata gate.
+
+Modified files:
+- src/api/routers/internal/mapping.py
+- src/front/static/mapping/js/mapping-autoassign.js
+- tests/units/front/test_mapping_automap_modal.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: covered by the full-suite run in the rollback section below (same day).
+
+## Live per-item Auto-Map results in the Mapping Visual and List tabs
+
+Context:
+While a batch Auto-Map ran, the Visual and List tabs only changed when the
+whole run completed: the backend published counts per chunk and mappings
+reached the session at the end. Operators want to watch each entity /
+relationship turn green (mapped) or yellow (partial) as soon as the agent
+submits it.
+
+Changes:
+1. src/agents/tools/context.py, src/agents/tools/mapping.py
+   New optional ``ToolContext.on_mapping(kind, mapping)`` hook fired after
+   every accepted ``submit_entity_mapping`` / ``submit_relationship_mapping``.
+2. src/agents/agent_auto_assignment/engine.py
+   ``run_agent(on_mapping=...)`` forwards the hook into the ToolContext.
+3. src/back/objects/mapping/AutoAssignLiveFeed.py (new)
+   Accumulates one batch run's mappings (committed per chunk + in-flight
+   submissions) and republishes ``task.result`` with
+   ``live_entity_mappings`` / ``live_relationship_mappings`` and live counts;
+   failed chunks roll back their in-flight items.
+4. src/back/objects/mapping/Mapping.py
+   ``run_auto_assign_task`` uses the feed (per-item callback, commit /
+   rollback per chunk); ``auto_assign_with_agent`` accepts ``on_mapping``.
+5. src/front/static/mapping/js/mapping-autoassign.js
+   ``applyLiveMappings`` merges live items into ``MappingState`` (keeps the
+   ``excluded`` flag, skips unchanged items) and repaints; "Run in
+   background" is shown during a run; failed / cancelled runs reload the
+   server config.
+6. src/front/static/mapping/js/mapping-design.js
+   ``entityAttributeStatus`` helper (shared with List), in-place
+   ``refreshMappingMapStatus`` (no redraw, zoom/pan kept) and
+   ``refreshMappingLiveStatus``; changed items pulse.
+7. src/front/static/mapping/js/mapping-manual.js, mapping-manual.css
+   ``refreshLive`` keeps collapsed groups / scroll and pulses changed rows;
+   new yellow **Partial** badge for entities missing attribute columns.
+8. src/front/static/mapping/css/mapping-design.css
+   Pulse animation for just-mapped nodes / relationship handles.
+9. src/front/config/menu_config.json, src/front/static/global/js/mapping-core.js
+   The Mapping section is no longer disabled during Auto-Map; instead
+   ``autoSaveMappings`` refuses to save (with a warning) while a run is active.
+10. docs/user-guide.md
+    Document live results in Visual / List.
+11. Tests: live feed (mid-chunk publish, out-of-chunk filter, failed-chunk
+    rollback), ``on_mapping`` hook, front contracts; size baseline tightened.
+
+Modified files:
+- src/agents/tools/context.py
+- src/agents/tools/mapping.py
+- src/agents/agent_auto_assignment/engine.py
+- src/back/objects/mapping/AutoAssignLiveFeed.py
+- src/back/objects/mapping/__init__.py
+- src/back/objects/mapping/Mapping.py
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-manual.js
+- src/front/static/mapping/css/mapping-manual.css
+- src/front/static/mapping/css/mapping-design.css
+- src/front/static/global/js/mapping-core.js
+- src/front/config/menu_config.json
+- docs/user-guide.md
+- tests/units/mapping/test_auto_assign_observability.py
+- tests/units/agents/test_mapping_tools.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10888 passed, 333 skipped, 8 deselected, 44 warnings in 50.40s
+
+## Refresh Visual and List after Unmap all
+
+Context:
+Clicking Unmap all in the Mapping Studio header cleared the session and
+updated MappingState, but never repainted the Visual canvas or the List
+tree — nodes stayed green until a manual navigation or redraw.
+
+Changes:
+1. src/front/static/global/js/mapping-information.js
+   After a successful clear + reload, call ``refreshMappingLiveStatus``
+   (fallback: ``refreshMappingDesign`` + ``ManualModule.refresh``).
+2. tests/units/front/test_unmap_all_ui.py
+   Contract: Unmap all must refresh Visual/List.
+3. tests/units/front/test_mapping_unmap_keeps_exclusions.py
+   Stub ``refreshMappingLiveStatus`` in the node harness.
+
+Modified files:
+- src/front/static/global/js/mapping-information.js
+- tests/units/front/test_unmap_all_ui.py
+- tests/units/front/test_mapping_unmap_keeps_exclusions.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10889 passed, 333 skipped, 8 deselected, 44 warnings in 50.04s
+
+## Allow Mapping while Auto-Map runs (sidebar section guard)
+
+Context:
+After enabling live Visual/List progress, operators still could not open
+Graph → Mapping during a run: ``mapping-init.js`` blocked every section
+change with "Please wait until Auto-Map finishes…".
+
+Changes:
+1. src/front/static/mapping/js/mapping-init.js
+   ``onBeforeSectionChange`` allows ``design`` / ``manual`` while Auto-Map
+   is running; other Graph sections stay blocked.
+2. docs/user-guide.md
+   Note that Mapping is reachable during a background Auto-Map run.
+3. tests/units/front/test_mapping_automap_modal.py
+   Contract for the design/manual allow-list.
+
+Modified files:
+- src/front/static/mapping/js/mapping-init.js
+- docs/user-guide.md
+- tests/units/front/test_mapping_automap_modal.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10889 passed, 333 skipped, 8 deselected, 44 warnings in 49.82s
+
+## Roll back Genie mapping integration (keep Genie Knowledge Pages)
+
+Context:
+Genie-first mapping SQL made Auto-Map too slow (one Genie conversation per
+entity/relationship). The Genie mapping work was never pushed, so the 7 local
+commits (dd8d8f3a..c8c323fd) were dropped with `git reset --mixed d15771f4`.
+A backup branch `backup/genie-integration-2026-11-18` points at c8c323fd.
+Genie Knowledge Pages (entry point for Ontology generation) are unchanged.
+Non-Genie work from this session is kept: live per-item Auto-Map results,
+Unmap-all refresh, sidebar guard, autosave guard, Run in background,
+Partial badge, OWL attributes fix, metadata-required error surfacing.
+
+Changes:
+
+1. Deleted Genie mapping sources: src/agents/tools/genie_context.py,
+   src/agents/tools/genie_sql.py, src/back/core/databricks/GenieSpaceService.py,
+   GenieSqlExtractor.py, genie_space.py, src/back/core/sqlwizard/
+   GenerateSqlPipeline.py, GenieFirstSqlAttempt.py, MappingSqlFromGenie.py,
+   ProposedMappingSql.py, src/front/static/domain/js/domain-genie-space-picker.js,
+   the Genie eval datasets and the Genie unit tests.
+2. Restored to d15771f4: auto-assignment tools, PGE engine/generators,
+   internal domain router, DatabricksClient/constants, SQLWizardService,
+   Domain/DomainSession, domain-information.js, navbar.js, mapping-shared.js,
+   domain templates, test_sql_wizard.py, user guide, 2026-11-17 changelog.
+3. src/agents/agent_auto_assignment/engine.py, src/agents/tools/context.py
+   Re-applied only the `on_mapping` per-item hook used by the live feed.
+4. src/back/objects/mapping/Mapping.py, src/api/routers/internal/mapping.py
+   Removed Genie space resolution; Auto-Map requires Context → Metadata tables
+   again, and the metadata error is re-raised unwrapped.
+5. src/front/static/mapping/js/mapping-autoassign.js
+   Removed Genie-only banner/branches; missing metadata blocks Start with a
+   Load metadata link. Live-results code kept.
+6. docs/user-guide.md
+   Re-added the "Live results in Visual and List" paragraph.
+7. tests/units/mapping/test_resolve_auto_assign_schema_context.py,
+   tests/units/front/test_mapping_automap_modal.py
+   Metadata-only expectations.
+8. tests/units/architecture/baseline.json
+   Restored from d15771f4 and re-ratcheted.
+
+Modified files:
+- src/agents/agent_auto_assignment/engine.py
+- src/agents/tools/context.py
+- src/api/routers/internal/mapping.py
+- src/back/objects/mapping/Mapping.py
+- src/front/static/mapping/js/mapping-autoassign.js
+- docs/user-guide.md
+- tests/units/mapping/test_resolve_auto_assign_schema_context.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10849 passed, 333 skipped, 8 deselected, 44 warnings in 56.96s
+
+## Remove grey rounded background box for metadata loading spinner and status
+
+Context:
+On the Unity Catalog (Data Assets) page, `#metadataStatus` was wrapped in a
+Bootstrap `.alert alert-secondary` rounded box. During initial load and status
+polling, the spinner and "Loading data assets…" text rendered inside that grey
+box. Loading spinners must sit seamlessly on the card surface without a
+separate background or rounded box container.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_metadata.html
+   Removed `class="alert alert-secondary"` from `#metadataStatus`. The status
+   container is now seamless (`class="mb-4"`) with inline muted flex styling.
+2. src/front/static/domain/js/domain-metadata.js
+   `loadMetadataStatus` now renders loading, loaded, empty, and error states
+   cleanly without `alert` box classes (`statusDiv.className = 'mb-4'`,
+   clean icons, no rounded background box).
+3. .cursor/11-frontend-design.mdc
+   Documented the explicit rule: never wrap spinners and loading text in a
+   separate background container (e.g. `alert-secondary`, rounded grey boxes,
+   or bordered wells). Spinners must sit seamlessly on their parent surface.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/static/domain/js/domain-metadata.js
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10849 passed, 333 skipped, 8 deselected, 44 warnings in 50.84s
+
+## Fix Auto-Map early Start race and duplicate completion toasts
+
+Context:
+Opening Batch Auto-Map ran prepare twice (open + shown.bs.modal), so Start
+was clickable while ontology / mappings / metadata were still loading and
+looked like a silent no-op. On completion, two monitor loops each emitted
+both "Auto-map completed!" and "Auto-mapped N item(s) successfully".
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_autoassign_modal.html
+   Added a seamless preparing spinner (`#autoAssignPreparing`) with live
+   status text — no grey rounded background box.
+2. src/front/static/mapping/js/mapping-autoassign.js
+   Shared `_prepareModal` promise; disable Start while preparing and show
+   step labels (ontology → mappings → metadata); guard Start/startPartial
+   against `_preparing`; single `_monitoringTaskId` poll loop; drop the
+   redundant "Auto-map completed!" toast; emit one "Auto-mapped N…" toast
+   only on live completion (`showReport({ notify: true })`).
+3. tests/units/front/test_mapping_automap_modal.py
+   Contract coverage for preparing UI, prepare/monitor guards, and single
+   completion toast.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_autoassign_modal.html
+- src/front/static/mapping/js/mapping-autoassign.js
+- tests/units/front/test_mapping_automap_modal.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10850 passed, 333 skipped, 8 deselected, 44 warnings in 53.04s
+
+## Flatten resting page-content card shadows
+
+Context:
+Page body cards under section titles (e.g. Ontology → Import) carried a
+soft `--db-shadow-sm` elevation, while flat references like Graph →
+Mapping Studio used border-only framing. Align all resting page-content
+cards with the design-system rule: no resting shadows; elevation only
+for floating surfaces (`.cursor/11` Surface / Borders).
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   `.card` resting `box-shadow` set to `none` (1px border only).
+2. src/front/templates/partials/mapping/_mapping_design.html
+   Dropped Bootstrap `shadow-sm` from the Mapping Studio outer card.
+3. src/front/templates/partials/intelligence/_intel_analytics.html
+   Dropped `shadow-sm` from the analytics health card.
+4. src/front/templates/settings.html
+   Dropped `shadow-sm` from Branding and Theme cards.
+5. tests/units/front/test_clarity_design_contract.py
+   Contract now asserts resting `.card` keeps `box-shadow: none`.
+6. .cursor/11-frontend-design.mdc
+   Corrected Aurora note: resting cards stay flat; shadows are for
+   floating surfaces only.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/intelligence/_intel_analytics.html
+- src/front/templates/settings.html
+- tests/units/front/test_clarity_design_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10850 passed, 333 skipped, 8 deselected, 44 warnings in 50.04s
+
+## Adopt local gray palette as factory UI defaults
+
+Context:
+Settings → UI was still shipping indigo/cyan factory defaults
+(`#4F46E5` / `#22A7C8`) while the local workspace used neutral gray
+(`#737373` / `#6B6B6B`). Make those local colors the built-in defaults
+so Reset/Default and first-paint fallbacks match the active brand.
+
+Changes:
+
+1. src/back/core/helpers/UIBranding.py
+   `DEFAULT_PRIMARY_COLOR` / `DEFAULT_AURORA_COLOR` set to `#737373` /
+   `#6B6B6B`; factory primary without aurora pairs with factory aurora
+   (hue rotation is meaningless on achromatic gray).
+2. src/back/objects/session/GlobalConfigService.py
+   Empty `ui_branding` seed includes both factory colors.
+3. src/front/static/global/css/main.css
+   `:root` static primary/aurora/canvas fallbacks updated to the gray
+   palette.
+4. src/front/static/config/js/settings.js
+   `UI_BRANDING_DEFAULTS` + derived palette mirror the new factory.
+5. src/shared/fastapi/ui_branding.py
+   CSS-var render fallbacks updated.
+6. src/front/templates/settings.html + CSS/JS fallbacks + docs /
+   `.cursor/11`
+   Placeholders, swatches, token docs, and consumer fallbacks aligned.
+7. tests/units/ui/test_branding.py (+ related branding contracts)
+   Defaults and factory-aurora pairing coverage updated.
+
+Modified files:
+- src/back/core/helpers/UIBranding.py
+- src/back/objects/session/GlobalConfigService.py
+- src/front/static/global/css/main.css
+- src/front/static/config/js/settings.js
+- src/shared/fastapi/ui_branding.py
+- src/front/templates/settings.html
+- src/front/static/intelligence/css/intelligence.css
+- src/front/static/domain/css/domain-pages.css
+- src/front/static/domain/css/domain-versions.css
+- src/front/static/ontology/js/ontology-map.js
+- docs/user-guide.md
+- docs/api.md
+- .cursor/11-frontend-design.mdc
+- tests/units/ui/test_branding.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_ui_branding_rendering.py
+- tests/units/front/test_ui_branding_settings_contract.py
+- tests/units/settings/test_ui_branding.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: covered with the opaque-overlay suite below.
+
+## Make Auto-Map / Generate progress overlays opaque
+
+Context:
+While Auto-mapping or Ontology Generation was running, the shared
+progress overlay used `rgba(255,255,255,0.95)`, so the previous form
+still showed through. Progress/activity stay visible; only the backdrop
+needed to fully hide the underlying screen.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   `.task-progress-overlay` / `.wizard-form-overlay` background set to
+   opaque `var(--db-surface-warm)`.
+2. tests/units/front/test_clarity_design_contract.py
+   Added contract asserting both selectors stay opaque (no translucent
+   white rgba).
+
+Modified files:
+- src/front/static/global/css/components.css
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10852 passed, 333 skipped, 8 deselected, 44 warnings in 56.44s
+
+## Rename Ontology wizard sub-menu tabs to Unity Catalog Assets and Genie Pages
+
+Context:
+The Ontology Generate wizard (Ontology → Generate) sub-menu still said
+"Data Assets" and "Pages" with generic Bootstrap icons. The app now names
+the Unity Catalog source "Unity Catalog" and the Knowledge Pages "Genie
+Pages", with brand marks in the Context → Metadata menu. The wizard tabs
+now use the same labels and brand icons.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_wizard.html
+   Tab `wizard-tab-metadata` relabelled "Unity Catalog Assets" with the
+   `ob-brand-icon ob-icon-unity-catalog` mark; tab `wizard-tab-pages`
+   relabelled "Genie Pages" with the `ob-brand-icon ob-icon-genie` mark.
+   Matching pane headings and the no-metadata hint link use the same labels
+   and icons. Tab ids are unchanged.
+2. tests/units/front/test_ontology_generate_wizard_staged.py
+   Contract test for the new wizard tab labels and brand icons.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- tests/units/front/test_ontology_generate_wizard_staged.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10853 passed, 333 skipped, 8 deselected, 44 warnings in 57.98s

@@ -165,6 +165,7 @@ class TestUnmapAllKeepsHiddenItems:
         }};
         global.showNotification = () => {{}};
         global.updateMappingCompletionStatus = () => {{}};
+        global.refreshMappingLiveStatus = () => {{}};
 
         MappingState.loadedOntology = {{
             classes: [{{ uri: 'E1' }}, {{ uri: 'E2' }}],

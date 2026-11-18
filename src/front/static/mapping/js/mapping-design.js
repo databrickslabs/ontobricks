@@ -265,29 +265,9 @@ async function initMappingDesigner(opts) {
             
             const isExcluded = !!cls.excluded;
             const isMapped = mappedClassUris.has(cls.uri);
-            
-            // Check if attributes are fully assigned
-            let mappingStatus = isExcluded ? 'excluded' : (isMapped ? 'mapped' : 'unmapped');
-            if (!isExcluded && isMapped) {
-                const dataProps = cls.dataProperties || [];
-                if (dataProps.length > 0) {
-                    const em = mappingByClassUri[cls.uri] || {};
-                    const attrMap = em.attribute_mappings || {};
-                    const excludedAttrs = new Set(em.excluded_attributes || []);
-                    // Only count included attributes — excluded ones don't create a gap.
-                    const includedProps = dataProps.filter(dp => {
-                        const name = dp.name || dp.localName || '';
-                        return name && !excludedAttrs.has(name);
-                    });
-                    const hasAllAttrs = includedProps.every(dp => {
-                        const name = dp.name || dp.localName || '';
-                        return !!attrMap[name];
-                    });
-                    if (!hasAllAttrs) {
-                        mappingStatus = 'partial';
-                    }
-                }
-            }
+            const mappingStatus = isExcluded
+                ? 'excluded'
+                : (isMapped ? entityAttributeStatus(cls, mappingByClassUri[cls.uri]) : 'unmapped');
             
             return {
                 id: cls.name || cls.localName,
@@ -1069,6 +1049,81 @@ function refreshMappingDesign() {
     // have changed too — allow exactly one new drift fetch.
     mappingDriftLoaded = false;
     initMappingDesigner();
+}
+
+/**
+ * 'mapped' when every included data property of *cls* has a column in *em*,
+ * else 'partial' (excluded attributes never create a gap).
+ */
+function entityAttributeStatus(cls, em) {
+    const attrMap = (em && em.attribute_mappings) || {};
+    const excludedAttrs = new Set((em && em.excluded_attributes) || []);
+    const missing = ((cls && cls.dataProperties) || []).some(dp => {
+        const name = dp.name || dp.localName || '';
+        return name && !excludedAttrs.has(name) && !attrMap[name];
+    });
+    return missing ? 'partial' : 'mapped';
+}
+
+/**
+ * Briefly pulse a node / link / tree row that a running Auto-Map just mapped.
+ */
+function flashLiveMapped(el) {
+    if (!el || !el.classList) return;
+    el.classList.remove('live-mapped');
+    void el.getBoundingClientRect();
+    el.classList.add('live-mapped');
+    setTimeout(() => el.classList.remove('live-mapped'), 2500);
+}
+
+/**
+ * Re-colour the existing Visual canvas from MappingState in place — no
+ * redraw, so zoom / pan / selection survive the 1.5s Auto-Map poll.
+ */
+function refreshMappingMapStatus(changedUris) {
+    if (typeof d3 === 'undefined' || !mappingMapInitialized) return;
+    const cfg = MappingState.config || {};
+    const classByUri = new Map(((MappingState.loadedOntology || {}).classes || []).map(c => [c.uri, c]));
+    const entityByUri = new Map();
+    (cfg.entities || []).forEach(m => entityByUri.set(m.ontology_class || m.class_uri, m));
+    const mappedProps = new Set((cfg.relationships || []).filter(m => m.sql_query).map(m => m.property));
+    const changed = new Set(changedUris || []);
+
+    d3.selectAll('.mapping-map-node').each(function(d) {
+        if (!d || d.excluded) return;
+        const em = entityByUri.get(d.uri);
+        d.mapped = !!(em && em.sql_query);
+        d.mappingStatus = d.mapped ? entityAttributeStatus(classByUri.get(d.uri), em) : 'unmapped';
+        d3.select(this)
+            .classed('mapped', d.mappingStatus === 'mapped')
+            .classed('partial', d.mappingStatus === 'partial')
+            .classed('unmapped', d.mappingStatus === 'unmapped');
+        if (changed.has(d.uri)) flashLiveMapped(this);
+    });
+
+    d3.selectAll('.mapping-map-link, .mapping-map-link-hitarea, .mapping-map-link-label').each(function(d) {
+        if (!d || d.type !== 'relationship' || d.excluded) return;
+        d.mapped = mappedProps.has(d.uri);
+        const sel = d3.select(this).classed('mapped', d.mapped).classed('unmapped', !d.mapped);
+        if (sel.classed('self-loop')) {
+            sel.attr('marker-end', d.mapped ? 'url(#mapping-arrow-self-mapped)' : 'url(#mapping-arrow-self-unmapped)');
+        }
+        if (changed.has(d.uri) && sel.classed('mapping-map-link-hitarea')) flashLiveMapped(this);
+    });
+}
+
+/**
+ * Repaint Visual + List + status cards after MappingState changed outside
+ * the panels (a running Auto-Map streaming per-item results).
+ */
+function refreshMappingLiveStatus(changedUris) {
+    refreshMappingMapStatus(changedUris);
+    if (window.ManualModule && typeof ManualModule.refreshLive === 'function') {
+        ManualModule.refreshLive(changedUris);
+    }
+    if (typeof window.updateMappingCompletionStatus === 'function') {
+        window.updateMappingCompletionStatus();
+    }
 }
 
 // Alias for compatibility
@@ -4154,6 +4209,9 @@ document.addEventListener('DOMContentLoaded', function() {
 window.initMappingDesigner = initMappingDesigner;
 window.loadOntologyIntoMappingDesigner = loadOntologyIntoMappingDesigner;
 window.refreshMappingDesign = refreshMappingDesign;
+window.refreshMappingLiveStatus = refreshMappingLiveStatus;
+window.entityAttributeStatus = entityAttributeStatus;
+window.flashLiveMapped = flashLiveMapped;
 window.resizeMapSvg = resizeMapSvg;
 window.centerMappingDiagram = centerMappingDiagram;
 

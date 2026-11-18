@@ -78,6 +78,14 @@ async function loadExistingMappings() {
  * Auto-save mappings to session and regenerate R2RML
  */
 async function autoSaveMappings() {
+    // The Mapping tabs stay open during a batch Auto-Map to watch it live, but
+    // the run's final save would overwrite any edit made meanwhile.
+    if (window.AutoAssignModule && window.AutoAssignModule.isRunning) {
+        if (typeof showNotification === 'function') {
+            showNotification('Auto-Map is running — mapping edits are not saved until it finishes.', 'warning', 4000);
+        }
+        return;
+    }
     try {
         const response = await fetch('/mapping/save', {
             method: 'POST',

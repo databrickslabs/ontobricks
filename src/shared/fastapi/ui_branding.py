@@ -86,19 +86,19 @@ def brand_page_title(branding: Mapping[str, Any], page_label: str = "") -> str:
 def render_ui_branding_css_vars(branding: Mapping[str, Any]) -> str:
     palette = branding.get("palette", {}) if isinstance(branding, Mapping) else {}
     primary = str(branding.get("primary_color") or DEFAULT_PRIMARY_COLOR)
-    primary_rgb = str(palette.get("primary_rgb") or "79, 70, 229")
-    primary_dark = str(palette.get("primary_dark") or "#4338CA")
-    primary_darker = str(palette.get("primary_darker") or "#3730A3")
-    primary_light = str(palette.get("primary_light") or "rgba(79, 70, 229, 0.10)")
-    hover = str(palette.get("hover") or "rgba(79, 70, 229, 0.06)")
-    focus = str(palette.get("focus") or "rgba(79, 70, 229, 0.18)")
+    primary_rgb = str(palette.get("primary_rgb") or "115, 115, 115")
+    primary_dark = str(palette.get("primary_dark") or "#626262")
+    primary_darker = str(palette.get("primary_darker") or "#515151")
+    primary_light = str(palette.get("primary_light") or "rgba(115, 115, 115, 0.10)")
+    hover = str(palette.get("hover") or "rgba(115, 115, 115, 0.06)")
+    focus = str(palette.get("focus") or "rgba(115, 115, 115, 0.18)")
     on_primary = str(palette.get("on_primary") or "#FFFFFF")
-    selected_text = str(palette.get("selected_text") or "#3730A3")
+    selected_text = str(palette.get("selected_text") or "#686868")
     aurora = str(palette.get("aurora") or DEFAULT_AURORA_COLOR)
-    aurora_rgb = str(palette.get("aurora_rgb") or "34, 167, 200")
-    aurora_dark = str(palette.get("aurora_dark") or "#1D8EAA")
-    gradient_end = str(palette.get("gradient_end") or "#3A79E2")
-    canvas_tint = str(palette.get("canvas_tint") or "#F6F6FE")
+    aurora_rgb = str(palette.get("aurora_rgb") or "107, 107, 107")
+    aurora_dark = str(palette.get("aurora_dark") or "#5B5B5B")
+    gradient_end = str(palette.get("gradient_end") or "#6F6F6F")
+    canvas_tint = str(palette.get("canvas_tint") or "#F8F8F8")
 
     return (
         ":root {\n"

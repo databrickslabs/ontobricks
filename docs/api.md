@@ -1472,11 +1472,11 @@ POST /settings/ui-branding
   "success": true,
   "branding": {
     "app_title": "OntoBricks",
-    "primary_color": "#4F46E5",
+    "primary_color": "#737373",
     "logo_url": "/static/global/img/favicon.svg",
     "is_custom_logo": false,
     "palette": {
-      "primary_rgb": "79, 70, 229",
+      "primary_rgb": "115, 115, 115",
       "primary_dark": "#4338CA",
       "on_primary": "#FFFFFF"
     }

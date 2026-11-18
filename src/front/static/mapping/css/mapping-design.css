@@ -108,6 +108,17 @@
     filter: drop-shadow(0 0 6px rgba(220, 53, 69, 0.5));
 }
 
+/* Pulse on nodes / relationship handles a running Auto-Map just mapped */
+.mapping-map-node.live-mapped .mapping-map-node-hitarea,
+.mapping-map-link-hitarea.live-mapped {
+    animation: mapping-live-mapped 0.8s ease-in-out 3;
+}
+
+@keyframes mapping-live-mapped {
+    0%, 100% { stroke-width: 3px; }
+    50%      { stroke-width: 9px; }
+}
+
 /* Excluded entity node - grey */
 .mapping-map-node.excluded .mapping-map-node-hitarea {
     fill: rgba(173, 181, 189, 0.15);
