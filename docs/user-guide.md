@@ -1760,7 +1760,7 @@ the API/MCP **Active** selection managed in **Registry → Browse**.
    It does not stay on Home or reload Registry Browse. Publication and
    Validation entry points that already jump to `?section=review` are unchanged.
 
-When the Registry popup opens, OntoBricks briefly reuses a recently loaded
+When the Home page Browse tab is shown, OntoBricks briefly reuses a recently loaded
 Browse list and starts loading Bridges in the background. This avoids duplicate
 requests during modal opening and makes the first switch to Bridges faster.
 Use the tab's **Refresh** button whenever an immediate server refresh is needed.

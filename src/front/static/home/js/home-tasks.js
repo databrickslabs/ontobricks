@@ -1,9 +1,9 @@
 /**
- * Home → My Tasks
+ * Home → My tasks tab
  *
- * Compact review worklist surfaced on the home page, just below the
- * Current Context panel. Only reveals itself when the current user
- * actually has pending review tasks.
+ * Review worklist + tasks assigned to the current user. The tab is always
+ * visible; an empty state is shown when there is nothing to do. Reloads each
+ * time the tab is opened (``sidebarSectionChanged`` with section ``tasks``).
  *
  * Data source: GET /review/my-tasks (see ReviewService.my_tasks).
  */
@@ -11,11 +11,13 @@
     'use strict';
 
     document.addEventListener('DOMContentLoaded', loadTasks);
+    document.addEventListener('sidebarSectionChanged', (e) => {
+        if (e.detail?.section === 'tasks') loadTasks();
+    });
 
     async function loadTasks() {
-        const section = document.getElementById('homeTasksSection');
         const container = document.getElementById('homeTasksContainer');
-        if (!section || !container) return;
+        if (!container) return;
 
         try {
             const resp = await fetch('/review/my-tasks', {
@@ -25,21 +27,33 @@
             const ok = resp.ok && data.success;
             const tasks = (ok && data.tasks) ? data.tasks : [];
             const assigned = (ok && data.assigned_tasks) ? data.assigned_tasks : [];
-            if (!tasks.length && !assigned.length) {
-                section.style.display = 'none';
-                return;
-            }
             render(container, tasks, assigned);
-            section.style.display = '';
+            setTileCount(tasks.length + assigned.length);
         } catch (err) {
             // Home page must stay usable even if the review API is down.
             console.error('home loadTasks error:', err);
-            section.style.display = 'none';
+            setTileCount(null);
+            container.innerHTML =
+                '<div class="my-tasks-empty text-muted small py-3">' +
+                '<i class="bi bi-exclamation-triangle me-1"></i>Could not load tasks.</div>';
         }
+    }
+
+    /** My tasks tile count (null = unavailable). */
+    function setTileCount(n) {
+        const el = document.getElementById('homeCountTasks');
+        if (el) el.textContent = (n === null) ? '\u2014' : String(n);
     }
 
     function render(container, tasks, assigned) {
         assigned = assigned || [];
+        if (!tasks.length && !assigned.length) {
+            container.innerHTML =
+                '<div class="my-tasks-empty text-muted small py-4 text-center">' +
+                '<i class="bi bi-check2-circle fs-4 d-block mb-2"></i>' +
+                'No tasks waiting for you.</div>';
+            return;
+        }
         const rows = tasks.map((t) => {
             const actions = validateButton(t);
             return '<tr>' +

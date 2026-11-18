@@ -91,14 +91,6 @@ body[data-app-role="admin"] .dropdown-item[data-requires-app="admin"] {
     display: flex !important;
 }
 
-body[data-app-role="admin"] .ob-domain-empty-cta[data-requires-app="admin"] {
-    display: inline-flex !important;
-}
-
-body[data-app-role="admin"] .ob-domain-empty-cta[data-requires-app="admin"] {
-    display: inline-flex !important;
-}
-
 /* ==========================================================================
    Context-role gates (builder / editor)
    ========================================================================== */

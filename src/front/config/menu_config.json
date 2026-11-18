@@ -9,10 +9,9 @@
             "id": "registry",
             "label": "Registry",
             "icon": "bi-boxes",
-            "route": "/?open=registry",
+            "route": "/",
             "requires_domain_saved": false,
-            "navbar_hidden": false,
-            "navbar_modal": true,
+            "navbar_hidden": true,
             "status_indicator": null,
             "navbar_actions": [],
             "groups": []

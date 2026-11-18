@@ -1,606 +1,266 @@
-## Accept nested page-object double-encoding in Ontology Generate completion
+## Home page becomes the Registry + Context menu status badge removed
 
-Context:
-Ontology Generate → Complete failed live with
-`output must contain a 'attributes' list` after ~37s. Relations had passed;
-the attributes page from Claude under `response_format` json_schema came
-back as a stringified *page object* inside the list field
-(`{"attributes": "{\"attributes\": [...], \"has_more\": false}"}`). The
-parser already unwrapped a stringified bare array, but not this nested
-shape — same residual transport quirk documented for Sonnet endpoints.
+Context: The Home page showed the "All Contexts" card grid and the navbar
+Registry icon opened a Browse / Bridges popup. Both now live on Home in one
+card with three tabs (Browse · Bridges · My tasks). The Registry popup and its
+navbar icon are removed. Separately, the lifecycle status badge (Draft, In
+Review, Published) was removed from the Context dropdown header in the L2
+navbar. Design: docs/superpowers/specs/2026-11-18-home-registry-design.md
 
 Changes:
-
-1. src/agents/agent_owl_generator/schemas.py
-   `_require_list` now accepts one extra decode of a field string into
-   either a list or a dict carrying that same key as a list (and promotes
-   inner `has_more` when the outer object omitted it). Reject-only /
-   single-decode policy unchanged for anything else.
-2. tests/units/agents/test_owl_generator_schemas.py
-   Added page-object double-encoding cases for attributes, relations, and
-   axioms.
-
-Modified files:
-- src/agents/agent_owl_generator/schemas.py
-- tests/units/agents/test_owl_generator_schemas.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10875 passed, 333 skipped, 8 deselected, 44 warnings in 52.19s
-
-## Surface missing UC metadata clearly on Auto-Map start
-
-Context:
-Clicking Auto-Map from Graph → Build showed a vague
-`Error: Schema context could not be resolved`. The real cause was empty
-`domain.metadata` (no Unity Catalog tables loaded); the API wrapped that
-actionable ValidationError, and the modal did not pre-check metadata.
-
-Changes:
-
-1. src/api/routers/internal/mapping.py
-   Stop wrapping resolve_auto_assign_schema_context failures — re-raise the
-   original message (e.g. load metadata first).
-2. src/front/static/mapping/js/mapping-autoassign.js
-   Block Start when /domain/metadata has no tables; show a Load metadata
-   alert; prefer result.detail in start/startPartial error toasts.
-3. tests/units/front/test_mapping_automap_modal.py
-   Contract asserts for the missing-metadata gate.
-
-Modified files:
-- src/api/routers/internal/mapping.py
-- src/front/static/mapping/js/mapping-autoassign.js
-- tests/units/front/test_mapping_automap_modal.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: covered by the full-suite run in the rollback section below (same day).
-
-## Live per-item Auto-Map results in the Mapping Visual and List tabs
-
-Context:
-While a batch Auto-Map ran, the Visual and List tabs only changed when the
-whole run completed: the backend published counts per chunk and mappings
-reached the session at the end. Operators want to watch each entity /
-relationship turn green (mapped) or yellow (partial) as soon as the agent
-submits it.
-
-Changes:
-1. src/agents/tools/context.py, src/agents/tools/mapping.py
-   New optional ``ToolContext.on_mapping(kind, mapping)`` hook fired after
-   every accepted ``submit_entity_mapping`` / ``submit_relationship_mapping``.
-2. src/agents/agent_auto_assignment/engine.py
-   ``run_agent(on_mapping=...)`` forwards the hook into the ToolContext.
-3. src/back/objects/mapping/AutoAssignLiveFeed.py (new)
-   Accumulates one batch run's mappings (committed per chunk + in-flight
-   submissions) and republishes ``task.result`` with
-   ``live_entity_mappings`` / ``live_relationship_mappings`` and live counts;
-   failed chunks roll back their in-flight items.
-4. src/back/objects/mapping/Mapping.py
-   ``run_auto_assign_task`` uses the feed (per-item callback, commit /
-   rollback per chunk); ``auto_assign_with_agent`` accepts ``on_mapping``.
-5. src/front/static/mapping/js/mapping-autoassign.js
-   ``applyLiveMappings`` merges live items into ``MappingState`` (keeps the
-   ``excluded`` flag, skips unchanged items) and repaints; "Run in
-   background" is shown during a run; failed / cancelled runs reload the
-   server config.
-6. src/front/static/mapping/js/mapping-design.js
-   ``entityAttributeStatus`` helper (shared with List), in-place
-   ``refreshMappingMapStatus`` (no redraw, zoom/pan kept) and
-   ``refreshMappingLiveStatus``; changed items pulse.
-7. src/front/static/mapping/js/mapping-manual.js, mapping-manual.css
-   ``refreshLive`` keeps collapsed groups / scroll and pulses changed rows;
-   new yellow **Partial** badge for entities missing attribute columns.
-8. src/front/static/mapping/css/mapping-design.css
-   Pulse animation for just-mapped nodes / relationship handles.
-9. src/front/config/menu_config.json, src/front/static/global/js/mapping-core.js
-   The Mapping section is no longer disabled during Auto-Map; instead
-   ``autoSaveMappings`` refuses to save (with a warning) while a run is active.
-10. docs/user-guide.md
-    Document live results in Visual / List.
-11. Tests: live feed (mid-chunk publish, out-of-chunk filter, failed-chunk
-    rollback), ``on_mapping`` hook, front contracts; size baseline tightened.
+1. src/front/templates/home.html: hero keeps logo + "OntoBricks" title + tagline
+   (version badge removed). "All Contexts" grid removed. New card with tabs
+   Browse (default), Bridges, My tasks (`#homeTabs`, `data-home-section`), with
+   Registry partials and Export/Import modals included.
+2. src/front/templates/partials/home/_home_my_tasks.html (new): My tasks pane.
+3. src/front/templates/partials/registry/_registry_domains.html: Create button
+   id renamed `btnRegistryModalNewDomain` -> `btnHomeNewDomain`.
+4. src/front/templates/partials/layout/registry_modal.html: deleted (popup).
+5. src/front/templates/base.html: removed registry modal include, its script and
+   stylesheet, and the navbar branch for `navbar_modal`.
+6. src/front/config/menu_config.json: registry menu `navbar_hidden: true`,
+   `navbar_modal` removed, route `/`.
+7. src/front/static/global/js/registry-modal.js, src/front/static/global/css/registry-modal.css: deleted.
+8. src/front/static/home/js/home.js: gateway code removed. Now wires tabs to
+   `?section=` URL state, dispatches `sidebarSectionChanged` (source `home`), and
+   the Create button calls `window.domainNew()`.
+9. src/front/static/home/js/home-tasks.js: always visible; empty state and error
+   state; reloads when the My tasks tab is shown.
+10. src/front/static/home/css/home.css: gateway grid styles replaced by Registry
+    card and Bridges sizing rules (modal layout rules dropped).
+11. src/front/static/registry/js/registry.js: removed `source === 'registry-modal'`
+    branch (Bridges load driven by `section === 'bridges'`); comments updated.
+12. src/front/routes/registry.py: legacy `/registry/` redirects to
+    `/?section=domains`.
+13. src/front/static/global/css/pages.css: removed unused `.workflow-section`.
+14. src/front/static/global/css/components.css: removed unused `.ob-home-brand-version`.
+15. src/front/static/global/css/permissions.css: removed dead
+    `.ob-domain-empty-cta` admin rules.
+16. src/front/static/global/js/navbar.js: removed the lifecycle status badge
+    from the Context dropdown header (`#domainSectionName` in
+    `#subnavDomainDropdownMenu`). The L2 trigger and workspace map badges are
+    unchanged.
+17. src/front/templates/partials/layout/help_modal.html: Registry popup and
+    Registry -> Bridges wording updated to Home tabs.
+18. .cursor/11-frontend-design.mdc: tab catalogue example updated.
+19. docs/development.md, docs/user-guide.md, docs/architecture.md: Home contract,
+    `/registry/` redirect, popup references updated.
+20. docs/superpowers/specs/2026-11-18-home-registry-design.md (new): design spec.
+21. Tests updated for the new structure: tests/units/front/test_clarity_design_contract.py,
+    tests/units/api/test_ui_rendering.py, tests/units/front/test_registry_modal_loading.py,
+    tests/units/front/test_registry_operational_status.py,
+    tests/units/front/test_admin_only_domain_create.py,
+    tests/units/front/test_registry_stacked_obx_modals.py,
+    tests/units/front/test_domain_load_redirect.py,
+    tests/units/ui/test_home_and_explorer_contracts.py,
+    tests/e2e/registry/test_registry_flows.py (rewritten; modal stacking test dropped),
+    tests/e2e/navigation/test_navigation_flows.py (opt-in, not run).
 
 Modified files:
-- src/agents/tools/context.py
-- src/agents/tools/mapping.py
-- src/agents/agent_auto_assignment/engine.py
-- src/back/objects/mapping/AutoAssignLiveFeed.py
-- src/back/objects/mapping/__init__.py
-- src/back/objects/mapping/Mapping.py
-- src/front/static/mapping/js/mapping-autoassign.js
-- src/front/static/mapping/js/mapping-design.js
-- src/front/static/mapping/js/mapping-manual.js
-- src/front/static/mapping/css/mapping-manual.css
-- src/front/static/mapping/css/mapping-design.css
-- src/front/static/global/js/mapping-core.js
+- src/front/templates/home.html
+- src/front/templates/partials/home/_home_my_tasks.html (new)
+- src/front/templates/partials/registry/_registry_domains.html
+- src/front/templates/partials/layout/registry_modal.html (deleted)
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/base.html
 - src/front/config/menu_config.json
-- docs/user-guide.md
-- tests/units/mapping/test_auto_assign_observability.py
-- tests/units/agents/test_mapping_tools.py
-- tests/units/front/test_mapping_automap_modal.py
-- tests/units/architecture/baseline.json
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10888 passed, 333 skipped, 8 deselected, 44 warnings in 50.40s
-
-## Refresh Visual and List after Unmap all
-
-Context:
-Clicking Unmap all in the Mapping Studio header cleared the session and
-updated MappingState, but never repainted the Visual canvas or the List
-tree — nodes stayed green until a manual navigation or redraw.
-
-Changes:
-1. src/front/static/global/js/mapping-information.js
-   After a successful clear + reload, call ``refreshMappingLiveStatus``
-   (fallback: ``refreshMappingDesign`` + ``ManualModule.refresh``).
-2. tests/units/front/test_unmap_all_ui.py
-   Contract: Unmap all must refresh Visual/List.
-3. tests/units/front/test_mapping_unmap_keeps_exclusions.py
-   Stub ``refreshMappingLiveStatus`` in the node harness.
-
-Modified files:
-- src/front/static/global/js/mapping-information.js
-- tests/units/front/test_unmap_all_ui.py
-- tests/units/front/test_mapping_unmap_keeps_exclusions.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10889 passed, 333 skipped, 8 deselected, 44 warnings in 50.04s
-
-## Allow Mapping while Auto-Map runs (sidebar section guard)
-
-Context:
-After enabling live Visual/List progress, operators still could not open
-Graph → Mapping during a run: ``mapping-init.js`` blocked every section
-change with "Please wait until Auto-Map finishes…".
-
-Changes:
-1. src/front/static/mapping/js/mapping-init.js
-   ``onBeforeSectionChange`` allows ``design`` / ``manual`` while Auto-Map
-   is running; other Graph sections stay blocked.
-2. docs/user-guide.md
-   Note that Mapping is reachable during a background Auto-Map run.
-3. tests/units/front/test_mapping_automap_modal.py
-   Contract for the design/manual allow-list.
-
-Modified files:
-- src/front/static/mapping/js/mapping-init.js
-- docs/user-guide.md
-- tests/units/front/test_mapping_automap_modal.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10889 passed, 333 skipped, 8 deselected, 44 warnings in 49.82s
-
-## Roll back Genie mapping integration (keep Genie Knowledge Pages)
-
-Context:
-Genie-first mapping SQL made Auto-Map too slow (one Genie conversation per
-entity/relationship). The Genie mapping work was never pushed, so the 7 local
-commits (dd8d8f3a..c8c323fd) were dropped with `git reset --mixed d15771f4`.
-A backup branch `backup/genie-integration-2026-11-18` points at c8c323fd.
-Genie Knowledge Pages (entry point for Ontology generation) are unchanged.
-Non-Genie work from this session is kept: live per-item Auto-Map results,
-Unmap-all refresh, sidebar guard, autosave guard, Run in background,
-Partial badge, OWL attributes fix, metadata-required error surfacing.
-
-Changes:
-
-1. Deleted Genie mapping sources: src/agents/tools/genie_context.py,
-   src/agents/tools/genie_sql.py, src/back/core/databricks/GenieSpaceService.py,
-   GenieSqlExtractor.py, genie_space.py, src/back/core/sqlwizard/
-   GenerateSqlPipeline.py, GenieFirstSqlAttempt.py, MappingSqlFromGenie.py,
-   ProposedMappingSql.py, src/front/static/domain/js/domain-genie-space-picker.js,
-   the Genie eval datasets and the Genie unit tests.
-2. Restored to d15771f4: auto-assignment tools, PGE engine/generators,
-   internal domain router, DatabricksClient/constants, SQLWizardService,
-   Domain/DomainSession, domain-information.js, navbar.js, mapping-shared.js,
-   domain templates, test_sql_wizard.py, user guide, 2026-11-17 changelog.
-3. src/agents/agent_auto_assignment/engine.py, src/agents/tools/context.py
-   Re-applied only the `on_mapping` per-item hook used by the live feed.
-4. src/back/objects/mapping/Mapping.py, src/api/routers/internal/mapping.py
-   Removed Genie space resolution; Auto-Map requires Context → Metadata tables
-   again, and the metadata error is re-raised unwrapped.
-5. src/front/static/mapping/js/mapping-autoassign.js
-   Removed Genie-only banner/branches; missing metadata blocks Start with a
-   Load metadata link. Live-results code kept.
-6. docs/user-guide.md
-   Re-added the "Live results in Visual and List" paragraph.
-7. tests/units/mapping/test_resolve_auto_assign_schema_context.py,
-   tests/units/front/test_mapping_automap_modal.py
-   Metadata-only expectations.
-8. tests/units/architecture/baseline.json
-   Restored from d15771f4 and re-ratcheted.
-
-Modified files:
-- src/agents/agent_auto_assignment/engine.py
-- src/agents/tools/context.py
-- src/api/routers/internal/mapping.py
-- src/back/objects/mapping/Mapping.py
-- src/front/static/mapping/js/mapping-autoassign.js
-- docs/user-guide.md
-- tests/units/mapping/test_resolve_auto_assign_schema_context.py
-- tests/units/front/test_mapping_automap_modal.py
-- tests/units/architecture/baseline.json
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10849 passed, 333 skipped, 8 deselected, 44 warnings in 56.96s
-
-## Remove grey rounded background box for metadata loading spinner and status
-
-Context:
-On the Unity Catalog (Data Assets) page, `#metadataStatus` was wrapped in a
-Bootstrap `.alert alert-secondary` rounded box. During initial load and status
-polling, the spinner and "Loading data assets…" text rendered inside that grey
-box. Loading spinners must sit seamlessly on the card surface without a
-separate background or rounded box container.
-
-Changes:
-
-1. src/front/templates/partials/domain/_domain_metadata.html
-   Removed `class="alert alert-secondary"` from `#metadataStatus`. The status
-   container is now seamless (`class="mb-4"`) with inline muted flex styling.
-2. src/front/static/domain/js/domain-metadata.js
-   `loadMetadataStatus` now renders loading, loaded, empty, and error states
-   cleanly without `alert` box classes (`statusDiv.className = 'mb-4'`,
-   clean icons, no rounded background box).
-3. .cursor/11-frontend-design.mdc
-   Documented the explicit rule: never wrap spinners and loading text in a
-   separate background container (e.g. `alert-secondary`, rounded grey boxes,
-   or bordered wells). Spinners must sit seamlessly on their parent surface.
-
-Modified files:
-- src/front/templates/partials/domain/_domain_metadata.html
-- src/front/static/domain/js/domain-metadata.js
-- .cursor/11-frontend-design.mdc
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10849 passed, 333 skipped, 8 deselected, 44 warnings in 50.84s
-
-## Fix Auto-Map early Start race and duplicate completion toasts
-
-Context:
-Opening Batch Auto-Map ran prepare twice (open + shown.bs.modal), so Start
-was clickable while ontology / mappings / metadata were still loading and
-looked like a silent no-op. On completion, two monitor loops each emitted
-both "Auto-map completed!" and "Auto-mapped N item(s) successfully".
-
-Changes:
-
-1. src/front/templates/partials/mapping/_mapping_autoassign_modal.html
-   Added a seamless preparing spinner (`#autoAssignPreparing`) with live
-   status text — no grey rounded background box.
-2. src/front/static/mapping/js/mapping-autoassign.js
-   Shared `_prepareModal` promise; disable Start while preparing and show
-   step labels (ontology → mappings → metadata); guard Start/startPartial
-   against `_preparing`; single `_monitoringTaskId` poll loop; drop the
-   redundant "Auto-map completed!" toast; emit one "Auto-mapped N…" toast
-   only on live completion (`showReport({ notify: true })`).
-3. tests/units/front/test_mapping_automap_modal.py
-   Contract coverage for preparing UI, prepare/monitor guards, and single
-   completion toast.
-
-Modified files:
-- src/front/templates/partials/mapping/_mapping_autoassign_modal.html
-- src/front/static/mapping/js/mapping-autoassign.js
-- tests/units/front/test_mapping_automap_modal.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10850 passed, 333 skipped, 8 deselected, 44 warnings in 53.04s
-
-## Flatten resting page-content card shadows
-
-Context:
-Page body cards under section titles (e.g. Ontology → Import) carried a
-soft `--db-shadow-sm` elevation, while flat references like Graph →
-Mapping Studio used border-only framing. Align all resting page-content
-cards with the design-system rule: no resting shadows; elevation only
-for floating surfaces (`.cursor/11` Surface / Borders).
-
-Changes:
-
-1. src/front/static/global/css/main.css
-   `.card` resting `box-shadow` set to `none` (1px border only).
-2. src/front/templates/partials/mapping/_mapping_design.html
-   Dropped Bootstrap `shadow-sm` from the Mapping Studio outer card.
-3. src/front/templates/partials/intelligence/_intel_analytics.html
-   Dropped `shadow-sm` from the analytics health card.
-4. src/front/templates/settings.html
-   Dropped `shadow-sm` from Branding and Theme cards.
-5. tests/units/front/test_clarity_design_contract.py
-   Contract now asserts resting `.card` keeps `box-shadow: none`.
-6. .cursor/11-frontend-design.mdc
-   Corrected Aurora note: resting cards stay flat; shadows are for
-   floating surfaces only.
-
-Modified files:
-- src/front/static/global/css/main.css
-- src/front/templates/partials/mapping/_mapping_design.html
-- src/front/templates/partials/intelligence/_intel_analytics.html
-- src/front/templates/settings.html
-- tests/units/front/test_clarity_design_contract.py
-- .cursor/11-frontend-design.mdc
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10850 passed, 333 skipped, 8 deselected, 44 warnings in 50.04s
-
-## Adopt local gray palette as factory UI defaults
-
-Context:
-Settings → UI was still shipping indigo/cyan factory defaults
-(`#4F46E5` / `#22A7C8`) while the local workspace used neutral gray
-(`#737373` / `#6B6B6B`). Make those local colors the built-in defaults
-so Reset/Default and first-paint fallbacks match the active brand.
-
-Changes:
-
-1. src/back/core/helpers/UIBranding.py
-   `DEFAULT_PRIMARY_COLOR` / `DEFAULT_AURORA_COLOR` set to `#737373` /
-   `#6B6B6B`; factory primary without aurora pairs with factory aurora
-   (hue rotation is meaningless on achromatic gray).
-2. src/back/objects/session/GlobalConfigService.py
-   Empty `ui_branding` seed includes both factory colors.
-3. src/front/static/global/css/main.css
-   `:root` static primary/aurora/canvas fallbacks updated to the gray
-   palette.
-4. src/front/static/config/js/settings.js
-   `UI_BRANDING_DEFAULTS` + derived palette mirror the new factory.
-5. src/shared/fastapi/ui_branding.py
-   CSS-var render fallbacks updated.
-6. src/front/templates/settings.html + CSS/JS fallbacks + docs /
-   `.cursor/11`
-   Placeholders, swatches, token docs, and consumer fallbacks aligned.
-7. tests/units/ui/test_branding.py (+ related branding contracts)
-   Defaults and factory-aurora pairing coverage updated.
-
-Modified files:
-- src/back/core/helpers/UIBranding.py
-- src/back/objects/session/GlobalConfigService.py
-- src/front/static/global/css/main.css
-- src/front/static/config/js/settings.js
-- src/shared/fastapi/ui_branding.py
-- src/front/templates/settings.html
-- src/front/static/intelligence/css/intelligence.css
-- src/front/static/domain/css/domain-pages.css
-- src/front/static/domain/css/domain-versions.css
-- src/front/static/ontology/js/ontology-map.js
-- docs/user-guide.md
-- docs/api.md
-- .cursor/11-frontend-design.mdc
-- tests/units/ui/test_branding.py
-- tests/units/front/test_clarity_design_contract.py
-- tests/units/front/test_ui_branding_rendering.py
-- tests/units/front/test_ui_branding_settings_contract.py
-- tests/units/settings/test_ui_branding.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: covered with the opaque-overlay suite below.
-
-## Make Auto-Map / Generate progress overlays opaque
-
-Context:
-While Auto-mapping or Ontology Generation was running, the shared
-progress overlay used `rgba(255,255,255,0.95)`, so the previous form
-still showed through. Progress/activity stay visible; only the backdrop
-needed to fully hide the underlying screen.
-
-Changes:
-
-1. src/front/static/global/css/components.css
-   `.task-progress-overlay` / `.wizard-form-overlay` background set to
-   opaque `var(--db-surface-warm)`.
-2. tests/units/front/test_clarity_design_contract.py
-   Added contract asserting both selectors stay opaque (no translucent
-   white rgba).
-
-Modified files:
+- src/front/routes/registry.py
+- src/front/static/home/js/home.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/home/css/home.css
+- src/front/static/registry/js/registry.js
+- src/front/static/global/js/registry-modal.js (deleted)
+- src/front/static/global/css/registry-modal.css (deleted)
+- src/front/static/global/css/pages.css
 - src/front/static/global/css/components.css
+- src/front/static/global/css/permissions.css
+- src/front/static/global/js/navbar.js
+- .cursor/11-frontend-design.mdc
+- docs/development.md
+- docs/user-guide.md
+- docs/architecture.md
+- docs/superpowers/specs/2026-11-18-home-registry-design.md (new)
 - tests/units/front/test_clarity_design_contract.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_registry_modal_loading.py
+- tests/units/front/test_registry_operational_status.py
+- tests/units/front/test_admin_only_domain_create.py
+- tests/units/front/test_registry_stacked_obx_modals.py
+- tests/units/front/test_domain_load_redirect.py
+- tests/units/ui/test_home_and_explorer_contracts.py
+- tests/e2e/registry/test_registry_flows.py
+- tests/e2e/navigation/test_navigation_flows.py
 
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10852 passed, 333 skipped, 8 deselected, 44 warnings in 56.44s
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10860 passed, 334 skipped, 8 deselected.
+- `node --check` passes on home.js, home-tasks.js, registry.js, navbar.js.
+- Browser check of the Home tabs and the navbar badge removal not yet done.
 
-## Rename Ontology wizard sub-menu tabs to Unity Catalog Assets and Genie Pages
+## Home navigation: launch tiles with illustrations and live counts
 
-Context:
-The Ontology Generate wizard (Ontology → Generate) sub-menu still said
-"Data Assets" and "Pages" with generic Bootstrap icons. The app now names
-the Unity Catalog source "Unity Catalog" and the Knowledge Pages "Genie
-Pages", with brand marks in the Context → Metadata menu. The wizard tabs
-now use the same labels and brand icons.
-
-Changes:
-
-1. src/front/templates/partials/ontology/_ontology_wizard.html
-   Tab `wizard-tab-metadata` relabelled "Unity Catalog Assets" with the
-   `ob-brand-icon ob-icon-unity-catalog` mark; tab `wizard-tab-pages`
-   relabelled "Genie Pages" with the `ob-brand-icon ob-icon-genie` mark.
-   Matching pane headings and the no-metadata hint link use the same labels
-   and icons. Tab ids are unchanged.
-2. tests/units/front/test_ontology_generate_wizard_staged.py
-   Contract test for the new wizard tab labels and brand icons.
-
-Modified files:
-- src/front/templates/partials/ontology/_ontology_wizard.html
-- tests/units/front/test_ontology_generate_wizard_staged.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10853 passed, 333 skipped, 8 deselected, 44 warnings in 57.98s
-
-## Accept grouped-by-kind axioms dict in Ontology Generate completion
-
-Context:
-Ontology Generate → Complete failed live with
-`output must contain a 'axioms' list` (task 6432a73f, ~52s). Relations and
-attributes substages had succeeded; only the axioms substage failed. The
-axioms prompt enumerates three axiom kinds (subClassOf / disjointWith /
-equivalentClass), so the endpoint intermittently returned the `axioms`
-field as a dict whose values are lists grouped by kind
-(`{"subClassOf": [...], "disjointWith": [...]}`) instead of a single
-`axioms` list. `schemas._require_list` only tolerated the JSON-string
-double-encoding quirk on `str` values; a plain dict value fell through to
-the `output must contain a 'axioms' list` reject. The actual failing LLM
-content was not recoverable (tracing logs token counts only; the in-memory
-task store had `result: null`), so the fix is conservative and adds a
-diagnostic log so the next residual quirk is self-diagnosing.
+Context: On Home, the Browse / Bridges / My tasks tab rail is replaced by three
+large launch tiles (Contexts, Bridges, My tasks). Each tile has an inline SVG
+illustration and a live count. The selected panel renders below the tiles.
+Only the Home page changes; other pages keep their tab rails.
 
 Changes:
-
-1. src/agents/agent_owl_generator/schemas.py
-   New `_dict_to_list(obj, key, data)` helper coerces a dict field value
-   into a list for two recognised shapes: page-object re-wrap
-   (`{"<key>": [...], "has_more": false}` — use the inner list, promote
-   `has_more`) and grouped-by-kind (`{"subClassOf": [...], ...}` — flatten
-   all list values into one list, only when every non-`has_more` value is a
-   list). `_require_list` now applies this coercion to both the
-   string-decoded result and a plain dict value; anything else is returned
-   unchanged and rejected. Added a diagnostic `logger.info` on final reject
-   (top-level keys + value type) so the next failure is diagnosable from the
-   server log. A single axiom object (dict with non-list values) is NOT
-   auto-wrapped — too speculative; the diagnostic log will reveal if that is
-   the actual shape. Module docstring note updated for the new shape.
-2. tests/units/agents/test_owl_generator_schemas.py
-   Added grouped-by-kind dict cases for axioms (flatten + `has_more`
-   promotion), the same shape as a JSON-encoded string, relations and
-   attributes grouped dicts, plain-dict page-rewrap, and a non-grouped dict
-   still rejected.
-3. tests/eval/staged_contract.py
-   New `_c_accepts_grouped_axioms_dict` check: scripts `infer_axioms` with
-   a grouped-dict payload built from the example's own `input.draft`,
-   asserts success + parsed axiom kinds; registered in `_CHECKS`.
-4. tests/eval/datasets/agent_owl_generator/baseline.jsonl
-   New staged row `staged-grouped-axioms-001` (stage `complete_axioms`,
-   `cls-Customer-a1` anchor + `cand-6` candidate, constraint kind
-   `accepts_grouped_axioms_dict`).
-5. tests/eval/datasets/agent_owl_generator/regression.jsonl
-   New regression row `regression-axioms-grouped-dict-004` documenting the
-   live failure, root cause, and fix coverage.
-6. tests/eval/run_agent_owl_generator.py
-   Bumped `_MIN_STAGED_EXAMPLES` 43 -> 44 (45 staged rows now, 1-buffer);
-   added `accepts_grouped_axioms_dict` to `_REQUIRED_STAGED_CONSTRAINT_KINDS`.
-
-AI-feature gate note: this is a parser bug fix under `src/agents/**`, gated
-by `.cursor/12-ai-feature-lifecycle.mdc`. The deterministic staged contract
-(CI gate G2) passes offline (`python tests/eval/run_agent_owl_generator.py`,
-no `--live`). A live MLflow eval run URI is required in the PR body when this
-goes to PR but cannot be produced from this environment (no live endpoint
-access).
+1. src/front/templates/home.html: tab rail replaced by `.home-nav-tiles`
+   (`#homeTabs`, three `.home-nav-tile` buttons with inline SVG art, count
+   spans `#homeCountContexts` / `#homeCountBridges` / `#homeCountTasks`, title
+   and description). Panel card no longer uses `ob-tabs-wrap`.
+2. src/front/static/home/css/home.css: launch tile styles (grid, hover, active,
+   focus-visible, count, art sizing, responsive stacking below 768px).
+3. src/front/static/home/js/home.js: loads the Contexts count from
+   `/domain/list-projects` on init.
+4. src/front/static/home/js/home-tasks.js: sets the My tasks count from the
+   same `/review/my-tasks` response it already renders; `—` on error.
+5. src/front/static/registry/js/registry.js: sets the Bridges count when bridge
+   data loads (lazy: `—` until the Bridges tile/tab is first opened).
+6. docs/superpowers/specs/2026-11-18-home-registry-design.md: navigation section
+   revised to launch tiles.
+7. docs/development.md: Home page contract row updated.
+8. tests/units/front/test_clarity_design_contract.py,
+   tests/units/api/test_ui_rendering.py,
+   tests/units/front/test_registry_operational_status.py: assertions moved from
+   the tab rail to the launch tiles.
 
 Modified files:
-- src/agents/agent_owl_generator/schemas.py
-- tests/units/agents/test_owl_generator_schemas.py
-- tests/eval/staged_contract.py
-- tests/eval/datasets/agent_owl_generator/baseline.jsonl
-- tests/eval/datasets/agent_owl_generator/regression.jsonl
-- tests/eval/run_agent_owl_generator.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+- src/front/templates/home.html
+- src/front/static/home/css/home.css
+- src/front/static/home/js/home.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/registry/js/registry.js
+- docs/superpowers/specs/2026-11-18-home-registry-design.md
+- docs/development.md
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_registry_operational_status.py
 
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10860 passed, 333 skipped, 8 deselected, 44 warnings in 58.32s; staged contract `python tests/eval/run_agent_owl_generator.py` → aggregate 1.000 (threshold 0.950)
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10860 passed, 334 skipped, 8 deselected.
+- `node --check` passes on home.js, home-tasks.js, registry.js.
+- Not verified in a browser yet (tile layout, hover, mobile stacking, SVG sizing).
 
-## Surface Pattern Detect failures as toasts
+## Home launch tiles open an 80% Registry modal
 
-Context:
-Clicking Patterns → New → Detect looked like a no-op. The request did fire
-(`POST /dtwin/patterns/detect` → 400 when the mapped-triples table is
-missing), but Patterns `_notify` called a never-defined `showToast` helper
-(and a missing `OB.notify` fallback), so the ValidationError message was
-swallowed. Separately, many callers pass Bootstrap `'danger'` into
-`showNotification`, which only toasts for `error`/`warning`/`success`.
+Context: The Contexts / Bridges / My tasks content no longer renders under the
+launch tiles. Clicking a tile opens an 80% viewport modal with that section.
+A compact switcher in the modal header lets you move between sections without
+closing. Deep links ``?section=…`` auto-open the modal.
 
 Changes:
-
-1. src/front/static/intelligence/js/intelligence-patterns.js
-   `_notify` now calls `showNotification` (same as Communities).
-2. src/front/static/global/js/utils.js
-   `showNotification` maps `danger` → `error` so floating toasts appear.
-3. tests/units/front/test_intelligence_page_contract.py
-   Contract: Patterns must not reference `showToast`; utils must alias
-   `danger` → `error`.
+1. src/front/templates/home.html: panel card removed; content moved into
+   ``#homeRegistryModal`` (80% dialog). Header carries title, section switcher
+   (Contexts / Bridges / My tasks), ``#registryStatus``, and close.
+2. src/front/static/home/js/home.js: tile click → open modal + activate
+   section; header switcher uses Bootstrap tabs; ``?section=`` opens modal;
+   closing clears the URL section; Bridges re-dispatched on ``shown.bs.modal``
+   for graph layout.
+3. src/front/static/home/css/home.css: 80vw/80vh modal layout; Bridges flex
+   fill restored for the modal body; launch tiles unchanged.
+4. tests/units/api/test_ui_rendering.py,
+   tests/units/front/test_clarity_design_contract.py,
+   tests/units/front/test_registry_modal_loading.py,
+   tests/e2e/registry/test_registry_flows.py: assert modal + tiles contract.
 
 Modified files:
-- src/front/static/intelligence/js/intelligence-patterns.js
-- src/front/static/global/js/utils.js
-- tests/units/front/test_intelligence_page_contract.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+- src/front/templates/home.html
+- src/front/static/home/js/home.js
+- src/front/static/home/css/home.css
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_registry_modal_loading.py
+- tests/e2e/registry/test_registry_flows.py
 
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10860 passed, 333 skipped, 8 deselected, 44 warnings in 59.22s
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10860 passed, 334 skipped, 8 deselected.
+- `node --check` passes on home.js.
 
-## Block Graph / Intelligence pages when the Knowledge Graph is not built
+## Home hides L2 workspace rail; shows Back to context (like Settings)
 
-Context:
-When the mapped-triples snapshot was missing, Pattern Detect (and other
-graph-backed pages) still looked usable — only a small title badge said
-"Graph not built". Operators need a blocking empty-state on Explorer,
-Query, Chat, Data Quality, Business rules, and Intelligence sub-menus so
-they cannot run actions until Build has materialised the graph.
+Context: With a context open, Home still showed the L2 Context / Ontology /
+Graph / Intelligence rail. Home now matches Settings: that rail is hidden and
+the shared "Back to context" control is shown instead.
 
 Changes:
-
-1. src/front/static/query/js/query-sync.js
-   `updateKgReadyIndicators` now also calls `updateKgGates()`: when the
-   graph is definitely empty (not building / checking / unreachable),
-   inject a blocking card after each section header ("Knowledge Graph not
-   ready" + Go to Build), hide body siblings with `kg-gate-hidden`, and
-   mark the section `kg-gate-blocked` so header actions are inert.
-2. src/front/static/global/css/components.css
-   Gate card + blocked-header styles (shared with Intelligence).
-3. src/front/static/query/css/query-sync.css
-   Same gate styles for Graph pages that load this stylesheet.
-4. src/front/templates/partials/dtwin/_kg_status_indicator.html
-   Document the blocking gate behaviour.
-5. tests/units/front/test_kg_readiness_indicator.py
-   Contract coverage for the gate, block conditions, modal exemption, and
-   CSS.
+1. src/front/templates/home.html: `{% block page_id %}home{% endblock %}` so
+   ``<body data-page="home">``.
+2. src/front/static/global/js/navbar.js: ``updateDomainMenuVisibility`` treats
+   ``settings`` and ``home`` as context-return pages (``isContextReturnPage``);
+   workspace rail stays off, ``#settingsDomainReturnNav`` shows when a domain
+   is loaded.
+3. tests/units/front/test_settings_subnav_hidden.py: contracts updated for the
+   shared Settings/Home return pattern.
+4. tests/units/api/test_ui_rendering.py: asserts ``data-page="home"``.
 
 Modified files:
-- src/front/static/query/js/query-sync.js
-- src/front/static/global/css/components.css
-- src/front/static/query/css/query-sync.css
-- src/front/templates/partials/dtwin/_kg_status_indicator.html
-- tests/units/front/test_kg_readiness_indicator.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
-
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10862 passed, 333 skipped, 8 deselected, 44 warnings in 59.75s
-
-## Remove background and border for Back to context button in Settings
-
-Context:
-On the Settings page, the "Back to context" button (`#settingsDomainReturnLink`)
-rendered with a framed look (`background: var(--db-surface-warm)` and
-`border: 1px solid var(--db-border)`). Seamless subnav items should have no
-resting background or border, aligning with the subnav bar styling.
-
-Changes:
-
-1. src/front/static/global/css/main.css
-   `.ob-subnav-settings-return-link` resting styles updated to
-   `background: transparent` and `border: 0`.
-2. tests/units/front/test_settings_subnav_hidden.py
-   Assert `background: transparent` and `border: 0` in rule contract test.
-
-Modified files:
-- src/front/static/global/css/main.css
+- src/front/templates/home.html
+- src/front/static/global/js/navbar.js
 - tests/units/front/test_settings_subnav_hidden.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+- tests/units/api/test_ui_rendering.py
 
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10862 passed, 333 skipped, 8 deselected, 44 warnings in 51.00s
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10862 passed, 334 skipped, 8 deselected.
 
-## Left-align text in Settings Back to context button
+## Fix Home Illegal invocation (Bootstrap Tab on btn-group)
 
-Context:
-After removing the background and border, the "Back to context" label in the
-Settings subnav was still centred inside its fixed 200px width. Align the icon
-and label to the left edge of the button.
+Context: Clicking a Home launch tile threw ``Uncaught TypeError: Illegal
+invocation`` inside Bootstrap Tab (``SelectorEngine.find``). The modal header
+switcher is a ``btn-group`` (``role="group"``), not a Tab parent (``.nav`` /
+``role="tablist"``), so ``_parent`` was null.
 
 Changes:
-
-1. src/front/static/global/css/main.css
-   `.ob-subnav-settings-return-link` uses `justify-content: flex-start` and
-   `text-align: left` (fixed width and mobile reset unchanged).
-2. tests/units/front/test_settings_subnav_hidden.py
-   Contract asserts left alignment instead of centring.
+1. src/front/static/home/js/home.js: stop using ``bootstrap.Tab``; toggle panes
+   and switcher state manually.
+2. src/front/templates/home.html: remove ``data-bs-toggle="tab"`` /
+   ``data-bs-target`` from the header switcher buttons.
 
 Modified files:
-- src/front/static/global/css/main.css
-- tests/units/front/test_settings_subnav_hidden.py
-- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+- src/front/static/home/js/home.js
+- src/front/templates/home.html
 
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 10862 passed, 333 skipped, 8 deselected, 44 warnings
+Tests:
+- Playwright against local Home: no page errors; tiles + switcher open panes.
+- Related unit tests: 174 passed.
+
+## Home tiles richer copy + Help / Website / GitHub resources
+
+Context: Home launch tiles needed fuller descriptions, plus clear links to the
+in-app Help Center, ontobricks.org, and the GitHub repo.
+
+Changes:
+1. src/front/templates/home.html: longer tile blurbs and three bullet points
+   per tile; new ``.home-resources`` strip with Help Center button, website
+   link, and GitHub link.
+2. src/front/static/home/css/home.css: styles for tile point lists and the
+   resources grid (hover, icon well, responsive stack).
+3. src/front/static/home/js/home.js: ``#homeOpenHelp`` opens
+   ``HelpCenter.open('welcome')`` (falls back to navbar toggle).
+4. tests/units/ui/test_home_and_explorer_contracts.py: pins resources strip
+   and HelpCenter wiring.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/home/css/home.css
+- src/front/static/home/js/home.js
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10863 passed, 334 skipped, 8 deselected.
+
+## Home Bridges tile shows its count on load
+
+Context: The Bridges tile showed a dash until the Bridges section was opened,
+because bridge data loaded lazily.
+
+Changes:
+1. src/front/static/registry/js/registry.js: on Home (``#homeCountBridges``
+   present) or when ``?section=bridges``, bridges load on page load. The
+   existing request dedup makes the tab reuse this load.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+
+Tests:
+- Playwright on local Home: Bridges tile shows the count, no page errors.
+- `uv run --frozen pytest -q -m "not scenario"`: 10,863 passed, 334 skipped, 8 deselected.

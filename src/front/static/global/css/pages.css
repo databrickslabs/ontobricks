@@ -221,22 +221,6 @@
 }
 
 /* ==========================================================================
-   Home Page - Workflow Section (shared section wrapper + header)
-   ========================================================================== */
-.workflow-section {
-    margin-bottom: 2rem;
-}
-
-.workflow-section h5 {
-    font-weight: 600;
-    color: var(--db-text-muted);
-    margin-bottom: 1rem;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-/* ==========================================================================
    Home Page - Quick Links
    ========================================================================== */
 .quick-links {

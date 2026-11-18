@@ -969,7 +969,7 @@ surfaces:
 - Layout helpers (`nav-fill`, `flex-shrink-0`, `mb-0`) may accompany
   `ob-tabs`. The catalogued combinations are:
   - `nav nav-tabs ob-tabs mb-0` — independent Domain / Settings surfaces.
-  - `nav nav-tabs ob-tabs` — Import / Registry modal.
+  - `nav nav-tabs ob-tabs` — Import / Home Registry tabs.
   - `nav nav-tabs ob-tabs nav-fill` — Domain → General / Ontology Generate /
     Ontology DQ / Business Rules / Axioms.
   - `nav nav-tabs ob-tabs nav-fill flex-shrink-0` —

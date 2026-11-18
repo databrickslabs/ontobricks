@@ -1194,13 +1194,6 @@
     display: none;
 }
 
-.ob-home-brand-version {
-    font-size: 0.4em;
-    font-weight: 300;
-    opacity: 0.6;
-    vertical-align: middle;
-}
-
 /* ==========================================================================
    Stacked confirmation over an open modal
    Applied by showConfirmDialog() in global/js/utils.js when another

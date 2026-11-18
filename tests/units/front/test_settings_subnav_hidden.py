@@ -1,11 +1,11 @@
-"""Settings-specific L2 behavior for the domain return control.
+"""Settings/Home L2 behavior for the domain return control.
 
 The L2 (`#obSubnav`) remains a single shared slot with mutually exclusive
 presentations:
-- Settings + loaded domain: show only "Back to context"
-- Settings + no domain: hide all L2
-- Non-settings + loaded domain: show normal workspace rail
-- Non-settings + no domain: hide all L2
+- Settings or Home + loaded domain: show only "Back to context"
+- Settings or Home + no domain: hide all L2
+- Other pages + loaded domain: show normal workspace rail
+- Other pages + no domain: hide all L2
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 NAVBAR_JS = REPO_ROOT / "src/front/static/global/js/navbar.js"
 MAIN_CSS = REPO_ROOT / "src/front/static/global/css/main.css"
 BASE_HTML = REPO_ROOT / "src/front/templates/base.html"
+HOME_HTML = REPO_ROOT / "src/front/templates/home.html"
 
 
 def _read(path: Path) -> str:
@@ -50,9 +51,14 @@ def _update_domain_menu_visibility_body() -> str:
     return match.group(1)
 
 
-def test_reads_settings_page_from_body_dataset():
+def test_reads_context_return_pages_from_body_dataset():
     body = _update_domain_menu_visibility_body()
-    assert "document.body.dataset.page === 'settings'" in body
+    assert "page === 'settings'" in body
+    assert "page === 'home'" in body
+
+
+def test_home_declares_page_id():
+    assert '{% block page_id %}home{% endblock %}' in _read(HOME_HTML)
 
 
 def test_toggles_settings_return_link_for_settings_with_domain():
@@ -69,16 +75,16 @@ def test_toggles_workspace_rail_for_non_settings_with_domain():
 
 def test_subnav_visibility_is_driven_by_the_four_state_combinations():
     body = _update_domain_menu_visibility_body()
-    assert "const showSettingsReturn = isSettingsPage && hasDomain;" in body
-    assert "const showWorkspaceRail = !isSettingsPage && hasDomain;" in body
+    assert "const showSettingsReturn = isContextReturnPage && hasDomain;" in body
+    assert "const showWorkspaceRail = !isContextReturnPage && hasDomain;" in body
     assert "subnav.classList.toggle('d-none', !showSettingsReturn && !showWorkspaceRail);" in body
     assert "document.querySelectorAll('[data-subnav-domain-chrome]').forEach((el) => {" in body
     assert "el.classList.toggle('d-none', !showWorkspaceRail);" in body
 
 
-def test_is_settings_page_flag_is_computed_once_at_function_top():
+def test_is_context_return_page_flag_is_computed_once_at_function_top():
     body = _update_domain_menu_visibility_body()
-    assert "const isSettingsPage = document.body.dataset.page === 'settings';" in body
+    assert "const isContextReturnPage = page === 'settings' || page === 'home';" in body
 
 
 def test_settings_return_link_matches_sidebar_width_on_desktop():

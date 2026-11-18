@@ -6,9 +6,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REGISTRY_JS = REPO_ROOT / "src/front/static/registry/js/registry.js"
-REGISTRY_LAYOUT = (
-    REPO_ROOT / "src/front/templates/partials/layout/registry_modal.html"
-)
+HOME_TEMPLATE = REPO_ROOT / "src/front/templates/home.html"
 REGISTRY_DOMAINS = (
     REPO_ROOT / "src/front/templates/partials/registry/_registry_domains.html"
 )
@@ -27,12 +25,12 @@ def test_registry_child_modal_is_centered(template: Path):
 
 
 def test_registry_child_modals_are_siblings_not_nested():
-    layout = REGISTRY_LAYOUT.read_text(encoding="utf-8")
+    home = HOME_TEMPLATE.read_text(encoding="utf-8")
     domains = REGISTRY_DOMAINS.read_text(encoding="utf-8")
-    registry_close = layout.rfind("</div>")
+    registry_close = home.rfind("</div>")
     for modal_name in ("_export_obx_modal.html", "_import_obx_modal.html"):
         assert modal_name not in domains
-        assert layout.index(modal_name) > registry_close
+        assert home.index(modal_name) > registry_close
 
 
 def test_export_uses_shared_stacked_modal_helper():

@@ -3167,7 +3167,7 @@ and the engine that ultimately runs (column **Engine**).
 
 | UI Feature | Page / JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
-| Browse / open / create / save domain | Registry modal (`partials/layout/registry_modal.html`), `templates/domain.html` | `GET/POST /api/v1/domain/...`, `/settings/registry/...`, `/domain/...` | REST | Python services (`DomainService`, `RegistryService`); files on UC Volumes |
+| Browse / open / create / save domain | Home Registry tabs (`templates/home.html`, `partials/registry/_registry_domains.html`), `templates/domain.html` | `GET/POST /api/v1/domain/...`, `/settings/registry/...`, `/domain/...` | REST | Python services (`DomainService`, `RegistryService`); files on UC Volumes |
 | Schedule (background actions) | `settings` (Automation → Scheduler) | `/settings/schedules`, `/settings/cohort-schedules` | REST | Python `BuildScheduler` + Databricks Jobs SDK |
 | Cockpit / readiness | `domain-validation` | `GET /api/v1/domain/design-status` | REST | Python aggregator over OWL / R2RML / metadata |
 | Data Assets (UC tables / views / metric views preview) | `domain-metadata` | Internal REST → `databricks-sql-connector` | REST → Spark SQL | **Spark SQL** on UC tables, views and **metric views** (sample queries). Each source is tagged with `object_kind` (`table` / `view` / `metric_view`); metric-view columns also carry a `role` (`dimension` / `measure`) resolved via `SHOW CREATE TABLE`. |

@@ -17,14 +17,26 @@ _HOME = _FRONT / "templates" / "home.html"
 _MENU = _FRONT / "config" / "menu_config.json"
 
 
-def test_home_is_all_domains_gateway_with_new_domain_cta():
+def test_home_is_the_registry_tabs_without_gateway():
     html = _HOME.read_text(encoding="utf-8")
-    assert 'id="domainGateway"' in html
-    assert "New Context" in html
+    assert 'id="homeTabs"' in html
+    assert "partials/registry/_registry_domains.html" in html
+    assert 'id="domainGateway"' not in html
     assert "workflow-card" not in html
     assert 'id="classCount"' not in html
     assert 'id="propCount"' not in html
     assert 'id="mappingCount"' not in html
+
+
+def test_home_has_resources_strip_with_help_website_github():
+    html = _HOME.read_text(encoding="utf-8")
+    assert 'id="homeOpenHelp"' in html
+    assert "https://ontobricks.org/" in html
+    assert "https://github.com/databrickslabs/ontobricks" in html
+    assert "home-nav-tile-points" in html
+    assert "HelpCenter.open" in (
+        (_FRONT / "static" / "home" / "js" / "home.js").read_text(encoding="utf-8")
+    )
 
 
 def test_sigmagraph_sidebar_label_is_explorer():

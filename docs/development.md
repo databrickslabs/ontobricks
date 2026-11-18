@@ -764,9 +764,8 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Page | What Is Verified |
 |------|-----------------|
 | All pages | Navbar present, brand link, notification container, Bootstrap/utils.js scripts, nav dropdowns (Registry, Domain, Knowledge Graph), Ontology/Mapping links under Domain dropdown, Settings link, warehouse status, task tracker |
-| Home `/` | Hero section, domain panel, stat items (Entities, Relationships, Mappings), quick links (Settings, About) |
+| Home `/` | Hero (logo, `OntoBricks` title, tagline); three launch tiles (Contexts, Bridges, My tasks) that select the Registry panel below (`?section=domains\|bridges\|tasks`) |
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
-| Registry modal (`/?open=registry`) | Navbar boxes icon (`bi-boxes`) → Browse + Bridges modal |
 | Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Runs — admin only, all domains); Developer → API |
 | Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships, Sanity Checks), Advanced (Data Quality, Business Rules, Expr. & Axioms); General tabs (Informations, OWL); Studio **Export** (OWL); section divs, OntoViz script |
 | Mapping `/mapping` | Graph → Management → Mapping (Informations, Visual, List tabs); toolbar Import / Export (R2RML); Auto-Map and Diagnostics modals; mapping-core.js, mapping-import.js, mapping-r2rml.js |
@@ -1508,7 +1507,7 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 | `/mapping/` (HTML) | `front/routes/mapping.py` | redirect | Legacy Mapping URL → `/dtwin/?section=…` (API stays under `/mapping/*` via `api/routers/internal/mapping.py`) |
 | `/dtwin/*` | `front/routes/dtwin.py` | `dtwin.html` + mapping partials | Graph UI: Mapping (General/Studio Visual+List), Build, Explorer, Query, Chat, Compute |
 | `/domain/*` | `front/routes/domain.py` | domain templates | Domain JSON in UC volumes, versioning, metadata, documents |
-| `/registry/` | `front/routes/registry.py` | redirects to `/?open=registry` | Opens Registry modal (Browse + Bridges) on Home |
+| `/registry/` | `front/routes/registry.py` | redirects to `/?section=domains` | Opens Home on the Registry Browse tab |
 | `/resolve` | `front/routes/resolve.py` | — (redirect) | Entity URI resolution — finds the owning domain and redirects to the graph viewer |
 | `/tasks/*` | `api/routers/internal/tasks.py` | — | Task list/detail JSON for long-running work |
 

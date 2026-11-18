@@ -178,19 +178,8 @@ class TestBaseTemplate:
         trigger_html = trigger_match.group(1)
         assert 'id="currentDomainName"' in trigger_html
 
-        registry_toggle = _find(tags, id_="registryModalToggle")
-        assert registry_toggle is not None
-        assert registry_toggle.get("title") == "Registry"
-        assert registry_toggle.get("aria-label") == "Open Registry"
-        registry_match = re.search(
-            r'<a\b[^>]*id="registryModalToggle"[^>]*>(.*?)</a>',
-            html,
-            flags=re.DOTALL,
-        )
-        assert registry_match is not None
-        registry_inner = registry_match.group(1)
-        assert re.search(r'<i\b[^>]*class="[^"]*\bbi-boxes\b[^"]*"[^>]*>', registry_inner)
-        assert "<span" not in registry_inner
+        # The Registry navbar icon was removed: Home is the Registry.
+        assert _find(tags, id_="registryModalToggle") is None
 
     def test_subnav_has_domain_dropdown(self, client):
         """Domain dropdown is in the L2 subnav."""
@@ -277,9 +266,11 @@ class TestHomePage:
         assert _find(_tags(html), id_="homeDomainName") is None
         assert _find(_tags(html), id_="kpiEntities") is None
 
-    def test_domain_gateway(self, client):
+    def test_registry_tabs_replace_the_gateway(self, client):
         html = _html(client, "/")
-        assert _find(_tags(html), id_="domainGateway") is not None
+        assert _find(_tags(html), id_="domainGateway") is None
+        assert _find(_tags(html), id_="homeTabs") is not None
+        assert _find(_tags(html), id_="registryDomainsSection") is not None
 
     def test_no_quick_links(self, client):
         """Settings / About quick links were removed from the Home page."""
@@ -293,11 +284,14 @@ class TestHomePage:
         assert "/settings" not in hrefs
         assert "/about" not in hrefs
 
-    def test_my_tasks_before_domains(self, client):
-        """My Tasks now sits above the All Domains gateway."""
+    def test_tab_order_browse_bridges_my_tasks(self, client):
+        """Tabs are Browse, Bridges, then My tasks."""
         html = _html(client, "/")
-        assert "homeTasksSection" in html
-        assert html.index("homeTasksSection") < html.index("domainGateway")
+        browse = html.index('data-home-section="domains"')
+        bridges = html.index('data-home-section="bridges"')
+        tasks = html.index('data-home-section="tasks"')
+        assert browse < bridges < tasks
+        assert "homeTasksContainer" in html
 
 
 # =====================================================
@@ -355,27 +349,28 @@ class TestSettingsPage:
         assert _find(_tags(html), id_="lakebaseSyncMode") is not None
         assert _find(_tags(html), id_="lakebaseManagedSyncPanel") is not None
 
-    def test_registry_modal_on_home(self, client):
+    def test_registry_tabs_on_home(self, client):
         html = _html(client, "/")
         tags = _tags(html)
-        assert _find(tags, id_="registryModal") is not None
+        assert _find(tags, id_="registryModal") is None
+        assert _find(tags, id_="homeRegistryModal") is not None
         assert _find(tags, id_="registryDomainsSection") is not None
-        assert _find(tags, id_="registryModalToggle") is not None
-        tabs = _find(tags, id_="registryModalTabs")
+        assert _find(tags, id_="registryStatus") is not None
+        tabs = _find(tags, id_="homeTabs")
         assert tabs is not None
         tab_classes = _class_tokens(tabs.get("class", ""))
-        assert "mb-3" not in tab_classes
-        assert "nav-tabs" in tab_classes
-        assert "ob-tabs" in tab_classes
-        content = _find(tags, id_="registryModalTabContent")
+        assert "home-nav-tiles" in tab_classes
+        assert "nav-tabs" not in tab_classes
+        content = _find(tags, id_="homeTabContent")
         assert content is not None
         assert "ob-tab-content" not in _class_tokens(content.get("class", ""))
         assert 'id="registryDropdown"' not in html
+        assert "home-registry-dialog" in html
 
     def test_registry_legacy_url_redirects(self, client):
         resp = client.get("/registry/", follow_redirects=False)
         assert resp.status_code in (301, 302, 307, 308)
-        assert "open=registry" in (resp.headers.get("location") or "")
+        assert "section=domains" in (resp.headers.get("location") or "")
 
     def test_teams_on_settings_admin_page(self, client):
         settings_html = _html(client, "/settings")
@@ -405,6 +400,11 @@ class TestSettingsPage:
         PUBLISHED domain is loaded (issue #78)."""
         html = _html(client, "/settings")
         assert 'data-page="settings"' in html
+
+    def test_body_has_page_id_home(self, client):
+        """Home shares Settings' L2 pattern (Back to context, no workspace rail)."""
+        html = _html(client, "/")
+        assert 'data-page="home"' in html
 
     def test_settings_subnav_has_only_return_link_markup(self, client):
         html = _html(client, "/settings")

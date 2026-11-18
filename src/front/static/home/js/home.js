@@ -1,189 +1,173 @@
 /**
  * OntoBricks - home.js
  *
- * Business-user home page:
- *   - Settings / About quick links
- *   - "All Contexts" gateway grid (the open door to every domain)
- *   - My Tasks review worklist
+ * Home page = Registry landing:
+ *   - Three launch tiles open ``#homeRegistryModal`` (80% viewport) on
+ *     Contexts / Bridges / My tasks.
+ *   - Section state mirrored to ``?section=domains|bridges|tasks``.
+ *   - Each section switch dispatches ``sidebarSectionChanged`` (source ``home``).
+ *   - "Create a New Context" delegates to ``window.domainNew()``.
  *
- * The current-domain KPI / health band lives on Context → General
- * (see domain-information.js); it is no longer rendered here.
+ * Panes are toggled manually (not via Bootstrap Tab). The modal header
+ * switcher is a ``btn-group``, which is not a valid Tab parent — calling
+ * ``bootstrap.Tab.show()`` there throws ``Illegal invocation``.
  */
+(function () {
+    'use strict';
 
+    const SECTIONS = ['domains', 'bridges', 'tasks'];
+    const DEFAULT_SECTION = 'domains';
+    const SECTION_TITLES = {
+        domains: 'Contexts',
+        bridges: 'Bridges',
+        tasks: 'My tasks',
+    };
+    const PANE_IDS = {
+        domains: 'home-pane-domains',
+        bridges: 'home-pane-bridges',
+        tasks: 'home-pane-tasks',
+    };
 
-/* ──────────────────────────────────────────────────────────────────────────
-   All Contexts gateway — the open door
-   ────────────────────────────────────────────────────────────────────────── */
-async function loadDomainGateway() {
-    const container = document.getElementById('domainGateway');
-    if (!container) return;
+    let modal = null;
+    let currentSection = null;
 
-    try {
-        const [listResp, sessionResp] = await Promise.all([
-            fetch('/domain/list-projects', { credentials: 'same-origin' }),
-            fetch('/session-status', { credentials: 'same-origin' }),
-        ]);
-        const data = await listResp.json();
-        const session = await sessionResp.json();
-        const current = session.domain_name || '';
+    document.addEventListener('DOMContentLoaded', init);
 
-        const domains = (data && data.success && Array.isArray(data.domains))
-            ? data.domains
-            : [];
+    function init() {
+        const tiles = document.getElementById('homeTabs');
+        const modalEl = document.getElementById('homeRegistryModal');
+        if (!tiles || !modalEl || typeof bootstrap === 'undefined') return;
 
-        if (!domains.length) {
-            container.innerHTML =
-                '<div class="ob-domain-grid-empty text-muted">' +
-                '<div><i class="bi bi-box fs-3 d-block mb-2"></i>No contexts yet.</div>' +
-                '<button type="button" class="ob-domain-empty-cta" data-requires-app="admin" data-action="newDomain">' +
-                '<i class="bi bi-file-earmark-plus"></i> Create your first domain</button>' +
-                '</div>';
-            return;
-        }
+        modal = bootstrap.Modal.getOrCreateInstance(modalEl);
 
-        container.innerHTML = domains.map((name) => domainCard(name, name === current)).join('');
+        document.getElementById('btnHomeNewDomain')?.addEventListener('click', () => {
+            if (typeof window.domainNew === 'function') window.domainNew();
+        });
 
-        container.querySelectorAll('.ob-domain-card[data-domain]').forEach((card) => {
-            const domain = card.dataset.domain;
-            const select = card.querySelector('.ob-domain-version');
-            const openBtn = card.querySelector('.ob-domain-card-open');
+        loadContextCount();
+        bindHelpResource();
 
-            // Lazy-load versions on first hover / focus so we don't fire one
-            // (slow) registry call per domain up front.
-            const ensureVersions = () => loadVersionsInto(select, domain);
-            card.addEventListener('mouseenter', ensureVersions);
-            if (select) {
-                select.addEventListener('focus', ensureVersions);
-                select.addEventListener('mousedown', ensureVersions);
-            }
-            if (openBtn) {
-                openBtn.addEventListener('click', () => {
-                    openDomain(domain, select ? select.value : '');
-                });
+        tiles.querySelectorAll('[data-home-section]').forEach((btn) => {
+            btn.addEventListener('click', () => openSection(btn.dataset.homeSection));
+        });
+
+        document.querySelectorAll(
+            '#homeRegistryModal .home-registry-switcher [data-home-section]'
+        ).forEach((btn) => {
+            btn.addEventListener('click', () => openSection(btn.dataset.homeSection));
+        });
+
+        modalEl.addEventListener('shown.bs.modal', () => {
+            // Bridges graph needs a layout pass once the modal is visible.
+            if (currentSection === 'bridges') {
+                document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
+                    detail: { section: 'bridges', source: 'home' },
+                }));
             }
         });
-    } catch (err) {
-        console.error('Error loading context gateway:', err);
-        container.innerHTML =
-            '<div class="ob-domain-grid-empty text-muted">' +
-            '<i class="bi bi-exclamation-triangle"></i> Could not load contexts.</div>';
-    }
-}
 
-function domainCard(name, isCurrent) {
-    return '<div class="ob-domain-card' + (isCurrent ? ' is-current' : '') + '" ' +
-        'data-domain="' + escapeAttr(name) + '">' +
-        '<div class="ob-domain-card-top">' +
-        '<span class="ob-domain-card-icon"><i class="bi bi-diagram-3"></i></span>' +
-        '<span class="ob-domain-card-name">' + escapeHtml(name) + '</span>' +
-        (isCurrent ? '<span class="ob-domain-card-current-badge">Current</span>' : '') +
-        '</div>' +
-        '<div class="ob-domain-card-footer">' +
-        '<select class="ob-domain-version form-select form-select-sm" ' +
-        'aria-label="Version for ' + escapeAttr(name) + '">' +
-        '<option value="">Latest</option>' +
-        '</select>' +
-        '<button type="button" class="ob-domain-card-open" title="Open this domain">' +
-        'Open <i class="bi bi-arrow-right"></i></button>' +
-        '</div>' +
-        '</div>';
-}
-
-async function loadVersionsInto(select, domain) {
-    if (!select || select.dataset.loaded === '1' || select.dataset.loading === '1') return;
-    select.dataset.loading = '1';
-    const fallback = select.innerHTML;
-    select.innerHTML = '<option value="">Loading…</option>';
-    try {
-        const resp = await fetch(
-            '/domain/list-versions?domain_name=' + encodeURIComponent(domain),
-            { credentials: 'same-origin' }
-        );
-        const data = await resp.json();
-        const versions = (data && data.success && Array.isArray(data.versions)) ? data.versions : [];
-        if (versions.length) {
-            const statuses = data.version_status || {};
-            const sorted = versions.slice().sort(
-                (a, b) => b.localeCompare(a, undefined, { numeric: true })
-            );
-            select.innerHTML = sorted.map((v) =>
-                '<option value="' + escapeAttr(v) + '">v' + escapeHtml(v) +
-                ' — ' + escapeHtml(versionStatusLabel(statuses[v])) + '</option>'
-            ).join('');
-            select.value = sorted[0];
-            select.dataset.loaded = '1';
-        } else {
-            select.innerHTML = fallback;
-        }
-    } catch (err) {
-        console.error('Error loading versions for', domain, err);
-        select.innerHTML = fallback;
-    } finally {
-        select.dataset.loading = '';
-    }
-}
-
-function versionStatusLabel(status) {
-    switch ((status || 'DRAFT').toUpperCase()) {
-        case 'PUBLISHED': return 'Published';
-        case 'IN-REVIEW': return 'In Review';
-        default: return 'Draft';
-    }
-}
-
-async function openDomain(name, version) {
-    if (!name) return;
-    try {
-        const verLabel = version ? ' v' + version : '';
-        showNotification('Opening ' + name + verLabel + '…', 'info', 4000);
-        const body = { domain: name };
-        if (version) body.version = version;
-        const resp = await fetch('/domain/load-from-uc', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            syncTileActive(null);
+            clearSectionFromUrl();
+            currentSection = null;
         });
-        const data = await resp.json();
-        if (!data.success) {
-            showNotification('Error: ' + (data.message || 'Failed to open context'), 'error');
-            return;
-        }
-        if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-        // Open lands on Context → General, not a Home reload.
-        if (typeof navigateToDomainGeneral === 'function') {
-            navigateToDomainGeneral();
-        } else {
-            window.location.href = '/domain/?section=information';
-        }
-    } catch (err) {
-        showNotification('Error opening context: ' + err.message, 'error');
-    }
-}
 
-/* ──────────────────────────────────────────────────────────────────────────
-   Init + event wiring
-   ────────────────────────────────────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', function () {
-    loadDomainGateway();
-    initHomeActionButtons();
-});
-
-/**
- * Delegate home `data-action` clicks from the document root. The only remaining
- * action is the gateway empty-state "Create your first domain" CTA.
- */
-function initHomeActionButtons() {
-    document.addEventListener('click', onHomePanelClick);
-}
-
-function onHomePanelClick(e) {
-    const el = e.target.closest('[data-action]');
-    if (!el) return;
-    if (el.getAttribute('data-action') === 'newDomain') {
-        e.preventDefault();
-        if (typeof window.domainNew === 'function') {
-            window.domainNew();
+        const requested = new URLSearchParams(window.location.search).get('section');
+        if (SECTIONS.includes(requested)) {
+            openSection(requested);
         }
     }
-}
+
+    /** Open the 80% modal on *section*. */
+    function openSection(section) {
+        if (!SECTIONS.includes(section)) section = DEFAULT_SECTION;
+        applySection(section);
+        if (modal) modal.show();
+    }
+
+    function applySection(section) {
+        currentSection = section;
+        activatePane(section);
+        setModalTitle(section);
+        syncTileActive(section);
+        syncSwitcherActive(section);
+        writeSectionToUrl(section);
+        document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
+            detail: { section: section, source: 'home' },
+        }));
+    }
+
+    function activatePane(section) {
+        Object.keys(PANE_IDS).forEach((key) => {
+            const pane = document.getElementById(PANE_IDS[key]);
+            if (!pane) return;
+            const on = key === section;
+            pane.classList.toggle('show', on);
+            pane.classList.toggle('active', on);
+        });
+    }
+
+    function syncTileActive(section) {
+        document.querySelectorAll('#homeTabs [data-home-section]').forEach((btn) => {
+            const on = section && btn.dataset.homeSection === section;
+            btn.classList.toggle('active', on);
+            btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+    }
+
+    function syncSwitcherActive(section) {
+        document.querySelectorAll(
+            '#homeRegistryModal .home-registry-switcher [data-home-section]'
+        ).forEach((btn) => {
+            const on = btn.dataset.homeSection === section;
+            btn.classList.toggle('active', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+    }
+
+    function setModalTitle(section) {
+        const el = document.getElementById('homeRegistryModalTitle');
+        if (el) el.textContent = SECTION_TITLES[section] || SECTION_TITLES[DEFAULT_SECTION];
+    }
+
+    /** Open the in-app Help Center from the Home resources strip. */
+    function bindHelpResource() {
+        const btn = document.getElementById('homeOpenHelp');
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+            if (window.HelpCenter && typeof window.HelpCenter.open === 'function') {
+                window.HelpCenter.open('welcome');
+                return;
+            }
+            document.getElementById('helpCenterToggle')?.click();
+        });
+    }
+
+    /** Contexts tile count: number of contexts visible in the registry. */
+    async function loadContextCount() {
+        const el = document.getElementById('homeCountContexts');
+        if (!el) return;
+        try {
+            const resp = await fetch('/domain/list-projects', { credentials: 'same-origin' });
+            const data = await resp.json();
+            el.textContent = (data && data.success && Array.isArray(data.domains))
+                ? String(data.domains.length)
+                : '\u2014';
+        } catch (err) {
+            console.error('home context count error:', err);
+            el.textContent = '\u2014';
+        }
+    }
+
+    function writeSectionToUrl(section) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('section', section);
+        window.history.replaceState({}, '', url.href);
+    }
+
+    function clearSectionFromUrl() {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('section');
+        window.history.replaceState({}, '', url.href);
+    }
+})();

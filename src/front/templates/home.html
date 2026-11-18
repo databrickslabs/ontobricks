@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 
+{% block page_id %}home{% endblock %}
 {% block title %}{{ brand_page_title('Home') }}{% endblock %}
 
 {% block extra_css %}
@@ -13,36 +14,163 @@
 <div class="home-hero">
     <h1>
         <img data-brand-icon src="{{ ui_branding_for().logo_url }}" alt="{{ ui_branding_for().app_title }}" width="56" height="56" class="me-2 align-middle">
-        <span data-brand-title>{{ ui_branding_for().app_title }}</span> <span class="ob-home-brand-version">v{{ app_version }}</span>
+        <span data-brand-title>{{ ui_branding_for().app_title }}</span>
     </h1>
     <p class="tagline">Explore and govern your organization's knowledge &mdash; one trusted, connected view of your business data.</p>
 </div>
 
-<div id="domainStatus" class="domain-status hidden-initial"></div>
-
-<!-- My Tasks (review worklist) -->
-<div class="workflow-section" id="homeTasksSection" style="display:none;">
-    <h5><i class="bi bi-inbox"></i> My Tasks</h5>
-    <div class="domain-panel">
-        <div id="homeTasksContainer"></div>
-    </div>
+<!-- Launch tiles: each tile opens the 80% Registry modal on its section -->
+<div class="home-nav-tiles" id="homeTabs" role="tablist" aria-label="Registry sections">
+    <button type="button" class="home-nav-tile" id="home-tab-domains" role="tab"
+            aria-controls="home-pane-domains" aria-selected="false"
+            data-home-section="domains">
+        <span class="home-nav-tile-art" aria-hidden="true">
+            <svg viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                <rect x="30" y="12" width="60" height="18" rx="5" fill="currentColor" fill-opacity=".12"/>
+                <rect x="22" y="32" width="76" height="18" rx="5" fill="currentColor" fill-opacity=".2"/>
+                <rect x="14" y="52" width="92" height="18" rx="5" fill="currentColor" fill-opacity=".3"/>
+                <circle cx="98" cy="21" r="3" fill="currentColor" stroke="none"/>
+                <circle cx="98" cy="41" r="3" fill="currentColor" stroke="none"/>
+                <circle cx="98" cy="61" r="3" fill="currentColor" stroke="none"/>
+            </svg>
+        </span>
+        <span class="home-nav-tile-count" id="homeCountContexts">&mdash;</span>
+        <span class="home-nav-tile-title">Contexts</span>
+        <span class="home-nav-tile-desc">Your governed knowledge spaces — each context holds an ontology, mappings and a knowledge graph version.</span>
+        <ul class="home-nav-tile-points">
+            <li><i class="bi bi-box" aria-hidden="true"></i> Browse, open and switch versions</li>
+            <li><i class="bi bi-file-earmark-plus" aria-hidden="true"></i> Create a new context</li>
+            <li><i class="bi bi-box-arrow-up" aria-hidden="true"></i> Export or import portable .obx packs</li>
+        </ul>
+        <i class="bi bi-arrow-right home-nav-tile-arrow" aria-hidden="true"></i>
+    </button>
+    <button type="button" class="home-nav-tile" id="home-tab-bridges" role="tab"
+            aria-controls="home-pane-bridges" aria-selected="false"
+            data-home-section="bridges">
+        <span class="home-nav-tile-art" aria-hidden="true">
+            <svg viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="26" cy="40" r="13" fill="currentColor" fill-opacity=".2" stroke="none"/>
+                <circle cx="94" cy="40" r="13" fill="currentColor" fill-opacity=".2" stroke="none"/>
+                <path d="M39 40 C 50 14, 70 14, 81 40"/>
+                <path d="M39 40 C 50 66, 70 66, 81 40" stroke-dasharray="3 5"/>
+                <circle cx="26" cy="40" r="4" fill="currentColor" stroke="none"/>
+                <circle cx="94" cy="40" r="4" fill="currentColor" stroke="none"/>
+            </svg>
+        </span>
+        <span class="home-nav-tile-count" id="homeCountBridges">&mdash;</span>
+        <span class="home-nav-tile-title">Bridges</span>
+        <span class="home-nav-tile-desc">Cross-context links that let you hop from an entity in one domain to its counterpart in another.</span>
+        <ul class="home-nav-tile-points">
+            <li><i class="bi bi-diagram-3" aria-hidden="true"></i> See bridges as a graph or a table</li>
+            <li><i class="bi bi-signpost-split" aria-hidden="true"></i> Follow links from the Graph Explorer</li>
+            <li><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Connect entities across contexts</li>
+        </ul>
+        <i class="bi bi-arrow-right home-nav-tile-arrow" aria-hidden="true"></i>
+    </button>
+    <button type="button" class="home-nav-tile" id="home-tab-tasks" role="tab"
+            aria-controls="home-pane-tasks" aria-selected="false"
+            data-home-section="tasks">
+        <span class="home-nav-tile-art" aria-hidden="true">
+            <svg viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="34" y="12" width="52" height="60" rx="8" fill="currentColor" fill-opacity=".12"/>
+                <rect x="50" y="6" width="20" height="12" rx="4" fill="currentColor" fill-opacity=".3"/>
+                <path d="M44 38 l4 4 l8 -9"/>
+                <path d="M44 56 l4 4 l8 -9"/>
+                <path d="M64 36 h14"/>
+                <path d="M64 54 h14"/>
+            </svg>
+        </span>
+        <span class="home-nav-tile-count" id="homeCountTasks">&mdash;</span>
+        <span class="home-nav-tile-title">My tasks</span>
+        <span class="home-nav-tile-desc">Your personal inbox for version reviews and collaboration items waiting on you.</span>
+        <ul class="home-nav-tile-points">
+            <li><i class="bi bi-eye" aria-hidden="true"></i> Approve or send versions back</li>
+            <li><i class="bi bi-chat-dots" aria-hidden="true"></i> Jump to comments and feedback</li>
+            <li><i class="bi bi-person-check" aria-hidden="true"></i> Clear tasks assigned to you</li>
+        </ul>
+        <i class="bi bi-arrow-right home-nav-tile-arrow" aria-hidden="true"></i>
+    </button>
 </div>
 
-<!-- All Contexts - the open door -->
-<div class="workflow-section">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-        <h5 class="mb-0"><i class="bi bi-grid-3x3-gap"></i> All Contexts</h5>
-        <button type="button" class="btn btn-sm btn-primary" data-requires-app="admin" onclick="domainNew()">
-            <i class="bi bi-file-earmark-plus me-1"></i>New Context
-        </button>
+<!-- Resources: Help · Website · GitHub -->
+<section class="home-resources" aria-label="Learn more">
+    <div class="home-resources-intro">
+        <h2 class="home-resources-title">Keep exploring</h2>
+        <p class="home-resources-lead">Docs in the app, demos on the web, and the open source repo.</p>
     </div>
-    <div id="domainGateway" class="ob-domain-grid">
-        <div class="ob-domain-grid-loading text-muted">
-            <div class="spinner-border" role="status" aria-hidden="true"></div>
-            <span>Loading contexts...</span>
+    <div class="home-resources-grid">
+        <button type="button" class="home-resource-card" id="homeOpenHelp" data-home-resource="help">
+            <span class="home-resource-icon" aria-hidden="true"><i class="bi bi-life-preserver"></i></span>
+            <span class="home-resource-body">
+                <span class="home-resource-label">Help Center</span>
+                <span class="home-resource-desc">Starter guide, workflow walkthrough and FAQ — right inside the app.</span>
+            </span>
+            <i class="bi bi-arrow-right home-resource-arrow" aria-hidden="true"></i>
+        </button>
+        <a class="home-resource-card" href="https://ontobricks.org/" target="_blank" rel="noopener noreferrer"
+           data-home-resource="website">
+            <span class="home-resource-icon" aria-hidden="true"><i class="bi bi-globe2"></i></span>
+            <span class="home-resource-body">
+                <span class="home-resource-label">ontobricks.org</span>
+                <span class="home-resource-desc">Product site, demos and screenshots of the knowledge graph experience.</span>
+            </span>
+            <i class="bi bi-box-arrow-up-right home-resource-arrow" aria-hidden="true"></i>
+        </a>
+        <a class="home-resource-card" href="https://github.com/databrickslabs/ontobricks" target="_blank" rel="noopener noreferrer"
+           data-home-resource="github">
+            <span class="home-resource-icon" aria-hidden="true"><i class="bi bi-github"></i></span>
+            <span class="home-resource-body">
+                <span class="home-resource-label">GitHub</span>
+                <span class="home-resource-desc">Source, issues, releases and contribution guide for the Databricks Labs project.</span>
+            </span>
+            <i class="bi bi-box-arrow-up-right home-resource-arrow" aria-hidden="true"></i>
+        </a>
+    </div>
+</section>
+
+<!-- 80% Registry modal (opened by the launch tiles) -->
+<div class="modal fade" id="homeRegistryModal" tabindex="-1" aria-labelledby="homeRegistryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered home-registry-dialog">
+        <div class="modal-content home-registry-modal-content">
+            <div class="modal-header align-items-center py-3">
+                <h5 class="modal-title mb-0" id="homeRegistryModalLabel">
+                    <i class="bi bi-boxes me-2"></i><span id="homeRegistryModalTitle">Contexts</span>
+                </h5>
+                <div class="d-flex align-items-center gap-3 ms-auto">
+                    <div class="btn-group btn-group-sm home-registry-switcher" role="group" aria-label="Registry section">
+                        <button type="button" class="btn btn-outline-primary" data-home-section="domains"
+                                id="home-modal-tab-domains" aria-pressed="false">Contexts</button>
+                        <button type="button" class="btn btn-outline-primary" data-home-section="bridges"
+                                id="home-modal-tab-bridges" aria-pressed="false">Bridges</button>
+                        <button type="button" class="btn btn-outline-primary" data-home-section="tasks"
+                                id="home-modal-tab-tasks" aria-pressed="false">My tasks</button>
+                    </div>
+                    <div id="registryStatus" class="home-registry-status" style="display:none;"></div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0 d-flex flex-column">
+                <div class="tab-content p-3" id="homeTabContent">
+                    <div class="tab-pane fade show active" id="home-pane-domains" role="tabpanel"
+                         aria-labelledby="home-tab-domains">
+                        {% include "partials/registry/_registry_domains.html" %}
+                    </div>
+                    <div class="tab-pane fade" id="home-pane-bridges" role="tabpanel"
+                         aria-labelledby="home-tab-bridges">
+                        {% include "partials/registry/_registry_bridges.html" %}
+                    </div>
+                    <div class="tab-pane fade" id="home-pane-tasks" role="tabpanel"
+                         aria-labelledby="home-tab-tasks">
+                        {% include "partials/home/_home_my_tasks.html" %}
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+{% include 'partials/registry/_export_obx_modal.html' %}
+{% include 'partials/registry/_import_obx_modal.html' %}
 
 <!-- Home page JavaScript (extracted from template) -->
 <script src="{{ url_for('static', filename='home/js/home.js') }}?v={{ asset_version }}"></script>

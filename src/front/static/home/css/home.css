@@ -1,148 +1,430 @@
 /* ==========================================================================
-   Home Page — business-user landing
-   - KPI / health band for the current domain (reuses shared .ob-kpi-tile)
-   - "All Contexts" gateway grid (.ob-domain-card)
-   - "Build & Manage" header layout
+   Home Page — Registry landing
+   - Hero (logo + title + tagline)
+   - Three launch tiles that open an 80% Registry modal
    All colours via --db-* tokens (see 11-frontend-design.mdc).
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   All Contexts — the open door
+   Launch tiles — Home navigation
    -------------------------------------------------------------------------- */
-.ob-domain-grid {
+.home-nav-tiles {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
 }
 
-.ob-domain-grid-loading,
-.ob-domain-grid-empty {
-    grid-column: 1 / -1;
-    text-align: center;
-    padding: 2rem 1rem;
-    font-size: 0.9rem;
+.home-nav-tile {
+    position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.ob-domain-grid-empty .ob-domain-empty-cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 1.2rem;
-    background: var(--db-primary);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: background var(--db-transition, 0.2s ease);
-}
-
-.ob-domain-grid-empty .ob-domain-empty-cta:hover {
-    background: var(--db-primary-dark);
-}
-
-.ob-domain-card {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1.1rem 1.25rem;
-    background: #ffffff;
-    border: 2px solid var(--db-border);
-    border-radius: 14px;
+    align-items: flex-start;
+    gap: 0.35rem;
+    min-height: 240px;
+    padding: 1.5rem;
     text-align: left;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    width: 100%;
+    color: var(--db-text);
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    box-shadow: var(--db-shadow-sm);
+    cursor: pointer;
+    transition: transform var(--db-transition-fast), box-shadow var(--db-transition),
+        border-color var(--db-transition), background var(--db-transition);
 }
 
-.ob-domain-card:hover {
+.home-nav-tile:hover {
     transform: translateY(-3px);
-    box-shadow: var(--db-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--db-shadow-md);
     border-color: var(--db-primary);
 }
 
-.ob-domain-card.is-current {
+.home-nav-tile:focus-visible {
+    outline: none;
+    box-shadow: var(--db-focus-ring);
+}
+
+.home-nav-tile.active {
+    background: var(--db-primary-light);
     border-color: var(--db-primary);
-    background: var(--db-primary-light, rgba(73, 80, 87, 0.1));
-    box-shadow: var(--db-shadow-primary, 0 4px 16px rgba(73, 80, 87, 0.18));
+    box-shadow: var(--db-shadow-primary);
 }
 
-.ob-domain-card.is-current .ob-domain-card-icon {
-    background: var(--db-primary);
-    color: #fff;
-}
-
-.ob-domain-card-top {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-}
-
-.ob-domain-card-icon {
-    width: 2.1rem;
-    height: 2.1rem;
-    flex: 0 0 auto;
-    border-radius: 0.5rem;
+.home-nav-tile-art {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--db-primary-light, rgba(73, 80, 87, 0.1));
+    width: 100%;
+    height: 96px;
+    margin-bottom: 0.75rem;
     color: var(--db-primary);
+}
+
+.home-nav-tile-art svg {
+    width: 128px;
+    height: 88px;
+}
+
+.home-nav-tile-count {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--db-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.home-nav-tile-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--db-text);
+}
+
+.home-nav-tile-desc {
+    font-size: 0.875rem;
+    line-height: 1.45;
+    color: var(--db-text-muted);
+}
+
+.home-nav-tile-points {
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    width: 100%;
+}
+
+.home-nav-tile-points li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: var(--db-text-secondary);
+}
+
+.home-nav-tile-points i {
+    flex: 0 0 auto;
+    margin-top: 0.1rem;
+    color: var(--db-primary);
+    opacity: 0.85;
+}
+
+.home-nav-tile-arrow {
+    margin-top: auto;
+    align-self: flex-end;
+    font-size: 1.25rem;
+    color: var(--db-primary);
+    transition: transform var(--db-transition-fast);
+}
+
+.home-nav-tile:hover .home-nav-tile-arrow {
+    transform: translateX(4px);
+}
+
+/* --------------------------------------------------------------------------
+   Resources strip — Help · Website · GitHub
+   -------------------------------------------------------------------------- */
+.home-resources {
+    margin: 0.5rem 0 2rem;
+}
+
+.home-resources-intro {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.home-resources-title {
+    margin: 0 0 0.25rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--db-text-muted);
+}
+
+.home-resources-lead {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--db-text-secondary);
+}
+
+.home-resources-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.home-resource-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    padding: 1.15rem 1.2rem;
+    text-align: left;
+    text-decoration: none;
+    color: inherit;
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    box-shadow: var(--db-shadow-sm);
+    cursor: pointer;
+    transition: transform var(--db-transition-fast), box-shadow var(--db-transition),
+        border-color var(--db-transition), background var(--db-transition);
+}
+
+a.home-resource-card:hover,
+button.home-resource-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--db-shadow-md);
+    border-color: var(--db-primary);
+    color: inherit;
+    text-decoration: none;
+}
+
+.home-resource-card:focus-visible {
+    outline: none;
+    box-shadow: var(--db-focus-ring);
+}
+
+.home-resource-icon {
+    flex: 0 0 auto;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--db-radius-control);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--db-primary-light);
+    color: var(--db-primary);
+    font-size: 1.2rem;
+}
+
+.home-resource-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.home-resource-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--db-text);
+}
+
+.home-resource-desc {
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--db-text-muted);
+}
+
+.home-resource-arrow {
+    flex: 0 0 auto;
+    margin-top: 0.35rem;
+    color: var(--db-primary);
+    opacity: 0.7;
+    transition: transform var(--db-transition-fast), opacity var(--db-transition-fast);
+}
+
+.home-resource-card:hover .home-resource-arrow {
+    opacity: 1;
+    transform: translateX(3px);
+}
+
+@media (max-width: 991.98px) {
+    .home-nav-tile {
+        min-height: 0;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .home-nav-tiles {
+        grid-template-columns: 1fr;
+        gap: 0.9rem;
+    }
+
+    .home-nav-tile {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        column-gap: 1rem;
+        padding: 1rem 1.1rem;
+    }
+
+    .home-nav-tile-art {
+        width: 72px;
+        height: 56px;
+        margin: 0;
+    }
+
+    .home-nav-tile-art svg {
+        width: 72px;
+        height: 48px;
+    }
+
+    .home-nav-tile-count {
+        font-size: 1.5rem;
+        margin-left: auto;
+    }
+
+    .home-nav-tile-title,
+    .home-nav-tile-desc,
+    .home-nav-tile-points {
+        flex: 1 1 100%;
+    }
+
+    .home-nav-tile-arrow {
+        display: none;
+    }
+
+    .home-resources-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   80% Registry modal
+   -------------------------------------------------------------------------- */
+#homeRegistryModal.show {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0 !important;
+}
+
+.home-registry-dialog {
+    flex: 0 0 80vw;
+    width: 80vw;
+    max-width: 80vw;
+    height: 80vh;
+    margin: 0;
+}
+
+.home-registry-modal-content {
+    height: 80vh;
+    min-height: 80vh;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.home-registry-modal-content .modal-header {
+    flex-shrink: 0;
+}
+
+.home-registry-status {
+    max-width: min(28rem, 40vw);
+    text-align: right;
+}
+
+.home-registry-status p {
+    margin-bottom: 0;
+}
+
+.home-registry-modal-content .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#homeTabContent {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+#home-pane-domains.tab-pane.active {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+#home-pane-tasks.tab-pane.active {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+#home-pane-bridges.tab-pane.active {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#home-pane-bridges > .content-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+}
+
+#home-pane-bridges .section-header,
+#home-pane-bridges #bridgesSummary,
+#home-pane-bridges #bridgesStatus {
+    flex-shrink: 0;
+}
+
+#home-pane-bridges #bridgesGraphContainer {
+    flex: 1 1 auto;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#home-pane-bridges #bridgesGraph {
+    flex: 1 1 auto;
+    min-height: 280px;
+    width: 100%;
+}
+
+#home-pane-bridges #bridgesContent {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.home-registry-modal-content .content-section {
+    padding: 0;
+}
+
+.home-registry-modal-content .section-header h4 {
     font-size: 1.1rem;
 }
 
-.ob-domain-card-name {
-    font-weight: 600;
-    color: var(--db-text);
-    font-size: 0.95rem;
-    word-break: break-word;
-    line-height: 1.2;
-}
+@media (max-width: 767.98px) {
+    .home-registry-dialog {
+        flex-basis: calc(100vw - 1rem);
+        width: calc(100vw - 1rem);
+        max-width: calc(100vw - 1rem);
+        height: calc(100vh - 1rem);
+    }
 
-.ob-domain-card-current-badge {
-    margin-left: auto;
-    flex: 0 0 auto;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-weight: 700;
-    color: var(--db-primary);
-}
+    .home-registry-modal-content {
+        height: calc(100vh - 1rem);
+        min-height: calc(100vh - 1rem);
+        max-height: calc(100vh - 1rem);
+    }
 
-.ob-domain-card-footer {
-    margin-top: auto;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
+    .home-registry-status {
+        display: none;
+    }
 
-.ob-domain-card-footer .ob-domain-version {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-size: 0.8rem;
-}
-
-.ob-domain-card-open {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.35rem 0.75rem;
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: #fff;
-    background: var(--db-primary);
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.2s ease;
-}
-
-.ob-domain-card-open:hover {
-    background: var(--db-primary-dark);
+    .home-registry-switcher .btn {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        font-size: 0.75rem;
+    }
 }

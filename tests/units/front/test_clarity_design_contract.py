@@ -51,9 +51,7 @@ ONTOLOGY_BUSINESS_RULES_CSS = (
 REGISTRY_TEAMS_CSS = (
     REPO_ROOT / "src/front/static/registry/css/registry-teams.css"
 )
-REGISTRY_MODAL_TEMPLATE = (
-    REPO_ROOT / "src/front/templates/partials/layout/registry_modal.html"
-)
+HOME_TEMPLATE = REPO_ROOT / "src/front/templates/home.html"
 FRONTEND_RULE = REPO_ROOT / ".cursor/11-frontend-design.mdc"
 CLAUDE_GUIDE = REPO_ROOT / "CLAUDE.md"
 FRONTEND_SKILL = REPO_ROOT / ".claude/skills/frontend-design/SKILL.md"
@@ -376,22 +374,20 @@ def test_build_page_uses_the_card_integrated_tab_pattern():
     assert "ob-tab-content" not in content_tag
 
 
-def test_registry_modal_uses_the_shared_tab_rail():
-    template = _read(REGISTRY_MODAL_TEMPLATE)
-    assert '<div class="ob-tabs-wrap">' in template
-    assert (
-        'class="nav nav-tabs ob-tabs" id="registryModalTabs"'
-        in template
-    )
-    anchor = template.index('id="registryModalTabContent"')
-    content_tag = template[template.rindex("<div", 0, anchor) : anchor]
-    assert "tab-content p-3" in content_tag
-    assert "ob-tab-content" not in content_tag
+def test_home_registry_uses_launch_tiles_and_eighty_percent_modal():
+    """Home only: launch tiles open an 80% modal (no card-integrated tab rail)."""
+    template = _read(HOME_TEMPLATE)
+    assert 'class="home-nav-tiles" id="homeTabs"' in template
+    assert 'id="homeRegistryModal"' in template
+    assert "home-registry-dialog" in template
+    assert 'class="nav nav-tabs ob-tabs nav-fill" id="homeTabs"' not in template
+    assert 'class="card-body p-0 ob-tabs-wrap"' not in template
+    assert template.count('role="tab"') == 3
+    assert 'id="homeTabContent"' in template
 
-    css = _read(COMPONENTS_CSS)
-    assert ".ob-tabs-wrap > .nav-tabs.ob-tabs" in css
-    assert "margin-right: 0" in css
-    assert ".modal-body > .ob-tabs-wrap" in css
+    css = _read(HOME_TEMPLATE.parent.parent / "static" / "home" / "css" / "home.css")
+    assert "80vw" in css
+    assert "80vh" in css
 
 
 def test_frontend_rule_defines_card_integrated_page_tabs():

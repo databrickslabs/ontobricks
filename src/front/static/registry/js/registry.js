@@ -1258,8 +1258,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!btn) return;
         const view = btn.dataset.view;
         _applyBridgesView(view);
-        // Re-render after layout so the canvas gets real dimensions (critical
-        // inside the Registry modal where the graph pane is flex-sized).
+        // Re-render after layout so the canvas gets real dimensions (the
+        // graph pane is hidden while the Table view is active).
         if (view === 'graph' && bridgesData) {
             const graphModel = _buildGraphModel(bridgesData);
             requestAnimationFrame(() => {
@@ -1275,21 +1275,18 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('sidebarSectionChanged', (e) => {
         const section = e.detail?.section;
         // Reuse a recent domain list when navigating back to Browse. The
-        // short TTL avoids duplicate modal-open requests while still
+        // short TTL avoids duplicate tab-switch requests while still
         // refreshing data that may have changed in another tab or after a
         // build. Skip requests while the registry is still being configured;
         // the initial loadRegistryConfig call primes the list when ready.
         if (section === 'domains' && registryConfigured) {
             loadRegistryDomains();
         }
-        if (e.detail?.source === 'registry-modal' && !bridgesLoaded) {
-            loadRegistryBridges();
-        }
         if (section === 'bridges') {
             if (!bridgesLoaded) {
                 loadRegistryBridges();
             } else if (bridgesData && _getBridgesView() === 'graph') {
-                // Modal tab may have been hidden when first rendered; re-measure.
+                // Bridges tab may have been hidden when first rendered; re-measure.
                 const graphModel = _buildGraphModel(bridgesData);
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
@@ -1301,7 +1298,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     const urlSection = new URLSearchParams(window.location.search).get('section');
-    if (urlSection === 'bridges') {
+    // Home shows the bridge total on its Bridges tile, so prefetch it on load
+    // (deduplicated with the tab's own load).
+    if (urlSection === 'bridges' || document.getElementById('homeCountBridges')) {
         loadRegistryBridges();
     }
 
@@ -1659,6 +1658,8 @@ document.addEventListener('DOMContentLoaded', function () {
             bridgesData = domains;
             const domainsWithBridges = domains.filter(d => (d.bridges || []).length > 0);
             const totalBridges = domains.reduce((sum, d) => sum + (d.bridges || []).length, 0);
+            const bridgesTileCount = document.getElementById('homeCountBridges');
+            if (bridgesTileCount) bridgesTileCount.textContent = String(totalBridges);
 
             if (totalBridges === 0) {
                 content.innerHTML = '<div class="text-muted small py-3 text-center">' +

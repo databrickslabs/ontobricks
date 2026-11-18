@@ -64,22 +64,20 @@ class TestHomePage:
         assert hero.is_visible()
         assert "OntoBricks" in hero.text_content()
 
-    def test_all_domains_gateway_visible(self, page, live_server):
+    def test_registry_tabs_visible(self, page, live_server):
         # The KPI band moved to Domain → General and the Settings / About
-        # quick links were removed; the Home page leads with My Tasks + the
-        # All Domains gateway grid.
+        # quick links were removed; Home is the Registry (Browse · Bridges ·
+        # My tasks).
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
-        assert page.locator("#domainGateway").count() >= 1
+        assert page.locator("#homeTabs").is_visible()
         assert page.locator("a.quick-link-sm").count() == 0
 
     def test_new_domain_cta_present(self, page, live_server):
-        # Replaces the old 3× `.workflow-card` strip and `#classCount` KPI
-        # band — Home is now the All Domains gateway + New Domain CTA.
+        # Create lives in the Browse tab of the Registry card.
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
-        assert page.locator("#domainGateway").is_visible()
-        assert page.get_by_role("button", name="New Context").is_visible()
+        assert page.locator("#btnHomeNewDomain").is_visible()
 
 
 class TestAboutPage:

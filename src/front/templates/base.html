@@ -24,7 +24,6 @@
     <script src="{{ url_for('static', filename='global/js/sidebar-collapse-init.js') }}?v={{ asset_version }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/emoji-picker.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/help-modal.css') }}?v={{ asset_version }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/registry-modal.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/llm-endpoint-picker.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/review-modals.css') }}?v={{ asset_version }}">
@@ -55,7 +54,6 @@
     <script defer src="{{ url_for('static', filename='global/js/help-modal.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/help-docs.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
-    <script defer src="{{ url_for('static', filename='global/js/registry-modal.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/llm-endpoint-picker.js') }}?v={{ asset_version }}"></script>
     
     {% block extra_css %}{% endblock %}
@@ -82,14 +80,7 @@
                     <li class="nav-item ob-nav-dot-sep" aria-hidden="true">·</li>
                     {% for menu in menu_config.menus %}
                     {% if not menu.navbar_hidden|default(false) %}
-                    {% if menu.navbar_modal|default(false) and menu.id == 'registry' %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" id="registryModalToggle"
-                           title="{{ menu.label }}" aria-label="Open {{ menu.label }}">
-                            <i class="bi {{ menu.icon }}"></i>
-                        </a>
-                    </li>
-                    {% elif menu.id != 'domain' %}
+                    {% if menu.id != 'domain' %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle{% if menu.requires_domain_saved %} nav-requires-domain{% endif %}" href="#" id="{{ menu.id }}Dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi {{ menu.icon }}"></i> <span>{{ menu.label }}</span>
@@ -477,9 +468,6 @@
 
     <!-- Help Center Modal -->
     {% include "partials/layout/help_modal.html" %}
-
-    <!-- Registry Modal (Browse + Bridges) -->
-    {% include "partials/layout/registry_modal.html" %}
 
     <!-- LLM endpoint picker -->
     {% include "partials/layout/llm_endpoint_picker_modal.html" %}

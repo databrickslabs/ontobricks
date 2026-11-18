@@ -390,7 +390,6 @@ function applyDomainInfo(data) {
 
     if (domainSectionName) {
         domainSectionName.textContent = domainName;
-        applyDomainStatusBadge(domainSectionName, hasDomain ? status : null);
     }
 
     updateDomainMenuVisibility(hasDomain);
@@ -550,13 +549,15 @@ function enableMenusAfterSave() {
 /**
  * Update L2 subnav visibility based on domain state.
  *
- * The L2 slot shows the domain workspace rail outside Settings, and the
- * Settings return control when Settings has a domain open in session.
+ * The L2 slot shows the domain workspace rail on context pages, and the
+ * "Back to context" return control on Settings and Home when a domain is
+ * open in session (same pattern as Settings).
  */
 function updateDomainMenuVisibility(hasDomain) {
-    const isSettingsPage = document.body.dataset.page === 'settings';
-    const showSettingsReturn = isSettingsPage && hasDomain;
-    const showWorkspaceRail = !isSettingsPage && hasDomain;
+    const page = document.body.dataset.page;
+    const isContextReturnPage = page === 'settings' || page === 'home';
+    const showSettingsReturn = isContextReturnPage && hasDomain;
+    const showWorkspaceRail = !isContextReturnPage && hasDomain;
 
     // Show/hide L2 subnav
     const subnav = document.getElementById('obSubnav');
