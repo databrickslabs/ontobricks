@@ -44,7 +44,8 @@
             if (typeof window.domainNew === 'function') window.domainNew();
         });
 
-        loadContextCount();
+        // Contexts tile count is filled by registry.js when it prefetches
+        // /settings/registry/domains (avoids a second heavy list-projects call).
         bindHelpResource();
 
         tiles.querySelectorAll('[data-home-section]').forEach((btn) => {
@@ -141,22 +142,6 @@
             }
             document.getElementById('helpCenterToggle')?.click();
         });
-    }
-
-    /** Contexts tile count: number of contexts visible in the registry. */
-    async function loadContextCount() {
-        const el = document.getElementById('homeCountContexts');
-        if (!el) return;
-        try {
-            const resp = await fetch('/domain/list-projects', { credentials: 'same-origin' });
-            const data = await resp.json();
-            el.textContent = (data && data.success && Array.isArray(data.domains))
-                ? String(data.domains.length)
-                : '\u2014';
-        } catch (err) {
-            console.error('home context count error:', err);
-            el.textContent = '\u2014';
-        }
     }
 
     function writeSectionToUrl(section) {

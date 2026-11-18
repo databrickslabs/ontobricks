@@ -31,6 +31,24 @@ def test_registry_bridges_prefetch_with_request_deduplication():
     assert "loadRegistryBridges(true)" in source
 
 
+def test_home_prefetches_domains_before_bridges_and_sets_context_tile_count():
+    """Contexts win the Home network queue; tile count comes from domains."""
+    source = REGISTRY_JS.read_text(encoding="utf-8")
+    assert "homeCountContexts" in source
+    assert "loadRegistryDomains()" in source
+    # Bridges prefetch is chained after domains settle on Home.
+    assert ".finally(() => loadRegistryBridges())" in source or \
+        ".finally(() => { loadRegistryBridges(); })" in source
+    # Immediate bridges-only path remains for deep links.
+    assert "urlSection === 'bridges'" in source
+
+
+def test_home_js_does_not_fetch_list_projects_for_tile_count():
+    source = HOME_JS.read_text(encoding="utf-8")
+    assert "/domain/list-projects" not in source
+    assert "loadContextCount" not in source
+
+
 def test_domain_mutations_invalidate_prefetched_bridges():
     source = REGISTRY_JS.read_text(encoding="utf-8")
     assert "function invalidateRegistryBridges()" in source

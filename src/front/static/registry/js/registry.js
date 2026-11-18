@@ -390,6 +390,12 @@ document.addEventListener('DOMContentLoaded', function () {
     let domainsLoadPromise = null;
     let domainsLoadedAt = 0;
 
+    function _setHomeContextsTileCount(count) {
+        const el = document.getElementById('homeCountContexts');
+        if (!el) return;
+        el.textContent = (count === null || count === undefined) ? '\u2014' : String(count);
+    }
+
     function loadRegistryDomains(force = false) {
         const cacheIsFresh = Date.now() - domainsLoadedAt < DOMAINS_CACHE_TTL_MS;
         if (!force && cacheIsFresh) return Promise.resolve();
@@ -422,12 +428,14 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!data.success) {
                 listDiv.innerHTML = '<div class="text-muted small py-3"><i class="bi bi-exclamation-triangle text-warning me-1"></i> ' +
                     (data.message || 'Could not load contexts') + '</div>';
+                _setHomeContextsTileCount(null);
                 return;
             }
 
             domainsLoadedAt = Date.now();
             registryGithubEnabled = !!data.github_enabled;
             const rows = data.domains || data.projects || [];
+            _setHomeContextsTileCount(rows.length);
             if (!rows.length) {
                 listDiv.innerHTML = '<div class="text-muted small py-3 text-center">' +
                     '<i class="bi bi-folder"></i> No contexts in registry yet</div>';
@@ -609,6 +617,7 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error('Error loading registry contexts:', e);
             listDiv.innerHTML = '<div class="text-danger small py-3">' +
                 '<i class="bi bi-x-circle me-1"></i> Error loading domains</div>';
+            _setHomeContextsTileCount(null);
         }
     }
 
@@ -1298,10 +1307,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     const urlSection = new URLSearchParams(window.location.search).get('section');
-    // Home shows the bridge total on its Bridges tile, so prefetch it on load
-    // (deduplicated with the tab's own load).
-    if (urlSection === 'bridges' || document.getElementById('homeCountBridges')) {
+    // Home: prefetch Contexts first (ungated by /settings/registry) so the
+    // popup is warm before click; defer Bridges until domains settle so the
+    // heavy bridges call does not starve the Contexts table.
+    // Deep-link ?section=bridges still loads bridges immediately.
+    if (urlSection === 'bridges') {
         loadRegistryBridges();
+    } else if (document.getElementById('homeCountContexts')) {
+        Promise.resolve(loadRegistryDomains()).finally(() => loadRegistryBridges());
     }
 
     document.getElementById('btnRefreshBridges')?.addEventListener('click', () => {
