@@ -549,27 +549,27 @@ body {
 .ob-subnav-settings-return-link {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    text-align: left;
     gap: 0.35rem;
     width: 200px;
     min-width: 200px;
     max-width: 200px;
     padding: 0.35rem 0.75rem;
     color: var(--db-text);
-    background: var(--db-surface-warm);
-    border: 1px solid var(--db-border);
+    background: transparent;
+    border: 0;
     border-radius: var(--db-radius-control);
     box-shadow: none;
     text-decoration: none;
     font-size: 0.8125rem;
     font-weight: 500;
-    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .ob-subnav-settings-return-link:hover {
     color: var(--db-text);
     background: var(--db-hover-indigo);
-    border-color: var(--db-primary);
     text-decoration: none;
 }
 

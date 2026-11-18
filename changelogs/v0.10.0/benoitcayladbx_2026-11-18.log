@@ -559,3 +559,48 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10862 passed, 333 skipped, 8 deselected, 44 warnings in 59.75s
+
+## Remove background and border for Back to context button in Settings
+
+Context:
+On the Settings page, the "Back to context" button (`#settingsDomainReturnLink`)
+rendered with a framed look (`background: var(--db-surface-warm)` and
+`border: 1px solid var(--db-border)`). Seamless subnav items should have no
+resting background or border, aligning with the subnav bar styling.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   `.ob-subnav-settings-return-link` resting styles updated to
+   `background: transparent` and `border: 0`.
+2. tests/units/front/test_settings_subnav_hidden.py
+   Assert `background: transparent` and `border: 0` in rule contract test.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_settings_subnav_hidden.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10862 passed, 333 skipped, 8 deselected, 44 warnings in 51.00s
+
+## Left-align text in Settings Back to context button
+
+Context:
+After removing the background and border, the "Back to context" label in the
+Settings subnav was still centred inside its fixed 200px width. Align the icon
+and label to the left edge of the button.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   `.ob-subnav-settings-return-link` uses `justify-content: flex-start` and
+   `text-align: left` (fixed width and mobile reset unchanged).
+2. tests/units/front/test_settings_subnav_hidden.py
+   Contract asserts left alignment instead of centring.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_settings_subnav_hidden.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10862 passed, 333 skipped, 8 deselected, 44 warnings

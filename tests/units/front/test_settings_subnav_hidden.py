@@ -91,7 +91,10 @@ def test_settings_return_link_matches_sidebar_width_on_desktop():
     assert "width: 200px" in rule
     assert "min-width: 200px" in rule
     assert "max-width: 200px" in rule
-    assert "justify-content: center" in rule
+    assert "justify-content: flex-start" in rule
+    assert "text-align: left" in rule
+    assert "background: transparent" in rule
+    assert "border: 0" in rule
 
 
 def test_settings_return_link_resets_fixed_width_on_mobile():
