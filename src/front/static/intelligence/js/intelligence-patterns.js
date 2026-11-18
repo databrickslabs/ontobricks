@@ -209,8 +209,12 @@ const IntelligencePatterns = {
     },
 
     _notify(msg, type) {
-        if (typeof showToast === 'function') showToast(msg, type || 'info');
-        else if (window.OB && typeof OB.notify === 'function') OB.notify(msg, type);
+        // Same surface as Communities / the rest of the app. An earlier
+        // helper name was never defined globally, so Detect failures (and
+        // every other notify) were silent and looked like a no-op click.
+        if (typeof showNotification === 'function') {
+            showNotification(msg, type || 'info');
+        }
     },
 
     async _json(url, opts) {

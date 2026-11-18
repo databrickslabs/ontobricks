@@ -134,6 +134,11 @@ const NotificationCenter = {
  * @param {number} duration - For errors: toast display time in ms (default 6000)
  */
 function showNotification(message, type = 'info', duration) {
+    // Bootstrap/legacy callers pass 'danger'; treat it as 'error' so the
+    // floating toast and Notification Center both use the error styling
+    // instead of silently falling through to info (no toast).
+    if (type === 'danger') type = 'error';
+
     var isProgress = typeof message === 'string' && /\.\.\.\s*$/.test(message);
     if (!isProgress) {
         NotificationCenter.add(message, type);

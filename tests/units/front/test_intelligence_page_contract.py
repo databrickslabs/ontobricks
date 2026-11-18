@@ -348,6 +348,9 @@ def test_hypothetical_facts_prompt_uses_agent():
     assert "justify-content: flex-end" in head_css
     utils_js = _read(FRONT / "static/global/js/utils.js")
     assert "fade show d-flex align-items-start" in utils_js
+    # Legacy/Bootstrap callers pass 'danger'; must map to 'error' so the
+    # floating toast fires (TOAST_CONF has no 'danger' key).
+    assert "if (type === 'danger') type = 'error';" in utils_js
     assert "description: this._val('simWbDescription')" not in wb.split("proposeFacts", 1)[1].split("_persistLastFactPrompt", 1)[0]
     assert "this._set('simWbDescription', data.description)" not in wb
     assert "fact_prompt: this._val('simWbFactPrompt')" in wb
@@ -878,6 +881,10 @@ def test_patterns_section_owns_discovery():
     assert "openSavedById(savedId" in js_patterns
     assert "openSaveModal" not in js_patterns
     assert "task.result.saved_id" in js_patterns
+    # Detect failures must surface via showNotification — the old showToast
+    # helper was never defined, so Pattern Detect looked like a no-op.
+    assert "showToast" not in js_patterns
+    assert "showNotification(msg, type || 'info')" in js_patterns
     # Diagram nodes must resolve ontology icons (same path as communities).
     assert "await this._loadClasses()" in js_patterns
     assert "_findOntologyClass" in js_patterns
