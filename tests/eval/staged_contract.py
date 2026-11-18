@@ -673,6 +673,56 @@ def _c_accepts_double_encoded_list_field(example, constraint) -> bool:
     )
 
 
+def _c_accepts_grouped_axioms_dict(example, constraint) -> bool:
+    """Residual live-reliability bug (axioms substage): the same
+    ``response_format`` transport quirk that double-encodes list fields
+    intermittently returns the ``axioms`` field as a DICT whose values are
+    lists grouped by kind (``{"subClassOf": [...], "disjointWith": [...]}``)
+    — the axioms prompt enumerates three axiom kinds, so the model groups
+    its output that way — rather than a single ``axioms`` list. This is the
+    ``output must contain a 'axioms' list`` failure seen on Ontology
+    Generate complete. Proves the dict-coercion in
+    ``schemas._dict_to_list`` flattens that exact shape and the real
+    ``infer_axioms`` orchestrator still succeeds with a correctly parsed
+    result — built from the example's own ``input.draft`` (never a
+    hand-picked literal), never a second finalization call."""
+    subject_id = str(constraint["value"])
+    draft_cfg = example.get("input", {}).get("draft", {})
+    anchors = [
+        _anchor(a["id"], a.get("canonical_label", a["id"]))
+        for a in draft_cfg.get("existing_anchors", [])
+    ]
+    candidates = [
+        _candidate(
+            c.get("canonical_label", c["id"]), c["id"], included=c.get("included", True)
+        )
+        for c in draft_cfg.get("candidate_entities", [])
+    ]
+    draft = GenerateDraft.new(
+        source_fingerprint="s", existing_anchors=anchors, candidate_entities=candidates
+    )
+    draft = draft.with_checkpoint("relations", CHECKPOINT_DONE, result={"relations": []})
+    draft = draft.with_checkpoint("attributes", CHECKPOINT_DONE, result={"attributes": []})
+    grouped = {
+        "subClassOf": [
+            {"kind": "subClassOf", "subject": subject_id, "object": "cls-Customer-a1"}
+        ],
+        "disjointWith": [
+            {"kind": "disjointWith", "subject": subject_id, "object": "cls-Customer-a1"}
+        ],
+    }
+    payload = json.dumps({"axioms": grouped})
+    with patch.object(staged, "call_serving_endpoint") as mock_llm:
+        mock_llm.side_effect = [_answer(payload)]
+        result = staged.infer_axioms(host="h", token="t", endpoint_name="e", draft=draft)
+    return (
+        result.success
+        and not result.rejected
+        and mock_llm.call_count == 1
+        and {a["kind"] for a in result.result.get("axioms", [])} == {"subClassOf", "disjointWith"}
+    )
+
+
 def _c_does_not_merge_on_rejection(_e, _c) -> bool:
     # A rejected substage returns success=False and does not persist a result.
     draft = GenerateDraft.new(
@@ -904,6 +954,7 @@ _CHECKS: Dict[str, Callable[[dict, dict], bool]] = {
     "rejects_reference_to_excluded_entity": _c_rejects_excluded_ref,
     "rejects_bracketed_id_reference": _c_rejects_bracketed_id_ref,
     "accepts_double_encoded_list_field": _c_accepts_double_encoded_list_field,
+    "accepts_grouped_axioms_dict": _c_accepts_grouped_axioms_dict,
     "does_not_merge_on_rejection": _c_does_not_merge_on_rejection,
     "does_not_call_document_tools": _c_no_document_tools,
     "uses_persisted_evidence_only": _c_uses_persisted_evidence_only,

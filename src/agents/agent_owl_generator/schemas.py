@@ -149,13 +149,21 @@ def _strip_fences(text: str) -> str:
 #     (`{"attributes": "{\"attributes\": [...], \"has_more\": false}"}`)
 #     — this last shape used to raise ``output must contain a 'attributes'
 #     list`` because only the bare-array unwrap was accepted.
+#   * a list-typed field arrives as a plain or JSON-encoded **dict** whose
+#     values are lists grouped by kind
+#     (`{"axioms": "{\"subClassOf\": [...], \"disjointWith\": [...]}"}``
+#     or the same as a real dict) — observed on the axioms substage,
+#     whose prompt enumerates three axiom kinds; this used to raise
+#     ``output must contain a 'axioms' list`` because only `str` values
+#     were unwrapped, never a plain dict.
 # This is an endpoint/transport quirk, not a free-text/prose answer, so the
 # tolerance below is narrow and deterministic: exactly ONE extra
 # `json.loads` is attempted on a `str` value, and its result is used ONLY
 # if it is already the expected type (or, for list fields, a dict that
-# carries that same key as a list). No loop, no regex/prose extraction —
-# anything else falls through unchanged and is rejected by the caller's
-# existing type check.
+# carries that same key as a list, or a dict whose values are all lists —
+# the grouped-by-kind shape). A plain dict value is coerced the same way.
+# No loop, no regex/prose extraction — anything else falls through
+# unchanged and is rejected by the caller's existing type check.
 # ---------------------------------------------------------------------------
 
 
@@ -462,30 +470,73 @@ def build_axioms_response_format(closed_ids: Iterable[str]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _dict_to_list(obj: Dict[str, Any], key: str, data: Dict[str, Any]) -> Any:
+    """Coerce a dict field value into a list, or return it unchanged.
+
+    Two recognised shapes (the same transport quirk that double-encodes list
+    fields, now arriving as a *plain* dict instead of a JSON string):
+
+    * **page-object re-wrap** — ``{"<key>": [...], "has_more": false}``: the
+      real list sits under the same key; the pagination flag is promoted to
+      the page when only the inner object carried it.
+    * **grouped-by-kind** — ``{"subClassOf": [...], "disjointWith": [...]}``
+      (observed on the axioms substage, whose prompt lists three kinds):
+      every non-``has_more`` value is a list of items, so they are flattened
+      into one list in iteration order.
+
+    Anything else is returned unchanged so the caller rejects it (a dict
+    that is neither shape is not silently reinterpreted).
+    """
+    inner = obj.get(key)
+    if isinstance(inner, list):
+        if "has_more" in obj and "has_more" not in data:
+            data["has_more"] = obj["has_more"]
+        return inner
+    non_flag = {k: v for k, v in obj.items() if k != "has_more"}
+    if non_flag:
+        groups = {k: v for k, v in non_flag.items() if isinstance(v, list)}
+        if groups and len(groups) == len(non_flag):
+            if "has_more" in obj and "has_more" not in data:
+                data["has_more"] = obj["has_more"]
+            return [item for lst in groups.values() for item in lst]
+    return obj
+
+
 def _require_list(data: Dict[str, Any], key: str) -> List[Dict[str, Any]]:
     raw = data.get(key)
     if isinstance(raw, str):
-        # Field-level double-encoding quirk (see module note above). Two
-        # observed shapes after ONE extra json.loads of the field string:
+        # Field-level double-encoding quirk (see module note above). Shapes
+        # after ONE extra json.loads of the field string:
         #   (a) a bare array — ``{"attributes": "[{...}]"}``
         #   (b) the whole page object re-wrapped — ``{"attributes":
         #       "{\"attributes\": [...], \"has_more\": false}"}``
-        # Shape (b) is what produced live ``output must contain a
-        # 'attributes' list`` rejects when only (a) was tolerated.
+        #   (c) a grouped-by-kind object — ``{"axioms":
+        #       "{\"subClassOf\": [...], \"disjointWith\": [...]}"}``
+        # Shapes (b)/(c) are what produced live ``output must contain a
+        # '... list`` rejects when only (a) was tolerated.
         as_list = _unwrap_double_encoded(raw, expected=list)
         if isinstance(as_list, list):
             raw = as_list
         else:
             as_obj = _unwrap_double_encoded(raw, expected=dict)
             if isinstance(as_obj, dict):
-                inner = as_obj.get(key)
-                if isinstance(inner, list):
-                    raw = inner
-                    # Promote pagination flag when only the inner object
-                    # carried it (outer often omits ``has_more``).
-                    if "has_more" in as_obj and "has_more" not in data:
-                        data["has_more"] = as_obj["has_more"]
+                raw = _dict_to_list(as_obj, key, data)
+    if isinstance(raw, dict):
+        # Plain (non-string) dict value: the same page-object re-wrap or
+        # grouped-by-kind shapes arriving as a real dict rather than a
+        # JSON-encoded string. Coerce or leave unchanged (then reject).
+        raw = _dict_to_list(raw, key, data)
     if not isinstance(raw, list):
+        # Diagnostic: the live failure ``output must contain a 'axioms'
+        # list`` is transport-level, so log the observed shape to make the
+        # next residual quirk self-diagnosing from the server log instead
+        # of a bare reject message.
+        logger.info(
+            "completion field %r rejected: top-level keys=%s value_type=%s",
+            key,
+            list(data.keys()),
+            type(data.get(key)).__name__,
+        )
         raise SchemaValidationError(f"output must contain a '{key}' list")
     for item in raw:
         if not isinstance(item, dict):

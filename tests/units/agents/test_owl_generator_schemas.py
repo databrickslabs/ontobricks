@@ -563,6 +563,102 @@ class TestFieldLevelDoubleEncodingTolerance:
         result = schemas.parse_axioms_payload(payload)
         assert result["axioms"][0]["kind"] == "subClassOf"
 
+    def test_axioms_grouped_by_kind_dict_is_flattened(self):
+        # Live residual shape on the axioms substage (prompt lists three
+        # kinds): the ``axioms`` field arrives as a dict whose values are
+        # lists grouped by kind, not a single list. This is the
+        # ``output must contain a 'axioms' list`` failure seen on Ontology
+        # Generate complete.
+        grouped = {
+            "subClassOf": [
+                {"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}
+            ],
+            "disjointWith": [
+                {"kind": "disjointWith", "subject": "cand-6", "object": "cand-7"}
+            ],
+        }
+        payload = json.dumps({"axioms": grouped})
+        result = schemas.parse_axioms_payload(payload)
+        kinds = {a["kind"] for a in result["axioms"]}
+        assert kinds == {"subClassOf", "disjointWith"}
+
+    def test_axioms_grouped_by_kind_dict_promotes_has_more(self):
+        grouped = {
+            "subClassOf": [
+                {"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}
+            ],
+            "has_more": True,
+        }
+        payload = json.dumps({"axioms": grouped})
+        result = schemas.parse_axioms_payload(payload)
+        assert result["axioms"][0]["kind"] == "subClassOf"
+        assert result["has_more"] is True
+
+    def test_axioms_grouped_by_kind_as_json_string_is_flattened(self):
+        # Same grouped-by-kind shape but the field is a JSON-encoded
+        # string (the double-encoding quirk on top of the grouping).
+        grouped = {
+            "subClassOf": [
+                {"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}
+            ],
+            "disjointWith": [
+                {"kind": "disjointWith", "subject": "cand-6", "object": "cand-7"}
+            ],
+        }
+        payload = json.dumps({"axioms": json.dumps(grouped)})
+        result = schemas.parse_axioms_payload(payload)
+        kinds = {a["kind"] for a in result["axioms"]}
+        assert kinds == {"subClassOf", "disjointWith"}
+
+    def test_relations_grouped_by_kind_dict_is_flattened(self):
+        grouped = {
+            "objectProperties": [
+                {"label": "placesOrder", "domain": "cls-Customer-a1", "range": "cand-6"}
+            ],
+            "dataProperties": [
+                {"label": "hasName", "domain": "cls-Customer-a1", "range": "cand-6"}
+            ],
+        }
+        payload = json.dumps({"relations": grouped})
+        result = schemas.parse_relations_payload(payload)
+        labels = {r["label"] for r in result["relations"]}
+        assert labels == {"placesOrder", "hasName"}
+
+    def test_attributes_grouped_by_kind_dict_is_flattened(self):
+        grouped = {
+            "dates": [
+                {"label": "orderDate", "domain": "cand-6", "datatype": "xsd:date"}
+            ],
+            "strings": [
+                {"label": "name", "domain": "cand-6", "datatype": "xsd:string"}
+            ],
+        }
+        payload = json.dumps({"attributes": grouped})
+        result = schemas.parse_attributes_payload(payload)
+        labels = {a["label"] for a in result["attributes"]}
+        assert labels == {"orderDate", "name"}
+
+    def test_axioms_plain_dict_page_rewrap_is_unwrapped(self):
+        # Page-object re-wrap arriving as a real (non-string) dict.
+        page = {
+            "axioms": [
+                {"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}
+            ],
+            "has_more": False,
+        }
+        payload = json.dumps({"axioms": page})
+        result = schemas.parse_axioms_payload(payload)
+        assert result["axioms"][0]["kind"] == "subClassOf"
+
+    def test_axioms_non_grouped_dict_is_still_rejected(self):
+        # A dict whose values are NOT all lists (e.g. a single axiom object
+        # passed as the field value) is not silently reinterpreted — the
+        # diagnostic log fires and the caller rejects it.
+        single = {"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}
+        payload = json.dumps({"axioms": single})
+        with pytest.raises(schemas.SchemaValidationError):
+            schemas.parse_axioms_payload(payload)
+
     def test_detection_candidate_entities_field_double_encoded_string_is_unwrapped(self):
         inner = [{"canonical_label": "Carrier"}]
         payload = json.dumps({"candidate_entities": json.dumps(inner)})
