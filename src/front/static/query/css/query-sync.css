@@ -57,6 +57,32 @@
     line-height: 1.4;
 }
 
+/* Blocking empty-state when the Knowledge Graph is not built yet
+   (mirrored in components.css for Intelligence pages that don't load
+   this stylesheet). */
+.kg-gate-card .kg-gate-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.kg-gate-card .kg-gate-copy {
+    max-width: 32rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.kg-gate-hidden {
+    display: none !important;
+}
+
+.kg-gate-blocked > .section-header .btn:not(.onto-discuss-btn),
+.kg-gate-blocked > .section-header select,
+.kg-gate-blocked > .section-header input,
+.kg-gate-blocked > .section-header .btn-group {
+    pointer-events: none;
+    opacity: 0.45;
+}
+
 #syncLoadingOverlay.sync-loading-overlay {
     position: absolute;
     top: 0;

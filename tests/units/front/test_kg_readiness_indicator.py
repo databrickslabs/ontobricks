@@ -46,6 +46,32 @@ def test_update_kg_ready_indicators_covers_three_states():
     assert "Graph ready" in js
     assert "Graph not built" in js
     assert "kg-go-build-btn" in js
+    # Badge updater also drives the blocking page gate.
+    assert "updateKgGates()" in js
+
+
+def test_kg_gate_blocks_when_graph_is_definitely_empty():
+    js = SYNC_JS.read_text(encoding="utf-8")
+    assert "function updateKgGates()" in js
+    assert "function _kgShouldBlockPage()" in js
+    assert "Knowledge Graph not ready" in js
+    assert "data-kg-gate" in js
+    assert "kg-gate-blocked" in js
+    # Unknown / pending / building must not block with a rebuild CTA.
+    body = js[js.index("function _kgShouldBlockPage()"):]
+    body = body[: body.index("\n}")]
+    assert "!tripleStoreStatusUnknown" in body
+    assert "!tripleStoreStatusPending" in body
+    assert "!syncIsRunning" in body
+
+
+def test_kg_gate_keeps_modals_mounted():
+    js = SYNC_JS.read_text(encoding="utf-8")
+    assert "function _kgSiblingIsModalHost(" in js
+    body = js[js.index("function updateKgGates()"):]
+    body = body[: body.index("\nfunction _kgSiblingIsModalHost(")]
+    assert "_kgSiblingIsModalHost(sib)" in body
+    assert "kg-gate-hidden" in body
 
 
 def test_backend_label_covers_lakehouse_neo4j_lakebase():
@@ -95,6 +121,13 @@ def test_kg_status_css_present():
     css = SYNC_CSS.read_text(encoding="utf-8")
     assert ".kg-status-indicator" in css
     assert ".kg-go-build-btn" in css
+    assert ".kg-gate-card" in css
+    assert ".kg-gate-blocked" in css
+    components = (
+        REPO_ROOT / "src/front/static/global/css/components.css"
+    ).read_text(encoding="utf-8")
+    assert ".kg-gate-card" in components
+    assert ".kg-gate-blocked" in components
 
 
 def test_ready_badge_has_high_contrast_classes_and_visible_icon():

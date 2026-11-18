@@ -203,6 +203,32 @@
     line-height: 1.4;
 }
 
+/* Blocking empty-state when the Knowledge Graph is not built yet */
+.kg-gate-card .kg-gate-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.kg-gate-card .kg-gate-copy {
+    max-width: 32rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.kg-gate-hidden {
+    display: none !important;
+}
+
+/* Section-header actions stay visible but inert while the page is gated
+   (discuss / help icons remain usable). */
+.kg-gate-blocked > .section-header .btn:not(.onto-discuss-btn),
+.kg-gate-blocked > .section-header select,
+.kg-gate-blocked > .section-header input,
+.kg-gate-blocked > .section-header .btn-group {
+    pointer-events: none;
+    opacity: 0.45;
+}
+
 /* Display utilities */
 .d-hidden {
     display: none;

@@ -424,3 +424,138 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 10853 passed, 333 skipped, 8 deselected, 44 warnings in 57.98s
+
+## Accept grouped-by-kind axioms dict in Ontology Generate completion
+
+Context:
+Ontology Generate → Complete failed live with
+`output must contain a 'axioms' list` (task 6432a73f, ~52s). Relations and
+attributes substages had succeeded; only the axioms substage failed. The
+axioms prompt enumerates three axiom kinds (subClassOf / disjointWith /
+equivalentClass), so the endpoint intermittently returned the `axioms`
+field as a dict whose values are lists grouped by kind
+(`{"subClassOf": [...], "disjointWith": [...]}`) instead of a single
+`axioms` list. `schemas._require_list` only tolerated the JSON-string
+double-encoding quirk on `str` values; a plain dict value fell through to
+the `output must contain a 'axioms' list` reject. The actual failing LLM
+content was not recoverable (tracing logs token counts only; the in-memory
+task store had `result: null`), so the fix is conservative and adds a
+diagnostic log so the next residual quirk is self-diagnosing.
+
+Changes:
+
+1. src/agents/agent_owl_generator/schemas.py
+   New `_dict_to_list(obj, key, data)` helper coerces a dict field value
+   into a list for two recognised shapes: page-object re-wrap
+   (`{"<key>": [...], "has_more": false}` — use the inner list, promote
+   `has_more`) and grouped-by-kind (`{"subClassOf": [...], ...}` — flatten
+   all list values into one list, only when every non-`has_more` value is a
+   list). `_require_list` now applies this coercion to both the
+   string-decoded result and a plain dict value; anything else is returned
+   unchanged and rejected. Added a diagnostic `logger.info` on final reject
+   (top-level keys + value type) so the next failure is diagnosable from the
+   server log. A single axiom object (dict with non-list values) is NOT
+   auto-wrapped — too speculative; the diagnostic log will reveal if that is
+   the actual shape. Module docstring note updated for the new shape.
+2. tests/units/agents/test_owl_generator_schemas.py
+   Added grouped-by-kind dict cases for axioms (flatten + `has_more`
+   promotion), the same shape as a JSON-encoded string, relations and
+   attributes grouped dicts, plain-dict page-rewrap, and a non-grouped dict
+   still rejected.
+3. tests/eval/staged_contract.py
+   New `_c_accepts_grouped_axioms_dict` check: scripts `infer_axioms` with
+   a grouped-dict payload built from the example's own `input.draft`,
+   asserts success + parsed axiom kinds; registered in `_CHECKS`.
+4. tests/eval/datasets/agent_owl_generator/baseline.jsonl
+   New staged row `staged-grouped-axioms-001` (stage `complete_axioms`,
+   `cls-Customer-a1` anchor + `cand-6` candidate, constraint kind
+   `accepts_grouped_axioms_dict`).
+5. tests/eval/datasets/agent_owl_generator/regression.jsonl
+   New regression row `regression-axioms-grouped-dict-004` documenting the
+   live failure, root cause, and fix coverage.
+6. tests/eval/run_agent_owl_generator.py
+   Bumped `_MIN_STAGED_EXAMPLES` 43 -> 44 (45 staged rows now, 1-buffer);
+   added `accepts_grouped_axioms_dict` to `_REQUIRED_STAGED_CONSTRAINT_KINDS`.
+
+AI-feature gate note: this is a parser bug fix under `src/agents/**`, gated
+by `.cursor/12-ai-feature-lifecycle.mdc`. The deterministic staged contract
+(CI gate G2) passes offline (`python tests/eval/run_agent_owl_generator.py`,
+no `--live`). A live MLflow eval run URI is required in the PR body when this
+goes to PR but cannot be produced from this environment (no live endpoint
+access).
+
+Modified files:
+- src/agents/agent_owl_generator/schemas.py
+- tests/units/agents/test_owl_generator_schemas.py
+- tests/eval/staged_contract.py
+- tests/eval/datasets/agent_owl_generator/baseline.jsonl
+- tests/eval/datasets/agent_owl_generator/regression.jsonl
+- tests/eval/run_agent_owl_generator.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10860 passed, 333 skipped, 8 deselected, 44 warnings in 58.32s; staged contract `python tests/eval/run_agent_owl_generator.py` → aggregate 1.000 (threshold 0.950)
+
+## Surface Pattern Detect failures as toasts
+
+Context:
+Clicking Patterns → New → Detect looked like a no-op. The request did fire
+(`POST /dtwin/patterns/detect` → 400 when the mapped-triples table is
+missing), but Patterns `_notify` called a never-defined `showToast` helper
+(and a missing `OB.notify` fallback), so the ValidationError message was
+swallowed. Separately, many callers pass Bootstrap `'danger'` into
+`showNotification`, which only toasts for `error`/`warning`/`success`.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_notify` now calls `showNotification` (same as Communities).
+2. src/front/static/global/js/utils.js
+   `showNotification` maps `danger` → `error` so floating toasts appear.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract: Patterns must not reference `showToast`; utils must alias
+   `danger` → `error`.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/global/js/utils.js
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10860 passed, 333 skipped, 8 deselected, 44 warnings in 59.22s
+
+## Block Graph / Intelligence pages when the Knowledge Graph is not built
+
+Context:
+When the mapped-triples snapshot was missing, Pattern Detect (and other
+graph-backed pages) still looked usable — only a small title badge said
+"Graph not built". Operators need a blocking empty-state on Explorer,
+Query, Chat, Data Quality, Business rules, and Intelligence sub-menus so
+they cannot run actions until Build has materialised the graph.
+
+Changes:
+
+1. src/front/static/query/js/query-sync.js
+   `updateKgReadyIndicators` now also calls `updateKgGates()`: when the
+   graph is definitely empty (not building / checking / unreachable),
+   inject a blocking card after each section header ("Knowledge Graph not
+   ready" + Go to Build), hide body siblings with `kg-gate-hidden`, and
+   mark the section `kg-gate-blocked` so header actions are inert.
+2. src/front/static/global/css/components.css
+   Gate card + blocked-header styles (shared with Intelligence).
+3. src/front/static/query/css/query-sync.css
+   Same gate styles for Graph pages that load this stylesheet.
+4. src/front/templates/partials/dtwin/_kg_status_indicator.html
+   Document the blocking gate behaviour.
+5. tests/units/front/test_kg_readiness_indicator.py
+   Contract coverage for the gate, block conditions, modal exemption, and
+   CSS.
+
+Modified files:
+- src/front/static/query/js/query-sync.js
+- src/front/static/global/css/components.css
+- src/front/static/query/css/query-sync.css
+- src/front/templates/partials/dtwin/_kg_status_indicator.html
+- tests/units/front/test_kg_readiness_indicator.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-18.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10862 passed, 333 skipped, 8 deselected, 44 warnings in 59.75s

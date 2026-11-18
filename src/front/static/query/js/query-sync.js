@@ -794,13 +794,19 @@ function updateDataMenus() {
 
 /**
  * Populate every Knowledge Graph readiness indicator (the `[data-kg-status]`
- * spans injected next to each sub-page title via `_kg_status_indicator.html`).
+ * spans injected next to each sub-page title via `_kg_status_indicator.html`)
+ * and the blocking gate card for Graph / Intelligence pages that need a
+ * built graph.
  *
- * Three states, driven by the shared triple-store status:
+ * Badge states, driven by the shared triple-store status:
  *   - building  -> a "Building…" badge while a sync/build task is running;
  *   - ready     -> a green "Graph ready" badge once the graph has data;
  *   - not built -> a message + a "Go to Build" button that jumps to the
  *                  Build sub-page.
+ *
+ * When the graph is definitely not built, each KG sub-page also shows a
+ * blocking empty-state card and hides its body content (Explorer, Query,
+ * Chat, Data Quality, Business rules, and Intelligence menus).
  */
 /**
  * Friendly label for the triple-store backend / graph engine in use, from the
@@ -873,6 +879,105 @@ function updateKgReadyIndicators() {
     }
 
     els.forEach(function(el) { el.innerHTML = html; });
+    updateKgGates();
+}
+
+/**
+ * Whether KG pages that need triples should block interaction.
+ * Only a definite empty graph blocks — building / checking / unreachable
+ * keep the page usable (the title badge already covers those states).
+ */
+function _kgShouldBlockPage() {
+    return !syncIsRunning
+        && !tripleStoreStatusPending
+        && !tripleStoreHasData
+        && !tripleStoreStatusUnknown;
+}
+
+function _kgGateRoot(badge) {
+    return badge.closest('.content-section') || badge.closest('.sidebar-section');
+}
+
+function _ensureKgGate(header) {
+    var el = header.nextElementSibling;
+    while (el) {
+        if (el.hasAttribute && el.hasAttribute('data-kg-gate')) return el;
+        el = el.nextElementSibling;
+    }
+    var gate = document.createElement('div');
+    gate.setAttribute('data-kg-gate', '');
+    gate.className = 'card kg-gate-card mb-3 d-none';
+    gate.setAttribute('role', 'status');
+    gate.setAttribute('aria-live', 'polite');
+    header.insertAdjacentElement('afterend', gate);
+    return gate;
+}
+
+function _kgGateBodyHtml() {
+    return ''
+        + '<div class="card-body text-center py-5 px-4">'
+        +   '<i class="bi bi-exclamation-triangle text-warning kg-gate-icon d-block mb-3" aria-hidden="true"></i>'
+        +   '<h5 class="fw-semibold mb-2">Knowledge Graph not ready</h5>'
+        +   '<p class="text-muted mb-3 kg-gate-copy">'
+        +     'This page needs a built Knowledge Graph. Run <strong>Build</strong> to '
+        +     'materialise mapped triples, then return here.'
+        +   '</p>'
+        +   '<button type="button" class="btn btn-sm btn-primary kg-go-build-btn">'
+        +     '<i class="bi bi-hammer me-1"></i>Go to Build'
+        +   '</button>'
+        + '</div>';
+}
+
+/**
+ * Show / hide the blocking empty-state card on every KG sub-page that
+ * carries a readiness badge. Body siblings after the section header are
+ * hidden while blocked; Bootstrap modals stay in the DOM (not hidden) so
+ * they keep working once the graph is ready.
+ */
+function updateKgGates() {
+    var blocked = _kgShouldBlockPage();
+    var seen = [];
+    document.querySelectorAll('[data-kg-status]').forEach(function(badge) {
+        var root = _kgGateRoot(badge);
+        if (!root || seen.indexOf(root) !== -1) return;
+        seen.push(root);
+
+        var header = root.querySelector('.section-header');
+        if (!header) return;
+
+        var gate = _ensureKgGate(header);
+        root.classList.toggle('kg-gate-blocked', blocked);
+        if (blocked) {
+            gate.innerHTML = _kgGateBodyHtml();
+            gate.classList.remove('d-none');
+        } else {
+            gate.classList.add('d-none');
+            gate.innerHTML = '';
+        }
+
+        var sib = gate.nextElementSibling;
+        while (sib) {
+            // Keep Bootstrap modals mounted so they can open once the graph
+            // is ready (hiding an ancestor with d-none breaks show()).
+            if (!_kgSiblingIsModalHost(sib)) {
+                // Dedicated class — do not reuse Bootstrap `d-none`, which
+                // page scripts already toggle for their own empty/loading panes.
+                sib.classList.toggle('kg-gate-hidden', blocked);
+                if (blocked) sib.setAttribute('aria-hidden', 'true');
+                else sib.removeAttribute('aria-hidden');
+            }
+            sib = sib.nextElementSibling;
+        }
+    });
+}
+
+function _kgSiblingIsModalHost(sib) {
+    if (!sib || !sib.classList) return false;
+    if (sib.classList.contains('modal')) return true;
+    return !!(sib.children
+        && sib.children.length === 1
+        && sib.children[0].classList
+        && sib.children[0].classList.contains('modal'));
 }
 
 // One-time delegated handler: any "Go to Build" button jumps to the Build
