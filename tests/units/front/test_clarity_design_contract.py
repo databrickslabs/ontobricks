@@ -490,13 +490,12 @@ def test_designer_canvas_selection_uses_clarity_indigo():
         assert any("--db-primary" in block for block in blocks), selector
 
 
-def test_main_css_l2_segment_and_nav_tabs_use_indigo_soft_selection():
+def test_main_css_l2_app_switcher_and_nav_tabs_use_indigo_soft_selection():
     css = _read(MAIN_CSS)
-    # L2 "C" direction: active workspace is a raised surface chip, not a gradient.
+    # Current workspace lives in the app switcher (rail dropdowns removed).
     assert re.search(
-        r"\.ob-subnav-link\.active\s*\{"
-        r"[^}]*color\s*:\s*var\(--db-primary-darker\)\s*;"
-        r"[^}]*background\s*:\s*transparent\s*;",
+        r"\.ob-app-switcher-item\.is-current\s*\{"
+        r"[^}]*background\s*:\s*var\(--db-primary-light\)\s*;",
         css,
         flags=re.DOTALL,
     )

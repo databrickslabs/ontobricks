@@ -662,15 +662,15 @@ The UI uses a consistent **sidebar layout** across all main pages:
 - **L1 (global utilities):** icon-only Registry launcher plus warehouse status,
   task tracker, notification center, help, and user menu.
 - **L2 (domain context rail):** domain crumb (`#domainContextTrigger`),
-  version crumb (`#menuSwitchDomain`, `vN ▾`, hosts Versions and New Version),
-  the five-workspace segmented track (Domain, Ontology, Mapping, Graph,
-  Simulation), and Close -> Save actions (Save shows a dirty
-  dot while registry writes are unsaved).
+  version badge (`#domainContextVersion`), the Databricks-style app switcher
+  (`#obAppSwitcher` — Context / Ontology / Graph / Intelligence), and
+  Close → Save actions (Save shows a dirty dot while registry writes are
+  unsaved). The old segmented workspace dropdown rail is removed.
 - **Settings override in same L2 slot:** when `body[data-page="settings"]`
   and a domain is loaded, `#obSubnav` swaps to a single return control
-  (`#settingsDomainReturnLink`) under `#settingsDomainReturnNav`; the regular
-  rail (`#domainWorkspaceSubnavNav`), domain identity, breadcrumb, and actions
-  are hidden.
+  (`#settingsDomainReturnLink`) under `#settingsDomainReturnNav`; domain
+  chrome (`[data-subnav-domain-chrome]`, including the app switcher and
+  Close/Save) is hidden.
 - **Workspace map:** clicking `#domainContextTrigger` opens
   `#workspaceMapModal` (menu-driven four-column map). The same handler is
   bound to `#settingsDomainReturnLink`; its fallback `href` is `/domain/` when
@@ -679,9 +679,8 @@ The UI uses a consistent **sidebar layout** across all main pages:
   routes (`front/routes/{domain,ontology,mapping,dtwin}.py`) 303-redirect to
   `/` when `WorkspacePresence.is_loaded()` is false, matching `domainIsLoaded`
   in `navbar.js`. Home, Settings, and About do not require a domain.
-- **Active workspace:** `navbar.js` marks the current workspace as a static
-  `aria-current="page"` segment and removes its dropdown wiring; inactive
-  segments keep their Bootstrap dropdown menus.
+- **Active workspace:** `navbar.js` marks the current app-switcher tile with
+  `.is-current` / `aria-current="page"`.
 - **Responsive behavior:** below `768px`, labels are visually hidden and the
   rail uses titled icon targets while preserving DOM labels for accessibility.
 

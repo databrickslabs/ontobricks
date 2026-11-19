@@ -288,115 +288,100 @@
                     </a>
                 </li>
                 {% endif %}
-                <li class="ob-subnav-workspaces" id="domainWorkspaceSubnavNav" data-subnav-domain-chrome>
-                    <ul class="ob-subnav-workspace-list">
-                {% if domain_m.v %}
-                <li class="ob-subnav-item dropdown">
-                    <a class="ob-subnav-link dropdown-toggle" href="{{ domain_m.v.route }}" id="subnavDomainDropdown" role="button"
-                       data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ domain_m.v.route }}"
-                       title="{{ domain_m.v.label }}">
-                        <i class="bi {{ domain_m.v.icon }}"></i>
-                        <span class="ob-subnav-label">{{ domain_m.v.label }}</span>
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="subnavDomainDropdown" id="subnavDomainDropdownMenu">
-                        {% set ns = namespace(first_group=true) %}
-                        {% for group in domain_m.v.groups %}
-                        {% if group.id != 'domain-design' and not group.sidebar_only|default(false) %}
-                        {% if not ns.first_group %}<li><hr class="dropdown-divider"></li>{% endif %}
-                        <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> <span{% if ns.first_group %} id="domainSectionName"{% endif %}>{{ group.title }}</span></h6></li>
-                        {% set ns.first_group = false %}
-                        {% for item in group['items'] %}
-                        <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ domain_m.v.route }}?section={{ item.id }}">{% if 'ob-brand-icon' in item.icon %}<i class="{{ item.icon }}" aria-hidden="true"></i>{% else %}<i class="bi {{ item.icon }}" aria-hidden="true"></i>{% endif %} {{ item.label }}</a></li>
-                        {% endfor %}
-                        {% endif %}
-                        {% endfor %}
-                    </ul>
-                </li>
-                {% endif %}
-                <li class="ob-subnav-divider" aria-hidden="true"></li>
-                {% if ontology_m.v %}
-                <li class="ob-subnav-item dropdown">
-                    <a class="ob-subnav-link dropdown-toggle"
-                       href="{{ ontology_m.v.route }}"
-                       id="subnavOntologyDropdown" role="button"
-                       data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ ontology_m.v.route }}"
-                       title="{{ ontology_m.v.label }}">
-                        <i class="bi {{ ontology_m.v.icon }}"></i>
-                        <span class="ob-subnav-label">{{ ontology_m.v.label }}</span>
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="subnavOntologyDropdown">
-                        {% set vis = namespace(any=false) %}
-                        {% for group in ontology_m.v.groups %}
-                        {% if not group.sidebar_only|default(false) %}
-                        {% if vis.any %}<li><hr class="dropdown-divider"></li>{% endif %}
-                        {% set vis.any = true %}
-                        <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
-                        {% for item in group['items'] %}
-                        <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}{% if item.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}" href="{{ ontology_m.v.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
-                        {% endfor %}
-                        {% endif %}
-                        {% endfor %}
-                    </ul>
-                </li>
-                {% endif %}
-                {% if kg_m.v %}
-                <li class="ob-subnav-item dropdown">
-                    <a class="ob-subnav-link dropdown-toggle nav-requires-graph"
-                       href="{{ kg_m.v.route }}"
-                       id="subnavKgDropdown" role="button"
-                       data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ kg_m.v.route }}"
-                       title="{{ kg_m.v.label }}">
-                        <i class="bi {{ kg_m.v.icon }}"></i>
-                        <span class="ob-subnav-label">{{ kg_m.v.label }}</span>
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="subnavKgDropdown">
-                        {% set vis = namespace(any=false) %}
-                        {% for group in kg_m.v.groups %}
-                        {% if not group.sidebar_only|default(false) %}
-                        {% if vis.any %}<li><hr class="dropdown-divider"></li>{% endif %}
-                        {% set vis.any = true %}
-                        <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
-                        {% for item in group['items'] %}
-                        <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ kg_m.v.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
-                        {% endfor %}
-                        {% endif %}
-                        {% endfor %}
-                    </ul>
-                </li>
-                {% endif %}
-                {% if intel_m.v %}
-                <li class="ob-subnav-item dropdown">
-                    <a class="ob-subnav-link dropdown-toggle nav-requires-graph"
-                       href="{{ intel_m.v.route }}"
-                       id="subnavSimDropdown" role="button"
-                       data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ intel_m.v.route }}"
-                       title="{{ intel_m.v.label }}">
-                        <i class="bi {{ intel_m.v.icon }}"></i>
-                        <span class="ob-subnav-label">{{ intel_m.v.label }}</span>
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="subnavSimDropdown">
-                        {% set vis = namespace(any=false) %}
-                        {% for group in intel_m.v.groups %}
-                        {% if not group.sidebar_only|default(false) %}
-                        {% if vis.any %}<li><hr class="dropdown-divider"></li>{% endif %}
-                        {% set vis.any = true %}
-                        <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
-                        {% for item in group['items'] %}
-                        <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ intel_m.v.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
-                        {% endfor %}
-                        {% endif %}
-                        {% endfor %}
-                    </ul>
-                </li>
-                {% endif %}
-                    </ul>
-                </li>
-                <!-- Flex spacer — always pushes breadcrumb + Save button to the right -->
+                {# Workspace dropdowns (Context/Ontology/Graph/Intelligence) removed —
+                   navigation is the L2 app switcher on the right. #}
+                <!-- Flex spacer — always pushes app switcher + Close/Save to the right -->
                 <li class="ob-subnav-flex-spacer" aria-hidden="true" data-subnav-domain-chrome></li>
+
+                {# Databricks-style app switcher (9-dot nav-icon) — left of Close. #}
+                <li class="ob-subnav-item dropdown" data-subnav-domain-chrome>
+                    <button type="button"
+                            class="ob-subnav-app-switcher"
+                            id="obAppSwitcher"
+                            data-bs-toggle="dropdown"
+                            data-bs-auto-close="true"
+                            aria-expanded="false"
+                            aria-haspopup="true"
+                            aria-label="Open workspace switcher"
+                            title="Switch workspace">
+                        <span class="ob-nav-icon" aria-hidden="true">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                        </span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end ob-app-switcher-menu"
+                         aria-labelledby="obAppSwitcher"
+                         role="menu">
+                        {# Databricks app-switcher pattern: one option per line (icon + label + check). #}
+                        <div class="ob-app-switcher-list" role="none">
+                            {% if domain_m.v %}
+                            <a class="ob-app-switcher-item"
+                               href="{{ domain_m.v.route }}"
+                               data-subnav-route="{{ domain_m.v.route }}"
+                               role="menuitem"
+                               title="{{ domain_m.v.label }}">
+                                <span class="ob-app-switcher-item-icon" aria-hidden="true">
+                                    <i class="bi {{ domain_m.v.icon }}"></i>
+                                </span>
+                                <span class="ob-app-switcher-item-copy">
+                                    <span class="ob-app-switcher-item-label">{{ domain_m.v.label }}</span>
+                                    <span class="ob-app-switcher-item-desc">{{ domain_m.v.description }}</span>
+                                </span>
+                                <i class="bi bi-check2 ob-app-switcher-item-check" aria-hidden="true"></i>
+                            </a>
+                            {% endif %}
+                            {% if ontology_m.v %}
+                            <a class="ob-app-switcher-item"
+                               href="{{ ontology_m.v.route }}"
+                               data-subnav-route="{{ ontology_m.v.route }}"
+                               role="menuitem"
+                               title="{{ ontology_m.v.label }}">
+                                <span class="ob-app-switcher-item-icon" aria-hidden="true">
+                                    <i class="bi {{ ontology_m.v.icon }}"></i>
+                                </span>
+                                <span class="ob-app-switcher-item-copy">
+                                    <span class="ob-app-switcher-item-label">{{ ontology_m.v.label }}</span>
+                                    <span class="ob-app-switcher-item-desc">{{ ontology_m.v.description }}</span>
+                                </span>
+                                <i class="bi bi-check2 ob-app-switcher-item-check" aria-hidden="true"></i>
+                            </a>
+                            {% endif %}
+                            {% if kg_m.v %}
+                            <a class="ob-app-switcher-item nav-requires-graph"
+                               href="{{ kg_m.v.route }}"
+                               data-subnav-route="{{ kg_m.v.route }}"
+                               role="menuitem"
+                               title="{{ kg_m.v.label }}">
+                                <span class="ob-app-switcher-item-icon" aria-hidden="true">
+                                    <i class="bi {{ kg_m.v.icon }}"></i>
+                                </span>
+                                <span class="ob-app-switcher-item-copy">
+                                    <span class="ob-app-switcher-item-label">{{ kg_m.v.label }}</span>
+                                    <span class="ob-app-switcher-item-desc">{{ kg_m.v.description }}</span>
+                                </span>
+                                <i class="bi bi-check2 ob-app-switcher-item-check" aria-hidden="true"></i>
+                            </a>
+                            {% endif %}
+                            {% if intel_m.v %}
+                            <a class="ob-app-switcher-item nav-requires-graph"
+                               href="{{ intel_m.v.route }}"
+                               data-subnav-route="{{ intel_m.v.route }}"
+                               role="menuitem"
+                               title="{{ intel_m.v.label }}">
+                                <span class="ob-app-switcher-item-icon" aria-hidden="true">
+                                    <i class="bi {{ intel_m.v.icon }}"></i>
+                                </span>
+                                <span class="ob-app-switcher-item-copy">
+                                    <span class="ob-app-switcher-item-label">{{ intel_m.v.label }}</span>
+                                    <span class="ob-app-switcher-item-desc">{{ intel_m.v.description }}</span>
+                                </span>
+                                <i class="bi bi-check2 ob-app-switcher-item-check" aria-hidden="true"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </li>
 
                 <li class="ob-subnav-item" data-subnav-domain-chrome>
                     {% set save_action = namespace(v=none) %}

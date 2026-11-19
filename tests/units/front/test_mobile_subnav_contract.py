@@ -46,11 +46,9 @@ def test_mobile_subnav_keeps_controls_but_hides_their_visual_labels():
         css,
         flags=re.DOTALL,
     )
-    # Four workspace links (Context, Ontology, Graph, Intelligence) plus Save
-    # and Close keep their accessible text in the DOM while CSS hides only the
-    # visual label on mobile. Version switching lives in the workspace map.
-    # Mapping is under Graph, not a separate L2 target.
-    assert html.count('class="ob-subnav-label"') == 6
+    # Close + Save only (workspace dropdown labels are gone; app switcher is
+    # already icon-only). CSS still hides `.ob-subnav-label` on mobile.
+    assert html.count('class="ob-subnav-label"') == 2
 
 
 def test_mobile_subnav_compacts_padding_without_horizontal_scrolling():
@@ -62,7 +60,6 @@ def test_mobile_subnav_compacts_padding_without_horizontal_scrolling():
         flags=re.DOTALL,
     )
     assert re.search(
-        r"\.ob-subnav-link\s*,[^}]*"
         r"\.ob-subnav-close-btn\s*\{[^}]*padding-inline:",
         css,
         flags=re.DOTALL,
@@ -73,19 +70,15 @@ def test_mobile_subnav_compacts_padding_without_horizontal_scrolling():
 def test_icon_only_mobile_subnav_controls_have_tooltips():
     html = _read(BASE_HTML)
 
-    for element_id in (
-        "subnavDomainDropdown",
-        "subnavOntologyDropdown",
-        "subnavKgDropdown",
-        "subnavSimDropdown",
-    ):
-        tag = re.search(
-            rf'<a\b[^>]*id="{element_id}"[^>]*>',
-            html,
-            flags=re.DOTALL,
-        )
-        assert tag, element_id
-        assert 'title="' in tag.group(0), f"{element_id} lacks an icon tooltip"
+    # Workspace rail dropdowns are gone; app switcher + Close/Save keep titles.
+    switcher = re.search(
+        r'<button\b[^>]*id="obAppSwitcher"[^>]*>',
+        html,
+        flags=re.DOTALL,
+    )
+    assert switcher and 'title="' in switcher.group(0)
+    assert re.search(r'class="ob-subnav-close-btn[^"]*"[^>]*title="', html)
+    assert re.search(r'class="ob-subnav-save-btn[^"]*"[^>]*title="', html)
 
 
 def test_expired_lease_resume_action_uses_the_responsive_label():

@@ -20,6 +20,7 @@
         {
             "id": "domain",
             "label": "Context",
+            "description": "Govern versions, documents, and workspace settings",
             "icon": "bi-box",
             "route": "/domain/",
             "requires_domain_saved": false,
@@ -149,6 +150,7 @@
         {
             "id": "ontology",
             "label": "Ontology",
+            "description": "Design classes, properties, and SHACL constraints",
             "icon": "bi-bezier2",
             "route": "/ontology/",
             "requires_domain_saved": true,
@@ -408,6 +410,7 @@
         {
             "id": "digitaltwin",
             "label": "Graph",
+            "description": "Map, build, explore, and query the knowledge graph",
             "icon": "bi-radar",
             "route": "/dtwin/",
             "requires_domain_saved": true,
@@ -498,6 +501,7 @@
         {
             "id": "intelligence",
             "label": "Intelligence",
+            "description": "Simulate, discover patterns, and analyze the graph",
             "icon": "bi-sliders2-vertical",
             "route": "/intelligence/",
             "requires_domain_saved": true,

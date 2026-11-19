@@ -181,51 +181,51 @@ class TestBaseTemplate:
         # The Registry navbar icon was removed: Home is the Registry.
         assert _find(tags, id_="registryModalToggle") is None
 
-    def test_subnav_has_domain_dropdown(self, client):
-        """Domain dropdown is in the L2 subnav."""
-        html = _html(client, "/")
-        assert _find(_tags(html), id_="subnavDomainDropdown") is not None
-
-    def test_subnav_has_knowledge_graph_dropdown(self, client):
-        """Graph is a dropdown in the L2 subnav with its sections."""
+    def test_subnav_has_app_switcher_instead_of_workspace_dropdowns(self, client):
+        """L2 workspace dropdowns are gone; the app switcher owns Context→Intelligence."""
         html = _html(client, "/")
         tags = _tags(html)
-        kg_toggles = [t for t in tags if t[0] == "a" and t[1].get("data-subnav-route") == "/dtwin/"]
-        assert len(kg_toggles) > 0
-        assert _find(tags, id_="subnavKgDropdown") is not None
+        assert _find(tags, id_="obAppSwitcher") is not None
+        assert _find(tags, id_="subnavDomainDropdown") is None
+        assert _find(tags, id_="subnavKgDropdown") is None
+        assert _find(tags, id_="subnavOntologyDropdown") is None
+        assert _find(tags, id_="subnavSimDropdown") is None
+        assert _find(tags, id_="subnavMappingDropdown") is None
+        routes = {
+            t[1].get("data-subnav-route")
+            for t in tags
+            if t[0] == "a" and t[1].get("data-subnav-route")
+        }
+        assert "/domain/" in routes
+        assert "/ontology/" in routes
+        assert "/dtwin/" in routes
+        assert "/intelligence/" in routes
 
     def test_subnav_has_mutually_exclusive_workspace_and_settings_slots(self, client):
         html = _html(client, "/")
         tags = _tags(html)
         assert _find(tags, tag="nav", id_="obSubnav") is not None
-        assert _find(tags, id_="domainWorkspaceSubnavNav") is not None
+        assert _find(tags, id_="domainWorkspaceSubnavNav") is None
         assert _find(tags, id_="settingsDomainReturnNav") is not None
+        assert _find(tags, id_="obAppSwitcher") is not None
         settings_return_link = _find(tags, tag="a", id_="settingsDomainReturnLink")
         assert settings_return_link is not None
         assert settings_return_link.get("href") == "/domain/"
         assert settings_return_link.get("title") == "Back to context"
         assert settings_return_link.get("aria-label") == "Back to context"
 
-    def test_subnav_has_ontology_and_graph_dropdowns(self, client):
-        """Ontology and Graph are dropdowns in the L2 subnav (Mapping is under Graph)."""
-        html = _html(client, "/")
-        tags = _tags(html)
-        assert _find(tags, id_="subnavOntologyDropdown") is not None
-        assert _find(tags, id_="subnavKgDropdown") is not None
-        assert _find(tags, id_="subnavMappingDropdown") is None
-
     def test_navbar_has_ontology_link_under_domain(self, client):
-        """Ontology appears as a sub-item under the Domain dropdown (navbar_hidden)."""
+        """Ontology remains reachable via the L2 app switcher."""
         html = _html(client, "/")
         assert "/ontology/" in html
 
     def test_navbar_has_graph_mapping_links(self, client):
-        """Mapping sections live under Graph (/dtwin/), not a top-level /mapping/ menu."""
-        html = _html(client, "/")
-        assert "/dtwin/?section=design" in html
-        assert "/dtwin/?section=information" not in html
-        assert "/dtwin/?section=manual" not in html
+        """Mapping sections live under Graph (/dtwin/) sidebar, not a top-level menu."""
+        html = _html(client, "/dtwin/")
+        assert 'data-section="design"' in html or "/dtwin/?section=design" in html
         assert 'id="subnavMappingDropdown"' not in html
+        home = _html(client, "/")
+        assert 'id="subnavMappingDropdown"' not in home
 
     def test_navbar_has_settings_link(self, client):
         html = _html(client, "/")
@@ -411,8 +411,7 @@ class TestSettingsPage:
         tags = _tags(html)
         settings_nav = _find(tags, id_="settingsDomainReturnNav")
         assert settings_nav is not None
-        workspace_nav = _find(tags, id_="domainWorkspaceSubnavNav")
-        assert workspace_nav is not None
+        assert _find(tags, id_="domainWorkspaceSubnavNav") is None
         settings_link = _find(tags, tag="a", id_="settingsDomainReturnLink")
         assert settings_link is not None
         assert settings_link.get("href") == "/domain/"
@@ -593,13 +592,10 @@ class TestDomainPage:
         assert found, f"Sidebar link for section '{section}' not found"
 
     def test_general_precedes_configuration_in_domain_menu(self, client):
-        """General (Cockpit) is the first item of the Domain menu, before
-        Configuration, in the subnav dropdown."""
+        """General (Cockpit) precedes Configuration in the Domain sidebar."""
         html = _html(client, "/domain")
-        dropdown = html[html.index('id="subnavDomainDropdownMenu"'):]
-        dropdown = dropdown[: dropdown.index("</ul>")]
-        general = dropdown.index('href="/domain/?section=validation"')
-        configuration = dropdown.index('href="/domain/?section=information"')
+        general = html.index('data-section="validation"')
+        configuration = html.index('data-section="information"')
         assert general < configuration
 
     @pytest.mark.parametrize(

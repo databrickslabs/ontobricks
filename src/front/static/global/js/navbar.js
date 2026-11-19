@@ -114,36 +114,25 @@ window.openWorkspaceMap = openWorkspaceMap;
  * path prefix. Runs once on page load — no polling needed.
  */
 function initSubnavActiveState() {
-    const path = window.location.pathname;
-    const links = document.querySelectorAll('.ob-subnav-link[data-subnav-route]');
-    links.forEach(link => {
-        const route = link.getAttribute('data-subnav-route');
-        if (route && path.startsWith(route)) {
-            link.classList.add('active');
-            disableCurrentSubnavDropdown(link);
-        }
-    });
+    // Workspace dropdowns are gone from L2; the app switcher owns current-route state.
+    initAppSwitcherActiveState(window.location.pathname);
 }
 
 /**
- * The current L2 area (Context / Ontology / Graph / Intelligence) already has its
- * sections in the left sidebar, so the matching L2 dropdown is redundant.
- * Drop Bootstrap dropdown wiring and the menu, keep a static active tab.
+ * Mark the current workspace row in the Databricks-style L2 app switcher.
  */
-function disableCurrentSubnavDropdown(toggle) {
-    const item = toggle.closest('.ob-subnav-item');
-    const menu = item ? item.querySelector(':scope > .dropdown-menu') : null;
-    toggle.classList.remove('dropdown-toggle');
-    toggle.removeAttribute('data-bs-toggle');
-    toggle.removeAttribute('aria-expanded');
-    toggle.removeAttribute('role');
-    toggle.setAttribute('aria-current', 'page');
-    toggle.addEventListener('click', event => event.preventDefault());
-    if (item) {
-        item.classList.remove('dropdown');
-        item.classList.add('is-current');
-    }
-    if (menu) menu.remove();
+function initAppSwitcherActiveState(path) {
+    const currentPath = path || window.location.pathname;
+    document.querySelectorAll('.ob-app-switcher-item[data-subnav-route]').forEach((item) => {
+        const route = item.getAttribute('data-subnav-route');
+        const isCurrent = !!(route && currentPath.startsWith(route));
+        item.classList.toggle('is-current', isCurrent);
+        if (isCurrent) {
+            item.setAttribute('aria-current', 'page');
+        } else {
+            item.removeAttribute('aria-current');
+        }
+    });
 }
 
 /**
@@ -334,7 +323,6 @@ async function hasLoadedDomain() {
 function applyDomainInfo(data) {
     const currentDomainNameEl = document.getElementById('currentDomainName');
     const domainContextVersion = document.getElementById('domainContextVersion');
-    const domainSectionName = document.getElementById('domainSectionName');
     const hasDomain = domainIsLoaded(data);
     // The navbar-state source of truth is domain.info.llm_endpoint.
     window.OB?.updateLlmAvailability(Boolean(data.info?.llm_endpoint?.trim()));
@@ -400,10 +388,6 @@ function applyDomainInfo(data) {
         settingsReturnLabel.textContent = hasDomain
             ? `Back to ${domainName} V${version}`
             : 'Back to context';
-    }
-
-    if (domainSectionName) {
-        domainSectionName.textContent = domainName;
     }
 
     updateDomainMenuVisibility(hasDomain);
@@ -580,10 +564,6 @@ function updateDomainMenuVisibility(hasDomain) {
         if (typeof window.OBBreadcrumb !== 'undefined' && typeof window.OBBreadcrumb._updateChromeHeight === 'function') {
             window.OBBreadcrumb._updateChromeHeight();
         }
-    }
-    const domainWorkspaceSubnavNav = document.getElementById('domainWorkspaceSubnavNav');
-    if (domainWorkspaceSubnavNav) {
-        domainWorkspaceSubnavNav.classList.toggle('d-none', !showWorkspaceRail);
     }
     const settingsDomainReturnNav = document.getElementById('settingsDomainReturnNav');
     if (settingsDomainReturnNav) {

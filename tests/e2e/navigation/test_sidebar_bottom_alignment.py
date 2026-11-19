@@ -90,7 +90,7 @@ def test_desktop_chrome_uses_equal_vertical_gutters(page, live_server, path):
         """() => {
             const navbar = document.querySelector('body > nav.navbar');
             const levelTwoRail = document.querySelector(
-                '#obSubnav .ob-subnav-workspace-list'
+                '#obSubnav .ob-subnav-nav'
             );
             const sidebar = document.querySelector('.sidebar-nav');
             const navbarRect = navbar.getBoundingClientRect();

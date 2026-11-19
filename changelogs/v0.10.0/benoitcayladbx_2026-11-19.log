@@ -616,3 +616,173 @@ Modified files:
 Tests:
 - `uv run --frozen pytest -q -m "not scenario"`: 10898 passed, 334 skipped,
   8 deselected, 0 failed.
+
+## Add Databricks-style L2 app switcher left of Close
+
+Context: Users asked for a navigation affordance similar to the Databricks
+navbar ``nav-icon`` app switcher, placed left of Close, that opens the main
+workspaces (Context, Ontology, Graph, Intelligence).
+
+Changes:
+
+1. src/front/templates/base.html
+   - Added `#obAppSwitcher` (9-dot `.ob-nav-icon`) and
+     `.ob-app-switcher-menu` 2×2 tile grid driven by menu_config workspaces,
+     between the flex spacer and Close/Save.
+2. src/front/static/global/css/main.css
+   - Styled the trigger like Databricks nav-icon (transparent, soft hover)
+     and the popover as a 2-column tile grid with icon wells + labels.
+3. src/front/static/global/js/navbar.js
+   - Added `initAppSwitcherActiveState()` (called from
+     `initSubnavActiveState`) to mark the current workspace tile.
+4. tests/units/front/test_app_switcher_contract.py
+   - New contracts for placement, 9-dot styles, tile set, and active-state
+     wiring.
+5. tests/units/front/test_segmented_subnav_contract.py
+   - Assert switcher sits between Context chrome and Close.
+6. .cursor/11-frontend-design.mdc
+   - Documented the app switcher in the L2 left→right layout.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10901 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+## Remove L2 workspace dropdown rail beside Context
+
+Context: After adding the Databricks-style app switcher, the Context /
+Ontology / Graph / Intelligence dropdown menus to the right of the Context
+crumb were redundant. Remove that segmented rail so L2 is Context chrome +
+app switcher + Close/Save.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Removed `.ob-subnav-workspaces` / workspace dropdowns
+     (`#subnavDomainDropdown`, Ontology, Graph, Intelligence).
+   - Kept `#obAppSwitcher`; Graph + Intelligence tiles carry
+     `nav-requires-graph`.
+2. src/front/static/global/js/navbar.js
+   - Dropped `disableCurrentSubnavDropdown` and domainSectionName /
+     domainWorkspaceSubnavNav wiring; `initSubnavActiveState` only marks
+     app-switcher tiles.
+3. src/front/static/global/css/main.css
+   - Removed workspace-rail / `.ob-subnav-link` styles; kept app-switcher
+     and L2 dropdown-menu styles.
+4. tests/units/front/test_segmented_subnav_contract.py
+   - Contracts now assert the rail is gone and app switcher owns navigation.
+5. tests/units/front/test_mobile_subnav_contract.py
+   - Updated label/tooltip counts for Close/Save + app switcher only.
+6. tests/units/front/test_settings_subnav_hidden.py
+   - Domain chrome toggles via `data-subnav-domain-chrome` only.
+7. tests/units/front/test_no_backend_ui.py
+   - Graph gate asserted on app-switcher tiles.
+8. tests/units/front/test_clarity_design_contract.py
+   - Current workspace selection asserted on `.ob-app-switcher-tile.is-current`.
+9. tests/units/api/test_ui_rendering.py
+   - Rendering contracts updated for app switcher / no workspace dropdowns.
+10. tests/e2e/navigation/test_sidebar_bottom_alignment.py
+    - L2 geometry reads `.ob-subnav-nav` instead of the removed workspace list.
+11. .cursor/11-frontend-design.mdc
+    - Documented removed rail and app-switcher-only workspace navigation.
+12. docs/architecture.md
+    - L2 description updated to match.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_settings_subnav_hidden.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+- .cursor/11-frontend-design.mdc
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10898 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+## Reshape app switcher to Databricks line-item list
+
+Context: The L2 app switcher used a 2×2 tile grid. Match the Databricks
+workspace app switcher (fe-vm-bcayla-demos): one option per line with icon,
+label, and a check on the current workspace.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Replaced `.ob-app-switcher-grid` / `.ob-app-switcher-tile` with
+     `.ob-app-switcher-list` / `.ob-app-switcher-item` (+ check icon).
+2. src/front/static/global/css/main.css
+   - Vertical flex list; horizontal rows (icon well + label + check);
+     current row uses `--db-primary-light` and shows the checkmark.
+3. src/front/static/global/js/navbar.js
+   - `initAppSwitcherActiveState` targets `.ob-app-switcher-item`.
+4. tests/units/front/test_app_switcher_contract.py
+   - Contracts assert line-item layout (no 2×2 grid).
+5. tests/units/front/test_no_backend_ui.py
+   - Graph gate asserted on `.ob-app-switcher-item.nav-requires-graph`.
+6. tests/units/front/test_clarity_design_contract.py
+   - Current selection asserted on `.ob-app-switcher-item.is-current`.
+7. .cursor/11-frontend-design.mdc
+   - Documented the Databricks line-item app switcher pattern.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_clarity_design_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10898 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+## Add Databricks-style subtitles to app switcher rows
+
+Context: The app switcher listed workspace names only. Match the Databricks
+two-line layout: title plus a smaller feature subtitle, with a wider, taller
+popover so the copy can breathe.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Added `description` on Context, Ontology, Graph, and Intelligence.
+2. src/front/templates/base.html
+   - Each `.ob-app-switcher-item` now has `.ob-app-switcher-item-copy`
+     wrapping the label and `.ob-app-switcher-item-desc`.
+3. src/front/static/global/css/main.css
+   - Popover min-width `22rem`; taller rows; muted 0.72rem subtitle.
+4. tests/units/front/test_app_switcher_contract.py
+   - Asserts subtitle markup, copy stack, and wider menu.
+5. .cursor/11-frontend-design.mdc
+   - Documented title + subtitle rows and `description` from menu_config.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- tests/units/front/test_app_switcher_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10898 passed, 334 skipped,
+  8 deselected, 0 failed.

@@ -258,12 +258,13 @@ class TestTheMcpTabRehydratesUnderTheConstraint:
 
 
 class TestTheNavbarDisablesGraphFeatures:
-    def test_the_kg_subnav_tab_is_marked(self):
+    def test_the_kg_app_switcher_tile_is_marked(self):
         html = _read(BASE_HTML)
-        kg = html[html.index('id="subnavKgDropdown"') - 300 :
-                  html.index('id="subnavKgDropdown"')]
-        assert "nav-requires-graph" in kg
+        menu = html[html.index("ob-app-switcher-list") : html.index("ob-subnav-close-btn")]
+        assert 'class="ob-app-switcher-item nav-requires-graph"' in menu
+        assert "kg_m.v.route" in menu
         assert 'id="subnavMappingDropdown"' not in html
+        assert 'id="subnavKgDropdown"' not in html
 
     def test_the_navbar_defines_and_calls_the_gate(self):
         js = _read(NAVBAR_JS)

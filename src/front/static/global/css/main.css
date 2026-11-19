@@ -497,71 +497,9 @@ body {
     gap: 0;
 }
 
-.ob-subnav-workspaces {
-    display: flex;
-    align-items: center;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-.ob-subnav-workspace-list > .ob-subnav-item,
-.ob-subnav-workspace-list > .ob-subnav-item > .ob-subnav-link {
-    height: 100%;
-}
-
 .ob-subnav-item {
     display: flex;
     align-items: center;
-}
-
-.ob-subnav-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.2rem 0.55rem;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: var(--db-text);
-    text-decoration: none;
-    border: 0;
-    border-radius: var(--db-radius-control);
-    white-space: nowrap;
-    transition: color 0.15s ease, background-color 0.15s ease;
-}
-
-.ob-subnav-link .bi {
-    font-size: 0.85rem;
-}
-
-
-.ob-subnav-link:hover {
-    color: var(--db-primary-darker);
-    background: var(--db-hover-indigo);
-    text-decoration: none;
-}
-
-.ob-subnav-link:focus-visible {
-    color: var(--db-text);
-    outline: 2px solid transparent;
-    outline-offset: 2px;
-    box-shadow: var(--db-focus-ring);
-}
-
-
-
-.ob-subnav-link.nav-disabled {
-    opacity: 0.4;
-    pointer-events: none;
-    cursor: not-allowed;
 }
 
 .ob-subnav-settings-return-link {
@@ -606,12 +544,7 @@ body {
     white-space: nowrap;
 }
 
-/* Dropdown toggle arrow */
-.ob-subnav-link.dropdown-toggle::after {
-    margin-left: 0.2rem;
-}
-
-/* L2 dropdowns mirror the left sidebar panel (indigo-soft hover + fill). */
+/* L2 dropdowns (app switcher) mirror the left sidebar panel. */
 .ob-subnav .dropdown-menu {
     z-index: 1051;
     background-color: var(--db-surface-warm);
@@ -687,19 +620,6 @@ body {
 .ob-subnav .dropdown-menu .dropdown-divider {
     border-color: var(--db-border);
     margin: 0.5rem 0.45rem;
-}
-
-.ob-subnav-link.active.dropdown-toggle::after {
-    display: none;
-}
-
-/* Separator between Context context and the remaining workspace targets. */
-.ob-subnav-divider {
-    width: 1px;
-    height: 1rem;
-    background-color: var(--db-border);
-    margin: 0 0.3rem;
-    align-self: center;
 }
 
 /* Resume Editing button — L2 subnav, left of Save, when the edit lease expired */
@@ -851,30 +771,6 @@ body {
     color: var(--db-text-muted);
 }
 
-/* Quiet segmented track for the workspaces */
-.ob-subnav-workspace-list {
-    display: flex;
-    align-items: center;
-    list-style: none;
-    margin: 0;
-    padding: 0.15rem;
-    gap: 0.125rem;
-    /* Transparent like the Context / version crumbs: no page-coloured well. */
-    background: transparent;
-    border: 0;
-    border-radius: var(--db-radius-control);
-    min-height: var(--ob-subnav-rail-height);
-    height: var(--ob-subnav-rail-height);
-    box-sizing: border-box;
-}
-
-/* Active workspace: raised white chip, no gradient, no ordinal */
-.ob-subnav-link.active {
-    color: var(--db-primary-darker);
-    font-weight: 600;
-    background: transparent;
-}
-
 /* Save Context — the only filled primary action in L2 */
 .ob-subnav-save-btn {
     position: relative;
@@ -943,6 +839,171 @@ body {
     padding: 0 0.25rem;
 }
 
+/* Databricks-style app switcher (9-dot nav-icon) — left of Close */
+.ob-subnav-app-switcher {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ob-subnav-rail-height);
+    height: var(--ob-subnav-rail-height);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--db-text-secondary);
+    border-radius: var(--db-radius-control);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+.ob-subnav-app-switcher:hover,
+.ob-subnav-app-switcher[aria-expanded="true"] {
+    background: var(--db-hover-indigo);
+    color: var(--db-text);
+}
+
+.ob-subnav-app-switcher:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+/* 3×3 dots — mirrors Databricks ``nav-icon`` app switcher affordance */
+.ob-nav-icon {
+    display: grid;
+    grid-template-columns: repeat(3, 3px);
+    grid-template-rows: repeat(3, 3px);
+    gap: 2px;
+    width: 13px;
+    height: 13px;
+}
+
+.ob-nav-icon > span {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+/* Databricks app-switcher popover: wider two-line rows (title + subtitle). */
+.ob-app-switcher-menu {
+    min-width: 22rem;
+    max-width: 26rem;
+    padding: 0.5rem;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    background: var(--db-surface-warm);
+    box-shadow: var(--db-shadow-md);
+}
+
+.ob-app-switcher-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.ob-app-switcher-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.7rem;
+    text-decoration: none;
+    color: var(--db-text);
+    border-radius: var(--db-radius-control);
+    border: 0;
+    background: transparent;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.ob-app-switcher-item:hover,
+.ob-app-switcher-item:focus-visible {
+    background: var(--db-hover-indigo);
+    color: var(--db-text);
+    text-decoration: none;
+}
+
+.ob-app-switcher-item:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-app-switcher-item.is-current {
+    background: var(--db-primary-light);
+    color: var(--db-primary-darker);
+    font-weight: 600;
+}
+
+.ob-app-switcher-item.nav-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.ob-app-switcher-item-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 auto;
+    align-self: center;
+    border-radius: var(--db-radius-control);
+    background: var(--db-canvas-warm);
+    color: var(--db-text-secondary);
+    font-size: 1.05rem;
+}
+
+.ob-app-switcher-item.is-current .ob-app-switcher-item-icon {
+    color: var(--db-primary-darker);
+    background: var(--db-surface-warm);
+}
+
+.ob-app-switcher-item-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ob-app-switcher-item-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ob-app-switcher-item-desc {
+    font-size: 0.72rem;
+    font-weight: 400;
+    line-height: 1.3;
+    color: var(--db-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ob-app-switcher-item.is-current .ob-app-switcher-item-label {
+    font-weight: 650;
+}
+
+/* Checkmark only on the current workspace (Databricks app-switcher pattern). */
+.ob-app-switcher-item-check {
+    flex: 0 0 auto;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: var(--db-primary-darker);
+    opacity: 0;
+    visibility: hidden;
+}
+
+.ob-app-switcher-item.is-current .ob-app-switcher-item-check {
+    opacity: 1;
+    visibility: visible;
+}
+
 /* Close Context — ghost text action */
 .ob-subnav-close-btn {
     display: inline-flex;
@@ -982,6 +1043,12 @@ body {
     align-items: center;
     gap: 0.4rem;
     padding-right: 0.25rem;
+}
+
+.ob-subnav-nav .ob-subnav-item:has(.ob-subnav-app-switcher) {
+    display: flex;
+    align-items: center;
+    margin-right: 0.15rem;
 }
 
 @media (max-width: 1199.98px) {
@@ -1239,9 +1306,7 @@ body {
 
     .ob-subnav,
     #obSubnav .container-fluid,
-    .ob-subnav-nav,
-    .ob-subnav-workspaces,
-    .ob-subnav-workspace-list {
+    .ob-subnav-nav {
         overflow: visible;
     }
 
@@ -1271,7 +1336,6 @@ body {
         display: none;
     }
 
-    .ob-subnav-link,
     .ob-subnav-resume-btn,
     .ob-subnav-save-btn,
     .ob-subnav-close-btn {

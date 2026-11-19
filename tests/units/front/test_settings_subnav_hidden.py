@@ -67,10 +67,13 @@ def test_toggles_settings_return_link_for_settings_with_domain():
     assert "settingsDomainReturnNav.classList.toggle('d-none', !showSettingsReturn);" in body
 
 
-def test_toggles_workspace_rail_for_non_settings_with_domain():
+def test_toggles_domain_chrome_for_non_settings_with_domain():
     body = _update_domain_menu_visibility_body()
-    assert "domainWorkspaceSubnavNav" in body
-    assert "domainWorkspaceSubnavNav.classList.toggle('d-none', !showWorkspaceRail);" in body
+    # Workspace dropdown rail is gone; domain chrome (context + app switcher +
+    # Close/Save) toggles via data-subnav-domain-chrome.
+    assert "domainWorkspaceSubnavNav" not in body
+    assert "document.querySelectorAll('[data-subnav-domain-chrome]').forEach((el) => {" in body
+    assert "el.classList.toggle('d-none', !showWorkspaceRail);" in body
 
 
 def test_subnav_visibility_is_driven_by_the_four_state_combinations():

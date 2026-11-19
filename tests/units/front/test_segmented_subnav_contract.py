@@ -44,7 +44,8 @@ def _constrained_block(css: str) -> str:
     return match.group(1)
 
 
-def test_workspace_targets_are_grouped_before_context_and_actions():
+def test_l2_layout_is_context_then_app_switcher_then_actions():
+    """Workspace dropdown rail is gone; app switcher owns Context→Intelligence nav."""
     html = _read(BASE_HTML)
     assert 'id="obSubnav"' in html
     context_li = re.search(
@@ -54,33 +55,23 @@ def test_workspace_targets_are_grouped_before_context_and_actions():
     )
     assert context_li, "Missing .ob-subnav-context wrapper"
     assert "ob-subnav-item" in context_li.group(0)
-    assert html.index(context_li.group(0)) < html.index('class="ob-subnav-workspaces"')
-    # Workspace numbering (1-5 ordinals) is retired in the C direction.
-    assert 'class="ob-subnav-ordinal"' not in html
-    workspace_match = re.search(
-        r'<li\b[^>]*class="[^"]*\bob-subnav-workspaces\b[^"]*"[^>]*>',
-        html,
-    )
-    assert workspace_match, "Missing .ob-subnav-workspaces wrapper"
-    group_start = html.index(workspace_match.group(0))
-    group_end = html.index("<!-- Flex spacer", group_start)
-    group = html[group_start:group_end]
 
-    ids = [
+    # Retired segmented workspace rail + ordinals.
+    assert 'class="ob-subnav-workspaces"' not in html
+    assert 'class="ob-subnav-workspace-list"' not in html
+    assert 'class="ob-subnav-ordinal"' not in html
+    for element_id in (
         "subnavDomainDropdown",
         "subnavOntologyDropdown",
         "subnavKgDropdown",
         "subnavSimDropdown",
-    ]
-    positions = [group.index(element_id) for element_id in ids]
+        "domainWorkspaceSubnavNav",
+        "domainSectionName",
+    ):
+        assert f'id="{element_id}"' not in html
 
-    assert positions == sorted(positions)
-    assert 'class="ob-subnav-workspace-list"' in group
-    assert "ob-subnav-save-btn" not in group
     assert "currentDomainName" in html
     assert "domainContextVersion" in html
-    # Version is a badge next to the context name; the switcher lives in the
-    # workspace map modal (no separate vN ▾ crumb).
     assert "ob-subnav-version-crumb" not in html
     assert "ob-subnav-crumb-sep" not in html
     assert re.search(
@@ -88,7 +79,8 @@ def test_workspace_targets_are_grouped_before_context_and_actions():
         html,
     )
     assert html.index("obSidebarToggle") < html.index("domainContextTrigger")
-    assert html.index("domainContextTrigger") < html.index("ob-subnav-close-btn")
+    assert html.index("domainContextTrigger") < html.index("obAppSwitcher")
+    assert html.index("obAppSwitcher") < html.index("ob-subnav-close-btn")
     assert html.index("ob-subnav-close-btn") < html.index("ob-subnav-save-btn")
     assert "ob-subnav-switch-btn" not in html
     assert "ob-subnav-save-dirty" in html
@@ -116,44 +108,19 @@ def test_subnav_left_edge_matches_sidebar_panel_gutter():
     )
 
 
-def test_workspace_targets_stretch_to_near_full_inner_height():
+def test_context_crumb_and_rail_use_quiet_tokens():
     css = _read(MAIN_CSS)
-    group = _rule(css, ".ob-subnav-workspace-list")
-    stretch = re.search(
-        r"\.ob-subnav-workspace-list\s*>\s*\.ob-subnav-item\s*,\s*"
-        r"\.ob-subnav-workspace-list\s*>\s*\.ob-subnav-item\s*>\s*\.ob-subnav-link\s*\{([^}]*)\}",
-        css,
-        flags=re.DOTALL,
-    )
-
-    assert "padding: 0.15rem" in group
-    assert stretch, "Missing workspace target stretch rule"
-    assert "height: 100%" in stretch.group(1)
-
-
-def test_workspace_group_uses_quiet_segmented_tokens():
-    css = _read(MAIN_CSS)
-    group = _rule(css, ".ob-subnav-workspace-list")
     crumb = _rule(css, ".ob-subnav-crumb")
     crumb_hover = _rule(css, ".ob-subnav-crumb:hover")
-    active = _rule(css, ".ob-subnav-link.active")
-    focus = _rule(css, ".ob-subnav-link:focus-visible")
 
-    assert "background: transparent" in group
-    assert "border: 0" in group
-    assert "border-radius: var(--db-radius-control)" in group
-    assert "var(--db-surface-warm)" not in group
     assert "color: var(--db-text)" in crumb
     assert "background: var(--db-hover-indigo)" in crumb_hover
-    assert "color: var(--db-primary-darker)" in active
-    assert "background: transparent" in active
-    assert "box-shadow" not in active
-    assert "gradient" not in active
-    assert "outline: 2px solid transparent" in focus
-    assert "box-shadow: var(--db-focus-ring)" in focus
     assert "--ob-subnav-rail-height: 2.25rem" in css
     nav = _rule(css, ".ob-subnav-nav")
     assert "padding: 0.15rem 0 0" in nav
+    # Segmented workspace rail styles must not return.
+    assert ".ob-subnav-workspace-list" not in css
+    assert ".ob-subnav-link" not in css
 
 
 def test_obsolete_l1_domain_rules_are_removed():
@@ -164,30 +131,13 @@ def test_obsolete_l1_domain_rules_are_removed():
     assert ".ob-nav-path-sep" not in css
 
 
-def test_active_target_disables_only_its_dropdown():
+def test_app_switcher_owns_current_workspace_state():
     html = _read(BASE_HTML)
     js = _read(NAVBAR_JS)
 
-    assert "if (route && path.startsWith(route))" in js
-    assert "disableCurrentSubnavDropdown(link)" in js
-    assert "toggle.removeAttribute('data-bs-toggle')" in js
-    assert "toggle.classList.remove('dropdown-toggle')" in js
-    assert "toggle.setAttribute('aria-current', 'page')" in js
-    assert "event.preventDefault()" in js
-    assert "if (menu) menu.remove()" in js
-    for element_id in (
-        "subnavDomainDropdown",
-        "subnavOntologyDropdown",
-        "subnavKgDropdown",
-        "subnavSimDropdown",
-    ):
-        tag = re.search(
-            rf'<a\b[^>]*id="{element_id}"[^>]*>',
-            html,
-            flags=re.DOTALL,
-        )
-        assert tag, element_id
-        assert 'data-bs-toggle="dropdown"' in tag.group(0)
+    assert "initAppSwitcherActiveState" in js
+    assert "disableCurrentSubnavDropdown" not in js
+    assert 'id="obAppSwitcher"' in html
     assert "`V${version}`" in js
     assert "domainContextVersion" in js
     assert "domain-version-badge" in js or "domainContextVersion" in js
@@ -217,7 +167,7 @@ def test_mobile_contract_does_not_add_horizontal_scrolling():
     assert re.search(r"\.ob-subnav-label\s*\{[^}]*display\s*:\s*none", mobile)
     assert ".ob-subnav" in mobile
     assert ".ob-subnav-nav" in mobile
-    assert ".ob-subnav-workspace-list" in mobile
+    assert ".ob-subnav-workspace-list" not in mobile
     assert re.search(r"\.ob-subnav-context-trigger\s*\{[^}]*width\s*:\s*auto", mobile)
     assert re.search(r"\.ob-subnav-context-trigger\s*\{[^}]*min-width\s*:\s*2rem", mobile)
     assert re.search(r"\.ob-subnav-context-trigger\s*\{[^}]*max-width\s*:\s*none", mobile)
