@@ -1,0 +1,207 @@
+================================================================================
+## Single "Add Data Assets" dialog for Unity Catalog import
+================================================================================
+
+Context: Importing Unity Catalog tables under Context > Data Assets went through
+three stacked popups: "Select Unity Catalog Location" (a widget with a nested
+"Select Catalog & Schema" picker), then a "Select Tables to Import" list, then
+the import. Design was agreed in brainstorming: one dialog holds the catalog and
+schema pickers, the table list and the Import action. Backend endpoints
+(`/domain/metadata/list-tables`, `/domain/metadata/initialize-async`) and the
+shared UCLocationWidget are unchanged; the Change Data Asset modal is unchanged.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_metadata.html
+   Replaced `#tableSelectionModal` and `#loadMetadataLocationModal` with one
+   `#addDataAssetsModal` (modal-xl). It holds Catalog and Schema selects, a
+   "Context" shortcut button, a placeholder/spinner/list area, the permission
+   banner, Select All / Deselect All / Select New Only, the filter, and the
+   footer button `#importSelectedBtn` ("Add N assets"). Existing IDs and
+   `data-meta-action` values are kept.
+2. src/front/static/domain/js/domain-metadata.js
+   - Removed `loadMetadataModal`, `loadMetadataWidgetInitialized`,
+     `pendingLoadCatalog`, `pendingLoadSchema`.
+   - `showLoadMetadataModal()` opens the single dialog and fills catalogs and the
+     context shortcut from `UCLocationWidget.loadCatalogs()` and
+     `UCLocationWidget.loadDomainLocation()`.
+   - New `onAddDataAssetsCatalogChange()`, `onAddDataAssetsSchemaChange()`,
+     `useContextLocationForAssets()`, `resetAddDataAssetsListing()`,
+     `getAddDataAssetsLocation()`, `_showAddAssetsState()`, `_setSelectValue()`,
+     `_optionHtml()`.
+   - `loadMetadataFromUC()` replaced by `loadTablesForSelection(catalog, schema)`:
+     lists tables inline when a schema is picked. A request-id guard drops stale
+     responses. Same initial selection logic (new tables up to the import limit).
+   - `showTableSelectionModal()` renamed `renderImportTable()` and no longer
+     opens a modal.
+   - `importSelectedTables()` reads catalog and schema from the dialog and hides
+     `#addDataAssetsModal`. Fixed `const selectedTables` being reassigned on the
+     import-limit path (would throw a TypeError).
+   - Template bindings: `load-from-uc` removed, `add-assets-use-context` added,
+     catalog and schema `change` events routed to the new handlers.
+3. src/front/static/global/css/permissions.css
+   Removed the `#loadMetadataConfirmBtn` read-only selector (element no longer
+   exists). `#importSelectedBtn` and `[data-meta-action="show-load-modal"]` gates
+   are unchanged.
+4. tests/units/front/test_add_data_assets_dialog.py (new)
+   Source-contract tests for the single dialog: legacy modals gone, required
+   hooks present, no chained-modal state in JS, inline schema listing, import
+   reads from the dialog, read-only gate.
+5. tests/units/front/test_mapping_metric_view_ui.py
+   Copy test retargeted from the removed `#loadMetadataConfirmBtn` to
+   `#importSelectedBtn` ("Add 0 assets").
+6. tests/units/front/test_data_assets_import_limit.py
+   Import-limit contract now looks for `renderImportTable` (renamed from
+   `showTableSelectionModal`). Limit check unchanged.
+7. docs/user-guide.md
+   Step 3 "Import Table Metadata" rewritten for the single dialog.
+8. docs/getting-started.md
+   Assign Data Assets step describes the single dialog.
+9. docs/examples.md
+   Step 2 "Load Data Source" updated to the single dialog.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/static/domain/js/domain-metadata.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_add_data_assets_dialog.py (new)
+- tests/units/front/test_mapping_metric_view_ui.py
+- tests/units/front/test_data_assets_import_limit.py
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/examples.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log (new)
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10881 passed, 334 skipped,
+  8 deselected, 0 failed.
+- `node --check src/front/static/domain/js/domain-metadata.js`: OK.
+- Not done: live browser check (desktop, mobile, read-only role). Needs a
+  Databricks workspace for the catalog and schema APIs.
+
+
+================================================================================
+## Fix Select All in the Add Data Assets dialog
+================================================================================
+
+Context: Select All (toolbar button and header checkbox) looked like a no-op.
+It forced already-loaded rows off, then the header checkbox snapped back to
+unchecked/indeterminate because not every visible row was selected. The
+remaining-slot count also used already-loaded flags from the current schema
+listing instead of how many assets are in the domain.
+
+Changes:
+
+1. src/front/static/domain/js/domain-metadata.js
+   Added `computeSelectAllImportState`: Select All checks every visible row,
+   including Already loaded. The import-limit cap applies only to new assets
+   and shows a warning when some new rows are skipped. `_remainingImportSlots`
+   uses the domain metadata table count. Import submits only new tables so
+   already-loaded checks do not consume the limit.
+2. tests/units/front/test_add_data_assets_dialog.py
+   Node tests for Select All / Deselect All / remaining-slot cap.
+
+Modified files:
+- src/front/static/domain/js/domain-metadata.js
+- tests/units/front/test_add_data_assets_dialog.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10884 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Already-loaded assets have no checkbox; Context becomes Refresh
+================================================================================
+
+Context: Feedback on the single Add Data Assets dialog: (1) already-loaded
+assets must not be reloadable, so they should have no checkbox; (2) the
+Context shortcut is less useful than a Refresh that reloads catalogs/schemas
+and the table list from Unity Catalog.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_metadata.html
+   Replaced the Context button with `#addDataAssetsRefreshBtn`
+   (`data-meta-action="add-assets-refresh"`).
+2. src/front/static/domain/js/domain-metadata.js
+   - Already-loaded rows render an empty checkbox cell; Select All /
+     `computeSelectAllImportState` never selects them; the header checkbox
+     only considers rows that still have a checkbox; the selection counter
+     counts new assets only.
+   - Removed the Context shortcut (`addDataAssetsContext`,
+     `useContextLocationForAssets`). Added `refreshAddDataAssets()` which
+     clears the UCLocationWidget cache, reloads catalogs (preserving the
+     current selection) and re-lists tables for the current schema.
+3. docs/user-guide.md
+   Step 3 updated for Refresh and non-selectable already-loaded assets.
+4. tests/units/front/test_add_data_assets_dialog.py
+   Contracts updated for Refresh, no Context, and Select All skipping
+   already-loaded assets.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/static/domain/js/domain-metadata.js
+- docs/user-guide.md
+- tests/units/front/test_add_data_assets_dialog.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10886 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Faster Data Assets paint: deferred Rights + reload spinner
+================================================================================
+
+Context: The Unity Catalog Data Assets page felt slow to display because SELECT
+permission probes ran with metadata load. After Add/Update from the popup, the
+list also refreshed without a clear loading state. The heading still said
+"Loaded Tables".
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_metadata.html
+   Renamed "Loaded Tables" to "Loaded Unity Catalog Assets". Added
+   `#metadataListOverlay` spinner over the assets table.
+2. src/front/static/domain/css/domain-metadata.css
+   Overlay styles for the reload spinner.
+3. src/front/static/domain/js/domain-metadata.js
+   - `loadMetadataStatus` paints the list first, then calls
+     `refreshSelectPermissionsInBackground()`.
+   - New `POST /domain/metadata/check-select` fills the Rights column in place.
+   - After Add/Update (popup close / Update from UC), shows the list overlay
+     spinner while reloading assets.
+4. src/back/core/databricks/uc/MetadataService.py
+   Import no longer probes SELECT (sets `can_select: null`). Added
+   `probe_select_permissions` for the background Rights pass.
+5. src/back/objects/domain/_metadata_select.py (new)
+   Orchestrates the background probe + session save (kept out of Domain to
+   respect the class size budget).
+6. src/api/routers/internal/domain.py
+   Added `POST /metadata/check-select`.
+7. docs/user-guide.md
+   Notes two-phase list paint + background Rights.
+8. tests/units/front/test_loaded_uc_assets_deferred_rights.py (new)
+   plus MetadataService / guard-UI contract updates.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/static/domain/css/domain-metadata.css
+- src/front/static/domain/js/domain-metadata.js
+- src/back/core/databricks/uc/MetadataService.py
+- src/back/objects/domain/_metadata_select.py (new)
+- src/api/routers/internal/domain.py
+- docs/user-guide.md
+- tests/units/front/test_loaded_uc_assets_deferred_rights.py (new)
+- tests/units/core/test_metadata_service_object_kind.py
+- tests/units/core/test_metadata_service_uc_failures.py
+- tests/units/front/test_metadata_guard_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10890 passed, 334 skipped,
+  8 deselected, 0 failed.
+

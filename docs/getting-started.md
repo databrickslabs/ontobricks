@@ -308,7 +308,8 @@ Alternatively, use the traditional form interface:
 ### 5. Assign Data Assets
 
 Load Unity Catalog tables from **Context → Data Assets → Add Data Asset**
-(catalog and schema picker). Editors and Builders can do this with `CAN_USE`;
+(one dialog: pick the catalog and schema, check the tables, then **Add N assets**).
+Editors and Builders can do this with `CAN_USE`;
 they do not need `CAN_MANAGE`. Viewers cannot import or remove sources.
 
 Then map those tables under **Graph → Mapping**:

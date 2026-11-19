@@ -2422,15 +2422,14 @@ Navigate to **Context > Data Assets** in the sidebar.
 
 This step tells OntoBricks about the Databricks tables you want to model in your ontology.
 
-1. Select a **Catalog** from the dropdown.
-2. Select a **Schema** from the dropdown.
-3. Click **List Tables** to see all available tables.
-4. **Check the tables** you want to include in your ontology (or use "Select All").
-5. Click **Initialize Metadata**.
+1. Click **Add Data Asset**. A single **Add Data Assets from Unity Catalog** dialog opens.
+2. Select a **Catalog** from the dropdown, then a **Schema**. The tables of that schema are listed in the same dialog as soon as the schema is selected. Use **Refresh** to reload catalogs, schemas and the table list from Unity Catalog.
+3. **Check the new tables** you want to include (already-loaded assets have no checkbox). Use "Select All", "Select New Only", or the filter box as needed.
+4. Click **Add N assets**. The load runs in the background and its progress is shown on the page.
 
 Imports are capped at **40 data assets** by default (tables, views, and metric views combined). Admins change the cap under **Settings → Global → Data assets import limit** (1–500). If the schema has more assets than remaining slots, extras are skipped until you raise the limit or remove existing assets.
 
-OntoBricks fetches column names, types, and comments from Unity Catalog for each selected table. This metadata is used by the Wizard and Auto-Map features to understand your data structure.
+OntoBricks fetches column names, types, and comments from Unity Catalog for each selected table. This metadata is used by the Wizard and Auto-Map features to understand your data structure. The **Loaded Unity Catalog Assets** list paints first; the **Rights** column (service-principal SELECT) is filled in the background afterward so the page stays responsive.
 
 > **Tip**: Include all tables that are relevant to the domain you want to model. The more context the LLM has, the better the ontology and mappings will be.
 

@@ -81,11 +81,11 @@ def test_no_ui_label_still_says_data_source():
 
 
 class TestAddAssetsCopy:
-    def test_the_catalog_schema_modal_confirms_with_add_assets(self):
+    def test_the_add_assets_dialog_confirms_with_add_assets(self):
         html = _read(METADATA_HTML)
-        confirm = html[html.index('id="loadMetadataConfirmBtn"') :]
+        confirm = html[html.index('id="importSelectedBtn"') :]
         confirm = confirm[: confirm.index("</button>")]
-        assert "Add assets" in confirm
+        assert "Add 0 assets" in confirm
         assert "Load Tables" not in confirm
         assert "Add Tables" not in confirm
 

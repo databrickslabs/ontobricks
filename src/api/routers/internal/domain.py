@@ -784,6 +784,21 @@ async def get_metadata(session_mgr: SessionManager = Depends(get_session_manager
     return Domain(get_domain(session_mgr)).get_metadata_response()
 
 
+@router.post("/metadata/check-select")
+async def check_metadata_select_permissions(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Probe SELECT rights for loaded data assets (background Rights column).
+
+    The asset list is painted from ``GET /domain/metadata`` first; the UI then
+    calls this endpoint to fill the Rights column without blocking first paint.
+    """
+    from back.objects.domain._metadata_select import check_select_permissions
+
+    return await check_select_permissions(get_domain(session_mgr), settings)
+
+
 @router.post("/metadata/list-tables")
 async def list_schema_tables(
     request: Request,
