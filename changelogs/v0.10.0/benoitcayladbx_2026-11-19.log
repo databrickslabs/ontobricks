@@ -479,3 +479,68 @@ Modified files:
 Tests:
 - `uv run --frozen pytest -q -m "not scenario"`: 10896 passed, 334 skipped,
   8 deselected, 0 failed.
+
+
+================================================================================
+## Compact spacing between text and content (L2 subnav, sidebar, headers, cards)
+================================================================================
+
+Context: The UI had excessive dead whitespace between titles/text and content
+surfaces. The L2 subnav had a 48px (3rem) rail height, the sidebar had generous
+padding and a 16px gap to the content card, section headers floated high above
+content with 0.5rem (or template mb-4) margins, and cards/headers had large
+padding. The user asked to reduce these spaces across L2, the sidebar, and pages.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - Reduced `--ob-subnav-rail-height` from 3rem (48px) to 2.25rem (36px).
+   - Tightened `.ob-subnav-nav` padding from 0.25rem to 0.15rem.
+   - Reduced padding on `.ob-subnav-link`, `.ob-subnav-crumb`, `.ob-subnav-save-btn`,
+     `.ob-subnav-close-btn`, `.ob-subnav-resume-btn`, `.ob-subnav-settings-return-link`,
+     and `.ob-subnav-workspace-list`.
+   - Tightened `#obSubnav .container-fluid` left padding from 0.5rem to 0.25rem to
+     match the new sidebar outer gutter.
+   - Compacted `.section-header`: `padding-top: 0.25rem`, `margin-bottom: 0.25rem !important`
+     (overriding template `mb-4`/`mb-3` utilities), `h1..h4` margin reduced to 0.1rem,
+     subtitle margin to 0.
+   - Compacted `.card-header` (padding `0.5rem 0.75rem`, down from `1rem 1.25rem`),
+     `.card-body` (padding `0.75rem`), and `.ob-tab-content` (padding `0.75rem`).
+   - Compacted `.content-wrapper` (padding `0.75rem 1rem`, down from `2rem`),
+     and `.page-header` (margin `0.75rem`, padding `0.25rem 0 0.5rem`).
+2. src/front/static/global/css/sidebar-layout.css
+   - Reduced `.sidebar-layout` outer padding (`0.15rem 0.25rem 0.25rem`, down from
+     `0.25rem 0.5rem 0.5rem`) and inner gap between sidebar and content (`0.25rem`,
+     down from `0.5rem`).
+   - Reduced `.sidebar-content` horizontal padding (`0 0.25rem`, down from `0 0.5rem`),
+     cutting the gap between sidebar nav links and content cards from 16px to 8px.
+   - Tightened `.sidebar-nav` padding (`0.25rem 0`), `.sidebar-title` padding,
+     `.nav-link` padding (`0.25rem 0.5rem`), margin, and icon gap (`0.35rem`).
+   - Compacted `.sidebar-toggle` padding (`0.3rem 0.5rem`).
+   - Aligned `.sidebar-layout .section-header` to `padding-top: 0.25rem` and
+     `margin-bottom: 0.25rem !important`.
+3. tests/units/front/test_clarity_design_contract.py
+   - Updated layout gutter, L2 top padding, and section-header alignment assertions
+     for the compact spacing tokens.
+4. tests/units/front/test_segmented_subnav_contract.py
+   - Updated subnav rail height (2.25rem), container left padding (0.25rem), and
+     nav padding (0.15rem) assertions.
+5. tests/units/front/test_sidebar_content_stretch_contract.py
+   - Updated `.sidebar-content:has(#dataquality-section.active)` padding assertion
+     to `0 0.25rem`.
+6. .cursor/11-frontend-design.mdc
+   - Documented the compact 0.25rem outer gutter, 2.25rem L2 rail height, and
+     0.25rem title-to-content rhythm.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10896 passed, 334 skipped,
+  8 deselected, 0 failed.

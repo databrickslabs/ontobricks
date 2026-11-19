@@ -683,7 +683,7 @@ def test_sidebar_toggle_has_no_hover_highlight():
 
 
 def test_sidebar_layout_centralizes_the_shared_outer_gutter():
-    """The shell owns asymmetric vertical gutters and a 0.5rem horizontal inset.
+    """The shell owns asymmetric vertical gutters and a compact horizontal inset.
 
     Exact-selector parsing so a ``:has()`` page override cannot satisfy the
     base-layout contract.
@@ -693,13 +693,13 @@ def test_sidebar_layout_centralizes_the_shared_outer_gutter():
     sidebar = _rule_blocks_for_exact_selector(css, ".sidebar-nav")
     content = _rule_blocks_for_exact_selector(css, ".sidebar-content")
 
-    assert _any_block_has_declaration(layout, r"gap", r"0\.5rem")
-    assert _any_block_has_declaration(layout, r"padding", r"0\.25rem\s+0\.5rem\s+0\.5rem")
+    assert _any_block_has_declaration(layout, r"gap", r"0\.25rem")
+    assert _any_block_has_declaration(layout, r"padding", r"0\.15rem\s+0\.25rem\s+0\.25rem")
     assert _any_block_has_declaration(layout, r"box-sizing", r"border-box")
     assert _any_block_has_declaration(sidebar, r"margin", r"0")
     assert _any_block_has_declaration(sidebar, r"height", r"100%")
     assert _any_block_has_declaration(
-        content, r"padding", r"0\s+0\.5rem"
+        content, r"padding", r"0\s+0\.25rem"
     )
 
 
@@ -711,7 +711,7 @@ def test_level_two_rail_and_content_share_the_same_vertical_gutter():
     assert _any_block_has_declaration(
         subnav,
         r"padding",
-        r"0\.25rem\s+0\s+0",
+        r"0\.15rem\s+0\s+0",
     )
 
 
@@ -729,7 +729,7 @@ def test_desktop_sidebar_titles_match_subtitle_to_content_gap():
     body = desktop_rule.group("body")
     assert re.search(
         r"\.sidebar-layout\s+\.section-header\s*\{"
-        r"[^}]*padding-top\s*:\s*0\.5rem\s*;",
+        r"[^}]*padding-top\s*:\s*0\.25rem\s*;",
         body,
         flags=re.DOTALL,
     )
@@ -742,15 +742,15 @@ def test_desktop_sidebar_titles_match_subtitle_to_content_gap():
     assert _any_block_has_declaration(
         header_blocks,
         r"margin-bottom",
-        r"0\.5rem\s*!important",
+        r"0\.25rem\s*!important",
     )
 
 
 def test_section_header_top_inset_matches_subtitle_to_content_gap():
-    """``.section-header`` top padding equals its 0.5rem bottom margin."""
+    """``.section-header`` top padding equals its 0.25rem bottom margin."""
     css = _read(MAIN_CSS)
     blocks = _rule_blocks_for_exact_selector(css, ".section-header")
-    assert _any_block_has_declaration(blocks, r"padding-top", r"0\.5rem")
+    assert _any_block_has_declaration(blocks, r"padding-top", r"0\.25rem")
 
 
 def test_sidebar_layout_has_a_min_height_safe_flex_chain():

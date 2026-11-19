@@ -349,7 +349,7 @@ def test_fixed_height_dataquality_and_logs_use_shell_vertical_padding():
     _assert_winning_declarations(
         SIDEBAR_CSS,
         ".sidebar-content:has(#dataquality-section.active)",
-        {"padding": r"0\s+0\.5rem"},
+        {"padding": r"0\s+0\.25rem"},
     )
     _assert_winning_declarations(
         SIDEBAR_CSS,

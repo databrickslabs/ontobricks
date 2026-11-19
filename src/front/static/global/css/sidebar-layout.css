@@ -48,11 +48,11 @@ body.full-width-layout {
     display: flex;
     height: calc(100vh - var(--ob-chrome-height, 60px));
     max-height: calc(100vh - var(--ob-chrome-height, 60px));
-    gap: 0.5rem;
+    gap: 0.25rem;
     width: 100%;
     max-width: 100vw;
     margin: 0;
-    padding: 0.25rem 0.5rem 0.5rem;
+    padding: 0.15rem 0.25rem 0.25rem;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -65,13 +65,13 @@ body.full-width-layout {
     min-width: 200px;
     background: transparent;
     /* Transparent rail with no outer border, matching the L2 second navbar (#obSubnav).
-       The shell owns the 0.5rem outer gutter (padding + gap), so the nav aligns
+       The shell owns the 0.25rem outer gutter (padding + gap), so the nav aligns
        within it with no margin of its own and simply fills the shell height. */
     margin: 0;
     height: 100%;
     border: none;
     border-radius: 0;
-    padding: 0.5rem 0;
+    padding: 0.25rem 0;
     flex-shrink: 0;
     overflow-y: auto;
     overflow-x: hidden;
@@ -81,7 +81,7 @@ body.full-width-layout {
 }
 
 .sidebar-nav .sidebar-title {
-    padding: 0.3rem 1rem 0.35rem;
+    padding: 0.2rem 0.75rem 0.2rem;
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -95,9 +95,9 @@ body.full-width-layout {
 .sidebar-nav .nav-link {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0.65rem;
-    margin: 0 0.35rem;
+    gap: 0.35rem;
+    padding: 0.25rem 0.5rem;
+    margin: 0 0.25rem;
     color: var(--db-text-secondary);
     border-radius: var(--db-radius-control);
     border-left: 3px solid transparent;
@@ -169,15 +169,15 @@ body.full-width-layout {
 .sidebar-toggle {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.45rem 0.6rem;
-    margin: 0 0.4rem 0.35rem;
+    gap: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    margin: 0 0.25rem 0.25rem;
     border: none;
     background: transparent;
     cursor: pointer;
     border-radius: var(--db-radius-control);
     transition: background 0.15s ease;
-    width: calc(100% - 0.8rem);
+    width: calc(100% - 0.5rem);
     overflow: hidden;
 }
 
@@ -267,7 +267,7 @@ html.ob-sidebar-collapsed .sidebar-nav .sidebar-toggle .sidebar-toggle-label,
     min-height: 0;
     /* The shell owns the vertical gutter. Keeping only the horizontal inset
        aligns each page heading with the top edge of the sidebar card. */
-    padding: 0 0.5rem;
+    padding: 0 0.25rem;
     overflow-y: auto;
     overflow-x: hidden;
     transition: width 0.25s ease;
@@ -301,7 +301,7 @@ html.ob-sidebar-collapsed .sidebar-nav .sidebar-toggle .sidebar-toggle-label,
 .sidebar-content:has(#graphql-section.active),
 .sidebar-content:has(#dataquality-section.active) {
     overflow: hidden;
-    padding: 0 0.5rem;
+    padding: 0 0.25rem;
 }
 
 #sigmagraph-section.active,
@@ -359,7 +359,7 @@ html.ob-sidebar-collapsed .sidebar-nav .sidebar-toggle .sidebar-toggle-label,
 .sidebar-content:has(#results-section.active),
 .sidebar-content:has(#sql-section.active) {
     overflow: hidden;
-    padding: 0 0.5rem;
+    padding: 0 0.25rem;
     display: flex;
     flex-direction: column;
 }
@@ -377,14 +377,14 @@ html.ob-sidebar-collapsed .sidebar-nav .sidebar-toggle .sidebar-toggle-label,
 /* One shared title/subtitle-to-content rhythm for every sidebar page. This
    intentionally overrides template-level Bootstrap `mb-4` utilities. */
 .sidebar-layout .section-header {
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.25rem !important;
 }
 
 /* The space above the title equals the space below the subtitle
    (``margin-bottom`` above), so the title block is vertically balanced. */
 @media (min-width: 769px) {
     .sidebar-layout .section-header {
-        padding-top: 0.5rem;
+        padding-top: 0.25rem;
     }
 }
 

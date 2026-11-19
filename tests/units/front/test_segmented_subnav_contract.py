@@ -108,9 +108,9 @@ def test_subnav_left_edge_matches_sidebar_panel_gutter():
     subnav_container = _rule(main_css, "#obSubnav .container-fluid")
     sidebar_layout = _rule(sidebar_css, ".sidebar-layout")
 
-    assert re.search(r"padding\s*:\s*0\.25rem\s+0\.5rem\s+0\.5rem\s*;", sidebar_layout)
+    assert re.search(r"padding\s*:\s*0\.15rem\s+0\.25rem\s+0\.25rem\s*;", sidebar_layout)
     assert re.search(
-        r"padding-left\s*:\s*0\.5rem\s*!important\s*;",
+        r"padding-left\s*:\s*0\.25rem\s*!important\s*;",
         subnav_container,
     )
 
@@ -125,7 +125,7 @@ def test_workspace_targets_stretch_to_near_full_inner_height():
         flags=re.DOTALL,
     )
 
-    assert "padding: 0.2rem" in group
+    assert "padding: 0.15rem" in group
     assert stretch, "Missing workspace target stretch rule"
     assert "height: 100%" in stretch.group(1)
 
@@ -150,9 +150,9 @@ def test_workspace_group_uses_quiet_segmented_tokens():
     assert "gradient" not in active
     assert "outline: 2px solid transparent" in focus
     assert "box-shadow: var(--db-focus-ring)" in focus
-    assert "--ob-subnav-rail-height: 3rem" in css
+    assert "--ob-subnav-rail-height: 2.25rem" in css
     nav = _rule(css, ".ob-subnav-nav")
-    assert "padding: 0.25rem 0 0" in nav
+    assert "padding: 0.15rem 0 0" in nav
 
 
 def test_obsolete_l1_domain_rules_are_removed():
