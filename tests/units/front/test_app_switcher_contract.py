@@ -100,6 +100,17 @@ def test_app_switcher_uses_databricks_line_item_styles():
     assert check and "visibility: visible" in check.group(1)
 
 
+def test_app_switcher_trigger_is_labelled_feature_selector():
+    """The 9-dot trigger is the "Feature selector" (tooltip + accessible name)."""
+    html = _read(BASE_HTML)
+    trigger = re.search(r'<button\b[^>]*id="obAppSwitcher"[^>]*>', html)
+    assert trigger, "Missing #obAppSwitcher trigger"
+    tag = trigger.group(0)
+    assert 'title="Feature selector"' in tag
+    assert 'aria-label="Open feature selector"' in tag
+    assert "Switch workspace" not in html
+
+
 def test_app_switcher_marks_current_workspace_from_route():
     js = _read(NAVBAR_JS)
     assert "ob-app-switcher-item" in js

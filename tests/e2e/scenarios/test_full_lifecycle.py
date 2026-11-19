@@ -92,8 +92,9 @@ class TestFullDomainLifecycle:
         info = _json(page.request.get(f"{live_server}/domain/info"))
         assert info.get("info", {}).get("name") == _DOMAIN_NAME
 
-        # Real DOM: the Domain page renders the saved name in an editable field.
-        page.goto(f"{live_server}/domain")
+        # Real DOM: Context → Configuration renders the saved name in an
+        # editable field (bare /domain lands on the workspace Home tiles).
+        page.goto(f"{live_server}/domain/?section=information")
         page.wait_for_load_state("domcontentloaded")
         name_field = page.locator("#domainName")
         name_field.wait_for(state="visible", timeout=10_000)

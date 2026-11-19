@@ -2295,3 +2295,60 @@ Tests:
 - Playwright computed-style verification: Close, Save, and Resume all transparent at rest with no visible border; hover adds subtle tint without border.
 - `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 51.10s.
 
+
+================================================================================
+## Scenarios: align the full-lifecycle journey with the workspace Home landing
+================================================================================
+
+Context: Context (`/domain`) now opens on the workspace Home tiles, so the
+Configuration panel holding `#domainName` is hidden on a bare `/domain` load.
+`test_full_lifecycle.py` waited for that field to be visible and timed out.
+All other scenario selectors and deep links (`/ontology?section=wizard`,
+`SidebarNav.switchTo("import"|"entities")`, `/dtwin/?open=automap`,
+`/dtwin/?section=design&tab=informations`, `#autoAssignModal`,
+`#mappingExportR2RMLBtn`, …) were audited against the current templates and
+are unchanged.
+
+Changes:
+
+1. tests/e2e/scenarios/test_full_lifecycle.py
+   - Step 2 now navigates to `/domain/?section=information` (Context →
+     Configuration, the same deep link the app uses) before asserting the
+     editable `#domainName` field.
+
+Modified files:
+- tests/e2e/scenarios/test_full_lifecycle.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest tests/e2e/scenarios/test_full_lifecycle.py -m scenario`: 1 passed (previous version: TimeoutError on `#domainName`).
+- `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 48.73s.
+
+================================================================================
+## App switcher trigger renamed "Feature selector"
+================================================================================
+
+Context: The 9-dot app switcher trigger in the unified chrome bar was labelled
+"Switch workspace" (tooltip) and "Open workspace switcher" (accessible name).
+It now reads "Feature selector" in both places so the tooltip and the screen
+reader label match. Hover styling is unchanged: matching the Databricks
+reference hover was not possible because the reference workspace requires an
+Okta sign-in that blocks automated browsers. Pending the reference values.
+
+Changes:
+
+1. src/front/templates/base.html
+   - `#obAppSwitcher` `title` "Switch workspace" → "Feature selector".
+   - `#obAppSwitcher` `aria-label` "Open workspace switcher" → "Open feature selector".
+2. tests/units/front/test_app_switcher_contract.py
+   - New `test_app_switcher_trigger_is_labelled_feature_selector`: asserts the
+     new title/aria-label and that "Switch workspace" no longer appears in base.html.
+
+Modified files:
+- src/front/templates/base.html
+- tests/units/front/test_app_switcher_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_app_switcher_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_segmented_subnav_contract.py`: 19 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 10964 passed, 334 skipped, 8 deselected, 0 failed in 50.34s.
