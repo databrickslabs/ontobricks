@@ -138,8 +138,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         container.innerHTML =
             '<div class="table-responsive">' +
-            '<table class="table table-sm table-hover align-middle mb-0">' +
-            '<thead class="table-light"><tr>' +
+            '<table class="table table-hover align-middle ob-runs-table">' +
+            '<thead><tr>' +
             '<th style="width: 26%;">Context</th>' +
             '<th style="width: 10%;">Version</th>' +
             '<th style="width: 12%;">Status</th>' +

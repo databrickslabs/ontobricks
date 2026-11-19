@@ -184,12 +184,12 @@ html:not(.ob-sidebar-ready) .sidebar-nav {
 
 html.ob-sidebar-collapsed .sidebar-nav,
 .sidebar-nav.collapsed {
-    width: 48px;
-    min-width: 48px;
+    width: 40px;
+    min-width: 40px;
 }
 
 html.ob-sidebar-collapsed:has(.sidebar-layout) {
-    --ob-sidebar-width: 48px;
+    --ob-sidebar-width: 40px;
 }
 
 html.ob-sidebar-collapsed .sidebar-nav .sidebar-title,

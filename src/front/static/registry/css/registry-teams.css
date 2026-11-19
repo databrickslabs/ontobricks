@@ -13,6 +13,12 @@
     position: relative;
 }
 
+.teams-matrix-wrapper:has(.spinner-border),
+.teams-matrix-wrapper.is-loading {
+    border: none;
+    background: transparent;
+}
+
 .teams-matrix {
     border-collapse: separate;
     border-spacing: 0;

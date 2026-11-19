@@ -23,6 +23,7 @@ RUNS_RENDER = REPO / "src/front/static/global/js/runs-render.js"
 DOMAIN_RUNS_JS = REPO / "src/front/static/domain/js/domain-runs.js"
 COMPONENTS_CSS = REPO / "src/front/static/global/css/components.css"
 MAIN_CSS = REPO / "src/front/static/global/css/main.css"
+SETTINGS_LOCKS_JS = REPO / "src/front/static/config/js/settings-locks.js"
 
 ROW_BUILDERS = (
     "buildRunCells",
@@ -126,3 +127,14 @@ def test_runs_list_css_matches_databricks_list():
     assert "background: transparent" in ghost
     assert "border: 0" in ghost
     assert re.search(r"--db-link:\s*#2272B4", _read(MAIN_CSS))
+
+
+def test_settings_locks_list_uses_the_shared_list_style():
+    """Settings → Locks renders its table with the same flat list style."""
+    js = _read(SETTINGS_LOCKS_JS)
+    match = re.search(r"'<table class=\"([^\"]*)\">'", js)
+    assert match is not None, "Locks table markup not found"
+    classes = match.group(1).split()
+    assert "ob-runs-table" in classes
+    assert "table-light" not in js, "Locks header is transparent, not a grey band"
+    assert "table-sm" not in classes

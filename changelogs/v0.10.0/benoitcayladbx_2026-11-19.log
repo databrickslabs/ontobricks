@@ -1860,3 +1860,106 @@ Modified files:
 - tests/units/front/test_button_design_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10951 passed, 334 skipped, 8 deselected, 0 failed in 49.83s
+
+## Remove alert background and border from Settings Lakebase spinner
+
+Context: In Settings → Lakebase (`/settings?section=lakebase`), the loading
+indicator for "Loading Lakebase settings…" was rendered inside an
+`alert alert-light border` box, drawing a colored background and border box on
+the page panel surface. Removed the alert and border classes (and similarly for
+Delta and Neo4j loading banners) so the spinner and text float cleanly on the
+panel without an enclosing box.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Removed `alert alert-light border` from `#lakebaseSectionBanner`,
+   `#deltaSectionBanner`, and `#neo4jSectionBanner`.
+2. tests/units/front/test_settings_lakebase_sync_defaults.py
+   Added `test_lakebase_loading_banner_has_no_alert_background_or_border` test.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/templates/settings.html
+- tests/units/front/test_settings_lakebase_sync_defaults.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10952 passed, 334 skipped, 8 deselected, 0 failed in 50.56s
+
+## Remove alert background and border from Delta and Teams spinners
+
+Context: In Settings → Delta (`/settings?section=delta`) and Settings → Teams
+(`/settings?section=teams`), spinners were displayed with enclosing borders and
+backgrounds (alert box for Delta; white bordered container for Teams). Removed
+the alert/border styling from Delta's banner and made the Teams matrix container
+borderless and transparent while loading so both spinners float cleanly directly
+on the page panel surface without an enclosing box.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Cleaned `#deltaSectionBanner` to be borderless and transparent without
+   `alert alert-light border`.
+2. src/front/templates/partials/settings/_settings_teams.html
+   Updated `#teamsMatrixContainer` loading markup with `.is-loading` and
+   centered flex layout.
+3. src/front/static/registry/css/registry-teams.css
+   Added `.teams-matrix-wrapper.is-loading, .teams-matrix-wrapper:has(.spinner-border)`
+   with `border: none; background: transparent;`.
+4. src/front/static/registry/js/registry-teams.js
+   Toggles `.is-loading` on `#teamsMatrixContainer` during `loadMatrix()`,
+   removing it upon completion or error.
+5. tests/units/front/test_settings_lakebase_sync_defaults.py
+   Added `test_teams_loading_spinner_has_no_border_or_background` test.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/registry/css/registry-teams.css
+- src/front/static/registry/js/registry-teams.js
+- src/front/templates/partials/settings/_settings_teams.html
+- src/front/templates/settings.html
+- tests/units/front/test_settings_lakebase_sync_defaults.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10953 passed, 334 skipped, 8 deselected, 0 failed in 50.30s
+
+## Settings → Locks list uses the shared flat list style
+
+Context: the Settings → Locks table still used the Bootstrap grey-header
+`table-sm` style, unlike the Databricks-style run lists. The user asked for
+the usual list style on `http://localhost:8000/settings?section=locks`.
+
+Changes:
+
+1. src/front/static/config/js/settings-locks.js
+   `renderLocks()` now renders `<table class="table table-hover align-middle ob-runs-table">`
+   with a plain `<thead>` (no `table-sm`, no `table-light`), matching the
+   shared `.ob-runs-table` list used by the run lists.
+2. tests/units/front/test_databricks_runs_list_contract.py
+   Added `test_settings_locks_list_uses_the_shared_list_style`.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/config/js/settings-locks.js
+- tests/units/front/test_databricks_runs_list_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10956 passed, 334 skipped, 8 deselected, 0 failed in 51.89s
+
+## Collapsed sidebar narrower (48px → 40px)
+
+Context: the collapsed sidebar rail felt too wide. Reduced the collapsed
+width so the icon rail takes less horizontal space.
+
+Changes:
+
+1. src/front/static/global/css/sidebar-layout.css
+   `html.ob-sidebar-collapsed .sidebar-nav, .sidebar-nav.collapsed` width and
+   min-width 48px → 40px; `html.ob-sidebar-collapsed:has(.sidebar-layout)`
+   `--ob-sidebar-width` 48px → 40px (drives the Back-to-context offset).
+2. tests/units/front/test_clarity_design_contract.py
+   Geometry token assertions updated to 40px.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10956 passed, 334 skipped, 8 deselected, 0 failed in 50.42s

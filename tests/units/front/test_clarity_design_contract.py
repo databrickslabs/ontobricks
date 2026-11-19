@@ -662,8 +662,8 @@ def test_sidebar_layout_preserves_geometry_and_clarity_active_tokens():
         [
             "width: 200px;",
             "min-width: 200px;",
-            "width: 48px;",
-            "min-width: 48px;",
+            "width: 40px;",
+            "min-width: 40px;",
         ],
     )
 
