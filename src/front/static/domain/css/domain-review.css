@@ -3,7 +3,7 @@
 .review-banner {
     border: 1px solid var(--db-border);
     border-left-width: 4px;
-    border-radius: 8px;
+    border-radius: var(--db-radius-card);
     padding: 1rem 1.25rem;
     background: #fff;
 }
@@ -37,7 +37,7 @@
     flex: 1 1 0;
     min-width: 0;
     border: 1px solid var(--db-border);
-    border-radius: 10px;
+    border-radius: var(--db-radius-card);
     padding: 0.85rem 0.9rem;
     background: #fff;
     transition: box-shadow .15s, border-color .15s, opacity .15s;
@@ -112,7 +112,7 @@
 .review-stage-icon {
     width: 26px;
     height: 26px;
-    border-radius: 7px;
+    border-radius: var(--db-radius-control);
     background: var(--db-bg-secondary, #ffffff);
     display: flex;
     align-items: center;
@@ -265,7 +265,7 @@
 
 .review-card {
     border: 1px solid var(--db-border);
-    border-radius: 8px;
+    border-radius: var(--db-radius-card);
 }
 
 .review-card .card-title {

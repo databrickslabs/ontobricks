@@ -117,3 +117,20 @@ def test_settings_return_link_resets_fixed_width_on_mobile():
         r"\.ob-subnav-settings-return-link\s*\{[^}]*max-width\s*:\s*none",
         mobile,
     )
+
+
+def test_settings_return_label_shows_context_name_and_version():
+    """The visible return link reads "Back to {name} V{version}" when a context is open."""
+    js = _read(NAVBAR_JS)
+    html = _read(BASE_HTML)
+    css = _read(MAIN_CSS)
+
+    assert 'id="settingsDomainReturnLabel"' in html
+    assert "document.getElementById('settingsDomainReturnLabel')" in js
+    assert "`Back to ${domainName} V${version}`" in js
+    assert "'Back to context'" in js
+    assert re.search(
+        r"\.ob-subnav-settings-return-link\s*>\s*span\s*\{[^}]*text-overflow\s*:\s*ellipsis",
+        css,
+        flags=re.DOTALL,
+    )

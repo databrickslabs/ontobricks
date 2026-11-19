@@ -11,7 +11,7 @@
 }
 
 .help-modal .modal-content {
-    border-radius: 12px;
+    border-radius: var(--db-radius-card);
     overflow: hidden;
     height: 88vh;
     max-height: 88vh;
@@ -229,7 +229,7 @@
     align-items: center;
     gap: 1.25rem;
     padding: 1.25rem 1.5rem;
-    border-radius: 12px;
+    border-radius: var(--db-radius-card);
     background: #b91c1c;
     border: 1px solid #7f1d1d;
     color: #fff;
@@ -249,7 +249,7 @@
 .help-hero-icon {
     width: 62px;
     height: 62px;
-    border-radius: 14px;
+    border-radius: var(--db-radius-control);
     background: #fff;
     display: flex;
     align-items: center;
@@ -267,7 +267,7 @@
 .help-title-logo {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     background: #fff;
     display: inline-flex;
     align-items: center;
@@ -292,7 +292,7 @@
    ========================================================================== */
 .help-card {
     border: 1px solid #e5e7eb;
-    border-radius: 10px;
+    border-radius: var(--db-radius-card);
     padding: 1rem 1.1rem;
     height: 100%;
     background: #fff;
@@ -320,7 +320,7 @@
 .help-card-icon {
     width: 36px;
     height: 36px;
-    border-radius: 10px;
+    border-radius: var(--db-radius-control);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -351,7 +351,7 @@
     background: #ffffff;
     border: 1px solid #e5e7eb;
     border-top: 3px solid #dc2626;
-    border-radius: 10px;
+    border-radius: var(--db-radius-card);
     padding: 0.6rem 0.7rem;
     display: flex;
     align-items: center;
@@ -411,7 +411,7 @@
     padding: 1rem 1.2rem;
     border-left: 4px solid #dc2626;
     background: #ffffff;
-    border-radius: 8px;
+    border-radius: var(--db-radius-card);
     align-items: flex-start;
 }
 
@@ -473,7 +473,7 @@
    ========================================================================== */
 .help-feature {
     border: 1px solid #e5e7eb;
-    border-radius: 10px;
+    border-radius: var(--db-radius-card);
     padding: 1.1rem 1.15rem;
     background: #fff;
     height: 100%;
@@ -482,7 +482,7 @@
 .help-feature-icon {
     width: 40px;
     height: 40px;
-    border-radius: 10px;
+    border-radius: var(--db-radius-control);
     background: #dc2626;
     color: #fff;
     font-size: 1.2rem;
@@ -520,18 +520,18 @@
 
 .help-accordion .accordion-item:first-of-type,
 .help-accordion .accordion-item:last-of-type {
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
 }
 
 .help-accordion .accordion-item:first-of-type .accordion-button,
 .help-accordion .accordion-item:last-of-type .accordion-button.collapsed {
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
 }
 
 .help-accordion .accordion-button {
     font-weight: 500;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
 }
 
 .help-accordion .accordion-collapse {

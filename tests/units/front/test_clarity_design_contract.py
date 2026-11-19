@@ -584,7 +584,7 @@ def test_navbar_dropdown_hover_matches_sidebar():
     )
     assert re.search(
         r"\.navbar\s+\.dropdown-menu\s+\.dropdown-item\s*\{"
-        r"[^}]*border-radius\s*:\s*9px\s*;",
+        r"[^}]*border-radius\s*:\s*var\(--db-radius-control\)\s*;",
         css,
         flags=re.DOTALL,
     )
@@ -606,7 +606,7 @@ def test_l2_dropdown_items_match_sidebar_hover_and_active():
     )
     assert re.search(
         r"\.ob-subnav\s+\.dropdown-menu\s+\.dropdown-item\s*\{"
-        r"[^}]*border-radius\s*:\s*9px\s*;",
+        r"[^}]*border-radius\s*:\s*var\(--db-radius-control\)\s*;",
         css,
         flags=re.DOTALL,
     )
@@ -914,3 +914,21 @@ def test_base_template_preserves_css_and_js_contract_ordering():
     )
     assert defer_scripts, "No deferred script references found in base.html"
     assert defer_scripts[0] == "global/js/permissions.js"
+
+
+def test_navbar_count_bubbles_are_round():
+    """Notification and task-tracker count bubbles render as circles, not pills."""
+    css = _read(COMPONENTS_CSS)
+    for selector in ("#taskTrackerBadge", "#notifCenterBadge"):
+        assert re.search(
+            re.escape(selector) + r"[^{]*\{[^}]*border-radius\s*:\s*50%\s*!important\s*;",
+            css,
+            flags=re.DOTALL,
+        ), f"{selector} must be a round bubble"
+
+
+def test_task_tracker_badge_uses_flex_so_count_is_centred():
+    """The JS must not force inline-block on the round badge (top-aligns the count)."""
+    js = (REPO_ROOT / "src/front/static/global/js/task-tracker.js").read_text(encoding="utf-8")
+    assert "badge.style.display = 'inline-flex'" in js
+    assert "badge.style.display = 'inline-block'" not in js

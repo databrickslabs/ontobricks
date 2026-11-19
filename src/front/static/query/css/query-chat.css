@@ -110,7 +110,7 @@
     width: 64px;
     height: 64px;
     margin-bottom: 0.85rem;
-    border-radius: 16px;
+    border-radius: var(--db-radius-control);
     background: #ffffff;
     box-shadow: var(--gc-shadow-md);
     display: flex;
@@ -230,7 +230,7 @@
     padding: 0.65rem 0.95rem;
     font-size: 0.9rem;
     line-height: 1.5;
-    border-radius: 14px;
+    border-radius: var(--db-radius-control);
     box-shadow: var(--gc-shadow-sm);
     word-break: break-word;
     /* prevent the bubble from stretching to fill the row */
@@ -242,7 +242,7 @@
     background: linear-gradient(135deg, var(--gc-user-start), var(--gc-user-end));
     color: #ffffff;
     border: none;
-    border-bottom-right-radius: 4px;
+    border-bottom-right-radius: 2px;
     box-shadow: 0 4px 14px rgba(var(--db-primary-rgb), 0.22);
 }
 .graph-chat-messages .user-msg .assistant-msg-body a {
@@ -254,7 +254,7 @@
     background: var(--gc-bot-bg);
     color: #0f172a;
     border: 1px solid var(--gc-bot-border);
-    border-bottom-left-radius: 4px;
+    border-bottom-left-radius: 2px;
 }
 
 .graph-chat-messages .assistant-msg.error-msg .assistant-msg-body {
@@ -276,8 +276,8 @@
     padding: 0.55rem 0.9rem;
     background: #ffffff;
     border: 1px solid var(--gc-bot-border);
-    border-radius: 14px;
-    border-bottom-left-radius: 4px;
+    border-radius: var(--db-radius-control);
+    border-bottom-left-radius: 2px;
     box-shadow: var(--gc-shadow-sm);
     color: var(--db-text-secondary);
     font-size: 0.85rem;
@@ -852,7 +852,7 @@
 .graph-chat-messages .bot-msg .assistant-msg-body pre {
     margin: 0.5em 0;
     padding: 0.6em 0.75em;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     background: #0f172a;
     color: #e2e8f0;
     overflow-x: auto;

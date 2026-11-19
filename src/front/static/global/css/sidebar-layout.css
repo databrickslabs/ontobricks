@@ -99,7 +99,7 @@ body.full-width-layout {
     padding: 0.35rem 0.65rem;
     margin: 0 0.35rem;
     color: var(--db-text-secondary);
-    border-radius: 9px;
+    border-radius: var(--db-radius-control);
     border-left: 3px solid transparent;
     position: relative;
     transition: all 0.2s ease;
@@ -127,7 +127,7 @@ body.full-width-layout {
     top: 5px;
     bottom: 5px;
     width: 3px;
-    border-radius: 0 3px 3px 0;
+    border-radius: 0 2px 2px 0;
     background: var(--db-gradient-rail);
 }
 
@@ -175,7 +175,7 @@ body.full-width-layout {
     border: none;
     background: transparent;
     cursor: pointer;
-    border-radius: 9px;
+    border-radius: var(--db-radius-control);
     transition: background 0.15s ease;
     width: calc(100% - 0.8rem);
     overflow: hidden;

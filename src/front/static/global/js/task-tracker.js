@@ -269,7 +269,8 @@ function updateTaskBadge() {
     
     if (activeCount > 0) {
         badge.textContent = activeCount;
-        badge.style.display = 'inline-block';
+        // inline-flex (not inline-block) so the count is centred vertically in the round bubble.
+        badge.style.display = 'inline-flex';
         
         // Add pulse animation for running tasks
         const hasRunning = trackedTasks.some(t => t.status === 'running');

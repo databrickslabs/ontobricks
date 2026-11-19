@@ -57,7 +57,7 @@ other tokens are **fixed** — they are not overridden at runtime.
 | Borders *(fixed)* | `--db-border`, `--db-border-light` | `#ECEAE6`, `#F4F2EF` |
 | Text *(fixed)* | `--db-text`, `--db-text-secondary`, `--db-text-muted` | `#191817`, `#6B6864`, `#6F6B65` |
 | Semantic tinted status *(fixed)* | `--db-status-success/warning/danger/info/draft` + `*-soft-bg` | success / warning / danger / info / draft on soft backgrounds |
-| Shared radii *(fixed)* | `--db-radius-control`, `--db-radius-card`, `--db-radius-chip` | `10px`, `14px`, `999px` |
+| Shared radii *(fixed)* | `--db-radius-control`, `--db-radius-card`, `--db-radius-chip` | `2px`, `2px`, `2px` |
 | Shadows *(fixed)* | `--db-shadow-sm`, `--db-shadow-md`, `--db-shadow-lg` | floating surfaces only |
 | Transitions *(fixed)* | `--db-transition`, `--db-transition-fast` | `0.2s` / `0.15s ease` |
 
@@ -203,7 +203,7 @@ Status color is assistive, not sufficient alone: provide icon + label text.
 
 - Resting component borders are one-pixel and warm (`--db-border` /
   `--db-border-light`).
-- Shared shape scale is mandatory: `14px` cards, `10px` controls/buttons, pill
+- Shared shape scale is mandatory: `2px` cards, `2px` controls/buttons, `2px`
   chips (`--db-radius-chip`).
 - Resting cards/forms/tables keep `box-shadow: none`; elevation is reserved for
   floating surfaces (dropdowns, modals, overlays, transient toasts).
@@ -587,7 +587,7 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   version crumbs (`--db-text`, weight 600; hover `--db-primary-darker` on
   `--db-hover-indigo`). The current workspace is `--db-primary-darker`, weight 600,
   with no fill or border. Dropdown menus keep the sidebar surface and hover
-  (`--db-hover-indigo`, `9px` radius). L1/L2 structure, order, and ownership are immutable.
+  (`--db-hover-indigo`, `2px` radius). L1/L2 structure, order, and ownership are immutable.
 - Domain and version crumbs (`.ob-subnav-crumb`) are text on the transparent row,
   with a `--db-hover-indigo` well on hover. The domain name is ellipsized
   (`max-width: 10rem`); name length never changes the `3rem` rail height shared
@@ -1139,9 +1139,9 @@ These already exist; reuse before reinventing.
   `components.css`; see *Tabs (`.ob-tabs`) — transparent underline rail*
   above. `.ob-tab-content` is the optional independent bordered surface.
 - **Cards** — Bootstrap `.card` / `.card-header`; styling already neutered
-  to project tokens (`14px` radius, one-pixel border, no resting shadow).
+  to project tokens (`2px` radius, one-pixel border, no resting shadow).
 - **Forms** — Bootstrap `.form-control` / `.form-select` / `.form-label`;
-  one-pixel warm borders, white/warm surfaces, `10px` radius, themed focus ring.
+  one-pixel warm borders, white/warm surfaces, `2px` radius, themed focus ring.
 - **Alerts** — Bootstrap `.alert` with `.alert-success` / `.alert-danger`
   using project status background tokens.
 - **Wizard overlay** — `.wizard-form-overlay` for absolute-positioned

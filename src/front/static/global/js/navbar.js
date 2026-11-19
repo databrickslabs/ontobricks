@@ -377,6 +377,7 @@ function applyDomainInfo(data) {
         }
     }
     const settingsReturnLink = document.getElementById('settingsDomainReturnLink');
+    const settingsReturnLabel = document.getElementById('settingsDomainReturnLabel');
     if (settingsReturnLink) {
         if (hasDomain) {
             const label = `Back to context for ${domainName}, opens context navigation via the workspace map`;
@@ -386,6 +387,11 @@ function applyDomainInfo(data) {
             settingsReturnLink.setAttribute('aria-label', 'Back to context');
             settingsReturnLink.setAttribute('title', 'Back to context');
         }
+    }
+    if (settingsReturnLabel) {
+        settingsReturnLabel.textContent = hasDomain
+            ? `Back to ${domainName} V${version}`
+            : 'Back to context';
     }
 
     if (domainSectionName) {

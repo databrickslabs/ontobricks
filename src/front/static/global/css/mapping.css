@@ -62,7 +62,7 @@
     align-items: center;
     justify-content: center;
     z-index: 100;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
 }
 
 
@@ -80,7 +80,7 @@
     min-height: 200px;
     height: 100% !important;
     border: 1px solid #e0e0e0;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
 }
 
 /* ==========================================================================

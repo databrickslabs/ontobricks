@@ -168,7 +168,7 @@
 .manual-status-badge {
     font-size: 0.7rem;
     padding: 2px 6px;
-    border-radius: 10px;
+    border-radius: var(--db-radius-control);
     flex-shrink: 0;
 }
 
@@ -231,7 +231,7 @@
 .manual-count-badge {
     font-size: 0.75rem;
     padding: 2px 8px;
-    border-radius: 10px;
+    border-radius: var(--db-radius-control);
     background: #ffffff;
     color: #495057;
     margin-left: 8px;

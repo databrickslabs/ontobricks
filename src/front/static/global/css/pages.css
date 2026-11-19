@@ -181,7 +181,7 @@
     background: #1e1e1e;
     color: #d4d4d4;
     padding: 1rem;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     font-family: 'Fira Code', 'Consolas', monospace;
     font-size: 0.85rem;
     overflow-x: auto;
@@ -391,7 +391,7 @@
     z-index: 9999 !important;
     background: white !important;
     color: #212529;
-    border-radius: 0.375rem;
+    border-radius: var(--db-radius-control);
 }
 
 .navbar .dropdown-menu.notif-center-dropdown .dropdown-item,
@@ -632,7 +632,7 @@
     justify-content: space-between;
     padding: 0.75rem 1rem;
     background-color: var(--db-light-gray);
-    border-radius: 6px;
+    border-radius: var(--db-radius-control);
     margin-bottom: 1rem;
 }
 
@@ -652,7 +652,7 @@
     background-color: var(--db-gray);
     color: #F8F8F2;
     padding: 1rem;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.85rem;
     overflow-x: auto;
@@ -710,7 +710,7 @@
     gap: 0.75rem;
     padding: 0.75rem;
     background-color: var(--db-light-gray);
-    border-radius: 6px;
+    border-radius: var(--db-radius-control);
     margin-top: 1rem;
 }
 
@@ -744,7 +744,7 @@
     background-color: #1e1e1e;
     color: #d4d4d4;
     border: 1px solid var(--db-border);
-    border-radius: 6px;
+    border-radius: var(--db-radius-control);
     padding: 1rem;
     resize: vertical;
 }

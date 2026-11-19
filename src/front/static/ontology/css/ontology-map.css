@@ -302,7 +302,7 @@
     bottom: 15px;
     left: 15px;
     background: rgba(255,255,255,0.95);
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     padding: 10px 14px;
     font-size: 11px;
     color: #495057;
@@ -354,7 +354,7 @@
 .map-context-menu {
     position: absolute;
     background: white;
-    border-radius: 8px;
+    border-radius: var(--db-radius-card);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     border: 1px solid #e9ecef;
     min-width: 180px;
@@ -457,7 +457,7 @@
     overflow-y: auto;
     background: #ffffff;
     border: 1px solid var(--db-border, #e9ecef);
-    border-radius: 8px;
+    border-radius: var(--db-radius-card);
     box-shadow: var(--db-shadow-md, 0 4px 20px rgba(0, 0, 0, 0.15));
     z-index: 1001;
     padding: 4px 0;
@@ -635,7 +635,7 @@
     background: rgba(33, 37, 41, 0.9);
     color: white;
     padding: 10px 16px;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     font-size: 13px;
     z-index: 100;
     white-space: nowrap;
@@ -692,7 +692,7 @@
     width: 240px;
     background: #fff;
     border: 1px solid #dee2e6;
-    border-radius: 10px;
+    border-radius: var(--db-radius-card);
     box-shadow: 0 6px 24px rgba(0,0,0,.12);
     z-index: 900;
     animation: mapContextFadeIn 0.15s ease;

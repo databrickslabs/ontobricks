@@ -205,3 +205,226 @@ Tests:
 - `uv run --frozen pytest -q -m "not scenario"`: 10890 passed, 334 skipped,
   8 deselected, 0 failed.
 
+
+================================================================================
+## Reduced UI corner rounding to minimum (almost square)
+================================================================================
+
+Context: The UI had heavily rounded corners across surfaces, including 14px cards,
+10px controls/inputs/buttons, 14px submenu dropdowns with 9px rounded items, and
+rounded pills. The user requested reducing all rounded boxes (submenus, pages,
+cards, modals, inputs, and controls) to the minimum (almost a square).
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - Reduced shared radii tokens: `--db-radius-sm: 2px`, `--db-radius-md: 2px`,
+     `--db-radius-lg: 2px`, with `--db-radius-control`, `--db-radius-card`, and
+     `--db-radius-chip` all resolving to 2px.
+   - Added Bootstrap CSS variable overrides in `:root` (`--bs-border-radius: 2px`,
+     `--bs-border-radius-sm: 2px`, `--bs-border-radius-lg: 2px`,
+     `--bs-card-border-radius: 2px`, `--bs-modal-border-radius: 2px`,
+     `--bs-dropdown-border-radius: 2px`, `--bs-btn-border-radius: 2px`,
+     `--bs-alert-border-radius: 2px`, etc.) so standard Bootstrap elements inherit
+     the almost-square aesthetic.
+   - Replaced hardcoded 9px radii on `.navbar .dropdown-menu .dropdown-item` and
+     `.ob-subnav .dropdown-menu .dropdown-item` with `var(--db-radius-control)`.
+   - Updated `.ob-subnav-link`, `.ob-subnav-resume-btn`, `.ob-subnav-save-kbd`,
+     and `.modal-content` to use the 2px tokens.
+   - Updated `pre` and `code` blocks to 2px border radius.
+2. src/front/static/global/css/sidebar-layout.css
+   - Replaced hardcoded 9px radii on `.sidebar-nav .nav-link` and `.sidebar-toggle`
+     with `var(--db-radius-control)`.
+   - Updated `.sidebar-nav .nav-link.active::before` indicator to `border-radius: 0 2px 2px 0`.
+3. src/front/static/global/css/components.css
+   - Aligned `.ob-workspace-map-item`, `.canvas-container`, `.ob-kpi-tile`,
+     `.ob-kpi-tile-icon`, `.step-status`, `.task-tracker-dropdown`,
+     `.wizard-form-overlay`, `.task-activity-log`, and `.ob-shortcut-card` to
+     `var(--db-radius-control)` / `var(--db-radius-card)`.
+4. src/front/static/global/css/pages.css
+   - Aligned `.sql-code`, `.notif-center-dropdown`, `.column-header`, `.code-preview`,
+     `.graph-legend`, and `.code-textarea` to `var(--db-radius-control)`.
+5. src/front/static/global/css/help-modal.css
+   - Aligned `.help-modal .modal-content`, `.help-hero`, `.help-hero-icon`,
+     `.help-title-logo`, `.help-card`, `.help-card-icon`, `.help-step`,
+     `.help-step-card`, `.help-feature`, `.help-feature-icon`, and accordion buttons
+     to `var(--db-radius-control)` / `var(--db-radius-card)`.
+6. src/front/static/registry/css/registry.css
+   - Replaced 0.5rem and 0.75rem with `var(--db-radius-card)` on `.bridges-domain-card`,
+     `.bridges-summary-bar`, and `#bridgesGraph`.
+7. src/front/static/global/css/review-modals.css
+   - Replaced 10px and rem radii on `.review-chat-bubble`, `.oc-thread`, and
+     `.oc-md pre` with `var(--db-radius-control)`.
+8. src/front/static/domain/css/domain-review.css
+   - Replaced 8px, 10px, and 7px on `.review-banner`, `.review-stage`, `.review-stage-icon`,
+     and `.review-card` with design tokens.
+9. src/front/static/global/css/config.css
+   - Aligned `.doc-drop-zone`, `.registry-domain-table-wrapper`, and `.lk-domain-card`
+     with design tokens.
+10. src/front/static/query/css/query-chat.css
+    - Replaced 16px, 14px, and 8px radii on chat bubbles, thinking indicator,
+      welcome icon, and code blocks with `var(--db-radius-control)`.
+11. src/front/static/ontology/css/ontology-assistant.css
+    - Aligned `.assistant-popup`, header, footer, message bubbles, and textarea
+      with design tokens.
+12. src/front/static/ontology/css/ontology-map.css
+    - Replaced 8px and 10px on `.map-legend`, `.map-context-menu`, `.map-context-submenu`,
+      `.map-connection-tooltip`, and `.map-search-popup` with design tokens.
+13. src/front/static/mapping/css/mapping-design.css, mapping-manual.css, mapping.css
+    - Replaced 8px and 10px on legends, context menus, status/count badges, and canvas
+      containers with design tokens.
+14. tests/units/front/test_clarity_design_contract.py
+    - Updated assertions for dropdown item radii to expect `var(--db-radius-control)`.
+15. .cursor/11-frontend-design.mdc
+    - Updated design system documentation to reflect the 2px almost-square radius scale.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- src/front/static/global/css/components.css
+- src/front/static/global/css/pages.css
+- src/front/static/global/css/help-modal.css
+- src/front/static/global/css/config.css
+- src/front/static/global/css/review-modals.css
+- src/front/static/global/css/mapping.css
+- src/front/static/registry/css/registry.css
+- src/front/static/domain/css/domain-review.css
+- src/front/static/query/css/query-chat.css
+- src/front/static/ontology/css/ontology-assistant.css
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/mapping/css/mapping-design.css
+- src/front/static/mapping/css/mapping-manual.css
+- tests/units/front/test_clarity_design_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10890 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+## Compare: auto-load differences; Rename View difference → Refresh
+
+Context: On Intelligence → Simulation → Compare, users had to press
+"View difference" after picking a ready scenario. The overlay now loads
+automatically whenever a ready scenario is available; with none, the empty
+state stays. The action button is renamed Refresh for manual reloads.
+
+Changes:
+
+1. src/front/static/intelligence/js/simulation-compare.js
+   Auto-run compare on section show when a ready scenario is selected;
+   also re-run on scenario or live-source change; drop the autoRun flag.
+2. src/front/templates/partials/intelligence/_sim_compare.html
+   Rename run button to Refresh (bi-arrow-clockwise); update idle copy.
+3. src/front/templates/partials/intelligence/_sim_scenarios.html
+   How-it-works copy: overlay loads automatically; Refresh reloads.
+4. src/front/templates/partials/layout/help_modal.html
+   Help text aligned with auto-load + Refresh wording.
+5. docs/intelligence.md
+   Graphs-tab docs: auto-load overlay; Refresh; empty when no scenario.
+6. docs/user-guide.md
+   Compare workflow row updated for auto-load + Refresh.
+7. tests/units/front/test_intelligence_page_contract.py
+   Contract asserts Refresh label, no View difference, auto-run path.
+
+Modified files:
+- src/front/static/intelligence/js/simulation-compare.js
+- src/front/templates/partials/intelligence/_sim_compare.html
+- src/front/templates/partials/intelligence/_sim_scenarios.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/intelligence.md
+- docs/user-guide.md
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10890 passed, 334 skipped, 8 deselected, 44 warnings in 50.77s
+
+
+================================================================================
+## Round navbar count bubbles (notifications and task tracker)
+================================================================================
+
+Context: After reducing the global radius scale to 2px, the red count badges in
+the top navbar (notification bell and task tracker) became squares because they
+use Bootstrap's `rounded-pill` class, which is pinned to the 2px pill token. The
+user asked for them to be round again.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   - `#taskTrackerBadge, #notifCenterBadge`: fixed 16px square box with
+     `aspect-ratio: 1 / 1`, `border-radius: 50% !important` (ID selector and
+     `!important` beat `.rounded-pill`), flex-centred count, no vertical padding.
+2. tests/units/front/test_clarity_design_contract.py
+   - New `test_navbar_count_bubbles_are_round` contract test.
+
+Modified files:
+- src/front/static/global/css/components.css
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10891 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Center the count inside the round navbar bubble
+================================================================================
+
+Context: The round count bubble rendered the number at the top instead of the
+vertical centre. `task-tracker.js` forced `display: inline-block` inline on the
+task badge, which overrides the flex centring in the stylesheet; an inline-block
+with a fixed height keeps its text on the top line box.
+
+Changes:
+
+1. src/front/static/global/js/task-tracker.js
+   - `updateTaskBadge()` now shows the badge with `display: inline-flex` instead of
+     `inline-block`, so the count is centred vertically.
+2. tests/units/front/test_clarity_design_contract.py
+   - New `test_task_tracker_badge_uses_flex_so_count_is_centred` guard test.
+
+Modified files:
+- src/front/static/global/js/task-tracker.js
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10892 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Settings/Home return link shows the context name and version
+================================================================================
+
+Context: On Settings and Home, the L2 return control read a static "Back to
+context". The user asked for it to show the open context: "Back to {Name} V{n}".
+
+Changes:
+
+1. src/front/templates/base.html
+   - The return link label is wrapped in `#settingsDomainReturnLabel`. The
+     server-rendered fallback stays "Back to context" (no context open).
+2. src/front/static/global/js/navbar.js
+   - `applyDomainInfo()` sets the label to `Back to {domainName} V{version}` when a
+     context is loaded, and back to "Back to context" otherwise. Same version
+     format as the workspace map label.
+3. src/front/static/global/css/main.css
+   - The label span ellipsizes inside the 200px rail (the link width is pinned to
+     the sidebar width by an existing test). The full text stays in the title.
+4. tests/units/front/test_settings_subnav_hidden.py
+   - New `test_settings_return_label_shows_context_name_and_version` contract test.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/main.css
+- tests/units/front/test_settings_subnav_hidden.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10893 passed, 334 skipped,
+  8 deselected, 0 failed.

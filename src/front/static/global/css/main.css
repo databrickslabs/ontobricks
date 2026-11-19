@@ -93,13 +93,31 @@
     --db-warning: var(--db-status-warning);
     --db-info: var(--db-status-info);
 
-    /* Shared radii */
-    --db-radius-sm: 10px;
-    --db-radius-md: 14px;
-    --db-radius-lg: 999px;
+    /* Shared radii - reduced to minimum (almost a square) */
+    --db-radius-sm: 2px;
+    --db-radius-md: 2px;
+    --db-radius-lg: 2px;
     --db-radius-control: var(--db-radius-sm);
     --db-radius-card: var(--db-radius-md);
-    --db-radius-chip: var(--db-radius-lg);
+    --db-radius-chip: var(--db-radius-sm);
+
+    /* Bootstrap radius overrides - align all standard components to almost-square */
+    --bs-border-radius: 2px;
+    --bs-border-radius-sm: 2px;
+    --bs-border-radius-lg: 2px;
+    --bs-border-radius-xl: 2px;
+    --bs-border-radius-xxl: 2px;
+    --bs-border-radius-2xl: var(--bs-border-radius-xxl);
+    --bs-border-radius-pill: 2px;
+    --bs-card-border-radius: 2px;
+    --bs-modal-border-radius: 2px;
+    --bs-dropdown-border-radius: 2px;
+    --bs-btn-border-radius: 2px;
+    --bs-btn-border-radius-sm: 2px;
+    --bs-btn-border-radius-lg: 2px;
+    --bs-nav-pills-border-radius: 2px;
+    --bs-alert-border-radius: 2px;
+    --bs-pagination-border-radius: 2px;
 
     /* Focus ring */
     --db-focus-ring: 0 0 0 0.2rem rgba(var(--db-primary-rgb), 0.18);
@@ -166,7 +184,7 @@ body {
     font-size: 0.82rem;
     padding: 0.35rem 0.65rem;
     margin: 0;
-    border-radius: 9px;
+    border-radius: var(--db-radius-control);
     transition: all 0.2s ease;
 }
 
@@ -515,7 +533,7 @@ body {
     color: var(--db-text);
     text-decoration: none;
     border: 0;
-    border-radius: calc(var(--db-radius-control) - 2px);
+    border-radius: var(--db-radius-control);
     white-space: nowrap;
     transition: color 0.15s ease, background-color 0.15s ease;
 }
@@ -579,6 +597,15 @@ body {
     box-shadow: var(--db-focus-ring);
 }
 
+/* "Back to {context} V{n}" label: long names ellipsize inside the 200px rail;
+   the full text stays in the link's title attribute. */
+.ob-subnav-settings-return-link > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Dropdown toggle arrow */
 .ob-subnav-link.dropdown-toggle::after {
     margin-left: 0.2rem;
@@ -604,7 +631,7 @@ body {
     font-size: 0.82rem;
     padding: 0.35rem 0.65rem;
     margin: 0;
-    border-radius: 9px;
+    border-radius: var(--db-radius-control);
     transition: all 0.2s ease;
 }
 
@@ -686,7 +713,7 @@ body {
     color: #664d03;
     background-color: #fff3cd;
     border: 1px solid #ffe69c;
-    border-radius: 0.3rem;
+    border-radius: var(--db-radius-control);
     white-space: nowrap;
     cursor: pointer;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
@@ -865,7 +892,7 @@ body {
     opacity: 0.75;
     background: transparent;
     border: 1px solid currentColor;
-    border-radius: 4px;
+    border-radius: 2px;
     padding: 0 0.25rem;
 }
 
@@ -931,13 +958,17 @@ body {
    ========================================================================== */
 
 /* ==========================================================================
-   Cards
+   Cards & Modals
    ========================================================================== */
 .card {
     border: 1px solid var(--db-border);
     border-radius: var(--db-radius-card);
     box-shadow: none;
     background: var(--db-surface-warm);
+}
+
+.modal-content {
+    border-radius: var(--db-radius-card);
 }
 
 .card-header {
@@ -990,7 +1021,7 @@ body {
 .input-group-lg > .form-select,
 .input-group-lg > .input-group-text,
 .input-group-lg > .btn {
-    border-radius: var(--db-radius-card);
+    border-radius: var(--db-radius-control);
 }
 
 /* ==========================================================================
@@ -1250,7 +1281,7 @@ pre {
     background-color: var(--db-gray);
     color: #F8F8F2;
     padding: 1rem;
-    border-radius: 4px;
+    border-radius: 2px;
     overflow-x: auto;
 }
 
@@ -1258,7 +1289,7 @@ code {
     background-color: #ffffff;
     color: #495057;
     padding: 0.2rem 0.4rem;
-    border-radius: 3px;
+    border-radius: 2px;
     font-size: 0.875em;
 }
 
