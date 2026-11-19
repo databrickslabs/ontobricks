@@ -48,10 +48,10 @@ class TestNavigation:
             or page.url == f"{live_server}/"
         )
 
-    def test_settings_link_in_navbar(self, page, live_server):
-        page.goto(live_server)
-        page.wait_for_load_state("domcontentloaded")
-        page.click('a.nav-link[href="/settings"]')
+    def test_settings_page_loads(self, page, live_server):
+        # Settings is reached via the L2 app switcher (admin-only), not a
+        # top-navbar gear. Direct navigation still works for the route contract.
+        page.goto(f"{live_server}/settings")
         page.wait_for_load_state("domcontentloaded")
         assert "Settings" in page.title()
 

@@ -231,8 +231,7 @@ the entire app chrome — never duplicate or substitute any of it:
 | L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the domain crumb (name + status + version badges), app switcher (`#obAppSwitcher`), and Close → Save actions | a second nav element |
 | Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav, with dirty dot and shortcut keycap | a per-page save button |
 | Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
-| Notification Center dropdown | `#notifCenterDropdown` (bell) | a per-page notif list |
-| Task Tracker dropdown | `#taskTrackerDropdown` (hourglass) | a per-page task panel |
+| Activity Center dropdown | `#activityCenterDropdown` (`bi-inboxes`) | a per-page tasks + notifications panel |
 | Help Center modal | included via `partials/layout/help_modal.html` | a custom help dialog |
 | Workspace Map modal | included via `partials/layout/_workspace_map_modal.html`, opened from `#domainContextTrigger` | a duplicate workspace launcher |
 | UC File Browser modal | included via `partials/layout/uc_file_browser_modal.html` | another file picker |
@@ -519,10 +518,16 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
 
 - Standard Bootstrap `<nav class="navbar navbar-expand-lg">`.
 - L1 is global app chrome: brand, icon-only Registry launcher, and global
-  utilities (warehouse, tasks, notifications, help, user menu).
+  utilities (activity + user menu). Help and Report an issue live inside the
+  user dropdown. The SQL Warehouse status icon is removed from L1; warehouse
+  config lives in Settings.
+- L1 user control is a Databricks-style initials avatar (`.ob-user-avatar`),
+  not `bi-person-circle`.
 - L1 no longer carries a Domain link target. Domain identity and the workspace
   map launcher live in L2 as `#domainContextTrigger`.
-- Other menus (Graph / digitaltwin) may be hidden via
+- L1 no longer carries a Settings gear dropdown. Settings is the admin-only
+  fifth row of the L2 app switcher (`#obAppSwitcher`).
+- Other menus (Graph / digitaltwin / settings) may be hidden via
   `"navbar_hidden": true` in `menu_config.json`.
 - Visual contract: white L1 surface, warm one-pixel divider, dark text, indigo
   active/hover emphasis.
@@ -538,7 +543,7 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
 | Mapping | `assignment` | `bi-shuffle` |
 | Graph | `digitaltwin` | `bi-radar` |
 | Intelligence | `intelligence` | `bi-sliders2-vertical` |
-| Settings | `settings` | `bi-gear` |
+| Settings | `settings` | `bi-gear` (app switcher only) |
 
 Do not reuse Domain's `bi-box` for Graph (or any other
 top-level menu). `tests/units/front/test_knowledge_graph_icon.py`
@@ -567,15 +572,18 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   4. **App switcher** (`#obAppSwitcher`, `.ob-subnav-app-switcher`): Databricks-style
      9-dot `nav-icon` left of Close. Opens `.ob-app-switcher-menu` as a vertical
      list (one option per line: icon + title + subtitle + check) for Context /
-     Ontology / Graph / Intelligence. Each item always opens that workspace's
-     **Home** section (`?section=home`). Subtitles come from `description` on
-     each menu in `menu_config.json`. Graph + Intelligence items carry
-     `nav-requires-graph`. Current workspace gets `.is-current` via
-     `initAppSwitcherActiveState()` in `navbar.js`. The popover is at least
-     `22rem` wide so the two-line copy can breathe. Workspace Home pages reuse
-     `partials/layout/_workspace_home.html`: feature tiles are **grouped by the
-     same sidebar menu groups** (Home group skipped). Each menu item carries
-     `description` / `help_jump` / `help_doc` for the tile copy.
+     Ontology / Graph / Intelligence / Settings. Each item always opens that
+     workspace's **Home** section (`?section=home`). Subtitles come from
+     `description` on each menu in `menu_config.json`. Graph + Intelligence
+     items carry `nav-requires-graph`. Settings carries
+     `data-requires-app="admin"` (hidden for non-admins via `permissions.css`).
+     Current workspace gets `.is-current` via `initAppSwitcherActiveState()` in
+     `navbar.js`. The popover is at least `22rem` wide so the two-line copy can
+     breathe. Workspace Home pages reuse `partials/layout/_workspace_home.html`:
+     feature tiles are **grouped by the same sidebar menu groups** (Home group
+     skipped). Each menu item carries `description` / `help_jump` / `help_doc`
+     for the tile copy; Settings admin-only tiles also carry
+     `data-requires-app="admin"`.
   5. **Close Domain button** (`.ob-subnav-close-btn`): ghost text action.
   6. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`): see the
      action-styles bullet below.
@@ -1204,35 +1212,37 @@ loading spinner — leave it as is.
    `confirm()`, or `prompt()` from any frontend code. They bypass our
    design system, block the main thread, look like a 2003 Windows error,
    and cannot be tested from JS.
-2. **All user-facing messages route through the navbar Notification
-   Center.** There is one message bus for the whole app — the bell
-   dropdown in the top-right of the navbar (`#notifCenterDropdown`),
+2. **All user-facing messages route through the navbar Activity
+   Center.** There is one message bus for the whole app — the inboxes
+   dropdown in the top-right of the navbar (`#activityCenterDropdown`),
    backed by the `NotificationCenter` singleton in
-   `global/js/utils.js`. Every success / error / warning / info that a
-   user should see goes through `showNotification(...)`. No
-   per-page toasts. No inline `<div class="alert">` blocks bolted on as
-   a status line. No console-only errors for things the user needs to
-   know.
+   `global/js/utils.js` (and the Task Tracker list in the same panel).
+   Every success / error / warning / info that a user should see goes
+   through `showNotification(...)`. No per-page toasts. No inline
+   `<div class="alert">` blocks bolted on as a status line. No
+   console-only errors for things the user needs to know.
 
-#### Single message bus — the navbar Notification Center
+#### Single message bus — the navbar Activity Center
 
-The Notification Center is provided by `base.html` and runs on every
+The Activity Center is provided by `base.html` and runs on every
 page:
 
-- Bell toggle: `#notifCenterToggle` (icon `bi-bell`).
-- Dropdown: `#notifCenterDropdown` with list `#notifCenterList`.
-- Unread badge: `#notifCenterBadge` (auto-managed; shows `99+` past 99).
+- Toggle: `#activityCenterToggle` (icon `bi-inboxes`).
+- Dropdown: `#activityCenterDropdown` with `#taskTrackerList` (running
+  jobs) above `#notifCenterList` (messages).
+- Combined unread/active badge: `#activityCenterBadge` (auto-managed;
+  shows `99+` past 99).
 - Buffer: in-memory ring buffer capped by
   `<html data-max-notifications>` (default `10`).
-- Each entry shows icon + message + relative time
+- Each notification shows icon + message + relative time
   (`just now`, `5s ago`, `12m ago`, `3h ago`, then absolute date).
-- Opening the dropdown marks all entries read; the user can clear all
-  via the trash button in the dropdown header.
+- Opening the dropdown marks all notifications read; refresh reloads
+  tasks; trash clears notifications.
 
 **The only API you should call is `showNotification(message, type,
 duration?)`.** It pushes to the centre **and** flashes a transient
 toast for `success` / `warning` / `error` so urgent messages are
-immediately visible without forcing the user to open the bell.
+immediately visible without forcing the user to open the panel.
 
 #### What goes through the Notification Center
 

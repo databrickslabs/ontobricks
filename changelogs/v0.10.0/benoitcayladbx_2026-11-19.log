@@ -882,3 +882,191 @@ Modified files:
 Tests:
 - `uv run --frozen pytest -q -m "not scenario"`: 10906 passed, 334 skipped,
   8 deselected, 0 failed.
+
+================================================================================
+## Add Settings as admin-only 5th app switcher with Home
+================================================================================
+
+Context: Admins needed Settings in the Databricks-style L2 app switcher, with
+the same Home landing pattern as Context / Ontology / Graph / Intelligence.
+Non-admins must not see Settings in the switcher.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Settings gets `description`, `admin_only`, a default `home` group, and
+     per-item `description` / help links.
+2. src/front/templates/settings.html
+   - Hosts `#home-section` as the default active section.
+3. src/front/templates/base.html
+   - Fifth app-switcher row for Settings (`?section=home`,
+     `data-requires-app="admin"`).
+4. src/front/templates/partials/layout/_workspace_home.html
+   - Home tiles honour `admin_only` via `data-requires-app="admin"`.
+5. src/front/static/global/css/permissions.css
+   - Restore flex display for admin-gated app-switcher items and home tiles.
+6. tests + docs / design notes updated for the fifth row and admin gate.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/settings.html
+- src/front/templates/base.html
+- src/front/templates/partials/layout/_workspace_home.html
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- docs/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10908 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Remove Settings gear from the top navbar
+================================================================================
+
+Context: Settings is now the admin-only fifth row of the L2 app switcher, so
+the top-right gear dropdown was redundant.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Removed `#settingsGearDropdown` and its dropdown menu.
+2. tests/units/front/test_backend_brand_icons.py,
+   test_clarity_design_contract.py, e2e navigation flows
+   - Contracts assert the gear is gone; Settings opens via route / app switcher.
+3. docs/user-guide.md, .cursor/11-frontend-design.mdc, tests/e2e/README.md
+   - Document Settings via the app switcher, not an L1 gear.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_backend_brand_icons.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_admin_only_domain_create.py
+- tests/e2e/navigation/test_navigation_flows.py
+- tests/e2e/README.md
+- docs/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10908 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Remove SQL Warehouse status icon from the top navbar
+================================================================================
+
+Context: The admin-only SQL Warehouse status icon in L1 duplicated the
+Settings configuration surface. Remove it from the top navbar.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Removed `#warehouseStatusLink` / `#warehouseStatusIcon` from the L1 navbar.
+2. src/front/static/global/js/navbar.js
+   - Removed `applyWarehouseIcon()` and its call in `loadNavbarState()`.
+3. src/front/static/global/css/components.css
+   - Removed `.ob-warehouse-status-icon`.
+4. src/front/config/menu_config.json
+   - Removed the `warehouse` entry from `utility_links`.
+5. tests/units/api/test_ui_rendering.py
+   - Contract asserts the warehouse icon is absent; Settings link check now
+     accepts the app-switcher `/settings` route.
+6. .cursor/11-frontend-design.mdc
+   - L1 utilities list no longer includes warehouse.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/components.css
+- src/front/config/menu_config.json
+- tests/units/api/test_ui_rendering.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10908 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Combine navbar tasks and notifications into one Activity panel
+================================================================================
+
+Context: The L1 navbar had two adjacent icons (hourglass for background
+tasks, bell for notifications). Combine them into a single Activity Center
+with one icon and one dropdown.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Replaced the two dropdowns with `#activityCenterToggle` (`bi-inboxes`)
+     and `#activityCenterDropdown` (tasks list above notifications list).
+2. src/front/static/global/js/utils.js
+   - Added `ActivityCenter` (toggle, combined badge, click-outside).
+3. src/front/static/global/js/task-tracker.js, base-ui-handlers.js
+   - Badge/toggle go through ActivityCenter; keep `#taskTrackerList`.
+4. src/front/static/global/css/components.css, pages.css
+   - `.activity-center-dropdown` styles; one round `#activityCenterBadge`.
+5. src/front/config/menu_config.json
+   - `utility_links` activity entry uses `bi-inboxes`.
+6. tests/units/front/test_activity_center_contract.py
+   - One icon, one panel, no leftover bell/hourglass toggles.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/utils.js
+- src/front/static/global/js/task-tracker.js
+- src/front/static/global/js/base-ui-handlers.js
+- src/front/static/global/css/components.css
+- src/front/static/global/css/pages.css
+- src/front/config/menu_config.json
+- tests/units/front/test_activity_center_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/api/test_ui_rendering.py
+- docs/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10910 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Databricks-style user avatar; Help and Report issue in user menu
+================================================================================
+
+Context: Match the Databricks workspace user control (circular initials
+avatar) and move Help + Report an issue into that dropdown so L1 stays
+leaner.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Replaced `bi-person-circle` with `.ob-user-avatar` initials from email.
+   - Moved `#helpCenterToggle` and `#navReportIssue` into `.ob-user-menu`.
+2. src/front/static/global/css/main.css
+   - `.ob-user-avatar` circle styles (primary fill, white initials).
+3. src/front/static/global/js/help-modal.js
+   - Closes the user dropdown before opening Help.
+4. tests + e2e help flows + design notes updated.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/help-modal.js
+- src/front/config/menu_config.json
+- tests/units/front/test_user_menu_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/ui/test_home_and_explorer_contracts.py
+- tests/e2e/help/test_help_modal_flows.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10912 passed, 334 skipped,
+  8 deselected, 0 failed.

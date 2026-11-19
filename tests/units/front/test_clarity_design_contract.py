@@ -838,9 +838,14 @@ def test_user_identity_lives_in_the_navbar_not_the_sidebar():
     # in it, or it is not the right-most item.
     assert (
         html.index('<ul class="navbar-nav ms-auto">')
-        < html.index("settingsGearDropdown")
+        < html.index("activityCenterToggle")
         < html.index("userMenuDropdown")
     )
+    assert html.index("userMenuDropdown") < html.index("helpCenterToggle")
+    assert html.index("helpCenterToggle") < html.index("navReportIssue")
+    assert "settingsGearDropdown" not in html
+    assert "ob-user-avatar" in html
+    assert "bi-person-circle" not in html
 
     # The sidebar CSS for the old footer must go with it.
     assert "sidebar-user" not in _read(SIDEBAR_LAYOUT_CSS)
@@ -920,7 +925,7 @@ def test_base_template_preserves_css_and_js_contract_ordering():
 def test_navbar_count_bubbles_are_round():
     """Notification and task-tracker count bubbles render as circles, not pills."""
     css = _read(COMPONENTS_CSS)
-    for selector in ("#taskTrackerBadge", "#notifCenterBadge"):
+    for selector in ("#activityCenterBadge",):
         assert re.search(
             re.escape(selector) + r"[^{]*\{[^}]*border-radius\s*:\s*50%\s*!important\s*;",
             css,
@@ -930,6 +935,6 @@ def test_navbar_count_bubbles_are_round():
 
 def test_task_tracker_badge_uses_flex_so_count_is_centred():
     """The JS must not force inline-block on the round badge (top-aligns the count)."""
-    js = (REPO_ROOT / "src/front/static/global/js/task-tracker.js").read_text(encoding="utf-8")
+    js = (REPO_ROOT / "src/front/static/global/js/utils.js").read_text(encoding="utf-8")
     assert "badge.style.display = 'inline-flex'" in js
     assert "badge.style.display = 'inline-block'" not in js

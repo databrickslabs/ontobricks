@@ -342,6 +342,20 @@
             "navbar_actions": [],
             "groups": [
                 {
+                    "id": "settings-home",
+                    "title": "",
+                    "icon": "bi-house",
+                    "items": [
+                        {
+                            "id": "home",
+                            "label": "Home",
+                            "icon": "bi-house",
+                            "default": true,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
                     "id": "settings-config",
                     "title": "Configuration",
                     "icon": "bi-sliders",
@@ -350,8 +364,11 @@
                             "id": "databricks",
                             "label": "Databricks",
                             "icon": "ob-brand-icon ob-icon-databricks",
-                            "default": true,
-                            "requires": null
+                            "default": false,
+                            "requires": null,
+                            "description": "Host, auth and the Build SQL Warehouse for the whole app.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "registry",
@@ -359,7 +376,10 @@
                             "icon": "bi-archive",
                             "default": false,
                             "requires": null,
-                            "admin_only": true
+                            "admin_only": true,
+                            "description": "Registry location and portable .obx import / export settings.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "github",
@@ -367,21 +387,30 @@
                             "icon": "bi-github",
                             "default": false,
                             "requires": null,
-                            "admin_only": true
+                            "admin_only": true,
+                            "description": "Connect a GitHub repository for version sync and reviews.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "global",
                             "label": "Global",
                             "icon": "bi-sliders",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "App-wide defaults that apply across every context.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "ui",
                             "label": "UI",
                             "icon": "bi-palette",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Brand title, colours, logo and default entity icon.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 },
@@ -395,21 +424,30 @@
                             "label": "Lakebase",
                             "icon": "ob-brand-icon ob-icon-postgresql",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Postgres / Lakebase connection used by the graph store.",
+                            "help_jump": "docs",
+                            "help_doc": "deployment"
                         },
                         {
                             "id": "delta",
                             "label": "Lakehouse",
                             "icon": "ob-brand-icon ob-icon-lakehouse",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Lakehouse (Delta) graph backend options.",
+                            "help_jump": "docs",
+                            "help_doc": "deployment"
                         },
                         {
                             "id": "neo4j",
                             "label": "Neo4j",
                             "icon": "ob-brand-icon ob-icon-neo4j",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Neo4j Bolt connection for the property-graph backend.",
+                            "help_jump": "docs",
+                            "help_doc": "deployment"
                         }
                     ]
                 },
@@ -424,7 +462,10 @@
                             "icon": "bi-people",
                             "default": false,
                             "requires": null,
-                            "admin_only": true
+                            "admin_only": true,
+                            "description": "Manage application teams and membership.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "locks",
@@ -432,7 +473,10 @@
                             "icon": "bi-lock",
                             "default": false,
                             "requires": null,
-                            "admin_only": true
+                            "admin_only": true,
+                            "description": "Inspect and release edit locks across contexts.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "health",
@@ -440,7 +484,10 @@
                             "icon": "bi-heart-pulse",
                             "default": false,
                             "requires": null,
-                            "admin_only": true
+                            "admin_only": true,
+                            "description": "Runtime health checks for warehouses, backends and jobs.",
+                            "help_jump": "docs",
+                            "help_doc": "deployment"
                         },
                         {
                             "id": "logs",
@@ -448,7 +495,10 @@
                             "icon": "bi-terminal",
                             "default": false,
                             "requires": null,
-                            "admin_only": true
+                            "admin_only": true,
+                            "description": "Live application logs for troubleshooting.",
+                            "help_jump": "docs",
+                            "help_doc": "deployment"
                         }
                     ]
                 },
@@ -462,7 +512,10 @@
                             "label": "Scheduler",
                             "icon": "bi-clock-history",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Schedule recurring builds and automation jobs.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "runs",
@@ -470,7 +523,10 @@
                             "icon": "bi-list-check",
                             "default": false,
                             "requires": null,
-                            "admin_only": true
+                            "admin_only": true,
+                            "description": "History of build, analytics and simulation runs.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 },
@@ -484,11 +540,16 @@
                             "label": "API",
                             "icon": "bi-braces",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "REST / MCP endpoints and developer credentials.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 }
-            ]
+            ],
+            "description": "Configure backends, branding, teams, and automation",
+            "admin_only": true
         },
         {
             "id": "digitaltwin",
@@ -729,19 +790,11 @@
     ],
     "utility_links": [
         {
-            "id": "warehouse",
+            "id": "activity",
             "label": null,
-            "icon": "bi-server",
-            "route": "/settings",
-            "element_id": "warehouseStatusLink",
-            "tooltip": "SQL Warehouse \u2013 click to configure"
-        },
-        {
-            "id": "tasks",
-            "label": null,
-            "icon": "bi-hourglass-split",
-            "element_id": "taskTrackerToggle",
-            "tooltip": "Background tasks"
+            "icon": "bi-inboxes",
+            "element_id": "activityCenterToggle",
+            "tooltip": "Activity"
         },
         {
             "id": "help",
@@ -751,12 +804,12 @@
             "tooltip": "Help & documentation"
         },
         {
-            "id": "settings",
-            "label": "Settings",
-            "icon": "bi-gear-fill",
-            "route": "/settings",
-            "element_id": null,
-            "tooltip": null
+            "id": "report_issue",
+            "label": "Report an issue",
+            "icon": "bi-bug",
+            "route": "https://github.com/databrickslabs/ontobricks/issues",
+            "element_id": "navReportIssue",
+            "tooltip": "Create an issue on GitHub"
         }
     ]
 }

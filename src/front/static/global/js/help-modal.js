@@ -261,6 +261,12 @@
         if (!btn) return;
         btn.addEventListener('click', function (e) {
             e.preventDefault();
+            // Close the user dropdown before opening Help (item lives inside it).
+            var userToggle = document.getElementById('userMenuDropdown');
+            if (userToggle && window.bootstrap) {
+                var dd = window.bootstrap.Dropdown.getInstance(userToggle);
+                if (dd) dd.hide();
+            }
             openHelp();
         });
     }

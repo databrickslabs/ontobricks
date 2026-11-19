@@ -72,6 +72,7 @@ SECTION_INVENTORY = {
         "compare",
     },
     "settings.html": {
+        "home",
         "databricks",
         "delta",
         "lakebase",

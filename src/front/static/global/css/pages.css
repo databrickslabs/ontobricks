@@ -382,30 +382,6 @@
 /* ==========================================================================
    Notification Center Dropdown
    ========================================================================== */
-.notif-center-dropdown {
-    width: 400px;
-    max-height: 450px;
-    overflow-y: auto;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    z-index: 9999 !important;
-    background: white !important;
-    color: #212529;
-    border-radius: var(--db-radius-control);
-}
-
-.navbar .dropdown-menu.notif-center-dropdown .dropdown-item,
-.notif-center-dropdown .fw-semibold,
-.notif-center-dropdown .text-muted {
-    color: inherit;
-}
-
-.notif-center-dropdown .border-bottom {
-    border-color: rgba(0, 0, 0, 0.1) !important;
-}
-.notif-center-dropdown.show {
-    display: block !important;
-}
 .notif-item {
     transition: background-color 0.2s ease;
 }

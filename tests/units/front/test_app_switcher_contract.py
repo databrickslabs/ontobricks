@@ -36,18 +36,22 @@ def test_app_switcher_sits_left_of_close_and_lists_main_workspaces():
     # Main workspaces only (Mapping lives under Graph). Labels/routes come
     # from menu_config via Jinja (domain / ontology / kg / intel).
     menu = html[html.index("ob-app-switcher-list") : html.index("ob-subnav-close-btn")]
-    assert len(re.findall(r'class="ob-app-switcher-item(?:\s[^"]*)?"', menu)) == 4
-    assert menu.count("ob-app-switcher-item-check") == 4
-    for ns in ("domain_m", "ontology_m", "kg_m", "intel_m"):
+    assert len(re.findall(r'class="ob-app-switcher-item(?:\s[^"]*)?"', menu)) == 5
+    assert menu.count("ob-app-switcher-item-check") == 5
+    for ns in ("domain_m", "ontology_m", "kg_m", "intel_m", "settings_m"):
         assert f"{ns}.v.route" in menu and "?section=home" in menu, (
             f"App switcher must land on {ns} home"
         )
         assert f"{ns}.v.label" in menu, f"Missing app label for {ns}"
         assert f"{ns}.v.icon" in menu, f"Missing app icon for {ns}"
         assert f"{ns}.v.description" in menu, f"Missing app subtitle for {ns}"
-    assert menu.count("ob-app-switcher-item-desc") == 4
-    assert menu.count("ob-app-switcher-item-copy") == 4
+    assert menu.count("ob-app-switcher-item-desc") == 5
+    assert menu.count("ob-app-switcher-item-copy") == 5
     assert menu.count("nav-requires-graph") == 2
+    assert 'data-requires-app="admin"' in menu
+    # Settings is the only admin-gated app-switcher row.
+    assert menu.count('data-requires-app="admin"') == 1
+    assert "settings_m.v.route" in menu
 
 
 def test_app_switcher_uses_databricks_line_item_styles():

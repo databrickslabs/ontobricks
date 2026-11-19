@@ -79,7 +79,7 @@ tests/e2e/
 
 | File | Class | What it tests |
 |---|---|---|
-| `test_navigation_flows.py` | `TestNavigation` | All 6 top-level routes load with correct `<title>`; navbar brand goes home; Settings nav-link works |
+| `test_navigation_flows.py` | `TestNavigation` | All 6 top-level routes load with correct `<title>`; navbar brand goes home; Settings page loads |
 | | `TestHomePage` | Hero visible, domain panel present, 3 workflow cards, stat counters (`#classCount`, `#propCount`, `#mappingCount`) |
 | | `TestAboutPage` | Body contains "OntoBricks" and "R2RML" |
 | `test_resolve_flows.py` | `TestResolveRoute` | `/resolve` without URI → 4xx; `?uri=...` → not 5xx; path variant → not 5xx |

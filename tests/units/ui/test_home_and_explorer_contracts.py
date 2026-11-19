@@ -61,9 +61,13 @@ def test_navbar_has_report_issue_link():
     assert 'id="navReportIssue"' in base_html
     assert 'href="https://github.com/databrickslabs/ontobricks/issues"' in base_html
     assert "bi-bug" in base_html
-    # Placed in the right-aligned nav items
+    # Help + Report issue live in the user dropdown (right-aligned nav).
     ms_auto_pos = base_html.index('class="navbar-nav ms-auto"')
     assert base_html.index('id="navReportIssue"') > ms_auto_pos
+    assert base_html.index("userMenuDropdown") < base_html.index('id="helpCenterToggle"')
+    assert base_html.index('id="helpCenterToggle"') < base_html.index('id="navReportIssue"')
+    assert "Report an issue" in base_html
+    assert "ob-user-avatar" in base_html
 
 
 def test_home_has_resources_strip_with_help_website_github():

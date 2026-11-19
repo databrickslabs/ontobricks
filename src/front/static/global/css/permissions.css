@@ -78,16 +78,23 @@ body[data-app-role="admin"] [data-requires-app="admin"] {
  * aligned with the others" in the retractable sidebar (the Teams entry
  * is the only ``data-requires-app="admin"`` nav-link, so it loses
  * ``display: flex`` for admins and the icon falls back to inline
- * positioning, ignoring ``gap`` and ``align-items``). Navbar Settings
- * gear rows are the same: Registry / GitHub / Admin items are
- * ``admin_only``; ``display: block`` made their labels follow the glyph
- * width while Databricks (not gated) stayed on the 20px flex column.
+ * positioning, ignoring ``gap`` and ``align-items``). Dropdown and
+ * app-switcher admin rows need the same flex restore so icon + label
+ * stay aligned.
  */
 body[data-app-role="admin"] .sidebar-nav .nav-link[data-requires-app="admin"] {
     display: flex !important;
 }
 
 body[data-app-role="admin"] .dropdown-item[data-requires-app="admin"] {
+    display: flex !important;
+}
+
+body[data-app-role="admin"] .ob-app-switcher-item[data-requires-app="admin"] {
+    display: flex !important;
+}
+
+body[data-app-role="admin"] .ob-workspace-home-tile[data-requires-app="admin"] {
     display: flex !important;
 }
 

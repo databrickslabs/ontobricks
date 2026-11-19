@@ -27,12 +27,12 @@
         });
     }
 
-    function initTaskTrackerControls() {
-        var taskToggle = document.getElementById('taskTrackerToggle');
-        if (taskToggle) {
-            taskToggle.addEventListener('click', function (e) {
-                if (typeof window.toggleTaskDropdown === 'function') {
-                    window.toggleTaskDropdown(e);
+    function initActivityCenterControls() {
+        var toggle = document.getElementById('activityCenterToggle');
+        if (toggle) {
+            toggle.addEventListener('click', function (e) {
+                if (window.ActivityCenter) {
+                    window.ActivityCenter.toggle(e);
                 }
                 e.preventDefault();
             });
@@ -41,16 +41,6 @@
         if (refreshBtn) {
             refreshBtn.addEventListener('click', function () {
                 if (typeof window.refreshTasks === 'function') window.refreshTasks();
-            });
-        }
-    }
-
-    function initNotificationControls() {
-        var notifToggle = document.getElementById('notifCenterToggle');
-        if (notifToggle && window.NotificationCenter) {
-            notifToggle.addEventListener('click', function (e) {
-                window.NotificationCenter.toggle(e);
-                e.preventDefault();
             });
         }
         var clearBtn = document.getElementById('notifCenterClearBtn');
@@ -130,8 +120,7 @@
 
     function init() {
         initNavbarActionDelegation();
-        initTaskTrackerControls();
-        initNotificationControls();
+        initActivityCenterControls();
         initKeyboardShortcuts();
     }
 

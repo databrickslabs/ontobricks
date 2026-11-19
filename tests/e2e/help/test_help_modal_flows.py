@@ -13,10 +13,19 @@ via ``partials/layout/help_modal.html``:
 import json
 
 
+def _open_help_from_user_menu(page):
+    """Help lives in the user dropdown; open that first, then Help."""
+    page.click("#userMenuDropdown")
+    page.wait_for_selector("#helpCenterToggle", state="visible", timeout=3000)
+    page.click("#helpCenterToggle")
+
+
 class TestHelpModalPresence:
     def test_help_toggle_visible_on_home(self, page, live_server):
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
+        page.click("#userMenuDropdown")
+        page.wait_for_selector("#helpCenterToggle", state="visible", timeout=3000)
         assert page.locator("#helpCenterToggle").is_visible()
 
     def test_help_modal_markup_injected(self, page, live_server):
@@ -28,7 +37,7 @@ class TestHelpModalPresence:
     def test_help_toggle_opens_modal(self, page, live_server):
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
-        page.click("#helpCenterToggle")
+        _open_help_from_user_menu(page)
         # Bootstrap toggles .show on the modal element.
         page.wait_for_selector("#helpModal.show", timeout=3000)
         assert page.locator("#helpModal.show").is_visible()
@@ -36,7 +45,7 @@ class TestHelpModalPresence:
     def test_help_modal_welcome_section_active_by_default(self, page, live_server):
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
-        page.click("#helpCenterToggle")
+        _open_help_from_user_menu(page)
         page.wait_for_selector("#helpModal.show", timeout=3000)
         active = page.locator(".help-section.active")
         assert active.count() == 1

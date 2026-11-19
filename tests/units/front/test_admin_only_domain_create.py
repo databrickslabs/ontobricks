@@ -26,7 +26,7 @@ def test_home_js_wires_create_button_to_domain_new():
 
 
 def test_admin_dropdown_items_restore_flex_not_block():
-    """Settings gear rows are flex icon+label; ``display: block`` un-aligns labels."""
+    """Admin-gated dropdown rows are flex icon+label; ``display: block`` un-aligns labels."""
     css = (
         FRONT / "static" / "global" / "css" / "permissions.css"
     ).read_text(encoding="utf-8")

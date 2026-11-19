@@ -159,11 +159,13 @@ mutually exclusive behavior:
   (`#settingsDomainReturnLink`).
 - On **Settings** with no loaded domain, the full level-two bar remains hidden.
 - On non-Settings pages with a loaded domain, it shows the domain context,
-  the **app switcher** (Context, Ontology, Graph, Intelligence), and Close / Save.
+  the **app switcher** (Context, Ontology, Graph, Intelligence, and Settings for
+  admins), and Close / Save.
 - On non-Settings pages with no loaded domain, it remains hidden.
 - The app switcher always opens that workspace's **Home** page
   (`?section=home`), which groups features by the same sidebar menu sections
-  (short explanations and Help Center links on each tile).
+  (short explanations and Help Center links on each tile). Settings is
+  admin-only in the switcher.
 - Hitting a workspace URL (`/domain/`, `/ontology/`, `/dtwin/`) with no
   domain in session immediately redirects to Home. Legacy `/mapping/` URLs
   redirect into Graph → Management → Mapping when a domain is loaded, or Home when not.
@@ -2328,7 +2330,7 @@ import. The repository must already be configured and claimed in Settings.
 
 - **Deep-linked sections**: Sidebar section changes update the URL (`?section=<id>`), so you can bookmark or share a specific section. Browser Back/Forward navigates between previously visited sections.
 - **Domain identity target**: The contextual identity launcher (`Domain` name + version badge) lives in the L2 rail. Clicking it opens the workspace map.
-- **App switcher**: The 9-dot control left of Close opens Context, Ontology, Graph, and Intelligence. Each option always lands on that workspace's Home page.
+- **App switcher**: The 9-dot control left of Close opens Context, Ontology, Graph, Intelligence, and (for admins) Settings. Each option always lands on that workspace's Home page.
 - **Workspace map launcher**: Clicking the context name opens a four-column menu directory for Context, Ontology, Graph, and Intelligence actions (including Home).
 - **Workspace active state**: The current workspace row in the app switcher is marked `aria-current="page"` with a check.
 - **Mobile icon state**: On narrow screens, workspace and action labels are visually hidden and controls remain as titled icons with keyboard focus support.
@@ -2395,7 +2397,7 @@ Step 7: Validate with quality checks
 
 ### Step 1: Configure Databricks Connection
 
-Navigate to **Settings** (gear icon in the top-right corner).
+Navigate to **Settings** from the L2 app switcher (admins only), or open `/settings`.
 
 1. Enter your **Databricks Host** URL (e.g., `https://your-workspace.cloud.databricks.com`).
 2. Enter your **Personal Access Token**.
@@ -3071,7 +3073,7 @@ After import you can:
 - **Audit Trail Integration**: From the AI Insights card, click **Add to audit trail** to post the AI-generated interpretation as a comment on the current domain version (markdown-formatted). The discussion panel opens automatically to show the new entry.
 - **Dashboard Embedding**: View assigned Databricks dashboards with entity-specific parameters directly in the Graph Viewer.
 - **Class Actions (Unity Catalog functions)**: Bind any number of UC functions to an ontology class in **Ontology → Studio → Behaviour → Functions**, each with its own description. Run them on a node from the details pane or its right-click menu; the result (scalar or table) opens in a popup. Each function must take exactly one argument — the entity's ID — and the invocation endpoint enforces an allow-list so only functions declared on the node's own class can be called. The same actions are surfaced to the MCP server through `get_entity_context` and `invoke_entity_action`.
-- **Class Actions (Databricks Jobs)**: In the same **Behaviour** tab (**Jobs** section), bind workspace Jobs that declare an `entity_id` parameter. OntoBricks only starts the Job (`run_now`); Spark still uses the Job's run-as identity. On Lakehouse domains in App mode the trigger is on-behalf-of the signed-in user. Triggering a Job from Explorer opens a popup that checks the run actually started and tells you right away whether it is **Running** or **Queued**, with a link to the run in Databricks. The popup keeps following the run while it is open (Running → Succeeded / Failed), and you can close it at any time: the run stays in the navbar **Background Tasks** hourglass, which shows its live state and the same run link. Invoke the same `job:<job_id>` name from Explorer or MCP `invoke_entity_action`.
+- **Class Actions (Databricks Jobs)**: In the same **Behaviour** tab (**Jobs** section), bind workspace Jobs that declare an `entity_id` parameter. OntoBricks only starts the Job (`run_now`); Spark still uses the Job's run-as identity. On Lakehouse domains in App mode the trigger is on-behalf-of the signed-in user. Triggering a Job from Explorer opens a popup that checks the run actually started and tells you right away whether it is **Running** or **Queued**, with a link to the run in Databricks. The popup keeps following the run while it is open (Running → Succeeded / Failed), and you can close it at any time: the run stays in the navbar **Activity** panel (`bi-inboxes`), which shows its live state and the same run link. Invoke the same `job:<job_id>` name from Explorer or MCP `invoke_entity_action`.
 
 - **Entity Inference Rules (IF-THEN)**: In **Ontology → Studio → Behaviour → Inference rules (IF-THEN)**, attach one or more IF-THEN rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the live graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the live graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the IF-THEN editor updates the class references. Neo4j supports graph-shaped rules with class and object-property atoms; unsupported literal or builtin atoms report an explicit rule error.
 - **Virtual Attributes (computed on demand)**: A class of attribute that no mapping feeds and no build materialises — a Unity Catalog function computes it from the entity's ID when someone asks. Declare them in **Ontology → Studio → Attrs. → Virtual attributes** by picking a UC function that takes exactly one parameter; one attribute is created per returned column (or a single one for a scalar function), read from `information_schema`. In the Graph Explorer they appear in their own **Virtual Attributes** section under the mapped ones with a per-function **Compute** button, a **Compute all**, and a right-click shortcut; computed values are cached per entity for the page's lifetime, with **Recompute** as the refresh. Over MCP the declarations always ride along with `get_entity_context`; when a question is about a virtual attribute's value, the model should call `compute_virtual_attributes(entity_uri)` to run the UC function — nothing is computed unless asked. A failing function reports its error without denying the attributes that still resolve. Because they are never materialised, virtual attributes are **not queryable** in SPARQL or GraphQL and take no part in mappings, R2RML, SHACL or data-quality checks.

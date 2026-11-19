@@ -30,7 +30,8 @@
                     {% for tile in home_items %}
                     <a class="ob-workspace-home-tile{% if tile.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}{% if tile.requires|default('') == 'domain_saved' %} sidebar-requires-domain{% endif %}"
                        href="{{ workspace_home_menu.route }}?section={{ tile.id }}"
-                       data-section="{{ tile.id }}">
+                       data-section="{{ tile.id }}"
+                       {% if tile.admin_only|default(false) %}data-requires-app="admin"{% endif %}>
                         <span class="ob-workspace-home-tile-icon" aria-hidden="true">
                             {% if 'ob-brand-icon' in tile.icon %}<i class="{{ tile.icon }}"></i>{% else %}<i class="bi {{ tile.icon }}"></i>{% endif %}
                         </span>

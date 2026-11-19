@@ -21,8 +21,13 @@
         <!-- Right Content Area -->
         <div class="sidebar-content">
 
+            <div id="home-section" class="sidebar-section active">
+                {% set workspace_home_menu = get_menu('settings') %}
+                {% include "partials/layout/_workspace_home.html" %}
+            </div>
+
             <!-- ==================== DATABRICKS SECTION ==================== -->
-            <div id="databricks-section" class="sidebar-section active">
+            <div id="databricks-section" class="sidebar-section">
                 <div class="content-section">
                     <div class="section-header d-flex justify-content-between align-items-center mb-4">
                         <div>

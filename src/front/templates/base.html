@@ -116,112 +116,68 @@
                             <span id="roleNavBadgeLabel"></span>
                         </span>
                     </li>
-                    <!-- SQL Warehouse status indicator (admin-only) -->
-                    <li class="nav-item" data-requires-app="admin">
-                        <a class="nav-link" href="/settings" id="warehouseStatusLink" title="SQL Warehouse – click to configure">
-                            <i class="bi bi-server ob-warehouse-status-icon" id="warehouseStatusIcon"></i>
-                        </a>
-                    </li>
-                    <!-- Task Tracker -->
+                    <!-- Activity Center (background tasks + notifications) -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link position-relative" href="#" id="taskTrackerToggle" title="Background tasks">
-                            <i class="bi bi-hourglass-split"></i>
-                            <span id="taskTrackerBadge" class="position-absolute start-100 translate-middle badge rounded-pill bg-danger ob-hidden ob-navbar-count-badge">
+                        <a class="nav-link position-relative" href="#" id="activityCenterToggle"
+                           title="Activity" aria-label="Open activity center">
+                            <i class="bi bi-inboxes" id="activityCenterIcon"></i>
+                            <span id="activityCenterBadge" class="position-absolute start-100 translate-middle badge rounded-pill bg-danger ob-hidden ob-navbar-count-badge">
                                 0
                             </span>
                         </a>
-                        <div id="taskTrackerDropdown" class="dropdown-menu dropdown-menu-end task-tracker-dropdown">
+                        <div id="activityCenterDropdown" class="dropdown-menu dropdown-menu-end activity-center-dropdown">
                             <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
-                                <span class="fw-semibold"><i class="bi bi-hourglass-split me-2"></i>Background Tasks</span>
-                                <button type="button" class="btn btn-link btn-sm p-0 text-muted" id="taskTrackerRefreshBtn" title="Refresh">
-                                    <i class="bi bi-arrow-clockwise"></i>
-                                </button>
+                                <span class="fw-semibold"><i class="bi bi-inboxes me-2"></i>Activity</span>
+                                <span class="d-flex gap-2">
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-muted" id="taskTrackerRefreshBtn" title="Refresh tasks">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-muted" id="notifCenterClearBtn" title="Clear notifications">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </span>
                             </div>
-                            <div id="taskTrackerList">
-                                <div class="text-center text-muted py-4">
-                                    <i class="bi bi-inbox fs-3 d-block mb-2"></i>
-                                    <small>No tasks</small>
+                            <div class="activity-center-section">
+                                <div class="activity-center-section-title">
+                                    <i class="bi bi-hourglass-split" aria-hidden="true"></i> Background tasks
+                                </div>
+                                <div id="taskTrackerList">
+                                    <div class="text-center text-muted py-3">
+                                        <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                        <small>No tasks</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="activity-center-section border-top">
+                                <div class="activity-center-section-title">
+                                    <i class="bi bi-bell" aria-hidden="true"></i> Notifications
+                                </div>
+                                <div id="notifCenterList">
+                                    <div class="text-center text-muted py-3">
+                                        <i class="bi bi-bell-slash fs-3 d-block mb-2"></i>
+                                        <small>No notifications</small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </li>
-                    <!-- Notification Center -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link position-relative" href="#" id="notifCenterToggle" title="Notifications">
-                            <i class="bi bi-bell" id="notifCenterIcon"></i>
-                            <span id="notifCenterBadge" class="position-absolute start-100 translate-middle badge rounded-pill bg-danger ob-navbar-count-badge" style="display: none;">
-                                0
-                            </span>
-                        </a>
-                        <div id="notifCenterDropdown" class="dropdown-menu dropdown-menu-end notif-center-dropdown">
-                            <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
-                                <span class="fw-semibold"><i class="bi bi-bell me-2"></i>Notifications</span>
-                                <button type="button" class="btn btn-link btn-sm p-0 text-muted" id="notifCenterClearBtn" title="Clear all">
-                                    <i class="bi bi-trash3"></i>
-                                </button>
-                            </div>
-                            <div id="notifCenterList">
-                                <div class="text-center text-muted py-4">
-                                    <i class="bi bi-bell-slash fs-3 d-block mb-2"></i>
-                                    <small>No notifications</small>
-                                </div>
-                            </div>
-                        </div>
-                    </li>
-                    <!-- Help Center -->
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" id="helpCenterToggle" title="Help &amp; documentation" aria-label="Open help center">
-                            <i class="bi bi-question-circle"></i>
-                        </a>
-                    </li>
-                    <!-- Create an issue on GitHub -->
-                    <li class="nav-item">
-                        <a class="nav-link" href="https://github.com/databrickslabs/ontobricks/issues" target="_blank" rel="noopener noreferrer" id="navReportIssue" title="Create an issue on GitHub" aria-label="Create an issue on GitHub">
-                            <i class="bi bi-bug"></i>
-                        </a>
-                    </li>
-                    {% for menu in menu_config.menus %}
-                    {% if menu.id == 'settings' %}
-                    <li class="nav-item dropdown" data-requires-app="admin">
-                        <a class="nav-link dropdown-toggle" href="#" id="settingsGearDropdown" role="button"
-                           data-bs-toggle="dropdown" aria-expanded="false" title="Settings">
-                            <i class="bi bi-gear"></i>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="settingsGearDropdown">
-                            {% set vis = namespace(any=false) %}
-                            {% for group in menu.groups %}
-                            {% if vis.any %}<li><hr class="dropdown-divider"></li>{% endif %}
-                            {% set vis.any = true %}
-                            <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
-                            {% for item in group['items'] %}
-                            <li>
-                                <a class="dropdown-item"
-                                   href="{{ menu.route }}?section={{ item.id }}"
-                                   {% if item.admin_only|default(false) %}data-requires-app="admin"{% endif %}>
-                                    <span class="ob-dropdown-icon" aria-hidden="true">{% if 'ob-brand-icon' in item.icon %}<i class="{{ item.icon }}"></i>{% else %}<i class="bi {{ item.icon }}"></i>{% endif %}</span><span class="ob-dropdown-label">{{ item.label }}</span>
-                                </a>
-                            </li>
-                            {% endfor %}
-                            {% endfor %}
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <a class="dropdown-item" href="{{ menu.route }}">
-                                    <span class="ob-dropdown-icon" aria-hidden="true"><i class="bi bi-arrow-right-circle"></i></span><span class="ob-dropdown-label">Open full settings</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-                    {% endif %}
-                    {% endfor %}
-                    <!-- Current user — last item, so it anchors the right edge -->
+                    <!-- Settings lives in the L2 app switcher (admin-only), not the top navbar. -->
+                    <!-- Current user — Databricks-style initials avatar; Help + Report issue live here. -->
                     {% set _email = get_user_email() %}
                     {% set _app_role = get_user_role() or 'user' %}
                     {% set _domain_role = get_user_domain_role() %}
+                    {% set _local = (_email or 'U').split('@')[0] %}
+                    {% set _parts = _local.replace('_', '.').replace('-', '.').split('.') %}
+                    {% if _parts|length >= 2 and _parts[0] and _parts[1] %}
+                    {% set _initials = (_parts[0][0] ~ _parts[1][0])|upper %}
+                    {% else %}
+                    {% set _initials = _local[:2]|upper %}
+                    {% endif %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link" href="#" id="userMenuDropdown" role="button"
+                        <a class="nav-link ob-user-menu-toggle" href="#" id="userMenuDropdown" role="button"
                            data-bs-toggle="dropdown" aria-expanded="false"
                            title="{{ _email }}" aria-label="Current user">
-                            <i class="bi bi-person-circle"></i>
+                            <span class="ob-user-avatar" aria-hidden="true">{{ _initials }}</span>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end ob-user-menu" aria-labelledby="userMenuDropdown">
                             <li class="ob-user-menu-identity">
@@ -237,6 +193,20 @@
                                     {% endif %}
                                 </div>
                             </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="#" id="helpCenterToggle">
+                                    <span class="ob-dropdown-icon" aria-hidden="true"><i class="bi bi-question-circle"></i></span>
+                                    <span class="ob-dropdown-label">Help</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="https://github.com/databrickslabs/ontobricks/issues"
+                                   target="_blank" rel="noopener noreferrer" id="navReportIssue">
+                                    <span class="ob-dropdown-icon" aria-hidden="true"><i class="bi bi-bug"></i></span>
+                                    <span class="ob-dropdown-label">Report an issue</span>
+                                </a>
+                            </li>
                         </ul>
                     </li>
                 </ul>
@@ -250,11 +220,13 @@
     {% set kg_m       = namespace(v=none) %}
     {% set intel_m      = namespace(v=none) %}
     {% set domain_m   = namespace(v=none) %}
+    {% set settings_m = namespace(v=none) %}
     {% for m in menu_config.menus %}
         {% if m.id == 'ontology'   %}{% set ontology_m.v = m %}{% endif %}
         {% if m.id == 'digitaltwin'%}{% set kg_m.v       = m %}{% endif %}
         {% if m.id == 'intelligence' %}{% set intel_m.v      = m %}{% endif %}
         {% if m.id == 'domain'     %}{% set domain_m.v   = m %}{% endif %}
+        {% if m.id == 'settings'   %}{% set settings_m.v = m %}{% endif %}
     {% endfor %}
     <nav id="obSubnav" class="ob-subnav d-none" aria-label="Section navigation">
         <div class="container-fluid">
@@ -375,6 +347,23 @@
                                 <span class="ob-app-switcher-item-copy">
                                     <span class="ob-app-switcher-item-label">{{ intel_m.v.label }}</span>
                                     <span class="ob-app-switcher-item-desc">{{ intel_m.v.description }}</span>
+                                </span>
+                                <i class="bi bi-check2 ob-app-switcher-item-check" aria-hidden="true"></i>
+                            </a>
+                            {% endif %}
+                            {% if settings_m.v %}
+                            <a class="ob-app-switcher-item"
+                               href="{{ settings_m.v.route }}?section=home"
+                               data-subnav-route="{{ settings_m.v.route }}"
+                               data-requires-app="admin"
+                               role="menuitem"
+                               title="{{ settings_m.v.label }}">
+                                <span class="ob-app-switcher-item-icon" aria-hidden="true">
+                                    <i class="bi {{ settings_m.v.icon }}"></i>
+                                </span>
+                                <span class="ob-app-switcher-item-copy">
+                                    <span class="ob-app-switcher-item-label">{{ settings_m.v.label }}</span>
+                                    <span class="ob-app-switcher-item-desc">{{ settings_m.v.description }}</span>
                                 </span>
                                 <i class="bi bi-check2 ob-app-switcher-item-check" aria-hidden="true"></i>
                             </a>

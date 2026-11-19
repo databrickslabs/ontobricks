@@ -80,11 +80,7 @@ function initTaskTracker() {
 function setupTaskTrackerEvents() {
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
-        const dropdown = document.getElementById('taskTrackerDropdown');
-        const toggle = document.getElementById('taskTrackerToggle');
-        if (dropdown && toggle && !dropdown.contains(e.target) && !toggle.contains(e.target)) {
-            dropdown.classList.remove('show');
-        }
+        const dropdown = document.getElementById('activityCenterDropdown');
         const item = e.target.closest('.task-item[data-open-url]');
         if (item && dropdown && dropdown.contains(item) && !e.target.closest('button, a')) {
             window.location.href = item.getAttribute('data-open-url');
@@ -259,25 +255,18 @@ function updateTaskTrackerUI() {
 /**
  * Update the badge showing active task count
  */
-function updateTaskBadge() {
-    const badge = document.getElementById('taskTrackerBadge');
-    if (!badge) return;
-    
-    const activeCount = trackedTasks.filter(t => 
+function getActiveTaskCount() {
+    return trackedTasks.filter((t) =>
         t.status === 'pending' || t.status === 'running'
     ).length;
-    
-    if (activeCount > 0) {
-        badge.textContent = activeCount;
-        // inline-flex (not inline-block) so the count is centred vertically in the round bubble.
-        badge.style.display = 'inline-flex';
-        
-        // Add pulse animation for running tasks
-        const hasRunning = trackedTasks.some(t => t.status === 'running');
-        badge.classList.toggle('pulse-animation', hasRunning);
-    } else {
-        badge.style.display = 'none';
-    }
+}
+
+function hasRunningTask() {
+    return trackedTasks.some((t) => t.status === 'running');
+}
+
+function updateTaskBadge() {
+    if (window.ActivityCenter) ActivityCenter.updateBadge();
 }
 
 /**
@@ -409,40 +398,8 @@ function getTaskStatusConfig(status) {
  * Toggle dropdown visibility
  */
 function toggleTaskDropdown(event) {
-    if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-    }
-    
-    const dropdown = document.getElementById('taskTrackerDropdown');
-    const toggle = document.getElementById('taskTrackerToggle');
-    
-    if (dropdown) {
-        const isOpen = dropdown.classList.contains('show');
-        
-        // Close all other dropdowns first
-        document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
-            if (menu !== dropdown) {
-                menu.classList.remove('show');
-            }
-        });
-        
-        if (isOpen) {
-            dropdown.classList.remove('show');
-        } else {
-            dropdown.classList.add('show');
-            
-            // Position the dropdown properly - align to right edge
-            if (toggle) {
-                const toggleRect = toggle.getBoundingClientRect();
-                dropdown.style.position = 'fixed';
-                dropdown.style.top = (toggleRect.bottom + 6) + 'px';
-                dropdown.style.right = '10px';  // 10px from right edge
-                dropdown.style.left = 'auto';
-            }
-            
-            fetchTasks();  // Refresh when opening
-        }
+    if (window.ActivityCenter) {
+        ActivityCenter.toggle(event);
     }
 }
 
@@ -588,6 +545,8 @@ function getTimeAgo(isoString) {
 
 window.initTaskTracker = initTaskTracker;
 window.toggleTaskDropdown = toggleTaskDropdown;
+window.getActiveTaskCount = getActiveTaskCount;
+window.hasRunningTask = hasRunningTask;
 window.cancelTask = cancelTask;
 window.refreshTasks = refreshTasks;
 window.waitForTask = waitForTask;

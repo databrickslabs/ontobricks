@@ -175,7 +175,6 @@ async function loadNavbarState() {
     try {
         const state = await fetchCached('/navbar/state', 15000);
         applyDomainInfo(state.domain || {});
-        applyWarehouseIcon(state.warehouse || {});
         applyBrandLogo(state.branding || {});
     } catch (error) {
         console.error('Error loading navbar state:', error);
@@ -257,22 +256,6 @@ function navigateToDomainGeneral() {
 
 window.refreshNavbarIndicators = refreshNavbarIndicators;
 window.invalidateDomainCaches = invalidateDomainCaches;
-
-/**
- * Apply warehouse icon colour from pre-fetched data (no extra HTTP call).
- */
-function applyWarehouseIcon(warehouse) {
-    const icon = document.getElementById('warehouseStatusIcon');
-    const link = document.getElementById('warehouseStatusLink');
-    if (!icon) return;
-    if (warehouse.warehouse_id) {
-        icon.style.color = 'var(--bs-success)';
-        if (link) link.title = 'SQL Warehouse configured – click to change';
-    } else {
-        icon.style.color = 'var(--bs-danger)';
-        if (link) link.title = 'No SQL Warehouse selected – click to configure';
-    }
-}
 
 // Lifecycle status → Bootstrap badge classes + label.
 const DOMAIN_STATUS_BADGE = {

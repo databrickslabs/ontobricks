@@ -248,9 +248,33 @@ body {
     margin: 0.35rem 0.45rem;
 }
 
-/* Current-user menu — read-only identity card, so no interactive item styling */
+/* Current-user menu — Databricks-style initials avatar + identity + utility links */
+.navbar .nav-link.ob-user-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.4rem;
+}
+
+.ob-user-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--db-primary);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    text-transform: uppercase;
+    user-select: none;
+}
+
 .ob-user-menu {
-    min-width: 200px;
+    min-width: 220px;
 }
 
 .ob-user-menu .ob-user-menu-identity {

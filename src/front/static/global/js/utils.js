@@ -48,46 +48,18 @@ const NotificationCenter = {
     },
 
     toggle(event) {
-        if (event) { event.preventDefault(); event.stopPropagation(); }
-        const dropdown = document.getElementById('notifCenterDropdown');
-        const toggle = document.getElementById('notifCenterToggle');
-        if (!dropdown) return;
-        const isOpen = dropdown.classList.contains('show');
-        // Close task-tracker if open
-        const taskDd = document.getElementById('taskTrackerDropdown');
-        if (taskDd) taskDd.classList.remove('show');
-
-        if (isOpen) {
-            dropdown.classList.remove('show');
-        } else {
-            this._positionDropdown(dropdown, toggle);
-            dropdown.classList.add('show');
-            this.markAllRead();
+        if (window.ActivityCenter) {
+            ActivityCenter.toggle(event);
+            return;
         }
-    },
-
-    _positionDropdown(dropdown, toggle) {
-        if (!toggle) return;
-        const rect = toggle.getBoundingClientRect();
-        dropdown.style.position = 'fixed';
-        dropdown.style.top = (rect.bottom + 4) + 'px';
-        dropdown.style.right = (window.innerWidth - rect.right) + 'px';
-        dropdown.style.left = 'auto';
     },
 
     _updateBadge() {
-        const badge = document.getElementById('notifCenterBadge');
-        if (!badge) return;
-        if (this.unreadCount > 0) {
-            badge.textContent = this.unreadCount > 99 ? '99+' : this.unreadCount;
-            badge.style.display = '';
-        } else {
-            badge.style.display = 'none';
-        }
+        if (window.ActivityCenter) ActivityCenter.updateBadge();
     },
 
     _flashIcon() {
-        const icon = document.getElementById('notifCenterIcon');
+        const icon = document.getElementById('activityCenterIcon');
         if (!icon) return;
         icon.classList.add('notif-flash');
         setTimeout(() => icon.classList.remove('notif-flash'), 600);
@@ -179,10 +151,56 @@ function _showToast(message, cssClass, iconClass, closeWhite, duration) {
     }, duration);
 }
 
-// Close notification dropdown when clicking outside
+const ActivityCenter = {
+    toggle(event) {
+        if (event) { event.preventDefault(); event.stopPropagation(); }
+        const dropdown = document.getElementById('activityCenterDropdown');
+        const toggle = document.getElementById('activityCenterToggle');
+        if (!dropdown) return;
+        const isOpen = dropdown.classList.contains('show');
+
+        document.querySelectorAll('.dropdown-menu.show').forEach((menu) => {
+            if (menu !== dropdown) menu.classList.remove('show');
+        });
+
+        if (isOpen) {
+            dropdown.classList.remove('show');
+            return;
+        }
+        if (toggle) {
+            const rect = toggle.getBoundingClientRect();
+            dropdown.style.position = 'fixed';
+            dropdown.style.top = (rect.bottom + 6) + 'px';
+            dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+            dropdown.style.left = 'auto';
+        }
+        dropdown.classList.add('show');
+        NotificationCenter.markAllRead();
+        if (typeof window.refreshTasks === 'function') window.refreshTasks();
+    },
+
+    updateBadge() {
+        const badge = document.getElementById('activityCenterBadge');
+        if (!badge) return;
+        const tasks = typeof window.getActiveTaskCount === 'function'
+            ? window.getActiveTaskCount() : 0;
+        const unread = NotificationCenter.unreadCount || 0;
+        const total = tasks + unread;
+        if (total > 0) {
+            badge.textContent = total > 99 ? '99+' : String(total);
+            badge.style.display = 'inline-flex';
+            const running = typeof window.hasRunningTask === 'function' && window.hasRunningTask();
+            badge.classList.toggle('pulse-animation', !!running);
+        } else {
+            badge.style.display = 'none';
+            badge.classList.remove('pulse-animation');
+        }
+    }
+};
+
 document.addEventListener('click', function(e) {
-    const dropdown = document.getElementById('notifCenterDropdown');
-    const toggle = document.getElementById('notifCenterToggle');
+    const dropdown = document.getElementById('activityCenterDropdown');
+    const toggle = document.getElementById('activityCenterToggle');
     if (dropdown && dropdown.classList.contains('show') &&
         !dropdown.contains(e.target) && toggle && !toggle.contains(e.target)) {
         dropdown.classList.remove('show');
@@ -1048,6 +1066,7 @@ function showNewDomainDialog() {
 // Make all utility functions globally available
 window.showNotification = showNotification;
 window.NotificationCenter = NotificationCenter;
+window.ActivityCenter = ActivityCenter;
 window.DocumentPreview = DocumentPreview;
 window.showConfirmDialog = showConfirmDialog;
 window.showInfoDialog = showInfoDialog;

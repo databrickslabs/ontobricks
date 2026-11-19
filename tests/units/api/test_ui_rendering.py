@@ -142,7 +142,8 @@ class TestBaseTemplate:
     @pytest.mark.parametrize("path", ["/", "/settings", "/ontology"])
     def test_has_notification_container(self, client, path):
         html = _html(client, path)
-        assert _find(_tags(html), id_="notifCenterDropdown") is not None
+        assert _find(_tags(html), id_="activityCenterDropdown") is not None
+        assert _find(_tags(html), id_="notifCenterList") is not None
 
     @pytest.mark.parametrize("path", ["/", "/settings", "/ontology"])
     def test_bootstrap_script_loaded(self, client, path):
@@ -228,18 +229,24 @@ class TestBaseTemplate:
         assert 'id="subnavMappingDropdown"' not in home
 
     def test_navbar_has_settings_link(self, client):
+        """Settings is reached from the L2 app switcher (admin-only), not the L1 gear."""
         html = _html(client, "/")
         tags = _tags(html)
-        assert any(t == "a" and a.get("href") == "/settings" for t, a in tags)
+        assert any(
+            t == "a" and str(a.get("href", "")).startswith("/settings") for t, a in tags
+        )
         assert "Settings" in html
 
-    def test_navbar_has_warehouse_status(self, client):
+    def test_navbar_has_no_warehouse_status(self, client):
+        """SQL Warehouse status lives in Settings, not the top navbar."""
         html = _html(client, "/")
-        assert _find(_tags(html), id_="warehouseStatusLink") is not None
+        assert _find(_tags(html), id_="warehouseStatusLink") is None
+        assert "ob-warehouse-status-icon" not in html
 
     def test_navbar_has_task_tracker(self, client):
         html = _html(client, "/")
-        assert _find(_tags(html), id_="taskTrackerToggle") is not None
+        assert _find(_tags(html), id_="activityCenterToggle") is not None
+        assert _find(_tags(html), id_="taskTrackerList") is not None
 
 
 # =====================================================

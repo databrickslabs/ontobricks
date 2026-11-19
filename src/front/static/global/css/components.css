@@ -893,9 +893,9 @@
    Task Tracker
    ========================================================================== */
 
-.task-tracker-dropdown {
+.activity-center-dropdown {
     width: 480px;
-    max-height: 500px;
+    max-height: 560px;
     overflow-y: auto;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(0, 0, 0, 0.1);
@@ -905,18 +905,31 @@
     border-radius: var(--db-radius-control);
 }
 
-.navbar .dropdown-menu.task-tracker-dropdown .dropdown-item,
-.task-tracker-dropdown .fw-semibold,
-.task-tracker-dropdown .text-muted {
+.navbar .dropdown-menu.activity-center-dropdown .dropdown-item,
+.activity-center-dropdown .fw-semibold,
+.activity-center-dropdown .text-muted {
     color: inherit;
 }
 
-.task-tracker-dropdown .border-bottom {
+.activity-center-dropdown .border-bottom,
+.activity-center-dropdown .border-top {
     border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
-.task-tracker-dropdown.show {
+.activity-center-dropdown.show {
     display: block !important;
+}
+
+.activity-center-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem 0.25rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--db-text-muted);
 }
 
 .task-item {
@@ -955,16 +968,14 @@
     to { transform: rotate(360deg); }
 }
 
-/* Task tracker toggle button */
-#taskTrackerToggle,
-#notifCenterToggle {
+/* Activity center toggle button */
+#activityCenterToggle {
     position: relative;
 }
 
 /* Round count bubbles. ID selectors + !important beat Bootstrap's
    `.rounded-pill` (which is pinned to the 2px pill token app-wide). */
-#taskTrackerBadge,
-#notifCenterBadge {
+#activityCenterBadge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1228,10 +1239,6 @@
     align-self: flex-end;
     margin-left: 0.35em;
     line-height: 1;
-}
-
-.ob-warehouse-status-icon {
-    color: var(--bs-secondary);
 }
 
 .ob-navbar-count-badge {
