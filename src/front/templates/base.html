@@ -259,6 +259,17 @@
     <nav id="obSubnav" class="ob-subnav d-none" aria-label="Section navigation">
         <div class="container-fluid">
             <ul class="ob-subnav-nav">
+                {# Fixed L2 collapse control — left of Context / Settings return; not domain-chrome. #}
+                <li class="ob-subnav-item ob-subnav-sidebar-toggle-item d-none" id="obSidebarToggleItem">
+                    <button type="button"
+                            class="ob-subnav-sidebar-toggle"
+                            id="obSidebarToggle"
+                            title="Expand sidebar"
+                            aria-label="Expand sidebar"
+                            aria-pressed="true">
+                        <i class="bi bi-layout-sidebar-inset" aria-hidden="true"></i>
+                    </button>
+                </li>
                 {% if domain_m.v %}
                 <li class="ob-subnav-item ob-subnav-context" data-subnav-domain-chrome>
                     <a class="ob-subnav-crumb ob-subnav-context-trigger"

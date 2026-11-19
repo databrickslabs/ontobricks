@@ -544,3 +544,75 @@ Modified files:
 Tests:
 - `uv run --frozen pytest -q -m "not scenario"`: 10896 passed, 334 skipped,
   8 deselected, 0 failed.
+
+## Move sidebar collapse toggle into L2 left of Context
+
+Context: The collapse/expand control lived at the top of the sidebar rail,
+so it moved with the rail and competed with section links. Move it to a fixed
+L2 position immediately left of the Context name (still visible on Settings,
+left of the return link) so the control stays put while the rail collapses.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Added fixed `#obSidebarToggle` / `#obSidebarToggleItem` as the first L2
+     item (not under `data-subnav-domain-chrome`), left of the Context crumb.
+2. src/front/static/global/js/sidebar-nav.js
+   - Stopped injecting `.sidebar-toggle` into the rail; wire and reveal the L2
+     button when a `.sidebar-nav` exists; sync `aria-pressed` / title via
+     `_syncToggleChrome`.
+3. src/front/static/global/css/main.css
+   - Styled `.ob-subnav-sidebar-toggle` to the L2 rail height with no hover fill.
+4. src/front/static/global/css/sidebar-layout.css
+   - Removed in-rail `.sidebar-toggle` styles (control now lives in L2).
+5. tests/units/front/test_sidebar_collapse_prepaint.py
+   - Added contract that the toggle is fixed left of Context and no longer
+     injected into the sidebar.
+6. tests/units/front/test_segmented_subnav_contract.py
+   - Assert `#obSidebarToggle` precedes `#domainContextTrigger`.
+7. tests/units/front/test_clarity_design_contract.py
+   - No-hover assertion covers `.ob-subnav-sidebar-toggle`.
+8. .cursor/11-frontend-design.mdc
+   - Documented the fixed L2 collapse control in the sidebar and L2 layout
+     contracts.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_sidebar_collapse_prepaint.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10897 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+## Align L2 sidebar toggle icon with sidebar nav icons
+
+Context: The fixed L2 collapse button sat about 7px left of the sidebar icon
+column and used a larger glyph (1.05rem vs 0.95rem), so the two icon sets did
+not line up.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-subnav-sidebar-toggle-item`: `margin-left: 0.44rem` so the 2.25rem
+     button centre lands on the sidebar icon centre (~29px from the shell edge).
+   - `.ob-subnav-sidebar-toggle i`: font-size `0.95rem` (matches
+     `.sidebar-nav .nav-link i`).
+2. tests/units/front/test_sidebar_collapse_prepaint.py
+   - Added `test_sidebar_toggle_icon_is_centred_on_sidebar_icon_column`
+     asserting matching icon size and the margin-left alignment offset.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_sidebar_collapse_prepaint.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10898 passed, 334 skipped,
+  8 deselected, 0 failed.

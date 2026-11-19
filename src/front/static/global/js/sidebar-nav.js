@@ -202,6 +202,19 @@ const SidebarNav = {
         const nav = document.querySelector('.sidebar-nav');
         if (nav) nav.classList.toggle('collapsed', collapsed);
         document.documentElement.classList.toggle('ob-sidebar-collapsed', collapsed);
+        SidebarNav._syncToggleChrome(collapsed);
+    },
+
+    /**
+     * Keep the fixed L2 collapse control in sync with the rail state.
+     */
+    _syncToggleChrome: function(collapsed) {
+        const btn = document.getElementById('obSidebarToggle');
+        if (!btn) return;
+        const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
     },
 
     /**
@@ -303,15 +316,15 @@ const SidebarNav = {
             }
         });
 
-        // Inject toggle button at the top of the sidebar
-        if (!nav.querySelector('.sidebar-toggle')) {
-            const btn = document.createElement('button');
-            btn.className = 'sidebar-toggle';
-            btn.type = 'button';
-            btn.title = 'Collapse / Expand sidebar';
-            btn.innerHTML = '<i class="bi bi-layout-sidebar-inset"></i>';
-            btn.addEventListener('click', () => SidebarNav.toggleCollapse());
-            nav.insertBefore(btn, nav.firstChild);
+        // Fixed L2 toggle (left of Context name). Remove any legacy in-rail toggle.
+        nav.querySelectorAll('.sidebar-toggle').forEach((legacy) => legacy.remove());
+        const toggleItem = document.getElementById('obSidebarToggleItem');
+        const toggleBtn = document.getElementById('obSidebarToggle');
+        if (toggleItem) toggleItem.classList.remove('d-none');
+        if (toggleBtn && !toggleBtn.dataset.bound) {
+            if (nav.id) toggleBtn.setAttribute('aria-controls', nav.id);
+            toggleBtn.addEventListener('click', () => SidebarNav.toggleCollapse());
+            toggleBtn.dataset.bound = '1';
         }
 
         // Restore saved state (default: collapsed). Prefer the html class already

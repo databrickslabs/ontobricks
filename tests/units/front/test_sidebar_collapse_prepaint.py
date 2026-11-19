@@ -1,5 +1,6 @@
 """Sidebar must paint collapsed by default — no expand-then-collapse flash."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -49,3 +50,50 @@ def test_sidebar_nav_syncs_html_collapsed_class_on_toggle():
     assert "_applyCollapsed:" in js
     toggle = js[js.index("toggleCollapse: function") : js.index("_updateTooltips: function")]
     assert "_applyCollapsed" in toggle
+
+
+def test_sidebar_toggle_lives_fixed_left_of_context_name_in_l2():
+    """Collapse control is a fixed L2 control left of the Context crumb, not inside the rail."""
+    html = _read(BASE_HTML)
+    js = _read(SIDEBAR_JS)
+    main_css = (REPO_ROOT / "src/front/static/global/css/main.css").read_text(encoding="utf-8")
+
+    assert 'id="obSidebarToggle"' in html
+    assert html.index("obSidebarToggle") < html.index("domainContextTrigger")
+    assert "ob-subnav-sidebar-toggle" in html
+    # Stay visible on Settings too (not tied to domain-only chrome).
+    toggle_li = re.search(
+        r'<li\b[^>]*id="obSidebarToggleItem"[^>]*>',
+        html,
+    )
+    assert toggle_li, "Missing #obSidebarToggleItem"
+    assert "data-subnav-domain-chrome" not in toggle_li.group(0)
+
+    setup = js[js.index("_setupCollapse: function") :]
+    assert "obSidebarToggle" in setup
+    assert "insertBefore(btn, nav.firstChild)" not in setup
+    assert "nav.querySelector('.sidebar-toggle')" not in setup
+
+    assert ".ob-subnav-sidebar-toggle" in main_css
+    assert not re.search(r"\.ob-subnav-sidebar-toggle:hover\s*\{", main_css)
+
+
+def test_sidebar_toggle_icon_is_centred_on_sidebar_icon_column():
+    """The L2 toggle icon uses the same size and centre line as the sidebar nav icons.
+
+    Sidebar icon centre (from the shell edge): shell padding 0.25rem + nav-link
+    margin 0.25rem + border-left 3px + padding-left 0.5rem + half of the 20px
+    icon column (10px) = ~29px. The L2 button is 2.25rem wide and starts after
+    the 0.25rem container inset, so its margin-left must be ~0.44rem.
+    """
+    main_css = (REPO_ROOT / "src/front/static/global/css/main.css").read_text(encoding="utf-8")
+    sidebar_css = _read(SIDEBAR_CSS)
+
+    nav_icon = re.search(r"\.sidebar-nav \.nav-link i\s*\{([^}]*)\}", sidebar_css)
+    assert nav_icon and "font-size: 0.95rem" in nav_icon.group(1)
+
+    toggle_icon = re.search(r"\.ob-subnav-sidebar-toggle i\s*\{([^}]*)\}", main_css)
+    assert toggle_icon and "font-size: 0.95rem" in toggle_icon.group(1)
+
+    toggle_item = re.search(r"\.ob-subnav-sidebar-toggle-item\s*\{([^}]*)\}", main_css)
+    assert toggle_item and re.search(r"margin-left\s*:\s*0\.4\d*rem", toggle_item.group(1))

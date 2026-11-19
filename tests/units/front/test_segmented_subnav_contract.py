@@ -87,6 +87,7 @@ def test_workspace_targets_are_grouped_before_context_and_actions():
         r'id="domainContextVersion"[^>]*class="[^"]*\bdomain-version-badge\b',
         html,
     )
+    assert html.index("obSidebarToggle") < html.index("domainContextTrigger")
     assert html.index("domainContextTrigger") < html.index("ob-subnav-close-btn")
     assert html.index("ob-subnav-close-btn") < html.index("ob-subnav-save-btn")
     assert "ob-subnav-switch-btn" not in html

@@ -164,47 +164,13 @@ body.full-width-layout {
 }
 
 /* ==========================================================================
-   Sidebar Toggle Button
-   ========================================================================== */
-.sidebar-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.3rem 0.5rem;
-    margin: 0 0.25rem 0.25rem;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    border-radius: var(--db-radius-control);
-    transition: background 0.15s ease;
-    width: calc(100% - 0.5rem);
-    overflow: hidden;
-}
-
-.sidebar-toggle i {
-    font-size: 1.1rem;
-    min-width: 20px;
-    text-align: center;
-    flex-shrink: 0;
-    color: var(--db-text-muted);
-}
-
-.sidebar-toggle .sidebar-toggle-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--db-text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    transition: opacity 0.2s ease;
-}
-
-/* ==========================================================================
    Sidebar Collapsed State
-   ``html.ob-sidebar-collapsed`` is set by sidebar-collapse-init.js before
-   first paint so the rail never flashes expanded→collapsed. ``.collapsed``
-   on the nav is kept in sync by SidebarNav for the same visual rules.
-   Until ``ob-sidebar-ready``, suppress width transitions so preference
-   restore cannot animate.
+   The collapse control lives in L2 (``#obSidebarToggle``), left of the
+   Context name — not inside the rail. ``html.ob-sidebar-collapsed`` is set
+   by sidebar-collapse-init.js before first paint so the rail never flashes
+   expanded→collapsed. ``.collapsed`` on the nav is kept in sync by
+   SidebarNav for the same visual rules. Until ``ob-sidebar-ready``, suppress
+   width transitions so preference restore cannot animate.
    ========================================================================== */
 html:not(.ob-sidebar-ready) .sidebar-nav {
     transition: none;
@@ -240,19 +206,6 @@ html.ob-sidebar-collapsed .sidebar-nav .nav-link .nav-label,
 
 html.ob-sidebar-collapsed .sidebar-nav .nav-link .badge,
 .sidebar-nav.collapsed .nav-link .badge {
-    display: none;
-}
-
-html.ob-sidebar-collapsed .sidebar-nav .sidebar-toggle,
-.sidebar-nav.collapsed .sidebar-toggle {
-    justify-content: center;
-    padding: 0.45rem 0;
-    margin: 0 0 0.35rem;
-    width: 100%;
-}
-
-html.ob-sidebar-collapsed .sidebar-nav .sidebar-toggle .sidebar-toggle-label,
-.sidebar-nav.collapsed .sidebar-toggle .sidebar-toggle-label {
     display: none;
 }
 

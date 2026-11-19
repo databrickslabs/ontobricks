@@ -676,10 +676,12 @@ def test_sidebar_has_transparent_background_and_no_border():
 
 
 def test_sidebar_toggle_has_no_hover_highlight():
-    """The collapse/expand toggle must not change background on hover."""
-    css = _read(SIDEBAR_LAYOUT_CSS)
+    """The L2 collapse/expand toggle must not change background on hover."""
+    main_css = _read(MAIN_CSS)
+    sidebar_css = _read(SIDEBAR_LAYOUT_CSS)
 
-    assert not re.search(r"\.sidebar-toggle:hover\s*\{", css)
+    assert not re.search(r"\.ob-subnav-sidebar-toggle:hover\s*\{", main_css)
+    assert not re.search(r"\.sidebar-toggle:hover\s*\{", sidebar_css)
 
 
 def test_sidebar_layout_centralizes_the_shared_outer_gutter():

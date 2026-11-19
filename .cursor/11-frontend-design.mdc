@@ -376,9 +376,12 @@ keyboard handling.
   `html.ob-sidebar-collapsed`); `sidebar-nav.js` keeps `.sidebar-nav.collapsed`
   in sync. Do not remove the pre-paint script or reintroduce a flash of
   the expanded rail on load.
-- The collapse toggle button is injected automatically at the top of
-  the sidebar. Do not author your own toggle. It has no hover highlight
-  (no `:hover` background); do not add one.
+- The collapse toggle is a **fixed L2 control** (`#obSidebarToggle`,
+  `.ob-subnav-sidebar-toggle`) placed left of the Context name (and still
+  visible on Settings, left of the return link). `SidebarNav._setupCollapse()`
+  reveals it when a `.sidebar-nav` exists and removes any legacy in-rail
+  `.sidebar-toggle`. Do not inject a toggle into the sidebar. It has no
+  hover highlight (no `:hover` background); do not add one.
 - A `sidebarSectionChanged` `CustomEvent` (`detail: { section,
   targetSection }`) is dispatched on `document` after every switch.
   This is the official extension point — listen to it instead of
@@ -553,18 +556,21 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
     (`#settingsDomainReturnLink`) inside `#settingsDomainReturnNav`.
   - **Any page + no loaded domain:** hide all L2 chrome.
 - Layout (left → right inside `.ob-subnav-nav`):
-  1. **Domain crumb** (`#domainContextTrigger`, `.ob-subnav-crumb`): domain
+  1. **Sidebar collapse toggle** (`#obSidebarToggle`, fixed — not under
+     `data-subnav-domain-chrome`): revealed only when the page has a
+     `.sidebar-nav`. Sits left of the Context crumb (or Settings return).
+  2. **Domain crumb** (`#domainContextTrigger`, `.ob-subnav-crumb`): domain
      name, optional status badge, version badge (`#domainContextVersion`,
      `.domain-version-badge`, e.g. `V2`), and caret. Opens `#workspaceMapModal`,
      which now also hosts Switch Version / New Version (no separate `vN ▾`
      crumb).
-  2. **Workspace links** (`.ob-subnav-workspace-list`): Domain, Ontology,
+  3. **Workspace links** (`.ob-subnav-workspace-list`): Domain, Ontology,
      Mapping, Graph, Intelligence. No ordinal numbers. The current workspace is a
      static `aria-current="page"` target; only the other workspace targets
      retain Bootstrap dropdowns.
-  3. A `.ob-subnav-flex-spacer` (`flex: 1`) — pushes the right group to the edge.
-  4. **Close Domain button** (`.ob-subnav-close-btn`): ghost text action.
-  5. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`): see the
+  4. A `.ob-subnav-flex-spacer` (`flex: 1`) — pushes the right group to the edge.
+  5. **Close Domain button** (`.ob-subnav-close-btn`): ghost text action.
+  6. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`): see the
      action-styles bullet below.
 - The three tab toggles (Ontology/Mapping/KG) do **not** carry
   `nav-requires-domain`. They are enabled whenever the subnav is
