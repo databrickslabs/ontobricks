@@ -1323,3 +1323,52 @@ Test result
 -----------
 uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped,
 8 deselected, 0 failed.
+
+================================================================================
+UI refinement: App switcher rounded boxes & Review/Validation load speed
+================================================================================
+
+Context
+-------
+1. App switcher (level 2 navbar right) updated with Databricks-style rounded
+   boxes for the popover menu, row items, and icon chips.
+2. Context → General validation dashboard uses spinners inside each box rather
+   than overlay masks on top of sections.
+3. Context → Review page load accelerated: `loadReadiness()` queries in-session
+   overview (`/validate/detailed?parts=overview`) instantly and loads graph
+   check in background; `ReviewService` avoids duplicate cloud reads of the
+   version document.
+
+Changes
+-------
+1. src/front/static/global/css/main.css — `.ob-app-switcher-menu`,
+   `.ob-app-switcher-item`, `.ob-app-switcher-item-icon`, and
+   `.ob-subnav-app-switcher` updated to `0.5rem` / `0.375rem` rounded boxes with
+   1px border on icon chips.
+2. src/front/templates/partials/domain/_domain_validation.html,
+   src/front/static/domain/css/domain-validation.css,
+   src/front/static/domain/js/domain-validation.js — section overlay masks
+   removed; spinners placed inside each card and tile box.
+3. src/front/static/domain/js/domain-review.js — `loadReadiness()` uses
+   `parts=overview` for immediate rendering; graph status resolves in background.
+4. src/back/objects/registry/collab/ReviewService.py — pass `data` from
+   `_load()` into `_has_ontology()` to eliminate duplicate cloud read.
+5. tests/units/front/test_app_switcher_contract.py,
+   tests/units/front/test_validation_progressive_load.py — contracts updated.
+
+Modified files
+--------------
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/back/objects/registry/collab/ReviewService.py
+- src/front/static/domain/css/domain-validation.css
+- src/front/static/domain/js/domain-review.js
+- src/front/static/domain/js/domain-validation.js
+- src/front/static/global/css/main.css
+- src/front/templates/partials/domain/_domain_validation.html
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_validation_progressive_load.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped,
+8 deselected, 0 failed.

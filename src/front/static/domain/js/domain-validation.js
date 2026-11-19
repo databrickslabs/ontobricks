@@ -9,17 +9,19 @@
 
 var _validationState = {};
 
-function setValidationSpinner(id, visible) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.classList.toggle('is-hidden', !visible);
+function _toggleBoxLoading(spinnerId, contentId, badgeId, isLoading) {
+    const sp = document.getElementById(spinnerId);
+    const ct = document.getElementById(contentId);
+    const bg = document.getElementById(badgeId);
+    if (sp) sp.classList.toggle('d-none', !isLoading);
+    if (ct) ct.classList.toggle('d-none', isLoading);
+    if (bg && isLoading) {
+        bg.className = 'badge bg-secondary';
+        bg.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;" role="status" aria-hidden="true"></span>';
+    }
 }
 
 function showValidationSectionSpinners() {
-    setValidationSpinner('validationAssetsSpinner', true);
-    setValidationSpinner('validationOntologySpinner', true);
-    setValidationSpinner('validationMappingSpinner', true);
-    setValidationSpinner('validationGraphSpinner', true);
     const banner = document.getElementById('domainHealthBanner');
     if (banner) {
         banner.className = 'validation-health-banner mb-4 health-loading';
@@ -27,6 +29,30 @@ function showValidationSectionSpinners() {
             '<span id="domainHealthBannerSpinner" class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>' +
             '<div>Checking context health…</div>';
     }
+
+    // Top tiles: inline spinner inside each tile's status container
+    [
+        'metadataTileStatus',
+        'documentsTileStatus',
+        'versionsTileStatus',
+        'currentVersionTileStatus',
+        'activeVersionTileStatus'
+    ].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.innerHTML = '<span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>';
+        }
+    });
+
+    // Middle detail cards: spinner inside each card body + badge
+    _toggleBoxLoading('ontologyEntitiesSpinner', 'ontologyEntitiesContent', 'ontologyValidationBadge', true);
+    _toggleBoxLoading('ontologyRelSpinner', 'ontologyRelContent', 'ontologyRelValidationBadge', true);
+    _toggleBoxLoading('mappingEntitiesSpinner', 'mappingEntitiesContent', 'mappingValidationBadge', true);
+    _toggleBoxLoading('mappingRelSpinner', 'mappingRelContent', 'mappingRelValidationBadge', true);
+    _toggleBoxLoading('mappingCompletionSpinner', 'mappingCompletionContent', 'mappingCompletionBadge', true);
+
+    // Knowledge Graph card: spinner inside card body + badge
+    _toggleBoxLoading('dtwinValidationSpinner', 'dtwinValidationContent', 'dtwinValidationBadge', true);
 }
 
 async function fetchValidationPart(part) {
@@ -43,6 +69,14 @@ async function fetchValidationPart(part) {
 
 function applyValidationOverview(data) {
     Object.assign(_validationState, data);
+
+    // Reveal card contents before drawing gauges so dimensions are valid
+    _toggleBoxLoading('ontologyEntitiesSpinner', 'ontologyEntitiesContent', null, false);
+    _toggleBoxLoading('ontologyRelSpinner', 'ontologyRelContent', null, false);
+    _toggleBoxLoading('mappingEntitiesSpinner', 'mappingEntitiesContent', null, false);
+    _toggleBoxLoading('mappingRelSpinner', 'mappingRelContent', null, false);
+    _toggleBoxLoading('mappingCompletionSpinner', 'mappingCompletionContent', null, false);
+
     updateWarehouseTile(data);
     updateOntologyTile(data);
     updateMappingTile(data);
@@ -51,9 +85,7 @@ function applyValidationOverview(data) {
     updateOntologyCard(data);
     updateMappingCard(data);
     updateMissingItems(data);
-    setValidationSpinner('validationAssetsSpinner', false);
-    setValidationSpinner('validationOntologySpinner', false);
-    setValidationSpinner('validationMappingSpinner', false);
+
     // Health still waits for the graph slice when present; otherwise paint now.
     if (_validationState.dtwin) {
         updateHealthBanner(_validationState);
@@ -67,9 +99,9 @@ function applyValidationDocuments(data) {
 
 function applyValidationGraph(data) {
     Object.assign(_validationState, data);
+    _toggleBoxLoading('dtwinValidationSpinner', 'dtwinValidationContent', null, false);
     updateDtwinTile(data);
     updateDtwinCard(data);
-    setValidationSpinner('validationGraphSpinner', false);
     if (_validationState.ontology_valid !== undefined) {
         updateHealthBanner(_validationState);
     }
@@ -83,9 +115,11 @@ async function loadValidationDetails() {
             .then(applyValidationOverview)
             .catch(function (error) {
                 console.error('Error loading validation overview:', error);
-                setValidationSpinner('validationAssetsSpinner', false);
-                setValidationSpinner('validationOntologySpinner', false);
-                setValidationSpinner('validationMappingSpinner', false);
+                _toggleBoxLoading('ontologyEntitiesSpinner', 'ontologyEntitiesContent', null, false);
+                _toggleBoxLoading('ontologyRelSpinner', 'ontologyRelContent', null, false);
+                _toggleBoxLoading('mappingEntitiesSpinner', 'mappingEntitiesContent', null, false);
+                _toggleBoxLoading('mappingRelSpinner', 'mappingRelContent', null, false);
+                _toggleBoxLoading('mappingCompletionSpinner', 'mappingCompletionContent', null, false);
                 const banner = document.getElementById('domainHealthBanner');
                 if (banner) {
                     banner.className = 'validation-health-banner health-error mb-4';
@@ -104,7 +138,7 @@ async function loadValidationDetails() {
             .then(applyValidationGraph)
             .catch(function (error) {
                 console.error('Error loading graph validation:', error);
-                setValidationSpinner('validationGraphSpinner', false);
+                _toggleBoxLoading('dtwinValidationSpinner', 'dtwinValidationContent', null, false);
                 setTile('dtwinTile', 'danger', 'Unavailable');
                 const badge = document.getElementById('dtwinValidationBadge');
                 if (badge) {

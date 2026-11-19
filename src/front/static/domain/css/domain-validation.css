@@ -3,27 +3,7 @@
  * Styles for the Project Validation dashboard
  */
 
-/* ── Section wrapper & loading overlay ────────── */
-.validation-section-wrapper {
-    position: relative;
-}
-/* Per-section spinner overlays (Context → General progressive load). */
-.validation-section-spinner {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.72);
-    border-radius: var(--db-radius-card, 0.25rem);
-    pointer-events: none;
-}
-
-.validation-section-spinner.is-hidden {
-    display: none;
-}
-
+/* ── Health banner loading state ─────────────────── */
 .validation-health-banner.health-loading {
     background: var(--db-canvas-warm, #f8f8f8);
     border: 1px solid var(--db-border, #eceae6);

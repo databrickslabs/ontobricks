@@ -72,12 +72,18 @@ def test_app_switcher_uses_databricks_line_item_styles():
 
     menu_box = re.search(r"\.ob-app-switcher-menu\s*\{([^}]*)\}", css)
     assert menu_box and "min-width: 22rem" in menu_box.group(1)
+    assert "border-radius: 0.5rem" in menu_box.group(1)
 
     item = re.search(r"\.ob-app-switcher-item\s*\{([^}]*)\}", css)
     assert item
     assert "display: flex" in item.group(1)
     assert "flex-direction: column" not in item.group(1)
     assert "align-items: center" in item.group(1)
+    assert "border-radius: 0.5rem" in item.group(1)
+
+    icon = re.search(r"\.ob-app-switcher-item-icon\s*\{([^}]*)\}", css)
+    assert icon and "border-radius: 0.5rem" in icon.group(1)
+    assert "border: 1px solid var(--db-border)" in icon.group(1)
 
     copy = re.search(r"\.ob-app-switcher-item-copy\s*\{([^}]*)\}", css)
     assert copy and "flex-direction: column" in copy.group(1)

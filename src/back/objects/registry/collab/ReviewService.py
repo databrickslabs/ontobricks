@@ -190,7 +190,7 @@ class ReviewService:
     ) -> Dict[str, Any]:
         """Full review state + audit trail + allowed actions for a version."""
         try:
-            svc, info = ReviewService._load(session_mgr, settings, folder, version)
+            svc, info, data = ReviewService._load(session_mgr, settings, folder, version)
             status = (info.get("status") or STATUS_DRAFT).upper()
             last_build = info.get("last_build", "") or ""
             # A "No Backend" (ontology-only) domain never builds a graph, so it
@@ -199,7 +199,7 @@ class ReviewService:
             from back.core.graphdb.GraphDBFactory import is_graphless_backend
 
             graphless = is_graphless_backend(info.get("graph_backend"))
-            has_ontology = ReviewService._has_ontology(svc, folder, version)
+            has_ontology = ReviewService._has_ontology(svc, folder, version, data=data)
             can_submit_content = bool(last_build) or (graphless and has_ontology)
             quorum = ReviewService._quorum(svc, folder)
             events = svc.list_review_events(folder, version)
@@ -368,7 +368,7 @@ class ReviewService:
         user_domain_role: str,
     ) -> Dict[str, Any]:
         """Submit a DRAFT version for review (DRAFT -> IN-REVIEW)."""
-        svc, info = ReviewService._load(session_mgr, settings, folder, version)
+        svc, info, data = ReviewService._load(session_mgr, settings, folder, version)
         status = (info.get("status") or STATUS_DRAFT).upper()
         last_build = info.get("last_build", "") or ""
         if not ReviewService._is_builder(user_role, user_domain_role):
@@ -378,7 +378,7 @@ class ReviewService:
         if status != STATUS_DRAFT:
             raise ConflictError(f"Version is {status}, expected DRAFT")
         if not last_build and not ReviewService._has_ontology(
-            svc, folder, version
+            svc, folder, version, data=data
         ):
             raise ValidationError(
                 "Cannot submit for review: this version has neither a "
@@ -431,7 +431,7 @@ class ReviewService:
             raise ValidationError(
                 "decision must be 'approve' or 'request_changes'"
             )
-        svc, info = ReviewService._load(session_mgr, settings, folder, version)
+        svc, info, _ = ReviewService._load(session_mgr, settings, folder, version)
         status = (info.get("status") or STATUS_DRAFT).upper()
         is_member = (
             user_role == ROLE_ADMIN
@@ -500,7 +500,7 @@ class ReviewService:
         Admins (app-level or domain-level) may publish regardless of the
         quorum; the override is recorded in the audit event meta.
         """
-        svc, info = ReviewService._load(session_mgr, settings, folder, version)
+        svc, info, _ = ReviewService._load(session_mgr, settings, folder, version)
         status = (info.get("status") or STATUS_DRAFT).upper()
         if not ReviewService._is_builder(user_role, user_domain_role):
             raise AuthorizationError(
@@ -559,7 +559,7 @@ class ReviewService:
         user_domain_role: str,
     ) -> Dict[str, Any]:
         """Send an IN-REVIEW or PUBLISHED version back to DRAFT (admin only)."""
-        svc, info = ReviewService._load(session_mgr, settings, folder, version)
+        svc, info, _ = ReviewService._load(session_mgr, settings, folder, version)
         status = (info.get("status") or STATUS_DRAFT).upper()
         if not ReviewService._is_admin(user_role, user_domain_role):
             raise AuthorizationError("Only an administrator can reopen")
@@ -597,8 +597,8 @@ class ReviewService:
     @staticmethod
     def _load(
         session_mgr: SessionManager, settings, folder: str, version: str
-    ) -> Tuple[RegistryService, Dict[str, Any]]:
-        """Resolve the registry service + the version ``info`` blob."""
+    ) -> Tuple[RegistryService, Dict[str, Any], Dict[str, Any]]:
+        """Resolve the registry service + the version ``info`` blob + raw ``data``."""
         if not folder or not version:
             raise ValidationError("context and version are required")
         domain = get_domain(session_mgr)
@@ -612,11 +612,14 @@ class ReviewService:
             raise InfrastructureError(
                 "Failed to read registry version", detail=msg
             )
-        return svc, data.get("info", {}) or {}
+        return svc, (data.get("info", {}) or {}), (data or {})
 
     @staticmethod
     def _has_ontology(
-        svc: RegistryService, folder: str, version: str
+        svc: RegistryService,
+        folder: str,
+        version: str,
+        data: Dict[str, Any] | None = None,
     ) -> bool:
         """True when *version* declares at least one ontology class.
 
@@ -624,9 +627,10 @@ class ReviewService:
         falls back to the ``last_build`` precondition rather than raising.
         """
         try:
-            ok, data, _ = svc.read_version(folder, version)
-            if not ok:
-                return False
+            if data is None:
+                ok, data, _ = svc.read_version(folder, version)
+                if not ok:
+                    return False
             return RegistryService.version_document_has_ontology(data, version)
         except Exception as exc:  # noqa: BLE001
             logger.debug("_has_ontology(%s/%s) failed: %s", folder, version, exc)

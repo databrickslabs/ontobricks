@@ -14,22 +14,30 @@ API = REPO_ROOT / "src/api/routers/internal/home.py"
 SERVICE = REPO_ROOT / "src/back/objects/domain/HomeService.py"
 
 
-def test_general_page_has_no_full_page_blocking_overlay():
+def test_general_page_has_no_full_page_or_section_blocking_overlays():
     html = HTML.read_text(encoding="utf-8")
     assert "validationLoadingOverlay" not in html
     assert "validation-loading-overlay" not in html
+    assert "validation-section-spinner" not in html
+    assert "validationAssetsSpinner" not in html
+    assert "validationOntologySpinner" not in html
+    assert "validationMappingSpinner" not in html
+    assert "validationGraphSpinner" not in html
 
 
-def test_general_page_sections_expose_per_section_spinners():
+def test_general_page_boxes_expose_per_box_spinners_inside_cards():
     html = HTML.read_text(encoding="utf-8")
-    for section_id in (
-        "validationAssetsSpinner",
-        "validationOntologySpinner",
-        "validationMappingSpinner",
-        "validationGraphSpinner",
+    for box_spinner_id in (
         "domainHealthBannerSpinner",
+        "ontologyEntitiesSpinner",
+        "ontologyRelSpinner",
+        "mappingEntitiesSpinner",
+        "mappingRelSpinner",
+        "mappingCompletionSpinner",
+        "dtwinValidationSpinner",
+        "graphStructureSpinner",
     ):
-        assert f'id="{section_id}"' in html
+        assert f'id="{box_spinner_id}"' in html
 
 
 def test_validation_js_loads_overview_documents_and_graph_in_parallel():

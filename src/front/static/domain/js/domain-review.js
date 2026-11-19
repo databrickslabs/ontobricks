@@ -290,10 +290,9 @@
         const el = document.getElementById('reviewReadiness');
         if (!el) return;
         try {
-            const d = await (await fetch('/validate/detailed', {
+            const d = await (await fetch('/validate/detailed?parts=overview', {
                 credentials: 'same-origin',
             })).json();
-            const dtwin = d.dtwin || {};
             const warehouse = d.warehouse || {};
             const dc = d.design_checks || {};
             const dcParts = [
@@ -309,8 +308,31 @@
                 '<span class="small">Sanity Checks (advisory): ' + escapeHtml(dcParts) +
                 ' — <a href="/ontology/?section=designchecks">Open</a></span></div>' +
                 checkRow('SQL Warehouse configured', !!warehouse.warehouse_id) +
-                checkRow('Knowledge Graph built', dtwin.indicator === 'green',
-                    dtwin.indicator === 'orange');
+                '<div id="reviewKgCheckRow">' +
+                '<div class="review-check d-flex align-items-center gap-2 mb-1">' +
+                '<span class="spinner-border spinner-border-sm text-secondary" style="width:.75rem;height:.75rem;" role="status"></span>' +
+                '<span class="small text-muted">Checking Knowledge Graph…</span></div>' +
+                '</div>';
+
+            fetch('/validate/detailed?parts=graph', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(gd => {
+                    const dtwin = (gd && gd.dtwin) || {};
+                    const row = document.getElementById('reviewKgCheckRow');
+                    if (row) {
+                        row.innerHTML = checkRow(
+                            'Knowledge Graph built',
+                            dtwin.indicator === 'green',
+                            dtwin.indicator === 'orange'
+                        );
+                    }
+                })
+                .catch(() => {
+                    const row = document.getElementById('reviewKgCheckRow');
+                    if (row) {
+                        row.innerHTML = checkRow('Knowledge Graph built', false, false);
+                    }
+                });
         } catch (err) {
             el.innerHTML = '<div class="text-muted small">Readiness unavailable.</div>';
         }
