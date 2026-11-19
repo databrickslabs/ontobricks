@@ -583,7 +583,15 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
      feature tiles are **grouped by the same sidebar menu groups** (Home group
      skipped). Each menu item carries `description` / `help_jump` / `help_doc`
      for the tile copy; Settings admin-only tiles also carry
-     `data-requires-app="admin"`.
+     `data-requires-app="admin"`. Tiles follow the **Databricks MCP server
+     cards** (Agents → MCP): a header row (`.ob-workspace-home-tile-head`) with
+     a 2rem icon chip (1px `--db-border`, `--db-canvas-warm` fill, 0.375rem
+     radius) and a 14px semibold title, then a 13px `--db-text-secondary`
+     description; 1rem padding, 1px `--db-border`, `--ob-home-card-radius`
+     (0.5rem), soft shadow on hover, no arrow. Group titles are 15px semibold
+     in `--db-text` (no uppercase). The Home body has no enclosing card frame
+     (`.ob-workspace-home > .card` is borderless and transparent); the
+     resources row reuses the same card look.
   5. **Close Domain button** (`.ob-subnav-close-btn`): ghost text action.
   6. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`): see the
      action-styles bullet below.

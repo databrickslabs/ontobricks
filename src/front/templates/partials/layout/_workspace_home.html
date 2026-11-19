@@ -32,13 +32,13 @@
                        href="{{ workspace_home_menu.route }}?section={{ tile.id }}"
                        data-section="{{ tile.id }}"
                        {% if tile.admin_only|default(false) %}data-requires-app="admin"{% endif %}>
-                        <span class="ob-workspace-home-tile-icon" aria-hidden="true">
-                            {% if 'ob-brand-icon' in tile.icon %}<i class="{{ tile.icon }}"></i>{% else %}<i class="bi {{ tile.icon }}"></i>{% endif %}
-                        </span>
-                        <span class="ob-workspace-home-tile-copy">
+                        <span class="ob-workspace-home-tile-head">
+                            <span class="ob-workspace-home-tile-icon" aria-hidden="true">
+                                {% if 'ob-brand-icon' in tile.icon %}<i class="{{ tile.icon }}"></i>{% else %}<i class="bi {{ tile.icon }}"></i>{% endif %}
+                            </span>
                             <span class="ob-workspace-home-tile-title">{{ tile.label }}</span>
-                            <span class="ob-workspace-home-tile-desc">{{ tile.description|default('') }}</span>
                         </span>
+                        <span class="ob-workspace-home-tile-desc">{{ tile.description|default('') }}</span>
                         {% if tile.help_jump %}
                         <button type="button"
                                 class="ob-workspace-home-tile-help"
@@ -50,7 +50,6 @@
                             <i class="bi bi-question-circle" aria-hidden="true"></i>
                         </button>
                         {% endif %}
-                        <i class="bi bi-arrow-right ob-workspace-home-tile-arrow" aria-hidden="true"></i>
                     </a>
                     {% endfor %}
                 </div>

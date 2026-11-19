@@ -1235,3 +1235,39 @@ Test result
 -----------
 uv run --frozen pytest -q -m "not scenario" → 10920 passed, 334 skipped,
 8 deselected, 0 failed.
+
+================================================================================
+Workspace Home tiles: Databricks MCP card style
+================================================================================
+
+Context
+-------
+Workspace Home pages (Context, Ontology, Graph, Intelligence, Settings) now
+render their feature tiles like the Databricks MCP server cards (Agents → MCP).
+
+Changes
+-------
+1. src/front/templates/partials/layout/_workspace_home.html — tile markup
+   restructured: `.ob-workspace-home-tile-head` row (icon chip + title), then
+   the description; trailing arrow icon removed.
+2. src/front/static/global/css/main.css — tiles stack vertically with 1rem
+   padding, 1px border, 0.5rem radius (`--ob-home-card-radius`) and a soft
+   hover shadow; icon chip is a 2rem bordered light square; title 14px
+   semibold, description 13px secondary; group titles 15px semibold dark
+   (no uppercase); the Home body drops its enclosing card frame and padding;
+   the resources row reuses the same card style.
+3. tests/units/front/test_workspace_home_contract.py — new contract for the
+   MCP card structure and styles.
+4. .cursor/11-frontend-design.mdc — Workspace Home tile style documented.
+
+Modified files
+--------------
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/main.css
+- src/front/templates/partials/layout/_workspace_home.html
+- tests/units/front/test_workspace_home_contract.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10921 passed, 334 skipped,
+8 deselected, 0 failed.

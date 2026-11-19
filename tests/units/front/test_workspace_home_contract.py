@@ -112,3 +112,27 @@ def test_workspace_home_styles_and_navigation_hooks():
     help_js = _read(HELP_JS)
     assert "_jumpToHelp" in help_js
     assert "jump.closest('.help-modal-body')" in help_js
+
+
+def test_workspace_home_tiles_use_databricks_mcp_card_style():
+    """Icon chip + title header row, description below, soft hover shadow,
+    and no enclosing card frame around the Home body."""
+    html = _read(HOME_PARTIAL)
+    head = html.index("ob-workspace-home-tile-head")
+    assert head < html.index("ob-workspace-home-tile-icon") < html.index(
+        "ob-workspace-home-tile-title"
+    ) < html.index("ob-workspace-home-tile-desc")
+    assert "ob-workspace-home-tile-arrow" not in html
+
+    css = _read(MAIN_CSS)
+    tile = re.search(r"\.ob-workspace-home-tile\s*\{([^}]*)\}", css).group(1)
+    assert "flex-direction: column" in tile
+    assert "border: 1px solid var(--db-border)" in tile
+    assert "border-radius: var(--ob-home-card-radius)" in tile
+    hover = re.search(r"\.ob-workspace-home-tile:hover\s*\{([^}]*)\}", css).group(1)
+    assert "box-shadow" in hover
+    icon = re.search(r"\.ob-workspace-home-tile-icon\s*\{([^}]*)\}", css).group(1)
+    assert "border: 1px solid var(--db-border)" in icon
+    assert "background: var(--db-canvas-warm)" in icon
+    frame = re.search(r"\.ob-workspace-home\s*>\s*\.card\s*\{([^}]*)\}", css).group(1)
+    assert "border: none" in frame and "background: transparent" in frame
