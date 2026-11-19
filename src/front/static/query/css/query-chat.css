@@ -45,8 +45,9 @@
     font-size: 0.85rem;
 }
 
-/* Panel chrome (border / radius / shadow / fill) is owned by the shared
-   Bootstrap ``.card`` rules in main.css — do not redeclare them here. */
+/* Layout only on `.graph-chat-container`. Borderless chrome for the chat
+   panel (same as Graph → Query) is scoped under `#chat-section` so the
+   shared `.card` defaults stay untouched for other pages. */
 .graph-chat-container {
     --gc-user-start: var(--db-primary);
     --gc-user-end:   var(--db-primary-dark);
@@ -61,6 +62,12 @@
     min-height: 0;                /* crucial: allow inner overflow:auto */
     overflow: hidden;
     position: relative;
+}
+
+#chat-section .graph-chat-container {
+    border: none;
+    background: transparent;
+    box-shadow: none;
 }
 
 

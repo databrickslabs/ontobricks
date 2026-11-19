@@ -68,7 +68,7 @@
 
         const reviewBlock = tasks.length
             ? '<div class="table-responsive">' +
-              '<table class="table table-sm align-middle my-tasks-table mb-0">' +
+              '<table class="table table-hover align-middle ob-runs-table mb-0">' +
               '<thead><tr>' +
               '<th>Context</th><th>Version</th><th>Status</th>' +
               '<th>Approvals</th><th class="text-end">Review</th>' +
@@ -109,7 +109,7 @@
         return '<div class="mt-3 mb-2 fw-medium small text-uppercase text-muted">' +
             '<i class="bi bi-person-check me-1"></i>Assigned to me</div>' +
             '<div class="table-responsive">' +
-            '<table class="table table-sm align-middle my-tasks-table mb-0">' +
+            '<table class="table table-hover align-middle ob-runs-table mb-0">' +
             '<thead><tr><th>Task</th><th>Context</th><th>Status</th>' +
             '<th class="text-end">Action</th></tr></thead>' +
             '<tbody>' + rows + '</tbody></table></div>';

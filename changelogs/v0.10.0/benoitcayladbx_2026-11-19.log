@@ -1615,3 +1615,248 @@ Modified files:
 - src/front/templates/partials/domain/_domain_documents.html
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10937 passed, 334 skipped, 8 deselected, 0 failed in 49.77s
+
+
+## Documents tab: remove intro paragraph above upload area
+
+Context:
+Following the removal of the "Upload Documents" card, the explanatory sentence
+"Upload files to this context's documents. The context must be saved to the
+registry first." was still shown at the top of the upload area. Requested to
+remove it.
+
+Changes:
+1. src/front/templates/partials/domain/_domain_documents.html
+   - Removed the `<p class="text-muted mb-3">` intro paragraph at the top of
+     the upload block.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/templates/partials/domain/_domain_documents.html
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10937 passed, 334 skipped, 8 deselected, 0 failed in 48.82s
+
+
+## My Tasks: Databricks Query History style list
+
+Context:
+Context → My Tasks (`/domain/?section=mytasks`) showed two separate tables
+("Assigned to me" and "Review worklist") with uppercase captions and filled
+status badges. Requested to align it with the Databricks SQL → Query History
+page: a filter bar above a single flat, hoverable list.
+
+Changes:
+1. src/front/templates/partials/domain/_domain_mytasks.html
+   - Added a filter bar (`.ob-tasks-filters`) inside the section card: search
+     input (`#domainTasksSearch`), Type and Status dropdown filter buttons
+     (`#domainTasksTypeFilter`, `#domainTasksStatusFilter`) and a task count
+     (`#domainTasksCount`).
+2. src/front/static/domain/js/domain-collaboration.js
+   - Normalised assigned tasks and review worklist items into one row model
+     (`assignedRow`, `reviewRow`), sorted by last update.
+   - Added client-side filtering (`applyTaskFilters`, `initTaskFilters`) by
+     text, type and status, with "N tasks" / "N of M tasks" count and a
+     no-match empty state.
+   - Render a single `table-hover ob-runs-table ob-tasks-table` with columns
+     Status, Task, Context, Type, From, Updated, Due, actions; review titles
+     are links opening the review.
+   - Replaced the filled badges (`taskStatusBadge`, `statusBadge`) with one
+     icon + word status (`taskStatus`, `.ob-run-status.is-*`); row actions
+     are `btn-outline-secondary`.
+   - Removed `assignedHtml` / `reviewHtml`.
+3. src/front/static/domain/css/domain-collaboration.css
+   - Added `.ob-tasks-filters`, `.ob-tasks-search`, `.ob-tasks-filter-btn`
+     (with `.is-active`), `.ob-tasks-title`, `.ob-tasks-meta`.
+4. .cursor/11-frontend-design.mdc
+   - Documented the "Work Lists (Query History style)" pattern.
+5. tests/units/front/test_domain_mytasks_query_history.py
+   - New contracts for the filter bar, single flat table, icon + word status,
+     client-side filtering and CSS location.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/css/domain-collaboration.css
+- src/front/static/domain/js/domain-collaboration.js
+- src/front/templates/partials/domain/_domain_mytasks.html
+- tests/units/front/test_domain_mytasks_query_history.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10943 passed, 334 skipped, 8 deselected, 0 failed in 51.76s
+
+
+## My Tasks: compact row height
+
+Context:
+The My Tasks rows inherited the Runs list padding, which made the rows taller
+than needed. Requested to reduce row height.
+
+Changes:
+1. src/front/static/domain/css/domain-collaboration.css
+   - Added `.ob-tasks-table` header padding (0.35rem vertical).
+   - Added `.ob-tasks-table > tbody > tr > td` padding (0.3rem vertical) and
+     `line-height: 1.3`.
+   - Added `.ob-tasks-table .btn-sm` vertical padding (0.05rem) and
+     `line-height: 1.4` so row buttons no longer force taller rows.
+2. tests/units/front/test_domain_mytasks_query_history.py
+   - Added `test_task_rows_are_compact` asserting the compact cell padding.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/css/domain-collaboration.css
+- tests/units/front/test_domain_mytasks_query_history.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10944 passed, 334 skipped, 8 deselected, 0 failed in 49.93s
+
+
+## Work-list template: shared filter bar and compact table across the app
+
+Context:
+The My Tasks restyle (filter bar + flat compact table) is now the app-wide
+template for flat work lists. The filter bar, compact rows and status styles
+were moved from the My Tasks page into the shared stylesheet, and the Build
+and Analytics run lists and the Home My Tasks tile were moved onto the same
+template. The Discussions timeline is a timeline, not a table, so it keeps
+its own layout.
+
+Changes:
+1. src/front/static/global/css/components.css
+   - Added the shared `.ob-filter-bar`, `.ob-filter-search`, `.ob-filter-btn`
+     (incl. `.is-active`) styles, moved from `domain-collaboration.css`.
+   - Compacted `.ob-runs-table` rows: header padding `0.35rem 0.75rem`, body
+     padding `0.3rem 0.75rem` with `line-height: 1.3`; `.ob-runs-table .btn-sm`
+     uses tighter vertical padding.
+   - Removed the unused `.ob-runs-toolbar` rule.
+2. src/front/static/domain/css/domain-collaboration.css
+   - Removed the My Tasks copies of the filter bar and compact table rules;
+     only `.ob-tasks-title` and `.ob-tasks-meta` remain.
+3. src/front/templates/partials/domain/_domain_mytasks.html
+   - Renamed filter classes to the shared `ob-filter-*` names.
+4. src/front/static/domain/js/domain-collaboration.js
+   - Renamed the filter-value selector to `.ob-filter-value`.
+5. src/front/static/global/js/list-filter.js (new)
+   - `window.ObListFilter.bind(input, tbody, countEl, noun)`: free-text filter
+     over table rows, with "N runs" / "N of M runs" count.
+6. src/front/templates/partials/domain/_domain_build_runs.html
+7. src/front/templates/partials/domain/_domain_analytics_runs.html
+   - Replaced `.ob-runs-toolbar` with `.ob-filter-bar`: search input
+     (`#runsFilter`, `#analyticsRunsFilter`), count, and Refresh on the right
+     (`ms-auto`).
+8. src/front/static/domain/js/domain-runs.js
+   - Bound both run-list filters lazily and re-applied them after each render;
+     the count is now filter-aware.
+9. src/front/templates/domain.html, intelligence.html, dtwin.html
+   - Load `global/js/list-filter.js` before `domain/js/domain-runs.js`.
+10. src/front/static/home/js/home-tasks.js
+    - Home My Tasks tables use `table table-hover align-middle ob-runs-table`.
+11. src/front/static/registry/css/registry-my-tasks.css
+    - Removed the `.my-tasks-table` overrides (uppercase headers); kept the
+      approvals and empty-state helpers.
+12. .cursor/11-frontend-design.mdc
+    - Documented the Work-List Template as the app-wide pattern.
+13. tests/units/front/test_domain_mytasks_query_history.py
+    - Rewritten contracts for the shared classes, compact rows, the list
+      filter helper, run-list wiring, script load order and the Home tile.
+14. tests/units/front/test_databricks_runs_list_contract.py
+    - Toolbar contract now targets `.ob-filter-bar` and checks the run count
+      sits before the Refresh button.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/css/domain-collaboration.css
+- src/front/static/domain/js/domain-collaboration.js
+- src/front/static/domain/js/domain-runs.js
+- src/front/static/global/css/components.css
+- src/front/static/global/js/list-filter.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/registry/css/registry-my-tasks.css
+- src/front/templates/domain.html
+- src/front/templates/dtwin.html
+- src/front/templates/intelligence.html
+- src/front/templates/partials/domain/_domain_analytics_runs.html
+- src/front/templates/partials/domain/_domain_build_runs.html
+- src/front/templates/partials/domain/_domain_mytasks.html
+- tests/units/front/test_databricks_runs_list_contract.py
+- tests/units/front/test_domain_mytasks_query_history.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10950 passed, 334 skipped, 8 deselected, 0 failed in 49.29s
+
+## Indent Explorer right pane tab header
+
+Context: In the Graph Explorer (`/dtwin/?section=sigmagraph`), the right pane's
+compact tab strip (`.sg-panel-tabs`) was flush against the card's left border
+with 0px padding, making the leading "Details" tab touch the panel's left edge.
+Added `padding: 0 1rem` to inset the tabs so the "Details" tab aligns neatly
+with the `p-3` (1rem) inner tab content below it.
+
+Changes:
+
+1. src/front/static/query/css/query-sigmagraph.css
+   Added `padding: 0 1rem` to `#sigmagraph-section .sg-panel-tabs, .sg-panel-tabs`
+   so the tabs are inset 1rem from the panel's edges while keeping the baseline
+   border spanning the full card width.
+2. tests/units/front/test_clarity_design_contract.py
+   Updated `test_sigmagraph_panel_uses_the_shared_compact_tab_rail` to assert
+   horizontal 1rem padding on `.sg-panel-tabs`.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_clarity_design_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10950 passed, 334 skipped, 8 deselected, 0 failed in 49.70s
+
+## Remove borders for tabs on GraphQL/Query page
+
+Context: On the Graph Query page (`/dtwin/?section=graphql`), the enclosing
+card (`.query-card-fill`) rendered a Bootstrap card frame and border around the
+GraphQL / SPARQL tabs, and the tab rail had a baseline border. Removed both
+borders so the tabs float cleanly and borderless directly on the white page
+panel surface, matching Databricks style.
+
+Changes:
+
+1. src/front/static/query/css/query-sparql.css
+   Added `border: none; background: transparent; box-shadow: none;` to
+   `#graphql-section .query-card-fill` and `border: none !important; border-bottom: none !important;`
+   to `#graphql-section .query-language-tabs`.
+2. src/front/static/global/css/components.css
+   Extended the card-integrated borderless rule to include
+   `.sidebar-section > .card:has(.nav-tabs.ob-tabs)` and
+   `.sidebar-section > .card.query-card-fill`.
+3. tests/units/front/test_query_language_tabs_style.py
+   Added `test_query_language_tabs_and_card_have_no_border` contract test.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/components.css
+- src/front/static/query/css/query-sparql.css
+- tests/units/front/test_query_language_tabs_style.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10951 passed, 334 skipped, 8 deselected, 0 failed in 50.37s
+
+## Remove borders for Graph Chat panel
+
+Context: Same Databricks borderless treatment as Graph → Query. The Graph Chat
+panel (`/dtwin/?section=chat`) sat in a Bootstrap `.card` frame; it now sits
+flush on the white page panel with no border, background or shadow.
+
+Changes:
+
+1. src/front/static/query/css/query-chat.css
+   Added `#chat-section .graph-chat-container { border: none; background:
+   transparent; box-shadow: none; }` (scoped so bare `.graph-chat-container`
+   still does not override shared `.card` chrome).
+2. src/front/static/global/css/components.css
+   Included `.sidebar-section > .card.graph-chat-container` in the card-
+   integrated borderless rule.
+3. tests/units/front/test_button_design_contract.py
+   Asserts the scoped borderless rule under `#chat-section`.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/components.css
+- src/front/static/query/css/query-chat.css
+- tests/units/front/test_button_design_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10951 passed, 334 skipped, 8 deselected, 0 failed in 49.83s

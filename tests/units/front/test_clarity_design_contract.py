@@ -439,6 +439,10 @@ def test_sigmagraph_panel_uses_the_shared_compact_tab_rail():
 
     css = _read(SIGMAGRAPH_CSS)
     assert ".sg-panel-tabs .nav-link" not in css
+    # Tab rail header has horizontal padding so Details is inset from the panel edge
+    match = re.search(r"(?:#sigmagraph-section\s+)?\.sg-panel-tabs\s*\{([^}]*)\}", css)
+    assert match is not None
+    assert re.search(r"padding(?:-left)?\s*:\s*(?:0\s+)?1rem", match.group(1))
 
 
 def test_sigmagraph_max_entities_matches_backend_clamp():

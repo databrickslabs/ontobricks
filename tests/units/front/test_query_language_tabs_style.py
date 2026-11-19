@@ -82,3 +82,15 @@ def test_query_language_tabs_keep_their_bootstrap_wiring():
     assert 'data-bs-target="#querySparqlPane"' in shell
     assert 'aria-controls="queryGraphqlPane"' in shell
     assert 'aria-controls="querySparqlPane"' in shell
+
+
+def test_query_language_tabs_and_card_have_no_border():
+    css = SPARQL_CSS.read_text(encoding="utf-8")
+    card_match = re.search(r"#graphql-section\s+\.query-card-fill\s*\{([^}]*)\}", css)
+    assert card_match is not None
+    assert "border: none" in card_match.group(1)
+
+    tabs_match = re.search(r"#graphql-section\s+\.query-language-tabs\s*\{([^}]*)\}", css)
+    assert tabs_match is not None
+    assert "border: none" in tabs_match.group(1)
+

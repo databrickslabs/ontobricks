@@ -19,14 +19,41 @@ function _setRunsCount(el, n) {
     el.textContent = n > 0 ? n.toLocaleString() + (n === 1 ? ' run' : ' runs') : '';
 }
 
+// Free-text filter bound to the shared .ob-filter-bar (see list-filter.js).
+// Bound lazily so the inputs only need to exist when a table is rendered.
+let _buildRunsFilter = null;
+let _analyticsRunsFilter = null;
+
+function _buildRunsFilterApi() {
+    if (!_buildRunsFilter) {
+        _buildRunsFilter = ObListFilter.bind(
+            document.getElementById('runsFilter'),
+            document.getElementById('runsTableBody'),
+            document.getElementById('runsCount'),
+            'run');
+    }
+    return _buildRunsFilter;
+}
+
+function _analyticsRunsFilterApi() {
+    if (!_analyticsRunsFilter) {
+        _analyticsRunsFilter = ObListFilter.bind(
+            document.getElementById('analyticsRunsFilter'),
+            document.getElementById('analyticsRunsTableBody'),
+            document.getElementById('analyticsRunsCount'),
+            'run');
+    }
+    return _analyticsRunsFilter;
+}
+
 function _renderRunsTable() {
     const empty = document.getElementById('runsEmpty');
     const wrapper = document.getElementById('runsTableWrapper');
     const tbody = document.getElementById('runsTableBody');
     if (!tbody) return;
 
-    _setRunsCount(document.getElementById('runsCount'), _runsCache.length);
     if (_runsCache.length === 0) {
+        _setRunsCount(document.getElementById('runsCount'), 0);
         wrapper.style.display = 'none';
         empty.style.display = '';
         return;
@@ -41,6 +68,8 @@ function _renderRunsTable() {
         tbody.appendChild(row);
     });
     wrapper.style.display = '';
+    const f = _buildRunsFilterApi();
+    if (f) f.apply();
 }
 
 function _renderAnalyticsRunsTable() {
@@ -49,8 +78,8 @@ function _renderAnalyticsRunsTable() {
     const tbody = document.getElementById('analyticsRunsTableBody');
     if (!tbody) return;
 
-    _setRunsCount(document.getElementById('analyticsRunsCount'), _analyticsRunsCache.length);
     if (_analyticsRunsCache.length === 0) {
+        _setRunsCount(document.getElementById('analyticsRunsCount'), 0);
         wrapper.style.display = 'none';
         empty.style.display = '';
         return;
@@ -65,6 +94,8 @@ function _renderAnalyticsRunsTable() {
         tbody.appendChild(row);
     });
     wrapper.style.display = '';
+    const f = _analyticsRunsFilterApi();
+    if (f) f.apply();
 }
 
 async function _loadBuildRuns() {

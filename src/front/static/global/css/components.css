@@ -1162,6 +1162,9 @@
 .sidebar-section > .content-section > .card:has(.nav-tabs.ob-tabs),
 .sidebar-section > .content-section > form.card.ob-tabs-wrap,
 .sidebar-section > .content-section > .card.ob-tabs-wrap,
+.sidebar-section > .card:has(.nav-tabs.ob-tabs),
+.sidebar-section > .card.query-card-fill,
+.sidebar-section > .card.graph-chat-container,
 .card:has(> .card-body.ob-tabs-wrap),
 .card:has(> .card-body > .ob-tabs-wrap) {
     border: none;
@@ -1337,17 +1340,69 @@
    Flat list: transparent header, hairline rows, start-time link first,
    icon + word status, ghost details control.
    ========================================================================== */
-.ob-runs-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-}
-
 .ob-runs-count {
     font-size: 0.8125rem;
     color: var(--db-text-secondary);
+}
+
+/* ---- Filter bar (Databricks Query History style) ----------------------
+   Search + filter dropdown buttons above a flat list. Shared by every
+   work list: My Tasks, Build / Analytics runs, etc.
+   Markup: .ob-filter-bar > .ob-filter-search | .dropdown > .ob-filter-btn
+           + .ob-runs-count (row count on the right).                      */
+.ob-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.ob-filter-search {
+    position: relative;
+    flex: 0 1 18rem;
+    min-width: 12rem;
+}
+
+.ob-filter-search > .bi {
+    position: absolute;
+    top: 50%;
+    left: 0.6rem;
+    transform: translateY(-50%);
+    font-size: 0.8125rem;
+    color: var(--db-text-muted);
+    pointer-events: none;
+}
+
+.ob-filter-search > .form-control {
+    padding-left: 1.85rem;
+    font-size: 0.8125rem;
+}
+
+.ob-filter-btn {
+    font-size: 0.8125rem;
+    color: var(--db-text);
+    background: transparent;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+}
+
+.ob-filter-btn:hover,
+.ob-filter-btn.show {
+    background: var(--db-hover);
+    color: var(--db-text);
+    border-color: var(--db-border);
+}
+
+.ob-filter-btn.is-active {
+    color: var(--db-link);
+    border-color: var(--db-link);
+    background: var(--db-primary-soft);
+}
+
+.ob-filter-btn:focus-visible {
+    outline: 2px solid transparent;
+    box-shadow: var(--db-focus-ring);
 }
 
 .ob-runs-table {
@@ -1365,12 +1420,13 @@
     font-size: 0.75rem;
     font-weight: 600;
     white-space: nowrap;
-    padding: 0.5rem 0.75rem;
+    padding: 0.35rem 0.75rem;
     border-bottom: 1px solid var(--db-border);
 }
 
 .ob-runs-table > tbody > tr > td {
-    padding: 0.55rem 0.75rem;
+    padding: 0.3rem 0.75rem;
+    line-height: 1.3;
     color: var(--db-text);
     white-space: nowrap;
     border-bottom: 1px solid var(--db-border-light);
@@ -1378,6 +1434,13 @@
 
 .ob-runs-table > tbody > tr:last-child > td {
     border-bottom: 0;
+}
+
+/* Row buttons must not force taller rows. */
+.ob-runs-table .btn-sm {
+    padding-top: 0.05rem;
+    padding-bottom: 0.05rem;
+    line-height: 1.4;
 }
 
 .ob-run-link {

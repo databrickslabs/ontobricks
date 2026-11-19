@@ -238,6 +238,12 @@ def test_graph_chat_panel_defers_to_shared_card_surface():
         assert not _has_declaration(container_blocks, prop, r"."), (
             f".graph-chat-container must not override .card {prop}"
         )
+    # Borderless on the chat page only (Databricks page-panel style), scoped
+    # under #chat-section so the bare `.graph-chat-container` rule stays clean.
+    scoped = _blocks_for_selector(css, "#chat-section .graph-chat-container")
+    assert _has_declaration(scoped, "border", r"none")
+    assert _has_declaration(scoped, "background", r"transparent")
+    assert _has_declaration(scoped, "box-shadow", r"none")
 
 
 def test_settings_header_buttons_carry_the_small_size():

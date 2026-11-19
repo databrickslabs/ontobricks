@@ -1067,6 +1067,35 @@ styling lives only in `components.css`.
 - ❌ Filled status pills, grey header bands, or outline-primary eye buttons in
   run-list rows.
 
+### Work-List Template (`.ob-filter-bar` + `.ob-runs-table`) — Databricks Query History style
+
+This is the **app-wide template for every flat work list**: a filter bar above
+one compact, hoverable table. Styles live in `global/css/components.css`;
+the free-text filter helper is `global/js/list-filter.js` (`ObListFilter.bind`).
+Used by Context → My Tasks, Graph → Build → Runs, Intelligence → Analytics →
+Runs, and the Home → My tasks tile (table only). Settings → Runs lists keep
+the same table but have no filter bar yet.
+
+- Filter bar (`.ob-filter-bar`, flex row with `gap: 0.5rem`):
+  - search: `.ob-filter-search` wrapping a leading `bi-search` icon and an
+    `input[type=search].form-control-sm`; filtered by `ObListFilter.bind`
+    on the rows' visible text.
+  - filter dropdowns (My Tasks only): Bootstrap `.dropdown` with a
+    `.ob-filter-btn` toggle that shows `Label: Value` and gains `.is-active`.
+  - row count: `.ob-runs-count` (`N runs`, or `N of M runs` while filtering).
+  - a trailing action such as Refresh gets `ms-auto` to sit on the right.
+- Table: `table table-hover align-middle ob-runs-table`, plain `<thead>`.
+  Rows are compact: cell padding `0.3rem 0.75rem`, row buttons `btn-sm` with
+  tighter vertical padding (see `.ob-runs-table .btn-sm`).
+- Re-apply the filter (`ObListFilter.bind(...).apply()`) after every render
+  so the count stays accurate.
+- **Status** is icon + word via `.ob-run-status.is-*`; no filled badges.
+  Row actions are `btn-sm btn-outline-secondary`.
+- Task-specific bits only (e.g. `.ob-tasks-title`, `.ob-tasks-meta`) live in
+  `domain/css/domain-collaboration.css`.
+- ❌ Per-list copies of the filter bar or table styles, separate tables with
+  uppercase captions, or filled status badges.
+
 ### Split-Panel Canvas Layout (canvas + resizable right panel)
 
 Every screen that pairs a canvas or a browsable list with a contextual

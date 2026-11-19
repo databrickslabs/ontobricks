@@ -213,9 +213,13 @@
     min-height: 0;
 }
 
-/* The shared compact tab rail owns all visual states. */
+/* The shared compact tab rail owns all visual states.
+   Inset with horizontal padding so the first tab (Details) has breathing
+   room from the panel edge, aligning with the p-3 body content below. */
+#sigmagraph-section .sg-panel-tabs,
 .sg-panel-tabs {
     flex-shrink: 0;
+    padding: 0 1rem;
 }
 
 .sg-tab-content {

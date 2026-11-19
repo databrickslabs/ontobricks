@@ -14,6 +14,14 @@
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+#graphql-section .query-language-tabs {
+    border: none !important;
+    border-bottom: none !important;
 }
 
 #graphql-section .query-card-fill > .card-body {

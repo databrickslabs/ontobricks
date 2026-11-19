@@ -1,9 +1,14 @@
 <!-- Build-run history — Graph → Management → Build → Runs tab.
      JS: /static/domain/js/domain-runs.js (shared with Analytics → Runs). -->
 <div id="buildRunsPaneBody">
-    <div class="ob-runs-toolbar">
+    <div class="ob-filter-bar">
+        <div class="ob-filter-search">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input type="search" class="form-control form-control-sm" id="runsFilter"
+                   placeholder="Filter runs" aria-label="Filter build runs">
+        </div>
         <span class="ob-runs-count" id="runsCount" aria-live="polite"></span>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadBuildRuns"
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="btnReloadBuildRuns"
                 onclick="loadBuildRuns()" title="Reload build runs from the registry">
             <i class="bi bi-arrow-counterclockwise me-1"></i>Refresh
         </button>

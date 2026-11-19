@@ -82,8 +82,8 @@ def test_build_runs_list_shows_duration(path):
 @pytest.mark.parametrize("path,count_id", [(BUILD_RUNS, "runsCount"), (ANALYTICS_RUNS, "analyticsRunsCount")])
 def test_per_domain_runs_have_a_toolbar_with_a_run_count(path, count_id):
     html = _read(path)
-    toolbar = html[html.index('class="ob-runs-toolbar"') :]
-    assert f'id="{count_id}"' in toolbar[: toolbar.index("</div>")]
+    toolbar = html[html.index('class="ob-filter-bar"') :]
+    assert f'id="{count_id}"' in toolbar[: toolbar.index("Refresh")]
     js = _read(DOMAIN_RUNS_JS)
     assert f"document.getElementById('{count_id}')" in js
 
