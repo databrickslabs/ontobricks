@@ -1,5 +1,6 @@
 {# Workspace map opened from #domainContextTrigger; menu_config.json stays authoritative.
-   Mapping lives under Graph (digitaltwin) — no separate Mapping column. #}
+   Mapping lives under Graph (digitaltwin) — no separate Mapping column.
+   Switch Version controls live in this same modal (no separate popup). #}
 {% set domain_m = namespace(v=none) %}
 {% set ontology_m = namespace(v=none) %}
 {% set kg_m = namespace(v=none) %}
@@ -23,6 +24,31 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"
                         aria-label="Close"></button>
+            </div>
+            <div class="ob-workspace-map-versions" data-workspace-map-versions>
+                <div class="ob-workspace-map-versions-main">
+                    <label class="form-label mb-0" for="switchVersionSelect">Version</label>
+                    <select class="form-select form-select-sm" id="switchVersionSelect" disabled>
+                        <option value="">Loading versions…</option>
+                    </select>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="switchSaveFirst" checked>
+                        <label class="form-check-label" for="switchSaveFirst">
+                            Save my changes before switching
+                        </label>
+                    </div>
+                    <div class="form-text text-warning-emphasis mb-0" id="switchSaveFirstHint">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Unchecking discards any unsaved changes.
+                    </div>
+                </div>
+                <div class="ob-workspace-map-versions-actions">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCreateVersionFromSwitch">
+                        <i class="bi bi-plus-circle me-1"></i> New Version
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnConfirmSwitch" disabled>
+                        <i class="bi bi-arrow-repeat me-1"></i> Switch
+                    </button>
+                </div>
             </div>
             <div class="modal-body p-0">
                 <div class="ob-workspace-map-grid">

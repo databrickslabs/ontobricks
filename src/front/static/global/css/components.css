@@ -31,6 +31,65 @@
     color: var(--db-primary);
 }
 
+/* Switch Version strip — former dedicated popup, now under the map header. */
+.ob-workspace-map-versions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--db-border);
+    background: var(--db-canvas-warm);
+}
+
+.ob-workspace-map-versions-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    min-width: 0;
+    flex: 1 1 18rem;
+}
+
+.ob-workspace-map-versions-main .form-label {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--db-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ob-workspace-map-versions-main #switchVersionSelect {
+    width: auto;
+    min-width: 12rem;
+    max-width: 100%;
+}
+
+.ob-workspace-map-versions-main .form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.ob-workspace-map-versions-main .form-check-label {
+    font-size: 0.82rem;
+    color: var(--db-text-secondary);
+}
+
+.ob-workspace-map-versions-main .form-text {
+    flex: 1 1 100%;
+    font-size: 0.72rem;
+}
+
+.ob-workspace-map-versions-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .ob-workspace-map-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));

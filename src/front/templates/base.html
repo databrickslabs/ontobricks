@@ -256,9 +256,6 @@
         {% if m.id == 'intelligence' %}{% set intel_m.v      = m %}{% endif %}
         {% if m.id == 'domain'     %}{% set domain_m.v   = m %}{% endif %}
     {% endfor %}
-    {# Version crumb (vN ▾) hosts the domainSwitch action from menu_config #}
-    {% set switch_action_ctx = namespace(v=none) %}
-    {% if domain_m.v %}{% for a in domain_m.v.navbar_actions %}{% if a.action == 'domainSwitch' %}{% set switch_action_ctx.v = a %}{% endif %}{% endfor %}{% endif %}
     <nav id="obSubnav" class="ob-subnav d-none" aria-label="Section navigation">
         <div class="container-fluid">
             <ul class="ob-subnav-nav">
@@ -271,19 +268,13 @@
                        aria-label="Open workspace map for Context">
                         <span class="ob-subnav-context-copy">
                             <span id="currentDomainName" class="ob-subnav-context-name">{{ domain_m.v.label }}</span>
+                            {# Status badge is injected after the name; version sits after it. #}
+                            <span id="domainContextVersion"
+                                  class="badge border domain-version-badge d-none"
+                                  aria-label="Context version"></span>
                         </span>
                         <i class="bi bi-chevron-down ob-subnav-caret" aria-hidden="true"></i>
                     </a>
-                    <span class="ob-subnav-crumb-sep" aria-hidden="true">/</span>
-                    {% if switch_action_ctx.v %}
-                    <a class="ob-subnav-crumb ob-subnav-version-crumb btn-requires-domain" href="#"
-                       data-navbar-action="{{ switch_action_ctx.v.action }}"
-                       {% if switch_action_ctx.v.element_id %}id="{{ switch_action_ctx.v.element_id }}"{% endif %}
-                       title="Switch version or create a new one">
-                        <span id="domainContextVersion" class="ob-subnav-context-version"></span>
-                        <i class="bi bi-chevron-down ob-subnav-caret" aria-hidden="true"></i>
-                    </a>
-                    {% endif %}
                 </li>
                 {% endif %}
                 <li class="ob-subnav-workspaces" id="domainWorkspaceSubnavNav" data-subnav-domain-chrome>

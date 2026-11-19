@@ -79,12 +79,15 @@ def test_workspace_targets_are_grouped_before_context_and_actions():
     assert "ob-subnav-save-btn" not in group
     assert "currentDomainName" in html
     assert "domainContextVersion" in html
-    # The version crumb owns the switcher (Versions merged into vN ▾).
-    version_crumb = re.search(r'<a\b[^>]*class="[^"]*ob-subnav-version-crumb[^"]*"[^>]*>', html)
-    assert version_crumb, "Missing version crumb"
-    # The id is rendered from menu_config.json (navbar action element_id).
-    assert 'id="{{ switch_action_ctx.v.element_id }}"' in version_crumb.group(0)
-    assert html.index("ob-subnav-version-crumb") < html.index("ob-subnav-close-btn")
+    # Version is a badge next to the context name; the switcher lives in the
+    # workspace map modal (no separate vN ▾ crumb).
+    assert "ob-subnav-version-crumb" not in html
+    assert "ob-subnav-crumb-sep" not in html
+    assert re.search(
+        r'id="domainContextVersion"[^>]*class="[^"]*\bdomain-version-badge\b',
+        html,
+    )
+    assert html.index("domainContextTrigger") < html.index("ob-subnav-close-btn")
     assert html.index("ob-subnav-close-btn") < html.index("ob-subnav-save-btn")
     assert "ob-subnav-switch-btn" not in html
     assert "ob-subnav-save-dirty" in html
@@ -184,7 +187,9 @@ def test_active_target_disables_only_its_dropdown():
         )
         assert tag, element_id
         assert 'data-bs-toggle="dropdown"' in tag.group(0)
-    assert "domainContextVersion.textContent = hasDomain ? String(version) : '';" in js
+    assert "`V${version}`" in js
+    assert "domainContextVersion" in js
+    assert "domain-version-badge" in js or "domainContextVersion" in js
 
 
 def test_save_is_the_only_primary_filled_domain_action():
@@ -207,7 +212,7 @@ def test_mobile_contract_does_not_add_horizontal_scrolling():
     mobile = _mobile_block(_read(MAIN_CSS))
 
     assert re.search(r"\.ob-subnav-context-copy\s*\{[^}]*display\s*:\s*none", mobile)
-    assert re.search(r"\.ob-subnav-save-kbd\s*,\s*\.ob-subnav-crumb-sep\s*\{[^}]*display\s*:\s*none", mobile)
+    assert re.search(r"\.ob-subnav-save-kbd\s*\{[^}]*display\s*:\s*none", mobile)
     assert re.search(r"\.ob-subnav-label\s*\{[^}]*display\s*:\s*none", mobile)
     assert ".ob-subnav" in mobile
     assert ".ob-subnav-nav" in mobile

@@ -48,7 +48,7 @@ def test_mobile_subnav_keeps_controls_but_hides_their_visual_labels():
     )
     # Four workspace links (Context, Ontology, Graph, Intelligence) plus Save
     # and Close keep their accessible text in the DOM while CSS hides only the
-    # visual label on mobile. Versions lives in the vN crumb (number only).
+    # visual label on mobile. Version switching lives in the workspace map.
     # Mapping is under Graph, not a separate L2 target.
     assert html.count('class="ob-subnav-label"') == 6
 

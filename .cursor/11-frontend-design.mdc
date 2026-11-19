@@ -229,7 +229,7 @@ the entire app chrome — never duplicate or substitute any of it:
 | Element | Provided by `base.html` | Don't reimplement |
 |---------|-------------------------|-------------------|
 | L1 navbar (top) | `<nav class="navbar navbar-expand-lg navbar-light">` driven by `menu_config.json` | a custom top bar |
-| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the domain crumb, version crumb (`vN ▾`), segmented Domain / Ontology / Mapping / Graph / Intelligence workspace track, breadcrumb, and Close → Save actions | a second nav element |
+| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the domain crumb (name + status + version badges), segmented Domain / Ontology / Mapping / Graph / Intelligence workspace track, breadcrumb, and Close → Save actions | a second nav element |
 | Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav, with dirty dot and shortcut keycap | a per-page save button |
 | Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
 | Notification Center dropdown | `#notifCenterDropdown` (bell) | a per-page notif list |
@@ -554,17 +554,17 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   - **Any page + no loaded domain:** hide all L2 chrome.
 - Layout (left → right inside `.ob-subnav-nav`):
   1. **Domain crumb** (`#domainContextTrigger`, `.ob-subnav-crumb`): domain
-     name + caret; opens `#workspaceMapModal`.
-  2. **Version crumb** (`#menuSwitchDomain`, `.ob-subnav-version-crumb`):
-     `vN ▾`, rendered from the `domainSwitch` action in `menu_config.json`.
-     It opens the version switcher, which includes **New Version**.
-  3. **Workspace links** (`.ob-subnav-workspace-list`): Domain, Ontology,
+     name, optional status badge, version badge (`#domainContextVersion`,
+     `.domain-version-badge`, e.g. `V2`), and caret. Opens `#workspaceMapModal`,
+     which now also hosts Switch Version / New Version (no separate `vN ▾`
+     crumb).
+  2. **Workspace links** (`.ob-subnav-workspace-list`): Domain, Ontology,
      Mapping, Graph, Intelligence. No ordinal numbers. The current workspace is a
      static `aria-current="page"` target; only the other workspace targets
      retain Bootstrap dropdowns.
-  4. A `.ob-subnav-flex-spacer` (`flex: 1`) — pushes the right group to the edge.
-  6. **Close Domain button** (`.ob-subnav-close-btn`): ghost text action.
-  7. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`): see the
+  3. A `.ob-subnav-flex-spacer` (`flex: 1`) — pushes the right group to the edge.
+  4. **Close Domain button** (`.ob-subnav-close-btn`): ghost text action.
+  5. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`): see the
      action-styles bullet below.
 - The three tab toggles (Ontology/Mapping/KG) do **not** carry
   `nav-requires-domain`. They are enabled whenever the subnav is
@@ -583,15 +583,15 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   the existing Bootstrap menu; selecting an item navigates to its existing
   route/section.
 - Visual contract: the L2 row is transparent with no bottom border. The five
-  workspaces are text links on the transparent row, styled like the Domain and
-  version crumbs (`--db-text`, weight 600; hover `--db-primary-darker` on
-  `--db-hover-indigo`). The current workspace is `--db-primary-darker`, weight 600,
-  with no fill or border. Dropdown menus keep the sidebar surface and hover
-  (`--db-hover-indigo`, `2px` radius). L1/L2 structure, order, and ownership are immutable.
-- Domain and version crumbs (`.ob-subnav-crumb`) are text on the transparent row,
-  with a `--db-hover-indigo` well on hover. The domain name is ellipsized
+  workspaces are text links on the transparent row, styled like the Domain crumb
+  (`--db-text`, weight 600; hover `--db-primary-darker` on `--db-hover-indigo`).
+  The current workspace is `--db-primary-darker`, weight 600, with no fill or
+  border. Dropdown menus keep the sidebar surface and hover (`--db-hover-indigo`,
+  `2px` radius). L1/L2 structure, order, and ownership are immutable.
+- The Domain crumb (`.ob-subnav-crumb`) is text on the transparent row, with a
+  `--db-hover-indigo` well on hover. The domain name is ellipsized
   (`max-width: 10rem`); name length never changes the `3rem` rail height shared
-  with the workspace track.
+  with the workspace track. Status and version badges sit beside the name.
 - Workspace target geometry: `.ob-subnav-workspace-list` keeps its `0.2rem`
   inset while direct `.ob-subnav-item` children and their `.ob-subnav-link`
   targets stretch with `height: 100%`. Hover and selected backgrounds therefore
@@ -613,7 +613,7 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   (`.ob-subnav-save-dirty`) while `setDomainDirty(source, dirty)` reports unsaved
   registry writes, and a platform shortcut keycap (`.ob-subnav-save-kbd`, filled by
   `navbar.js`). Close is a ghost text button with danger text. Rendered order:
-  version crumb → Close → Save. Preserve existing IDs, permission classes, and handlers.
+  Close → Save. Preserve existing IDs, permission classes, and handlers.
 - Shared ownership: L2 markup stays in `templates/base.html`, styling stays in
   `static/global/css/main.css`, active behavior stays in
   `static/global/js/navbar.js`, and menu contents stay driven by
@@ -626,9 +626,9 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   `200px` sidebar width and same shell left gutter.
 - Mobile contract (below `768px`): keep all four workspace targets plus Save and
   Close as titled icons by hiding only their `.ob-subnav-label`. Hide the inline
-  flex spacer, `.ob-subnav-context-copy`, the save keycap, and the
-  crumb separator. The version crumb shows only `vN` and its caret. Do not make the
-  subnav horizontally scrollable: Bootstrap dropdowns must still escape the row.
+  flex spacer, `.ob-subnav-context-copy` (name + badges), and the save keycap.
+  The context trigger collapses to its caret. Do not make the subnav horizontally
+  scrollable: Bootstrap dropdowns must still escape the row.
 
 **Tokens**
 

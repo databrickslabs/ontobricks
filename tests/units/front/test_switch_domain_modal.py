@@ -53,28 +53,24 @@ def test_navbar_js_confirm_skips_save_when_checkbox_disabled():
     assert "&& isSwitchSaveAllowed()" in js
 
 
-def test_switch_popup_exposes_shared_new_version_action():
-    """The global popup must offer the same create action as Domain → Versions."""
+def test_switch_controls_live_in_workspace_map_and_offer_new_version():
+    """Switch Version is embedded in the workspace map; New Version stays shared."""
     js = _read(NAVBAR_JS)
-    popup = js.split("function showSwitchDomainDialog")[1].split(
-        "\nfunction configureSwitchSaveOption"
-    )[0]
+    html = (
+        REPO_ROOT / "src/front/templates/partials/layout/_workspace_map_modal.html"
+    ).read_text(encoding="utf-8")
 
-    assert 'id="btnCreateVersionFromSwitch"' in popup
-    assert "bi-plus-circle" in popup
-    assert "New Version" in popup
-    assert popup.index('id="btnCreateVersionFromSwitch"') < popup.index(
-        'data-bs-dismiss="modal">Cancel'
-    )
-    assert popup.index('data-bs-dismiss="modal">Cancel') < popup.index(
+    assert 'id="btnCreateVersionFromSwitch"' in html
+    assert "bi-plus-circle" in html
+    assert "New Version" in html
+    assert html.index('id="btnCreateVersionFromSwitch"') < html.index(
         'id="btnConfirmSwitch"'
     )
-    assert (
-        "document.getElementById('btnCreateVersionFromSwitch')"
-        ".addEventListener('click', () => createNewDomainVersion({"
-    ) in popup
-    assert "closeSourceModal: () => modal.hide()" in popup
-    assert (
-        "restoreSourceModal: () => showSwitchDomainDialog("
-        "domainSlug, domainName, currentVersion)"
-    ) in popup
+    assert "function bindWorkspaceMapVersionActions(" in js
+    bind = js.split("function bindWorkspaceMapVersionActions")[1].split(
+        "\nfunction "
+    )[0]
+    assert "createNewDomainVersion({" in bind
+    assert "closeSourceModal:" in bind
+    assert "openWorkspaceMap(" in bind or "restoreSourceModal:" in bind
+    assert "showSwitchDomainDialog" not in js

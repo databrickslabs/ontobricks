@@ -68,6 +68,8 @@ function openWorkspaceMap(event) {
     if (!modalElement || typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
     syncWorkspaceMapTitle();
     highlightWorkspaceMapCurrent();
+    bindWorkspaceMapVersionActions();
+    initWorkspaceMapVersions();
     bootstrap.Modal.getOrCreateInstance(modalElement).show();
 }
 
@@ -357,7 +359,13 @@ function applyDomainInfo(data) {
         }
     }
     if (domainContextVersion) {
-        domainContextVersion.textContent = hasDomain ? String(version) : '';
+        if (hasDomain) {
+            domainContextVersion.textContent = `V${version}`;
+            domainContextVersion.classList.remove('d-none');
+        } else {
+            domainContextVersion.textContent = '';
+            domainContextVersion.classList.add('d-none');
+        }
     }
 
     const mapLabel = document.getElementById('workspaceMapDomainLabel');
@@ -1127,8 +1135,9 @@ function showCloseDomainDialog(options = {}) {
 /**
  * Create a new version from the current domain state.
  *
- * This global action is shared by the Versions popup and Context > Versions.
- * Branching remains available for read-only or incomplete domain versions.
+ * This global action is shared by the workspace map Switch strip and
+ * Context → Versions. Branching remains available for read-only or incomplete
+ * domain versions.
  */
 async function createNewDomainVersion(options = {}) {
     const confirmed = await showConfirmDialog({
@@ -1176,35 +1185,14 @@ async function createNewDomainVersion(options = {}) {
 }
 
 /**
- * Switch the open domain to another version — or reload the current one — from
- * the Registry.
+ * Switch the open domain to another version — or reload the current one.
  *
- * Opens a popup listing every available version of the currently open domain
- * (the current one flagged) so the user can either reload it (discard the
- * in-session edits and re-fetch from the Registry) or jump to a different
- * version. Because both paths overwrite the session, the popup offers to
- * *save first*; unchecking that box discards unsaved changes.
+ * Switch Version lives inside the workspace map modal (opened from the L2
+ * context name). ``domainSwitch`` remains the programmatic entry point used by
+ * ``data-navbar-action`` and Domain → Versions.
  */
 async function domainSwitch() {
-    let info;
-    try {
-        const resp = await fetch('/domain/info', { credentials: 'same-origin' });
-        info = await resp.json();
-    } catch (e) {
-        showNotification('Could not read the current context', 'error');
-        return;
-    }
-
-    const domainSlug = (info && info.domain_folder) || '';
-    const domainName = (info && (info.name || (info.info && info.info.name))) || 'context';
-    const currentVersion = (info && (info.info && info.info.version)) || (info && info.version) || '';
-
-    if (!domainSlug) {
-        showNotification('Save the context to the registry first before switching versions', 'warning');
-        return;
-    }
-
-    showSwitchDomainDialog(domainSlug, domainName, String(currentVersion));
+    openWorkspaceMap();
 }
 
 /**
@@ -1219,79 +1207,61 @@ function isSwitchSaveAllowed() {
 }
 
 /**
- * Render the Switch-version popup for the currently open domain.
+ * Hide the workspace map modal if it is open.
  */
-function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
-    const existing = document.getElementById('domainSwitchModal');
-    if (existing) existing.remove();
+function hideWorkspaceMapModal() {
+    const modalEl = document.getElementById('workspaceMapModal');
+    if (!modalEl || typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+    const instance = bootstrap.Modal.getInstance(modalEl);
+    if (instance) instance.hide();
+}
 
-    const modalHtml = `
-        <div class="modal fade" id="domainSwitchModal" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Switch Version</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p class="mb-2 small text-muted">
-                            <i class="bi bi-diagram-3 me-1"></i>Context: <strong>${escapeHtmlAttr(domainName)}</strong>
-                        </p>
-                        <div class="mb-3">
-                            <label class="form-label" for="switchVersionSelect">Version to load</label>
-                            <select class="form-select" id="switchVersionSelect" disabled>
-                                <option value="">Loading versions…</option>
-                            </select>
-                            <div class="form-text">Pick the current version to reload it from the Registry, or another version to switch.</div>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="switchSaveFirst" checked>
-                            <label class="form-check-label" for="switchSaveFirst">
-                                Save my changes before switching
-                            </label>
-                            <div class="form-text text-warning-emphasis" id="switchSaveFirstHint">
-                                <i class="bi bi-exclamation-triangle me-1"></i>Unchecking discards any unsaved changes.
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" id="btnCreateVersionFromSwitch">
-                            <i class="bi bi-plus-circle me-1"></i> New Version
-                        </button>
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="btnConfirmSwitch" disabled>
-                            <i class="bi bi-arrow-repeat"></i> Switch
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
+/**
+ * Bind Switch / New Version actions once on the workspace map controls.
+ */
+function bindWorkspaceMapVersionActions() {
+    const createBtn = document.getElementById('btnCreateVersionFromSwitch');
+    const confirmBtn = document.getElementById('btnConfirmSwitch');
+    if (!createBtn || !confirmBtn) return;
+    if (createBtn.dataset.bound === 'true') return;
+    createBtn.dataset.bound = 'true';
+    confirmBtn.dataset.bound = 'true';
 
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modalEl = document.getElementById('domainSwitchModal');
-    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-    modal.show();
-    modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove());
-
-    configureSwitchSaveOption();
-    populateSwitchVersions(currentVersion);
-    document.getElementById('btnCreateVersionFromSwitch').addEventListener('click', () => createNewDomainVersion({
-        closeSourceModal: () => modal.hide(),
-        restoreSourceModal: () => showSwitchDomainDialog(domainSlug, domainName, currentVersion)
+    createBtn.addEventListener('click', () => createNewDomainVersion({
+        closeSourceModal: () => hideWorkspaceMapModal(),
+        restoreSourceModal: () => openWorkspaceMap()
     }));
 
-    document.getElementById('btnConfirmSwitch').addEventListener('click', async () => {
+    confirmBtn.addEventListener('click', async () => {
         const select = document.getElementById('switchVersionSelect');
-        const version = select.value;
+        const version = select && select.value;
         if (!version) {
             showNotification('Please select a version', 'warning');
             return;
         }
+
+        let info;
+        try {
+            const resp = await fetch('/domain/info', { credentials: 'same-origin' });
+            info = await resp.json();
+        } catch (e) {
+            showNotification('Could not read the current context', 'error');
+            return;
+        }
+
+        const domainSlug = (info && info.domain_folder) || '';
+        if (!domainSlug) {
+            showNotification(
+                'Save the context to the registry first before switching versions',
+                'warning'
+            );
+            return;
+        }
+
         const saveCheckbox = document.getElementById('switchSaveFirst');
         const saveFirst = saveCheckbox && saveCheckbox.checked && !saveCheckbox.disabled
             && isSwitchSaveAllowed();
-        modal.hide();
+        hideWorkspaceMapModal();
 
         if (saveFirst) {
             if (typeof saveDomainInfoBeforeSave === 'function') await saveDomainInfoBeforeSave();
@@ -1301,6 +1271,40 @@ function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
 
         await doDomainLoad(domainSlug, version);
     });
+}
+
+/**
+ * Refresh the Switch Version strip when the workspace map opens.
+ */
+async function initWorkspaceMapVersions() {
+    const select = document.getElementById('switchVersionSelect');
+    const confirmBtn = document.getElementById('btnConfirmSwitch');
+    if (!select) return;
+
+    select.disabled = true;
+    select.innerHTML = '<option value="">Loading versions…</option>';
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    configureSwitchSaveOption();
+
+    let currentVersion = '';
+    try {
+        const resp = await fetch('/domain/info', { credentials: 'same-origin' });
+        const info = await resp.json();
+        currentVersion = String(
+            (info && info.info && info.info.version) || (info && info.version) || ''
+        );
+        const domainSlug = (info && info.domain_folder) || '';
+        if (!domainSlug) {
+            select.innerHTML = '<option value="">Save context to list versions</option>';
+            return;
+        }
+    } catch (e) {
+        select.innerHTML = '<option value="">Could not read context</option>';
+        return;
+    }
+
+    await populateSwitchVersions(currentVersion);
 }
 
 /**
@@ -1361,13 +1365,6 @@ async function populateSwitchVersions(currentVersion) {
     } catch (e) {
         select.innerHTML = '<option value="">Error loading versions</option>';
     }
-}
-
-/** Minimal attribute-safe escaper for interpolated text. */
-function escapeHtmlAttr(text) {
-    const div = document.createElement('div');
-    div.textContent = text == null ? '' : String(text);
-    return div.innerHTML;
 }
 
 /**

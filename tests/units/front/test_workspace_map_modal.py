@@ -148,3 +148,30 @@ def test_navbar_syncs_workspace_map_title_and_status():
     assert "workspaceMapDomainLabel" in js
     apply_block = js[js.index("function applyDomainInfo(") :][:1800]
     assert "applyDomainStatusBadge(mapLabel" in apply_block
+
+
+def test_workspace_map_embeds_switch_version_controls():
+    """The context popup owns the former Switch Version modal controls."""
+    html = _render_modal()
+    assert 'id="switchVersionSelect"' in html
+    assert 'id="switchSaveFirst"' in html
+    assert 'id="btnConfirmSwitch"' in html
+    assert 'id="btnCreateVersionFromSwitch"' in html
+    assert "ob-workspace-map-versions" in html
+    assert html.index("ob-workspace-map-versions") < html.index("ob-workspace-map-grid")
+
+
+def test_open_workspace_map_initialises_version_controls():
+    js = _read(NAVBAR_JS)
+    open_block = js[js.index("function openWorkspaceMap(") :][:1200]
+    assert "initWorkspaceMapVersions(" in open_block or "populateSwitchVersions(" in open_block
+    assert "configureSwitchSaveOption(" in open_block or "initWorkspaceMapVersions(" in open_block
+    assert "function bindWorkspaceMapVersionActions(" in js
+    assert "domainSwitchModal" not in js
+
+
+def test_domain_switch_opens_the_combined_workspace_map():
+    js = _read(NAVBAR_JS)
+    switch_fn = js[js.index("async function domainSwitch(") :][:900]
+    assert "openWorkspaceMap(" in switch_fn
+    assert "showSwitchDomainDialog(" not in switch_fn

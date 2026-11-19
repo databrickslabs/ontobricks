@@ -428,3 +428,54 @@ Modified files:
 Tests:
 - `uv run --frozen pytest -q -m "not scenario"`: 10893 passed, 334 skipped,
   8 deselected, 0 failed.
+
+
+================================================================================
+## Combine workspace map and Switch Version; version badge on L2 context
+================================================================================
+
+Context: The L2 subnav had two separate controls for context identity: the
+context name opened the workspace map, and a `vN ▾` crumb opened Switch Version.
+The user asked to merge both into the context popup, remove the version crumb,
+and show the version as a badge next to the context name.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Removed the `/` separator and `.ob-subnav-version-crumb` (and the
+     `domainSwitch` action wiring from that crumb).
+   - Added `#domainContextVersion.domain-version-badge` beside the context name
+     (status badge still injects between name and version).
+2. src/front/templates/partials/layout/_workspace_map_modal.html
+   - Embedded the Switch Version strip (`.ob-workspace-map-versions`) with
+     `#switchVersionSelect`, save-before-switch, New Version, and Switch.
+3. src/front/static/global/js/navbar.js
+   - `applyDomainInfo()` sets the version badge to `V{n}` (hidden when no context).
+   - `openWorkspaceMap()` binds version actions once and refreshes the version list.
+   - `domainSwitch()` opens the workspace map (no separate modal).
+   - Removed dynamic `#domainSwitchModal` / `showSwitchDomainDialog`.
+4. src/front/static/global/css/components.css
+   - Styles for `.ob-workspace-map-versions` strip.
+5. src/front/static/global/css/main.css
+   - Styles for `.domain-version-badge`; dropped obsolete version-crumb / crumb-sep
+     mobile rules; widened the context trigger slightly for badges.
+6. .cursor/11-frontend-design.mdc
+   - Documented the combined popup and version badge (no vN crumb).
+7. Contract tests updated for the new L2 + workspace map shape.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/front/test_switch_domain_modal.py
+- tests/units/front/test_mobile_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10896 passed, 334 skipped,
+  8 deselected, 0 failed.

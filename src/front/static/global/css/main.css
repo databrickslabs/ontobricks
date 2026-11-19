@@ -773,11 +773,13 @@ body {
 
 .ob-subnav-context-trigger {
     min-width: 0;
-    max-width: 14rem;
+    max-width: 18rem;
 }
 
 .ob-subnav-context-copy {
     display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     min-width: 0;
 }
 
@@ -789,14 +791,21 @@ body {
     white-space: nowrap;
 }
 
-.ob-subnav-context-version {
+/* Version badge next to the context name (replaces the former vN ▾ crumb). */
+.domain-version-badge {
+    flex: 0 0 auto;
+    font-size: 0.6rem;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
+    padding: 0.15em 0.4em;
+    line-height: 1.2;
+    color: var(--db-text-secondary);
+    background: var(--db-surface-warm);
+    border-color: var(--db-border) !important;
 }
 
-.ob-subnav-crumb-sep {
-    color: var(--db-text-muted);
-    font-size: 0.875rem;
-    padding: 0 0.1rem;
+.ob-subnav-context-copy .domain-status-badge {
+    margin-left: 0 !important;
 }
 
 .ob-subnav-caret {
@@ -1197,15 +1206,13 @@ body {
         transform: none;
     }
 
-    .ob-subnav-save-kbd,
-    .ob-subnav-crumb-sep {
+    .ob-subnav-save-kbd {
         display: none;
     }
 
     .ob-subnav-link,
     .ob-subnav-resume-btn,
     .ob-subnav-save-btn,
-    .ob-subnav-version-crumb,
     .ob-subnav-close-btn {
         justify-content: center;
         padding-inline: 0.5rem;
