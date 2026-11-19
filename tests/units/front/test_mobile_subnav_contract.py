@@ -60,7 +60,7 @@ def test_mobile_subnav_compacts_padding_without_horizontal_scrolling():
         flags=re.DOTALL,
     )
     assert re.search(
-        r"\.ob-subnav-close-btn\s*\{[^}]*padding-inline:",
+        r"\.ob-subnav-action\s*\{[^}]*padding-inline:",
         css,
         flags=re.DOTALL,
     )
@@ -77,8 +77,8 @@ def test_icon_only_mobile_subnav_controls_have_tooltips():
         flags=re.DOTALL,
     )
     assert switcher and 'title="' in switcher.group(0)
-    assert re.search(r'class="ob-subnav-close-btn[^"]*"[^>]*title="', html)
-    assert re.search(r'class="ob-subnav-save-btn[^"]*"[^>]*title="', html)
+    assert re.search(r'class="[^"]*\bob-subnav-close-btn\b[^"]*"[^>]*title="', html)
+    assert re.search(r'class="[^"]*\bob-subnav-save-btn\b[^"]*"[^>]*title="', html)
 
 
 def test_expired_lease_resume_action_uses_the_responsive_label():

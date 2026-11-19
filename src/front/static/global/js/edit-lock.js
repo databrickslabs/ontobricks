@@ -200,7 +200,7 @@
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.id = 'editLockResumeBtn';
-        btn.className = 'ob-subnav-resume-btn';
+        btn.className = 'ob-subnav-action ob-subnav-resume-btn';
         btn.innerHTML =
             '<i class="bi bi-arrow-clockwise"></i>' +
             '<span class="ob-subnav-label">Resume editing</span>';

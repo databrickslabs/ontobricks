@@ -2146,3 +2146,152 @@ Tests:
 - `uv run --frozen pytest -q -m "not scenario"`: 10962 passed, 334 skipped, 8 deselected, 0 failed in 54.09s.
 - Not done: browser timing check of `/review/...` vs `/domain/version-status` latency on a live workspace.
 
+
+================================================================================
+## Navbar Close / Save / Resume editing use Databricks Du Bois button style
+================================================================================
+
+Context: The right-side chrome actions (Close, Save, Resume editing) were
+compact ghost/filled chips. They now share the Databricks workspace header
+button geometry (32px, 4px radius, 13px/500) used on Lakewatch-style pages.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - New `.ob-subnav-action` shared chrome-button geometry (`--ob-subnav-btn-height`
+     2rem, `--ob-subnav-btn-radius` 0.25rem).
+   - Close is a secondary outline (`--db-surface-warm`, `--db-border`, `--db-text`).
+   - Save stays the only filled primary (`--db-primary` / `--db-on-primary`).
+   - Resume editing is a warning-outlined secondary using status tokens
+     (replaces hardcoded Bootstrap yellow).
+2. src/front/templates/base.html
+   - Close and Save carry `.ob-subnav-action`.
+3. src/front/static/global/js/edit-lock.js
+   - Resume editing button also carries `.ob-subnav-action`.
+4. .cursor/11-frontend-design.mdc
+   - Documents the Du Bois chrome-action contract.
+5. tests/units/front/test_segmented_subnav_contract.py
+   tests/units/front/test_mobile_subnav_contract.py
+   tests/units/front/test_clarity_design_contract.py
+   - Contracts updated for the shared class, outlined Close, and mobile padding.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/templates/base.html
+- src/front/static/global/js/edit-lock.js
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_clarity_design_contract.py tests/units/front/test_app_switcher_contract.py`: 68 passed.
+- Playwright computed-style check of the three chrome buttons against `main.css`: 32px height, 4px radius, 13px/500; Close outlined white, Save filled primary, Resume warning outline.
+- `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 52.60s.
+- Not done: live click-through on localhost (dev server had stopped).
+
+
+================================================================================
+## Navbar Close button gets a visible outline
+================================================================================
+
+Context: After the Du Bois restyle, the Close button's outline used
+`--db-border` (#ECEAE6), a hairline divider colour that is effectively invisible
+on the white chrome bar. Close looked borderless and only changed background on
+hover. Save is filled and Resume keeps its amber outline.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - New token `--db-border-control` (#C9C5BF) in `:root`, for outlined control
+     borders stronger than the hairline `--db-border`.
+   - `.ob-subnav-close-btn` border and hover border use `--db-border-control`.
+2. .cursor/11-frontend-design.mdc
+   - Documents `--db-border-control` for outlined chrome buttons.
+3. tests/units/front/test_segmented_subnav_contract.py
+   - Asserts the Close outline uses `--db-border-control` and the token exists.
+
+Modified files:
+- src/front/static/global/css/main.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_clarity_design_contract.py tests/units/front/test_app_switcher_contract.py`: 68 passed.
+- Playwright render with the full stylesheet cascade: Close border 1px solid rgb(201,197,191); Save and Resume unchanged.
+- `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 49.04s.
+
+
+================================================================================
+## Navbar Close button: ghost at rest, outline on hover only
+================================================================================
+
+Context: The Close button kept a visible outline and white fill at rest. The
+requested behaviour is borderless and transparent at rest, with the border and
+hover fill appearing only on hover. Save (filled primary) and Resume editing
+(warning state) keep their styles.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-subnav-close-btn` rests with `background: transparent` and a 1px
+     transparent border (same box size as hover, no layout shift).
+   - `.ob-subnav-close-btn:hover` shows `--db-hover-warm` fill and the
+     `--db-border-control` outline.
+2. .cursor/11-frontend-design.mdc
+   - Documents the Close rest/hover contract.
+3. tests/units/front/test_segmented_subnav_contract.py
+   - Asserts the transparent rest state and the hover-only outline and fill.
+
+Modified files:
+- src/front/static/global/css/main.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py`: 10 passed.
+- Playwright with the full stylesheet cascade: rest background rgba(0,0,0,0), border colour rgba(0,0,0,0), width 80.45px; hover background rgb(243,242,240), border rgb(201,197,191), width 80.45px.
+- `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 49.54s.
+
+
+================================================================================
+## Navbar Close, Save and Resume editing: borderless and transparent at rest
+================================================================================
+
+Context: All right-side chrome actions (Close, Save, Resume editing) now use
+Databricks-style ghost buttons: completely borderless and transparent at rest,
+revealing a subtle background tint only on hover without borders.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-subnav-save-btn` is now ghost at rest (`background: transparent`,
+     `border: 1px solid transparent`, `color: var(--db-text)`). Hover gives
+     `--db-hover-warm` with no border.
+   - `.ob-subnav-resume-btn` is ghost at rest (`background: transparent`,
+     `border: 1px solid transparent`, `color: var(--db-status-warning)`).
+     Hover gives `--db-status-warning-soft-bg` with no border.
+   - `.ob-subnav-close-btn:hover` removes border (`border-color: transparent`),
+     matching the borderless hover style.
+   - `.ob-subnav-save-kbd` text and border use muted neutral tokens so the
+     keycap remains crisp on the transparent background.
+2. .cursor/11-frontend-design.mdc
+   - Updated chrome action specification to ghost buttons at rest with hover fills.
+3. tests/units/front/test_segmented_subnav_contract.py
+   - Updated contract tests for borderless ghost rest and hover behaviour on all
+     three buttons.
+
+Modified files:
+- src/front/static/global/css/main.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_clarity_design_contract.py tests/units/front/test_app_switcher_contract.py`: 68 passed.
+- Playwright computed-style verification: Close, Save, and Resume all transparent at rest with no visible border; hover adds subtle tint without border.
+- `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 51.10s.
+

@@ -588,9 +588,13 @@ Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
   specificity required against legacy `!important` zeroing). Right padding
   stays `0.5rem`.
 - Keyboard focus uses `--db-focus-ring` plus a transparent outline for forced-colour support.
-- Action styles: Save is the only filled primary control (`--db-primary` /
-  `--db-on-primary`) with dirty dot (`.ob-subnav-save-dirty`) and shortcut
-  keycap (`.ob-subnav-save-kbd`). Close is a ghost text button with danger text.
+- Action styles: Close, Save, and Resume editing share `.ob-subnav-action`
+  (Databricks Du Bois md: 32px / `--ob-subnav-btn-height`, 4px /
+  `--ob-subnav-btn-radius`, 13px weight 500). All three are ghost controls at
+  rest (transparent background, transparent 1px border) that reveal a subtle
+  hover fill without borders on hover (`--db-hover-warm` for Close and Save,
+  `--db-status-warning-soft-bg` for Resume editing). Save retains its dirty dot
+  (`.ob-subnav-save-dirty`) and shortcut keycap (`.ob-subnav-save-kbd`).
   Rendered right-side order: Context → Close → Save → app switcher → Activity →
   User. Preserve existing IDs, permission classes, and handlers.
 - Shared ownership: markup in `templates/base.html`, styling in
@@ -638,8 +642,8 @@ Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
   square selected tab or horizontally scrollable strip.
 - ❌ Giving L2 a different left gutter from `.sidebar-layout`; the L2 row
   and sidebar panel must remain vertically aligned.
-- ❌ Filling Versions or Close with the primary colour. Save is the only
-  filled primary action in L2.
+- ❌ Solid or outlined borders at rest on Close, Save, or Resume editing.
+  They are ghost actions at rest with hover fills.
 - ❌ Hard-coding `.is-current` / `aria-current` on app-switcher items in
   Jinja or page code — `navbar.js` owns that state.
 - ❌ Restoring a 2×2 tile grid for the app switcher — keep the Databricks

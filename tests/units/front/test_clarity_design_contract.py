@@ -645,7 +645,7 @@ def test_base_template_keeps_logo_in_unified_chrome_bar():
     assert 'id="navbarNav"' not in html
     assert save_action["element_id"] == "menuSaveDomain"
     # Base template contract is dynamic: id comes from save_action.v.element_id.
-    assert 'class="ob-subnav-save-btn btn-requires-domain"' in html
+    assert 'class="ob-subnav-action ob-subnav-save-btn btn-requires-domain"' in html
     assert '{% if save_action.v.element_id %}id="{{ save_action.v.element_id }}"{% endif %}' in html
 
     # Left: toggle then brand; right group starts after the flex spacer.

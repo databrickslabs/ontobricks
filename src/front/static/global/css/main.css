@@ -53,6 +53,9 @@
     --db-bg-secondary: var(--db-surface-warm);
     --db-border: #ECEAE6;
     --db-border-light: #F4F2EF;
+    /* Visible outline for secondary buttons (Du Bois chrome). --db-border is a
+       hairline divider and disappears on white; controls need a stronger edge. */
+    --db-border-control: #C9C5BF;
 
     /* Chrome hierarchy (structure unchanged) */
     --db-navbar-bg: #FFFFFF;
@@ -526,6 +529,9 @@ body {
     margin: 0;
     padding: 0.15rem 0;
     --ob-subnav-rail-height: 2.25rem;
+    /* Du Bois md button: 32px tall, 4px radius (chrome Close / Save / Resume). */
+    --ob-subnav-btn-height: 2rem;
+    --ob-subnav-btn-radius: 0.25rem;
     gap: 0;
     width: 100%;
 }
@@ -694,27 +700,55 @@ body {
     margin: 0.5rem 0.45rem;
 }
 
-/* Resume Editing button — L2 subnav, left of Save, when the edit lease expired */
-.ob-subnav-resume-btn {
+/* Databricks Du Bois chrome actions (Close / Save / Resume editing).
+   Shared geometry matches workspace header buttons: 32px, 4px radius, 13px/500. */
+.ob-subnav-action {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    justify-content: center;
+    gap: 0.35rem;
+    box-sizing: border-box;
+    height: var(--ob-subnav-btn-height);
+    min-height: var(--ob-subnav-btn-height);
     margin: 0;
-    padding: 0.2rem 0.55rem;
-    font-size: 0.8rem;
-    color: #664d03;
-    background-color: #fff3cd;
-    border: 1px solid #ffe69c;
-    border-radius: var(--db-radius-control);
+    padding: 0 0.75rem;
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1;
+    border-radius: var(--ob-subnav-btn-radius);
+    text-decoration: none;
     white-space: nowrap;
     cursor: pointer;
+    appearance: none;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
+.ob-subnav-action:hover {
+    text-decoration: none;
+}
+
+.ob-subnav-action:focus {
+    box-shadow: var(--db-focus-ring);
+    outline: 2px solid transparent;
+}
+
+.ob-subnav-action .bi {
+    font-size: 0.875rem;
+    line-height: 1;
+}
+
+/* Resume Editing — warning secondary; ghost at rest, soft warning fill on hover */
+.ob-subnav-resume-btn {
+    color: var(--db-status-warning);
+    background: transparent;
+    border: 1px solid transparent;
+}
+
 .ob-subnav-resume-btn:hover {
-    background-color: #ffc107;
-    color: #664d03;
-    border-color: #ffda6a;
+    color: var(--db-status-warning);
+    background-color: var(--db-status-warning-soft-bg);
+    border-color: transparent;
 }
 
 
@@ -728,7 +762,7 @@ body {
 
 
 
-/* ---- Level-2 "C" direction: quiet crumbs, grey track, ghost Close, Save ---- */
+/* ---- Level-2 "C" direction: quiet crumbs, grey track, Close / Save ---- */
 .ob-subnav-context {
     display: flex;
     align-items: center;
@@ -853,27 +887,18 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     color: var(--db-text-muted);
 }
 
-/* Save Context — the only filled primary action in L2 */
+/* Save Context — ghost action at rest; hover background on hover */
 .ob-subnav-save-btn {
     position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.2rem 0.55rem;
-    font-size: 0.8rem;
-    color: var(--db-on-primary);
-    background: var(--db-primary);
-    border: 1px solid var(--db-primary);
-    border-radius: var(--db-radius-control);
-    text-decoration: none;
-    white-space: nowrap;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    color: var(--db-text);
+    background: transparent;
+    border: 1px solid transparent;
 }
 
 .ob-subnav-save-btn:hover {
-    background: var(--db-primary-dark);
-    border-color: var(--db-primary-dark);
-    color: var(--db-on-primary);
+    background-color: var(--db-hover-warm);
+    border-color: transparent;
+    color: var(--db-text);
     text-decoration: none;
 }
 
@@ -913,10 +938,10 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     font-size: 0.65rem;
     font-weight: 600;
     line-height: 1.2;
-    color: var(--db-on-primary);
-    opacity: 0.75;
+    color: var(--db-text-muted);
+    opacity: 0.85;
     background: transparent;
-    border: 1px solid currentColor;
+    border: 1px solid var(--db-border-control);
     border-radius: 2px;
     padding: 0 0.25rem;
 }
@@ -1088,26 +1113,17 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     visibility: visible;
 }
 
-/* Close Context — ghost text action */
+/* Close Context — ghost at rest; hover fill on hover */
 .ob-subnav-close-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    margin: 0;
-    padding: 0.2rem 0.45rem;
-    font-size: 0.8rem;
-    color: var(--db-status-danger);
+    color: var(--db-text);
     background: transparent;
-    border: 0;
-    border-radius: var(--db-radius-control);
-    text-decoration: none;
-    white-space: nowrap;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    border: 1px solid transparent;
 }
 
 .ob-subnav-close-btn:hover {
-    background-color: var(--db-status-danger-soft-bg);
-    color: var(--db-status-danger);
+    background-color: var(--db-hover-warm);
+    border-color: transparent;
+    color: var(--db-text);
     text-decoration: none;
 }
 
@@ -1142,9 +1158,7 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
 }
 
 @media (max-width: 1199.98px) {
-    .ob-subnav-resume-btn .ob-subnav-label,
-    .ob-subnav-close-btn .ob-subnav-label,
-    .ob-subnav-save-btn .ob-subnav-label {
+    .ob-subnav-action .ob-subnav-label {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -1446,11 +1460,10 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
         display: none;
     }
 
-    .ob-subnav-resume-btn,
-    .ob-subnav-save-btn,
-    .ob-subnav-close-btn {
+    .ob-subnav-action {
         justify-content: center;
         padding-inline: 0.5rem;
+        min-width: var(--ob-subnav-btn-height);
     }
 
     .ob-subnav-label {

@@ -150,20 +150,54 @@ def test_app_switcher_owns_current_workspace_state():
     assert "domain-version-badge" in js or "domainContextVersion" in js
 
 
-def test_save_is_the_only_primary_filled_domain_action():
+def test_chrome_actions_are_borderless_ghost_at_rest():
     css = _read(MAIN_CSS)
     save = _rule(css, ".ob-subnav-save-btn")
     dirty = _rule(css, ".ob-subnav-save-dirty")
     close = _rule(css, ".ob-subnav-close-btn")
+    action = _rule(css, ".ob-subnav-action")
 
-    assert "background: var(--db-primary)" in save
-    assert "color: var(--db-on-primary)" in save
+    assert "--ob-subnav-btn-height: 2rem" in css
+    assert "--ob-subnav-btn-radius: 0.25rem" in css
+    assert "height: var(--ob-subnav-btn-height)" in action
+    assert "border-radius: var(--ob-subnav-btn-radius)" in action
+    assert "font-weight: 500" in action
+    # All chrome buttons are ghost at rest: no border, transparent background
+    assert "background: transparent" in save
+    assert "border: 1px solid transparent" in save
+    assert "color: var(--db-text)" in save
+    assert "background: transparent" in close
+    assert "border: 1px solid transparent" in close
+    assert "color: var(--db-text)" in close
+    # Dirty indicator on Save
     assert "background: var(--db-status-warning)" in dirty
     assert "display: none" in dirty
     assert re.search(r"\.ob-subnav-save-btn\.is-dirty\s+\.ob-subnav-save-dirty\s*\{[^}]*display:\s*inline-block", css)
-    assert "background: transparent" in close
-    assert "border: 0" in close
-    assert "color: var(--db-status-danger)" in close
+    # Hover gives subtle background fill without borders
+    close_hover = _rule(css, ".ob-subnav-close-btn:hover")
+    assert "background-color: var(--db-hover-warm)" in close_hover
+    assert "border-color: transparent" in close_hover
+    save_hover = _rule(css, ".ob-subnav-save-btn:hover")
+    assert "background-color: var(--db-hover-warm)" in save_hover
+    assert "border-color: transparent" in save_hover
+
+
+def test_chrome_actions_share_databricks_button_class():
+    html = _read(BASE_HTML)
+    assert 'class="ob-subnav-action ob-subnav-close-btn' in html
+    assert 'class="ob-subnav-action ob-subnav-save-btn' in html
+    js = (REPO_ROOT / "src/front/static/global/js/edit-lock.js").read_text(
+        encoding="utf-8"
+    )
+    assert "ob-subnav-action ob-subnav-resume-btn" in js
+    css = _read(MAIN_CSS)
+    resume = _rule(css, ".ob-subnav-resume-btn")
+    assert "color: var(--db-status-warning)" in resume
+    assert "background: transparent" in resume
+    assert "border: 1px solid transparent" in resume
+    resume_hover = _rule(css, ".ob-subnav-resume-btn:hover")
+    assert "background-color: var(--db-status-warning-soft-bg)" in resume_hover
+    assert "border-color: transparent" in resume_hover
 
 
 def test_mobile_contract_does_not_add_horizontal_scrolling():

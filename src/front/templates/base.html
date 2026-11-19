@@ -139,7 +139,7 @@
                     {% set close_action = namespace(v=none) %}
                     {% if domain_m.v %}{% for a in domain_m.v.navbar_actions %}{% if a.action == 'domainSave' %}{% set save_action.v = a %}{% elif a.action == 'domainClose' %}{% set close_action.v = a %}{% endif %}{% endfor %}{% endif %}
                     {% if close_action.v %}
-                    <a class="ob-subnav-close-btn btn-requires-domain" href="#"
+                    <a class="ob-subnav-action ob-subnav-close-btn btn-requires-domain" href="#"
                        data-navbar-action="{{ close_action.v.action }}"
                        {% if close_action.v.element_id %}id="{{ close_action.v.element_id }}"{% endif %}
                        title="Close the context and release the edit lock">
@@ -148,7 +148,7 @@
                     </a>
                     {% endif %}
                     {% if save_action.v %}
-                    <a class="ob-subnav-save-btn btn-requires-domain" href="#"
+                    <a class="ob-subnav-action ob-subnav-save-btn btn-requires-domain" href="#"
                        data-navbar-action="{{ save_action.v.action }}"
                        {% if save_action.v.element_id %}id="{{ save_action.v.element_id }}"{% endif %}
                        title="Save context to Unity Catalog">
