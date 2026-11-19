@@ -359,7 +359,7 @@ def test_fixed_height_dataquality_and_logs_use_shell_vertical_padding():
     _assert_winning_declarations(
         SIDEBAR_CSS,
         "#logs-section.active",
-        {"padding": r"0\s+1rem"},
+        {"padding": r"var\(--ob-page-padding\)"},
     )
 
 

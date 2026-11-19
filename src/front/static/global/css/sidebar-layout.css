@@ -236,11 +236,25 @@ html.ob-sidebar-collapsed .sidebar-nav .nav-link .badge,
     position: relative;
 }
 
+/* Databricks-style page panel: title, subtitle and body share one white,
+   bordered surface beside the sidebar. Sections that override padding by ID
+   must reuse --ob-page-padding so every page keeps the same inset. */
+.sidebar-layout {
+    --ob-page-padding: 0.75rem 1rem;
+    --ob-page-panel-radius: 0.5rem;
+}
+
 .sidebar-section.active {
     display: flex;
     flex-direction: column;
     flex: 1 1 0;
     min-height: 0;
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    /* Databricks page panel: only the top-left corner is rounded. */
+    border-radius: var(--ob-page-panel-radius) 0 0 0;
+    padding: var(--ob-page-padding);
+    box-sizing: border-box;
 }
 
 .sidebar-section .card {
@@ -270,7 +284,7 @@ html.ob-sidebar-collapsed .sidebar-nav .nav-link .badge,
 
 #logs-section.active {
     overflow: hidden;
-    padding: 0 1rem;
+    padding: var(--ob-page-padding);
     box-sizing: border-box;
 }
 
@@ -330,14 +344,13 @@ html.ob-sidebar-collapsed .sidebar-nav .nav-link .badge,
 /* One shared title/subtitle-to-content rhythm for every sidebar page. This
    intentionally overrides template-level Bootstrap `mb-4` utilities. */
 .sidebar-layout .section-header {
-    margin-bottom: 0.25rem !important;
+    margin-bottom: 0.75rem !important;
 }
 
-/* The space above the title equals the space below the subtitle
-   (``margin-bottom`` above), so the title block is vertically balanced. */
+/* The page panel padding owns the space above the title. */
 @media (min-width: 769px) {
     .sidebar-layout .section-header {
-        padding-top: 0.25rem;
+        padding-top: 0;
     }
 }
 

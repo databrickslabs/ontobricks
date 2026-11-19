@@ -238,13 +238,13 @@ def test_designer_insets_match_the_explorer():
         explorer_wrapper, "padding"
     ) == "0"
 
-    # The shell owns vertical spacing; both canvases add only the remaining
-    # horizontal inset so neither sits deeper than the other.
+    # Both canvases reuse the shared white page-panel inset so neither sits
+    # deeper than the other.
     section = _block(designer, "#map-section.active")
-    assert _declaration(section, "padding") == "0 0.5rem"
+    assert _declaration(section, "padding") == "var(--ob-page-padding)"
 
     explorer_section = _block(explorer, "#sigmagraph-section.active")
-    assert _declaration(explorer_section, "padding") == "0 0.5rem"
+    assert _declaration(explorer_section, "padding") == "var(--ob-page-padding)"
 
 
 def test_designer_entities_and_relationships_use_the_shared_flex_height():

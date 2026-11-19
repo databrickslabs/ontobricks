@@ -4,8 +4,7 @@
  */
 
 /* Map section: full-height canvas, no page scroll. Insets mirror the Knowledge
-   Graph Explorer (query-sigmagraph.css): flush vertically with the sidebar and
-   a 0.5rem horizontal inset. */
+   Graph Explorer (query-sigmagraph.css) through the shared page padding. */
 .sidebar-content:has(#map-section.active) {
     overflow: hidden;
     padding: 0;
@@ -13,7 +12,7 @@
 
 #map-section.active {
     overflow: hidden;
-    padding: 0 0.5rem;
+    padding: var(--ob-page-padding);
 }
 
 #map-section .section-header {

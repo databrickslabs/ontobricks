@@ -1271,29 +1271,45 @@ body {
 }
 
 .section-header {
-    /* Compact title block: equal tight spacing above and below */
-    padding-top: 0.25rem;
-    margin-bottom: 0.25rem;
+    /* The white page panel owns the space above the title. */
+    padding-top: 0;
+    margin-bottom: 0.75rem;
     padding-right: 8px;
 }
 
 .section-header.mb-4,
 .section-header.mb-3,
 .section-header.mb-2 {
-    margin-bottom: 0.25rem !important;
+    margin-bottom: 0.75rem !important;
 }
 
+/* Databricks page title: 22px semibold, tight 28px line. */
 .section-header h1,
 .section-header h2,
 .section-header h3,
 .section-header h4 {
-    margin-bottom: 0.1rem;
-    line-height: 1.25;
+    font-size: 1.375rem;
+    font-weight: 600;
+    line-height: 1.75rem;
+    letter-spacing: -0.01em;
+    color: var(--db-text);
+    margin-bottom: 0.25rem;
 }
 
+.section-header h1 > .bi,
+.section-header h2 > .bi,
+.section-header h3 > .bi,
+.section-header h4 > .bi {
+    font-size: 0.85em;
+    color: var(--db-text-secondary);
+}
+
+/* Databricks page description: 13px secondary text. */
 .section-header p {
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    color: var(--db-text-secondary);
     margin-bottom: 0;
-    line-height: 1.35;
 }
 
 /* Section headers pair a title with a cluster of controls through

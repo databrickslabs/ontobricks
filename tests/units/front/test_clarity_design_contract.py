@@ -716,8 +716,9 @@ def test_level_two_rail_and_content_share_the_same_vertical_gutter():
     )
 
 
-def test_desktop_sidebar_titles_match_subtitle_to_content_gap():
-    """Space above the title equals the header's bottom margin."""
+def test_desktop_sidebar_titles_sit_on_the_page_panel_padding():
+    """The white page panel owns the space above the title; the header keeps
+    a fixed 0.75rem gap to the body."""
     css = _read(SIDEBAR_LAYOUT_CSS)
     desktop_rule = re.search(
         r"@media\s*\(\s*min-width\s*:\s*769px\s*\)\s*\{"
@@ -730,7 +731,7 @@ def test_desktop_sidebar_titles_match_subtitle_to_content_gap():
     body = desktop_rule.group("body")
     assert re.search(
         r"\.sidebar-layout\s+\.section-header\s*\{"
-        r"[^}]*padding-top\s*:\s*0\.25rem\s*;",
+        r"[^}]*padding-top\s*:\s*0\s*;",
         body,
         flags=re.DOTALL,
     )
@@ -743,15 +744,14 @@ def test_desktop_sidebar_titles_match_subtitle_to_content_gap():
     assert _any_block_has_declaration(
         header_blocks,
         r"margin-bottom",
-        r"0\.25rem\s*!important",
+        r"0\.75rem\s*!important",
     )
 
 
-def test_section_header_top_inset_matches_subtitle_to_content_gap():
-    """``.section-header`` top padding equals its 0.25rem bottom margin."""
+def test_section_header_has_no_top_inset_inside_the_page_panel():
     css = _read(MAIN_CSS)
     blocks = _rule_blocks_for_exact_selector(css, ".section-header")
-    assert _any_block_has_declaration(blocks, r"padding-top", r"0\.25rem")
+    assert _any_block_has_declaration(blocks, r"padding-top", r"0")
 
 
 def test_sidebar_layout_has_a_min_height_safe_flex_chain():

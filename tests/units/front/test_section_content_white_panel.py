@@ -1,7 +1,7 @@
 """Sidebar section bodies must sit on a white card under the title.
 
 Reference: Domain → Versions (``.section-header`` then ``.card``).
-Domain → Validation previously left tiles on the warm canvas — that is the
+Domain → Validation previously left tiles outside a card — that is the
 defect this contract guards against.
 """
 
@@ -16,7 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 TEMPLATES = REPO_ROOT / "src/front/templates"
 
 # Previously bare-on-canvas sections that must now wrap body content in a card
-# (title/header stays outside on the warm canvas).
+# (title/header stays above the card).
 WHITE_PANEL_PARTIALS = (
     "partials/layout/_workspace_home.html",
     "partials/domain/_domain_validation.html",
@@ -69,7 +69,7 @@ def test_settings_locks_and_logs_wrap_includes_in_cards():
 
 
 def test_validation_keeps_title_outside_the_white_card():
-    """Title stays on the warm canvas; the card starts after the header."""
+    """Title stays above the card; the card starts after the header."""
     html = _read("partials/domain/_domain_validation.html")
     header_pos = html.find("section-header")
     card_pos = html.find('<div class="card">')

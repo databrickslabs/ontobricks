@@ -20,7 +20,7 @@
     flex: 1 1 0 !important;
     min-height: 0 !important;
     overflow: hidden !important;
-    padding: 0 0.5rem;
+    padding: var(--ob-page-padding);
 }
 
 #design-section .content-section {

@@ -1070,3 +1070,88 @@ Modified files:
 Tests:
 - `uv run --frozen pytest -q -m "not scenario"`: 10912 passed, 334 skipped,
   8 deselected, 0 failed.
+
+================================================================================
+Databricks-style page panel and page typography
+================================================================================
+
+Context
+-------
+Sidebar pages should look like Databricks product pages (e.g. Compute → AI
+Search): the title, subtitle and body sit together on one white, bordered
+panel, with Databricks page-title and description typography.
+
+Changes
+-------
+1. src/front/static/global/css/sidebar-layout.css — `.sidebar-section.active`
+   is now a white panel (`--db-surface-warm`, 1px `--db-border`,
+   `--db-radius-card`, `padding: var(--ob-page-padding)`); new
+   `--ob-page-padding: 0.75rem 1rem` token on `.sidebar-layout`; logs section
+   reuses the token; header gap to body 0.75rem, no top padding.
+2. src/front/static/global/css/main.css — `.section-header` titles use 22px /
+   600 / 28px line in `--db-text`, title icons 0.85em secondary; subtitles
+   13px in `--db-text-secondary`; header has no top padding.
+3. src/front/static/global/css/mapping.css, src/front/static/global/css/query.css,
+   src/front/static/ontology/css/ontology-map.css,
+   src/front/static/query/css/query-sigmagraph.css — full-height sections
+   (`#design-section`, `#graphql-section`, `#map-section`,
+   `#sigmagraph-section`) reuse `var(--ob-page-padding)`.
+4. .cursor/11-frontend-design.mdc, .claude/skills/frontend-design/SKILL.md —
+   Section Body Surface rewritten around the white page panel and typography.
+5. tests/units/front/test_databricks_page_panel_contract.py (new) — panel,
+   shared padding and typography contracts.
+6. tests/units/front/test_clarity_design_contract.py,
+   tests/units/front/test_ontology_split_panel_layout.py,
+   tests/units/front/test_sidebar_content_stretch_contract.py,
+   tests/units/front/test_section_content_white_panel.py — updated to the new
+   inset/gap rules and wording.
+
+Modified files
+--------------
+- .claude/skills/frontend-design/SKILL.md
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/main.css
+- src/front/static/global/css/mapping.css
+- src/front/static/global/css/query.css
+- src/front/static/global/css/sidebar-layout.css
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_databricks_page_panel_contract.py
+- tests/units/front/test_ontology_split_panel_layout.py
+- tests/units/front/test_section_content_white_panel.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10919 passed, 334 skipped,
+8 deselected, 0 failed.
+
+================================================================================
+Page panel: rounded top-left corner (Databricks style)
+================================================================================
+
+Context
+-------
+Databricks product pages round only the top-left corner of the content panel
+next to the sidebar. The OntoBricks page panel now does the same.
+
+Changes
+-------
+1. src/front/static/global/css/sidebar-layout.css — `.sidebar-section.active`
+   uses `border-radius: var(--ob-page-panel-radius) 0 0 0`; new token
+   `--ob-page-panel-radius: 0.5rem` on `.sidebar-layout`.
+2. tests/units/front/test_databricks_page_panel_contract.py — asserts the
+   top-left-only radius and the new token.
+3. .cursor/11-frontend-design.mdc — panel description updated.
+
+Modified files
+--------------
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_databricks_page_panel_contract.py
+- .cursor/11-frontend-design.mdc
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10919 passed, 334 skipped,
+8 deselected, 0 failed.

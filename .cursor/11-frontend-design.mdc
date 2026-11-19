@@ -294,12 +294,12 @@ modal, not a sixth sidebar family.
 
 Rules for sidebar pages:
 
-- Section body under the title sits on a **white card**: keep
-  `.section-header` on the warm canvas, then wrap the rest of the
-  section in `<div class="card"><div class="card-body">…</div></div>`
+- The active section is a Databricks-style **white page panel** (title,
+  subtitle and body on white, 1px border). Under `.section-header`, wrap
+  the rest of the section in `<div class="card"><div class="card-body">…</div></div>`
   (or an equivalent `.card` workspace such as Versions /
   `ob-tabs-wrap`). Do not leave tiles, tables, forms, or empty states
-  floating directly on the warm canvas. Reference: Domain → Versions
+  floating outside a card. Reference: Domain → Versions
   (good) vs a bare Validation layout (bad).
 - The sidebar **must** be the `_sidebar_nav.html` partial driven by
   `menu_config.json` — never hand-code `<nav class="sidebar-nav">` items.
@@ -692,15 +692,30 @@ exposes `window.OBBreadcrumb._updateChromeHeight()` for `navbar.js`.
 - ❌ Adding a breadcrumb trail to the L2 row or any page header.
 - ❌ Setting `--ob-chrome-height` from page code (see above).
 
-### Section Body Surface (white card under the title)
+### Section Body Surface (Databricks page panel + card under the title)
 
 Canonical reference: **Domain → Versions** (`partials/domain/_domain_versions.html`).
-Every sidebar section follows the same two-zone layout:
+Like Databricks product pages, the active sidebar section
+(`.sidebar-section.active`) is **one white panel** with a 1px `--db-border`
+border, only the **top-left corner rounded** (`--ob-page-panel-radius`, 0.5rem,
+declared on `.sidebar-layout`; the other corners stay square) and
+`padding: var(--ob-page-padding)` (also declared on `.sidebar-layout`). Title, subtitle and body all sit on that
+white panel; only the sidebar and the outer gutter stay on the warm canvas.
+Full-height sections that override padding by ID (`#logs-section`,
+`#design-section`, `#map-section`, `#sigmagraph-section`, `#graphql-section`)
+must reuse `var(--ob-page-padding)`.
 
-1. **Title zone — on the warm canvas.** `.content-section` holds one
+Typography (`.section-header`): title `h1`–`h4` 1.375rem (22px), weight 600,
+1.75rem line, `--db-text`; title icon 0.85em in `--db-text-secondary`;
+subtitle `p` 0.8125rem (13px) in `--db-text-secondary`. The header has no
+top padding (the panel owns it) and a 0.75rem gap to the body.
+
+Inside the panel every section follows the same two-zone layout:
+
+1. **Title zone.** `.content-section` holds one
    `.section-header` (title, subtitle, top-right actions). Nothing else
-   sits in the title zone and the title is never placed on a white surface.
-2. **Body zone — on a white card.** Everything below the header lives in one
+   sits in the title zone.
+2. **Body zone — on a bordered card.** Everything below the header lives in one
    `.card` (or an equivalent `.card` workspace such as `.card h-100` +
    `ob-tabs-wrap`), with `.card-body` for padding when the content is not
    already a card-integrated workspace.
@@ -727,15 +742,16 @@ Skeleton:
 Rules:
 
 - Never leave body content (tiles, tables, forms, placeholders, spinners,
-  empty states) directly under `.section-header` on the warm canvas.
+  empty states) directly under `.section-header` outside a card.
   Validation before the fix is the counter-example.
-- Do not paint `.content-section` or `.sidebar-content` white: that would
-  also whiten the title.
+- Do not paint `.sidebar-content` white or add a second page border: the
+  page panel belongs to `.sidebar-section.active` only.
 - Do not nest a second white card around a body that already is a card
   (Versions, `_domain_metadata`, Ontology Studio split shells). Full-height
   split panes keep their existing `.card` / `ob-split-shell` structure.
 - The sidebar itself (`.sidebar-nav`) stays transparent.
-- Contract tests: `tests/units/front/test_section_content_white_panel.py`.
+- Contract tests: `tests/units/front/test_section_content_white_panel.py`,
+  `tests/units/front/test_databricks_page_panel_contract.py`.
 
 ### Section / Partial Conventions
 
