@@ -736,23 +736,22 @@ body {
 }
 
 /* Fixed L2 sidebar collapse control — left of Context / Settings return. */
-/* Icon centre lines up with the sidebar nav icon column (~29px from the shell
-   edge: 0.25rem shell + 0.25rem link margin + 3px border + 0.5rem padding +
-   10px half-column). Button is 2.25rem, so margin-left ≈ 0.44rem. */
+/* Left edge lines up with the sidebar nav icon column (~19px from the shell
+   edge: 0.25rem shell + 0.25rem link margin + 3px border + 0.5rem padding). */
 .ob-subnav-sidebar-toggle-item {
     display: flex;
     align-items: center;
-    margin-left: 0.44rem;
+    margin-left: 0.25rem;
     margin-right: 0.1rem;
 }
 
 .ob-subnav-sidebar-toggle {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: var(--ob-subnav-rail-height);
+    justify-content: flex-start;
+    padding-left: calc(0.5rem + 3px);
+    padding-right: 0.5rem;
     height: var(--ob-subnav-rail-height);
-    padding: 0;
     border: none;
     background: transparent;
     color: var(--db-text-muted);
@@ -761,9 +760,20 @@ body {
     flex: 0 0 auto;
 }
 
-/* Same glyph size as `.sidebar-nav .nav-link i` so the icons read as one set. */
+/* When the sidebar is collapsed, match the 32px centered icon rail of .nav-link */
+html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+    border-left: 3px solid transparent;
+}
+
+/* Same glyph size and column width as `.sidebar-nav .nav-link i` so the icons read as one set. */
 .ob-subnav-sidebar-toggle i {
     font-size: 0.95rem;
+    width: 20px;
+    min-width: 20px;
+    text-align: center;
     line-height: 1;
 }
 

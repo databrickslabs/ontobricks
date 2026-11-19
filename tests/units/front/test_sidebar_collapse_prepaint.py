@@ -78,22 +78,37 @@ def test_sidebar_toggle_lives_fixed_left_of_context_name_in_l2():
     assert not re.search(r"\.ob-subnav-sidebar-toggle:hover\s*\{", main_css)
 
 
-def test_sidebar_toggle_icon_is_centred_on_sidebar_icon_column():
-    """The L2 toggle icon uses the same size and centre line as the sidebar nav icons.
+def test_sidebar_toggle_icon_is_left_aligned_with_sidebar_icons():
+    """The L2 toggle icon left-aligns with the sidebar nav icons.
 
-    Sidebar icon centre (from the shell edge): shell padding 0.25rem + nav-link
-    margin 0.25rem + border-left 3px + padding-left 0.5rem + half of the 20px
-    icon column (10px) = ~29px. The L2 button is 2.25rem wide and starts after
-    the 0.25rem container inset, so its margin-left must be ~0.44rem.
+    Sidebar icon left edge (from the shell edge): shell padding 0.25rem + nav-link
+    margin 0.25rem + border-left 3px + padding-left 0.5rem = ~19px.
+    The L2 toggle item has margin-left 0.25rem (plus 0.25rem container-fluid inset)
+    and the toggle button has padding-left calc(0.5rem + 3px) so the icon left edge
+    lands at the exact same ~19px line with a 20px icon column.
     """
     main_css = (REPO_ROOT / "src/front/static/global/css/main.css").read_text(encoding="utf-8")
     sidebar_css = _read(SIDEBAR_CSS)
 
     nav_icon = re.search(r"\.sidebar-nav \.nav-link i\s*\{([^}]*)\}", sidebar_css)
     assert nav_icon and "font-size: 0.95rem" in nav_icon.group(1)
+    assert nav_icon and "width: 20px" in nav_icon.group(1)
 
     toggle_icon = re.search(r"\.ob-subnav-sidebar-toggle i\s*\{([^}]*)\}", main_css)
     assert toggle_icon and "font-size: 0.95rem" in toggle_icon.group(1)
+    assert toggle_icon and "width: 20px" in toggle_icon.group(1)
 
     toggle_item = re.search(r"\.ob-subnav-sidebar-toggle-item\s*\{([^}]*)\}", main_css)
-    assert toggle_item and re.search(r"margin-left\s*:\s*0\.4\d*rem", toggle_item.group(1))
+    assert toggle_item and "margin-left: 0.25rem" in toggle_item.group(1)
+
+    toggle_btn = re.search(r"\.ob-subnav-sidebar-toggle\s*\{([^}]*)\}", main_css)
+    assert toggle_btn and "padding-left: calc(0.5rem + 3px)" in toggle_btn.group(1)
+    assert toggle_btn and "justify-content: flex-start" in toggle_btn.group(1)
+
+    collapsed_toggle = re.search(
+        r"html\.ob-sidebar-collapsed\s+\.ob-subnav-sidebar-toggle\s*\{([^}]*)\}",
+        main_css,
+    )
+    assert collapsed_toggle and "width: 32px" in collapsed_toggle.group(1)
+    assert collapsed_toggle and "justify-content: center" in collapsed_toggle.group(1)
+    assert collapsed_toggle and "border-left: 3px solid transparent" in collapsed_toggle.group(1)

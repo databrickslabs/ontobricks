@@ -2001,3 +2001,44 @@ Modified files:
 - tests/units/front/test_clarity_design_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10956 passed, 334 skipped, 8 deselected, 0 failed in 50.42s
+
+## Studio View left-alignment, Group controls joined, and sidebar toggle icon left-alignment
+
+Context: In the Ontology Studio map (`/ontology/?section=map`), the View dropdown
+toggle centered its text ("All" or view name); the Groups dropdown and Expand/collapse
+toggle were in separate button groups with a gap between them. Additionally, the
+L2 sidebar collapse/expand icon was centered over the 36px toggle button, landing
+slightly to the right of the sidebar icons column below it.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_map.html
+   - Added `.text-start` to `#studioViewBtn` and `#studioViewName`.
+   - Merged `#studioGroupsBtn` and `#studioToggleAllGroupsBtn` into a single
+     `.btn-group btn-group-sm` so they stick together with joined borders and zero gap.
+2. src/front/static/ontology/css/ontology-map.css
+   - Styled `.studio-view-toggle` with `display: inline-flex; align-items: center; justify-content: space-between; text-align: left;`.
+   - Added `min-width: 0; text-align: left; margin-right: 0.25rem;` on `.studio-view-toggle-name`
+     to keep "All" or selected views left-aligned with the caret on the right edge.
+3. src/front/static/global/css/main.css
+   - Left-aligned the L2 collapse/expand toggle icon (`#obSidebarToggle i`) with the
+     sidebar nav icon column in both expanded (~19px) and collapsed (~15.5px) states:
+     - Expanded: `.ob-subnav-sidebar-toggle-item` `margin-left: 0.25rem`, `.ob-subnav-sidebar-toggle` `padding-left: calc(0.5rem + 3px)` with `width: 20px; text-align: center;` on the icon.
+     - Collapsed: `html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle` sets `width: 32px; padding: 0; justify-content: center; border-left: 3px solid transparent;`, matching the 32px centered icon rail of `.sidebar-nav.collapsed .nav-link` exactly.
+4. tests/units/front/test_studio_views_groups_contract.py
+   - Added contract assertions verifying that the View toggle is left-aligned and that the
+     groups dropdown and expand/collapse button are in the same `.btn-group`.
+5. tests/units/front/test_sidebar_collapse_prepaint.py
+   - Updated `test_sidebar_toggle_icon_is_left_aligned_with_sidebar_icons` to assert
+     the left-aligned icon geometry in both expanded and collapsed sidebar states.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/main.css
+- src/front/static/ontology/css/ontology-map.css
+- src/front/templates/partials/ontology/_ontology_map.html
+- tests/units/front/test_sidebar_collapse_prepaint.py
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10957 passed, 334 skipped, 8 deselected, 0 failed in 51.18s
+

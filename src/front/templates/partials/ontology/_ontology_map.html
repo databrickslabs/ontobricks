@@ -10,9 +10,9 @@
         <div class="d-flex align-items-center gap-1" title="Filter the canvas by Business View">
             <span class="small text-muted mb-0 me-1">View</span>
             <div class="btn-group btn-group-sm">
-                <button type="button" class="btn btn-outline-secondary dropdown-toggle studio-view-toggle" id="studioViewBtn"
+                <button type="button" class="btn btn-outline-secondary dropdown-toggle studio-view-toggle text-start" id="studioViewBtn"
                         data-bs-toggle="dropdown" aria-expanded="false" aria-label="Business view filter">
-                    <span class="studio-view-toggle-name text-truncate" id="studioViewName">All</span>
+                    <span class="studio-view-toggle-name text-truncate text-start" id="studioViewName">All</span>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end" id="studioViewMenu" aria-labelledby="studioViewBtn">
                     <li>
@@ -29,9 +29,9 @@
                 <i class="bi bi-trash"></i>
             </button>
         </div>
-        <div class="btn-group btn-group-sm ontology-edit-btn" title="Create or edit entity groups">
-            <button type="button" class="btn btn-outline-secondary dropdown-toggle" id="studioGroupsBtn"
-                    data-bs-toggle="dropdown" aria-expanded="false" aria-label="Manage groups">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Entity groups">
+            <button type="button" class="btn btn-outline-secondary dropdown-toggle ontology-edit-btn" id="studioGroupsBtn"
+                    data-bs-toggle="dropdown" aria-expanded="false" aria-label="Manage groups" title="Create or edit entity groups">
                 <i class="bi bi-collection"></i>
             </button>
             <ul class="dropdown-menu dropdown-menu-end" id="studioGroupsMenu" aria-labelledby="studioGroupsBtn">
@@ -43,8 +43,6 @@
                 <li><hr class="dropdown-divider" id="studioGroupsDivider"></li>
                 <li><span class="dropdown-item-text text-muted small" id="studioGroupsEmpty">No groups yet</span></li>
             </ul>
-        </div>
-        <div class="btn-group btn-group-sm" role="group" aria-label="Expand or collapse all groups">
             <button type="button" class="btn btn-outline-secondary" id="studioToggleAllGroupsBtn"
                     title="Collapse all groups" aria-label="Collapse all groups" aria-pressed="false">
                 <i class="bi bi-arrows-collapse"></i>

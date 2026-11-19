@@ -67,6 +67,13 @@ def test_studio_toolbar_has_view_dropdown_and_groups_menu():
     assert 'id="studioToggleAllGroupsBtn"' in html
     assert 'aria-pressed=' in html[html.index("studioToggleAllGroupsBtn") :]
 
+    # Groups dropdown and Expand/collapse toggle are stuck together in one btn-group
+    btn_group_start = html.rfind('<div class="btn-group', 0, html.index('id="studioGroupsBtn"'))
+    btn_group_end = html.index('</div>', html.index('id="studioToggleAllGroupsBtn"'))
+    group_html = html[btn_group_start:btn_group_end]
+    assert 'id="studioGroupsBtn"' in group_html
+    assert 'id="studioToggleAllGroupsBtn"' in group_html
+
 
 def test_groups_modal_has_delete_and_no_sidebar_section():
     groups_html = _read(
@@ -333,3 +340,15 @@ def test_persistence_module_marks_registry_dirty():
     assert "setDomainDirty('ontology', true)" in js
     assert "setDomainDirty('ontology', false)" in js
     assert "function saveRegistryOnUnload" in js
+
+
+def test_studio_view_dropdown_toggle_left_aligned():
+    """Business View toggle aligns 'All' or the selected view to the left."""
+    css = _read(MAP_CSS)
+    assert ".studio-view-toggle" in css
+    assert "justify-content: space-between" in css
+    assert "text-align: left" in css
+
+    html = _read(MAP_HTML)
+    assert "studio-view-toggle" in html
+    assert "text-start" in html
