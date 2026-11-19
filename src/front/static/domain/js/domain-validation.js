@@ -1,43 +1,124 @@
 /**
  * OntoBricks - domain-validation.js
  * Populates the Project Validation dashboard.
+ *
+ * Context → General loads in three parallel slices (overview / documents /
+ * graph) so ontology and mapping paint immediately while the slower UC and
+ * Lakebase checks keep their own section spinners.
  */
 
-function hideValidationLoadingOverlay() {
-    const overlay = document.getElementById('validationLoadingOverlay');
-    if (overlay) overlay.style.display = 'none';
+var _validationState = {};
+
+function setValidationSpinner(id, visible) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('is-hidden', !visible);
+}
+
+function showValidationSectionSpinners() {
+    setValidationSpinner('validationAssetsSpinner', true);
+    setValidationSpinner('validationOntologySpinner', true);
+    setValidationSpinner('validationMappingSpinner', true);
+    setValidationSpinner('validationGraphSpinner', true);
+    const banner = document.getElementById('domainHealthBanner');
+    if (banner) {
+        banner.className = 'validation-health-banner mb-4 health-loading';
+        banner.innerHTML =
+            '<span id="domainHealthBannerSpinner" class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>' +
+            '<div>Checking context health…</div>';
+    }
+}
+
+async function fetchValidationPart(part) {
+    const response = await fetch(
+        '/validate/detailed?parts=' + encodeURIComponent(part),
+        { credentials: 'same-origin' }
+    );
+    const data = await response.json();
+    if (!response.ok || data.success === false) {
+        throw new Error((data && (data.detail || data.error || data.message)) || ('HTTP ' + response.status));
+    }
+    return data;
+}
+
+function applyValidationOverview(data) {
+    Object.assign(_validationState, data);
+    updateWarehouseTile(data);
+    updateOntologyTile(data);
+    updateMappingTile(data);
+    updateMetadataTile(data);
+    updateVersionTiles(data);
+    updateOntologyCard(data);
+    updateMappingCard(data);
+    updateMissingItems(data);
+    setValidationSpinner('validationAssetsSpinner', false);
+    setValidationSpinner('validationOntologySpinner', false);
+    setValidationSpinner('validationMappingSpinner', false);
+    // Health still waits for the graph slice when present; otherwise paint now.
+    if (_validationState.dtwin) {
+        updateHealthBanner(_validationState);
+    }
+}
+
+function applyValidationDocuments(data) {
+    Object.assign(_validationState, data);
+    updateDocumentsTile(data);
+}
+
+function applyValidationGraph(data) {
+    Object.assign(_validationState, data);
+    updateDtwinTile(data);
+    updateDtwinCard(data);
+    setValidationSpinner('validationGraphSpinner', false);
+    if (_validationState.ontology_valid !== undefined) {
+        updateHealthBanner(_validationState);
+    }
 }
 
 async function loadValidationDetails() {
-    try {
-        const response = await fetch('/validate/detailed', { credentials: 'same-origin' });
-        const data = await response.json();
-
-        updateHealthBanner(data);
-        updateWarehouseTile(data);
-        updateOntologyTile(data);
-        updateMappingTile(data);
-        updateDtwinTile(data);
-        updateMetadataTile(data);
-        updateDocumentsTile(data);
-        updateVersionTiles(data);
-        updateOntologyCard(data);
-        updateMappingCard(data);
-        updateDtwinCard(data);
-        updateMissingItems(data);
-        loadGraphMetricsSummary();
-        loadMaterializedInferenceCount();
-    } catch (error) {
-        console.error('Error loading validation:', error);
-        const banner = document.getElementById('domainHealthBanner');
-        if (banner) {
-            banner.style.display = '';
-            banner.className = 'validation-health-banner health-error mb-4';
-            banner.innerHTML = '<i class="bi bi-exclamation-triangle health-icon"></i><div>Error loading validation status: ' + error.message + '</div>';
-        }
-    } finally {
-        hideValidationLoadingOverlay();
-    }
+    _validationState = {};
+    showValidationSectionSpinners();
+    const tasks = [
+        fetchValidationPart('overview')
+            .then(applyValidationOverview)
+            .catch(function (error) {
+                console.error('Error loading validation overview:', error);
+                setValidationSpinner('validationAssetsSpinner', false);
+                setValidationSpinner('validationOntologySpinner', false);
+                setValidationSpinner('validationMappingSpinner', false);
+                const banner = document.getElementById('domainHealthBanner');
+                if (banner) {
+                    banner.className = 'validation-health-banner health-error mb-4';
+                    banner.innerHTML =
+                        '<i class="bi bi-exclamation-triangle health-icon"></i>' +
+                        '<div>Error loading validation status: ' + error.message + '</div>';
+                }
+            }),
+        fetchValidationPart('documents')
+            .then(applyValidationDocuments)
+            .catch(function (error) {
+                console.error('Error loading documents tile:', error);
+                setTile('documentsTile', 'muted', 'Unavailable');
+            }),
+        fetchValidationPart('graph')
+            .then(applyValidationGraph)
+            .catch(function (error) {
+                console.error('Error loading graph validation:', error);
+                setValidationSpinner('validationGraphSpinner', false);
+                setTile('dtwinTile', 'danger', 'Unavailable');
+                const badge = document.getElementById('dtwinValidationBadge');
+                if (badge) {
+                    badge.className = 'badge bg-danger';
+                    badge.textContent = 'Error';
+                }
+                if (_validationState.ontology_valid !== undefined) {
+                    updateHealthBanner(_validationState);
+                }
+            }),
+    ];
+    await Promise.all(tasks);
+    loadGraphMetricsSummary();
+    loadMaterializedInferenceCount();
 }
 
 async function loadMaterializedInferenceCount() {

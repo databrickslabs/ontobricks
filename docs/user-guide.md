@@ -1608,7 +1608,7 @@ When you save an existing domain:
 
 ### General page (Cockpit)
 
-Under **Context → General** (the first item of the Context menu, before **Configuration**), tiles summarise registry and build readiness. The **Published Version** tile shows the numeric-latest **PUBLISHED** registry version. The external API and MCP can target **any** version (`domain_version`); when omitted they use the numeric-latest version regardless of status. That can differ from the version you have **loaded** in the editor; when it does, the tile adds a *(not loaded)* hint.
+Under **Context → General** (the first item of the Context menu, before **Configuration**), tiles summarise registry and build readiness. The page paints **per section** with its own spinner: ontology / mapping / asset tiles arrive first (in-session), then the documents count and Knowledge Graph status (live UC / Lakebase checks) fill in as they complete — there is no full-page wait. The **Published Version** tile shows the numeric-latest **PUBLISHED** registry version. The external API and MCP can target **any** version (`domain_version`); when omitted they use the numeric-latest version regardless of status. That can differ from the version you have **loaded** in the editor; when it does, the tile adds a *(not loaded)* hint.
 
 #### Version lifecycle (DRAFT / IN-REVIEW / PUBLISHED)
 

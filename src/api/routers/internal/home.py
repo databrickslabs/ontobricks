@@ -4,7 +4,7 @@ Internal API -- Home / session / validation JSON endpoints.
 Moved from app/frontend/home/routes.py during the front/back split.
 """
 
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from back.core.errors import ValidationError, InfrastructureError
 from back.objects.session import SessionManager, get_session_manager
 
@@ -79,15 +79,24 @@ async def validate_ontology_endpoint(
 
 @router.get("/validate/detailed")
 async def validate_detailed(
+    parts: str | None = None,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Get detailed validation status including Knowledge Graph and warehouse."""
+    """Get detailed validation status including Knowledge Graph and warehouse.
+
+    Optional ``parts`` (comma-separated: overview, documents, graph) returns
+    only the requested slices so the Context → General page can paint
+    progressively. Omit or pass ``all`` for the full payload.
+    """
     domain = get_domain(session_mgr)
     warehouse_id = resolve_warehouse_id(domain, settings)
-    return await home_service.get_detailed_validation(
-        domain, settings, warehouse_id=warehouse_id
-    )
+    try:
+        return await home_service.get_detailed_validation(
+            domain, settings, warehouse_id=warehouse_id, parts=parts
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ===========================================

@@ -1271,3 +1271,55 @@ Test result
 -----------
 uv run --frozen pytest -q -m "not scenario" → 10921 passed, 334 skipped,
 8 deselected, 0 failed.
+
+================================================================================
+Context → General: progressive per-section load with spinners
+================================================================================
+
+Context
+-------
+Context → General (cockpit) used a full-page overlay that waited for the
+entire `/validate/detailed` payload (including live UC document listing and
+Lakebase graph checks). Ontology and mapping tiles stayed blank until that
+finished. The page now loads by section with per-section spinners.
+
+Changes
+-------
+1. src/back/objects/domain/HomeService.py — `get_detailed_validation` accepts
+   `parts` (overview / documents / graph / all); overview is in-session only;
+   documents and graph keep their live I/O; helpers
+   `_normalize_validation_parts`, `_build_validation_overview`,
+   `_build_validation_graph_detail`, `_ontology_warnings`.
+2. src/api/routers/internal/home.py — `/validate/detailed?parts=` query param
+   (400 on unknown parts).
+3. src/front/static/domain/js/domain-validation.js — parallel fetches for
+   overview, documents and graph; apply each slice as it arrives; remove the
+   full-page overlay hand-off.
+4. src/front/templates/partials/domain/_domain_validation.html — remove
+   `validationLoadingOverlay`; add per-section spinners
+   (`validationAssetsSpinner`, `validationOntologySpinner`,
+   `validationMappingSpinner`, `validationGraphSpinner`,
+   `domainHealthBannerSpinner`).
+5. src/front/static/domain/css/domain-validation.css — section spinner styles.
+6. tests/units/front/test_validation_progressive_load.py (new),
+   tests/units/domain/test_home_service.py — overview skips live I/O;
+   tests/units/architecture/baseline.json — ratcheted after the split.
+7. docs/user-guide.md — General page progressive-load note.
+
+Modified files
+--------------
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- docs/user-guide.md
+- src/api/routers/internal/home.py
+- src/back/objects/domain/HomeService.py
+- src/front/static/domain/css/domain-validation.css
+- src/front/static/domain/js/domain-validation.js
+- src/front/templates/partials/domain/_domain_validation.html
+- tests/units/architecture/baseline.json
+- tests/units/domain/test_home_service.py
+- tests/units/front/test_validation_progressive_load.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped,
+8 deselected, 0 failed.
