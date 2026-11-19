@@ -44,7 +44,7 @@ def _constrained_block(css: str) -> str:
     return match.group(1)
 
 
-def test_l2_layout_is_context_then_app_switcher_then_actions():
+def test_chrome_layout_is_brand_context_actions_switcher_utilities():
     """Workspace dropdown rail is gone; app switcher owns Context→Intelligence nav."""
     html = _read(BASE_HTML)
     assert 'id="obSubnav"' in html
@@ -78,10 +78,14 @@ def test_l2_layout_is_context_then_app_switcher_then_actions():
         r'id="domainContextVersion"[^>]*class="[^"]*\bdomain-version-badge\b',
         html,
     )
-    assert html.index("obSidebarToggle") < html.index("domainContextTrigger")
-    assert html.index("domainContextTrigger") < html.index("obAppSwitcher")
-    assert html.index("obAppSwitcher") < html.index("ob-subnav-close-btn")
+    assert html.index("obSidebarToggle") < html.index("brandLogoImg")
+    assert html.index("brandLogoImg") < html.index("ob-subnav-flex-spacer")
+    assert html.index("ob-subnav-flex-spacer") < html.index("domainContextTrigger")
+    assert html.index("domainContextTrigger") < html.index("ob-subnav-close-btn")
     assert html.index("ob-subnav-close-btn") < html.index("ob-subnav-save-btn")
+    assert html.index("ob-subnav-save-btn") < html.index("obAppSwitcher")
+    assert html.index("obAppSwitcher") < html.index("activityCenterToggle")
+    assert html.index("activityCenterToggle") < html.index("userMenuDropdown")
     assert "ob-subnav-switch-btn" not in html
     assert "ob-subnav-save-dirty" in html
     assert "ob-subnav-save-kbd" in html
@@ -89,8 +93,11 @@ def test_l2_layout_is_context_then_app_switcher_then_actions():
 
 def test_subnav_surface_is_transparent_and_borderless():
     css = _read(MAIN_CSS)
-    block = _rule(css, ".ob-subnav")
-
+    # Unified chrome keeps former L2 look (canvas grey, no border) even when
+    # the element also carries Bootstrap `.navbar`.
+    block = _rule(css, ".ob-subnav,\n.ob-subnav.navbar")
+    if "transparent" not in block:
+        block = _rule(css, ".ob-subnav.navbar")
     assert re.search(r"background(?:-color)?\s*:\s*transparent", block)
     assert re.search(r"border-bottom\s*:\s*(?:0|none)", block)
 
@@ -117,7 +124,7 @@ def test_context_crumb_and_rail_use_quiet_tokens():
     assert "background: var(--db-hover-indigo)" in crumb_hover
     assert "--ob-subnav-rail-height: 2.25rem" in css
     nav = _rule(css, ".ob-subnav-nav")
-    assert "padding: 0.15rem 0 0" in nav
+    assert "padding: 0.15rem 0" in nav
     # Segmented workspace rail styles must not return.
     assert ".ob-subnav-workspace-list" not in css
     assert ".ob-subnav-link" not in css

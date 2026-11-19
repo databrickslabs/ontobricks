@@ -492,16 +492,22 @@ body {
 }
 
 /* ==========================================================================
-   Level-2 contextual sub-navigation (.ob-subnav)
-   Sits directly below the main navbar and provides Ontology / Mapping /
-   Knowledge Graph tabs plus the Context dropdown.
+   Unified app chrome (.ob-subnav / #obSubnav)
+   Single top bar: left = sidebar toggle + brand; right = Context, Close/Save,
+   app switcher, Activity, User. Former L1+L2 are merged here.
    ========================================================================== */
-.ob-subnav {
-    background: transparent;
-    border-bottom: 0;
+.ob-subnav,
+.ob-subnav.navbar {
+    /* Match former L2: canvas grey (--db-canvas-warm on body) shows through;
+       no white L1 surface and no bottom divider. */
+    background: transparent !important;
+    background-color: transparent !important;
+    border-bottom: 0 !important;
     padding: 0;
     position: relative;
-    z-index: 1040;
+    z-index: 1050; /* Above OntoViz elements */
+    min-height: 0;
+    box-shadow: none;
 }
 
 #obSubnav .container-fluid {
@@ -514,11 +520,51 @@ body {
     align-items: center;
     list-style: none;
     margin: 0;
-    /* Match the shell gutter below the rail. The shell owns the lower 0.15rem,
-       so L1 -> L2 and L2 -> page content remain visually equal. */
-    padding: 0.15rem 0 0;
+    padding: 0.15rem 0;
     --ob-subnav-rail-height: 2.25rem;
     gap: 0;
+    width: 100%;
+}
+
+.ob-subnav-brand-item .navbar-brand {
+    font-size: 1.05rem;
+    font-weight: 500;
+    padding: 0.15rem 0.35rem 0.15rem 0.15rem;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.ob-subnav-brand-item .navbar-brand img {
+    flex-shrink: 0;
+}
+
+.ob-subnav-utility-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--db-text-secondary);
+    text-decoration: none;
+    padding: 0.3rem 0.45rem;
+    border-radius: var(--db-radius-control);
+    line-height: 1;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.ob-subnav-utility-link:hover,
+.ob-subnav-utility-link:focus {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
+    text-decoration: none;
+}
+
+.ob-subnav-utility-link:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-subnav-utility-link.ob-user-menu-toggle {
+    padding: 0.25rem 0.4rem;
 }
 
 .ob-subnav-item {
@@ -532,9 +578,10 @@ body {
     justify-content: flex-start;
     text-align: left;
     gap: 0.35rem;
-    width: 200px;
-    min-width: 200px;
-    max-width: 200px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    white-space: nowrap;
     padding: 0.2rem 0.55rem;
     color: var(--db-text);
     background: transparent;
@@ -559,13 +606,23 @@ body {
     box-shadow: var(--db-focus-ring);
 }
 
-/* "Back to {context} V{n}" label: long names ellipsize inside the 200px rail;
-   the full text stays in the link's title attribute. */
+/* "Back to {context} V{n}" label is never truncated: the link takes its
+   natural width and the full name stays visible. */
 .ob-subnav-settings-return-link > span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* On pages with the section sidebar, the return link sits just right of the
+   sidebar column, aligned with the content panel's left edge (sidebar gutter
+   4px + sidebar width + 4px gap = 0.5rem after --ob-sidebar-width). Pages
+   without a sidebar (Home) keep it inline after the brand. */
+@media (min-width: 768px) {
+    html:has(.sidebar-layout) #settingsDomainReturnNav {
+        position: absolute;
+        top: 50%;
+        left: calc(var(--ob-sidebar-width, 200px) + 0.5rem);
+        transform: translateY(-50%);
+    }
 }
 
 /* L2 dropdowns (app switcher) mirror the left sidebar panel. */
@@ -1059,22 +1116,28 @@ body {
     pointer-events: none;
 }
 
-/* Spacer pushes Close / Save to the right edge of the L2 row */
+/* Spacer pushes the right chrome group to the edge */
 .ob-subnav-flex-spacer {
     flex: 1;
+}
+
+/* Extra breathing room between right-side chrome controls
+   (Context → Close/Save → switcher → Activity → User). */
+.ob-subnav-flex-spacer ~ .ob-subnav-item {
+    margin-inline-start: 0.35rem;
 }
 
 .ob-subnav-nav .ob-subnav-item:has(.ob-subnav-save-btn) {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding-right: 0.25rem;
+    gap: 0.55rem;
+    padding-right: 0.15rem;
 }
 
 .ob-subnav-nav .ob-subnav-item:has(.ob-subnav-app-switcher) {
     display: flex;
     align-items: center;
-    margin-right: 0.15rem;
+    margin-right: 0.1rem;
 }
 
 @media (max-width: 1199.98px) {

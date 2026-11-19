@@ -1,11 +1,11 @@
-"""Settings/Home L2 behavior for the domain return control.
+"""Settings/Home domain-chrome behavior for the return control.
 
-The L2 (`#obSubnav`) remains a single shared slot with mutually exclusive
-presentations:
-- Settings or Home + loaded domain: show only "Back to context"
-- Settings or Home + no domain: hide all L2
-- Other pages + loaded domain: show normal workspace rail
-- Other pages + no domain: hide all L2
+`#obSubnav` is the always-visible unified app bar. Domain chrome inside it is
+mutually exclusive:
+- Settings or Home + loaded domain: show "Back to context" (hide workspace rail)
+- Settings or Home + no domain: hide return + workspace rail
+- Other pages + loaded domain: show workspace rail (Context / Close / Save / switcher)
+- Other pages + no domain: hide workspace rail
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 NAVBAR_JS = REPO_ROOT / "src/front/static/global/js/navbar.js"
 MAIN_CSS = REPO_ROOT / "src/front/static/global/css/main.css"
+SIDEBAR_LAYOUT_CSS = REPO_ROOT / "src/front/static/global/css/sidebar-layout.css"
 BASE_HTML = REPO_ROOT / "src/front/templates/base.html"
 HOME_HTML = REPO_ROOT / "src/front/templates/home.html"
 
@@ -80,7 +81,8 @@ def test_subnav_visibility_is_driven_by_the_four_state_combinations():
     body = _update_domain_menu_visibility_body()
     assert "const showSettingsReturn = isContextReturnPage && hasDomain;" in body
     assert "const showWorkspaceRail = !isContextReturnPage && hasDomain;" in body
-    assert "subnav.classList.toggle('d-none', !showSettingsReturn && !showWorkspaceRail);" in body
+    # Unified bar stays visible; only domain chrome / return toggle.
+    assert "subnav.classList.toggle('d-none'" not in body
     assert "document.querySelectorAll('[data-subnav-domain-chrome]').forEach((el) => {" in body
     assert "el.classList.toggle('d-none', !showWorkspaceRail);" in body
 
@@ -90,20 +92,35 @@ def test_is_context_return_page_flag_is_computed_once_at_function_top():
     assert "const isContextReturnPage = page === 'settings' || page === 'home';" in body
 
 
-def test_settings_return_link_matches_sidebar_width_on_desktop():
+def test_settings_return_link_sits_right_of_sidebar_column_on_desktop():
     css = _read(MAIN_CSS)
     html = _read(BASE_HTML)
     rule = _rule(css, ".ob-subnav-settings-return-link")
+    sidebar_css = _read(SIDEBAR_LAYOUT_CSS)
 
     assert 'id="settingsDomainReturnLink"' in html
     assert 'class="ob-subnav-settings-return-link ob-settings-domain-return-link"' in html
-    assert "width: 200px" in rule
-    assert "min-width: 200px" in rule
-    assert "max-width: 200px" in rule
+    # Natural width: the "Back to {name} V{n}" label is never shortened.
+    assert "width: auto" in rule
+    assert "max-width: none" in rule
+    assert "white-space: nowrap" in rule
+    assert "width: 200px" not in rule
     assert "justify-content: flex-start" in rule
     assert "text-align: left" in rule
     assert "background: transparent" in rule
     assert "border: 0" in rule
+    # Anchored to the content column (right of the sidebar), only where a
+    # sidebar exists; the width variable follows the collapse state.
+    anchored = re.search(
+        r"html:has\(\.sidebar-layout\)\s+#settingsDomainReturnNav\s*\{([^}]*)\}",
+        css,
+    )
+    assert anchored, "Return link must anchor to the sidebar column on desktop"
+    assert "position: absolute" in anchored.group(1)
+    assert "left: calc(var(--ob-sidebar-width, 200px) + 0.5rem)" in anchored.group(1)
+    assert "--ob-sidebar-width: 200px" in sidebar_css
+    assert "html.ob-sidebar-collapsed:has(.sidebar-layout)" in sidebar_css
+    assert "--ob-sidebar-width: 48px" in sidebar_css
 
 
 def test_settings_return_link_resets_fixed_width_on_mobile():
@@ -132,8 +149,8 @@ def test_settings_return_label_shows_context_name_and_version():
     assert "document.getElementById('settingsDomainReturnLabel')" in js
     assert "`Back to ${domainName} V${version}`" in js
     assert "'Back to context'" in js
-    assert re.search(
-        r"\.ob-subnav-settings-return-link\s*>\s*span\s*\{[^}]*text-overflow\s*:\s*ellipsis",
-        css,
-        flags=re.DOTALL,
-    )
+    # No truncation: the label keeps its full text on one line.
+    label = _rule(css, ".ob-subnav-settings-return-link > span")
+    assert "white-space: nowrap" in label
+    assert "text-overflow" not in label
+    assert "ellipsis" not in label

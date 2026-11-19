@@ -622,7 +622,7 @@ def test_l2_dropdown_items_match_sidebar_hover_and_active():
     )
 
 
-def test_base_template_keeps_logo_nav_structure_and_l1_before_l2():
+def test_base_template_keeps_logo_in_unified_chrome_bar():
     html = _read(BASE_HTML)
     menu = _menu_config()
     domain_menu = next(menu_item for menu_item in menu["menus"] if menu_item["id"] == "domain")
@@ -635,14 +635,19 @@ def test_base_template_keeps_logo_nav_structure_and_l1_before_l2():
     assert 'data-brand-title' in html
     assert "{{ _branding.logo_url }}" in html
     assert 'id="obSubnav"' in html
+    assert 'class="ob-subnav navbar navbar-light"' in html
+    assert html.count('<nav id="obSubnav"') == 1
+    assert 'navbar-expand-lg' not in html
+    assert 'id="navbarNav"' not in html
     assert save_action["element_id"] == "menuSaveDomain"
     # Base template contract is dynamic: id comes from save_action.v.element_id.
     assert 'class="ob-subnav-save-btn btn-requires-domain"' in html
     assert '{% if save_action.v.element_id %}id="{{ save_action.v.element_id }}"{% endif %}' in html
 
-    l1_pos = html.index('<nav class="navbar navbar-expand-lg navbar-light">')
-    l2_pos = html.index('<nav id="obSubnav"')
-    assert l1_pos < l2_pos
+    # Left: toggle then brand; right group starts after the flex spacer.
+    assert html.index("obSidebarToggleItem") < html.index("brandLogoImg")
+    assert html.index("brandLogoImg") < html.index("ob-subnav-flex-spacer")
+    assert html.index("ob-subnav-flex-spacer") < html.index("domainContextTrigger")
 
 
 def test_sidebar_layout_preserves_geometry_and_clarity_active_tokens():
@@ -709,15 +714,15 @@ def test_sidebar_layout_centralizes_the_shared_outer_gutter():
     )
 
 
-def test_level_two_rail_and_content_share_the_same_vertical_gutter():
-    """L2 owns only its top gutter; the shell owns the gutter below it."""
+def test_chrome_rail_and_content_share_the_same_vertical_gutter():
+    """Chrome rail owns symmetric vertical padding; the shell owns space below."""
     main_css = _read(MAIN_CSS)
     subnav = _rule_blocks_for_exact_selector(main_css, ".ob-subnav-nav")
 
     assert _any_block_has_declaration(
         subnav,
         r"padding",
-        r"0\.15rem\s+0\s+0",
+        r"0\.15rem\s+0",
     )
 
 
@@ -831,7 +836,7 @@ def test_sidebar_layout_restores_natural_flow_on_mobile():
 
 
 def test_user_identity_lives_in_the_navbar_not_the_sidebar():
-    """One place for the current user, and it is the far right of the navbar."""
+    """One place for the current user, and it is the far right of the chrome bar."""
     partial = _read(SIDEBAR_NAV_PARTIAL)
     html = _read(BASE_HTML)
 
@@ -839,11 +844,9 @@ def test_user_identity_lives_in_the_navbar_not_the_sidebar():
     assert 'id="userMenuDropdown"' in html
     assert "ob-user-menu-email" in html
 
-    # Declared after the right-aligned group opens and after the last control
-    # in it, or it is not the right-most item.
+    # Declared after Activity and as the right-most chrome control.
     assert (
-        html.index('<ul class="navbar-nav ms-auto">')
-        < html.index("activityCenterToggle")
+        html.index("activityCenterToggle")
         < html.index("userMenuDropdown")
     )
     assert html.index("userMenuDropdown") < html.index("helpCenterToggle")

@@ -528,11 +528,12 @@ function enableMenusAfterSave() {
 }
 
 /**
- * Update L2 subnav visibility based on domain state.
+ * Update domain chrome inside the single app bar based on domain state.
  *
- * The L2 slot shows the domain workspace rail on context pages, and the
- * "Back to context" return control on Settings and Home when a domain is
- * open in session (same pattern as Settings).
+ * The bar (#obSubnav) is always visible. Domain chrome (Context + Close/Save +
+ * app switcher) shows on workspace pages with a loaded domain. The
+ * "Back to context" return control shows on Settings and Home when a domain
+ * is open in session.
  */
 function updateDomainMenuVisibility(hasDomain) {
     const page = document.body.dataset.page;
@@ -540,13 +541,10 @@ function updateDomainMenuVisibility(hasDomain) {
     const showSettingsReturn = isContextReturnPage && hasDomain;
     const showWorkspaceRail = !isContextReturnPage && hasDomain;
 
-    // Show/hide L2 subnav
     const subnav = document.getElementById('obSubnav');
-    if (subnav) {
-        subnav.classList.toggle('d-none', !showSettingsReturn && !showWorkspaceRail);
-        if (typeof window.OBBreadcrumb !== 'undefined' && typeof window.OBBreadcrumb._updateChromeHeight === 'function') {
-            window.OBBreadcrumb._updateChromeHeight();
-        }
+    if (subnav && typeof window.OBBreadcrumb !== 'undefined'
+            && typeof window.OBBreadcrumb._updateChromeHeight === 'function') {
+        window.OBBreadcrumb._updateChromeHeight();
     }
     const settingsDomainReturnNav = document.getElementById('settingsDomainReturnNav');
     if (settingsDomainReturnNav) {

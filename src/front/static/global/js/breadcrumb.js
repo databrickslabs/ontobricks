@@ -1,9 +1,9 @@
 /**
- * L2 chrome-height bookkeeping.
+ * App-chrome height bookkeeping.
  *
- * The inline breadcrumb that used to sit in the L2 subnav row was removed.
- * This module only keeps the --ob-chrome-height CSS variable in sync with the
- * navbar + subnav heights, which sidebar-layout uses for its offset.
+ * Keeps --ob-chrome-height in sync with the single top bar (#obSubnav), which
+ * sidebar-layout uses for its offset. Former L1+L2 heights are merged into
+ * one measurement.
  */
 
 const Breadcrumb = {
@@ -12,13 +12,10 @@ const Breadcrumb = {
     },
 
     _updateChromeHeight() {
-        const navbar  = document.querySelector('nav.navbar');
-        const subnav  = document.getElementById('obSubnav');
-        const navH    = navbar ? navbar.offsetHeight : 60;
-        const subnavH = (subnav && !subnav.classList.contains('d-none')) ? subnav.offsetHeight : 0;
-        document.documentElement.style.setProperty(
-            '--ob-chrome-height', (navH + subnavH) + 'px'
-        );
+        const chrome = document.getElementById('obSubnav')
+            || document.querySelector('nav.navbar');
+        const h = chrome ? chrome.offsetHeight : 48;
+        document.documentElement.style.setProperty('--ob-chrome-height', h + 'px');
     }
 };
 

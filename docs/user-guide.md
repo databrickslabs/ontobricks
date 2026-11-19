@@ -152,16 +152,16 @@ OntoBricks follows a 3-step workflow:
 
 ### Settings page navigation behavior
 
-The level-two bar below the top navbar (`#obSubnav`) uses one shared slot with
-mutually exclusive behavior:
+The unified top chrome (`#obSubnav`) is always visible (brand, Activity, User).
+Domain chrome inside it is mutually exclusive:
 
-- On **Settings** with a loaded domain, it shows only **Back to domain**
-  (`#settingsDomainReturnLink`).
-- On **Settings** with no loaded domain, the full level-two bar remains hidden.
-- On non-Settings pages with a loaded domain, it shows the domain context,
-  the **app switcher** (Context, Ontology, Graph, Intelligence, and Settings for
-  admins), and Close / Save.
-- On non-Settings pages with no loaded domain, it remains hidden.
+- On **Settings** or **Home** with a loaded domain, it shows **Back to domain**
+  (`#settingsDomainReturnLink`) and hides the workspace rail.
+- On **Settings** or **Home** with no loaded domain, domain chrome stays hidden.
+- On workspace pages with a loaded domain, the right side shows Context + version,
+  Close / Save, then the **app switcher** (Context, Ontology, Graph, Intelligence,
+  and Settings for admins).
+- On workspace pages with no loaded domain, domain chrome stays hidden.
 - The app switcher always opens that workspace's **Home** page
   (`?section=home`), which groups features by the same sidebar menu sections
   (short explanations and Help Center links on each tile). Settings is

@@ -14,8 +14,8 @@
     };
 
     function initNavbarActionDelegation() {
-        // Listen on document.body so data-navbar-action links work in both
-        // #navbarNav (L1) and #obSubnav (L2 Save button).
+        // Listen on document.body so data-navbar-action links work in the
+        // unified #obSubnav chrome (Close / Save).
         document.body.addEventListener('click', function (e) {
             var link = e.target.closest('a[data-navbar-action]');
             if (!link) return;

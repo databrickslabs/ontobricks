@@ -1372,3 +1372,84 @@ Test result
 -----------
 uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped,
 8 deselected, 0 failed.
+
+## Merge L1 into unified chrome bar
+
+Context: Collapse the former top navbar (L1) and contextual subnav (L2) into
+one always-visible `#obSubnav` bar. Left: sidebar toggle + OntoBricks brand.
+Right: Context & version → Close/Save → app switcher → Activity → User. Keep
+the former L2 look (transparent over canvas grey, no bottom border) and add
+slightly more spacing between right-side controls.
+
+Changes:
+
+1. src/front/templates/base.html
+   Single `#obSubnav` chrome; brand/Activity/User moved in; right-side order
+   Context → Close/Save → switcher → Activity → User; L1 menus removed.
+2. src/front/static/global/css/main.css
+   Transparent borderless bar (override Bootstrap `.navbar` white); brand and
+   utility link styles; right-side item spacing after the flex spacer.
+3. src/front/static/global/js/navbar.js
+   Bar always visible; only domain chrome / settings return toggle.
+4. src/front/static/global/js/breadcrumb.js
+   `--ob-chrome-height` measures `#obSubnav` only.
+5. src/front/static/global/js/base-ui-handlers.js
+   Comment updated for unified chrome action delegation.
+6. .cursor/11-frontend-design.mdc, docs/user-guide.md
+   Document unified chrome layout and Settings/Home return behavior.
+7. tests/units/front/*, tests/units/ui/*, tests/e2e/navigation/*
+   Contracts updated for single-bar order, transparent surface, and chrome height.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- docs/user-guide.md
+- src/front/static/global/css/main.css
+- src/front/static/global/js/base-ui-handlers.js
+- src/front/static/global/js/breadcrumb.js
+- src/front/static/global/js/navbar.js
+- src/front/templates/base.html
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_backend_brand_icons.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_settings_subnav_hidden.py
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped, 8 deselected, 0 failed in 49.79s
+
+## Back to Context link aligned right of sidebar, untruncated
+
+Context: On Settings the "Back to {context} V{n}" link was a fixed 200px chip
+after the brand, so long names were ellipsized and it did not line up with the
+content column. It now starts right of the sidebar column (aligned with the
+content panel) and shows the full label. Home has no sidebar and keeps the link
+inline after the brand.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   `.ob-subnav-settings-return-link` uses natural width with `nowrap` (no
+   ellipsis). Desktop rule anchors `#settingsDomainReturnNav` at
+   `left: calc(var(--ob-sidebar-width, 200px) + 0.5rem)` when the page has a
+   `.sidebar-layout`.
+2. src/front/static/global/css/sidebar-layout.css
+   Defines `--ob-sidebar-width` (200px; 48px when `ob-sidebar-collapsed`) on
+   pages with a sidebar.
+3. tests/units/front/test_settings_subnav_hidden.py
+   Contracts updated for natural width, nowrap label, sidebar-column anchor and
+   collapsed width variable.
+4. .cursor/11-frontend-design.mdc
+   Documents the return-link placement and no-truncation rule.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_settings_subnav_hidden.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped, 8 deselected, 0 failed in 49.51s

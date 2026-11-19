@@ -1,4 +1,4 @@
-"""L2 Databricks-style app switcher (9-dot nav icon left of Close)."""
+"""Unified-chrome Databricks-style app switcher (9-dot, after Close/Save)."""
 
 from pathlib import Path
 import re
@@ -17,7 +17,7 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_app_switcher_sits_left_of_close_and_lists_main_workspaces():
+def test_app_switcher_sits_after_close_save_and_lists_main_workspaces():
     html = _read(BASE_HTML)
 
     assert 'id="obAppSwitcher"' in html
@@ -28,14 +28,17 @@ def test_app_switcher_sits_left_of_close_and_lists_main_workspaces():
     assert "ob-app-switcher-grid" not in html
     assert "ob-app-switcher-tile" not in html
 
-    # Fixed position: after the flex spacer, before Close / Save.
-    assert html.index("ob-subnav-flex-spacer") < html.index("obAppSwitcher")
-    assert html.index("obAppSwitcher") < html.index("ob-subnav-close-btn")
-    assert html.index("obAppSwitcher") < html.index("ob-subnav-save-btn")
+    # Fixed right-side order: Context → Close/Save → app switcher → Activity → User.
+    assert html.index("ob-subnav-flex-spacer") < html.index("domainContextTrigger")
+    assert html.index("domainContextTrigger") < html.index("ob-subnav-close-btn")
+    assert html.index("ob-subnav-close-btn") < html.index("ob-subnav-save-btn")
+    assert html.index("ob-subnav-save-btn") < html.index("obAppSwitcher")
+    assert html.index("obAppSwitcher") < html.index("activityCenterToggle")
+    assert html.index("activityCenterToggle") < html.index("userMenuDropdown")
 
     # Main workspaces only (Mapping lives under Graph). Labels/routes come
     # from menu_config via Jinja (domain / ontology / kg / intel).
-    menu = html[html.index("ob-app-switcher-list") : html.index("ob-subnav-close-btn")]
+    menu = html[html.index("ob-app-switcher-list") : html.index("activityCenterToggle")]
     assert len(re.findall(r'class="ob-app-switcher-item(?:\s[^"]*)?"', menu)) == 5
     assert menu.count("ob-app-switcher-item-check") == 5
     for ns in ("domain_m", "ontology_m", "kg_m", "intel_m", "settings_m"):

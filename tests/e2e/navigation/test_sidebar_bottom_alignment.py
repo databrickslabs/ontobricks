@@ -78,35 +78,27 @@ def test_desktop_chrome_uses_equal_vertical_gutters(page, live_server, path):
             "() => { const el = document.getElementById('obSubnav');"
             " return Boolean(el) && !el.classList.contains('d-none'); }"
         )
-    else:
-        subnav_hidden = page.locator("#obSubnav").evaluate(
-            "el => el.classList.contains('d-none')"
-        )
-        if subnav_hidden:
-            pytest.skip("L2 workspace rail is hidden until a domain is loaded")
-    page.locator("#obSubnav:not(.d-none)").wait_for(state="visible")
+    page.locator("#obSubnav").wait_for(state="visible")
 
     geometry = page.evaluate(
         """() => {
-            const navbar = document.querySelector('body > nav.navbar');
-            const levelTwoRail = document.querySelector(
-                '#obSubnav .ob-subnav-nav'
-            );
+            const chrome = document.querySelector('#obSubnav');
+            const rail = document.querySelector('#obSubnav .ob-subnav-nav');
             const sidebar = document.querySelector('.sidebar-nav');
-            const navbarRect = navbar.getBoundingClientRect();
-            const railRect = levelTwoRail.getBoundingClientRect();
+            const chromeRect = chrome.getBoundingClientRect();
+            const railRect = rail.getBoundingClientRect();
             const sidebarRect = sidebar.getBoundingClientRect();
             return {
-                levelOneToLevelTwo: railRect.top - navbarRect.bottom,
-                levelTwoToContent: sidebarRect.top - railRect.bottom,
+                chromeToContent: sidebarRect.top - chromeRect.bottom,
+                railBottomToContent: sidebarRect.top - railRect.bottom,
             };
         }"""
     )
 
     expected_gutter = 4 if os.environ.get("ONTOBRICKS_LIVE_BASE") else 8
-    assert geometry["levelOneToLevelTwo"] == pytest.approx(expected_gutter, abs=1)
-    assert geometry["levelTwoToContent"] == pytest.approx(
-        geometry["levelOneToLevelTwo"],
+    assert geometry["chromeToContent"] == pytest.approx(expected_gutter, abs=1)
+    assert geometry["railBottomToContent"] == pytest.approx(
+        geometry["chromeToContent"],
         abs=1,
     )
 

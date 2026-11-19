@@ -227,9 +227,8 @@ the entire app chrome — never duplicate or substitute any of it:
 
 | Element | Provided by `base.html` | Don't reimplement |
 |---------|-------------------------|-------------------|
-| L1 navbar (top) | `<nav class="navbar navbar-expand-lg navbar-light">` driven by `menu_config.json` | a custom top bar |
-| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the domain crumb (name + status + version badges), app switcher (`#obAppSwitcher`), and Close → Save actions | a second nav element |
-| Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav, with dirty dot and shortcut keycap | a per-page save button |
+| Unified app chrome | `<nav id="obSubnav" class="ob-subnav navbar navbar-light">` — always visible; left = sidebar toggle + brand; right = Context crumb, Close → Save, app switcher (`#obAppSwitcher`), Activity, User | a second top bar or page-local chrome |
+| Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of `#obSubnav`, with dirty dot and shortcut keycap | a per-page save button |
 | Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
 | Activity Center dropdown | `#activityCenterDropdown` (`bi-inboxes`) | a per-page tasks + notifications panel |
 | Help Center modal | included via `partials/layout/help_modal.html` | a custom help dialog |
@@ -374,8 +373,8 @@ keyboard handling.
   `html.ob-sidebar-collapsed`); `sidebar-nav.js` keeps `.sidebar-nav.collapsed`
   in sync. Do not remove the pre-paint script or reintroduce a flash of
   the expanded rail on load.
-- The collapse toggle is a **fixed L2 control** (`#obSidebarToggle`,
-  `.ob-subnav-sidebar-toggle`) placed left of the Context name (and still
+- The collapse toggle is a **fixed chrome control** (`#obSidebarToggle`,
+  `.ob-subnav-sidebar-toggle`) placed left of the brand (and still
   visible on Settings, left of the return link). `SidebarNav._setupCollapse()`
   reveals it when a `.sidebar-nav` exists and removes any legacy in-rail
   `.sidebar-toggle`. Do not inject a toggle into the sidebar. It has no
@@ -399,7 +398,7 @@ keyboard handling.
 - Sidebar width: `200px` expanded, `48px` collapsed (driven by
   `.sidebar-nav.collapsed`). Do not override per page.
 - The sidebar has no background (`background: transparent`) and no border
-  (`border: none`), matching the L2 second navbar (`#obSubnav`):
+  (`border: none`), matching the unified chrome bar (`#obSubnav`):
   `margin: 0`, `height: 100%`. The **shell** owns the compact outer
   gutter (`.sidebar-layout { padding: 0.15rem 0.25rem 0.25rem; gap: 0.25rem; }`); do not
   put a margin on `.sidebar-nav` or size it with
@@ -455,13 +454,12 @@ and `global/css/sidebar-layout.css`.
 **Shell.** On desktop, `.sidebar-layout` is
 `height` / `max-height: calc(100vh - var(--ob-chrome-height, 60px))`,
 `padding: 0.25rem 0.5rem 0.5rem`, `gap: 0.5rem`, `box-sizing: border-box`,
-`overflow: hidden`. `--ob-chrome-height` remains navbar + L2, written only
-by `breadcrumb.js`.
+`overflow: hidden`. `--ob-chrome-height` is the single `#obSubnav` bar height,
+written only by `breadcrumb.js`.
 
-**Gutter.** `.ob-subnav-nav` owns only the `0.25rem` space above the visible L2
-workspace rail (`padding: 0.25rem 0 0`); `.sidebar-layout` owns the matching
-`0.25rem` space below it. Therefore the visible L1→L2 and L2→page gaps are both
-4px. `.sidebar-nav` fills the shell (`margin: 0; height: 100%`), while
+**Gutter.** `.ob-subnav-nav` owns vertical padding inside the chrome bar
+(`padding: 0.15rem 0`); `.sidebar-layout` owns the matching space below the
+bar. Therefore the visible chrome→page gap is ~4px. `.sidebar-nav` fills the shell (`margin: 0; height: 100%`), while
 `.sidebar-content` uses `padding: 0 0.5rem`: no second vertical inset, and a
 0.5rem horizontal inset. Page-specific fixed panes may change horizontal
 padding but must keep a zero top/bottom inset. Do not restore vertical content
@@ -489,7 +487,7 @@ primary pane share `getBoundingClientRect().bottom` within **1px**.
 The visible section title box (`.section-header h4`, including its icon) sits
 **0.25rem (4px ±1px)** below the sidebar content top — the same gap as subtitle
 → content. Desktop headers must not use a negative transform. The
-visible L1→L2 and L2→sidebar gaps are both **2.5px ±1px**. The gap from subtitle
+visible chrome→sidebar gap is **2.5px ±1px**. The gap from subtitle
 to primary content is **4px ±1px**.
 Fixed-height routes must not grow the document past the viewport by more
 than 1px.
@@ -510,30 +508,26 @@ and `0.5rem` horizontal padding) so `scrollWidth <= clientWidth` remains true.
 **Excluded.** Home, About, and Access Denied stay on Layout 2. True
 modals are not the measured pane.
 
-### Two-Level Navigation (L1 + L2 subnav)
+### Unified App Chrome (`#obSubnav`)
 
-The app chrome has **two horizontal nav levels**, both provided by `base.html`.
+The app chrome is **one horizontal bar** provided by `base.html`
+(`<nav id="obSubnav" class="ob-subnav navbar navbar-light">`). Former L1 and
+L2 are merged; do not restore a second top nav.
 
-#### L1 Navbar
+- Always visible. Brand, Activity, and User never hide with domain state.
+- Domain chrome toggles via `updateDomainMenuVisibility(hasDomain)` in
+  `navbar.js` (elements marked `data-subnav-domain-chrome`):
+  - **Workspace page + loaded domain:** show Context crumb, Close/Save, app switcher.
+  - **Settings/Home + loaded domain:** show `#settingsDomainReturnLink` only
+    (hide workspace domain chrome).
+  - **No loaded domain:** hide domain chrome and the settings return.
+- User control is a Databricks-style initials avatar (`.ob-user-avatar`), not
+  `bi-person-circle`. Help and Report an issue live inside the user dropdown.
+  Settings is the admin-only fifth row of `#obAppSwitcher` (no gear in chrome).
+- Visual contract: transparent bar over the canvas grey (no bottom border),
+  dark text, indigo hover/active emphasis.
 
-- Standard Bootstrap `<nav class="navbar navbar-expand-lg">`.
-- L1 is global app chrome: brand, icon-only Registry launcher, and global
-  utilities (activity + user menu). Help and Report an issue live inside the
-  user dropdown. The SQL Warehouse status icon is removed from L1; warehouse
-  config lives in Settings.
-- L1 user control is a Databricks-style initials avatar (`.ob-user-avatar`),
-  not `bi-person-circle`.
-- L1 no longer carries a Domain link target. Domain identity and the workspace
-  map launcher live in L2 as `#domainContextTrigger`.
-- L1 no longer carries a Settings gear dropdown. Settings is the admin-only
-  fifth row of the L2 app switcher (`#obAppSwitcher`).
-- Other menus (Graph / digitaltwin / settings) may be hidden via
-  `"navbar_hidden": true` in `menu_config.json`.
-- Visual contract: white L1 surface, warm one-pixel divider, dark text, indigo
-  active/hover emphasis.
-
-**Top-level menu icons** (source of truth: `menu_config.json`; keep
-`breadcrumb.js` `_ROUTE_MAP` in sync):
+**Top-level workspace icons** (source of truth: `menu_config.json`):
 
 | Menu | `id` | Icon |
 |------|------|------|
@@ -545,114 +539,81 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
 | Intelligence | `intelligence` | `bi-sliders2-vertical` |
 | Settings | `settings` | `bi-gear` (app switcher only) |
 
-Do not reuse Domain's `bi-box` for Graph (or any other
-top-level menu). `tests/units/front/test_knowledge_graph_icon.py`
-asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
+Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
+`tests/units/front/test_knowledge_graph_icon.py` asserts Domain ≠ Graph.
 
-#### L2 Subnav (`#obSubnav`)
+**Layout (left → right inside `.ob-subnav-nav`):**
 
-- `<nav id="obSubnav" class="ob-subnav d-none">` — hidden by default.
-- Revealed by `updateDomainMenuVisibility(true)` in `navbar.js` when
-  `hasDomain` becomes true (domain has a name or content in session).
-- The slot remains singular and mutually exclusive:
-  - **Non-Settings + loaded domain:** show the normal domain context rail.
-  - **Settings + loaded domain:** show only the return link
-    (`#settingsDomainReturnLink`) inside `#settingsDomainReturnNav`.
-  - **Any page + no loaded domain:** hide all L2 chrome.
-- Layout (left → right inside `.ob-subnav-nav`):
-  1. **Sidebar collapse toggle** (`#obSidebarToggle`, fixed — not under
-     `data-subnav-domain-chrome`): revealed only when the page has a
-     `.sidebar-nav`. Sits left of the Context crumb (or Settings return).
-  2. **Domain crumb** (`#domainContextTrigger`, `.ob-subnav-crumb`): domain
-     name, optional status badge, version badge (`#domainContextVersion`,
-     `.domain-version-badge`, e.g. `V2`), and caret. Opens `#workspaceMapModal`,
-     which now also hosts Switch Version / New Version (no separate `vN ▾`
-     crumb).
-  3. A `.ob-subnav-flex-spacer` (`flex: 1`) — pushes the right group to the edge.
-  4. **App switcher** (`#obAppSwitcher`, `.ob-subnav-app-switcher`): Databricks-style
-     9-dot `nav-icon` left of Close. Opens `.ob-app-switcher-menu` as a vertical
-     list (one option per line: icon + title + subtitle + check) for Context /
-     Ontology / Graph / Intelligence / Settings. Each item always opens that
-     workspace's **Home** section (`?section=home`). Subtitles come from
-     `description` on each menu in `menu_config.json`. Graph + Intelligence
-     items carry `nav-requires-graph`. Settings carries
-     `data-requires-app="admin"` (hidden for non-admins via `permissions.css`).
-     Current workspace gets `.is-current` via `initAppSwitcherActiveState()` in
-     `navbar.js`. The popover is at least `22rem` wide so the two-line copy can
-     breathe. Workspace Home pages reuse `partials/layout/_workspace_home.html`:
-     feature tiles are **grouped by the same sidebar menu groups** (Home group
-     skipped). Each menu item carries `description` / `help_jump` / `help_doc`
-     for the tile copy; Settings admin-only tiles also carry
-     `data-requires-app="admin"`. Tiles follow the **Databricks MCP server
-     cards** (Agents → MCP): a header row (`.ob-workspace-home-tile-head`) with
-     a 2rem icon chip (1px `--db-border`, `--db-canvas-warm` fill, 0.375rem
-     radius) and a 14px semibold title, then a 13px `--db-text-secondary`
-     description; 1rem padding, 1px `--db-border`, `--ob-home-card-radius`
-     (0.5rem), soft shadow on hover, no arrow. Group titles are 15px semibold
-     in `--db-text` (no uppercase). The Home body has no enclosing card frame
-     (`.ob-workspace-home > .card` is borderless and transparent); the
-     resources row reuses the same card look.
-  5. **Close Domain button** (`.ob-subnav-close-btn`): ghost text action.
-  6. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`): see the
-     action-styles bullet below.
-- The old segmented workspace dropdown rail (`.ob-subnav-workspaces` /
-  `.ob-subnav-workspace-list` / `#subnavDomainDropdown` etc.) is **removed**.
-  Do not restore Context/Ontology/Graph/Intelligence dropdowns beside the crumb;
-  the app switcher is the only L2 workspace navigator. Per-section navigation
-  stays in each page's left sidebar.
-- `--ob-chrome-height` = navbar height + subnav height (subnav already
-  Updated by `_updateChromeHeight()` in `breadcrumb.js` and called from
-  `updateDomainMenuVisibility`.
+1. **Sidebar collapse toggle** (`#obSidebarToggle`, fixed — not under
+   `data-subnav-domain-chrome`): revealed only when the page has a
+   `.sidebar-nav`. Sits left of the brand.
+2. **Brand** (`#brandLogoImg` + `#brandTitleText` + optional app version):
+   links to `menu_config.brand.route`.
+3. **Settings/Home return** (`#settingsDomainReturnNav`, mutually exclusive
+   with domain chrome): shown on Settings/Home when a domain is loaded.
+4. **`.ob-subnav-flex-spacer`** (`flex: 1`) — pushes the right group to the edge.
+5. **Domain crumb** (`#domainContextTrigger`, `.ob-subnav-crumb`, domain chrome):
+   domain name, optional status badge, version badge (`#domainContextVersion`),
+   and caret. Opens `#workspaceMapModal` (also hosts Switch Version / New Version).
+6. **Close** (`.ob-subnav-close-btn`) then **Save** (`#menuSaveDomain`,
+   `.ob-subnav-save-btn`) — domain chrome. See action-styles below.
+7. **App switcher** (`#obAppSwitcher`, `.ob-subnav-app-switcher`): Databricks-style
+   9-dot `nav-icon` after Close/Save. Opens `.ob-app-switcher-menu` as a vertical
+   list (icon + title + subtitle + check) for Context / Ontology / Graph /
+   Intelligence / Settings. Each item opens that workspace's **Home**
+   (`?section=home`). Graph + Intelligence carry `nav-requires-graph`; Settings
+   carries `data-requires-app="admin"`. Current workspace gets `.is-current` via
+   `initAppSwitcherActiveState()`. Popover min-width `22rem`; menu/items use
+   rounded boxes (`0.5rem` / `0.375rem`). Workspace Home tiles follow the
+   Databricks MCP card pattern in `_workspace_home.html`.
+8. **Activity** (`#activityCenterToggle`) then **User** (`#userMenuDropdown`).
+
+- The old segmented workspace dropdown rail and the separate L1 top navbar are
+  **removed**. Do not restore them. Per-section navigation stays in each page's
+  left sidebar; the app switcher is the only workspace navigator.
+- `--ob-chrome-height` = `#obSubnav` height only. Updated by
+  `_updateChromeHeight()` in `breadcrumb.js` (also called from
+  `updateDomainMenuVisibility`).
 - Active-state behavior for workspaces is owned by `initAppSwitcherActiveState()`
   (called from `initSubnavActiveState()`). Do not hard-code the active workspace
   in Jinja and do not duplicate this behavior in page scripts.
-- Visual contract: the L2 row is transparent with no bottom border. The Domain
-  crumb is text on the transparent row (`--db-text`, weight 600; hover
-  `--db-primary-darker` on `--db-hover-indigo`). L1/L2 structure, order, and
-  ownership are immutable.
-- The Domain crumb (`.ob-subnav-crumb`) is text on the transparent row, with a
-  `--db-hover-indigo` well on hover. The domain name is ellipsized
-  (`max-width: 10rem`); name length never changes the `2.25rem` rail height.
-  Status and version badges sit beside the name.
-- The L2 left edge aligns exactly with the sidebar panel's left edge. Both use
-  the shell's compact horizontal outer gutter:
-  `.sidebar-layout { padding: 0.15rem 0.25rem 0.25rem; }` and
-  `#obSubnav .container-fluid { padding-left: 0.25rem !important; }`. The ID
-  specificity and priority are required because the later-loaded legacy
-  full-width body rule zeroes nested `.container-fluid` padding with
-  `!important`. Keep the L2 right padding independent at `0.5rem` (`0.5rem` on
-  mobile).
+- Domain crumb is text (`--db-text`, weight 600; hover `--db-primary-darker` on
+  `--db-hover-indigo`). Name ellipsized (`max-width: 10rem`); rail height stays
+  `2.25rem`.
+- Left edge aligns with the sidebar panel: `.sidebar-layout` padding and
+  `#obSubnav .container-fluid { padding-left: 0.25rem !important; }` (ID
+  specificity required against legacy `!important` zeroing). Right padding
+  stays `0.5rem`.
 - Keyboard focus uses `--db-focus-ring` plus a transparent outline for forced-colour support.
-- Action styles: Save (`#menuSaveDomain`) is the only filled primary control
-  (`--db-primary` / `--db-on-primary`). It shows a `--db-status-warning` dirty dot
-  (`.ob-subnav-save-dirty`) while `setDomainDirty(source, dirty)` reports unsaved
-  registry writes, and a platform shortcut keycap (`.ob-subnav-save-kbd`, filled by
-  `navbar.js`). Close is a ghost text button with danger text. Rendered order:
-  App switcher → Close → Save. Preserve existing IDs, permission classes, and handlers.
-- Shared ownership: L2 markup stays in `templates/base.html`, styling stays in
-  `static/global/css/main.css`, active behavior stays in
-  `static/global/js/navbar.js`, and menu contents stay driven by
-  `menu_config.json`. Never add per-page L2 CSS or JS.
-- Stable IDs for the Settings/domain switch contract are mandatory:
-  `#settingsDomainReturnNav`, `#settingsDomainReturnLink`, and `#obAppSwitcher`.
-  On desktop/tablet, the settings return control
-  (`#settingsDomainReturnLink` / `.ob-settings-domain-return-link`) keeps
-  exact `200px` width/min-width/max-width so it aligns with the expanded
-  `200px` sidebar width and same shell left gutter.
-- Mobile contract (below `768px`): keep the app switcher, Save, and Close as
-  titled icons by hiding only their `.ob-subnav-label`. Hide the inline flex
-  spacer, `.ob-subnav-context-copy` (name + badges), and the save keycap. The
-  context trigger collapses to its caret. Do not make the subnav horizontally
-  scrollable: Bootstrap dropdowns must still escape the row.
+- Action styles: Save is the only filled primary control (`--db-primary` /
+  `--db-on-primary`) with dirty dot (`.ob-subnav-save-dirty`) and shortcut
+  keycap (`.ob-subnav-save-kbd`). Close is a ghost text button with danger text.
+  Rendered right-side order: Context → Close → Save → app switcher → Activity →
+  User. Preserve existing IDs, permission classes, and handlers.
+- Shared ownership: markup in `templates/base.html`, styling in
+  `static/global/css/main.css`, behavior in `static/global/js/navbar.js`, menus
+  from `menu_config.json`. Never add per-page chrome CSS or JS.
+- Stable IDs: `#settingsDomainReturnNav`, `#settingsDomainReturnLink`,
+  `#obAppSwitcher`. On desktop, when the page has a sidebar, the settings
+  return control is absolutely positioned at `left: calc(var(--ob-sidebar-width)
+  + 0.5rem)` so it starts right of the sidebar column, aligned with the content
+  panel. `--ob-sidebar-width` is 200px, or 48px when collapsed (set in
+  `sidebar-layout.css` via `html:has(.sidebar-layout)`). The label is never
+  truncated (natural width, `white-space: nowrap`). Home has no sidebar and
+  keeps the return link inline after the brand.
+- Mobile contract (below `768px`): keep app switcher, Save, and Close as titled
+  icons by hiding `.ob-subnav-label`. Hide the flex spacer,
+  `.ob-subnav-context-copy`, and the save keycap. Context collapses to its caret.
+  Do not make the bar horizontally scrollable.
 
 **Tokens**
 
 | Level | Token | Value |
 |-------|-------|-------|
-| L1 navbar background | `--db-navbar-bg` | `#FFFFFF` |
-| L2 app switcher current row | `--db-primary-light` / `--db-primary-darker` | `.ob-app-switcher-item.is-current` (+ visible check) |
-| L2 crumbs | `--db-text` / `--db-hover-indigo` | quiet text crumbs on the transparent row |
-| L2 Save dirty dot | `--db-status-warning` | `.ob-subnav-save-dirty`, shown only when dirty |
+| Chrome bar background | transparent (canvas grey shows through) | no bottom border |
+| App switcher current row | `--db-primary-light` / `--db-primary-darker` | `.ob-app-switcher-item.is-current` (+ visible check) |
+| Context crumb | `--db-text` / `--db-hover-indigo` | quiet text crumb on the chrome bar |
+| Save dirty dot | `--db-status-warning` | `.ob-subnav-save-dirty`, shown only when dirty |
 
 **New Domain flow**
 
@@ -673,7 +634,8 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
 - ❌ Restoring the L2 workspace dropdown rail
   (`.ob-subnav-workspaces` / `#subnavDomainDropdown` / etc.) beside the
   Context crumb — use `#obAppSwitcher` only.
-- ❌ Restoring a full-width L2 background, bottom border, active underline,
+- ❌ Restoring a separate L1 top navbar above `#obSubnav`
+- ❌ Restoring a full-width second-row background, active underline,
   square selected tab or horizontally scrollable strip.
 - ❌ Giving L2 a different left gutter from `.sidebar-layout`; the L2 row
   and sidebar panel must remain vertically aligned.
@@ -683,7 +645,7 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   Jinja or page code — `navbar.js` owns that state.
 - ❌ Restoring a 2×2 tile grid for the app switcher — keep the Databricks
   line-item list (`.ob-app-switcher-list` / `.ob-app-switcher-item`).
-- ❌ Moving the Save Domain button out of the L2 subnav.
+- ❌ Moving the Save Domain button out of `#obSubnav`.
 - ❌ Manually setting `--ob-chrome-height` from page code.
 
 ### Breadcrumb (removed)

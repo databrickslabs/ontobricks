@@ -60,6 +60,12 @@ body.full-width-layout {
 /* ==========================================================================
    Sidebar Navigation
    ========================================================================== */
+/* Sidebar column width shared with the chrome bar (#settingsDomainReturnNav
+   aligns to the content panel). Pages without a sidebar never read it. */
+html:has(.sidebar-layout) {
+    --ob-sidebar-width: 200px;
+}
+
 .sidebar-nav {
     width: 200px;
     min-width: 200px;
@@ -180,6 +186,10 @@ html.ob-sidebar-collapsed .sidebar-nav,
 .sidebar-nav.collapsed {
     width: 48px;
     min-width: 48px;
+}
+
+html.ob-sidebar-collapsed:has(.sidebar-layout) {
+    --ob-sidebar-width: 48px;
 }
 
 html.ob-sidebar-collapsed .sidebar-nav .sidebar-title,
