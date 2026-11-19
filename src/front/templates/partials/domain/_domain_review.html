@@ -17,11 +17,80 @@
     </div>
 
     <div class="card">
-        <div class="card-body">
-            <div id="reviewBody">
-                <div class="text-center text-muted small py-4">
-                    <span class="spinner-border spinner-border-sm me-1"></span>
-                    Loading review status...
+        <div class="card-body" id="reviewBody">
+            <!-- Status banner — paints as soon as review detail arrives -->
+            <div id="reviewBannerSlot" class="mb-3">
+                <div class="d-flex align-items-center justify-content-center gap-2 py-3 text-muted small" role="status" aria-live="polite">
+                    <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                    <span>Loading status…</span>
+                </div>
+            </div>
+
+            <!-- Lifecycle — paints with review detail -->
+            <div id="reviewLifecycleSlot" class="mb-3">
+                <div class="card review-card review-flow-card mb-0">
+                    <div class="card-body">
+                        <h6 class="card-title"><i class="bi bi-diagram-3 me-2"></i>Lifecycle</h6>
+                        <div class="d-flex align-items-center justify-content-center gap-2 py-3 text-muted small" role="status" aria-live="polite">
+                            <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                            <span>Loading lifecycle…</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-6">
+                    <!-- Consistency checks — fills via /validate/detailed?parts=overview -->
+                    <div class="card review-card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="bi bi-clipboard-check me-2"></i>Consistency checks</h6>
+                            <p class="text-muted small mb-3">A quick readiness summary.
+                                These checks are advisory &mdash; they do not block publishing.</p>
+                            <div id="reviewReadiness">
+                                <div class="d-flex align-items-center justify-content-center gap-2 py-3 text-muted small" role="status" aria-live="polite">
+                                    <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                                    <span>Checking…</span>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2 mt-3">
+                                <a class="btn btn-sm btn-outline-secondary" href="/domain/?section=validation">
+                                    <i class="bi bi-compass me-1"></i>Open General
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Context access — fills via /review/.../team -->
+                    <div class="card review-card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="bi bi-people me-2"></i>Context access</h6>
+                            <p class="text-muted small mb-3">People and groups with a role on
+                                this context. Roles are managed by administrators in
+                                Settings &rarr; Admin &rarr; Teams.</p>
+                            <div id="reviewTeam">
+                                <div class="d-flex align-items-center justify-content-center gap-2 py-3 text-muted small" role="status" aria-live="polite">
+                                    <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                                    <span>Loading members…</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <!-- Audit trail — paints with review detail -->
+                    <div class="card review-card">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="bi bi-clock-history me-2"></i>Audit trail</h6>
+                            <div id="reviewTimelineSlot">
+                                <div class="d-flex align-items-center justify-content-center gap-2 py-3 text-muted small" role="status" aria-live="polite">
+                                    <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                                    <span>Loading audit trail…</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

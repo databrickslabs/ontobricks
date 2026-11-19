@@ -5,6 +5,10 @@
  * version: a soft consistency-check summary, reviewer sign-off panel
  * (quorum-gated publish), and the full audit trail.
  *
+ * Progressive load: the page paints a per-section skeleton immediately,
+ * then fills banner / lifecycle / timeline / readiness / team as each
+ * fetch resolves (same pattern as Context → General).
+ *
  * Data sources:
  *   GET  /domain/version-status        -> loaded folder + version + status
  *   GET  /review/{folder}/{version}    -> review state + actions + events
@@ -24,64 +28,136 @@
         );
     });
 
+    function slotSpinner(text) {
+        return '<div class="d-flex align-items-center justify-content-center gap-2 py-3 text-muted small" role="status" aria-live="polite">' +
+            '<span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>' +
+            '<span>' + escapeHtml(text) + '</span></div>';
+    }
+
+    function paintReviewSkeleton() {
+        const banner = document.getElementById('reviewBannerSlot');
+        const life = document.getElementById('reviewLifecycleSlot');
+        const ready = document.getElementById('reviewReadiness');
+        const team = document.getElementById('reviewTeam');
+        const timeline = document.getElementById('reviewTimelineSlot');
+        if (banner) banner.innerHTML = slotSpinner('Loading status…');
+        if (life) {
+            life.innerHTML =
+                '<div class="card review-card review-flow-card mb-0"><div class="card-body">' +
+                '<h6 class="card-title"><i class="bi bi-diagram-3 me-2"></i>Lifecycle</h6>' +
+                slotSpinner('Loading lifecycle…') +
+                '</div></div>';
+        }
+        if (ready) ready.innerHTML = slotSpinner('Checking…');
+        if (team) team.innerHTML = slotSpinner('Loading members…');
+        if (timeline) timeline.innerHTML = slotSpinner('Loading audit trail…');
+    }
+
     async function loadReview() {
         const body = document.getElementById('reviewBody');
         if (!body) return;
-        body.innerHTML = spinner('Loading review status...');
+        paintReviewSkeleton();
 
         try {
-            const vs = await (await fetch('/domain/version-status', {
-                credentials: 'same-origin',
-            })).json();
+            const vsFetcher = (typeof fetchOnce === 'function')
+                ? fetchOnce('/domain/version-status')
+                : fetch('/domain/version-status', { credentials: 'same-origin' }).then(r => r.json());
+            const vs = await vsFetcher;
             state.folder = vs.domain_folder || '';
             state.version = vs.version || '';
 
             if (!state.folder || !vs.has_registry) {
-                body.innerHTML =
-                    '<div class="alert alert-info small mb-0">' +
-                    '<i class="bi bi-info-circle me-1"></i>' +
-                    'Save this context to the registry to start the review workflow.' +
-                    '</div>';
+                showNotSavedMessage();
                 return;
             }
 
-            const detail = await (await fetch(
-                '/review/' + encodeURIComponent(state.folder) + '/' +
-                encodeURIComponent(state.version),
-                { credentials: 'same-origin' }
-            )).json();
-
-            if (!detail.success) {
-                body.innerHTML =
-                    '<div class="alert alert-danger small mb-0">' +
-                    escapeHtml(detail.message || 'Failed to load review status') +
-                    '</div>';
-                return;
-            }
-            state.detail = detail;
-            render(detail);
-            loadReadiness();
-            loadTeam();
+            // Review detail + readiness + team in parallel once we know the scope.
+            // Each filler owns its slot errors so one failure does not blank the others.
+            await Promise.all([
+                loadReviewDetail().catch((err) => {
+                    console.error('loadReviewDetail error:', err);
+                    const banner = document.getElementById('reviewBannerSlot');
+                    const life = document.getElementById('reviewLifecycleSlot');
+                    const timeline = document.getElementById('reviewTimelineSlot');
+                    if (banner) {
+                        banner.innerHTML =
+                            '<div class="alert alert-danger small mb-0">Network error: ' +
+                            escapeHtml(String(err)) + '</div>';
+                    }
+                    if (life) life.innerHTML = '';
+                    if (timeline) {
+                        timeline.innerHTML =
+                            '<div class="text-muted small">Audit trail unavailable.</div>';
+                    }
+                }),
+                loadReadiness(),
+                loadTeam(),
+            ]);
         } catch (err) {
             console.error('loadReview error:', err);
             showNotification('Could not load review status: ' + err.message, 'error');
-            body.innerHTML =
-                '<div class="alert alert-danger small mb-0">Network error: ' +
-                escapeHtml(String(err)) + '</div>';
+            const banner = document.getElementById('reviewBannerSlot');
+            if (banner) {
+                banner.innerHTML =
+                    '<div class="alert alert-danger small mb-0">Network error: ' +
+                    escapeHtml(String(err)) + '</div>';
+            }
         }
     }
 
-    function render(d) {
-        const body = document.getElementById('reviewBody');
-        if (!body) return;
-        body.innerHTML =
-            statusBanner(d) +
-            lifecycleDiagram(d) +
-            '<div class="row g-3">' +
-            '<div class="col-lg-6">' + consistencyCard() + teamCard() + '</div>' +
-            '<div class="col-lg-6">' + timelineCard(d) + '</div>' +
+    function showNotSavedMessage() {
+        const msg =
+            '<div class="alert alert-info small mb-0">' +
+            '<i class="bi bi-info-circle me-1"></i>' +
+            'Save this context to the registry to start the review workflow.' +
             '</div>';
+        const banner = document.getElementById('reviewBannerSlot');
+        const life = document.getElementById('reviewLifecycleSlot');
+        const ready = document.getElementById('reviewReadiness');
+        const team = document.getElementById('reviewTeam');
+        const timeline = document.getElementById('reviewTimelineSlot');
+        if (banner) banner.innerHTML = msg;
+        if (life) life.innerHTML = '';
+        if (ready) ready.innerHTML = '<div class="text-muted small">Unavailable until the context is saved.</div>';
+        if (team) team.innerHTML = '<div class="text-muted small">Unavailable until the context is saved.</div>';
+        if (timeline) timeline.innerHTML = '<div class="text-muted small">No activity yet.</div>';
+    }
 
+    async function loadReviewDetail() {
+        const detail = await (await fetch(
+            '/review/' + encodeURIComponent(state.folder) + '/' +
+            encodeURIComponent(state.version),
+            { credentials: 'same-origin' }
+        )).json();
+
+        if (!detail.success) {
+            const banner = document.getElementById('reviewBannerSlot');
+            const life = document.getElementById('reviewLifecycleSlot');
+            const timeline = document.getElementById('reviewTimelineSlot');
+            if (banner) {
+                banner.innerHTML =
+                    '<div class="alert alert-danger small mb-0">' +
+                    escapeHtml(detail.message || 'Failed to load review status') +
+                    '</div>';
+            }
+            if (life) life.innerHTML = '';
+            if (timeline) {
+                timeline.innerHTML =
+                    '<div class="text-muted small">Audit trail unavailable.</div>';
+            }
+            return;
+        }
+        state.detail = detail;
+        render(detail);
+    }
+
+    function render(d) {
+        const banner = document.getElementById('reviewBannerSlot');
+        const life = document.getElementById('reviewLifecycleSlot');
+        const timeline = document.getElementById('reviewTimelineSlot');
+        if (banner) banner.innerHTML = statusBanner(d);
+        if (life) life.innerHTML = lifecycleDiagram(d);
+        if (timeline) timeline.innerHTML = timelineContent(d);
         wireActions(d);
     }
 
@@ -111,8 +187,27 @@
     }
 
     /* ── Lifecycle diagram ─────────────────────────── */
+
+    /**
+     * Preview model built from GET /domain/version-status alone. The lifecycle
+     * stage is known immediately; sign-offs, actors and quorum are not, so the
+     * footers render as "Loading details…" until the review detail arrives.
+     */
+    function lifecyclePreview(status) {
+        return {
+            status: (status || 'DRAFT').toUpperCase(),
+            pending: true,
+            events: [],
+            approvers: [],
+            approvals: 0,
+            quorum: 0,
+            quorum_met: false,
+        };
+    }
+
     function lifecycleDiagram(d) {
         const status = (d.status || 'DRAFT').toUpperCase();
+        const pending = !!d.pending;
         const order = ['DRAFT', 'IN-REVIEW', 'PUBLISHED'];
         const curIdx = order.indexOf(status);
         const ev = d.events || [];
@@ -120,13 +215,16 @@
         const publisher = lastActorFor(ev, ['published']);
         const back = latestEventFor(ev, ['changes_requested', 'reopened']);
         const approvers = d.approvers || [];
+        const loadingFooter = mutedLine('Loading details…');
 
         const stateOf = (i) =>
             i < curIdx ? 'done' : (i === curIdx ? 'current' : 'todo');
 
         // Draft: who (if anyone) last sent it back here.
         let draftFooter;
-        if (status === 'DRAFT' && back && back.actor) {
+        if (pending) {
+            draftFooter = loadingFooter;
+        } else if (status === 'DRAFT' && back && back.actor) {
             draftFooter = peopleLine(
                 back.action === 'changes_requested'
                     ? 'Changes requested by' : 'Sent back by',
@@ -170,7 +268,7 @@
                 desc: 'Live on API / MCP', footer: pubFooter,
             });
 
-        return '<div class="card review-card review-flow-card mb-3">' +
+        return '<div class="card review-card review-flow-card mb-0">' +
             '<div class="card-body">' +
             '<h6 class="card-title"><i class="bi bi-diagram-3 me-2"></i>' +
             'Lifecycle</h6>' +
@@ -274,21 +372,10 @@
     }
 
     /* ── Consistency checks (soft) ─────────────────── */
-    function consistencyCard() {
-        return '<div class="card review-card mb-3"><div class="card-body">' +
-            '<h6 class="card-title"><i class="bi bi-clipboard-check me-2"></i>Consistency checks</h6>' +
-            '<p class="text-muted small mb-3">A quick readiness summary. ' +
-            'These checks are advisory &mdash; they do not block publishing.</p>' +
-            '<div id="reviewReadiness">' + spinner('Checking...') + '</div>' +
-            '<div class="d-flex gap-2 mt-3">' +
-            '<a class="btn btn-sm btn-outline-secondary" href="/domain/?section=validation">' +
-            '<i class="bi bi-compass me-1"></i>Open General</a>' +
-            '</div></div></div>';
-    }
-
     async function loadReadiness() {
         const el = document.getElementById('reviewReadiness');
         if (!el) return;
+        el.innerHTML = slotSpinner('Checking…');
         try {
             const d = await (await fetch('/validate/detailed?parts=overview', {
                 credentials: 'same-origin',
@@ -349,16 +436,6 @@
     }
 
     /* ── Context access (who can view / edit / build) ───── */
-    function teamCard() {
-        return '<div class="card review-card mb-3"><div class="card-body">' +
-            '<h6 class="card-title"><i class="bi bi-people me-2"></i>Context access</h6>' +
-            '<p class="text-muted small mb-3">People and groups with a role on ' +
-            'this context. Roles are managed by administrators in ' +
-            'Settings &rarr; Admin &rarr; Teams.</p>' +
-            '<div id="reviewTeam">' + spinner('Loading members...') + '</div>' +
-            '</div></div>';
-    }
-
     const ROLE_META = {
         builder: {
             label: 'Builder', icon: 'tools',
@@ -381,6 +458,7 @@
     async function loadTeam() {
         const el = document.getElementById('reviewTeam');
         if (!el) return;
+        el.innerHTML = slotSpinner('Loading members…');
         try {
             const d = await (await fetch(
                 '/review/' + encodeURIComponent(state.folder) + '/' +
@@ -603,14 +681,12 @@
     }
 
     /* ── Audit timeline ────────────────────────────── */
-    function timelineCard(d) {
+    function timelineContent(d) {
         const events = (d.events || []).slice().reverse(); // newest first
         const items = events.length
             ? events.map(timelineItem).join('')
             : '<div class="text-muted small">No activity yet.</div>';
-        return '<div class="card review-card"><div class="card-body">' +
-            '<h6 class="card-title"><i class="bi bi-clock-history me-2"></i>Audit trail</h6>' +
-            '<div class="review-timeline">' + items + '</div></div></div>';
+        return '<div class="review-timeline">' + items + '</div>';
     }
 
     function timelineItem(e) {
@@ -664,12 +740,6 @@
         if (!iso) return '';
         return '<span class="text-muted small">' +
             escapeHtml(formatDateTime(iso)) + '</span>';
-    }
-
-    function spinner(text) {
-        return '<div class="text-center text-muted small py-3">' +
-            '<span class="spinner-border spinner-border-sm me-1"></span>' +
-            escapeHtml(text) + '</div>';
     }
 
 })();
