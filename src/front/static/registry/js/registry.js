@@ -279,14 +279,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const volumeLabel = document.getElementById('registryVolumeLabel');
         const initBtn     = document.getElementById('btnInitRegistry');
         // These elements only exist on the Settings → Registry tab.
-        if (!schemaLabel && !volumeLabel) return;
+        if (!schemaLabel) return;
 
         if (registryCfg.catalog && registryCfg.schema) {
             const lb = registryCfg.lakebase || {};
             // Schema line: catalog.schema
             const schemaPath = escapeHtml(registryCfg.catalog + '.' + registryCfg.schema);
             if (schemaLabel) schemaLabel.innerHTML = '<span class="font-monospace">' + schemaPath + '</span>';
-            // Volume line: volume name only
+            // Volume line: volume name only (if element present)
             const volName = registryCfg.volume || 'OntoBricksRegistry';
             if (volumeLabel) volumeLabel.innerHTML = '<span class="font-monospace">' + escapeHtml(volName) + '</span>';
             if (initBtn) {

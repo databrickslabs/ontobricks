@@ -169,15 +169,11 @@
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking…';
 
-        // Reset UC badges
-        ['registrySchemaCheckBadge', 'registryVolumeCheckBadge'].forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) el.innerHTML = '<span class="spinner-border spinner-border-sm text-secondary" style="width:0.75rem;height:0.75rem"></span>';
-        });
-        ['registrySchemaCheckDetail', 'registryVolumeCheckDetail'].forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) { el.innerHTML = ''; el.style.display = 'none'; }
-        });
+        // Reset UC badge
+        var schemaBadgeEl = document.getElementById('registrySchemaCheckBadge');
+        if (schemaBadgeEl) schemaBadgeEl.innerHTML = '<span class="spinner-border spinner-border-sm text-secondary" style="width:0.75rem;height:0.75rem"></span>';
+        var schemaDetailEl = document.getElementById('registrySchemaCheckDetail');
+        if (schemaDetailEl) { schemaDetailEl.innerHTML = ''; schemaDetailEl.style.display = 'none'; }
         var lbPanel = document.getElementById('lbChecksPanel');
         if (lbPanel) lbPanel.style.display = 'none';
 
@@ -195,18 +191,11 @@
             var sd = _ucDetailHtml(uc.schema);
             if (sd && schemaDetail) { schemaDetail.innerHTML = sd; schemaDetail.style.display = ''; }
 
-            // UC volume
-            var volumeBadge  = document.getElementById('registryVolumeCheckBadge');
-            var volumeDetail = document.getElementById('registryVolumeCheckDetail');
-            if (volumeBadge) volumeBadge.innerHTML = _ucBadgeHtml(uc.volume);
-            var vd = _ucDetailHtml(uc.volume);
-            if (vd && volumeDetail) { volumeDetail.innerHTML = vd; volumeDetail.style.display = ''; }
-
             // Lakebase
             _renderLbChecks(lb);
 
             // Summary toast
-            var ucOk = uc.schema?.accessible && uc.volume?.accessible;
+            var ucOk = !!uc.schema?.accessible;
             var lbOk = lb && lb.success && lb.checks && !lb.checks.some(function(c){ return c.status === 'error'; });
             var allOk = ucOk && lbOk;
             if (typeof showNotification === 'function') {

@@ -1943,6 +1943,44 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10956 passed, 334 skipped, 8 deselected, 0 failed in 51.89s
 
+## Remove obsolete documents/volume block from Settings → Registry
+
+Context: In Settings → Registry (`/settings?section=registry`), a section card
+was dedicated to "Unity Catalog Volume — binary context document uploads". Since
+context documents are persisted in Lakebase (`domain_documents` table) and
+parsed Volume-free, the UC Volume block and mentions of `documents/` uploads
+are no longer necessary and have been removed.
+
+Changes:
+
+1. src/front/templates/partials/registry/_registry_configuration.html
+   - Removed the obsolete Unity Catalog Volume card (`#registryVolumeLabel`,
+     `#registryVolumeCheckBadge`, `#registryVolumeCheckDetail`) describing
+     binary document uploads.
+   - Updated the section header and label from "Registry Catalog & Volume" to
+     "Registry Catalog Schema".
+   - Cleaned up the migration alert note referencing volume-based documents.
+2. src/front/static/config/js/settings-registry-configuration.js
+   - Removed badge reset and probe handling for `#registryVolumeCheckBadge`
+     and `#registryVolumeCheckDetail`.
+   - Updated `ucOk` validation to evaluate schema accessibility without volume.
+3. src/front/static/registry/js/registry.js
+   - Updated `updateRegistryLabel()` to guard `#registryVolumeLabel` cleanly
+     when absent from the DOM.
+4. tests/units/front/test_settings_registry_documents_removed.py
+   - Added contract tests asserting the absence of volume/documents elements
+     and verifying core UC schema and Lakebase elements remain intact.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/config/js/settings-registry-configuration.js
+- src/front/static/registry/js/registry.js
+- src/front/templates/partials/registry/_registry_configuration.html
+- tests/units/front/test_settings_registry_documents_removed.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10956 passed, 334 skipped, 8 deselected, 0 failed in 52.67s
+
+
 ## Collapsed sidebar narrower (48px → 40px)
 
 Context: the collapsed sidebar rail felt too wide. Reduced the collapsed
