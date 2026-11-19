@@ -53,6 +53,11 @@
         if (timeline) timeline.innerHTML = slotSpinner('Loading audit trail…');
     }
 
+    function paintLifecyclePreview(status) {
+        const life = document.getElementById('reviewLifecycleSlot');
+        if (life) life.innerHTML = lifecycleDiagram(lifecyclePreview(status));
+    }
+
     async function loadReview() {
         const body = document.getElementById('reviewBody');
         if (!body) return;
@@ -70,6 +75,10 @@
                 showNotSavedMessage();
                 return;
             }
+
+            // Optimistic first paint: the lifecycle stage is already known from
+            // version-status, so show it now; the full review detail replaces it.
+            paintLifecyclePreview(vs.status);
 
             // Review detail + readiness + team in parallel once we know the scope.
             // Each filler owns its slot errors so one failure does not blank the others.
@@ -234,18 +243,31 @@
         }
 
         // In Review: submitter + sign-offs collected.
-        let irFooter = '';
-        if (submitter) irFooter += peopleLine('Submitted by', [submitter]);
-        irFooter += approvers.length
-            ? peopleLine(
-                'Signed off (' + d.approvals + '/' + d.quorum + ')', approvers)
-            : mutedLine('Awaiting sign-off (0/' + d.quorum + ')');
-        if (status === 'IN-REVIEW') irFooter += progressBar(d);
+        let irFooter;
+        if (pending) {
+            irFooter = loadingFooter;
+        } else {
+            irFooter = '';
+            if (submitter) irFooter += peopleLine('Submitted by', [submitter]);
+            irFooter += approvers.length
+                ? peopleLine(
+                    'Signed off (' + d.approvals + '/' + d.quorum + ')', approvers)
+                : mutedLine('Awaiting sign-off (0/' + d.quorum + ')');
+            if (status === 'IN-REVIEW') irFooter += progressBar(d);
+        }
+        const irDesc = pending
+            ? 'Sign-off required'
+            : d.quorum + ' sign-off' + (d.quorum > 1 ? 's' : '') + ' required';
 
         // Published: who pushed it live.
-        const pubFooter = publisher
-            ? peopleLine('Published by', [publisher])
-            : mutedLine('Not yet published');
+        let pubFooter;
+        if (pending) {
+            pubFooter = loadingFooter;
+        } else {
+            pubFooter = publisher
+                ? peopleLine('Published by', [publisher])
+                : mutedLine('Not yet published');
+        }
 
         const boxes =
             stageBox({
@@ -257,8 +279,7 @@
             stageBox({
                 state: stateOf(1), tone: 'inreview', icon: 'eye',
                 label: 'In Review',
-                desc: d.quorum + ' sign-off' + (d.quorum > 1 ? 's' : '') +
-                    ' required',
+                desc: irDesc,
                 footer: irFooter,
             }) +
             flowArrow('Publish', curIdx >= 2) +

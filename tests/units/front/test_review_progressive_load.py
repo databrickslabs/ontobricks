@@ -36,3 +36,19 @@ def test_review_js_fills_sections_progressively_in_parallel():
     assert "Loading review status..." not in js or "reviewBannerSlot" in js
     assert "reviewLifecycleSlot" in js
     assert "reviewTimelineSlot" in js
+
+
+def test_lifecycle_paints_optimistically_from_version_status():
+    """Lifecycle stage is painted from version-status before review detail returns."""
+    js = JS.read_text(encoding="utf-8")
+    assert "function lifecyclePreview(status)" in js
+    assert "function paintLifecyclePreview(status)" in js
+    # Preview is painted right after the version-status check, before the detail fetch
+    vs_check = js.index("showNotSavedMessage();\n                return;")
+    paint = js.index("paintLifecyclePreview(vs.status);")
+    detail = js.index("loadReviewDetail().catch(")
+    assert vs_check < paint < detail
+    # Footers show a loading placeholder until the detail arrives
+    assert "pending: true" in js
+    assert "if (pending)" in js
+    assert "Loading details…" in js

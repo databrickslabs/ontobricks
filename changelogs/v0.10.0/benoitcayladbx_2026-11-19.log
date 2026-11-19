@@ -2105,3 +2105,44 @@ Tests:
 - `uv run --frozen pytest -q -m "not scenario"`: 10961 passed, 334 skipped, 8 deselected, 0 failed.
 - Not done: live check against a workspace where the user lacks access.
 
+
+================================================================================
+## Context → Review: optimistic first paint of the Lifecycle section
+================================================================================
+
+Context: The Lifecycle (context status) section waited for the full
+`/review/{folder}/{version}` payload, even though the status itself is already
+known from the cached `/domain/version-status` response. The section now paints
+from version-status first and is enriched once the review detail arrives.
+
+Changes:
+
+1. src/front/static/domain/js/domain-review.js
+   - New `lifecyclePreview(status)` builds a `pending: true` model from the
+     status alone (no events, approvers, quorum).
+   - New `paintLifecyclePreview(status)` renders the Lifecycle card into
+     `#reviewLifecycleSlot`.
+   - `loadReview()` calls `paintLifecyclePreview(vs.status)` right after the
+     version-status check, before the review detail request is awaited.
+   - `lifecycleDiagram(d)` shows "Loading details…" in the Draft, In Review and
+     Published footers while `d.pending` is true; the In Review description
+     reads "Sign-off required" until quorum is known. The progress bar is
+     hidden in pending mode.
+   - The full `render(detail)` still overwrites the slot with the complete
+     Lifecycle card (submitter, sign-offs, quorum, publisher).
+2. tests/units/front/test_review_progressive_load.py
+   - New `test_lifecycle_paints_optimistically_from_version_status` asserting
+     the preview is painted after the version-status check and before the
+     detail fetch, and that the pending placeholders exist.
+
+Modified files:
+- src/front/static/domain/js/domain-review.js
+- tests/units/front/test_review_progressive_load.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_review_progressive_load.py`: 3 passed.
+- `node --check src/front/static/domain/js/domain-review.js`: OK.
+- `uv run --frozen pytest -q -m "not scenario"`: 10962 passed, 334 skipped, 8 deselected, 0 failed in 54.09s.
+- Not done: browser timing check of `/review/...` vs `/domain/version-status` latency on a live workspace.
+
