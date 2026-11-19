@@ -1204,34 +1204,36 @@ body {
     min-width: 0;
     background: transparent;
     border: 0;
-    border-bottom: 1px solid var(--db-border);
+    border-bottom: none;
     border-radius: 0;
     margin-right: 12px;
+    gap: 1.5rem;
     overflow-x: auto;
     overflow-y: hidden;
 }
 
 .nav-tabs .nav-link {
-    color: var(--db-gray-600);
+    color: var(--db-text-secondary);
     background: transparent;
     border: none;
-    border-bottom: 2px solid transparent;
+    border-bottom: 3px solid transparent;
     border-radius: 0;
-    font-size: 0.9rem;
-    padding: 0.5rem 0.875rem;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    padding: 0.5rem 0;
     font-weight: 500;
     transition: var(--db-transition);
 }
 
 .nav-tabs .nav-link:hover {
-    color: var(--db-text);
-    background: var(--db-hover-indigo, var(--db-hover-warm));
+    color: var(--db-primary);
+    background: transparent;
     border-bottom-color: transparent;
 }
 
 .nav-tabs .nav-link.active {
     background-color: transparent !important;
-    color: var(--db-primary-darker) !important;
+    color: var(--db-text) !important;
     border: none !important;
     border-bottom-color: var(--db-primary) !important;
     border-radius: 0;

@@ -374,4 +374,4 @@ def test_form_tabs_inside_the_right_panel_use_the_shared_compact_rail():
         components, ".nav-tabs.ob-tabs.ob-tabs--compact .nav-link"
     )
     assert _declaration(compact_link, "font-size") == "0.75rem"
-    assert _declaration(compact_link, "padding") == "0.35rem 0.6rem"
+    assert _declaration(compact_link, "padding") == "0.35rem 0"

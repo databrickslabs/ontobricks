@@ -1121,10 +1121,10 @@
    Add `ob-tabs--compact` only in constrained panels. The component preserves
    Bootstrap tab behaviour while owning the complete visual contract.
 
-   The rail and its content are independent surfaces. The rail therefore has
-   no filled container or rounded outer frame, and the selected item remains
-   transparent with a 2px primary underline. Horizontal overflow keeps labels
-   on one line in narrow panels and on mobile.
+   The rail and its content are independent surfaces with no global borders.
+   The rail has no filled container, rounded frame, or global baseline border:
+   only the selected item draws a 3px primary underline. Horizontal overflow
+   keeps labels on one line in narrow panels and on mobile.
    ========================================================================== */
 .nav-tabs.ob-tabs {
     display: flex;
@@ -1132,10 +1132,10 @@
     min-width: 0;
     background: transparent;
     border: 0;
-    border-bottom: 1px solid var(--db-border, #dee2e6);
+    border-bottom: none;
     border-radius: 0;
     margin-right: 12px;
-    gap: 0;
+    gap: 1.5rem;
     padding: 0;
     overflow-x: auto;
     overflow-y: hidden;
@@ -1153,35 +1153,48 @@
     margin-right: 0;
 }
 
+/* Databricks style: tabs and their enclosing workspace have no global borders
+   or card frames inside the page panel. */
+.sidebar-section > .content-section > .card:has(.ob-tabs-wrap),
+.sidebar-section > .content-section > .card:has(.nav-tabs.ob-tabs),
+.sidebar-section > .content-section > form.card.ob-tabs-wrap,
+.sidebar-section > .content-section > .card.ob-tabs-wrap,
+.card:has(> .card-body.ob-tabs-wrap),
+.card:has(> .card-body > .ob-tabs-wrap) {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
 .nav-tabs.ob-tabs .nav-item {
     flex: 0 0 auto;
-    margin-bottom: -1px;
+    margin-bottom: 0;
 }
 
 .nav-tabs.ob-tabs .nav-link {
     background: transparent !important;
     border: none !important;
-    border-bottom: 2px solid transparent !important;
+    border-bottom: 3px solid transparent !important;
     border-radius: 0 !important;
     color: var(--db-text-secondary, #6c757d) !important;
-    font-size: 0.9rem;
+    font-size: 0.8125rem;
     font-weight: 500;
-    padding: 0.5rem 0.875rem;
+    line-height: 1.25rem;
+    padding: 0.5rem 0;
     margin: 0;
-    transition: color 0.15s ease, background-color 0.15s ease,
-        border-color 0.15s ease;
+    transition: color 0.15s ease, border-color 0.15s ease;
     white-space: nowrap;
 }
 
 .nav-tabs.ob-tabs .nav-link:hover:not(.active):not(.disabled) {
-    color: var(--db-text, #1e293b) !important;
-    background: var(--db-hover-indigo, var(--db-hover-warm, rgba(0, 0, 0, 0.03))) !important;
+    color: var(--db-primary) !important;
+    background: transparent !important;
     border-bottom-color: transparent !important;
 }
 
 .nav-tabs.ob-tabs .nav-link.active,
 .nav-tabs.ob-tabs .nav-item.show .nav-link {
-    color: var(--db-primary-darker, #3730A3) !important;
+    color: var(--db-text, #1e293b) !important;
     background: transparent !important;
     border-bottom-color: var(--db-primary) !important;
     border-radius: 0 !important;
@@ -1190,13 +1203,17 @@
 
 .nav-tabs.ob-tabs .nav-link:focus-visible {
     outline: 2px solid var(--db-primary);
-    outline-offset: -3px;
+    outline-offset: 2px;
     box-shadow: none;
+}
+
+.nav-tabs.ob-tabs.ob-tabs--compact {
+    gap: 1rem;
 }
 
 .nav-tabs.ob-tabs.ob-tabs--compact .nav-link {
     font-size: 0.75rem;
-    padding: 0.35rem 0.6rem;
+    padding: 0.35rem 0;
 }
 
 /* Standalone full-height pattern: the rail stays pinned while its independent

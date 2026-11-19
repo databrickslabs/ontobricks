@@ -876,17 +876,23 @@ fall back to Bootstrap's legacy 4px next to their full-size siblings.
 ### Tabs (`.ob-tabs`) — transparent underline rail
 
 There is **one** tab-navigation treatment across the application. It lives in
-`global/css/components.css`: a transparent, square rail with a 1px warm
-baseline. The active item keeps a transparent background, uses
-`--db-primary-darker` text at weight 600, and draws a 2px
-`--db-primary` underline. The rail has no outer fill, card outline, shadow, or
-radius, so it remains subordinate to the L2 workspace control and surrounding
-content surfaces.
+`global/css/components.css` and follows the Databricks product tabs: a
+transparent, square rail with no global borders, left-aligned 13px labels
+spaced `1.5rem` apart (`gap`), and links with **no horizontal padding** so the
+underline is exactly as wide as the label. Inactive labels use
+`--db-text-secondary` at weight 500. The active item keeps a transparent
+background, uses `--db-text` at weight 600, and draws a **3px** `--db-primary`
+underline. The rail has no outer fill, card outline, shadow, radius, or global
+baseline border — only the active tab has an underline.
 
-Inactive tabs use the configurable `--db-hover-indigo` well on hover. This
-token is derived from the branding colour selected in Settings and remains
-lighter than `--db-primary-light`; never substitute the fixed grey
-`--db-hover-warm` for tab navigation.
+Hover only recolours the label to `--db-primary` (follows the Settings
+branding colour); there is **no hover fill**. Keyboard focus draws a 2px
+`--db-primary` outline offset by 2px.
+
+Inside the page panel, card-integrated page tabs (`.card:has(.ob-tabs-wrap)`,
+`.card.ob-tabs-wrap`) have no border, shadow or card background, allowing the
+tabs and their content to sit directly on the panel surface flush with the
+section header.
 
 Every tab navigation must carry `nav nav-tabs ob-tabs`. Use
 `ob-tabs--compact` only for constrained right-hand panels. Do not introduce
@@ -983,10 +989,10 @@ surfaces:
   underline are owned by `.ob-tabs`; never override `.nav-link.active` in an
   area stylesheet.
 - Two densities are allowed:
-  - Standard: `.ob-tabs` (`0.9rem`, `0.5rem 0.875rem`) for pages, cards,
-    settings, and modals.
-  - Compact: `.ob-tabs.ob-tabs--compact` (`0.75rem`, `0.35rem 0.6rem`) for
-    narrow right-hand panels and generated panel tabs.
+  - Standard: `.ob-tabs` (`0.8125rem`, `0.5rem 0`, `1.5rem` gap) for pages,
+    cards, settings, and modals.
+  - Compact: `.ob-tabs.ob-tabs--compact` (`0.75rem`, `0.35rem 0`, `1rem` gap)
+    for narrow right-hand panels and generated panel tabs.
 - Layout helpers (`nav-fill`, `flex-shrink-0`, `mb-0`) may accompany
   `ob-tabs`. The catalogued combinations are:
   - `nav nav-tabs ob-tabs mb-0` — independent Domain / Settings surfaces.

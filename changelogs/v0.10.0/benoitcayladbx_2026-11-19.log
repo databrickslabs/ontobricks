@@ -1155,3 +1155,83 @@ Test result
 -----------
 uv run --frozen pytest -q -m "not scenario" → 10919 passed, 334 skipped,
 8 deselected, 0 failed.
+
+================================================================================
+Databricks-style tabs
+================================================================================
+
+Context
+-------
+Align the shared tab rail with Databricks product tabs (e.g. Compute → AI
+Search): left-aligned 13px labels, underline as wide as the label, no hover
+fill, dark active label over a 3px primary underline.
+
+Changes
+-------
+1. src/front/static/global/css/components.css — `.nav-tabs.ob-tabs`: rail
+   `gap: 1.5rem`; links 0.8125rem / 1.25rem line, `padding: 0.5rem 0`,
+   3px transparent bottom border; hover recolours the label to
+   `--db-primary` with a transparent background; active uses `--db-text` +
+   3px `--db-primary` underline; focus outline offset 2px; compact density
+   `0.35rem 0` with a 1rem gap; rails flush with a card edge
+   (`.card >`, `.card-header >`, `.card-body.p-0 >`, `.ob-tabs-wrap >`) get
+   `padding-inline: 1rem`.
+2. src/front/static/global/css/main.css — Bootstrap `.nav-tabs` fallback
+   mirrors the same typography, spacing, hover and active colours.
+3. .cursor/11-frontend-design.mdc — Tabs section and density catalogue
+   rewritten for the Databricks treatment.
+4. tests/units/front/test_clarity_design_contract.py,
+   tests/units/front/test_ontology_split_panel_layout.py — contracts updated
+   (active colour, hover without fill, focus offset, densities, gap).
+
+Modified files
+--------------
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_ontology_split_panel_layout.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10919 passed, 334 skipped,
+8 deselected, 0 failed.
+
+================================================================================
+Remove global borders for tabs (Databricks style)
+================================================================================
+
+Context
+-------
+In Databricks product pages, tabs sit directly on the page panel surface
+without an enclosing card border or an edge-to-edge baseline border across the
+tab rail. All global borders for tabs have been removed.
+
+Changes
+-------
+1. src/front/static/global/css/components.css — `.nav-tabs.ob-tabs`: removed
+   `border-bottom: 1px solid var(--db-border)`; card-integrated tab workspaces
+   (`.sidebar-section > .content-section > .card:has(.ob-tabs-wrap)`,
+   `.card.ob-tabs-wrap`, etc.) now have `border: none`, `background: transparent`,
+   `box-shadow: none`; removed artificial `padding-inline` on `.ob-tabs`.
+2. src/front/static/global/css/main.css — `.nav-tabs`: removed global
+   `border-bottom`.
+3. .cursor/11-frontend-design.mdc — updated tab section and card-integrated
+   tab documentation.
+4. tests/units/front/test_clarity_design_contract.py,
+   tests/units/front/test_databricks_page_panel_contract.py — updated tab
+   strip contract and added test for borderless tab workspaces.
+
+Modified files
+--------------
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_databricks_page_panel_contract.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10920 passed, 334 skipped,
+8 deselected, 0 failed.

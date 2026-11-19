@@ -251,7 +251,7 @@ def test_components_css_ob_tabs_active_is_transparent_with_primary_underline():
     assert re.search(
         r"\.nav-tabs\.ob-tabs\s+\.nav-link\.active,\s*"
         r"\.nav-tabs\.ob-tabs\s+\.nav-item\.show\s+\.nav-link\s*\{"
-        r"[^}]*color\s*:\s*var\(--db-primary-darker[^;]*;"
+        r"[^}]*color\s*:\s*var\(--db-text[,)][^;]*;"
         r"[^}]*background\s*:\s*transparent\s*!important;"
         r"[^}]*border-bottom-color\s*:\s*var\(--db-primary[^;]*;"
         r"[^}]*border-radius\s*:\s*0\s*!important;",
@@ -260,22 +260,23 @@ def test_components_css_ob_tabs_active_is_transparent_with_primary_underline():
     )
 
 
-def test_tab_hover_uses_the_brand_aware_indigo_token():
+def test_tab_hover_turns_the_label_primary_without_a_fill():
+    """Databricks tabs: hover recolours the label; no background fill."""
     components = _read(COMPONENTS_CSS)
     component_hover = _rule_blocks_for_exact_class(
         components, ".nav-tabs.ob-tabs .nav-link:hover:not(.active):not(.disabled)"
     )
     assert _any_block_has_declaration(
-        component_hover,
-        r"background",
-        r"var\(--db-hover-indigo[^;]*\)\s*!important",
+        component_hover, r"background", r"transparent\s*!important"
+    )
+    assert _any_block_has_declaration(
+        component_hover, r"color", r"var\(--db-primary\)\s*!important"
     )
 
     main = _read(MAIN_CSS)
     fallback_hover = _rule_blocks_for_exact_class(main, ".nav-tabs .nav-link:hover")
-    assert _any_block_has_declaration(
-        fallback_hover, r"background", r"var\(--db-hover-indigo[^;]*\)"
-    )
+    assert _any_block_has_declaration(fallback_hover, r"background", r"transparent")
+    assert _any_block_has_declaration(fallback_hover, r"color", r"var\(--db-primary\)")
 
 
 def test_components_css_ob_tabs_strip_is_a_transparent_scrollable_rail():
@@ -292,7 +293,7 @@ def test_components_css_ob_tabs_strip_is_a_transparent_scrollable_rail():
     assert _any_block_has_declaration(
         strip_blocks,
         r"border-bottom",
-        r"1px\s+solid\s+var\(--db-border[^;]*\)",
+        r"none",
     )
 
 
@@ -305,7 +306,7 @@ def test_components_css_ob_tabs_has_visible_keyboard_focus():
     assert _any_block_has_declaration(
         focus_blocks, r"outline", r"2px\s+solid\s+var\(--db-primary[^;]*\)"
     )
-    assert _any_block_has_declaration(focus_blocks, r"outline-offset", r"-3px")
+    assert _any_block_has_declaration(focus_blocks, r"outline-offset", r"2px")
 
 
 def test_components_css_ob_tabs_exposes_standard_and_compact_densities():
@@ -314,17 +315,21 @@ def test_components_css_ob_tabs_exposes_standard_and_compact_densities():
     compact = _rule_blocks_for_exact_class(
         css, ".nav-tabs.ob-tabs.ob-tabs--compact .nav-link"
     )
-    assert _any_block_has_declaration(standard, r"font-size", r"0\.9rem")
-    assert _any_block_has_declaration(standard, r"padding", r"0\.5rem\s+0\.875rem")
+    assert _any_block_has_declaration(standard, r"font-size", r"0\.8125rem")
+    assert _any_block_has_declaration(standard, r"padding", r"0\.5rem\s+0")
+    assert _any_block_has_declaration(
+        standard, r"border-bottom", r"3px\s+solid\s+transparent\s*!important"
+    )
     assert _any_block_has_declaration(compact, r"font-size", r"0\.75rem")
-    assert _any_block_has_declaration(compact, r"padding", r"0\.35rem\s+0\.6rem")
+    assert _any_block_has_declaration(compact, r"padding", r"0\.35rem\s+0")
+
+    rail = _rule_blocks_for_exact_class(css, ".nav-tabs.ob-tabs")
+    assert _any_block_has_declaration(rail, r"gap", r"1\.5rem")
 
     main = _read(MAIN_CSS)
     fallback = _rule_blocks_for_exact_class(main, ".nav-tabs .nav-link")
-    assert _any_block_has_declaration(fallback, r"font-size", r"0\.9rem")
-    assert _any_block_has_declaration(
-        fallback, r"padding", r"0\.5rem\s+0\.875rem"
-    )
+    assert _any_block_has_declaration(fallback, r"font-size", r"0\.8125rem")
+    assert _any_block_has_declaration(fallback, r"padding", r"0\.5rem\s+0")
 
 
 def test_data_quality_tabs_do_not_override_the_shared_density():

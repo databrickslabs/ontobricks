@@ -56,3 +56,12 @@ def test_section_title_and_subtitle_use_databricks_typography():
     subtitle = _block(css, ".section-header p")
     assert "font-size: 0.8125rem" in subtitle
     assert "color: var(--db-text-secondary)" in subtitle
+
+
+def test_tabs_and_tab_cards_have_no_global_borders():
+    """Tabs and their enclosing cards inside the page panel have no global borders."""
+    components = (CSS / "global/css/components.css").read_text(encoding="utf-8")
+    assert "border-bottom: none" in _block(components, ".nav-tabs.ob-tabs")
+    assert "border: none" in components and "background: transparent" in components
+    main = MAIN_CSS.read_text(encoding="utf-8")
+    assert "border-bottom: none" in _block(main, ".nav-tabs")
