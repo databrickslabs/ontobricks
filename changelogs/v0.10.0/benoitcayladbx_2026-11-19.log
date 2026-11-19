@@ -2352,3 +2352,78 @@ Modified files:
 Tests:
 - `uv run --frozen pytest -q tests/units/front/test_app_switcher_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_segmented_subnav_contract.py`: 19 passed.
 - `uv run --frozen pytest -q -m "not scenario"`: 10964 passed, 334 skipped, 8 deselected, 0 failed in 50.34s.
+
+================================================================================
+## Feature selector: Ontology description updated
+================================================================================
+
+Context: The Ontology entry's subtitle in the Feature selector (app switcher)
+read "Design classes, properties, and SHACL constraints". It now reads
+"Design Entities, Relationships, Data Quality and Business rules", to reflect
+what the Ontology workspace covers.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Ontology `description` → "Design Entities, Relationships, Data Quality and Business rules".
+   - The same string is also the subtitle of the Ontology Workspace Home header
+     (`partials/layout/_workspace_home.html`), so both places stay in sync.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `python3 -m json.tool` validation of menu_config.json: OK.
+- `uv run --frozen pytest -q -m "not scenario"`: 10964 passed, 334 skipped, 8 deselected, 0 failed in 48.94s.
+
+================================================================================
+## Feature selector: Context description updated
+================================================================================
+
+Context: The Context entry's subtitle in the Feature selector (app switcher)
+read "Govern versions, documents, and workspace settings". It now reads
+"Govern versions, Metadata, Publication and Manage collaboration".
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Context `description` → "Govern versions, Metadata, Publication and Manage collaboration".
+   - The same string is the subtitle of the Context Workspace Home header
+     (`partials/layout/_workspace_home.html`), so both places stay in sync.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `python3 -m json.tool` validation of menu_config.json: OK.
+- `uv run --frozen pytest -q -m "not scenario"`: 10964 passed, 334 skipped, 8 deselected, 0 failed in 49.64s.
+
+================================================================================
+## Feature selector: wider menu so workspace subtitles display in full
+================================================================================
+
+Context: The feature selector (app switcher) truncated the workspace subtitles
+with an ellipsis: the menu was capped at 26rem, leaving about 304px for the
+description column, while the Ontology subtitle needs 341px. Context's
+subtitle was also reworded to "Manage versions, Metadata, Publication and
+collaboration".
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Context `description` → "Manage versions, Metadata, Publication and collaboration"
+     (replaces "Govern versions, Metadata, Publication and Manage collaboration").
+2. src/front/static/global/css/main.css
+   - `.ob-app-switcher-menu` `max-width` 26rem → 30rem (`min-width` 22rem unchanged).
+     The menu now auto-sizes to 453px, so all five subtitles render without truncation.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/static/global/css/main.css
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- Headless Chromium on the running dev server: each subtitle's natural width is at or below the displayed width (widest: 341px in a 341px column).
+- `uv run --frozen pytest -q -m "not scenario"`: 10964 passed, 334 skipped, 8 deselected, 0 failed in 50.70s.

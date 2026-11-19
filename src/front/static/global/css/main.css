@@ -994,7 +994,7 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
 /* Databricks app-switcher popover: rounded boxes for menu, items and icon chips. */
 .ob-app-switcher-menu {
     min-width: 22rem;
-    max-width: 26rem;
+    max-width: 30rem;
     padding: 0.5rem;
     border: 1px solid var(--db-border);
     border-radius: 0.5rem;

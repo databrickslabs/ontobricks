@@ -18,7 +18,7 @@
         {
             "id": "domain",
             "label": "Context",
-            "description": "Govern versions, documents, and workspace settings",
+            "description": "Manage versions, Metadata, Publication and collaboration",
             "icon": "bi-box",
             "route": "/domain/",
             "requires_domain_saved": false,
@@ -191,7 +191,7 @@
         {
             "id": "ontology",
             "label": "Ontology",
-            "description": "Design classes, properties, and SHACL constraints",
+            "description": "Design Entities, Relationships, Data Quality and Business rules",
             "icon": "bi-bezier2",
             "route": "/ontology/",
             "requires_domain_saved": true,
