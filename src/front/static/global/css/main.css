@@ -84,6 +84,10 @@
     --db-status-draft: #7C3AED;
     --db-status-draft-soft-bg: #F3EDFE;
 
+    /* Databricks text links (run lists, inline navigation) */
+    --db-link: #2272B4;
+    --db-link-hover: #0E538B;
+
     /* Backward-compatible aliases */
     --db-success: var(--db-status-success);
     --db-success-bg: var(--db-status-success-soft-bg);
@@ -610,19 +614,6 @@ body {
    natural width and the full name stays visible. */
 .ob-subnav-settings-return-link > span {
     white-space: nowrap;
-}
-
-/* On pages with the section sidebar, the return link sits just right of the
-   sidebar column, aligned with the content panel's left edge (sidebar gutter
-   4px + sidebar width + 4px gap = 0.5rem after --ob-sidebar-width). Pages
-   without a sidebar (Home) keep it inline after the brand. */
-@media (min-width: 768px) {
-    html:has(.sidebar-layout) #settingsDomainReturnNav {
-        position: absolute;
-        top: 50%;
-        left: calc(var(--ob-sidebar-width, 200px) + 0.5rem);
-        transform: translateY(-50%);
-    }
 }
 
 /* L2 dropdowns (app switcher) mirror the left sidebar panel. */
@@ -1267,11 +1258,12 @@ body {
     display: flex;
     flex-wrap: nowrap;
     min-width: 0;
+    width: 100%;
     background: transparent;
     border: 0;
-    border-bottom: none;
+    border-bottom: 1px solid var(--db-border);
     border-radius: 0;
-    margin-right: 12px;
+    margin-right: 0;
     gap: 1.5rem;
     overflow-x: auto;
     overflow-y: hidden;
@@ -1283,6 +1275,7 @@ body {
     border: none;
     border-bottom: 3px solid transparent;
     border-radius: 0;
+    margin-bottom: -1px;
     font-size: 0.8125rem;
     line-height: 1.25rem;
     padding: 0.5rem 0;

@@ -6,6 +6,9 @@
     flex: 1;
     min-height: 0;
     overflow: hidden;
+    border: none;
+    background: transparent;
+    box-shadow: none;
 }
 
 .dm-versions-workspace .ob-hidden {

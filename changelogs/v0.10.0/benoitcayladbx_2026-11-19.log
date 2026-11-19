@@ -1453,3 +1453,165 @@ Modified files:
 - tests/units/front/test_settings_subnav_hidden.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped, 8 deselected, 0 failed in 49.51s
+
+## Databricks Jobs-style run lists
+
+Context: Run history pages (Graph → Build → Runs, Intelligence → Analytics →
+Runs, Settings → Automation → Runs) used grey-header Bootstrap tables with
+filled status pills and outline eye buttons. They now follow the Databricks
+Jobs → Runs list: flat table, start time first as a link, icon + word status,
+ghost details control, and a run-count toolbar.
+
+Changes:
+
+1. src/front/static/global/js/runs-render.js
+   Added `runStatus` (Succeeded / Failed / Running / Canceled / Pending),
+   `timeLink`, `versionText`, `durationOrDash`; every row builder leads with a
+   start-time link and uses icon + word status; ghost details button; build
+   rows gain a Duration column. Modal badges unchanged.
+2. src/front/templates/partials/domain/_domain_build_runs.html,
+   src/front/templates/partials/domain/_domain_analytics_runs.html
+   `.ob-runs-toolbar` with run count; `.ob-runs-table` with sentence-case
+   headers (Start time first), no grey band or inline widths.
+3. src/front/templates/partials/settings/_settings_runs.html
+   Same table style for the five cross-context run tabs.
+4. src/front/static/domain/js/domain-runs.js
+   Fills `#runsCount` / `#analyticsRunsCount`.
+5. src/front/static/global/css/components.css, src/front/static/global/css/main.css
+   New shared run-list component (`.ob-runs-*`, `.ob-run-*`) and `--db-link`
+   / `--db-link-hover` tokens.
+6. .cursor/11-frontend-design.mdc
+   New "Run Lists" section.
+7. tests/units/front/test_databricks_runs_list_contract.py
+   New contract for the run-list style across all seven tables.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/js/domain-runs.js
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- src/front/static/global/js/runs-render.js
+- src/front/templates/partials/domain/_domain_analytics_runs.html
+- src/front/templates/partials/domain/_domain_build_runs.html
+- src/front/templates/partials/settings/_settings_runs.html
+- tests/units/front/test_databricks_runs_list_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10936 passed, 334 skipped, 8 deselected, 0 failed in 52.70s
+
+================================================================================
+## Databricks tab header baseline line and removal of inner card box under page titles
+================================================================================
+
+Context:
+1. Under section headers (`.sidebar-section > .content-section`), pages such as
+   Versions and Review displayed an inner bordered card box around their
+   workspace content. Because the active sidebar section is already the white
+   Databricks-style page panel with its own border, top-level cards directly
+   under the section header now have `border: none; background: transparent;
+   box-shadow: none;` so contents sit seamlessly on the panel without an inner box.
+2. Tabs across the application lacked the Databricks Computes / product tabs
+   header baseline line. The tab rail (`.nav-tabs.ob-tabs`, `.nav-tabs`) now
+   features a continuous `border-bottom: 1px solid var(--db-border); width: 100%;`,
+   and tab items use `margin-bottom: -1px;` so the active primary underline sits
+   directly on top of the baseline border.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   - Added `border-bottom: 1px solid var(--db-border); width: 100%; margin-right: 0;`
+     to `.nav-tabs.ob-tabs`.
+   - Added `margin-bottom: -1px;` to `.nav-tabs.ob-tabs .nav-link`.
+   - Removed borders from all top-level workspace cards directly under
+     `.sidebar-section > .content-section` (`.card`, `form.card`).
+2. src/front/static/global/css/main.css
+   - Added `border-bottom: 1px solid var(--db-border); width: 100%; margin-right: 0;`
+     to `.nav-tabs`.
+   - Added `margin-bottom: -1px;` to `.nav-tabs .nav-link`.
+3. src/front/static/global/css/sidebar-layout.css
+   - Set `border: none; background: transparent; box-shadow: none;` on
+     `.sidebar-section > .content-section > .card` and
+     `.sidebar-section > .content-section > form.card`.
+4. src/front/static/domain/css/domain-versions.css
+   - Set `border: none; background: transparent; box-shadow: none;` on
+     `.dm-versions-workspace`.
+5. .cursor/11-frontend-design.mdc
+   - Updated tab documentation to specify the Databricks baseline header line
+     (`border-bottom: 1px solid var(--db-border)`).
+   - Documented that top-level workspace cards under the section header have no
+     enclosing border or box.
+6. tests/units/front/test_clarity_design_contract.py,
+   tests/units/front/test_databricks_page_panel_contract.py,
+   tests/units/front/test_domain_versions_cards.py
+   - Updated and added unit contracts to assert the 1px header baseline border
+     on `.nav-tabs.ob-tabs` / `.nav-tabs` and the borderless workspace card.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/css/domain-versions.css
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_databricks_page_panel_contract.py
+- tests/units/front/test_domain_versions_cards.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10937 passed, 334 skipped, 8 deselected, 0 failed in 49.65s
+
+================================================================================
+## Align Settings "Back to context" link on the right before Activity
+================================================================================
+
+Context: In Settings, the "Back to context" link (`#settingsDomainReturnNav`) was
+previously absolutely positioned right after the left sidebar column. It is now
+aligned on the right side of the chrome bar immediately before the Activity
+Center dropdown, in natural flex order after the flex spacer.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Moved `<li id="settingsDomainReturnNav">` after the flex-spacer and app
+     switcher, positioned directly before the Activity Center dropdown item.
+2. src/front/static/global/css/main.css
+   - Removed the `@media (min-width: 768px)` rule that absolutely positioned
+     `#settingsDomainReturnNav` left of the content panel. It now flows naturally
+     on the right.
+3. .cursor/11-frontend-design.mdc
+   - Updated chrome layout specification to reflect that `#settingsDomainReturnNav`
+     sits on the right immediately preceding Activity Center.
+4. tests/units/front/test_settings_subnav_hidden.py
+   - Updated unit test `test_settings_return_link_aligned_on_right_before_activity`
+     to assert natural flow on the right before `#activityCenterToggle`.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/main.css
+- src/front/templates/base.html
+- tests/units/front/test_settings_subnav_hidden.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10937 passed, 334 skipped, 8 deselected, 0 failed in 50.18s
+
+
+
+
+## Documents tab: remove "Upload Documents" card box
+
+Context:
+The domain Documents section (`/domain/?section=documents`) wrapped the upload
+area in a bordered card with a "Upload Documents" header. Requested to drop the
+visual box and title while keeping the upload content.
+
+Changes:
+1. src/front/templates/partials/domain/_domain_documents.html
+   - Replaced the upload `card mb-4` wrapper with a plain `mb-4` block.
+   - Removed the upload card header (`card-header` with "Upload Documents").
+   - Removed the `card-body` padding wrapper around the upload content.
+   - The "Parsed Documents" card is unchanged.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/templates/partials/domain/_domain_documents.html
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10937 passed, 334 skipped, 8 deselected, 0 failed in 49.77s

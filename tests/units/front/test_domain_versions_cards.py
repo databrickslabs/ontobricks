@@ -112,6 +112,13 @@ def test_card_css_owns_full_height_scroll_and_mobile_reset():
     assert "height: auto" in mobile
 
 
+def test_versions_workspace_has_no_border():
+    css = CSS.read_text(encoding="utf-8")
+    workspace_rule = css.split(".dm-versions-workspace {")[1].split("}")[0]
+    assert "border: none" in workspace_rule
+    assert "background: transparent" in workspace_rule
+
+
 def test_disabled_action_wrapper_has_visible_keyboard_focus():
     css = CSS.read_text(encoding="utf-8")
     assert ".dm-version-action-blocked:focus-visible" in css

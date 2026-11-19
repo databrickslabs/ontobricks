@@ -111,17 +111,6 @@
                         {% if app_version %}<span class="ob-navbar-brand-version">v{{ app_version }}</span>{% endif %}
                     </a>
                 </li>
-                <li id="settingsDomainReturnNav" class="ob-subnav-item d-none">
-                    <a id="settingsDomainReturnLink"
-                       class="ob-subnav-settings-return-link ob-settings-domain-return-link"
-                       href="/domain/"
-                       title="Back to context"
-                       aria-label="Back to context">
-                        <i class="bi bi-arrow-left" aria-hidden="true"></i>
-                        <i class="bi bi-box" aria-hidden="true"></i>
-                        <span id="settingsDomainReturnLabel">Back to context</span>
-                    </a>
-                </li>
 
                 <!-- Flex spacer — pushes the right-side chrome to the edge -->
                 <li class="ob-subnav-flex-spacer" aria-hidden="true"></li>
@@ -283,6 +272,19 @@
                     <span id="roleNavBadge" class="badge rounded-pill">
                         <span id="roleNavBadgeLabel"></span>
                     </span>
+                </li>
+
+                {# Settings/Home return link — aligned on the right, just before Activity. #}
+                <li id="settingsDomainReturnNav" class="ob-subnav-item d-none">
+                    <a id="settingsDomainReturnLink"
+                       class="ob-subnav-settings-return-link ob-settings-domain-return-link"
+                       href="/domain/"
+                       title="Back to context"
+                       aria-label="Back to context">
+                        <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                        <i class="bi bi-box" aria-hidden="true"></i>
+                        <span id="settingsDomainReturnLabel">Back to context</span>
+                    </a>
                 </li>
 
                 <!-- Activity Center (background tasks + notifications) -->

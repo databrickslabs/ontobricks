@@ -14,12 +14,18 @@ let _analyticsRunsLoaded = false;
 let _runsCache = [];
 let _analyticsRunsCache = [];
 
+function _setRunsCount(el, n) {
+    if (!el) return;
+    el.textContent = n > 0 ? n.toLocaleString() + (n === 1 ? ' run' : ' runs') : '';
+}
+
 function _renderRunsTable() {
     const empty = document.getElementById('runsEmpty');
     const wrapper = document.getElementById('runsTableWrapper');
     const tbody = document.getElementById('runsTableBody');
     if (!tbody) return;
 
+    _setRunsCount(document.getElementById('runsCount'), _runsCache.length);
     if (_runsCache.length === 0) {
         wrapper.style.display = 'none';
         empty.style.display = '';
@@ -43,6 +49,7 @@ function _renderAnalyticsRunsTable() {
     const tbody = document.getElementById('analyticsRunsTableBody');
     if (!tbody) return;
 
+    _setRunsCount(document.getElementById('analyticsRunsCount'), _analyticsRunsCache.length);
     if (_analyticsRunsCache.length === 0) {
         wrapper.style.display = 'none';
         empty.style.display = '';
@@ -67,6 +74,7 @@ async function _loadBuildRuns() {
     const wrapper = document.getElementById('runsTableWrapper');
     if (!loading) return false;
 
+    _setRunsCount(document.getElementById('runsCount'), 0);
     loading.style.display = '';
     empty.style.display = 'none';
     error.style.display = 'none';
@@ -101,6 +109,7 @@ async function _loadAnalyticsRuns() {
     const wrapper = document.getElementById('analyticsRunsTableWrapper');
     if (!loading) return false;
 
+    _setRunsCount(document.getElementById('analyticsRunsCount'), 0);
     loading.style.display = '';
     empty.style.display = 'none';
     error.style.display = 'none';

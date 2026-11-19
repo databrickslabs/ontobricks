@@ -1,7 +1,8 @@
 <!-- Analytics-run history — Intelligence → Discovery → Analytics → Runs tab.
      JS: /static/domain/js/domain-runs.js (shared with Graph → Build → Runs). -->
 <div id="analyticsRunsPaneBody">
-    <div class="d-flex justify-content-end mb-3">
+    <div class="ob-runs-toolbar">
+        <span class="ob-runs-count" id="analyticsRunsCount" aria-live="polite"></span>
         <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadAnalyticsRuns"
                 onclick="loadAnalyticsRuns()" title="Reload analytics runs from the registry">
             <i class="bi bi-arrow-counterclockwise me-1"></i>Refresh
@@ -28,20 +29,20 @@
 
     <div id="analyticsRunsTableWrapper" style="display:none;">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0" style="font-size:0.85rem">
-                <thead class="table-light">
+            <table class="table table-hover align-middle ob-runs-table">
+                <thead>
                     <tr>
-                        <th>Date &amp; Time</th>
+                        <th>Start time</th>
                         <th>Scope</th>
-                        <th class="text-center">Version</th>
-                        <th class="text-center">Status</th>
+                        <th>Version</th>
+                        <th>Status</th>
                         <th class="text-end">Nodes</th>
                         <th class="text-end">Edges</th>
                         <th class="text-end">Components</th>
-                        <th class="text-end">Avg Degree</th>
+                        <th class="text-end">Avg degree</th>
                         <th class="text-end">Density</th>
                         <th class="text-end">Duration</th>
-                        <th class="text-center">Details</th>
+                        <th class="text-end"><span class="visually-hidden">Details</span></th>
                     </tr>
                 </thead>
                 <tbody id="analyticsRunsTableBody">

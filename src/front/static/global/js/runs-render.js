@@ -111,14 +111,51 @@ window.RunsRender = (function () {
         return '<span class="badge bg-secondary">v' + esc(version || '?') + '</span>';
     }
 
+    // List rows follow the Databricks Jobs → Runs list: an icon + word status
+    // (no filled pill). Modals keep the badges above.
+    const RUN_STATUS = {
+        success: ['is-success', 'bi-check-circle-fill', 'Succeeded'],
+        completed: ['is-success', 'bi-check-circle-fill', 'Succeeded'],
+        ready: ['is-success', 'bi-check-circle-fill', 'Ready'],
+        error: ['is-failed', 'bi-x-circle-fill', 'Failed'],
+        failed: ['is-failed', 'bi-x-circle-fill', 'Failed'],
+        cancelled: ['is-canceled', 'bi-slash-circle', 'Canceled'],
+        canceled: ['is-canceled', 'bi-slash-circle', 'Canceled'],
+        running: ['is-running', 'bi-arrow-repeat', 'Running'],
+        pending: ['is-pending', 'bi-clock', 'Pending'],
+        queued: ['is-pending', 'bi-clock', 'Pending']
+    };
+
+    function runStatus(status) {
+        const cfg = RUN_STATUS[(status || '').toLowerCase()]
+            || ['is-unknown', 'bi-circle', status || 'Unknown'];
+        return '<span class="ob-run-status ' + cfg[0] + '">'
+            + '<i class="bi ' + cfg[1] + '" aria-hidden="true"></i>' + esc(cfg[2]) + '</span>';
+    }
+
+    function versionText(version) {
+        return '<span class="ob-run-version">v' + esc(version || '?') + '</span>';
+    }
+
+    function timeLink(handler, idx, iso, title) {
+        return '<td><a href="#" class="ob-run-link" onclick="' + handler + '(' + idx + '); return false;"'
+            + ' title="' + title + '">' + fmtTs(iso) + '</a></td>';
+    }
+
     function domainCell(run) {
-        return '<td class="small fw-semibold">' + esc(run.domain || '—') + '</td>';
+        return '<td class="fw-semibold">' + esc(run.domain || '—') + '</td>';
     }
 
     function detailsCell(handler, idx, title) {
-        return '<td class="text-center">'
-            + '<button class="btn btn-sm btn-outline-primary" onclick="' + handler + '(' + idx + ')" title="' + title + '">'
-            + '<i class="bi bi-eye"></i></button></td>';
+        return '<td class="text-end">'
+            + '<button type="button" class="btn btn-sm ob-run-details-btn" onclick="' + handler + '(' + idx + ')"'
+            + ' title="' + title + '" aria-label="' + title + '">'
+            + '<i class="bi bi-eye" aria-hidden="true"></i></button></td>';
+    }
+
+    function durationOrDash(secs) {
+        if (secs === null || secs === undefined || secs === '') return '<span class="text-muted">&mdash;</span>';
+        return esc(fmtDuration(secs));
     }
 
     function num(v) {
@@ -128,13 +165,15 @@ window.RunsRender = (function () {
     // opts: { domain: bool, handler: string }
     function buildRunCells(run, idx, opts) {
         const o = opts || {};
-        return '<td class="text-end text-muted small">' + esc(run.id || (idx + 1)) + '</td>'
+        const handler = o.handler || 'showRunDetails';
+        return timeLink(handler, idx, run.started_at, 'View run details')
             + (o.domain ? domainCell(run) : '')
-            + '<td class="small">' + fmtTs(run.started_at) + '</td>'
-            + '<td class="text-center">' + versionBadge(run.version) + '</td>'
-            + '<td class="text-center">' + buildStatusBadge(run.status) + '</td>'
+            + '<td class="text-muted font-monospace">' + esc(run.id || (idx + 1)) + '</td>'
+            + '<td>' + versionText(run.version) + '</td>'
+            + '<td>' + durationOrDash(run.duration_s) + '</td>'
+            + '<td>' + runStatus(run.status) + '</td>'
             + '<td class="text-end">' + num(run.triple_count) + '</td>'
-            + detailsCell(o.handler || 'showRunDetails', idx, 'View run details');
+            + detailsCell(handler, idx, 'View run details');
     }
 
     // A failed run stores zeros for every metric. Printing them would read as
@@ -145,21 +184,20 @@ window.RunsRender = (function () {
         const failed = (run.status || '').toLowerCase() === 'failed';
         const dash = '<span class="text-muted">&mdash;</span>';
 
-        return '<td class="small">' + fmtTs(run.computed_at) + '</td>'
+        const handler = o.handler || 'showAnalyticsRunDetails';
+
+        return timeLink(handler, idx, run.computed_at, 'View analytics run details')
             + (o.domain ? domainCell(run) : '')
-            + '<td class="small">' + analyticsScope(run.class_filter) + '</td>'
-            + '<td class="text-center">' + versionBadge(run.version) + '</td>'
-            + '<td class="text-center">' + analyticsStatusBadge(run.status) + '</td>'
+            + '<td>' + analyticsScope(run.class_filter) + '</td>'
+            + '<td>' + versionText(run.version) + '</td>'
+            + '<td>' + runStatus(run.status) + '</td>'
             + '<td class="text-end">' + (failed ? dash : num(run.node_count)) + '</td>'
             + '<td class="text-end">' + (failed ? dash : num(run.edge_count)) + '</td>'
             + '<td class="text-end">' + (failed ? dash : num(run.connected_components)) + '</td>'
             + '<td class="text-end">' + (failed ? dash : esc((Number(run.avg_degree) || 0).toFixed(2))) + '</td>'
             + '<td class="text-end font-monospace">' + (failed ? dash : esc((Number(run.density) || 0).toFixed(6))) + '</td>'
             + '<td class="text-end">' + esc(fmtMillis(run.duration_ms)) + '</td>'
-            +             detailsCell(
-                o.handler || 'showAnalyticsRunDetails', idx,
-                'View analytics run details'
-            );
+            + detailsCell(handler, idx, 'View analytics run details');
     }
 
     // opts: { domain: bool, handler: string }
@@ -168,17 +206,15 @@ window.RunsRender = (function () {
         const outcome = run.error || run.message || '';
         const outcomeCls = run.error ? 'text-danger' : '';
         const scenario = run.label || run.simulation_id || '—';
-        return '<td class="small">' + fmtTs(run.started_at) + '</td>'
+        const handler = o.handler || 'showSettingsSimulationRunDetails';
+        return timeLink(handler, idx, run.started_at, 'View simulation run details')
             + (o.domain ? domainCell(run) : '')
-            + '<td class="text-center">' + versionBadge(run.version) + '</td>'
-            + '<td class="small fw-semibold">' + esc(scenario) + '</td>'
-            + '<td class="text-center">' + simulationStatusBadge(run.status) + '</td>'
-            + '<td class="small ' + outcomeCls + '">' + esc(outcome) + '</td>'
-            + '<td class="text-end small">' + esc(fmtDuration(run.duration_s)) + '</td>'
-            + detailsCell(
-                o.handler || 'showSettingsSimulationRunDetails', idx,
-                'View simulation run details'
-            );
+            + '<td>' + versionText(run.version) + '</td>'
+            + '<td class="fw-semibold">' + esc(scenario) + '</td>'
+            + '<td>' + runStatus(run.status) + '</td>'
+            + '<td class="ob-run-outcome ' + outcomeCls + '" title="' + esc(outcome) + '">' + esc(outcome) + '</td>'
+            + '<td class="text-end">' + esc(fmtDuration(run.duration_s)) + '</td>'
+            + detailsCell(handler, idx, 'View simulation run details');
     }
 
     // Community and Pattern runs both record completed / failed rows, so they
@@ -200,19 +236,18 @@ window.RunsRender = (function () {
         const failed = (run.status || '').toLowerCase() === 'failed';
         const dash = '<span class="text-muted">&mdash;</span>';
 
-        return '<td class="small">' + fmtTs(run.computed_at) + '</td>'
+        const handler = o.handler || 'showSettingsCommunityRunDetails';
+
+        return timeLink(handler, idx, run.computed_at, 'View community run details')
             + (o.domain ? domainCell(run) : '')
-            + '<td class="small">' + analyticsScope(run.class_filter) + '</td>'
-            + '<td class="text-center">' + versionBadge(run.version) + '</td>'
-            + '<td class="text-center">' + analyticsStatusBadge(run.status) + '</td>'
+            + '<td>' + analyticsScope(run.class_filter) + '</td>'
+            + '<td>' + versionText(run.version) + '</td>'
+            + '<td>' + runStatus(run.status) + '</td>'
             + '<td class="text-end">' + (failed ? dash : num(run.node_count)) + '</td>'
             + '<td class="text-end">' + (failed ? dash : num(run.cluster_count)) + '</td>'
-            + '<td class="text-center">' + (failed ? dash : yesNo(run.converged)) + '</td>'
+            + '<td>' + (failed ? dash : (run.converged ? 'Yes' : 'No')) + '</td>'
             + '<td class="text-end">' + esc(fmtMillis(run.duration_ms)) + '</td>'
-            + detailsCell(
-                o.handler || 'showSettingsCommunityRunDetails', idx,
-                'View community run details'
-            );
+            + detailsCell(handler, idx, 'View community run details');
     }
 
     // opts: { domain: bool, handler: string }
@@ -221,20 +256,19 @@ window.RunsRender = (function () {
         const failed = (run.status || '').toLowerCase() === 'failed';
         const dash = '<span class="text-muted">&mdash;</span>';
 
-        return '<td class="small">' + fmtTs(run.computed_at) + '</td>'
+        const handler = o.handler || 'showSettingsPatternRunDetails';
+
+        return timeLink(handler, idx, run.computed_at, 'View pattern run details')
             + (o.domain ? domainCell(run) : '')
-            + '<td class="small">' + patternScope(run.anchor_type) + '</td>'
-            + '<td class="text-center">' + versionBadge(run.version) + '</td>'
-            + '<td class="text-center">' + analyticsStatusBadge(run.status) + '</td>'
+            + '<td>' + patternScope(run.anchor_type) + '</td>'
+            + '<td>' + versionText(run.version) + '</td>'
+            + '<td>' + runStatus(run.status) + '</td>'
             + '<td class="text-end">' + (failed ? dash : num(run.anchor_count)) + '</td>'
             + '<td class="text-end">' + (failed ? dash : num(run.pattern_count)) + '</td>'
             + '<td class="text-end">' + (failed ? dash : num(run.hop_count)) + '</td>'
             + '<td class="text-end">' + (failed ? dash : num(run.min_support)) + '</td>'
             + '<td class="text-end">' + esc(fmtMillis(run.duration_ms)) + '</td>'
-            + detailsCell(
-                o.handler || 'showSettingsPatternRunDetails', idx,
-                'View pattern run details'
-            );
+            + detailsCell(handler, idx, 'View pattern run details');
     }
 
     // Link to the Databricks job run, when the task recorded one.
@@ -487,6 +521,7 @@ window.RunsRender = (function () {
         localName: localName,
         analyticsScope: analyticsScope,
         versionBadge: versionBadge,
+        runStatus: runStatus,
         buildRunCells: buildRunCells,
         analyticsRunCells: analyticsRunCells,
         communityRunCells: communityRunCells,

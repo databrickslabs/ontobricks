@@ -92,11 +92,10 @@ def test_is_context_return_page_flag_is_computed_once_at_function_top():
     assert "const isContextReturnPage = page === 'settings' || page === 'home';" in body
 
 
-def test_settings_return_link_sits_right_of_sidebar_column_on_desktop():
+def test_settings_return_link_aligned_on_right_before_activity():
     css = _read(MAIN_CSS)
     html = _read(BASE_HTML)
     rule = _rule(css, ".ob-subnav-settings-return-link")
-    sidebar_css = _read(SIDEBAR_LAYOUT_CSS)
 
     assert 'id="settingsDomainReturnLink"' in html
     assert 'class="ob-subnav-settings-return-link ob-settings-domain-return-link"' in html
@@ -109,18 +108,11 @@ def test_settings_return_link_sits_right_of_sidebar_column_on_desktop():
     assert "text-align: left" in rule
     assert "background: transparent" in rule
     assert "border: 0" in rule
-    # Anchored to the content column (right of the sidebar), only where a
-    # sidebar exists; the width variable follows the collapse state.
-    anchored = re.search(
-        r"html:has\(\.sidebar-layout\)\s+#settingsDomainReturnNav\s*\{([^}]*)\}",
-        css,
-    )
-    assert anchored, "Return link must anchor to the sidebar column on desktop"
-    assert "position: absolute" in anchored.group(1)
-    assert "left: calc(var(--ob-sidebar-width, 200px) + 0.5rem)" in anchored.group(1)
-    assert "--ob-sidebar-width: 200px" in sidebar_css
-    assert "html.ob-sidebar-collapsed:has(.sidebar-layout)" in sidebar_css
-    assert "--ob-sidebar-width: 48px" in sidebar_css
+    # Aligned on the right, pushed by flex-spacer, right before the activity center
+    return_pos = html.index('id="settingsDomainReturnNav"')
+    activity_pos = html.index('id="activityCenterToggle"')
+    spacer_pos = html.index('class="ob-subnav-flex-spacer"')
+    assert spacer_pos < return_pos < activity_pos
 
 
 def test_settings_return_link_resets_fixed_width_on_mobile():

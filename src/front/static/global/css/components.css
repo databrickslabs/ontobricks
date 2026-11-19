@@ -1130,11 +1130,12 @@
     display: flex;
     flex-wrap: nowrap;
     min-width: 0;
+    width: 100%;
     background: transparent;
     border: 0;
-    border-bottom: none;
+    border-bottom: 1px solid var(--db-border);
     border-radius: 0;
-    margin-right: 12px;
+    margin-right: 0;
     gap: 1.5rem;
     padding: 0;
     overflow-x: auto;
@@ -1153,8 +1154,10 @@
     margin-right: 0;
 }
 
-/* Databricks style: tabs and their enclosing workspace have no global borders
-   or card frames inside the page panel. */
+/* Databricks style: enclosing workspace cards inside the page panel have no
+   borders or card frames under the section header. */
+.sidebar-section > .content-section > .card,
+.sidebar-section > .content-section > form.card,
 .sidebar-section > .content-section > .card:has(.ob-tabs-wrap),
 .sidebar-section > .content-section > .card:has(.nav-tabs.ob-tabs),
 .sidebar-section > .content-section > form.card.ob-tabs-wrap,
@@ -1182,6 +1185,7 @@
     line-height: 1.25rem;
     padding: 0.5rem 0;
     margin: 0;
+    margin-bottom: -1px;
     transition: color 0.15s ease, border-color 0.15s ease;
     white-space: nowrap;
 }
@@ -1324,4 +1328,128 @@
         transition: none;
         opacity: 0.55;
     }
+}
+
+/* ==========================================================================
+   Run lists — Databricks Jobs → Runs style
+   Shared by Graph → Build → Runs, Intelligence → Analytics → Runs and
+   Settings → Automation → Runs (rows rendered by global/js/runs-render.js).
+   Flat list: transparent header, hairline rows, start-time link first,
+   icon + word status, ghost details control.
+   ========================================================================== */
+.ob-runs-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.ob-runs-count {
+    font-size: 0.8125rem;
+    color: var(--db-text-secondary);
+}
+
+.ob-runs-table {
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: var(--db-hover);
+    --bs-table-border-color: var(--db-border-light);
+    margin-bottom: 0;
+    font-size: 0.8125rem;
+    background-color: transparent;
+}
+
+.ob-runs-table > thead > tr > th {
+    background: transparent;
+    color: var(--db-text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--db-border);
+}
+
+.ob-runs-table > tbody > tr > td {
+    padding: 0.55rem 0.75rem;
+    color: var(--db-text);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--db-border-light);
+}
+
+.ob-runs-table > tbody > tr:last-child > td {
+    border-bottom: 0;
+}
+
+.ob-run-link {
+    color: var(--db-link);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.ob-run-link:hover,
+.ob-run-link:focus {
+    color: var(--db-link-hover);
+    text-decoration: underline;
+}
+
+.ob-run-link:focus-visible,
+.ob-run-details-btn:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-run-version {
+    color: var(--db-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.ob-run-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--db-text);
+}
+
+.ob-run-status > .bi {
+    font-size: 0.875rem;
+    line-height: 1;
+    color: var(--db-text-muted);
+}
+
+.ob-run-status.is-success > .bi {
+    color: var(--db-status-success);
+}
+
+.ob-run-status.is-failed > .bi {
+    color: var(--db-status-danger);
+}
+
+.ob-run-status.is-running > .bi {
+    color: var(--db-status-info);
+}
+
+.ob-run-status.is-pending > .bi,
+.ob-run-status.is-canceled > .bi {
+    color: var(--db-text-muted);
+}
+
+.ob-run-outcome {
+    max-width: 18rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ob-run-details-btn {
+    background: transparent;
+    border: 0;
+    color: var(--db-text-secondary);
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--db-radius-control);
+    line-height: 1;
+}
+
+.ob-run-details-btn:hover {
+    background: var(--db-hover);
+    color: var(--db-text);
 }

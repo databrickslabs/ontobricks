@@ -550,7 +550,8 @@ Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
 2. **Brand** (`#brandLogoImg` + `#brandTitleText` + optional app version):
    links to `menu_config.brand.route`.
 3. **Settings/Home return** (`#settingsDomainReturnNav`, mutually exclusive
-   with domain chrome): shown on Settings/Home when a domain is loaded.
+   with domain chrome): aligned on the right, just before Activity, shown on
+   Settings/Home when a domain is loaded.
 4. **`.ob-subnav-flex-spacer`** (`flex: 1`) — pushes the right group to the edge.
 5. **Domain crumb** (`#domainContextTrigger`, `.ob-subnav-crumb`, domain chrome):
    domain name, optional status badge, version badge (`#domainContextVersion`),
@@ -566,7 +567,9 @@ Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
    `initAppSwitcherActiveState()`. Popover min-width `22rem`; menu/items use
    rounded boxes (`0.5rem` / `0.375rem`). Workspace Home tiles follow the
    Databricks MCP card pattern in `_workspace_home.html`.
-8. **Activity** (`#activityCenterToggle`) then **User** (`#userMenuDropdown`).
+8. **Settings/Home return link** (`#settingsDomainReturnNav`): when active on
+   Settings/Home, aligned on the right immediately preceding Activity.
+9. **Activity** (`#activityCenterToggle`) then **User** (`#userMenuDropdown`).
 
 - The old segmented workspace dropdown rail and the separate L1 top navbar are
   **removed**. Do not restore them. Per-section navigation stays in each page's
@@ -594,13 +597,9 @@ Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
   `static/global/css/main.css`, behavior in `static/global/js/navbar.js`, menus
   from `menu_config.json`. Never add per-page chrome CSS or JS.
 - Stable IDs: `#settingsDomainReturnNav`, `#settingsDomainReturnLink`,
-  `#obAppSwitcher`. On desktop, when the page has a sidebar, the settings
-  return control is absolutely positioned at `left: calc(var(--ob-sidebar-width)
-  + 0.5rem)` so it starts right of the sidebar column, aligned with the content
-  panel. `--ob-sidebar-width` is 200px, or 48px when collapsed (set in
-  `sidebar-layout.css` via `html:has(.sidebar-layout)`). The label is never
-  truncated (natural width, `white-space: nowrap`). Home has no sidebar and
-  keeps the return link inline after the brand.
+  `#obAppSwitcher`. The settings return control sits on the right side of the chrome
+  bar immediately preceding Activity Center (`#activityCenterToggle`).
+  The label is never truncated (natural width, `white-space: nowrap`).
 - Mobile contract (below `768px`): keep app switcher, Save, and Close as titled
   icons by hiding `.ob-subnav-label`. Hide the flex spacer,
   `.ob-subnav-context-copy`, and the save keycap. Context collapses to its caret.
@@ -846,23 +845,25 @@ fall back to Bootstrap's legacy 4px next to their full-size siblings.
 ### Tabs (`.ob-tabs`) — transparent underline rail
 
 There is **one** tab-navigation treatment across the application. It lives in
-`global/css/components.css` and follows the Databricks product tabs: a
-transparent, square rail with no global borders, left-aligned 13px labels
-spaced `1.5rem` apart (`gap`), and links with **no horizontal padding** so the
-underline is exactly as wide as the label. Inactive labels use
+`global/css/components.css` and follows the Databricks product tabs (such as
+Computes / Serverless): a transparent, square rail with a continuous 1px
+baseline header line (`border-bottom: 1px solid var(--db-border)`), left-aligned
+13px labels spaced `1.5rem` apart (`gap`), and links with **no horizontal padding**
+so the active underline is exactly as wide as the label. Inactive labels use
 `--db-text-secondary` at weight 500. The active item keeps a transparent
 background, uses `--db-text` at weight 600, and draws a **3px** `--db-primary`
-underline. The rail has no outer fill, card outline, shadow, radius, or global
-baseline border — only the active tab has an underline.
+underline sitting on top of the baseline border (`margin-bottom: -1px`). The
+rail has no outer fill, card outline, shadow, or radius.
 
 Hover only recolours the label to `--db-primary` (follows the Settings
 branding colour); there is **no hover fill**. Keyboard focus draws a 2px
 `--db-primary` outline offset by 2px.
 
-Inside the page panel, card-integrated page tabs (`.card:has(.ob-tabs-wrap)`,
-`.card.ob-tabs-wrap`) have no border, shadow or card background, allowing the
-tabs and their content to sit directly on the panel surface flush with the
-section header.
+Inside the page panel, enclosing workspace cards (`.sidebar-section > .content-section > .card`,
+`form.card`, `.card:has(.ob-tabs-wrap)`, `.card.ob-tabs-wrap`) have no border,
+shadow or card background, so there is never an enclosing box/border under the
+section title/sub-title; tabs and page content sit directly on the panel surface
+flush with the section header.
 
 Every tab navigation must carry `nav nav-tabs ob-tabs`. Use
 `ob-tabs--compact` only for constrained right-hand panels. Do not introduce
@@ -1039,6 +1040,32 @@ surfaces:
 - ❌ Adding tab styles to `main.css`'s `.nav-tabs` block —
   that's the legacy fallback. New work goes through
   `.ob-tabs` in `components.css`.
+
+### Run Lists (`.ob-runs-table`) — Databricks Jobs → Runs style
+
+Graph → Build → Runs, Intelligence → Analytics → Runs and Settings →
+Automation → Runs share one flat list modelled on the Databricks Jobs → Runs
+page. Rows come only from `global/js/runs-render.js` (`RunsRender.*RunCells`);
+styling lives only in `components.css`.
+
+- Toolbar (`.ob-runs-toolbar`): run count (`.ob-runs-count`, e.g. `12 runs`)
+  on the left, Refresh on the right. Settings keeps its section-header Refresh
+  and Context filter.
+- Table: `table table-hover align-middle ob-runs-table`, plain `<thead>` (no
+  `table-light`, no inline `font-size` or column widths). Header 12px
+  semibold `--db-text-secondary` on a transparent row with a 1px
+  `--db-border` underline; cells 13px with `--db-border-light` hairlines;
+  hover `--db-hover`.
+- Columns use sentence case and **Start time** is always first, rendered as a
+  `--db-link` link (`.ob-run-link`) that opens the run details. Build runs
+  also show **Run ID** and **Duration**. The last column is a ghost
+  `.ob-run-details-btn` (visually hidden "Details" header).
+- Status is icon + word (`RunsRender.runStatus` → `.ob-run-status.is-*`):
+  Succeeded (success), Failed (danger), Running (info), Canceled / Pending
+  (muted). Version is plain `vN` text (`.ob-run-version`). Filled badges
+  (`*StatusBadge`, `versionBadge`) stay for the run-details modals only.
+- ❌ Filled status pills, grey header bands, or outline-primary eye buttons in
+  run-list rows.
 
 ### Split-Panel Canvas Layout (canvas + resizable right panel)
 

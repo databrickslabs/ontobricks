@@ -314,12 +314,16 @@ html.ob-sidebar-collapsed .sidebar-nav .nav-link .badge,
     overflow-x: hidden;
 }
 
-.sidebar-section > .content-section > .card {
+.sidebar-section > .content-section > .card,
+.sidebar-section > .content-section > form.card {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+    border: none;
+    background: transparent;
+    box-shadow: none;
 }
 
 .sidebar-section > .content-section > .card > .card-body {

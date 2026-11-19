@@ -293,7 +293,7 @@ def test_components_css_ob_tabs_strip_is_a_transparent_scrollable_rail():
     assert _any_block_has_declaration(
         strip_blocks,
         r"border-bottom",
-        r"none",
+        r"1px\s+solid\s+var\(--db-border\)",
     )
 
 
