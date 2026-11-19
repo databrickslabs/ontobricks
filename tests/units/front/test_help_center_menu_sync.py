@@ -65,7 +65,9 @@ def test_knowledge_graph_workflow_uses_current_item_labels():
     assert "<strong>Explorer</strong>" in hw4_body
     assert "<strong>Query</strong>" in hw4_body
     # Every real digitaltwin item must be mentioned so the guide can't silently drift again.
-    for label in all_items.values():
+    for item_id, label in all_items.items():
+        if item_id == "home":
+            continue
         assert label in hw4_body, f"Knowledge Graph workflow doc is missing '{label}'"
 
 
@@ -216,6 +218,7 @@ def test_simulation_workflow_follows_menu_order():
         item["label"]
         for group in _menus()["intelligence"]["groups"]
         for item in group["items"]
+        if item["id"] != "home"
     ]
     hw6_start = page.index('id="hw6"')
     hw6_end = page.index("</div>\n                                </div>", hw6_start)

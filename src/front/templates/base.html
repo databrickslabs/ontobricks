@@ -317,7 +317,7 @@
                         <div class="ob-app-switcher-list" role="none">
                             {% if domain_m.v %}
                             <a class="ob-app-switcher-item"
-                               href="{{ domain_m.v.route }}"
+                               href="{{ domain_m.v.route }}?section=home"
                                data-subnav-route="{{ domain_m.v.route }}"
                                role="menuitem"
                                title="{{ domain_m.v.label }}">
@@ -333,7 +333,7 @@
                             {% endif %}
                             {% if ontology_m.v %}
                             <a class="ob-app-switcher-item"
-                               href="{{ ontology_m.v.route }}"
+                               href="{{ ontology_m.v.route }}?section=home"
                                data-subnav-route="{{ ontology_m.v.route }}"
                                role="menuitem"
                                title="{{ ontology_m.v.label }}">
@@ -349,7 +349,7 @@
                             {% endif %}
                             {% if kg_m.v %}
                             <a class="ob-app-switcher-item nav-requires-graph"
-                               href="{{ kg_m.v.route }}"
+                               href="{{ kg_m.v.route }}?section=home"
                                data-subnav-route="{{ kg_m.v.route }}"
                                role="menuitem"
                                title="{{ kg_m.v.label }}">
@@ -365,7 +365,7 @@
                             {% endif %}
                             {% if intel_m.v %}
                             <a class="ob-app-switcher-item nav-requires-graph"
-                               href="{{ intel_m.v.route }}"
+                               href="{{ intel_m.v.route }}?section=home"
                                data-subnav-route="{{ intel_m.v.route }}"
                                role="menuitem"
                                title="{{ intel_m.v.label }}">

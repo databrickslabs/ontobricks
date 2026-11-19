@@ -90,6 +90,15 @@ const SidebarNav = {
                 }
             });
         });
+
+        document.querySelectorAll('.ob-workspace-home-tile[data-section]').forEach((tile) => {
+            tile.addEventListener('click', function (e) {
+                if (e.target.closest('[data-help-jump]')) return;
+                e.preventDefault();
+                const section = this.getAttribute('data-section');
+                if (section) SidebarNav.switchTo(section);
+            });
+        });
     },
 
     /**

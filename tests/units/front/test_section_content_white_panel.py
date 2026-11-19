@@ -18,6 +18,7 @@ TEMPLATES = REPO_ROOT / "src/front/templates"
 # Previously bare-on-canvas sections that must now wrap body content in a card
 # (title/header stays outside on the warm canvas).
 WHITE_PANEL_PARTIALS = (
+    "partials/layout/_workspace_home.html",
     "partials/domain/_domain_validation.html",
     "partials/domain/_domain_review.html",
     "partials/domain/_domain_mytasks.html",

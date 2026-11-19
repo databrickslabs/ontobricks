@@ -46,6 +46,11 @@
         
         <!-- Right Content Area -->
         <div class="sidebar-content">
+            <div id="home-section" class="sidebar-section active">
+                {% set workspace_home_menu = get_menu('digitaltwin') %}
+                {% include "partials/layout/_workspace_home.html" %}
+            </div>
+
             <!-- Management → Mapping (Informations | Visual | List tabs; List embeds former Manual) -->
             <div id="design-section" class="sidebar-section">
                 {% include "partials/mapping/_mapping_design.html" %}
@@ -76,7 +81,7 @@
             </div>
 
             <!-- Graph Explorer Section -->
-            <div id="sigmagraph-section" class="sidebar-section active">
+            <div id="sigmagraph-section" class="sidebar-section">
                 {% include "partials/dtwin/_query_sigmagraph.html" %}
             </div>
             

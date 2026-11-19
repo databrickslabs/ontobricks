@@ -27,8 +27,13 @@
         
         <!-- Right Content Area -->
         <div class="sidebar-content">
+            <div id="home-section" class="sidebar-section active">
+                {% set workspace_home_menu = get_menu('domain') %}
+                {% include "partials/layout/_workspace_home.html" %}
+            </div>
+
             <!-- Configuration section (id remains information) -->
-            <div id="information-section" class="sidebar-section active">
+            <div id="information-section" class="sidebar-section">
                 {% include "partials/domain/_domain_information.html" %}
             </div>
             

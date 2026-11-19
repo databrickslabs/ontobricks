@@ -20,6 +20,11 @@
         </div>
 
         <div class="sidebar-content">
+            <div id="home-section" class="sidebar-section active">
+                {% set workspace_home_menu = get_menu('intelligence') %}
+                {% include "partials/layout/_workspace_home.html" %}
+            </div>
+
             <div id="analytics-section" class="sidebar-section">
                 {% include "partials/intelligence/_intel_analytics.html" %}
             </div>
@@ -44,7 +49,7 @@
             {% include "partials/intelligence/_intel_patterns_detect_modal.html" %}
             {% include "partials/intelligence/_intel_patterns_members_modal.html" %}
 
-            <div id="scenarios-section" class="sidebar-section active">
+            <div id="scenarios-section" class="sidebar-section">
                 <div id="simScenariosList" class="content-section">
                     {% include "partials/intelligence/_sim_scenarios.html" %}
                 </div>

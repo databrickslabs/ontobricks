@@ -567,11 +567,15 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   4. **App switcher** (`#obAppSwitcher`, `.ob-subnav-app-switcher`): Databricks-style
      9-dot `nav-icon` left of Close. Opens `.ob-app-switcher-menu` as a vertical
      list (one option per line: icon + title + subtitle + check) for Context /
-     Ontology / Graph / Intelligence. Subtitles come from `description` on each
-     menu in `menu_config.json`. Graph + Intelligence items carry
+     Ontology / Graph / Intelligence. Each item always opens that workspace's
+     **Home** section (`?section=home`). Subtitles come from `description` on
+     each menu in `menu_config.json`. Graph + Intelligence items carry
      `nav-requires-graph`. Current workspace gets `.is-current` via
      `initAppSwitcherActiveState()` in `navbar.js`. The popover is at least
-     `22rem` wide so the two-line copy can breathe.
+     `22rem` wide so the two-line copy can breathe. Workspace Home pages reuse
+     `partials/layout/_workspace_home.html`: feature tiles are **grouped by the
+     same sidebar menu groups** (Home group skipped). Each menu item carries
+     `description` / `help_jump` / `help_doc` for the tile copy.
   5. **Close Domain button** (`.ob-subnav-close-btn`): ghost text action.
   6. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`): see the
      action-styles bullet below.

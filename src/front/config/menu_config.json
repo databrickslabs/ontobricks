@@ -3,7 +3,6 @@
         "label": "OntoBricks",
         "route": "/"
     },
-
     "menus": [
         {
             "id": "registry",
@@ -16,7 +15,6 @@
             "navbar_actions": [],
             "groups": []
         },
-
         {
             "id": "domain",
             "label": "Context",
@@ -47,6 +45,20 @@
             ],
             "groups": [
                 {
+                    "id": "domain-home",
+                    "title": "",
+                    "icon": "bi-house",
+                    "items": [
+                        {
+                            "id": "home",
+                            "label": "Home",
+                            "icon": "bi-house",
+                            "default": true,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
                     "id": "domain-main",
                     "title": "",
                     "icon": "bi-sliders",
@@ -56,14 +68,20 @@
                             "label": "General",
                             "icon": "bi-info-circle",
                             "default": false,
-                            "requires": "domain_saved"
+                            "requires": "domain_saved",
+                            "description": "Cockpit for this context \u2014 status, next actions and a snapshot of the workspace.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "information",
                             "label": "Configuration",
                             "icon": "bi-sliders",
-                            "default": true,
-                            "requires": null
+                            "default": false,
+                            "requires": null,
+                            "description": "Name, backend, LLM endpoint and the settings that define this workspace.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 },
@@ -77,14 +95,20 @@
                             "label": "Publication",
                             "icon": "bi-patch-check",
                             "default": false,
-                            "requires": "domain_saved"
+                            "requires": "domain_saved",
+                            "description": "Review, approve and publish a version to the registry.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "versions",
                             "label": "Versions",
                             "icon": "bi-123",
                             "default": false,
-                            "requires": "domain_saved"
+                            "requires": "domain_saved",
+                            "description": "Create, switch and compare governed versions of this context.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 },
@@ -98,21 +122,30 @@
                             "label": "Unity Catalog",
                             "icon": "ob-brand-icon ob-icon-unity-catalog",
                             "default": false,
-                            "requires": "domain_saved"
+                            "requires": "domain_saved",
+                            "description": "Browse the tables and volumes bound to this context.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "pages",
                             "label": "Genie Pages",
                             "icon": "ob-brand-icon ob-icon-genie",
                             "default": false,
-                            "requires": "domain_saved"
+                            "requires": "domain_saved",
+                            "description": "Publish Genie knowledge pages for this context.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "documents",
                             "label": "Documents",
                             "icon": "bi-file-earmark-text",
                             "default": false,
-                            "requires": "domain_saved"
+                            "requires": "domain_saved",
+                            "description": "Attach supporting files that travel with the context.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 },
@@ -126,27 +159,35 @@
                             "label": "My Tasks",
                             "icon": "bi-inbox",
                             "default": false,
-                            "requires": "domain_saved"
+                            "requires": "domain_saved",
+                            "description": "Your review and collaboration inbox for this context.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "discussions",
                             "label": "Discussions",
                             "icon": "bi-chat-left-text",
                             "default": false,
-                            "requires": "domain_saved"
+                            "requires": "domain_saved",
+                            "description": "Threaded comments and feedback on the current version.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "audit",
                             "label": "Audit trail",
                             "icon": "bi-journal-text",
                             "default": false,
-                            "requires": "domain_saved"
+                            "requires": "domain_saved",
+                            "description": "Review and build activity for this context.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 }
             ]
         },
-
         {
             "id": "ontology",
             "label": "Ontology",
@@ -159,6 +200,20 @@
             "navbar_actions": [],
             "groups": [
                 {
+                    "id": "ontology-home",
+                    "title": "",
+                    "icon": "bi-house",
+                    "items": [
+                        {
+                            "id": "home",
+                            "label": "Home",
+                            "icon": "bi-house",
+                            "default": true,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
                     "id": "ontology-editor",
                     "title": "Design",
                     "icon": "bi-pencil-square",
@@ -167,8 +222,11 @@
                             "id": "information",
                             "label": "General",
                             "icon": "bi-info-circle",
-                            "default": true,
-                            "requires": null
+                            "default": false,
+                            "requires": null,
+                            "description": "Namespace, labels and high-level ontology settings.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "import",
@@ -176,7 +234,10 @@
                             "icon": "bi-box-arrow-in-down",
                             "default": false,
                             "requires": null,
-                            "hidden_in_view_mode": true
+                            "hidden_in_view_mode": true,
+                            "description": "Bring in OWL, RDFS or industry ontologies.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "wizard",
@@ -184,35 +245,50 @@
                             "icon": "bi-magic",
                             "default": false,
                             "requires": null,
-                            "hidden_in_view_mode": true
+                            "hidden_in_view_mode": true,
+                            "description": "Let the LLM propose classes and properties from your sources.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "map",
                             "label": "Studio",
                             "icon": "bi-pencil",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Design the ontology visually \u2014 classes, properties and layout.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "entities",
                             "label": "Entities",
                             "icon": "bi-list-nested",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Create and edit entity types and their attributes.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "relationships",
                             "label": "Relationships",
                             "icon": "bi-arrow-left-right",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Define how entities connect to each other.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "designchecks",
                             "label": "Sanity Checks",
                             "icon": "bi-clipboard2-check",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Lint the ontology design for common issues.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 },
@@ -226,27 +302,35 @@
                             "label": "Data Quality",
                             "icon": "bi-shield-check",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Author SHACL shapes that the graph will be checked against.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "if-then",
                             "label": "Business Rules",
                             "icon": "bi-lightning",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Author IF/THEN and SPARQL business rules.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "axioms",
                             "label": "Expr. & Axioms",
                             "icon": "bi-diagram-2",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Expressions, OWL axioms and advanced constructs.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 }
             ]
         },
-
         {
             "id": "settings",
             "label": "Settings",
@@ -406,7 +490,6 @@
                 }
             ]
         },
-
         {
             "id": "digitaltwin",
             "label": "Graph",
@@ -419,6 +502,20 @@
             "navbar_actions": [],
             "groups": [
                 {
+                    "id": "digitaltwin-home",
+                    "title": "",
+                    "icon": "bi-house",
+                    "items": [
+                        {
+                            "id": "home",
+                            "label": "Home",
+                            "icon": "bi-house",
+                            "default": true,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
                     "id": "digitaltwin-management",
                     "title": "Management",
                     "icon": "bi-gear",
@@ -428,21 +525,30 @@
                             "label": "Build",
                             "icon": "bi-hammer",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Materialize the graph from the current mapping.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "design",
                             "label": "Mapping",
                             "icon": "bi-pencil",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Map ontology entities onto Unity Catalog tables.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "insight",
                             "label": "Overview",
                             "icon": "bi-bar-chart-line",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Stats and health overview of the built knowledge graph.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 },
@@ -455,22 +561,31 @@
                             "id": "sigmagraph",
                             "label": "Explorer",
                             "icon": "bi-share",
-                            "default": true,
-                            "requires": null
+                            "default": false,
+                            "requires": null,
+                            "description": "Walk the knowledge graph visually and inspect entities.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "graphql",
                             "label": "Query",
                             "icon": "bi-braces-asterisk",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Run GraphQL and SPARQL against the live graph.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "chat",
                             "label": "Chat",
                             "icon": "bi-chat-dots",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Ask questions in natural language over the graph.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 },
@@ -484,20 +599,25 @@
                             "label": "Data Quality",
                             "icon": "bi-shield-check",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Evaluate SHACL shapes against graph instances.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         },
                         {
                             "id": "reasoning",
                             "label": "Business rules",
                             "icon": "bi-lightning",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Run inference and apply business rules on the graph.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 }
             ]
         },
-
         {
             "id": "intelligence",
             "label": "Intelligence",
@@ -510,6 +630,20 @@
             "navbar_actions": [],
             "groups": [
                 {
+                    "id": "intelligence-home",
+                    "title": "",
+                    "icon": "bi-house",
+                    "items": [
+                        {
+                            "id": "home",
+                            "label": "Home",
+                            "icon": "bi-house",
+                            "default": true,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
                     "id": "intelligence-configuration",
                     "title": "Configuration",
                     "icon": "bi-sliders",
@@ -519,7 +653,10 @@
                             "label": "Cohorts",
                             "icon": "bi-people-fill",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Save reusable slices of the graph for simulation and analysis.",
+                            "help_jump": "docs",
+                            "help_doc": "intelligence"
                         }
                     ]
                 },
@@ -533,21 +670,30 @@
                             "label": "Analytics",
                             "icon": "bi-graph-up-arrow",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Run graph analytics and inspect historical runs.",
+                            "help_jump": "docs",
+                            "help_doc": "intelligence"
                         },
                         {
                             "id": "communities",
                             "label": "Communities",
                             "icon": "bi-diagram-3",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Detect clusters of tightly connected entities.",
+                            "help_jump": "docs",
+                            "help_doc": "intelligence"
                         },
                         {
                             "id": "patterns",
                             "label": "Patterns",
                             "icon": "bi-grid-3x3-gap",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Discover recurring structures in the knowledge graph.",
+                            "help_jump": "docs",
+                            "help_doc": "intelligence"
                         }
                     ]
                 },
@@ -560,22 +706,27 @@
                             "id": "scenarios",
                             "label": "Scenarios",
                             "icon": "bi-collection",
-                            "default": true,
-                            "requires": null
+                            "default": false,
+                            "requires": null,
+                            "description": "Define what-if simulations on a slice of the graph.",
+                            "help_jump": "docs",
+                            "help_doc": "intelligence"
                         },
                         {
                             "id": "compare",
                             "label": "Compare",
                             "icon": "bi-columns-gap",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "description": "Compare simulation runs and inspect the delta.",
+                            "help_jump": "docs",
+                            "help_doc": "intelligence"
                         }
                     ]
                 }
             ]
         }
     ],
-
     "utility_links": [
         {
             "id": "warehouse",
@@ -583,7 +734,7 @@
             "icon": "bi-server",
             "route": "/settings",
             "element_id": "warehouseStatusLink",
-            "tooltip": "SQL Warehouse – click to configure"
+            "tooltip": "SQL Warehouse \u2013 click to configure"
         },
         {
             "id": "tasks",

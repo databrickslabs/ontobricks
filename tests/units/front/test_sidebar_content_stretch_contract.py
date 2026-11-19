@@ -25,6 +25,7 @@ TEAMS_CSS = REPO_ROOT / "src/front/static/registry/css/registry-teams.css"
 
 SECTION_INVENTORY = {
     "domain.html": {
+        "home",
         "information",
         "metadata",
         "validation",
@@ -38,6 +39,7 @@ SECTION_INVENTORY = {
         "pages",
     },
     "ontology.html": {
+        "home",
         "wizard",
         "information",
         "import",
@@ -50,6 +52,7 @@ SECTION_INVENTORY = {
         "axioms",
     },
     "dtwin.html": {
+        "home",
         "design",
         "sync",
         "insight",
@@ -60,6 +63,7 @@ SECTION_INVENTORY = {
         "chat",
     },
     "intelligence.html": {
+        "home",
         "analytics",
         "communities",
         "scenarios",

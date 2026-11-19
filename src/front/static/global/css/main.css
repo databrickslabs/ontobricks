@@ -1489,3 +1489,175 @@ body:is(.read-only-version, .role-viewer) #domainVersionSelect {
     box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), 0.1);
 }
 
+/* Workspace home (Context / Ontology / Graph / Intelligence landing) */
+.ob-workspace-home-group + .ob-workspace-home-group {
+    margin-top: 1.25rem;
+}
+
+.ob-workspace-home-group-title {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0 0 0.65rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--db-text-muted);
+}
+
+.ob-workspace-home-group-title > i {
+    font-size: 0.95rem;
+    color: var(--db-primary);
+}
+
+.ob-workspace-home-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.ob-workspace-home-tile {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    min-height: 5.5rem;
+    padding: 0.85rem 0.9rem;
+    text-decoration: none;
+    color: var(--db-text);
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    transition: border-color var(--db-transition), box-shadow var(--db-transition),
+        background var(--db-transition);
+}
+
+.ob-workspace-home-tile:hover {
+    border-color: var(--db-primary);
+    box-shadow: var(--db-shadow-sm);
+    color: var(--db-text);
+}
+
+.ob-workspace-home-tile:focus-visible {
+    outline: none;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-workspace-home-tile-icon {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    color: var(--db-primary);
+    font-size: 1.15rem;
+}
+
+.ob-workspace-home-tile-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    flex: 1;
+    padding-right: 1.5rem;
+}
+
+.ob-workspace-home-tile-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.ob-workspace-home-tile-desc {
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: var(--db-text-muted);
+}
+
+.ob-workspace-home-tile-help {
+    position: absolute;
+    top: 0.45rem;
+    right: 1.7rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--db-text-muted);
+    border-radius: var(--db-radius-control);
+}
+
+.ob-workspace-home-tile-help:hover {
+    color: var(--db-primary);
+    background: var(--db-primary-light);
+}
+
+.ob-workspace-home-tile-arrow {
+    position: absolute;
+    right: 0.55rem;
+    top: 0.55rem;
+    color: var(--db-text-muted);
+    font-size: 0.85rem;
+}
+
+/* Card body fills the card so the resources row sticks to the page bottom. */
+.ob-workspace-home > .card > .card-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.ob-workspace-home-resources {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: auto;
+    padding-top: 1.25rem;
+}
+
+.ob-workspace-home-resource {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.7rem 0.8rem;
+    text-align: left;
+    color: var(--db-text);
+    background: var(--db-surface);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+}
+
+.ob-workspace-home-resource:hover {
+    border-color: var(--db-primary);
+}
+
+.ob-workspace-home-resource > i {
+    color: var(--db-primary);
+    font-size: 1.05rem;
+    margin-top: 0.1rem;
+}
+
+.ob-workspace-home-resource-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.ob-workspace-home-resource-desc {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--db-text-muted);
+}
+
+@media (max-width: 991.98px) {
+    .ob-workspace-home-tiles,
+    .ob-workspace-home-resources {
+        grid-template-columns: 1fr;
+    }
+}
+
+

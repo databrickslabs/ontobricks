@@ -158,9 +158,12 @@ mutually exclusive behavior:
 - On **Settings** with a loaded domain, it shows only **Back to domain**
   (`#settingsDomainReturnLink`).
 - On **Settings** with no loaded domain, the full level-two bar remains hidden.
-- On non-Settings pages with a loaded domain, it shows the normal domain
-  context + four-workspace rail.
+- On non-Settings pages with a loaded domain, it shows the domain context,
+  the **app switcher** (Context, Ontology, Graph, Intelligence), and Close / Save.
 - On non-Settings pages with no loaded domain, it remains hidden.
+- The app switcher always opens that workspace's **Home** page
+  (`?section=home`), which groups features by the same sidebar menu sections
+  (short explanations and Help Center links on each tile).
 - Hitting a workspace URL (`/domain/`, `/ontology/`, `/dtwin/`) with no
   domain in session immediately redirects to Home. Legacy `/mapping/` URLs
   redirect into Graph → Management → Mapping when a domain is loaded, or Home when not.
@@ -2325,8 +2328,9 @@ import. The repository must already be configured and claimed in Settings.
 
 - **Deep-linked sections**: Sidebar section changes update the URL (`?section=<id>`), so you can bookmark or share a specific section. Browser Back/Forward navigates between previously visited sections.
 - **Domain identity target**: The contextual identity launcher (`Domain` name + version badge) lives in the L2 rail. Clicking it opens the workspace map.
-- **Workspace map launcher**: `Open workspace map` opens a five-column menu directory for Domain, Ontology, Mapping, Graph, and Intelligence actions. It launches sections/routes without forcing a jump to `/domain/`.
-- **Workspace active state**: The current workspace becomes a static highlighted segment (`aria-current="page"`); only inactive workspace targets keep dropdown menus.
+- **App switcher**: The 9-dot control left of Close opens Context, Ontology, Graph, and Intelligence. Each option always lands on that workspace's Home page.
+- **Workspace map launcher**: Clicking the context name opens a four-column menu directory for Context, Ontology, Graph, and Intelligence actions (including Home).
+- **Workspace active state**: The current workspace row in the app switcher is marked `aria-current="page"` with a check.
 - **Mobile icon state**: On narrow screens, workspace and action labels are visually hidden and controls remain as titled icons with keyboard focus support.
 
 ---
@@ -3125,7 +3129,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Registry modal from navbar**: Open **Registry → Browse** as a modal overlay from the top navbar without leaving the current domain; legacy `/registry/` URLs redirect into Home with the modal opened.
 - **Registry Browse for “Active” version**: Expand a domain in **Registry → Browse** to set which version is **Active** (API/MCP); the Domain app no longer exposes a per-version toggle on **Context → Versions** (badge only).
 - **Versions popup New Version**: The navbar Versions popup can create the next DRAFT version of the open domain; Context → Versions uses the same action. The loaded-domain badge stays visible across Settings navigation and transient navbar refresh failures.
-- **Navigation context**: The L2 row shows the domain and version (`vN ▾`), the active workspace, and the Close / Save actions; the sidebar shows the active section.
+- **Navigation context**: The L2 row shows the domain and version badge, the app switcher, and Close / Save; the sidebar starts on **Home** for each workspace.
 - **Keyboard Shortcuts**: `Cmd/Ctrl+S` to save domain, `Cmd/Ctrl+K` to focus sidebar search, `?` for a shortcut overlay.
 - **Toast Notifications**: All user feedback uses non-blocking toast notifications (no `alert()` dialogs).
 

@@ -65,21 +65,40 @@
         });
     }
 
+    function _jumpToHelp(jump) {
+        var id = jump.getAttribute('data-help-jump');
+        if (!id) return;
+        openHelp(id);
+        var docSlug = jump.getAttribute('data-help-doc');
+        if (docSlug && window.HelpDocs && typeof window.HelpDocs.activate === 'function') {
+            setTimeout(function () {
+                window.HelpDocs.activate(docSlug, jump.getAttribute('data-help-anchor'));
+            }, 40);
+        }
+    }
+
     function _initJumpLinks() {
         var body = document.querySelector('.help-modal-body');
-        if (!body) return;
-        body.addEventListener('click', function (e) {
+        if (body) {
+            body.addEventListener('click', function (e) {
+                var jump = e.target.closest('[data-help-jump]');
+                if (!jump) return;
+                e.preventDefault();
+                var id = jump.getAttribute('data-help-jump');
+                if (!id) return;
+                _activateSection(id);
+                var docSlug = jump.getAttribute('data-help-doc');
+                if (docSlug && window.HelpDocs && typeof window.HelpDocs.activate === 'function') {
+                    window.HelpDocs.activate(docSlug, jump.getAttribute('data-help-anchor'));
+                }
+            });
+        }
+        document.addEventListener('click', function (e) {
             var jump = e.target.closest('[data-help-jump]');
-            if (!jump) return;
+            if (!jump || jump.closest('.help-modal-body')) return;
             e.preventDefault();
-            var id = jump.getAttribute('data-help-jump');
-            if (!id) return;
-            _activateSection(id);
-            // Optional deep-link into a specific document slug (Documentation panel)
-            var docSlug = jump.getAttribute('data-help-doc');
-            if (docSlug && window.HelpDocs && typeof window.HelpDocs.activate === 'function') {
-                window.HelpDocs.activate(docSlug, jump.getAttribute('data-help-anchor'));
-            }
+            e.stopPropagation();
+            _jumpToHelp(jump);
         });
     }
 

@@ -1,5 +1,6 @@
 """Static contract for Knowledge Graph Query -> SPARQL."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -161,10 +162,11 @@ def test_dtwin_wires_query_shell_and_css():
 
 
 def test_menu_keeps_one_query_item():
-    menu = read(MENU)
-    assert menu.count('"id": "graphql"') == 1
-    block = menu[menu.index('"id": "graphql"') : menu.index('"id": "chat"')]
-    assert '"label": "Query"' in block
+    dtwin = next(m for m in json.loads(read(MENU))["menus"] if m["id"] == "digitaltwin")
+    items = [i for g in dtwin["groups"] for i in g["items"]]
+    graphql = [i for i in items if i["id"] == "graphql"]
+    assert len(graphql) == 1
+    assert graphql[0]["label"] == "Query"
 
 
 def test_sparql_css_uses_shared_tokens_and_responsive_stack():

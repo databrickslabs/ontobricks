@@ -39,7 +39,9 @@ def test_app_switcher_sits_left_of_close_and_lists_main_workspaces():
     assert len(re.findall(r'class="ob-app-switcher-item(?:\s[^"]*)?"', menu)) == 4
     assert menu.count("ob-app-switcher-item-check") == 4
     for ns in ("domain_m", "ontology_m", "kg_m", "intel_m"):
-        assert f"{ns}.v.route" in menu, f"Missing app item for {ns}"
+        assert f"{ns}.v.route" in menu and "?section=home" in menu, (
+            f"App switcher must land on {ns} home"
+        )
         assert f"{ns}.v.label" in menu, f"Missing app label for {ns}"
         assert f"{ns}.v.icon" in menu, f"Missing app icon for {ns}"
         assert f"{ns}.v.description" in menu, f"Missing app subtitle for {ns}"

@@ -41,8 +41,13 @@
                 {% include "partials/ontology/_ontology_wizard.html" %}
             </div>
             
-            <!-- General section (id remains information) — default view -->
-            <div id="information-section" class="sidebar-section active">
+            <div id="home-section" class="sidebar-section active">
+                {% set workspace_home_menu = get_menu('ontology') %}
+                {% include "partials/layout/_workspace_home.html" %}
+            </div>
+
+            <!-- General section (id remains information) -->
+            <div id="information-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_information.html" %}
             </div>
             

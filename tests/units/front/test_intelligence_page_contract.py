@@ -26,11 +26,13 @@ def _menu() -> dict:
 def test_intelligence_menu_groups():
     groups = _menu()["groups"]
     assert [g["id"] for g in groups] == [
+        "intelligence-home",
         "intelligence-configuration",
         "intelligence-discovery",
         "intelligence-simulation",
     ]
     assert [g["title"] for g in groups] == [
+        "",
         "Configuration",
         "Discovery",
         "Simulation",

@@ -786,3 +786,99 @@ Modified files:
 Tests:
 - `uv run --frozen pytest -q -m "not scenario"`: 10898 passed, 334 skipped,
   8 deselected, 0 failed.
+
+================================================================================
+## Workspace Home pages for Context, Ontology, Graph, and Intelligence
+================================================================================
+
+Context: The Databricks-style L2 app switcher jumped into each workspace's
+previous default section (Configuration, General, Explorer, Scenarios). Each
+function now has a Home landing similar to the OntoBricks registry home:
+feature tiles with short explanations and Help Center links. The app switcher
+always opens those homes.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Added a default `home` sidebar item and `home_tiles` on Context,
+     Ontology, Graph, and Intelligence.
+2. src/front/templates/partials/layout/_workspace_home.html
+   - Shared landing: section header, white card, feature tiles, Help resources.
+3. src/front/templates/domain.html, ontology.html, dtwin.html, intelligence.html
+   - Host `#home-section` as the default active sidebar section.
+4. src/front/templates/base.html
+   - App switcher hrefs are `{route}?section=home`.
+5. src/front/static/global/css/main.css
+   - `.ob-workspace-home-*` tile and resource grid.
+6. src/front/static/global/js/sidebar-nav.js
+   - Tile clicks call `SidebarNav.switchTo`.
+7. src/front/static/global/js/help-modal.js
+   - Page-level `data-help-jump` opens the Help Center (docs deep-link).
+8. tests/units/front/test_workspace_home_contract.py
+   - Contracts for default Home, tiles, and app-switcher landing URLs.
+9. docs/user-guide.md, .cursor/11-frontend-design.mdc
+   - Documented workspace Home and app-switcher landing.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/_workspace_home.html
+- src/front/templates/domain.html
+- src/front/templates/ontology.html
+- src/front/templates/dtwin.html
+- src/front/templates/intelligence.html
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/global/js/help-modal.js
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_section_content_white_panel.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sparql_playground_contract.py
+- docs/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10906 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Group workspace Home tiles by sidebar menu sections
+================================================================================
+
+Context: Workspace Home pages showed a flat feature-tile grid. Group tiles by
+the same sidebar menu sections (Governance, Metadata, Design, Navigation, …)
+so the landing mirrors the left nav.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Removed flat `home_tiles`; moved `description` / `help_jump` / `help_doc`
+     onto each sidebar menu item.
+2. src/front/templates/partials/layout/_workspace_home.html
+   - Renders one `.ob-workspace-home-group` per menu group (skips Home).
+3. src/front/static/global/css/main.css
+   - Group title styles; spacing only between groups and before resources
+     (no divider lines).
+   - Resources row (Starter Guide / User Guide / Workflow) pinned to the
+     bottom of the Home card (`margin-top: auto` in a flex card body).
+4. tests/units/front/test_workspace_home_contract.py
+   - Contracts assert group-driven markup and per-item descriptions.
+5. docs/user-guide.md, .cursor/11-frontend-design.mdc
+   - Documented grouped Home landings.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/_workspace_home.html
+- src/front/static/global/css/main.css
+- tests/units/front/test_workspace_home_contract.py
+- docs/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10906 passed, 334 skipped,
+  8 deselected, 0 failed.
