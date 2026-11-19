@@ -10,6 +10,7 @@ import re
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
+from back.core.errors import InfrastructureError
 from back.core.logging import get_logger
 
 from .constants import (
@@ -26,6 +27,26 @@ from .knowledge_pages import normalize_knowledge_pages
 logger = get_logger(__name__)
 
 _PAGE_ID_RE = re.compile(r"^[0-9a-fA-F-]{8,}$")
+_REMOTE_MESSAGE_MAX = 200
+_LIST_HTTP_HINTS = {
+    401: (
+        "Authentication failed: Databricks rejected the credentials used to "
+        "list Knowledge Pages (Genie Pages). Check the app's Databricks authentication."
+    ),
+    403: (
+        "Permission denied: the Databricks identity used by OntoBricks is not "
+        "allowed to list Knowledge Pages (Genie Pages) in this workspace. "
+        "Ask a workspace admin to grant access."
+    ),
+    404: (
+        "Not found: the Databricks Knowledge Pages API is not available in this "
+        "workspace. Genie Pages may not be enabled."
+    ),
+    429: (
+        "Rate limited: Databricks is throttling Knowledge Pages requests. "
+        "Retry in a moment."
+    ),
+}
 
 
 class KnowledgePageService:
@@ -73,13 +94,44 @@ class KnowledgePageService:
             )
             response.raise_for_status()
             data = response.json() or {}
-        except Exception as exc:  # noqa: BLE001
+        except requests.RequestException as exc:
             logger.warning("Knowledge Pages list failed: %s", exc)
-            raise
+            raise self._list_error(exc) from exc
 
         pages = normalize_knowledge_pages(data.get("pages") or [])
         token = data.get("next_page_token") or None
         return {"pages": pages, "next_page_token": token}
+
+    @staticmethod
+    def _list_error(exc: Exception) -> InfrastructureError:
+        """Translate a failed Knowledge Pages request into an explicit message.
+
+        The message names the cause (permissions, auth, missing API, network…)
+        because only ``message`` reaches the UI; ``detail`` is stripped outside
+        debug mode.
+        """
+        response = getattr(exc, "response", None)
+        if response is None:
+            return InfrastructureError(
+                "Could not reach Databricks to list Knowledge Pages (Genie Pages). "
+                "Check the workspace host and network connectivity.",
+                detail=str(exc),
+            )
+        status = response.status_code
+        headline = _LIST_HTTP_HINTS.get(status) or (
+            "Databricks failed to serve Knowledge Pages. Retry later."
+            if status >= 500
+            else "Databricks refused the Knowledge Pages request."
+        )
+        message = f"{headline} (HTTP {status})"
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+        remote = str(body.get("message") or "").strip() if isinstance(body, dict) else ""
+        if remote:
+            message += f" Databricks said: {remote[:_REMOTE_MESSAGE_MAX]}"
+        return InfrastructureError(message, detail=str(exc))
 
     def get_page(self, name: str) -> Dict[str, Any]:
         """Fetch a full Knowledge Page by resource name ``pages/{id}``."""

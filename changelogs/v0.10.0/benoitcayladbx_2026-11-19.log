@@ -2042,3 +2042,66 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10957 passed, 334 skipped, 8 deselected, 0 failed in 51.18s
 
+## Context → Review progressive per-section loading
+
+Context: `/domain/?section=review` blocked the whole page behind one spinner until
+`/domain/version-status` and `/review/{folder}/{version}` finished sequentially.
+Users waited on a blank card even though readiness and team can load independently.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_review.html
+   Painted a static skeleton with per-section slots and borderless spinners:
+   `#reviewBannerSlot`, `#reviewLifecycleSlot`, `#reviewReadiness`, `#reviewTeam`,
+   `#reviewTimelineSlot` (same progressive pattern as Context → General).
+2. src/front/static/domain/js/domain-review.js
+   - `paintReviewSkeleton()` resets each slot on open/refresh.
+   - Reuses `fetchOnce('/domain/version-status')` when available.
+   - Loads review detail, readiness (`/validate/detailed?parts=overview`) and
+     team in parallel via `Promise.all`; each filler owns its slot errors.
+   - Banner / lifecycle / audit trail fill when review detail arrives; KG check
+     still resolves in the background after overview.
+3. tests/units/front/test_review_progressive_load.py
+   Added contract tests for the per-section slots and parallel fill path.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/js/domain-review.js
+- src/front/templates/partials/domain/_domain_review.html
+- tests/units/front/test_review_progressive_load.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10961 passed, 334 skipped, 8 deselected, 0 failed in 50.99s
+
+================================================================================
+## Explicit error message when listing Genie Pages (Knowledge Pages) fails
+================================================================================
+
+Context: Context → Pages search showed only "List Knowledge Pages failed" when
+Databricks refused the request (e.g. missing permissions). The HTTP status and
+the Databricks reason were only in `detail`, which the global handler strips
+outside debug mode, so users could not tell the cause.
+
+Changes:
+
+1. src/back/core/databricks/KnowledgePageService.py
+   - `list_pages` catches `requests.RequestException` and raises an
+     `InfrastructureError` built by the new `_list_error` helper.
+   - `_list_error` names the cause: 401 (authentication), 403 (permission
+     denied, ask a workspace admin), 404 (API not available / Genie Pages not
+     enabled), 429 (rate limited), 5xx (Databricks unavailable); other statuses
+     get a generic refusal. Appends the HTTP status and the clipped Databricks
+     error message. Connection/timeout errors get "Could not reach Databricks".
+   - Raw request error stays in `detail` for debug mode.
+2. tests/units/core/test_knowledge_pages.py
+   - 403 names the missing permission and includes the Databricks message.
+   - Connection error gives an explicit "Could not reach Databricks" message.
+
+Modified files:
+- src/back/core/databricks/KnowledgePageService.py
+- tests/units/core/test_knowledge_pages.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10961 passed, 334 skipped, 8 deselected, 0 failed.
+- Not done: live check against a workspace where the user lacks access.
+

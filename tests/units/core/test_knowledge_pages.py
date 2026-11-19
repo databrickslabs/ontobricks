@@ -5,9 +5,11 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from back.core.databricks.DatabricksAuth import DatabricksAuth
 from back.core.databricks.KnowledgePageService import KnowledgePageService
+from back.core.errors import InfrastructureError
 from back.core.databricks.knowledge_pages import normalize_knowledge_pages
 
 
@@ -118,6 +120,34 @@ class TestKnowledgePageService:
         auth = DatabricksAuth(host="https://h.com", token="tok")
         with pytest.raises(ValueError):
             KnowledgePageService(auth).get_page("not-a-page")
+
+    @patch("requests.get")
+    def test_list_pages_403_names_missing_permission(self, mock_get, clean_databricks_env):
+        response = MagicMock(status_code=403)
+        response.json.return_value = {"message": "User does not have access"}
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError(
+            "403 Client Error: Forbidden", response=response
+        )
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+
+        with pytest.raises(InfrastructureError) as exc_info:
+            KnowledgePageService(auth).list_pages()
+
+        message = exc_info.value.message
+        assert message.startswith("Permission denied")
+        assert "(HTTP 403)" in message
+        assert "User does not have access" in message
+
+    @patch("requests.get")
+    def test_list_pages_connection_error_is_explicit(self, mock_get, clean_databricks_env):
+        mock_get.side_effect = requests.ConnectionError("no route to host")
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+
+        with pytest.raises(InfrastructureError) as exc_info:
+            KnowledgePageService(auth).list_pages()
+
+        assert exc_info.value.message.startswith("Could not reach Databricks")
+        assert "no route to host" in exc_info.value.detail
 
     @patch("requests.get")
     def test_list_domains(self, mock_get, clean_databricks_env):
