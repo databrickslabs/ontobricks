@@ -434,7 +434,9 @@ the **Live graph**:
 
 ### Graphs tab
 
-Press **View difference**. OntoBricks draws one overlay:
+When a ready scenario is selected, OntoBricks loads the overlay automatically
+(press **Refresh** to reload). With no ready scenario, the empty state stays
+visible. The overlay uses:
 
 - **Nodes:** grey unchanged, amber modified (attributes, types or links),
   green added, red removed.
@@ -452,7 +454,7 @@ eligible for the green rebate?"*) and press **Ask both**. Graph Chat answers
 twice, side by side: once on the live graph and once on the sandbox. When
 both answers are ready, **Business insights** comments on the difference.
 **Open report** builds a printable summary (facts, Compare metrics and graph
-if you already pressed View difference, both answers and the analysis).
+if the overlay already loaded, both answers and the analysis).
 **Export PDF** opens the browser print dialog (choose *Save as PDF*).
 
 ### Getting the most out of Compare

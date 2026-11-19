@@ -639,9 +639,16 @@ def test_compare_section_is_a_scenarios_submenu_with_overlay_graph():
     ):
         assert f'id="{element}"' in partial
     assert 'value="inferred"' in partial and 'value="asserted"' in partial
+    assert "Refresh" in partial
+    assert "View difference" not in partial
+    assert "bi-arrow-clockwise" in partial
     assert "/simulation/${encodeURIComponent(id)}/compare" in js
     assert "include_inferred" in js
     assert "sidebarSectionChanged" in js
+    # Ready scenario → auto-run overlay; empty state only when none are ready.
+    assert "this.run()" in js
+    assert "_showState('empty')" in js
+    assert "autoRun" not in js
     assert "--db-status-success" in js and "--db-status-danger" in js
     assert "query-sigmagraph" not in js
     assert ".sim-compare-canvas" in css

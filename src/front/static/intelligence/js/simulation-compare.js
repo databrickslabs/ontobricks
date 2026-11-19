@@ -31,6 +31,13 @@ const SimulationCompare = {
             scenario.addEventListener('change', () => {
                 this._paintExplorerLink();
                 this._toggleRun();
+                if (this._selectedId()) this.run();
+            });
+        }
+        const source = document.getElementById('simCompareSource');
+        if (source) {
+            source.addEventListener('change', () => {
+                if (this._selectedId()) this.run();
             });
         }
         document.addEventListener('sidebarSectionChanged', (e) => {
@@ -38,13 +45,13 @@ const SimulationCompare = {
         });
         const params = new URLSearchParams(window.location.search);
         if ((params.get('section') || '') === 'compare') {
-            setTimeout(() => this.onShow({ autoRun: !!params.get('simulation') }), 0);
+            setTimeout(() => this.onShow(), 0);
         }
     },
 
     // -- Scenario picker -----------------------------------------------------
 
-    async onShow({ autoRun = false } = {}) {
+    async onShow() {
         const select = document.getElementById('simCompareScenario');
         if (!select) return;
         try {
@@ -62,7 +69,8 @@ const SimulationCompare = {
         if (source && params.get('inferred') === '0') source.value = 'asserted';
         if (!this.scenarios.length) {
             this._showState('empty');
-        } else if (autoRun && select.value) {
+        } else if (select.value) {
+            // Ready scenario present: show the overlay immediately (Refresh re-runs).
             this.run();
         } else if (!this.data) {
             this._showState('idle');

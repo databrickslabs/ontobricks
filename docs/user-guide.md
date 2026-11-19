@@ -1362,7 +1362,7 @@ troubleshooting: **[Intelligence](intelligence.md)**.
 | **Communities** | Detect → Preview → Materialize so Explorer can colour and collapse clusters. |
 | **Patterns** | New → Detect (entity, hops, bins, min support) → open a saved card and its diagram. |
 | **Scenarios** | New scenario or Explorer **Simulate from here**. Scope + Set/Add/Remove facts + ticked rules → Run. Live graph is never mutated. |
-| **Compare** | Pick a **ready** scenario, **View difference**, then **Evaluate** a business question and export the PDF. |
+| **Compare** | Pick a **ready** scenario (differences load automatically; **Refresh** reloads), then **Evaluate** a business question and export the PDF. |
 
 **Before you start.** Domain saved, graph built (**Graph → Management → Build**).
 Analytics, Communities and Patterns also need *Compute large-graph metrics on
