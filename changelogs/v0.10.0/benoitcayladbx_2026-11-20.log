@@ -1,0 +1,188 @@
+================================================================================
+## Home tiles restyled to Databricks Jobs create-tile pattern
+================================================================================
+
+Context: After adding the Settings resource card, Home launch tiles still used
+tall illustrated cards (SVG art, bullet lists, lift-on-hover). Align them with
+the Databricks Jobs create tiles (Ingestion pipeline / ETL Pipeline style) and
+the existing Workspace Home MCP card pattern (`.ob-workspace-home-tile`).
+
+Changes:
+
+1. src/front/templates/home.html
+   - Launch tiles: icon square + title + count in a head row, short description
+     below. Dropped SVG art, bullet lists, and trailing arrows. Icons:
+     `bi-layers` (Contexts), `bi-signpost-split` (Bridges), `bi-clipboard-check`
+     (My tasks). Count element IDs unchanged for JS.
+   - Resource cards: same compact pattern; removed trailing arrows.
+2. src/front/static/home/css/home.css
+   - Restyle `.home-nav-tile` / `.home-resource-card` to match Workspace Home:
+     `--home-tile-radius` (0.5rem), bordered icon square, flat rest, soft
+     `0 2px 8px` hover shadow, no translateY / primary-border hover.
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   - Replaced points-list assertion with
+     `test_home_launch_tiles_use_databricks_jobs_card_pattern`.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/home/css/home.css
+- tests/units/ui/test_home_and_explorer_contracts.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/ui/test_home_and_explorer_contracts.py
+  tests/units/front/test_clarity_design_contract.py` -> 59 passed
+- `uv run --frozen pytest -q -m "not scenario"` -> 10982 passed, 334 skipped,
+  8 deselected
+
+================================================================================
+## Settings entry point on the Home page
+================================================================================
+
+Context: The Home page had no direct way to reach Settings (Databricks warehouse,
+graph engine backends, branding, automation runs). Design agreed in brainstorming:
+add a "Settings & Config" card to the existing "Keep exploring" resources strip,
+next to Help Center. The strip grows from 3 to 4 cards.
+
+Changes:
+
+1. src/front/templates/home.html
+   - Added `<a class="home-resource-card" href="/settings" data-home-resource="settings">`
+     right after the Help Center card. Internal link, same markup as the other cards,
+     `bi-arrow-right` affordance (no new tab).
+   - Updated the section lead to mention system settings.
+2. src/front/static/home/css/home.css
+   - `.home-resources-grid`: 4 columns on desktop.
+   - Under 991.98px: 2 columns (tablet). Existing <768px rule keeps 1 column.
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   - `test_home_resources_strip_links_to_settings`: card links to /settings, is
+     same-tab, and has no external-link affordance.
+   - `test_home_resources_grid_is_four_columns_on_desktop`: pins the 4 / 2 column
+     grid rules.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/home/css/home.css
+- tests/units/ui/test_home_and_explorer_contracts.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/ui/test_home_and_explorer_contracts.py` -> 8 passed
+- `uv run --frozen pytest -q -m "not scenario"` -> 10966 passed, 334 skipped, 8 deselected
+
+================================================================================
+## Configurable Databricks button styles: Create (filled) and Share (outlined)
+================================================================================
+
+Context: The Databricks Catalog browse page uses two button styles: Create
+(solid primary) and Share (outlined secondary). OntoBricks now exposes both in
+Settings → Configuration → UI → Theme, defaulting to the Databricks values and
+letting an admin change the colours. Applied to page buttons (`.btn-primary` =
+Create, `.btn-secondary` / `.btn-outline-secondary` = Share) and to the navbar
+chrome: Save = Create, Close = Share, Resume editing stays a warning ghost.
+Blank or invalid stored colours fall back to the Databricks defaults.
+
+Changes:
+
+1. src/back/core/helpers/UIBranding.py
+   - `DEFAULT_BUTTON_PRIMARY_COLOR` (#2272B4) and `DEFAULT_BUTTON_SECONDARY_COLOR`
+     (#11171C); Databricks companion tints (`DATABRICKS_CREATE_HOVER`,
+     `DATABRICKS_SHARE_BORDER`, `DATABRICKS_SHARE_HOVER`) used exactly for defaults.
+   - `BrandPalette` gains `button_primary`, `button_primary_hover`,
+     `button_on_primary`, `button_secondary`, `button_secondary_border`,
+     `button_secondary_hover`; `UIBranding` gains `button_primary_color` and
+     `button_secondary_color`.
+   - New `derive_button_palette()`; `derive_brand_palette()` and
+     `normalize_ui_branding()` accept and resolve the two colours.
+2. src/back/core/helpers/__init__.py
+   - Re-exports the two default constants.
+3. src/shared/fastapi/ui_branding.py
+   - `render_ui_branding_css_vars` emits `--db-btn-primary`, `-hover`, `-on`,
+     `--db-btn-secondary`, `-border`, `-hover` into `#uiBrandingTokens`.
+4. src/back/objects/session/GlobalConfigService.py
+   - Persists `button_primary_color` / `button_secondary_color` in `ui_branding`;
+     `_empty()` defaults updated.
+5. src/back/objects/domain/settings/WorkspaceUiSettings.py
+   - `save_ui_branding_result` takes the two colours (keyword, default blank),
+     validates them, and persists the normalized values.
+6. src/back/objects/domain/settings/SettingsService.py
+   - Facade forwards the two colours (kept on one line to stay within the
+     `SettingsService` size baseline).
+7. src/api/routers/internal/settings.py
+   - `POST /ui-branding` accepts `button_primary_color` and `button_secondary_color`
+     form fields.
+8. src/front/static/global/css/main.css
+   - `:root` defaults for the six `--db-btn-*` tokens.
+   - `.ob-subnav-save-btn` → Create (solid); `.ob-subnav-save-kbd` on Create label colour;
+     `.ob-subnav-close-btn` → Share (white surface, border, hover tint).
+9. src/front/static/global/css/components.css
+   - `.btn-primary` → solid Create (`--db-btn-primary`), no gradient, no resting shadow.
+   - `.btn-secondary` / `.btn-outline-secondary` → Share block (white surface at
+     rest, `--db-btn-secondary-border`, hover `--db-btn-secondary-hover`, focus ring);
+     removed from the neutral and outline lists.
+10. src/front/static/config/js/settings.js
+   - `UI_BRANDING_DEFAULTS` gains the two colours and the six palette keys.
+   - `deriveButtonPalette()` mirrors the Python derivation (verified numerically
+     identical for default and custom colours); `deriveBrandPalette()` takes the
+     two colours; `draftPalette()` keeps them across primary/Aurora edits.
+   - `normalizeUIBrandingDraft()` builds the palette from one fallback object.
+   - Preview sets the `--db-btn-*` variables; validity, dirty state, saved-default
+     check, input sync, blur handling and the save `FormData` cover both colours.
+11. src/front/templates/settings.html
+   - Theme card: "Create button color" and "Share button color" pickers (colour +
+     hex + help + error) after Aurora; preview gains a Share sample button.
+12. .cursor/11-frontend-design.mdc
+   - Documents the Create/Share tokens, derivation rules, the navbar mapping, and
+     the updated button hierarchy/states; `--db-gradient-primary` marked unused.
+13. tests/units/front/test_button_design_contract.py
+   - Share focus keeps the white surface (`var(--db-surface-warm)`) as its resting
+     background, in addition to `transparent`.
+14. tests/units/front/test_clarity_design_contract.py
+   - `.btn-primary` asserts Create tokens and no shadow; `.btn-secondary` and
+     `.btn-outline-secondary` assert the white surface token.
+15. tests/units/front/test_segmented_subnav_contract.py
+   - Renamed to `test_chrome_actions_use_create_and_share_styles`; asserts Save =
+     Create and Close = Share, with their hover tints.
+16. tests/units/settings/test_v090_settings_workspace_ui.py
+   - Exact-dict persistence assertion includes the two colours; new tests for
+     explicit, blank and invalid Create colours.
+17. tests/units/ui/test_ui_button_styles.py (new)
+   - Databricks default palette is exact; custom colours derive companions;
+     invalid stored colours fall back; CSS variables are published.
+18. tests/units/front/test_ui_button_styles_contract.py (new)
+   - Settings pickers, preview sample, JS payload and preview variables, and
+     `main.css` / `components.css` token contracts.
+
+Design notes:
+- Navbar Save (filled) and Close (outlined) reverse the earlier borderless /
+  no-background-at-rest chrome for those two buttons. This is the approved
+  content_and_chrome option; Resume editing is unchanged.
+- `--db-gradient-primary` is no longer used by any component. It is kept because
+  the contract tests assert the token; remove it in a follow-up.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/api/routers/internal/settings.py
+- src/back/core/helpers/UIBranding.py
+- src/back/core/helpers/__init__.py
+- src/back/objects/domain/settings/SettingsService.py
+- src/back/objects/domain/settings/WorkspaceUiSettings.py
+- src/back/objects/session/GlobalConfigService.py
+- src/front/static/config/js/settings.js
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- src/front/templates/settings.html
+- src/shared/fastapi/ui_branding.py
+- tests/units/front/test_button_design_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_ui_button_styles_contract.py (new)
+- tests/units/settings/test_v090_settings_workspace_ui.py
+- tests/units/ui/test_ui_button_styles.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium computed styles and screenshots: defaults render #2272B4 Create
+  and #11171C Share; custom colours (#FF0000 / #00AA00) propagate to all buttons.
+- JS vs Python `derive_button_palette` compared numerically: identical output.
+- `uv run --frozen pytest -q -m "not scenario"`: 10982 passed, 334 skipped, 8 deselected, 0 failed in 49.16s.
