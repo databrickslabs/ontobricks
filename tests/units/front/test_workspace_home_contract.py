@@ -61,6 +61,14 @@ def test_home_is_default_section_and_page_hosts_it(menu_id, page, get_id):
             assert item.get("help_jump"), f"{menu_id}/{item['id']} missing help_jump"
 
 
+def test_intelligence_home_help_opens_intelligence_guide():
+    html = _read(HOME_PARTIAL)
+    assert "_home_help_doc" in html
+    assert "intelligence' if workspace_home_menu.id == 'intelligence'" in html
+    assert "Intelligence guide" in html
+    assert "From a new context to a graph, then Intelligence." in html
+
+
 def test_workspace_home_partial_groups_by_menu_sections():
     html = _read(HOME_PARTIAL)
     assert "section-header" in html

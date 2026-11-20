@@ -1,6 +1,6 @@
 # Getting Started with OntoBricks
 
-By the end of this guide you will have OntoBricks running locally and connected to your Databricks workspace, ready to design your first ontology and explore a graph viewer.
+By the end of this guide you will have OntoBricks running locally and connected to your Databricks workspace, ready to design your first ontology, explore a graph viewer, and run Intelligence (Analytics, Communities, Patterns, Scenarios).
 
 <!-- toc -->
 **Contents**
@@ -25,14 +25,14 @@ By the end of this guide you will have OntoBricks running locally and connected 
 Before you begin, ensure you have:
 
 - **Python 3.11+** installed on your system
-- **Databricks workspace** access (Databricks Apps must be enabled)
+- **Databricks workspace** access ([Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) must be enabled)
 - **Personal Access Token** from Databricks (local dev) or service-principal auth (Databricks Apps)
-- **SQL Warehouse** in the workspace (you will need its ID for local dev)
-- **Databricks Lakebase Autoscaling** project + branch + Postgres database — used for
+- **[SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)** in the workspace (you will need its ID for local dev)
+- **Databricks [Lakebase](https://docs.databricks.com/aws/en/oltp/) Autoscaling** project + branch + Postgres database — used for
   the domain registry (domains, versions, permissions, schedules, global config)
   and for the Graph DB triple store. Required since **v0.4.0**.
   Provisioned Lakebase instances are **not** supported.
-- **Unity Catalog catalog/schema** — hosts the optional registry Volume
+- **[Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) catalog/schema** — hosts the optional registry Volume
   (ad-hoc export bundles only) and, for Lakehouse domains, the Delta
   triple-store family (`triplestore_<domain>_V<n>` VIEW plus `_data` /
   `_inferred` tables and the `_graph` union VIEW — see
@@ -89,7 +89,7 @@ pip install -e ".[lakebase]"
 ```
 
 > **Why `--extra lakebase`?** Since v0.4.0 the domain registry lives in
-> Lakebase Postgres, so `psycopg[binary]` and `psycopg-pool` are required
+> [Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/), so `psycopg[binary]` and `psycopg-pool` are required
 > at runtime. They are declared as optional in `pyproject.toml`
 > (`[project.optional-dependencies] lakebase`) so volume-only forks can
 > opt out, but every standard deployment must install them.
@@ -114,7 +114,7 @@ Your workspace URL, for example:
 7. Click **Generate** and **copy the token immediately**
 
 #### SQL Warehouse ID
-1. In Databricks, go to **SQL Warehouses**
+1. In Databricks, go to **[SQL Warehouses](https://docs.databricks.com/aws/en/compute/sql-warehouse/)**
 2. Click on your warehouse
 3. Find the ID in the URL or **Connection Details** tab:
    ```
@@ -155,7 +155,7 @@ SECRET_KEY=your-secret-key-here
 DATABRICKS_APP_PORT=8000
 ```
 
-> **Lakebase auth in local dev.** The Postgres password is a short-lived
+> **[Lakebase](https://docs.databricks.com/aws/en/oltp/) auth in local dev.** The Postgres password is a short-lived
 > JWT minted by `LakebaseAuth` via `POST /api/2.0/postgres/credentials`
 > using your `DATABRICKS_TOKEN`. Set `LAKEBASE_PROJECT` + `LAKEBASE_BRANCH`
 > (and optionally `LAKEBASE_DATABASE`) in `.env` — `LakebaseAuth` resolves
@@ -208,13 +208,13 @@ When running as a Databricks App, OntoBricks enforces role-based access control:
 
 To manage permissions, you must:
 1. Have **CAN_MANAGE** set on the app in the Databricks UI (Compute → Apps → ontobricks → Permissions)
-2. The app's service principal must have **CAN_MANAGE** on itself — `make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically; otherwise run `make bootstrap-perms`. See the [Deployment Guide](deployment.md#4-permission-management).
-3. The app's service principal must have **USAGE + DML** on the Lakebase
+2. The app's [service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals) must have **CAN_MANAGE** on itself — `make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically; otherwise run `make bootstrap-perms`. See the [Deployment Guide](deployment.md#4-permission-management).
+3. The app's service principal must have **USAGE + DML** on the [Lakebase](https://docs.databricks.com/aws/en/oltp/)
    registry / graph / sync schemas — `scripts/deploy.sh` runs
    `scripts/bootstrap/lakebase-perms.sh` automatically on the
    `dev-lakebase` target; otherwise run `make bootstrap-lakebase`. See
    the [Deployment Guide §2 Step 5b](deployment.md#step-5b--lakebase-schema-grants-target-dev-lakebase-only).
-4. The app's service principal must have **Unity Catalog** privileges
+4. The app's service principal must have **[Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/)** privileges
    on the registry catalog/schema/volume **and** on every source table
    referenced by an R2RML mapping. See the [Deployment Guide §3](deployment.md#3-unity-catalog-permissions-for-the-service-principal)
    for the exact grants.
@@ -227,10 +227,10 @@ In local development mode, there are no restrictions — all users have full adm
 
 1. Click **Settings** in the navigation bar
 2. Your credentials should be loaded from `.env`
-3. Select a **SQL Warehouse** from the dropdown
+3. Select a **[SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)** from the dropdown
 4. Click **Test Connection** to verify
 5. You should see "Connection successful"
-6. Open **Settings → Registry**. On a fresh Lakebase database the
+6. Open **Settings → Registry**. On a fresh [Lakebase](https://docs.databricks.com/aws/en/oltp/) database the
    registry tables don't exist yet — click **Initialize**. This runs
    the schema migration in `LAKEBASE_SCHEMA` (default
    `ontobricks_registry`) and creates the registry Volume if missing.
@@ -307,7 +307,7 @@ Alternatively, use the traditional form interface:
 
 ### 5. Assign Data Assets
 
-Load Unity Catalog tables from **Context → Data Assets → Add Data Asset**
+Load [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) tables from **Context → Data Assets → Add Data Asset**
 (one dialog: pick the catalog and schema, check the tables, then **Add N assets**).
 Editors and Builders can do this with `CAN_USE`;
 they do not need `CAN_MANAGE`. Viewers cannot import or remove sources.
@@ -354,6 +354,31 @@ Then map those tables under **Graph → Mapping**:
 5. Run inference from the **Inference** sidebar section — executes OWL 2 RL inference and IF-THEN business rules to discover inferred triples. Explorer can also run a class **Inference rule** or a bound **Job** on one entity.
 6. Open **Query → GraphQL** for the typed schema, or **Query → SPARQL** for read-only SELECT queries (generated SQL stays below the editor).
 
+### 7. Discover and simulate (Intelligence)
+
+After a successful Build, open **Intelligence** from the app switcher (it
+always lands on **Home**). The in-app Help **Starter Guide** covers the same
+path as step 5.
+
+1. **Analytics** — **Run Analysis** (optionally scoped to one entity type).
+   Read PageRank and betweenness on the Dashboard; **Interpret** needs an LLM
+   on the domain.
+2. **Communities** — **Detect**, then **Materialize** so Explorer can colour
+   and collapse clusters.
+3. **Patterns** — **New**, pick an entity type, **Detect**. Open the saved
+   run: KPIs are Hops, Entities, Patterns and Coverage; the bar chart ranks
+   matching entities.
+4. **Cohorts** — Design an explainable grouping rule, **Preview**, then
+   **Materialise** if you want `:inCohort` triples or a Unity Catalog table.
+5. **Scenarios** — **New scenario** or Explorer **Simulate from here**. Add a
+   Set / Add / Remove fact, tick reasoning phases, **Run**.
+6. **Compare** — pick the **ready** scenario (the overlay loads
+   automatically), then **Evaluate** a business question and export PDF.
+
+Analytics, Communities and Patterns need *Compute large-graph metrics on
+Databricks* in **Settings → Global** and the jobs from `make deploy`. Full
+operator guide: [Intelligence](intelligence.md).
+
 ## Common Commands
 
 ```bash
@@ -385,9 +410,11 @@ The OntoBricks interface has a navigation bar with status indicators:
 
 | Element | Description |
 |---------|-------------|
+| **App switcher** | Nine-dot control left of Close: Context, Ontology, Graph, Intelligence, and (admins) Settings. Each option opens that workspace's **Home**. |
 | **Ontology** | Shows ✓ (green) when ontology is loaded, ✗ (red) otherwise |
 | **Mapping** | Shows ✓ (green) when R2RML mapping exists, ✗ (red) otherwise |
 | **Graph** | Access the build, graph viewer, and quality checks interface |
+| **Intelligence** | After Build: Cohorts, Analytics, Communities, Patterns, Scenarios, Compare |
 | **Settings** | Manage Databricks connection and settings |
 | **Versions** (navbar popup) | Switch or reload versions (then opens Context → Configuration); **New Version** branches the open context without opening Context → Versions |
 | **Load Context** | Loads a registry context/version and always opens **Context → Configuration** |
@@ -398,9 +425,9 @@ Warehouse selection lives under Settings, not in the navbar.
 
 | Setting | Where | Role |
 |---------|-------|------|
-| **Build SQL Warehouse** | **Settings → Lakehouse → SQL Warehouse** | Non-RT warehouse for mapping views, materialization, and other build DDL/writes |
+| **Build [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)** | **Settings → Lakehouse → SQL Warehouse** | Non-RT warehouse for mapping views, materialization, and other build DDL/writes |
 | **Query SQL Warehouse** | Same panel; disabled until RT queries are enabled | Optional read warehouse; may be Lakehouse//RT |
-| **Use CloudFetch** | **Settings → Databricks** | Leave on unless Databricks Apps cannot download warehouse result files |
+| **Use CloudFetch** | **Settings → Databricks** | Leave on unless [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) cannot download warehouse result files |
 
 Query mirrors Build and stays disabled by default. Administrators can change
 Build in that panel; RT warehouses are excluded from the Build selector.
@@ -444,7 +471,7 @@ other graph backends retain their native or iterative traversal.
 
 - Verify your `DATABRICKS_HOST` includes `https://`
 - Check your token hasn't expired
-- Ensure the SQL Warehouse is running (check Databricks UI)
+- Ensure the [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) is running (check Databricks UI)
 - Verify network connectivity
 
 ### No Tables Showing
@@ -489,9 +516,9 @@ scripts/setup.sh
 ## Next Steps
 
 - Read the [User Guide](user-guide.md) for detailed instructions
-- After a first Build, use **[Intelligence](intelligence.md)** to score the graph (Analytics), find clusters (Communities) and look-alikes (Patterns), then run what-if **Scenarios** without touching live data
+- After a first Build, follow **First Steps §7** or the in-app **Starter Guide** (Help Center) then the **[Intelligence](intelligence.md)** operator guide — Analytics, Communities, Patterns, Cohorts, Scenarios and Compare
 - See the [Architecture](architecture.md) for technical details
-- Check [Deployment](deployment.md) for Databricks Apps deployment
+- Check [Deployment](deployment.md) for [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) deployment
 - Explore the [MCP Server](mcp.md) for Databricks Playground integration
 - Review [Data Quality](user-guide.md#data-quality-shacl-shapes) for SHACL shape validation
 - Explore [Reasoning](user-guide.md#step-7b-run-reasoning-optional) for OWL 2 RL and IF-THEN inference
@@ -515,8 +542,8 @@ OntoBricks uses environment variables for configuration, making it easy to deplo
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `DATABRICKS_HOST` | Your Databricks workspace URL | `https://your-workspace.cloud.databricks.com` |
-| `DATABRICKS_TOKEN` | Personal access token or service principal token | `dapi1234567890abcdef...` |
-| `DATABRICKS_SQL_WAREHOUSE_ID` | SQL Warehouse identifier | `abc123def456...` |
+| `DATABRICKS_TOKEN` | [Personal access token](https://docs.databricks.com/aws/en/dev-tools/auth/pat) or [service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals) token | `dapi1234567890abcdef...` |
+| `DATABRICKS_SQL_WAREHOUSE_ID` | [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) identifier | `abc123def456...` |
 
 #### Optional Configuration
 
@@ -525,19 +552,19 @@ OntoBricks uses environment variables for configuration, making it easy to deplo
 | `SECRET_KEY` | Secret key for session encryption | Random (dev only) |
 | `DATABRICKS_APP_PORT` | Port the application listens on | `8000` |
 | `REGISTRY_VOLUME_PATH` | Full volume path injected by the Databricks App `volume` resource (`/Volumes/<catalog>/<schema>/<volume>`). When set, overrides the three `REGISTRY_*` variables below. | *(from volume resource)* |
-| `REGISTRY_CATALOG` | Unity Catalog catalog for the domain registry (local dev fallback) | *(from session or Settings)* |
+| `REGISTRY_CATALOG` | [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) catalog for the domain registry (local dev fallback) | *(from session or Settings)* |
 | `REGISTRY_SCHEMA` | Schema for the domain registry (local dev fallback) | *(from session or Settings)* |
 | `REGISTRY_VOLUME` | Volume name for domain storage (local dev fallback) | `OntoBricksRegistry` |
 | `DATABRICKS_TRIPLESTORE_TABLE` | Default triple store table (catalog.schema.table) | *(none)* |
 | `DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT` | Fallback SQL Warehouse ID for MCP/API calls | *(none)* |
-| `ONTOBRICKS_GITHUB_TOKEN` | Fine-grained GitHub PAT for the instance repository mirror when no Databricks secret is configured. Production should use **Settings → Configuration → GitHub** + a Databricks secret instead. | *(none)* |
+| `ONTOBRICKS_GITHUB_TOKEN` | Fine-grained GitHub PAT for the instance repository mirror when no [Databricks secret](https://docs.databricks.com/aws/en/security/secrets/) is configured. Production should use **Settings → Configuration → GitHub** + a Databricks secret instead. | *(none)* |
 
 #### Lakebase (Required since v0.4.0)
 
 | Variable | Description | Default / Source |
 |----------|-------------|------------------|
 | `LAKEBASE_SCHEMA` | Postgres schema used by the registry inside `PGDATABASE`. Mirror the bundle's `lakebase_registry_schema`. | `ontobricks_registry` |
-| `LAKEBASE_PROJECT` | Lakebase Autoscaling **project id** (`projects/<this>/...`). Used by `LakebaseAuth` for local dev host resolution. In deployed Apps, informational only (injected via `app.yaml`). | *(set in `.env` for local dev)* |
+| `LAKEBASE_PROJECT` | [Lakebase](https://docs.databricks.com/aws/en/oltp/) Autoscaling **project id** (`projects/<this>/...`). Used by `LakebaseAuth` for local dev host resolution. In deployed Apps, informational only (injected via `app.yaml`). | *(set in `.env` for local dev)* |
 | `LAKEBASE_BRANCH` | Branch to connect to (e.g. `develop`, `production`). Used together with `LAKEBASE_PROJECT` to resolve the endpoint hostname locally. | *(set in `.env` for local dev)* |
 | `LAKEBASE_DATABASE` | Postgres database name (`datname`). Resolved from the branch when unset. | *(set in `.env` for local dev)* |
 | `PGHOST` | Lakebase Autoscaling endpoint (`ep-<id>.database.<region>.cloud.databricks.com`). **Auto-injected** by the `database` Apps resource binding — do not set in `.env`. | *(auto-injected by the Apps platform)* |
@@ -627,7 +654,7 @@ export DATABRICKS_SQL_WAREHOUSE_ID=abc123def456...
 
 #### Databricks Apps Deployment
 
-When deploying to Databricks Apps, set environment variables in the app configuration:
+When deploying to [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/), set environment variables in the app configuration:
 
 1. Navigate to your app in Databricks UI
 2. Go to Configuration → Environment Variables

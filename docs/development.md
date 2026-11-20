@@ -77,19 +77,19 @@ This document describes all external dependencies used by OntoBricks, including 
 | **aiofiles** | ≥23.0.0 | Async file I/O for Starlette static file serving | Apache-2.0 | [pypi.org/project/aiofiles](https://pypi.org/project/aiofiles/) |
 | **databricks-sql-connector[kernel]** | ≥4.4.0 | Python SQL connector with the native Kernel backend used for Lakehouse/RT Statement Execution API queries | Apache-2.0 | [pypi.org/project/databricks-sql-connector](https://pypi.org/project/databricks-sql-connector/) |
 | **databricks-sql-kernel** | ≥1.0.0,<2.0.0 | Native Rust SQL client core installed by the connector's `kernel` extra | Apache-2.0 | [pypi.org/project/databricks-sql-kernel](https://pypi.org/project/databricks-sql-kernel/) |
-| **databricks-sdk** | ≥0.20.0 | Databricks SDK for workspace API, OAuth authentication, and auto-auth in App mode | Apache-2.0 | [pypi.org/project/databricks-sdk](https://pypi.org/project/databricks-sdk/) |
+| **databricks-sdk** | ≥0.20.0 | [Databricks SDK](https://docs.databricks.com/aws/en/dev-tools/sdk-python) for workspace API, OAuth authentication, and auto-auth in App mode | Apache-2.0 | [pypi.org/project/databricks-sdk](https://pypi.org/project/databricks-sdk/) |
 | **pyarrow** | ≥23.0.1 | Columnar in-memory data format (required by databricks-sql-connector) | Apache-2.0 | [arrow.apache.org/docs/python](https://arrow.apache.org/docs/python/) |
 | **RDFLib** | ≥7.6.0 | Python library for working with RDF (Resource Description Framework) | BSD-3-Clause | [rdflib.readthedocs.io](https://rdflib.readthedocs.io/) |
 | **python-dotenv** | ≥1.2.2 | Load environment variables from `.env` files | BSD-3-Clause | [pypi.org/project/python-dotenv](https://pypi.org/project/python-dotenv/) |
 | **requests** | ≥2.33.0 | HTTP library for Python | Apache-2.0 | [requests.readthedocs.io](https://requests.readthedocs.io/) |
 | **neo4j** | ≥5.0 | Neo4j Bolt driver — connects OntoBricks to external Neo4j graph instances | Apache-2.0 | [neo4j.com/docs/python-manual](https://neo4j.com/docs/python-manual/) |
-| **psycopg[binary,pool]** | ≥3.2.0 | Postgres driver + connection pool used by the Lakebase Graph DB engine and the Lakebase registry backend | LGPL-3.0 | [psycopg.org/psycopg3](https://www.psycopg.org/psycopg3/) |
+| **psycopg[binary,pool]** | ≥3.2.0 | Postgres driver + connection pool used by the [Lakebase](https://docs.databricks.com/aws/en/oltp/) Graph DB engine and the Lakebase registry backend | LGPL-3.0 | [psycopg.org/psycopg3](https://www.psycopg.org/psycopg3/) |
 | **APScheduler** | ≥3.10.0 | Advanced Python Scheduler for background jobs (used by BuildScheduler for scheduled triple store builds) | MIT | [pypi.org/project/APScheduler](https://pypi.org/project/APScheduler/) |
 | **owlrl** | ≥7.0.0 | OWL 2 RL forward-chaining reasoner — performs deductive closure on RDFLib graphs for ontology-level inference | W3C | [owl-rl.readthedocs.io](https://owl-rl.readthedocs.io/) |
 | **pyshacl** | ≥0.26.0 | W3C SHACL validator for RDFLib graphs — validates RDF data against SHACL shapes for data quality checks | Apache-2.0 | [github.com/RDFLib/pySHACL](https://github.com/RDFLib/pySHACL) |
 | **NetworkX** | ≥3.0 | Graph analysis library — cohort discovery (connected components over compatibility links) | BSD-3-Clause | [networkx.org](https://networkx.org/) |
 | **strawberry-graphql[fastapi]** | ≥0.327.2 | GraphQL library for Python — auto-generates typed schema from ontology and integrates with FastAPI | MIT | [strawberry.rocks](https://strawberry.rocks/) |
-| **MLflow** | ≥3.17.2 | ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent) | Apache-2.0 | [mlflow.org](https://mlflow.org/) |
+| **[MLflow](https://docs.databricks.com/aws/en/mlflow/)** | ≥3.17.2 | ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent) | Apache-2.0 | [mlflow.org](https://mlflow.org/) |
 
 ##### MCP Server Additional Dependencies
 
@@ -194,7 +194,7 @@ async def ontology_page(request: Request):
 
 #### databricks-sql-connector
 
-Enables direct connectivity to Databricks SQL Warehouses for executing queries.
+Enables direct connectivity to Databricks [SQL Warehouses](https://docs.databricks.com/aws/en/compute/sql-warehouse/) for executing queries.
 
 **Example usage:**
 ```python
@@ -358,7 +358,7 @@ uv sync --frozen --extra lakebase
 Both `uv.lock` files are deployment artifacts. `registry =
 "https://pypi.org/simple"` identifies the package index used for resolution;
 the pinned `url = "https://files.pythonhosted.org/..."` entries are the wheel
-and source downloads used by `uv run --frozen` in Databricks Apps. Never commit
+and source downloads used by `uv run --frozen` in [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/). Never commit
 `pypi-proxy.dev.databricks.com` URLs. For routine install, run, and test
 commands, always pass `--frozen` so uv cannot rewrite the lock.
 
@@ -542,7 +542,7 @@ These use `unittest.mock` to isolate modules that depend on external systems (Da
 
 #### P1b -- Lakebase Graph DB Tests
 
-These test the Lakebase Postgres graph engine. Heavy paths (`COPY FROM
+These test the [Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/) graph engine. Heavy paths (`COPY FROM
 STDIN`, Lakeflow synced-table orchestration) are mocked at the
 `psycopg`/SDK boundary so the suite runs without a live Postgres or
 Databricks workspace.
@@ -622,7 +622,7 @@ open htmlcov/index.html
 | `back/core/w3c/sparql/SparqlTranslator.py` | 41% | Large module; advanced translation paths need Databricks |
 | Routes (`front/routes/`, `api/routers/internal/`) | 11-40% | Route handlers require full app context for deeper testing |
 | `back/core/graphdb/lakebase/FlatStore.py` | ~80% | Triple CRUD, bulk paths and named queries covered with mocked psycopg |
-| `back/core/graphdb/lakebase/SyncedTableManager.py` | ~85% | `ensure` idempotency, refresh trigger, polling and delete fully tested with mocked Databricks SDK |
+| `back/core/graphdb/lakebase/SyncedTableManager.py` | ~85% | `ensure` idempotency, refresh trigger, polling and delete fully tested with mocked [Databricks SDK](https://docs.databricks.com/aws/en/dev-tools/sdk-python) |
 
 Modules with 0% coverage (`back/core/w3c/rdfs`, `back/core/sqlwizard`, `back/core/databricks/unity_catalog/MetadataService.py`) are either not yet tested or depend entirely on external services.
 
@@ -685,7 +685,7 @@ Complete), not the 0.8 one-shot Generate click. The canonical guide
 for environment variables, chaining, registry isolation, and adding scenarios
 is `tests/e2e/scenarios/README.md`.
 
-Scenario 4 additionally needs a Databricks profile/token and SQL warehouse ID
+Scenario 4 additionally needs a Databricks profile/token and [SQL warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) ID
 exported in the pytest shell because it creates and drops scratch UC tables.
 The deterministic full-lifecycle browser journey can be run independently
 with `ONTOBRICKS_E2E_FAKE_CREDS=1`; see the canonical scenario guide.
@@ -771,7 +771,7 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Mapping `/mapping` | Graph → Management → Mapping (Informations, Visual, List tabs); toolbar Import / Export (R2RML); Auto-Map and Diagnostics modals; mapping-core.js, mapping-import.js, mapping-r2rml.js |
 | Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Documents, My Tasks, Discussions, Cockpit, Audit trail), section divs |
 | Knowledge Graph `/dtwin/` | Sidebar section groups: Management (Build with Build/Runs tabs, Overview), Navigation (Explorer, Query, Chat), Compute (Data Quality, Business rules); Sigma.js script |
-| Intelligence `/intelligence/` | Sidebar groups: Configuration (Cohorts), Discovery (Analytics with Analytics/Runs tabs, Communities, Patterns), Simulation (Scenarios, Compare); scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
+| Intelligence `/intelligence/` | Home landing of tiles; sidebar groups: Configuration (Cohorts), Discovery (Analytics with Analytics/Runs tabs, Communities, Patterns), Simulation (Scenarios, Compare); scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
 | About `/about` | Page renders, contains "OntoBricks" |
 
 **Run:**
@@ -828,7 +828,7 @@ Browser-based tests using Playwright against a live Uvicorn server. Verifies nav
 ### Known Limitations
 
 - **MCP server tests** are not included in the automated test suite — the MCP server is a separate project with its own dependencies.
-- **Databricks-connected features** (Unity Catalog operations, SQL Warehouse queries, triplestore sync) cannot be tested without a live workspace. These are tested at the mock/stub level only.
+- **Databricks-connected features** ([Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) operations, SQL Warehouse queries, triplestore sync) cannot be tested without a live workspace. These are tested at the mock/stub level only.
 - **LLM agent features** (AI Assistant, auto-map icons) rely on external API calls that are mocked with `responses` or `unittest.mock.patch`.
 - **E2E tests** validate navigation and DOM visibility but cannot fully test features that require a real Databricks connection (e.g., loading metadata, running queries).
 - **`test_sql_wizard.py`** has pre-existing failures unrelated to this test campaign and should be investigated separately.
@@ -869,7 +869,7 @@ OntoBricks uses a **two-layer** access-control model:
 | Layer | Where it lives | What it controls |
 |-------|----------------|------------------|
 | **Databricks App permissions** | Databricks workspace UI → Apps → *ontobricks* → Permissions | Who can reach the app at all, and who is an **Admin** (`CAN_MANAGE`). |
-| **In-app permission list** | `.permissions.json` stored in the Unity Catalog Registry Volume | Fine-grained roles (**Viewer** / **Editor** / **Builder**) for individual users and groups. |
+| **In-app permission list** | `.permissions.json` stored in the [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) Registry Volume | Fine-grained roles (**Viewer** / **Editor** / **Builder**) for individual users and groups. |
 | **Domain-level overrides** | `.domain_permissions.json` inside each domain folder | Per-domain role overrides that can restrict (but not elevate) the app-level role. |
 
 A user's effective role is determined by combining all three layers.
@@ -881,7 +881,7 @@ A user's effective role is determined by combining all three layers.
 | Role | Source | Capabilities |
 |------|--------|--------------|
 | **Admin** | Databricks App `CAN_MANAGE` permission | Full access. Can create domains in the registry, view, edit, build, and manage the Settings page including the permission list. |
-| **Builder** | In-app permission list | Can view, edit, **import and manage data sources**, and **build graph viewers**. Cannot change shared Settings (SQL Warehouse, Teams, branding). |
+| **Builder** | In-app permission list | Can view, edit, **import and manage data sources**, and **build graph viewers**. Cannot change shared Settings ([SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/), Teams, branding). |
 | **Editor** | In-app permission list | Can view all pages and modify assigned domains, ontologies, mappings, and **data sources**. Cannot create a domain (Admin only). **Cannot build graph viewers.** Cannot change shared Settings. |
 | **Viewer** | In-app permission list | Read-only access. Can browse domains, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings. |
 | **None** | Default when not matched | Completely blocked. Redirected to the Access Denied page. |
@@ -1111,7 +1111,7 @@ access control list to determine which users are admins.
 1. Find the SP's application ID. It appears in the app details (e.g.,
    `84eff7c5-778b-4c0b-a24d-36126bcc8cca`).
 
-2. Grant the permission using the Databricks CLI:
+2. Grant the permission using the [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/):
 
    ```bash
    databricks permissions update apps ontobricks \
@@ -1161,7 +1161,7 @@ The entire Settings page (`/settings` and all sub-routes) is restricted
 to **admin users only**. This includes:
 
 - The General tab (Databricks connection, SQL Warehouse).
-- The Registry tab (Lakebase registry + optional Unity Catalog Volume for export bundles).
+- The Registry tab ([Lakebase](https://docs.databricks.com/aws/en/oltp/) registry + optional [Unity Catalog Volume](https://docs.databricks.com/aws/en/volumes/) for export bundles).
 - The Admin → Teams matrix (per-domain role management).
 - The About tab.
 
@@ -1523,7 +1523,7 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 #### 3.5 Core UI concerns (conceptual)
 
 - **SessionManager / `get_domain`:** Most handlers depend on `SessionManager` to read/write the **current domain blob** (ontology, mappings, registry pointers, triple-store options) in the file session.
-- **Databricks integration:** UI services call helpers such as `get_databricks_client`, `get_databricks_host_and_token`, `resolve_warehouse_id`, and `VolumeFileService` to run SQL, read/write Unity Catalog volumes, and align with app vs. PAT auth.
+- **Databricks integration:** UI services call helpers such as `get_databricks_client`, `get_databricks_host_and_token`, `resolve_warehouse_id`, and `VolumeFileService` to run SQL, read/write [Unity Catalog volumes](https://docs.databricks.com/aws/en/volumes/), and align with app vs. PAT auth.
 - **TaskManager:** Long operations (builds, agent loops) register tasks under `/tasks/{id}` so the UI can poll progress without holding a request open.
 
 #### 3.6 Frontend code guidelines
@@ -1589,7 +1589,7 @@ Defined in `api/routers/digitaltwin.py`. Representative paths:
 | POST | `/dataquality/start` + GET `/dataquality/{task_id}` | Async data quality |
 | POST | `/reasoning/start` + GET `/reasoning/{task_id}`, GET `/reasoning/results` | Reasoning jobs and results |
 
-These endpoints combine **registry configuration** (Unity Catalog volume for the domain index) with **per-domain** parameters and often use the same Databricks credential resolution patterns as the UI.
+These endpoints combine **registry configuration** ([Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) volume for the domain index) with **per-domain** parameters and often use the same Databricks credential resolution patterns as the UI.
 
 #### 4.5 GraphQL
 
@@ -1649,7 +1649,7 @@ The **MCP** package exposes OntoBricks capabilities (domains, status, entities, 
 
 #### 6.3 Operating modes (from module docstring)
 
-- **`databricks`** — combined FastAPI + FastMCP app; uses **service principal** / app identity to reach the main app.  
+- **`databricks`** — combined FastAPI + FastMCP app; uses **[service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals)** / app identity to reach the main app.  
 - **`standalone`** — separate process (stdio/SSE HTTP) pointing at `ONTOBRICKS_URL` (e.g. localhost).  
 - **`mounted`** — optional embedding in the main OntoBricks process (loopback to the same host/port).
 
@@ -1787,11 +1787,11 @@ All logging goes through `back/core/logging/LogManager`.
 
 **Backend:**
 
-- **Asynchronous Operations**: Use `async/await` for Databricks SDK calls and I/O-bound operations.
+- **Asynchronous Operations**: Use `async/await` for [Databricks SDK](https://docs.databricks.com/aws/en/dev-tools/sdk-python) calls and I/O-bound operations.
 - **Logging**: Use %-style formatting (not f-strings) in logging calls for both security and performance.
 - **Session Data**: Minimize the number of session variables. Prefer computed values over stored ones when the cost is low.
 - **Caching**: Use TTL caches for frequently accessed, rarely changing data (e.g., version status in `version_status.py`).
-- **Triple Store / Graph DB**: Be mindful of query complexity. The Lakebase Graph DB engine streams large builds via `bulk_insert_iter` (`COPY FROM STDIN`) instead of materializing the full triple set in the FastAPI process; the Delta layer relies on Liquid Clustering and `OPTIMIZE` post-build.
+- **Triple Store / Graph DB**: Be mindful of query complexity. The [Lakebase](https://docs.databricks.com/aws/en/oltp/) Graph DB engine streams large builds via `bulk_insert_iter` (`COPY FROM STDIN`) instead of materializing the full triple set in the FastAPI process; the Delta layer relies on [Liquid Clustering](https://docs.databricks.com/aws/en/delta/clustering) and `OPTIMIZE` post-build.
 - **Background Tasks**: Offload heavy operations to `TaskManager` or Databricks Workflows. Log progress at each async step.
 
 **Frontend:**

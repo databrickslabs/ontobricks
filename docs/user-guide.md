@@ -37,14 +37,14 @@ OntoBricks is a visual tool for designing ontologies, mapping them to Databricks
 
 Before starting, ensure you have:
 - Access to a Databricks workspace
-- Personal access token from Databricks
-- SQL Warehouse ID
+- [Personal access token](https://docs.databricks.com/aws/en/dev-tools/auth/pat) from Databricks
+- [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) ID
 - Catalog and schema with tables to map
 
 ## Settings: Lakehouse Health (Registry permissions)
 
 The **Settings → Lakehouse → Health** tab validates whether the application
-principal has the Unity Catalog permissions required to operate on the saved
+principal has the [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) permissions required to operate on the saved
 Registry location (`catalog.schema`).
 
 ### What Health checks
@@ -64,7 +64,7 @@ grants (for example from catalog-level assignments) are accepted.
 
 ### Principal resolution
 
-In Databricks Apps, Health checks permissions for `DATABRICKS_CLIENT_ID`.
+In [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/), Health checks permissions for `DATABRICKS_CLIENT_ID`.
 Outside Databricks Apps, it falls back to the authenticated Databricks user.
 The resolved principal is shown in the Health panel.
 
@@ -83,12 +83,12 @@ The Health tab is intentionally domain-independent. It does not inspect:
 - R2RML VIEW existence or content
 - data-table or inferred-table existence
 - row counts
-- SQL Warehouse state
+- [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) state
 - materialization mode
 
 Use the **Lakehouse → Objects** tab for asset inventory and object-level
 visibility. The inventory includes only domain versions configured with the
-Lakehouse backend; UC objects belonging to Lakebase or Neo4j versions are
+Lakehouse backend; UC objects belonging to [Lakebase](https://docs.databricks.com/aws/en/oltp/) or Neo4j versions are
 excluded. Health answers only one question: "Can this principal operate on the
 configured Registry schema?"
 
@@ -96,7 +96,7 @@ configured Registry schema?"
 
 Use **Context → Documents** to upload specifications, glossaries, and other
 evidence for ontology Generate and Mapping. OntoBricks parses each supported
-file once after upload and stores **only the parsed text** in Lakebase (the
+file once after upload and stores **only the parsed text** in [Lakebase](https://docs.databricks.com/aws/en/oltp/) (the
 original binary is **not** retained). Both agents then read the same durable
 parsed text; agent runs never re-parse the source. You can view a document's
 parsed content directly on the Documents page, upload new files, and **purge one
@@ -125,7 +125,7 @@ domain version copies the parsed documents forward.
 
 ## Pages
 
-Use **Context → Pages** to search Unity Catalog Knowledge Pages (Genie Ontology
+Use **Context → Pages** to search [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) Knowledge Pages (Genie Ontology
 pages) and build the list that should later feed **Ontology → Generate**. The
 screen does **not** dump every page up front: use the **Genie Pages search**
 (title / synonym / keyword, optional Databricks Domain and state), **Add**
@@ -510,7 +510,7 @@ with no conditions applies to every instance, exactly as before.
 
 **Import/Export**: Shapes can be exported as W3C-compliant SHACL Turtle and imported from existing SHACL files. A guarded rule is exported as its own node shape with a SHACL-AF `sh:target [ a sh:SPARQLTarget ]`. Conditions are not reconstructed on import: the constraint comes back unguarded and the import result reports how many rules lost their conditions.
 
-**Validation**: Shapes are executed in the Graph → Data Quality section. Every check is compiled to SQL and run against the triple-store VIEW, which the build creates whatever graph engine the domain uses, so a rule gives the same answer on Lakebase, Delta and Neo4j domains. The VIEW carries the triples mapped from your source tables; triples added by reasoning live in the graph store and are deliberately outside the scope of data quality. A numeric-range rule also reports a value that is not a number at all, since SHACL treats a value it cannot compare as a violation. A rule that cannot be compiled to SQL is listed with an info icon and no pass rate rather than counted as passing.
+**Validation**: Shapes are executed in the Graph → Data Quality section. Every check is compiled to SQL and run against the triple-store VIEW, which the build creates whatever graph engine the domain uses, so a rule gives the same answer on [Lakebase](https://docs.databricks.com/aws/en/oltp/), Delta and Neo4j domains. The VIEW carries the triples mapped from your source tables; triples added by reasoning live in the graph store and are deliberately outside the scope of data quality. A numeric-range rule also reports a value that is not a number at all, since SHACL treats a value it cannot compare as a violation. A rule that cannot be compiled to SQL is listed with an info icon and no pass rate rather than counted as passing.
 
 ### Dashboard Mapping
 
@@ -536,7 +536,7 @@ When viewing an entity in the Knowledge Graph visualization, the dashboard will 
 ### Class Actions (Unity Catalog functions)
 
 Beyond linked datasets (tables, views, or metric views), an entity type can expose
-**actions** — Unity Catalog functions that operate on a single entity and can be
+**actions** — [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) functions that operate on a single entity and can be
 run from the Graph Explorer or from an MCP client.
 
 1. Go to **Ontology** → **Entities** and select an entity type
@@ -699,7 +699,7 @@ If your data sources, documents, or ontology change after detection, a
 banner flags the draft as stale and offers a one-click **Re-detect**.
 
 Generation uses the LLM saved in **Context → Configuration → AI** (an executable
-Unity AI Gateway model service or a legacy Model Serving endpoint). With
+Unity [AI Gateway](https://docs.databricks.com/aws/en/ai-gateway/) model service or a legacy [Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/) endpoint). With
 **No LLM** selected, **Detect Entities** stays visible but unavailable.
 
 #### Documents (PDF and other formats)
@@ -776,8 +776,8 @@ sidebar group (right after **Build**). The Mapping page has three tabs:
 > **Note**: You must have an ontology loaded before creating mappings. The "Ontology" indicator in the navbar should show a green checkmark.
 
 Users with an **Editor** or **Builder** role on the current domain can browse
-Unity Catalog and import, update, or remove data sources. `CAN_MANAGE` is only
-required for shared application configuration such as SQL Warehouse selection.
+[Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) and import, update, or remove data sources. `CAN_MANAGE` is only
+required for shared application configuration such as [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) selection.
 
 ### Mapping Studio
 
@@ -956,7 +956,7 @@ Navigate to the **Graph** page by clicking **Graph** in the navigation bar (URL:
 Click **Build** in the sidebar to manage your triple store:
 
 - **Readiness Status**: Shows whether Ontology and mappings (including attribute mappings) are all complete
-- **Synchronize**: Generates all triples from your mappings and writes them to the Delta view in Unity Catalog and to the configured Graph DB engine (Lakebase Postgres)
+- **Synchronize**: Generates all triples from your mappings and writes them to the Delta view in [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) and to the configured Graph DB engine ([Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/))
 - **Last Updated**: When the table contains data, the status area displays the last modification date and time (for Delta from Unity Catalog metadata; for Lakebase from the Postgres `count_triples` + table metadata)
 
 **Storage kind (Lakehouse domains).** On a Lakehouse domain the page names the kind of object `…_data` is, because the two [materialization modes](#materialization-modes-lakehouse) produce objects with the same name and very different behaviour. Next to the target FQN a badge reads either **TABLE · materialized copy** or **VIEW · no data copy**, and the page's subtitle, the note under the FQN, and the status card title all follow the same mode:
@@ -976,7 +976,7 @@ Preview, and `_props` for the final expansion payload fetch. The **Refresh cache
 action refreshes those companions from the same graph snapshot.
 Preview with **Inferred** disabled uses `_entity_search_asserted` instead of
 the union search snapshot. On Lakehouse domains, this action always uses
-the configured **Build SQL Warehouse**; the optional Lakehouse/RT warehouse is
+the configured **Build [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)**; the optional Lakehouse/RT warehouse is
 used only for graph reads and cannot execute the required table DDL. Freshness
 depends on backend and mode:
 
@@ -1333,55 +1333,193 @@ with* a built knowledge graph. It never changes your source tables: Discovery
 results are previews until you explicitly materialise them, and simulations
 run on private copies.
 
-The full operator guide — Cohorts, Analytics, Communities, Patterns,
-Scenarios, Compare / Evaluate, run history, the energy walkthrough and
-troubleshooting — is **[Intelligence](intelligence.md)**. The rest of this
-section is the map.
+This section describes every Intelligence page and its features. The full
+operator guide — detailed how-tos, the energy walkthrough and troubleshooting —
+is **[Intelligence](intelligence.md)**.
 
 ### Overview
 
-The left sidebar has three groups:
+The left sidebar has three groups. The app switcher always opens Intelligence
+**Home** (tiles grouped like the sidebar).
 
 | Group | Page | Business question it answers | Writes to the live graph? |
 |-------|------|------------------------------|---------------------------|
+| *(landing)* | **Home** | *Where do I start?* | Never |
 | **Configuration** | **Cohorts** | *Which entities belong together according to rules I define?* | Only when you **Materialise** a cohort run |
 | **Discovery** | **Analytics** | *Which entities matter most structurally (influence, bridges, density)?* | Never (reads the mapped graph; results cached in the registry) |
 | **Discovery** | **Communities** | *Which entities are tightly connected to each other?* | Only when you **Materialize** the partition |
-| **Discovery** | **Patterns** | *Which entities look alike (same kind of neighbourhood and profile)?* | Never (saved as a Unity Catalog snapshot) |
+| **Discovery** | **Patterns** | *Which entities look alike (same kind of neighbourhood and profile)?* | Never (saved as a [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) snapshot) |
 | **Simulation** | **Scenarios** | *What would change if these facts were true?* | Never (private sandbox per scenario) |
 | **Simulation** | **Compare** | *How does a scenario differ from today's live graph, and what does it mean for the business?* | Never |
 
-**Where to go next.** Full how-to for every page, including Detect
-settings, the scenario editor, Compare / Evaluate, run history and
-troubleshooting: **[Intelligence](intelligence.md)**.
+### Home
 
-| Page | Start here |
-|------|------------|
-| **Cohorts** | Design a rule, Preview, then Materialise. Deep reference: [Cohort discovery](advanced_features.md#cohort-discovery). |
-| **Analytics** | Run Analysis (optional entity-type scope). Dashboard, Data Model Health, Interpret. Chart internals stay in [Analytics](#analytics-intelligence--discovery) above. |
-| **Communities** | Detect → Preview → Materialize so Explorer can colour and collapse clusters. |
-| **Patterns** | New → Detect (entity, hops, bins, min support) → open a saved card and its diagram. |
-| **Scenarios** | New scenario or Explorer **Simulate from here**. Scope + Set/Add/Remove facts + ticked rules → Run. Live graph is never mutated. |
-| **Compare** | Pick a **ready** scenario (differences load automatically; **Refresh** reloads), then **Evaluate** a business question and export the PDF. |
+Opening **Intelligence** from the app switcher always lands on **Home**: a
+directory of tiles grouped like the sidebar (Configuration, Discovery,
+Simulation). Click a tile to open that page. The **?** on a tile and the
+header **Help** button open the Intelligence guide in the Help Center; the
+resources strip opens the Starter Guide, the Intelligence guide and the
+Workflow.
 
-**Before you start.** Domain saved, graph built (**Graph → Management → Build**).
-Analytics, Communities and Patterns also need *Compute large-graph metrics on
-Databricks* in **Settings → Global**. Simulation works on Lakebase, Lakehouse
-and Neo4j.
+### Cohorts (Configuration)
 
-**Run history.** Analytics → **Runs** on the Intelligence page; Community,
-Pattern and Simulation Detect/run history also under **Settings → Automation
-→ Runs** (admin, all domains).
+Cohorts group entities with explicit rules you can explain, for example
+*customers who share the same substation and the same tariff family*. Unlike
+Communities and Patterns, you decide the grouping logic.
+
+- **Design** — pick the target class, the linking paths (which relationships
+  connect members), the compatibility filters and the grouping type, then
+  **Save**. You can also describe the rule in natural language and let the
+  assistant draft it.
+- **Runs** — pick a saved rule, **Preview** the groups it finds on the live
+  graph, then **Materialise** them as `:inCohort` triples and/or a Unity
+  Catalog table. **Outputs** configures those targets. **Purge Inferences**
+  removes materialised cohort and reasoning triples.
+
+Saved cohorts can be reused as the scope of a Scenario. Rule reference:
+[Cohort discovery](advanced_features.md#cohort-discovery).
+
+### Analytics (Discovery)
+
+Analytics scores every entity of the mapped graph on five metrics: **PageRank**
+(global influence), **Betweenness** (bridging role), **Degree** (raw
+connectivity), **Closeness** (reachability) and **Clustering** (local density).
+It never writes to the graph.
+
+- **Run Analysis** — optionally restrict to one entity type, then run in the
+  background on a serverless Databricks job.
+- **Dashboard** — KPI tiles, one distribution histogram per metric, and a
+  ranking chart. Click a point to open that entity in Explorer. **Top N**
+  trims the detail table only.
+- **Data Model Health** — flags entity types that look flat (no relationships,
+  or one relationship across many instances): candidates to exclude from the
+  sync.
+- **AI Insights** — **Interpret** writes Key Findings, Notable Entities and
+  Recommendations with the domain's LLM; **Add to audit trail** posts them on
+  the domain version. Unavailable under **No LLM**.
+- **Runs** — every analysis launched from this page, with scope, version,
+  status, metrics, duration and details (failed runs included).
+
+Chart internals and the job reference are in
+[Analytics (Intelligence → Discovery)](#analytics-intelligence--discovery)
+above and [Intelligence → Analytics](intelligence.md#discovery--analytics).
+
+### Communities (Discovery)
+
+Communities finds clusters of tightly connected entities, with no groups
+defined in advance. It uses label propagation on a Databricks job and can be
+limited to one entity type.
+
+1. **Detect** — computes a bounded preview of the largest communities, with
+   size statistics, modularity, rounds and whether the run converged.
+2. **Materialize** — writes the partition into the graph as `Cluster` +
+   `:inCluster` triples, so Explorer can colour and collapse it. It replaces
+   the previous partition. The **Materialized (Explorer)** card shows what is
+   currently in the graph.
+3. **Purge** — removes the materialised partition. The last Detect preview is
+   kept.
+
+The **How it works** tab explains the algorithm in business terms.
+
+### Patterns (Discovery)
+
+Patterns finds entities that *look alike*: recurring neighbourhood profiles
+for one entity type, even when the entities are not connected to each other.
+
+- **List** — saved runs. Every Detect run is saved automatically to Unity
+  Catalog under the entity type and date/time; opening a card restores its
+  catalog and diagrams.
+- **New** (Detect) — choose the entity type, **Hops** (1–5), **Numeric bins**,
+  **Min support** and **Refine top-N**. Each field has an (i) tooltip. The
+  job runs on Databricks.
+- **Run details** — KPIs: **Hops**, **Entities** (instances of the type in the
+  run), **Patterns** (how many profiles were found) and **Coverage** (share of
+  the type that follows at least one pattern). A collapsible bar chart ranks
+  patterns by matching entities.
+- **Pattern view** — the detail level (*Exact*, *Neighbours (1 hop)*, *Own
+  attributes*, *Structure only*), a layered diagram (hover a box to highlight
+  its path, hover an arrow for min / max / count), and **Matching entities**
+  with links to Explorer.
+
+The graph is never changed. The **How it works** tab explains the method.
+
+### Scenarios (Simulation)
+
+A scenario is a safe *what if*. It copies a slice of the graph (an entity
+neighbourhood or a cohort) into a private sandbox, applies hypothetical facts,
+re-runs the reasoning you ticked, and lists what would be added or removed.
+The live graph is never modified.
+
+- **List** — saved scenarios with scope, number of facts, status (*draft*,
+  *running*, *ready*, *failed*) and the added / removed counts of the last run.
+- **Workbench** — header buttons **Save**, **Run** and **Purge** (Purge drops
+  the sandbox and keeps the scenario as a draft). Four tabs:
+  - **General** — name, description, slice (*Entity neighbourhood* or *Cohort*),
+    hops and entity cap.
+  - **Hypothetical facts** — **Set** replaces a value, **Add** keeps existing
+    values and adds one, **Remove** deletes one exact value or link. **Add
+    fact** opens a three-step wizard (entity type → predicate → object).
+    **Propose facts** lets an agent draft facts from a plain-language
+    description; review them before you run.
+  - **Reasoning** — T-Box (OWL 2 RL), Simple rules, Graph reasoning and Complex
+    rules. Simple rules and graph reasoning are on by default; expand a group to
+    tick individual rules.
+  - **Results** — KPIs and two paged tables, **Added** (tagged *your fact* or
+    *inferred*) and **Removed**. **Explorer** opens the sandbox.
+- **From Explorer** — **Simulate from here** on any entity opens the workbench
+  with that entity's neighbourhood already set as the scope.
+
+Limits: a scope holds at most 5,000 entities and 250,000 copied triples. A
+larger scope fails the run with a message instead of being cut silently.
+
+### Compare (Simulation)
+
+Compare answers *how would today's real graph differ if this scenario
+happened, and what does it mean for the business?*
+
+- **Graphs** — pick a **ready** scenario and the **Live graph** (inferred or
+  asserted only). The overlay loads automatically: grey unchanged, amber
+  modified, green added, red removed. **Refresh** reloads it, **Metrics** shows
+  exact counts, and **Selection & Guide** shows the details of a clicked node or
+  link.
+- **Evaluate** — type a business question in **Prompt** and press **Ask both**:
+  the same question runs on the live graph and on the sandbox. **Business
+  insights** comments on the difference, **Open report** builds a printable
+  summary, and **Export PDF** uses the browser print dialog.
+
+### Activity and run history
+
+- Long operations (Detect, Materialize, Analytics, scenario Run) run in the
+  background. Follow them in the navbar **Activity** panel and come back later.
+- Each page keeps its last result. The full history is on **Analytics → Runs**
+  and, for admins, in **Settings → Automation → Runs** (build, analytics,
+  community, pattern and simulation runs for every domain).
+- Every Intelligence page header has the **ontology discussion** button and the
+  graph readiness badge. Section and item are part of the URL (for example
+  `?section=patterns`), so a shared link reopens the same view.
+
+### Before you start and typical flow
+
+Before you start, save the domain and build the graph (**Graph → Management →
+Build**). Analytics, Communities and Patterns also need *Compute large-graph
+metrics on Databricks* in **Settings → Global** and the matching Databricks
+jobs. Scenarios and Compare work on [Lakebase](https://docs.databricks.com/aws/en/oltp/), Lakehouse and Neo4j domains.
+
+A typical first pass: **Analytics** (who is influential?) → **Communities**
+(which groups are connected?) → **Patterns** (who looks alike?) → a **Cohort**
+(turn an insight into a rule) → a **Scenario** from Explorer → **Compare** and
+**Evaluate**. The end-to-end energy example is in the
+[operator guide](intelligence.md#end-to-end-example-energy--utilities).
 
 ---
 
 ## Context Management & Version Control
 
-OntoBricks stores contexts in the **Lakebase registry** (Postgres) with built-in version control. Navigate to the **Context** page by clicking "Context" in the navigation bar.
+OntoBricks stores contexts in the **[Lakebase](https://docs.databricks.com/aws/en/oltp/) registry** (Postgres) with built-in version control. Navigate to the **Context** page by clicking "Context" in the navigation bar.
 
 ### Context Structure
 
-Each context is a named row family in the Lakebase registry (not a Unity Catalog Volume):
+Each context is a named row family in the Lakebase registry (not a [Unity Catalog Volume](https://docs.databricks.com/aws/en/volumes/)):
 - **Name**: CamelCase identifier (sanitized for catalog objects)
 - **Versions**: Integer versions (`v1`, `v2`, …) with Draft / In Review / Published lifecycle
 - **Contents**: Ontology, mappings, design layout, Knowledge Store parsed documents, and context metadata
@@ -1417,12 +1555,12 @@ The **Global** tab in the Context → Configuration section contains the main co
 Click **Browse** to search models available to the signed-in Databricks identity.
 **New Domain** uses the same picker. The list is grouped:
 
-1. **AI Gateway** first — Unity Catalog model services you can execute, including
+1. **[AI Gateway](https://docs.databricks.com/aws/en/ai-gateway/)** first — [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) model services you can execute, including
    `system.ai.*` and custom three-part names such as
    `main.ai.monclaudesonnetamoi`. Refresh reloads the catalog. The identity needs
    Unity Catalog `EXECUTE`, or an effective `ALL_PRIVILEGES` grant inherited by
-   the application service principal, on a Gateway service.
-2. **Model Serving (Legacy)** — existing Serving endpoints.
+   the application [service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals), on a Gateway service.
+2. **[Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/) (Legacy)** — existing Serving endpoints.
 
 Save the selection on the domain. Ontology generation, Assistant, Auto Icons,
 Business Rules, Mapping Auto-Map and SQL generation, Graph Chat, and Analytics
@@ -1468,7 +1606,7 @@ Full detail: [Architecture → Lakehouse Unity Catalog objects](architecture.md#
 
 | Backend | Storage | Sync | Best for |
 |---------|---------|------|----------|
-| **Lakehouse (Delta)** | The UC objects above (SQL Warehouse) | Build CTAS + companion tables, or Virtual Graph (no copy) | Unity Catalog governance, analytics on the mapped snapshot, no separate graph DB |
+| **Lakehouse (Delta)** | The UC objects above ([SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)) | Build CTAS + companion tables, or Virtual Graph (no copy) | Unity Catalog governance, analytics on the mapped snapshot, no separate graph DB |
 | **Lakebase Postgres** | Flat `(subject, predicate, object)` table on the App-bound Lakebase instance | App-managed (`COPY FROM STDIN`) or managed-synced (Lakeflow) | Low-latency reads from the FastAPI process, reasoning, BFS / cohort builds |
 | **Neo4j** | Bolt-connected property graph | Build `MERGE` of mapped triples | Cypher traversal workloads |
 
@@ -1486,7 +1624,7 @@ Short version:
 | Neo4j | Yes, twice: UC `_data` TABLE + Neo4j nodes | Build `MERGE` | None — native Bolt traversal |
 
 **Performance:**
-- **Delta** materialises the R2RML VIEW into `_data` with **Liquid Clustering** (`CLUSTER BY (predicate, subject)`), co-locating rows by predicate and subject for faster filtering. After each build, an `OPTIMIZE` runs on `_data` to compact files and apply the clustering layout. Interactive reads typically hit the `_graph` union VIEW. **Overview** and the KG status badge read the graph-index companions (`_entity_search`, `_adj_*`, `_props`) instead of `COUNT(*)` on that VIEW — a pass-through `_graph` on a large mapping would otherwise time out. Under `Virtual Graph (no copy)` there is nothing to cluster or optimise on `_data`, and SPARQL / uncached traversals still re-execute the mapping SQL.
+- **Delta** materialises the R2RML VIEW into `_data` with **[Liquid Clustering](https://docs.databricks.com/aws/en/delta/clustering)** (`CLUSTER BY (predicate, subject)`), co-locating rows by predicate and subject for faster filtering. After each build, an `OPTIMIZE` runs on `_data` to compact files and apply the clustering layout. Interactive reads typically hit the `_graph` union VIEW. **Overview** and the KG status badge read the graph-index companions (`_entity_search`, `_adj_*`, `_props`) instead of `COUNT(*)` on that VIEW — a pass-through `_graph` on a large mapping would otherwise time out. Under `Virtual Graph (no copy)` there is nothing to cluster or optimise on `_data`, and SPARQL / uncached traversals still re-execute the mapping SQL.
 - **Lakebase** stores triples in Postgres flat tables. Two modes are available: `managed_synced` (what Settings → Lakebase proposes: Databricks Lakeflow Snapshot-syncs a table from the mapped view; Triggered/Continuous need CDF and cannot run on a view) and `app_managed` (the app streams batches via `COPY FROM STDIN`, used at runtime when `sync_mode` was never saved).
 
 #### Materialization modes (Lakehouse)
@@ -1816,7 +1954,7 @@ Contexts are saved as versioned documents in the Lakebase registry. Use the **Sa
 4. **Use Consistent Column Types**: Source/target columns should match entity IDs
 5. **Exclude Irrelevant Attributes Early**: Before running Auto-Map, open each entity's Status tab and uncheck attributes you don't need. Auto-Map will skip excluded attributes, producing leaner SQL with no extra columns.
 6. **Quote Special Column Names**: If a source column contains spaces, hyphens, or dots, use backtick quoting in your SQL (`` `column name` AS column_name ``) so the mapping and R2RML export work correctly.
-7. **Quote Unity Catalog tables per segment**: Write `catalog.schema.table` or `` `catalog`.`schema`.`table` ``. A single pair of backticks around the whole three-level name is illegal Spark SQL; Mapping save, Auto-Map, and Diagnostics rewrite or flag it.
+7. **Quote [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) tables per segment**: Write `catalog.schema.table` or `` `catalog`.`schema`.`table` ``. A single pair of backticks around the whole three-level name is illegal Spark SQL; Mapping save, Auto-Map, and Diagnostics rewrite or flag it.
 8. **Use Metadata Quality Warning**: Check the Auto-Map page for the metadata quality warning before running Auto-Map — adding table and column descriptions in Context → Data Assets significantly improves mapping accuracy.
 
 ### Knowledge Graph Tips
@@ -1825,7 +1963,7 @@ Contexts are saved as versioned documents in the Lakebase registry. Use the **Sa
 2. **Check Quality**: Run quality checks after syncing to catch constraint violations early
 3. **Use Graph Viewer**: The interactive graph is the best way to explore entity relationships
 4. **Review Triples**: Browse the triples grid to verify the generated data looks correct
-5. **Performance**: The `/stats` API aggregates all scalar metrics in a single SQL query and the `/triples/find` BFS traversal uses a recursive CTE, minimizing SQL Warehouse round trips
+5. **Performance**: The `/stats` API aggregates all scalar metrics in a single SQL query and the `/triples/find` BFS traversal uses a recursive CTE, minimizing [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) round trips
 6. **Programmatic Access**: Use the Knowledge Graph API (`/api/v1/digitaltwin/`) or the MCP server for programmatic and conversational access to your graph viewer
 7. **Use Analytics for Governance**: Run the Analytics section after each sync to spot high-influence entities (PageRank), bottlenecks (Betweenness), and isolated sub-graphs (connected components count > 1). Use the AI Interpretation feature to get an instant narrative summary of the graph structure.
 8. **Save Insights to Audit Trail**: After interpreting analytics results, click **Add to audit trail** to keep a record of the AI-generated observations in the domain's review history.
@@ -2017,7 +2155,7 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 
 ### Lakebase domain objects
 
-**Settings → Lakebase → Objects** groups each domain/version's reader view,
+**Settings → [Lakebase](https://docs.databricks.com/aws/en/oltp/) → Objects** groups each domain/version's reader view,
 `_sync` bulk table, `__app` writable companion, `_adj_in`, `_adj_out`,
 `_entity_search`, `_entity_search_asserted`, and `_props` tables into one collapsible card. Simulation
 sandbox tables (`__sim_<id>`), Explorer overlay views (`__smu_<id>`),
@@ -2034,10 +2172,10 @@ rebuildable graph-index tables and any simulation sandboxes.
 
 > **Required role:** Administrator.
 
-**Settings → Lakehouse → SQL Warehouse** owns both compute roles:
+**Settings → Lakehouse → [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)** owns both compute roles:
 
 - **Build SQL Warehouse** — classic or serverless warehouse (never Lakehouse//RT) used for mapping views, materialization, and other writes. Build SQL always uses the Thrift transport; SEA/Kernel is not configurable for this role. You can override the Databricks App `sql-warehouse` resource default from this selector.
-- **Query SQL Warehouse** — disabled by default and mirrored from Build. Enable **Use Lakehouse//RT for queries** to choose a distinct warehouse for Knowledge Graph reads. RT warehouses reject `CREATE VIEW` / CTAS, so Build and **Refresh cache** never use the Query warehouse. Disabling the option and applying restores Build for reads. In Databricks Apps, RT reads use the Statement Execution API with `INLINE` JSON results, avoiding Kernel CloudFetch storage downloads. Local development keeps the SQL connector's Kernel path.
+- **Query SQL Warehouse** — disabled by default and mirrored from Build. Enable **Use Lakehouse//RT for queries** to choose a distinct warehouse for Knowledge Graph reads. RT warehouses reject `CREATE VIEW` / CTAS, so Build and **Refresh cache** never use the Query warehouse. Disabling the option and applying restores Build for reads. In [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/), RT reads use the Statement Execution API with `INLINE` JSON results, avoiding Kernel CloudFetch storage downloads. Local development keeps the SQL connector's Kernel path.
 
 **Settings → Databricks → Use CloudFetch** controls whether Thrift SQL clients download result files via CloudFetch. It does not affect Lakehouse//RT: Apps uses `INLINE` Statement Execution results and local development uses Kernel. INLINE responses are capped at 24 MiB; OntoBricks rejects a truncated response rather than displaying an incomplete graph.
 
@@ -2145,7 +2283,7 @@ returns. Save stays disabled until then.
 1. Create a repository (an empty one is fine) and a fine-grained personal
    access token (or GitHub App token) limited to it with **Contents: read and
    write**.
-2. Store the token in a Databricks secret and grant the app service principal
+2. Store the token in a [Databricks secret](https://docs.databricks.com/aws/en/security/secrets/) and grant the app [service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals)
    `READ` on the scope (`databricks secrets put-acl --scope <scope> --principal <app-sp> --permission READ`).
 3. In **Settings → Configuration → GitHub** tick **Enable GitHub mirror**
    (the repository fields appear only then). Fill in *Owner*, *Repository*,
@@ -2227,7 +2365,7 @@ import. The repository must already be configured and claimed in Settings.
 **Solutions**:
 - Verify Databricks host URL is correct (include `https://`)
 - Check token has not expired
-- Ensure SQL Warehouse is running
+- Ensure [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) is running
 - Verify network connectivity
 
 ### No Tables Showing
@@ -2245,7 +2383,7 @@ import. The repository must already be configured and claimed in Settings.
 
 **Solutions**:
 - Confirm the token has **Contents: read and write** on that repository
-- Confirm the Databricks secret scope/key (or `ONTOBRICKS_GITHUB_TOKEN` locally)
+- Confirm the [Databricks secret](https://docs.databricks.com/aws/en/security/secrets/) scope/key (or `ONTOBRICKS_GITHUB_TOKEN` locally)
 - If the repository is claimed by another instance, tick **Take over** only if
   you intend to reuse it
 - A GitHub outage never fails a registry save; retry **Sync all now** after
@@ -2288,7 +2426,7 @@ import. The repository must already be configured and claimed in Settings.
 **Problem**: Triples are missing from the Graph DB after the App restarts
 
 **Solutions**:
-- Lakebase Postgres is the source of truth for the graph engine — verify the App is bound to the Lakebase instance (`PGHOST` / `PGDATABASE` env vars set by the Apps runtime)
+- [Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/) is the source of truth for the graph engine — verify the App is bound to the Lakebase instance (`PGHOST` / `PGDATABASE` env vars set by the Apps runtime)
 - If the Lakebase instance was paused or scaled to zero, the connection layer retries on `SQLSTATE 57P03`. Wait a few seconds and re-trigger the build.
 - Re-run the Knowledge Graph sync — the build is idempotent (`INSERT … ON CONFLICT DO NOTHING`)
 - For `managed_synced` mode, check the Lakeflow synced-table status under **Settings → Back end**
@@ -2359,10 +2497,10 @@ This guide walks you through creating a fully populated **graph viewer triple st
 
 Before you start, make sure you have:
 
-- A **Databricks workspace** with tables in Unity Catalog
-- A **SQL Warehouse** (Serverless or Classic)
-- An executable **Unity AI Gateway model service** or a legacy **Databricks
-  Model Serving endpoint** for LLM features. You can instead save **No LLM**
+- A **Databricks workspace** with tables in [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/)
+- A **[SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)** (Serverless or Classic)
+- An executable **Unity [AI Gateway](https://docs.databricks.com/aws/en/ai-gateway/) model service** or a legacy **Databricks
+  [Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/) endpoint** for LLM features. You can instead save **No LLM**
   and still import metadata, design the ontology, map SQL by hand, and build
   the graph; Wizard, Auto-Map, Assistant, Graph Chat, and Interpret stay
   unavailable until you select a model.
@@ -2603,7 +2741,7 @@ error state; build information and actions remain hidden until loading succeeds.
 
 > **Note**: If the triple store table already exists, you can choose to **drop and recreate** it or append to the existing data.
 
-> **Triple Store Backend**: OntoBricks always materializes a Delta view in Unity Catalog (governance + lineage) and a flat triple table in the domain's Graph DB engine (Lakebase Postgres, Lakehouse, or Neo4j). The backend is chosen **per domain** under **Context → Configuration → Knowledge Graph** (engine *connection* settings live under **Settings → Back end**).
+> **Triple Store Backend**: OntoBricks always materializes a Delta view in Unity Catalog (governance + lineage) and a flat triple table in the domain's Graph DB engine ([Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/), Lakehouse, or Neo4j). The backend is chosen **per domain** under **Context → Configuration → Knowledge Graph** (engine *connection* settings live under **Settings → Back end**).
 
 ---
 
@@ -2675,7 +2813,7 @@ Open **Explorer** in the sidebar to explore the graph viewer interactively:
 - **Find** specific entities by name, type, or URI — matching entities and their neighbors are highlighted
 - **Find Path** highlights the shortest undirected path(s) between two entities already on the canvas (including through group/cluster super-nodes). Open it from the header or empty-canvas menu, or right-click an entity: **Find path (From)** opens the dialog with that entity as source; **Find path (To)** highlights immediately (Search seed → clicked entity, no dialog). Click a node or empty canvas to clear the highlight.
 - **Search** by entity type, field, match type, and relationship depth
-- **Cap expansion** with the max-entities control (default 5 000, up to 20 000). The server uses the value you pick, including in Databricks Apps.
+- **Cap expansion** with the max-entities control (default 5 000, up to 20 000). The server uses the value you pick, including in [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/).
 - **Navigate** relationships — click an entity to see its attributes, values, and connected entities in the detail panel
 - **Graph** chooses the live asserted graph, the live inferred graph, or one ready simulation sandbox per scenario. Opening Explorer from the sidebar always selects **Live graph (inferred)**; an inbound link (for example Results → Explorer with `?simulation=`) keeps that sandbox.
 - **View** opens canvas help: entity and relationship labels, hide orphans, and quality rings
@@ -2775,8 +2913,8 @@ OntoBricks supports multiple ways to create or bootstrap an ontology: from scrat
 
 | Method | Source | Formats | Use Case |
 |--------|--------|---------|----------|
-| **OWL** | Local file or Unity Catalog Volume | `.ttl`, `.owl`, `.rdf`, `.xml`, `.jsonld`, `.json` | Load an existing OWL ontology (Turtle, RDF/XML, or JSON-LD) |
-| **RDFS** | Local file or Unity Catalog Volume | `.ttl`, `.rdf`, `.xml`, `.rdfs`, `.n3`, `.nt`, `.jsonld` | Load an RDF Schema |
+| **OWL** | Local file or [Unity Catalog Volume](https://docs.databricks.com/aws/en/volumes/) | `.ttl`, `.owl`, `.rdf`, `.xml`, `.jsonld`, `.json` | Load an existing OWL ontology (Turtle, RDF/XML, or JSON-LD) |
+| **RDFS** | Local file or [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) Volume | `.ttl`, `.rdf`, `.xml`, `.rdfs`, `.n3`, `.nt`, `.jsonld` | Load an RDF Schema |
 | **FIBO** | EDM Council spec server | RDF/XML, Turtle | Financial industry ontology |
 | **CDISC** | PhUSE GitHub repository | RDF/XML, Turtle | Clinical data standards |
 | **IOF** | IOF GitHub repository | RDF/XML | Digital manufacturing ontology |
@@ -3000,7 +3138,7 @@ After import you can:
 ### Tips
 
 - **Start small**: When importing a large standard like FIBO, start with the required foundation module and one domain to evaluate the result before adding more.
-- **Network access**: Industry-standard imports require outbound internet access to fetch modules from their public repositories. If running in Databricks Apps with restricted egress, download the files manually and use the OWL file import instead.
+- **Network access**: Industry-standard imports require outbound internet access to fetch modules from their public repositories. If running in [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) with restricted egress, download the files manually and use the OWL file import instead.
 - **Incremental import**: Each import replaces the current ontology. If you need to combine multiple standards, export after each import and merge the OWL files externally.
 - **Layout reset**: After importing a large ontology, use **Auto-Layout** in the **Ontology Studio** view to arrange entities automatically.
 
@@ -3009,7 +3147,7 @@ After import you can:
 ## Feature inventory
 
 ### Ontology Design
-- **Ontology Studio (menu)**: Primary visual ontology workspace under **Ontology → Studio** — OntoViz canvas, toolbar, and floating AI Assistant (the sidebar label is *Studio*, not “Model”). The assistant uses the LLM saved in **Context → Configuration → AI** (Unity AI Gateway or Model Serving); it is unavailable when **No LLM** is selected.
+- **Ontology Studio (menu)**: Primary visual ontology workspace under **Ontology → Studio** — OntoViz canvas, toolbar, and floating AI Assistant (the sidebar label is *Studio*, not “Model”). The assistant uses the LLM saved in **Context → Configuration → AI** (Unity [AI Gateway](https://docs.databricks.com/aws/en/ai-gateway/) or [Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/)); it is unavailable when **No LLM** is selected.
 - **Visual Ontology Editor (OntoViz)**: Drag-and-drop canvas to create entities, relationships, and inheritance hierarchies with icons and attributes.
 - **Class Hierarchies**: Define rdfs:subClassOf relationships with automatic property inheritance from parent to child entities.
 - **Business Rules — Simple & Complex**: Two paradigms under **Business Rules**. **Simple** rules are IF/THEN inference rules authored in a **graphical D3-based editor** — fullscreen modal with IF/THEN atom builders, ontology-aware context menu, and a collapsible **Show SHACL code** pane with the live generated SHACL-AF; they run as SHACL-AF. A header **SHACL** button opens a modal (mirroring Data Quality’s SHACL) to view and export the generated SHACL-AF rules (read-only, one-directional). **Complex** rules are user-authored SPARQL `CONSTRUCT` queries that infer new triples from graph patterns.
@@ -3017,7 +3155,7 @@ After import you can:
 - **SHACL Data Quality Shapes**: Define data quality rules using W3C SHACL — six categories (completeness, cardinality, uniqueness, consistency, conformance, structural), Turtle round-trip (generate/import), and SQL compilation for triple store execution.
 - **Conditional data quality rules**: Guard a conformance or consistency rule with an optional IF block — *IF `status` = active AND `amount` > 1000, THEN `email` must match the pattern*. Conditions use property/operator/value rows, plus `exists` / `does not exist` on relationships, and compile to a SHACL-AF `sh:SPARQLTarget` on export.
 - **OWL Axioms**: Express class relationships, property chains, and complex expressions (equivalent, disjoint, union, intersection).
-- **OWL Generation**: Automatic generation of W3C-compliant OWL (Turtle by default; JSON-LD on request) from visual design. **Ontology → Generate** also reads Unity Catalog **metric views**: dimension columns are entity evidence, measures are never proposed as classes. The Generate source list badges metric views the same way as Context → Data Assets.
+- **OWL Generation**: Automatic generation of W3C-compliant OWL (Turtle by default; JSON-LD on request) from visual design. **Ontology → Generate** also reads [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) **metric views**: dimension columns are entity evidence, measures are never proposed as classes. The Generate source list badges metric views the same way as Context → Data Assets.
 - **LLM-Powered Auto-Map Icons**: Automatically assign emoji icons to entities based on their names using the LLM saved in **Context → Configuration → AI** (Ontology Studio toolbar). Entities that still use the default icon are mapped immediately; if every entity already has a custom icon, the toolbar asks for confirmation before remapping all of them. Unavailable when **No LLM** is selected.
 - **Ontology Studio (D3 Graph)**: Force-directed graph view of the full ontology under **Ontology → Studio**. Selecting an entity or relationship shows its URI under the name in the side panel. Click an entity to select it, open its panel, and highlight its 1-hop neighbourhood (connected links + neighbours dimmed). The toolbar **Select** toggle (bounding-box icon) turns click-to-toggle and empty-canvas marquee on without holding a modifier; Ctrl/Cmd-click and Ctrl/Cmd-drag still work when the toggle is off. Ctrl/Cmd-click toggles an entity in a multi-selection without opening the panel. Ctrl/Cmd-drag on empty canvas draws a marquee that replaces the selection with every entity inside the rectangle (an empty marquee leaves the current set). Plain drag on empty canvas still pans; Escape clears a multi-selection (after connection mode, if any). Dragging one selected node moves the whole set. Right-click a multi-selection offers **Create Business View** and **Delete N entities** only — Create Business View writes `Auto_Selection` (numeric suffix on collision) with exactly the selected entities plus object-property/inheritance links whose both endpoints are selected, then opens Business Views. Single-entity right-click still creates `Auto_<entity>` plus the 1-hop neighbourhood. Click a relationship to highlight its two endpoints. Subclasses show dashed inherited outgoing relations from ancestor object-properties (read-only; Mapping reuses the declaring class’s mapping). Toggle inheritance links and the OntoViz-style dotted canvas grid (both persisted). Search any entity by name to pan/zoom to it with neighbourhood highlight. Metadata-only saves (label, icon, reference, relationship direction) refresh visible nodes in place; topology changes still rebuild the map.
 - **Import Entity (Studio)**: The Studio header **Import entity** button copies entities from another registry domain (latest version). A modal lists the source entities with their 1-hop related entities (opt-in), previews the entity/relationship counts, flags name conflicts (keep existing or rename), and imports the selection with attributes, icon, description, resolvable parent, and the relationships whose endpoints are imported or already exist. Source URIs are kept (rename rewrites the local name under the source namespace) and each copy records `importedFrom`. Mappings, rules, constraints and groups are not imported.
@@ -3047,17 +3185,23 @@ After import you can:
 - **Mapping Diagnostics**: **Graph → Build → Diagnostics** lists only warnings and errors. Queries that return rows are informational (row count badge), not failures. Excluded attributes and relationship ID columns are not reported as missing, including Spark implicit aliases (`obj_id s` → `s`).
 
 ### Intelligence
+- **Home**: Opening Intelligence lands on a tile directory (Configuration, Discovery, Simulation) with links to the Starter Guide and this operator guide.
 - **Cohort design and run**: **Intelligence → Configuration → Cohorts** is one page with two tabs. **Design** authors grouping rules; **Runs** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages and the old **Runs** entry redirect here.
+- **Analytics**: **Intelligence → Discovery → Analytics** runs the centrality job (see **Graph Analytics** below). Tabs: **Dashboard** (KPIs, metric histograms, ranking chart), **Data Model Health** (flat entity types to exclude from the sync), **AI Insights** (**Interpret** with the domain LLM; **Add to audit trail**), and **Runs** (every launched analysis, failed ones included).
 - **Community detection**: **Intelligence → Discovery → Communities** previews a label-propagation partition computed on a Databricks job (optional entity-type scope, modularity, convergence), then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer colours and collapses that partition; **Purge** removes it.
-- **Pattern detection**: **Intelligence → Discovery → Patterns** lists saved neighbourhood snapshots; **New** opens the Detect dialog (entity, hops, numeric bins, min support, refine top-N, each with an (i) tooltip), runs a Databricks job, saves the run automatically to Unity Catalog, and opens it. Each pattern shows KPIs, the detail level, a layered diagram with hover lineage highlight and relationship badges, and a **Matching entities** dialog. The graph is never changed.
+- **Pattern detection**: **Intelligence → Discovery → Patterns** lists saved neighbourhood snapshots; **New** opens the Detect dialog (entity, hops, numeric bins, min support, refine top-N, each with an (i) tooltip), runs a Databricks job, saves the run automatically to Unity Catalog, and opens it. Run KPIs: Hops, Entities, Patterns, Coverage; a bar chart ranks matching entities; each pattern shows the detail level, a layered diagram with hover lineage highlight and relationship badges, and a **Matching entities** dialog. The graph is never changed.
 - **What-if sandboxes (Scenarios)**: Assert hypothetical facts (Set / Add / Remove) on a private copy of an entity neighbourhood or a cohort, re-run the ticked reasoning phases, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
 - **Compare and Evaluate**: **Intelligence → Simulation → Compare** overlays a ready sandbox on today's live graph (inferred or asserted only) with colour-coded nodes and links and exact metrics; **Evaluate** asks one question to both graphs, adds a business-insights commentary, and builds a printable / PDF report.
-- **How it works tabs**: Communities, Patterns and Scenarios each have a **How it works** tab with business-friendly diagrams, an energy & utilities example, and collapsed technical details. Every Intelligence page header has the **ontology discussion** button.
+- **How it works tabs**: Communities, Patterns and Scenarios each have a **How it works** tab with business-friendly diagrams, an energy & utilities example, and collapsed technical details. Every Intelligence page header has the **ontology discussion** button and the graph readiness badge.
+- **Scenario workbench**: **General**, **Hypothetical facts** (Set / Add / Remove; **Add fact** wizard; **Propose facts** drafts facts from plain language for review), **Reasoning** (T-Box, Simple rules, Graph reasoning, Complex rules) and **Results** (Added / Removed tables). Header buttons **Save**, **Run**, **Purge**. **Simulate from here** on an Explorer entity pre-fills the scope.
+- **Compare metrics and report**: the overlay loads for a ready scenario; **Metrics** shows exact counts; **Selection & Guide** explains the clicked node or link; **Evaluate** → **Ask both**, **Business insights**, **Open report** and **Export PDF**.
+- **Cohort runs**: the **Runs** tab previews a rule and materialises it to `:inCohort` and/or a Unity Catalog table (**Outputs**); **Purge Inferences** removes the materialised cohort and reasoning triples.
+- **Background runs and history**: long operations appear in the navbar **Activity** panel; Analytics **Runs** and Settings → Automation → Runs (admin) keep the history.
 
 ### Graph (Sync & Explore)
-- **Two Layers**: Every build materializes a Delta view (Unity Catalog, governance) and a Graph DB engine (Lakebase Postgres today; pluggable behind `GraphDBFactory`).
+- **Two Layers**: Every build materializes a Delta view (Unity Catalog, governance) and a Graph DB engine ([Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/) today; pluggable behind `GraphDBFactory`).
 - **Readiness Status**: Validates ontology, entity mappings, relationship mappings, and attribute mapping completeness before enabling sync and explore actions.
-- **Graph readiness indicator**: Each Knowledge Graph sub-page (Explorer, Chat, Overview, GraphQL, Data Quality, Inference) and **Intelligence** pages that include it (Configuration → Cohorts, Discovery → Analytics) show a badge next to the title — *Building…*, *Graph ready · \<backend\>*, or *Graph not built* with a **Go to Build** shortcut. The backend label reflects the domain's selected engine (Lakebase / Lakehouse / Neo4j).
+- **Graph readiness indicator**: Each Knowledge Graph sub-page (Explorer, Chat, Overview, GraphQL, Data Quality, Inference) and **Intelligence** pages (including Cohorts, Analytics, Communities, Patterns, Scenarios, Compare) show a badge next to the title — *Building…*, *Graph ready · \<backend\>*, or *Graph not built* with a **Go to Build** shortcut. The backend label reflects the domain's selected engine (Lakebase / Lakehouse / Neo4j).
 - **Triple Store Sync**: Synchronize generated triples to a Unity Catalog table — SQL is generated automatically from R2RML mappings (no manual query writing required).
 - **Last Updated Timestamp**: Triple store status displays the last modification date and time retrieved from Unity Catalog Delta table metadata (`DESCRIBE DETAIL`).
 - **Auto-Load Triple Store**: Triples and Graph Viewer views automatically load data from the triple store on navigation (no manual button click required).
@@ -3066,7 +3210,7 @@ After import you can:
 - **Triples Grid**: Interactive data grid with sorting, filtering, and grouping capabilities to browse triple store contents.
 - **Graph Viewer**: Interactive sigma.js WebGL-powered graph to explore entities and relationships visually with search, filtering, depth control, and entity detail panels. **Find Path** highlights the shortest undirected path(s) between two loaded entities (text search picker) without querying the rest of the store. The bottom-left stopwatch reports the latest search's Preview, Expansion, Display, and Total times (seed-selection dwell excluded). Delta/Lakehouse expansion traverses and fetches the bounded subgraph in one Query Warehouse statement; other graph backends retain native or iterative traversal. Graph status on first paint is cache-first so Explorer is not blocked on full triple `COUNT(*)` scans.
 - **Search cache switch**: Context → Configuration → Backend (Lakehouse / Lakebase) enables or disables adjacency, entity-search, and property companions. Default on; re-enable requires Build or Refresh cache. Public find, session find/filter, GraphQL, and MCP `describe_entity` accept `cache` to force companions on or off for one request.
-- **Lakehouse//RT query path**: Administrators can enable **Use Lakehouse//RT for queries** under **Settings → Lakehouse → SQL Warehouse**. Builds stay on a classic or serverless **Build** warehouse; Query is a distinct optional warehouse because RT compute rejects `CREATE VIEW` / CTAS. The native Kernel backend, bounded retries, and an optional **Use CloudFetch** toggle (**Settings → Databricks**) keep RT reads working in Databricks Apps.
+- **Lakehouse//RT query path**: Administrators can enable **Use Lakehouse//RT for queries** under **Settings → Lakehouse → [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)**. Builds stay on a classic or serverless **Build** warehouse; Query is a distinct optional warehouse because RT compute rejects `CREATE VIEW` / CTAS. The native Kernel backend, bounded retries, and an optional **Use CloudFetch** toggle (**Settings → Databricks**) keep RT reads working in [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/).
 - **Data Cluster visualization**: Explorer View tab colours and collapses communities materialized from **Intelligence → Discovery → Communities** (label propagation on a Databricks job). Detection and materialize live on Intelligence, not Explorer.
 - **Graph Analytics**: **Intelligence → Discovery → Analytics** computes five centrality metrics over the mapped knowledge graph using a serverless Databricks Lakeflow job: PageRank (global influence), Betweenness Centrality (bridging, Brandes–Pich estimate), Degree Centrality (raw connectivity), Closeness Centrality (reachability, Brandes–Pich estimate), and Clustering Coefficient (local density). Results are organised in three tabs — **Dashboard**, **Data Model Health**, and **AI Insights**. The Dashboard shows a KPI row, then a **distribution strip** of five small histogram tiles (one per metric) summarising **every scored node in the graph** — so you can tell whether a top-ranked score is an outlier or typical — followed by a single full-width ranked **point-and-line chart** for the selected metric across **all scored nodes** (sorted by rank). Each metric switch uses one `/dtwin/metrics/series` response. The warehouse ranks every node and returns only the first and last node of each of **1,000 rank buckets** (at most **2,000 points**, whatever the graph size); the chart reports exhaustive total vs rendered points in the status line. Click a distribution tile or use the segmented control to switch metrics; a **Log scale** toggle redraws the histograms on a logarithmic count axis for heavy-tailed metrics. Histograms use 20 linear bins; median and p90 are interpolated approximations and labelled as such. Betweenness and Closeness are Brandes–Pich estimates and may be unavailable for a run (depth cap / pivots disabled) — their tiles then read "Not computed for this run". Legacy cached results (computed before this redesign) still render KPIs, the ranking chart and the detail table; distribution tiles prompt you to re-run the analysis. Clicking a ranking point navigates directly to the entity in the Graph Viewer. A PageRank Detail Table shows all five scores side-by-side with relative mini-bars, and **Top N now controls this table only** (not the chart). The ranking chart card has an explanatory popup (formula, worked example, importance). **Run Analysis** opens an **Analysis scope** dialog where an optional entity type restricts the run to a single class; the scope resets to the full graph each time it opens, and the funnel line above the results always names the scope the displayed result was computed with. Requires the admin toggle enabled, the job bundle deployed, and the domain built (which materialises the Delta snapshot the job reads).
 - **AI Graph Interpretation**: After running an Analytics computation, click **Interpret** to invoke the `agent_graph_interpreter` AI agent. The agent uses the LLM saved in **Context → Configuration → AI**, may call `get_entity_details` to look up top-ranked entities, and produces three structured insight sections (Key Findings, Notable Entities, Recommendations). Results are rendered as styled Bootstrap cards with markdown support. Clickable entity names in "Notable Entities" jump to the Graph Viewer. Unavailable when **No LLM** is selected.
@@ -3080,11 +3224,11 @@ After import you can:
 - **Entity SHACL facets**: Check one entity against every enabled SHACL shape that applies to it — the shapes on its class, on its parent classes, and the global ones. In **Graph → Explorer**, right-click a node and choose **Data quality → Data Quality Checks (N)**, or use **Check** in the node's **Data quality** section. The **Data Quality Checks** popup shows a scrollable activity log while the
 check runs, then one gauge per dimension (completeness, cardinality, uniqueness, consistency, conformance, structural): the share of checked shapes that passed, ignoring the ones that did not apply, were not evaluated or errored — a dash means nothing in that dimension could be checked. Clicking a gauge opens its section. Below, the shapes are listed by dimension in sections that start collapsed, each with its status — passed, failed (with its severity), not applicable (guard condition false), not evaluated (no SQL translation, such as `sh:closed`) or error — the values the entity carries on the constrained property, and the ancestor an inherited shape comes from. The status chips filter the list and open the sections that hold a match. Results are cached per entity for the page's lifetime; **Re-check** recomputes them. Checked nodes get a ring on the canvas: red when a Violation failed, amber when a Warning/Info failed or a shape errored, green when every shape passed or did not apply. **View → Quality rings** hides the rings. MCP clients get the same check through `check_entity_shacl_facets(entity_uri)`, which can be disabled per domain in the MCP policy.
 - **Graph Chat ↔ MCP alignment**: Graph → Chat discovers Datasets, Bridges, and Class Actions the same way MCP does (`get_entity_context`). Executing an Action from Graph Chat is **confirmation-gated**: the agent proposes via `request_entity_action`, the UI shows a Confirm/Cancel card, and only Confirm runs the allow-listed UC function. Graph Chat does **not** expose MCP's direct `invoke_entity_action` tool.
-- **Named Neo4j connections**: Settings → Neo4j holds multiple named Bolt profiles (URI, database, username, Databricks secret). Domains with Graph Backend = Neo4j must pick one connection on Context → Configuration → Knowledge Graph; Test connection / Objects operate on the selected profile.
+- **Named Neo4j connections**: Settings → Neo4j holds multiple named Bolt profiles (URI, database, username, [Databricks secret](https://docs.databricks.com/aws/en/security/secrets/)). Domains with Graph Backend = Neo4j must pick one connection on Context → Configuration → Knowledge Graph; Test connection / Objects operate on the selected profile.
 - **Violation Details**: View quality check violations in a detailed modal with entity information.
 
 ### Project Management
-- **Lakebase registry**: Save and load domains from the Postgres registry (optional GitHub mirror; Unity Catalog Volume is for ad-hoc export bundles only).
+- **Lakebase registry**: Save and load domains from the Postgres registry (optional GitHub mirror; [Unity Catalog Volume](https://docs.databricks.com/aws/en/volumes/) is for ad-hoc export bundles only).
 - **Version Control**: Context → Versions presents newest-first cards with Loaded and Latest badges, metadata, and inline lifecycle actions that immediately synchronize global badges and read-only state. App administrators can permanently delete only older, unloaded Draft versions; loaded, latest, In Review, and Published versions are protected, and the destructive Lakebase statement atomically rechecks Draft status before Knowledge Store cleanup. Registry-row deletion and Knowledge Store cleanup cannot share one transaction; a cleanup failure therefore returns a truthful 5xx partial-deletion error rather than success. Lifecycle status (Draft / In Review / Published) is separate from the **Active** version exposed through API/MCP, which is selected in **Registry → Browse**.
 - **Single-editor concurrency**: A DRAFT domain version can only be **edited by one user at a time**. The first opener edits; anyone else opening the same version is automatically **read-only** with a banner naming the current editor. The lock uses a **renew-only lease** — the editor's browser keeps it alive while the domain is open, so an active session never expires, but a lock left behind (crashed/abandoned tab) auto-releases once its lease lapses (configurable in **Settings → Global → Edit Lock Lease**, or via `ONTOBRICKS_EDIT_LOCK_TTL_S`; default 10 min; `0` disables). It is also released immediately when the editor clicks **Close** (which prompts *Save before closing?* and returns to Home) or an **app-admin takes over**. The **Save** and **Close** buttons sit together in the domain sub-navigation.
 - **Context General (Cockpit)**: Readiness tiles including **Active Version** — the version currently exposed via API/MCP (from the registry), with a *(not loaded)* hint when it differs from the version open in the session. Distinct from “latest on disk” vs read-only UI gating (still driven by whether the loaded version is the latest).
@@ -3136,7 +3280,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Toast Notifications**: All user feedback uses non-blocking toast notifications (no `alert()` dialogs).
 
 ### Performance
-- **SQL Connection Pooling**: `SQLWarehouse` maintains `queue.Queue`-based pools of database connections, eliminating per-query TLS handshake overhead. Pools are **keyed by caller identity** (service principal vs a hash of each user's OBO token) so a connection minted for one user is never reused for another.
+- **SQL Connection Pooling**: `SQLWarehouse` maintains `queue.Queue`-based pools of database connections, eliminating per-query TLS handshake overhead. Pools are **keyed by caller identity** ([service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals) vs a hash of each user's OBO token) so a connection minted for one user is never reused for another.
 - **Dedicated Thread Pool**: Blocking Databricks I/O runs in a dedicated `ThreadPoolExecutor` (configurable via `ONTOBRICKS_THREAD_POOL_SIZE`, default 20). Knowledge Graph stats, load, BFS, and neighbour expansion run on that pool so a slow warehouse query does not freeze the rest of the UI. Explorer preview applies seed `LIMIT` in SQL.
 - **Consistent Asset Versioning**: All static assets use deterministic `?v={{ asset_version }}` cache busting.
 

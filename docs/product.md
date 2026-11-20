@@ -98,9 +98,9 @@ flowchart LR
 
 | Resource       | Role                                                                       |
 | -------------- | -------------------------------------------------------------------------- |
-| Unity Catalog  | Storage for tables, domain files (Volumes), and metadata                  |
-| SQL Warehouse  | Executes all data queries -- no separate compute                           |
-| AI Gateway / Model Serving | Powers LLM-driven ontology generation and auto-mapping; **No LLM** opts out |
+| [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/)  | Storage for tables, domain files (Volumes), and metadata                  |
+| [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)  | Executes all data queries -- no separate compute                           |
+| [AI Gateway](https://docs.databricks.com/aws/en/ai-gateway/) / [Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/) | Powers LLM-driven ontology generation and auto-mapping; **No LLM** opts out |
 | Delta Table    | Triple store -- triples live in your Lakehouse, not in a separate graph DB |
 | Databricks App | Deployment target -- `databricks apps deploy` and you are live             |
 | MCP Server     | Exposes knowledge-graph tools to the Databricks Playground and LLM clients |
@@ -148,7 +148,7 @@ flowchart LR
 
 ### Slide 4: Key Features and Capabilities
 
-#### Four pillars, one integrated experience.
+#### Ontology, mapping, graph, Intelligence — one integrated experience.
 
 #### Ontology Design
 
@@ -158,7 +158,7 @@ flowchart LR
 | Studio (OntoViz) | Drag-and-drop entities, relationships, and inheritance hierarchies on an interactive canvas  |
 | LLM-Powered Wizard        | Point to Unity Catalog tables; the LLM generates a complete OWL ontology from metadata       |
 | Industry Standards        | One-click import of FIBO (6 domains), CDISC (5 standards), IOF (3 domains)                   |
-| OWL/RDFS Import           | Load existing ontologies from files or Unity Catalog Volumes                                 |
+| OWL/RDFS Import           | Load existing ontologies from files or [Unity Catalog Volumes](https://docs.databricks.com/aws/en/volumes/)                                 |
 | Constraints and Rules     | Cardinality, value constraints, property characteristics, IF-THEN rules, expressions and axioms |
 
 
@@ -184,7 +184,20 @@ flowchart LR
 | Quality Checks        | Async validation against ontology constraints (cardinality, orphans, value rules)    |
 | Dashboard Integration | Embed Databricks dashboards with parameter mapping to ontology entities              |
 | Triples Grid          | Sortable, searchable table view of all materialized triples                          |
-| What-if Simulation    | Assert hypothetical facts on a sandbox copy of a graph slice, re-run reasoning, compare before/after — the live graph is never touched (Lakebase) |
+| What-if Simulation    | Assert hypothetical facts on a sandbox copy of a graph slice, re-run reasoning, compare before/after — the live graph is never touched |
+
+
+#### Intelligence (Discover and simulate)
+
+
+| Capability            | Description                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| Home                  | Workspace landing of tiles (Configuration, Discovery, Simulation) plus Starter Guide |
+| Analytics             | PageRank, betweenness, degree, closeness, clustering on a Databricks job; Dashboard, Data Model Health, Interpret, Runs |
+| Communities           | Label-propagation clusters; Materialize for Explorer colour / collapse               |
+| Patterns              | Recurring neighbourhood profiles; Coverage KPI, bar chart, diagrams                  |
+| Cohorts               | Explainable grouping rules; Preview / Materialise (`:inCohort` or a UC table)        |
+| Scenarios & Compare   | What-if sandbox, overlay vs live graph, Evaluate a question, PDF report              |
 
 
 #### Domain Management
@@ -234,6 +247,7 @@ OntoBricks is the **only** solution that combines all of the following in a sing
 - W3C standards-based (OWL, JSON-LD, R2RML, SPARQL, SHACL)
 - LLM-automated (ontology generation + data mapping)
 - Graph-visualizing (interactive graph viewer)
+- Graph-intelligent (Analytics, Communities, Patterns, Cohorts, what-if Scenarios)
 - Industry-standard ready (FIBO, CDISC, IOF)
 - Source-available under the [Databricks License](../LICENSE.txt)
 
@@ -318,11 +332,11 @@ databricks apps deploy --app-name ontobricks
 
 ### Summary
 
-OntoBricks is a **Graph Viewer Builder for Databricks** that brings **graph database capabilities and formal reasoning** to the Lakehouse — without requiring separate graph infrastructure. It transforms relational tables stored in Unity Catalog into a structured graph viewer by leveraging semantic web standards (OWL, JSON-LD, R2RML, RDF), a Lakebase Postgres graph engine, OWL 2 RL reasoning, and LLM-powered automation.
+OntoBricks is a **Graph Viewer Builder for Databricks** that brings **graph database capabilities and formal reasoning** to the Lakehouse — without requiring separate graph infrastructure. It transforms relational tables stored in [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) into a structured graph viewer by leveraging semantic web standards (OWL, JSON-LD, R2RML, RDF), a [Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/) graph engine, OWL 2 RL reasoning, and LLM-powered automation.
 
 Users can design ontologies visually or import industry standards (FIBO for finance, CDISC for clinical data, IOF for manufacturing), map ontology entities to Databricks tables, materialize the result into a Delta-backed triple store mirrored on Lakebase Postgres, run **formal reasoning** (OWL 2 RL deductive closure, IF-THEN rules, transitive/symmetric inference), and explore the graph viewer through interactive visualization. The entire pipeline — from raw tables to a reasoned, queryable graph viewer — can be completed in as few as four clicks thanks to LLM-driven ontology generation and automatic data mapping.
 
-OntoBricks runs as a **Databricks App**, making it natively integrated with the Databricks platform: Unity Catalog for storage and metadata, SQL Warehouses for query execution, and AI Gateway or Model Serving for LLM features.
+OntoBricks runs as a **Databricks App**, making it natively integrated with the Databricks platform: Unity Catalog for storage and metadata, [SQL Warehouses](https://docs.databricks.com/aws/en/compute/sql-warehouse/) for query execution, and [AI Gateway](https://docs.databricks.com/aws/en/ai-gateway/) or [Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/) for LLM features.
 
 ---
 
@@ -347,7 +361,7 @@ OntoBricks provides an end-to-end, web-based solution that runs directly on Data
 - **Visual designer** (OntoViz) with drag-and-drop entity creation, relationship wiring, and inheritance hierarchies.
 - **LLM-powered Wizard**: Point to Unity Catalog tables, and the LLM generates a complete OWL ontology from table/column metadata — entities, relationships, attributes, and inheritance.
 - **Industry-standard import**: One-click import of FIBO (6 domains), CDISC (5 standards), and IOF (3 domains) with automatic module fetching, merging, and parsing.
-- **OWL/RDFS import**: Load existing ontologies from files or Unity Catalog Volumes.
+- **OWL/RDFS import**: Load existing ontologies from files or [Unity Catalog Volumes](https://docs.databricks.com/aws/en/volumes/).
 
 #### Data Mapping
 
@@ -357,7 +371,7 @@ OntoBricks provides an end-to-end, web-based solution that runs directly on Data
 
 #### Triple Store + Graph DB Layers
 
-- **Delta view (SQL Warehouse)**: Materialize triples into a governed Delta view `(subject, predicate, object)` with Liquid Clustering, full Unity Catalog lineage, and SQL-based graph reasoning (recursive CTEs for transitive closure, anti-joins for symmetric expansion).
+- **Delta view (SQL Warehouse)**: Materialize triples into a governed Delta view `(subject, predicate, object)` with [Liquid Clustering](https://docs.databricks.com/aws/en/delta/clustering), full Unity Catalog lineage, and SQL-based graph reasoning (recursive CTEs for transitive closure, anti-joins for symmetric expansion).
 - **Lakebase Postgres (Graph DB engine)**: A flat triple table on the App-bound Lakebase Postgres instance, populated either by `app_managed` `COPY FROM STDIN` streaming or by `managed_synced` Lakeflow synced tables. The same SQL primitives used on Delta run on Lakebase, with sub-second latency from the FastAPI process. The Graph DB layer is pluggable behind `GraphDBBackend` and `GraphDBFactory` — capability flags (`supports_cypher`, `is_cypher_backend`, `query_dialect`) reserve a slot for plugging in a future Cypher / Gremlin engine.
 - **Quality checks**: Validate the triple store against ontology constraints — cardinality, value constraints, functional/symmetric properties, orphan detection, and more.
 - **SHACL Data Quality**: Define W3C SHACL shapes across six quality categories (completeness, cardinality, uniqueness, consistency, conformance, structural) — shapes are compiled to SQL for execution against the triple store or validated in-memory via PySHACL.
@@ -412,7 +426,7 @@ A **production-ready, source-available Databricks App** under the [Databricks Li
 - Deploys in minutes via `databricks apps deploy`
 - Requires only a SQL Warehouse and (optionally) an AI Gateway model or Model Serving endpoint
 - Stores domain data in the Lakebase registry (optional GitHub mirror; Unity Catalog Volume for export bundles only)
-- Supports the full lifecycle: design → map → materialize → explore → validate
+- Supports the full lifecycle: design → map → materialize → explore → validate → Intelligence (analytics, communities, patterns, scenarios)
 
 #### Expected Impact
 
@@ -445,15 +459,15 @@ A **production-ready, source-available Databricks App** under the [Databricks Li
 
 | Layer      | Technology                                                                                |
 | ---------- | ----------------------------------------------------------------------------------------- |
-| Backend    | Python 3.11+, FastAPI, RDFLib, Databricks SDK                                             |
+| Backend    | Python 3.11+, FastAPI, RDFLib, [Databricks SDK](https://docs.databricks.com/aws/en/dev-tools/sdk-python)                                             |
 | Reasoning  | owlrl 7.0+ (OWL 2 RL forward chaining), PySHACL 0.26+ (SHACL validation), custom IF-THEN engine (SQL translator) |
 | Graph DB   | Lakebase Postgres flat triple store (`psycopg`, `COPY FROM STDIN`, optional Lakeflow synced tables); pluggable behind `GraphDBBackend` |
-| Graph Analysis | Databricks Lakeflow jobs (graph metrics, label-propagation communities); NetworkX 3.0+ (cohorts) |
+| Graph Analysis | Databricks Lakeflow jobs (graph metrics, label-propagation communities, pattern detection); NetworkX 3.0+ (cohorts) |
 | Frontend   | Bootstrap 5, Sigma.js, Graphology (+ communities-louvain), D3.js, OntoViz (custom), Vanilla JS |
-| Data       | Databricks SQL Connector, Unity Catalog, Delta Lake                                       |
+| Data       | [Databricks SQL Connector](https://docs.databricks.com/aws/en/dev-tools/python-sql-connector), Unity Catalog, [Delta Lake](https://docs.databricks.com/aws/en/delta/)                                       |
 | AI         | Databricks AI Gateway model services and Model Serving endpoints                          |
 | MCP        | FastMCP, httpx, Databricks SDK (separate App)                                             |
-| Deployment | Databricks Apps (`app.yaml`)                                                              |
+| Deployment | [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) (`app.yaml`)                                                              |
 
 
 #### Current State
@@ -466,10 +480,11 @@ A **production-ready, source-available Databricks App** under the [Databricks Li
 - **Triple store + Graph DB layers**: Delta view (Unity Catalog) + Lakebase Postgres flat store, pluggable behind `GraphDBFactory`
 - MCP server deployed and operational for Databricks Playground
 - **Entity Groups**: OWL-compliant class grouping via `owl:equivalentClass` + `owl:unionOf`, with expand/collapse super-nodes in the Graph Viewer visualization
+- **Intelligence workspace**: Home tiles; Analytics (centrality job); Communities (label propagation, then `Cluster` + `:inCluster` for Explorer); Patterns (neighbourhood signatures, Coverage KPI); Cohorts; Scenarios / Compare / Evaluate
 - **Data Cluster Detection**: Intelligence → Discovery → Communities runs label propagation on a Databricks job, then materializes one partition (`Cluster` + `:inCluster`); Explorer colour-by-cluster and collapse/expand super-nodes consume that partition
 - Knowledge Graph REST API with design status, ontology, R2RML, Spark SQL endpoints
 - GraphQL API with configurable depth and auto-generated schema
-- Documentation: README, user guide, architecture, API reference, import guide, automated pipeline guide
+- Documentation: README, user guide, Intelligence operator guide, architecture, API reference, import guide, automated pipeline guide; in-app Help Center Starter Guide includes Intelligence
 
 #### Resources Needed
 

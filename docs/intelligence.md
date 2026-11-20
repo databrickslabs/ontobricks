@@ -13,6 +13,7 @@ is the deep reference for writing cohort rules.
 **Contents**
 
 - [Overview](#overview)
+- [Home](#home)
 - [Before you start](#before-you-start)
 - [Configuration → Cohorts](#configuration--cohorts)
 - [Discovery → Analytics](#discovery--analytics)
@@ -28,14 +29,16 @@ is the deep reference for writing cohort rules.
 
 ## Overview
 
-The left sidebar has three groups:
+The left sidebar has three groups. Opening Intelligence from the app switcher
+always lands on **Home**.
 
 | Group | Page | Business question it answers | Writes to the live graph? |
 |-------|------|------------------------------|---------------------------|
+| *(landing)* | **Home** | *Where do I start in this workspace?* | Never |
 | **Configuration** | **Cohorts** | *Which entities belong together according to rules I define?* | Only when you **Materialise** a cohort run |
 | **Discovery** | **Analytics** | *Which entities matter most structurally (influence, bridges, density)?* | Never (reads the mapped graph; results cached in the registry) |
 | **Discovery** | **Communities** | *Which entities are tightly connected to each other?* | Only when you **Materialize** the partition |
-| **Discovery** | **Patterns** | *Which entities look alike (same kind of neighbourhood and profile)?* | Never (saved as a Unity Catalog snapshot) |
+| **Discovery** | **Patterns** | *Which entities look alike (same kind of neighbourhood and profile)?* | Never (saved as a [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) snapshot) |
 | **Simulation** | **Scenarios** | *What would change if these facts were true?* | Never (private sandbox per scenario) |
 | **Simulation** | **Compare** | *How does a scenario differ from today's live graph, and what does it mean for the business?* | Never |
 
@@ -46,6 +49,9 @@ The left sidebar has three groups:
   business language with diagrams and an energy & utilities example (customers,
   contracts, meters, sites), followed by a collapsed **Technical details**
   section with the exact algorithm.
+- **Graph ready.** Most Intelligence page titles include the same badge as
+  Graph: *Building…*, *Graph ready · \<backend\>*, or *Graph not built* with
+  **Go to Build**.
 - **Ontology discussion.** The chat-bubble button in the page header opens the
   domain discussion so you can comment on a finding with your team, optionally
   tagging an entity.
@@ -59,6 +65,18 @@ The left sidebar has three groups:
   browser's local time zone (for example `2026/11/05 07:36:01`). The JSON API
   still returns ISO-8601.
 
+## Home
+
+The Intelligence **Home** page is a directory of tiles grouped like the
+sidebar: **Configuration**, **Discovery**, **Simulation**. Each tile opens
+that page. The **?** on a tile (and the header **Help** button) opens this
+guide in the Help Center. Resources at the bottom open the
+[Starter Guide](getting-started.md#first-steps-in-ontobricks) (in-app
+Help → Starter Guide), this operator guide, and the Step-by-Step Workflow.
+
+Suggested first visit after a Build: Analytics → Communities → Patterns,
+then a Scenario from Explorer **Simulate from here**.
+
 ## Before you start
 
 Intelligence needs:
@@ -70,7 +88,7 @@ Intelligence needs:
    Databricks jobs deployed (`make deploy`). When a prerequisite is missing the
    page says why and the action button stays disabled.
 
-Simulation works on the **Lakebase**, **Lakehouse (Delta)** and **Neo4j** graph
+Simulation works on the **[Lakebase](https://docs.databricks.com/aws/en/oltp/)**, **Lakehouse (Delta)** and **Neo4j** graph
 backends. Analytics, Communities and Patterns always run as serverless
 Databricks jobs over the mapped `…_data` snapshot (not over inferred triples).
 
@@ -247,19 +265,26 @@ has an (i) tooltip.
 
 Open a saved run (or let **Detect** open it), pick a pattern in the picker:
 
-- **KPIs**: support, entity types, relationships, size.
+- **Run KPIs**: **Hops**, **Entities** (how many instances of the chosen type
+  were in the run), **Patterns** (how many neighbourhood profiles were found),
+  **Coverage** (share of that type population that follows at least one
+  pattern). Older snapshots saved before population was persisted show
+  Coverage as *—*.
+- **Bar chart** (collapsible): one bar per pattern, X = Patterns, Y =
+  Matching entities. Each bar is labelled with its share of the type
+  population.
 - **Detail** badge: *Exact*, *Neighbours (1 hop)*, *Own attributes* or
   *Structure only* — the level that covered at least half of the anchors.
 - **Diagram**: the anchor type on the left, then columns for 1 hop, 2 hops, …
   Each box is one entity type at that hop; badges are attribute ranges;
-  arrows are relationships with typical counts. Hover a box to highlight its
-  path; hover an arrow or a badge for an explanation.
+  arrows are relationships with typical counts (hover for min / max / count).
+  Hover a box to highlight its path.
 - **Matching entities**: dialog listing the entities that share the pattern,
   with links to Graph Explorer.
 
 ### Saved runs
 
-Every Detect run is saved automatically to Unity Catalog (table
+Every Detect run is saved automatically to [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) (table
 `graph_pattern_saved_<slug>`) under a name built from the entity type and the
 local date/time (for example `Customer — 2026/11/14 14:06:32`). The snapshot
 stores the pattern catalog, cardinalities and diagrams — not every member
@@ -478,6 +503,7 @@ in Settings.
 |---------|----------------|
 | **Intelligence → Discovery → Analytics → Runs** | Every analysis launched from Analytics: date & time, scope, version, status, nodes, edges, components, avg degree, density, duration, **Details** |
 | **Intelligence → Configuration → Cohorts → Runs** | Preview and materialise of saved cohort rules (not the Settings Detect ledger) |
+| **Intelligence Home** | Directory of tiles; not a run ledger |
 | **Settings → Automation → Runs** (admin) | Build, analytics, **community**, **pattern** and **simulation** history across **every** domain, with a Domain filter (default *All domains*) and paging (25 / 50 / 100) |
 
 **Community** and **Pattern** Settings tabs list every Detect run that

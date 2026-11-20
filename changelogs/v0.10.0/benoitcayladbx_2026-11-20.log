@@ -1,4 +1,50 @@
 ================================================================================
+## Docs: official Databricks documentation links
+================================================================================
+
+Context: The online docs named Databricks products and concepts (Unity
+Catalog, SQL warehouses, Lakebase, Databricks Apps, bundles, Model Serving,
+AI Gateway, Delta, service principals, secrets, PATs, MLflow, ...) without
+pointing readers to the official Databricks documentation. Each target URL
+was checked against docs.databricks.com (HTTP 200) before use.
+
+Changes:
+
+1. docs/*.md (all pages except docs/mcp.md)
+   Added inline links to docs.databricks.com/aws/en/... at the first prose
+   mention of each Databricks term in each H2 section. Covered terms: Unity
+   Catalog (and Unity Catalog volumes), Lakeflow Jobs, Lakebase, Databricks
+   Apps, SQL warehouses, Model Serving, Foundation Model APIs, AI / Unity
+   Gateway, Delta Lake, liquid clustering, serverless compute, personal access
+   tokens, service principals, Databricks secrets, Databricks SQL Connector,
+   Databricks SDK, Catalog Explorer, Databricks CLI, MLflow, Declarative
+   Automation Bundles (formerly Asset Bundles), and AI/BI dashboards.
+   Headings, the TOC, code spans, existing links and diagrams were left
+   untouched, so anchors and the generated TOC do not change.
+2. Links were not added to docs/mcp.md: it already has uncommitted content
+   edits from another change and is left as is.
+
+Modified files:
+- docs/README.md
+- docs/advanced_features.md
+- docs/api.md
+- docs/architecture.md
+- docs/backend.md
+- docs/contributing.md
+- docs/deployment.md
+- docs/development.md
+- docs/getting-started.md
+- docs/intelligence.md
+- docs/product.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10995 passed, 334 skipped,
+8 deselected in 55.79s (no failures). The earlier full run in this session
+counted 11001 passed; the difference comes from the shared working tree, not
+from these doc edits.
+
+================================================================================
 ## User Guide: full Intelligence feature coverage
 ================================================================================
 

@@ -682,7 +682,7 @@
         {
             "id": "intelligence",
             "label": "Intelligence",
-            "description": "Simulate, discover patterns, and analyze the graph",
+            "description": "Analytics, communities, patterns, cohorts, and what-if sandboxes",
             "icon": "bi-sliders2-vertical",
             "route": "/intelligence/",
             "requires_domain_saved": true,

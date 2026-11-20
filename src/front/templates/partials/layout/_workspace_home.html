@@ -1,6 +1,7 @@
 {# Workspace home landing (Context / Ontology / Graph / Intelligence).
    Expects `workspace_home_menu` — a menu_config entry. Tiles are grouped by
    the same sidebar menu groups (Home group skipped). #}
+{% set _home_help_doc = 'intelligence' if workspace_home_menu.id == 'intelligence' else 'user-guide' %}
 <div class="content-section ob-workspace-home">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -10,7 +11,7 @@
         <div class="d-flex gap-2">
             <button type="button" class="btn btn-outline-secondary btn-sm"
                     data-help-jump="docs"
-                    data-help-doc="user-guide"
+                    data-help-doc="{{ _home_help_doc }}"
                     title="Open Help Center">
                 <i class="bi bi-life-preserver me-1"></i>Help
             </button>
@@ -61,21 +62,26 @@
                     <i class="bi bi-rocket-takeoff" aria-hidden="true"></i>
                     <span>
                         <span class="ob-workspace-home-resource-label">Starter Guide</span>
-                        <span class="ob-workspace-home-resource-desc">Four clicks from a new context to a graph.</span>
+                        <span class="ob-workspace-home-resource-desc">From a new context to a graph, then Intelligence.</span>
                     </span>
                 </button>
-                <button type="button" class="ob-workspace-home-resource" data-help-jump="docs" data-help-doc="user-guide">
+                <button type="button" class="ob-workspace-home-resource" data-help-jump="docs" data-help-doc="{{ _home_help_doc }}">
                     <i class="bi bi-journal-text" aria-hidden="true"></i>
                     <span>
+                        {% if workspace_home_menu.id == 'intelligence' %}
+                        <span class="ob-workspace-home-resource-label">Intelligence guide</span>
+                        <span class="ob-workspace-home-resource-desc">Cohorts, Analytics, Communities, Patterns, Scenarios.</span>
+                        {% else %}
                         <span class="ob-workspace-home-resource-label">User Guide</span>
                         <span class="ob-workspace-home-resource-desc">In-app documentation for this workspace.</span>
+                        {% endif %}
                     </span>
                 </button>
                 <button type="button" class="ob-workspace-home-resource" data-help-jump="workflow">
                     <i class="bi bi-signpost-2" aria-hidden="true"></i>
                     <span>
                         <span class="ob-workspace-home-resource-label">Workflow</span>
-                        <span class="ob-workspace-home-resource-desc">Ontology, mapping, sync and exploration.</span>
+                        <span class="ob-workspace-home-resource-desc">Ontology, mapping, sync, exploration and Intelligence.</span>
                     </span>
                 </button>
             </div>

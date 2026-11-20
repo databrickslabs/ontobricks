@@ -149,7 +149,7 @@ Databricks/product layer.
 | `ontobricks:direction` | object property | `forward` / `reverse` / bidirectional (UI + graph, not OWL) |
 | `ontobricks:dashboard` | class | Databricks dashboard URL |
 | `ontobricks:dashboardParams` | class | JSON: map dashboard filters → `__ID__` or an attribute |
-| `ontobricks:dataset` | class | JSON array of linked Unity Catalog tables/views/metric views (legacy singular object still accepted on read) |
+| `ontobricks:dataset` | class | JSON array of linked [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) tables/views/metric views (legacy singular object still accepted on read) |
 | `ontobricks:actions` | class | JSON: UC functions, **exactly one arg = entity local ID** |
 | `ontobricks:virtualAttributes` | class | JSON: computed attrs via UC functions (same 1-arg ID contract); **not** emitted as `owl:DatatypeProperty` |
 | `ontobricks:bridges` | class | JSON: cross-project bridges |
@@ -398,9 +398,9 @@ Once **Settings → Configuration → GitHub** points at a claimed repository:
 3. OntoBricks reads the JSON tree (`GET /settings/github/obx`) and opens the
    same Skip / Add missing versions / Rename preview as a file import.
 4. Confirm **Import**. Turtle files (`.owl.ttl`, `.r2rml.ttl`, `shacl.ttl`)
-   are ignored; Lakebase is written from the JSON sources.
+   are ignored; [Lakebase](https://docs.databricks.com/aws/en/oltp/) is written from the JSON sources.
 
-The GitHub token must already resolve (Databricks secret or
+The GitHub token must already resolve ([Databricks secret](https://docs.databricks.com/aws/en/security/secrets/) or
 `ONTOBRICKS_GITHUB_TOKEN`). A GitHub outage does not affect an already-loaded
 domain; it only blocks this restore path and background pushes.
 
@@ -480,7 +480,7 @@ A cohort is a set of entities that:
 
 The user writes this as a **CohortRule** in five small sections.  The engine
 runs it, produces deterministic cohort URIs, and writes the result either
-into the graph viewer (as `:inCohort` triples) or into a Unity Catalog
+into the graph viewer (as `:inCohort` triples) or into a [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/)
 Delta table — or both.
 
 ---
@@ -550,7 +550,7 @@ The sticky **action bar** at the bottom of the form lets you:
 | Button | What it does |
 |---|---|
 | **Preview** | Runs `/dtwin/cohorts/dry-run` and switches to the **Preview** tab (no writes). |
-| **Save** | `POST /dtwin/cohorts/rules` — versioned with the domain (works in both Volume and Lakebase modes). |
+| **Save** | `POST /dtwin/cohorts/rules` — versioned with the domain (works in both Volume and [Lakebase](https://docs.databricks.com/aws/en/oltp/) modes). |
 | **Materialise** | Opens a small modal confirming what gets written. Idempotent per rule. |
 | **Configure outputs** | Toggle graph triples on/off and configure the optional Unity Catalog Delta target. |
 | **View JSON** | Inspect the canonical `CohortRule` payload. |

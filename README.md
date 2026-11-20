@@ -34,7 +34,8 @@
 - **What-if simulation sandboxes**: build scenarios with hypothetical facts (add, remove, or set), written by hand, through a fact wizard, or with the natural-language agent. Run them in an isolated sandbox, explore the result in Explorer, and compare it with the live graph.
 - **Simulation API**: create, run and read scenarios over REST (`/api/v1/simulations`), and query a ready sandbox through the graph endpoints.
 - **Graph Chat and search in the viewer**: search the graph and ask questions about it from Explorer.
-- **Patterns and communities at scale**: community detection and pattern detection handle larger graphs.
+- **Patterns and communities at scale**: community detection and pattern detection handle larger graphs (Coverage KPI, hub pruning).
+- **Graph Analytics in Intelligence**: PageRank, betweenness, degree, closeness and clustering on a Databricks job, with Dashboard, Data Model Health, Interpret and run history.
 - **JSON-LD everywhere it matters**: OWL import and export, SPARQL `CONSTRUCT`/`DESCRIBE` results, and the MCP `describe_ontology` tool.
 - **Pluggable graph backends**: Delta, Lakebase and Neo4j sit behind shared capability interfaces, so each engine exposes what it supports and nothing more.
 - **Live Data Quality runs**: bulk checks run on a view-backed snapshot and show a live activity log.
@@ -95,9 +96,15 @@ months-long integration project.
 | **3** | **Auto-Map** — Mapping &gt; Auto-Map | The LLM generates SQL mappings for every entity and relationship | AI Gateway / Model Serving |
 | **4** | **Synchronize** — Graph &gt; Build | Executes the mappings and populates the triple store | SQL Warehouse |
 
+After **Build**, open **Intelligence** (app switcher → Home) to score the
+graph (**Analytics**), find clusters (**Communities**) and look-alikes
+(**Patterns**), then run what-if **Scenarios** without touching live data.
+The in-app Help **Starter Guide** walks the same path.
+
 Prefer full control? Every step is also available as a guided **manual
-workflow** — design, map, build, query, and reason at column-level precision.
-See the [User Guide](docs/user-guide.md).
+workflow** — design, map, build, query, reason, and simulate at column-level precision.
+See the [User Guide](docs/user-guide.md) and the
+[Intelligence guide](docs/intelligence.md).
 
 ### Run a context without an LLM
 
@@ -154,10 +161,12 @@ See the [SPARQL Playground guide](docs/user-guide.md#sparql-playground),
 [Cohort Discovery](docs/advanced_features.md#cohort-discovery).
 
 ### Discover and simulate (Intelligence)
-The **Intelligence** workspace turns a built graph into insight:
+The **Intelligence** workspace turns a built graph into insight.
+**Home** lists every page as tiles. **Analytics** scores influence and
+bridges (PageRank, betweenness, degree, closeness, clustering).
 **Cohorts** group entities with explainable rules, **Communities** finds
 tightly connected clusters, and **Patterns** finds entities that look alike
-(recurring neighbourhood profiles) — all computed on Databricks. **Scenarios**
+(recurring neighbourhood profiles, Coverage KPI) — Discovery jobs run on Databricks. **Scenarios**
 copies an entity neighbourhood or a cohort into a private sandbox, applies
 hypothetical facts ("what if this customer switches to the Green tariff?"),
 re-runs your IF-THEN, graph and business rules there, and shows exactly which

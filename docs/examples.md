@@ -1,11 +1,11 @@
 # Examples
 
-These walkthroughs take you from raw tables to an explorable graph viewer. Each one can be completed in 15–30 minutes.
+These walkthroughs take you from raw tables to an explorable graph viewer, then to Intelligence. Each one can be completed in 15–30 minutes.
 
 | Example | Difficulty | What you'll learn |
 |---------|-----------|-------------------|
-| [Family Tree](#example-family-tree-ontology-mapping) | Beginner | One entity, two relationships — the simplest end-to-end flow |
-| [Customer Journey](#example-customer-journey-ontology-energy-provider) | Intermediate | 10 tables, complex relationships, visual Studio, advanced SPARQL |
+| [Family Tree](#example-family-tree-ontology-mapping) | Beginner | One entity, two relationships — the simplest end-to-end flow, then Communities / a Scenario |
+| [Customer Journey](#example-customer-journey-ontology-energy-provider) | Intermediate | 10 tables, visual Studio, SPARQL, then Analytics, Communities, Patterns, Scenarios |
 
 <!-- toc -->
 **Contents**
@@ -407,8 +407,9 @@ unzip d2rq-0.8.1.zip
 3. **Include lifecycle events**: births, marriages, deaths
 4. **Connect to other ontologies**: Use FOAF, Schema.org
 5. **Build a visualization**: Create a family tree visualization from the RDF data
-6. **Intelligence**: After Build, run **Communities** on `Person` (family
-   clusters) or a **Scenario** that **Sets** a parent link — see
+6. **Intelligence**: After Build, open Intelligence **Home**, run
+   **Communities** on `Person` (family clusters), optionally **Patterns**
+   (Hops 1–2), or a **Scenario** that **Sets** a parent link — see
    [Intelligence](intelligence.md)
 
 ### Summary
@@ -418,7 +419,8 @@ This example demonstrated:
 - Creating class mappings for ontology classes
 - Defining relationship mappings for object properties
 - Generating W3C-compliant R2RML
-- Exploring the resulting graph viewer through the Knowledge Graph Graph Viewer
+- Exploring the resulting graph viewer through Graph → Explorer
+- Optional Intelligence: Communities on `Person`, or a parent-link Scenario
 
 The same approach can be applied to any relational database schema and target ontology.
 
@@ -688,15 +690,20 @@ After synchronization, switch to the **Graph Viewer** tab to see an interactive 
 With the customer-journey graph built, open **Intelligence** (full guide:
 [Intelligence](intelligence.md)):
 
-1. **Analytics** — Run Analysis scoped to *Customer*. PageRank should surface
+1. **Home** — tiles for Configuration, Discovery and Simulation; Starter Guide
+   in the resources strip.
+2. **Analytics** — Run Analysis scoped to *Customer*. PageRank should surface
    high-volume customers; betweenness may highlight customers that sit between
    call-centre and contract clusters.
-2. **Communities** — Detect, then Materialize. Explorer **View** can colour
+3. **Communities** — Detect, then Materialize. Explorer **View** can colour
    customers by cluster (for example a “high-touch” neighbourhood of callers
    and claims).
-3. **Patterns** — New → Entity *Customer*, Hops 2. Look for a residential
-   vs business neighbourhood signature, then open **Matching entities**.
-4. **Scenarios** — From Explorer, **Simulate from here** on one Customer.
+4. **Patterns** — New → Entity *Customer*, Hops 2. Read **Coverage**, the
+   bar chart, then a residential vs business neighbourhood diagram and
+   **Matching entities**.
+5. **Cohorts** — optional: an explainable *business customers on this
+   substation* rule, then Preview / Materialise.
+6. **Scenarios** — From Explorer, **Simulate from here** on one Customer.
    **Set** a contract tariff and Run. **Compare → Evaluate** asks the same
    question to live vs sandbox (for example *which rebate applies?*).
 

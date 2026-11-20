@@ -51,7 +51,7 @@
                                 </div>
                                 <div>
                                     <h2>Welcome to <span data-brand-title>{{ ui_branding_for().app_title }}</span></h2>
-                                    <p class="lead mb-0">The Knowledge Graph Builder for Databricks &mdash; design an ontology, map Databricks tables to it, materialize a knowledge graph, and explore it visually.</p>
+                                    <p class="lead mb-0">The Knowledge Graph Builder for Databricks &mdash; design an ontology, map Databricks tables to it, materialize a knowledge graph, explore it visually, then learn from it with Intelligence (analytics, communities, patterns and what-if scenarios).</p>
                                 </div>
                             </div>
 
@@ -60,14 +60,14 @@
                                     <div class="help-card">
                                         <div class="help-card-icon bg-soft-primary"><i class="bi bi-rocket-takeoff"></i></div>
                                         <h5>New here?</h5>
-                                        <p>Follow the <a href="#help-starter" data-help-jump="starter">Starter Guide</a> &mdash; build a full graph viewer in four clicks using the LLM-powered automation pipeline.</p>
+                                        <p>Follow the <a href="#help-starter" data-help-jump="starter">Starter Guide</a> &mdash; build a graph viewer in four clicks, then score, cluster and simulate it in Intelligence.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="help-card">
                                         <div class="help-card-icon bg-soft-success"><i class="bi bi-signpost-2"></i></div>
                                         <h5>Want the full flow?</h5>
-                                        <p>Read the <a href="#help-workflow" data-help-jump="workflow">Step-by-Step Workflow</a> to master ontology design, mapping, synchronization and exploration.</p>
+                                        <p>Read the <a href="#help-workflow" data-help-jump="workflow">Step-by-Step Workflow</a> to master ontology design, mapping, synchronization, exploration and Intelligence.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -97,14 +97,14 @@
                                 <div class="help-step"><span class="help-step-num">4</span><div><strong>Graph</strong><br><small>Map (R2RML), build, explore, query</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Intelligence</strong><br><small>Communities, cohorts, patterns, and what-if sandboxes</small></div></div>
+                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Intelligence</strong><br><small>Analytics, communities, patterns, cohorts, and what-if sandboxes</small></div></div>
                             </div>
                         </section>
 
                         <!-- STARTER GUIDE -->
                         <section class="help-section" id="help-starter" data-help-section-panel="starter">
-                            <h2><i class="bi bi-rocket-takeoff me-2"></i>Starter Guide &mdash; Build a Knowledge Graph in 4 Clicks</h2>
-                            <p class="text-muted">OntoBricks can generate an end-to-end graph viewer from your Databricks tables using LLM-powered automation. Here is the fastest path from zero to a queryable graph.</p>
+                            <h2><i class="bi bi-rocket-takeoff me-2"></i>Starter Guide &mdash; From tables to Intelligence</h2>
+                            <p class="text-muted">OntoBricks can generate an end-to-end graph viewer from your Databricks tables using LLM-powered automation. Here is the fastest path from zero to a queryable graph &mdash; then to Analytics, Communities, Patterns and what-if Scenarios.</p>
 
                             <h5 class="mt-4"><i class="bi bi-check2-circle me-2"></i>Prerequisites</h5>
                             <ul>
@@ -154,20 +154,35 @@
                                     <div class="help-step-badge"><i class="bi bi-check2"></i></div>
                                     <div>
                                         <h5><i class="bi bi-eye me-2"></i>Explore</h5>
-                                        <p>Head to <strong>Graph &rarr; Explorer</strong> to browse your data as an interactive graph, or use <strong>Query</strong> for programmatic access.</p>
+                                        <p>Head to <strong>Graph &rarr; Explorer</strong> to browse your data as an interactive graph, or use <strong>Query</strong> for programmatic access. Right-click a node for data-quality checks, IF-THEN rules, or <em>Simulate from here</em>.</p>
+                                    </div>
+                                </div>
+                                <div class="help-step-card">
+                                    <div class="help-step-badge">5</div>
+                                    <div>
+                                        <h5><i class="bi bi-sliders2-vertical me-2"></i>Intelligence</h5>
+                                        <p>Open <strong>Intelligence</strong> from the app switcher (it lands on <em>Home</em>). After Build:</p>
+                                        <ul class="mb-0">
+                                            <li><strong>Analytics</strong> &mdash; Run Analysis (optional entity type). Dashboard scores influence, bridges, degree, closeness and clustering.</li>
+                                            <li><strong>Communities</strong> &mdash; Detect clusters, then Materialize so Explorer can colour and collapse them.</li>
+                                            <li><strong>Patterns</strong> &mdash; New &rarr; pick an entity type &rarr; Detect. Open a saved run for Coverage, the bar chart and the neighbourhood diagram.</li>
+                                            <li><strong>Cohorts</strong> &mdash; Design an explainable grouping rule, Preview, then Materialise.</li>
+                                            <li><strong>Scenarios</strong> &amp; <strong>Compare</strong> &mdash; what-if facts on a private sandbox, then overlay vs today&rsquo;s live graph and Evaluate a business question.</li>
+                                        </ul>
+                                        <p class="small text-muted mt-2 mb-0">Analytics, Communities and Patterns need <em>Compute large-graph metrics on Databricks</em> in Settings &rarr; Global and the jobs from <code>make deploy</code>. Full operator guide: <a href="#help-docs/intelligence" data-help-jump="docs" data-help-doc="intelligence">Intelligence</a>.</p>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="alert alert-info mt-3">
-                                <i class="bi bi-lightbulb me-2"></i><strong>Tip:</strong> You can navigate away from long-running tasks (Auto-Map, Sync, Data Quality, Simulation) &mdash; they run in the background and their progress is tracked in the <i class="bi bi-hourglass-split"></i> <strong>Background Tasks</strong> panel in the navbar.
+                                <i class="bi bi-lightbulb me-2"></i><strong>Tip:</strong> You can navigate away from long-running tasks (Auto-Map, Sync, Data Quality, Analytics, Detect, Simulation) &mdash; they run in the background and their progress is tracked in the <i class="bi bi-inboxes"></i> <strong>Activity</strong> panel in the navbar.
                             </div>
                         </section>
 
                         <!-- WORKFLOW -->
                         <section class="help-section" id="help-workflow" data-help-section-panel="workflow">
                             <h2><i class="bi bi-signpost-2 me-2"></i>Step-by-Step Workflow</h2>
-                            <p class="text-muted">The full OntoBricks workflow, in detail. Each step corresponds to a main navbar item.</p>
+                            <p class="text-muted">The full OntoBricks workflow, in detail. Each step corresponds to a workspace in the app switcher.</p>
 
                             <div class="accordion help-accordion" id="helpWorkflowAccordion">
                                 <!-- Registry -->
@@ -286,21 +301,21 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw6">
-                                            <i class="bi bi-sliders2-vertical me-2"></i><strong>5. Intelligence</strong> &mdash; communities, cohorts, patterns, sandboxes
+                                            <i class="bi bi-sliders2-vertical me-2"></i><strong>5. Intelligence</strong> &mdash; analytics, communities, cohorts, patterns, sandboxes
                                         </button>
                                     </h2>
                                     <div id="hw6" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
-                                            <p>Learn from and experiment with a built graph. Communities, Patterns and Scenarios each have a <em>How it works</em> tab with business-friendly diagrams; every page header has the ontology discussion button.</p>
+                                            <p>Learn from and experiment with a built graph. The workspace <em>Home</em> lists every page as tiles. Communities, Patterns and Scenarios each have a <em>How it works</em> tab with business-friendly diagrams; every page header has the ontology discussion button and a Graph-ready badge.</p>
                                             <ul>
                                                 <li><strong>Cohorts</strong> (Configuration) &mdash; group entities with rules you define and can explain (&ldquo;which entities travel together?&rdquo;). The <em>Design</em> tab authors the rule; the <em>Runs</em> tab previews it and materialises it to the graph (<code>:inCohort</code>) or a Unity Catalog table. Cohorts are reusable scenario scopes</li>
                                                 <li><strong>Analytics</strong> (Discovery; Analytics / Runs tabs) &mdash; centrality &amp; structural metrics (PageRank, betweenness, degree, closeness, clustering) via a serverless Databricks job; Dashboard, Data Model Health, AI Interpret, and analytics-run history</li>
                                                 <li><strong>Communities</strong> (Discovery) &mdash; find clusters of tightly connected entities (label propagation on a Databricks job, any graph size, optional entity-type scope). Preview the largest communities with modularity and convergence, then <em>Materialize</em> the partition so Explorer can colour and collapse it; <em>Purge</em> removes it</li>
-                                                <li><strong>Patterns</strong> (Discovery) &mdash; find entities that look alike. <em>New</em> opens the Detect dialog (entity, hops, numeric bins, min support, refine top-N), runs on Databricks and auto-saves the run under the entity type + date/time. Each pattern shows its support, detail level, a layered diagram (hover to highlight a path) and <em>Matching entities</em></li>
+                                                <li><strong>Patterns</strong> (Discovery) &mdash; find entities that look alike. <em>New</em> opens the Detect dialog (entity, hops, numeric bins, min support, refine top-N), runs on Databricks and auto-saves the run under the entity type + date/time. KPIs: Hops, Entities (type population), Patterns, Coverage. A bar chart ranks patterns by matching entities; each pattern has a layered diagram (hover to highlight a path) and <em>Matching entities</em></li>
                                                 <li><strong>Scenarios</strong> (Simulation) &mdash; safe what-ifs on a private sandbox. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor: pick a scope (entity neighbourhood or cohort), add <em>Set / Add / Remove</em> facts (or let <em>Propose facts</em> draft them from plain language), tick the reasoning phases and rules, and run. <em>Results</em> lists triples added or removed (your fact vs inferred); <em>Explorer</em> opens the sandbox; <em>Purge</em> drops the sandbox and keeps the scenario as a draft</li>
                                                 <li><strong>Compare</strong> (Simulation) &mdash; pick a ready scenario and a live graph (inferred or asserted only). <em>Graphs</em> loads the colour-coded overlay automatically (grey unchanged, amber modified, green added, red removed; <em>Refresh</em> reloads) with exact metrics and a details panel. With no ready scenario the empty state stays. <em>Evaluate</em> asks the same question to the live graph and the sandbox, adds a business-insights commentary, and builds a printable / PDF report</li>
                                             </ul>
-                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar Background Tasks hourglass. Simulation run history lives under <strong>Settings &rarr; Automation &rarr; Runs</strong> (Simulation tab). Full guide: <a href="#help-docs/intelligence" data-help-jump="docs" data-help-doc="intelligence">Intelligence</a>.</p>
+                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar <em>Activity</em> panel. Simulation, community and pattern run history also lives under <strong>Settings &rarr; Automation &rarr; Runs</strong>. Full guide: <a href="#help-docs/intelligence" data-help-jump="docs" data-help-doc="intelligence">Intelligence</a>.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -370,9 +385,16 @@
                                 </div>
                                 <div class="col-md-6">
                                     <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-graph-up-arrow"></i></div>
+                                        <h5>Graph Analytics</h5>
+                                        <p><strong>Intelligence &rarr; Discovery &rarr; Analytics</strong> scores every entity (PageRank, betweenness, degree, closeness, clustering) on a serverless Databricks job. Dashboard, Data Model Health, AI Interpret, and a Runs history.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-diagram-3"></i></div>
                                         <h5>Communities &amp; Patterns</h5>
-                                        <p><strong>Intelligence &rarr; Discovery</strong>: <em>Communities</em> finds who is connected together (clusters you can materialize for Explorer); <em>Patterns</em> finds who looks alike (recurring neighbourhood profiles with diagrams and matching entities). Both run on Databricks.</p>
+                                        <p><strong>Intelligence &rarr; Discovery</strong>: <em>Communities</em> finds who is connected together (clusters you can materialize for Explorer); <em>Patterns</em> finds who looks alike (Coverage KPI, bar chart, neighbourhood diagrams and matching entities). Both run on Databricks.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -422,7 +444,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Auto-Map is running &mdash; can I leave the page?</button></h2>
-                                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Auto-Map, Sync, Data Quality, Inference and Simulation all run as <em>background tasks</em>. Their progress is tracked in the <i class="bi bi-hourglass-split"></i> navbar icon &mdash; you can navigate anywhere and come back.</div></div>
+                                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Auto-Map, Sync, Data Quality, Inference, Analytics, Community/Pattern Detect and Simulation all run as <em>background tasks</em>. Their progress is tracked in the <i class="bi bi-inboxes"></i> <strong>Activity</strong> panel in the navbar &mdash; you can navigate anywhere and come back.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">How does the LLM automation pick the right model?</button></h2>
@@ -443,6 +465,10 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq10">Is CSRF protection enabled?</button></h2>
                                     <div id="faq10" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. A double-submit cookie guards every state-changing request. This is transparent to users of the web UI.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq11">What is Intelligence, and when do I use it?</button></h2>
+                                    <div id="faq11" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">After a first <strong>Build</strong>, open the <strong>Intelligence</strong> workspace. <em>Analytics</em> scores who matters structurally; <em>Communities</em> finds tightly connected clusters; <em>Patterns</em> finds look-alike neighbourhoods; <em>Cohorts</em> apply rules you write; <em>Scenarios</em> and <em>Compare</em> run what-ifs on a private sandbox without changing live data. See the <a href="#help-docs/intelligence" data-help-jump="docs" data-help-doc="intelligence">Intelligence</a> guide and the <a href="#help-starter" data-help-jump="starter">Starter Guide</a> step 5.</div></div>
                                 </div>
                             </div>
                         </section>
@@ -474,6 +500,10 @@
                             <div class="help-trouble">
                                 <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;I see &lsquo;requires context saved&rsquo; tooltips everywhere.&rdquo;</h5>
                                 <p>An Admin (<code>CAN_MANAGE</code>) must first create and save a context: Registry &rarr; <em>New Context</em> &rarr; then on the Configuration page press <kbd>Cmd/Ctrl+S</kbd>. Editors and Builders can then open assigned contexts from Home or Registry Browse.</p>
+                            </div>
+                            <div class="help-trouble">
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Run Analysis / Detect is disabled.&rdquo;</h5>
+                                <p>Intelligence Discovery jobs need a <em>built</em> graph, the admin toggle <em>Compute large-graph metrics on Databricks</em> in <strong>Settings &rarr; Global</strong>, and the analytics / community / pattern jobs from <code>make deploy</code>. The page explains which prerequisite is missing. See <a href="#help-docs/intelligence" data-help-jump="docs" data-help-doc="intelligence">Intelligence</a>.</p>
                             </div>
                         </section>
 
@@ -519,11 +549,15 @@
                                 <dt>IF-THEN</dt><dd>Inference rules written as &ldquo;IF ... THEN ...&rdquo;.</dd>
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
                                 <dt>Bridge</dt><dd>Cross-context link between entities of two different contexts.</dd>
+                                <dt>Intelligence</dt><dd>Workspace for learning from and experimenting with a built graph: Cohorts, Analytics, Communities, Patterns, Scenarios and Compare. Opens on a Home landing of tiles.</dd>
+                                <dt>Analytics</dt><dd>Centrality and structural scores (PageRank, betweenness, degree, closeness, clustering) computed by <em>Intelligence &rarr; Discovery &rarr; Analytics</em> on a Databricks job. Never writes to the graph.</dd>
                                 <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed on the <em>Design</em> tab of <em>Intelligence &rarr; Configuration &rarr; Cohorts</em>, run on its <em>Runs</em> tab.</dd>
                                 <dt>Community</dt><dd>A group of entities much more connected to each other than to the rest of the graph, found by <em>Intelligence &rarr; Discovery &rarr; Communities</em>. <em>Modularity</em> scores how clearly the groups stand apart.</dd>
-                                <dt>Pattern</dt><dd>A recurring neighbourhood profile shared by several entities of one type (same kinds of links, similar attribute ranges), found by <em>Intelligence &rarr; Discovery &rarr; Patterns</em>. Its <em>support</em> is how many entities share it.</dd>
+                                <dt>Pattern</dt><dd>A recurring neighbourhood profile shared by several entities of one type (same kinds of links, similar attribute ranges), found by <em>Intelligence &rarr; Discovery &rarr; Patterns</em>. <em>Support</em> is how many entities share one pattern; <em>Coverage</em> is the share of the type population that follows at least one pattern.</dd>
+                                <dt>Scenario</dt><dd>A named what-if: scope (entity neighbourhood or cohort) plus hypothetical Set / Add / Remove facts, run on a private sandbox.</dd>
                                 <dt>Simulation</dt><dd>A named what-if sandbox: a slice of the Knowledge Graph copied into an isolated table, patched with hypothetical triples, and re-reasoned &mdash; the live graph is never modified.</dd>
                                 <dt>Sandbox</dt><dd>The private copy of a graph slice a scenario writes to. <em>Compare</em> overlays a ready sandbox on the live graph; <em>Purge</em> drops it.</dd>
+                                <dt>Compare</dt><dd><em>Intelligence &rarr; Simulation &rarr; Compare</em> overlays a ready scenario on today&rsquo;s live graph. <em>Evaluate</em> asks the same business question to both and can export a PDF.</dd>
                                 <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the context Graph DB.</dd>
                                 <dt>Graph DB</dt><dd>Per-context engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>
                                 <dt>Neo4j</dt><dd>Optional Graph DB backend that stores the Knowledge Graph as a typed property graph (nodes, labels, relationships) instead of flat triples. Requires Neo4j 5.x (Aura recommended).</dd>

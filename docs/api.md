@@ -41,7 +41,7 @@ The generated references remain available at `/api/docs` (Swagger UI),
 
 ## Authentication
 
-All endpoints that access Unity Catalog require Databricks authentication. Credentials can be provided via:
+All endpoints that access [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) require Databricks authentication. Credentials can be provided via:
 
 ### HTTP Headers (Recommended)
 ```
@@ -74,7 +74,7 @@ These are **not** the same as `GET /api/v1/health`.
 | Endpoint | Who | What it returns |
 |----------|-----|-----------------|
 | `GET /health` | Public | Cheap liveness: `{status, version, service, timestamp}`. Always HTTP 200. No catalog names, paths, or exception text. |
-| `GET /settings/diagnostics/readiness` | Admin | Full readiness: Databricks auth, SQL warehouse, registry DDL, Lakebase USAGE, … as `{status, summary, checks}`. Settings → Health → Databricks calls this. |
+| `GET /settings/diagnostics/readiness` | Admin | Full readiness: Databricks auth, [SQL warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/), registry DDL, [Lakebase](https://docs.databricks.com/aws/en/oltp/) USAGE, … as `{status, summary, checks}`. Settings → Health → Databricks calls this. |
 
 Probes that only need HTTP 200 should keep calling `/health`. Anything that parsed the old `checks` list from `/health` must switch to the readiness endpoint.
 
@@ -126,7 +126,7 @@ URLs use `/api/v1/domains` and `/api/v1/domain/…` for **domain** operations (s
 
 #### `POST /api/v1/domains/list`
 
-List domains in the Lakebase registry identified by the catalog / schema / volume triplet (the volume name is the registry key, not a JSON-on-Volume store).
+List domains in the [Lakebase](https://docs.databricks.com/aws/en/oltp/) registry identified by the catalog / schema / volume triplet (the volume name is the registry key, not a JSON-on-Volume store).
 
 **Request:**
 ```json
@@ -361,7 +361,7 @@ Execute a SPARQL query against a domain's ontology.
 ```
 
 **Parameters:**
-- `project_path` (required): Path to the domain JSON file in Unity Catalog
+- `project_path` (required): Path to the domain JSON file in [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/)
 - `query` (required): SPARQL query string
 - `limit` (optional): Maximum number of results (default: 100). For `CONSTRUCT`/`DESCRIBE` with `output_format=json-ld`, this truncates triples (not complete subgraphs).
 - `engine` (optional): Query engine - `local` (RDFLib) or `spark` (default: `local`)
@@ -676,7 +676,7 @@ has not been built yet.
 
 #### `GET /api/v1/domain/classes`
 
-Return per-class **dataset**, **bridge**, Unity Catalog **action** and **virtual
+Return per-class **dataset**, **bridge**, [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) **action** and **virtual
 attribute** metadata for every class in the domain's published ontology, without
 loading the full OWL. This is what the MCP server caches on `select_domain` to
 build its `[Context]` blocks. Only non-empty values are included, and virtual
@@ -1127,7 +1127,7 @@ curl -X POST http://localhost:8000/api/v1/query \
 
 ## Notes
 
-1. **Stateless**: The API is stateless - each request loads the domain fresh from Unity Catalog.
+1. **Stateless**: The API is stateless - each request loads the domain fresh from [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/).
 2. **Engine**: Currently, only the `local` engine (RDFLib) is fully supported. The `spark` engine requires additional setup.
 3. **R2RML Required**: SPARQL queries require the domain to have an R2RML mapping generated. Use the web interface to generate mappings first.
 4. **Security**: Never share your Databricks token. Consider using environment variables or secure credential management.
@@ -1145,7 +1145,7 @@ This document describes the REST API endpoints available in OntoBricks.
 ### Base URL
 
 - **Local Development**: `http://localhost:8000`
-- **Databricks Apps**: `https://<workspace>.databricks.com/apps/<app-id>/`
+- **[Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/)**: `https://<workspace>.databricks.com/apps/<app-id>/`
 
 ---
 
@@ -1240,7 +1240,7 @@ POST /reset-session
 
 #### Browse Volume Files
 
-List files in a Unity Catalog volume.
+List files in a [Unity Catalog volume](https://docs.databricks.com/aws/en/volumes/).
 
 ```http
 POST /browse-volume
@@ -1274,7 +1274,7 @@ POST /browse-volume
 
 #### Read Volume File
 
-Read a file from a Unity Catalog volume.
+Read a file from a [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) volume.
 
 ```http
 POST /read-volume-file
@@ -1425,7 +1425,7 @@ POST /settings/save
 #### GitHub repository mirror (admin)
 
 Instance-wide mirror of the registry into one GitHub repository. The PAT is
-never stored — only a Databricks secret scope/key (or `ONTOBRICKS_GITHUB_TOKEN`
+never stored — only a [Databricks secret](https://docs.databricks.com/aws/en/security/secrets/) scope/key (or `ONTOBRICKS_GITHUB_TOKEN`
 locally). See [User Guide — GitHub](user-guide.md#configuration--github-repository-mirror).
 
 ```http
@@ -1742,7 +1742,7 @@ POST /ontology/assistant/chat
 
 Conversational ontology editing used by **Ontology → Studio**. The request
 does not include an LLM target; the route uses the LLM saved on the domain
-(`llm_endpoint` + `llm_endpoint_kind`, AI Gateway or Model Serving). An empty
+(`llm_endpoint` + `llm_endpoint_kind`, [AI Gateway](https://docs.databricks.com/aws/en/ai-gateway/) or [Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/)). An empty
 target (**No LLM**) returns HTTP 400.
 
 **Request Body:**
@@ -2645,7 +2645,7 @@ POST /dtwin/auto-assign-icons
 
 ### Data Quality Execution Endpoints
 
-Execute SHACL data quality checks against the triple store (Delta view or the active Graph DB engine — Lakebase Postgres).
+Execute SHACL data quality checks against the triple store (Delta view or the active Graph DB engine — [Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/)).
 
 #### Execute Quality Checks (Synchronous)
 
@@ -3277,8 +3277,8 @@ OntoBricks uses Databricks authentication for all data operations:
 
 **Required Environment Variables:**
 - `DATABRICKS_HOST`: Workspace URL (with `https://`)
-- `DATABRICKS_TOKEN`: Personal access token or service principal token
-- `DATABRICKS_SQL_WAREHOUSE_ID`: SQL Warehouse identifier
+- `DATABRICKS_TOKEN`: [Personal access token](https://docs.databricks.com/aws/en/dev-tools/auth/pat) or [service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals) token
+- `DATABRICKS_SQL_WAREHOUSE_ID`: [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) identifier
 
 ---
 

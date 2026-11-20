@@ -212,6 +212,23 @@ def test_intelligence_pipeline_uses_menu_label():
     assert "<strong>5. Intelligence</strong>" in html
 
 
+def test_starter_guide_covers_intelligence_capabilities():
+    html = _help_html()
+    starter_start = html.index('id="help-starter"')
+    starter_end = html.index('id="help-workflow"')
+    starter = html[starter_start:starter_end]
+    for label in ("Analytics", "Communities", "Patterns", "Cohorts", "Scenarios", "Compare"):
+        assert f"<strong>{label}</strong>" in starter, label
+    assert "data-help-doc=\"intelligence\"" in starter
+    assert "Coverage" in starter
+
+
+def test_glossary_defines_intelligence_terms():
+    html = _help_html()
+    for term in ("Intelligence", "Analytics", "Scenario", "Compare"):
+        assert f"<dt>{term}</dt>" in html, term
+
+
 def test_simulation_workflow_follows_menu_order():
     page = _help_html()
     labels = [

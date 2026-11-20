@@ -10,7 +10,7 @@ This is the **workflow** guide. Deep dives live next to it:
 | Code map, layering, logging, error hierarchy | [code_organization.md](code_organization.md) |
 | Long-form coding rules and Fowler catalog | [src/.coding_rules.md](../src/.coding_rules.md) |
 | Reviewer pass (numbered gates) | [PR_REVIEW_CHECKLIST.md](PR_REVIEW_CHECKLIST.md) |
-| Deploy / Databricks Apps | [deployment.md](deployment.md), [DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md) |
+| Deploy / [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) | [deployment.md](deployment.md), [DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md) |
 | First-run operator setup | [get-started.md](get-started.md) |
 | Changelog format | [changelogs/README.md](../changelogs/README.md) |
 
@@ -111,7 +111,7 @@ uv sync --frozen --extra lakebase
 make install
 ```
 
-Always pass **`--frozen`**. A bare `uv run` / `uv sync` re-resolves against the internal PyPI proxy, rewrites `uv.lock` artifact URLs, and **breaks the next Databricks Apps deploy**. After any `uv` command, `git status` must show `uv.lock` clean unless you intentionally re-locked. See [development.md](development.md) and `.cursor/09-package-management.mdc`.
+Always pass **`--frozen`**. A bare `uv run` / `uv sync` re-resolves against the internal PyPI proxy, rewrites `uv.lock` artifact URLs, and **breaks the next [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) deploy**. After any `uv` command, `git status` must show `uv.lock` clean unless you intentionally re-locked. See [development.md](development.md) and `.cursor/09-package-management.mdc`.
 
 ### Environment
 
@@ -121,7 +121,7 @@ cp .env.example .env
 
 If the workspace blocks PAT generation, leave `DATABRICKS_TOKEN` empty and use CLI auth (`databricks auth login`). The app reads `~/.databrickscfg`; set `DATABRICKS_CONFIG_PROFILE` for a non-default profile.
 
-Operator-facing Databricks, Lakebase, warehouse, and volume setup is in [get-started.md](get-started.md).
+Operator-facing Databricks, [Lakebase](https://docs.databricks.com/aws/en/oltp/), warehouse, and volume setup is in [get-started.md](get-started.md).
 
 ### Run locally
 
@@ -269,7 +269,7 @@ Mutating live e2e: `ONTOBRICKS_LIVE_ALLOW_MUTATING=1` — the int workspace is s
 
 ## 10. AI / agent features
 
-Any change under `src/agents/**`, a new MLflow-traced LLM call, or an MCP tool wrapping an agent follows `.cursor/12-ai-feature-lifecycle.mdc`.
+Any change under `src/agents/**`, a new [MLflow](https://docs.databricks.com/aws/en/mlflow/)-traced LLM call, or an MCP tool wrapping an agent follows `.cursor/12-ai-feature-lifecycle.mdc`.
 
 **Required in the PR**
 
@@ -277,7 +277,7 @@ Any change under `src/agents/**`, a new MLflow-traced LLM call, or an MCP tool w
 2. Linked **MLflow eval run URI** in the PR body.
 3. Passing eval (judge ≥ baseline + delta) **or** an explicit reviewer waiver.
 
-SPEC.md and PLAN.md live under gitignored `.planning/` (local author drafts). No new agent without a local SPEC and a committed eval dataset. No prompt/tool tweak without an eval delta. Trace every Foundation Model API path (`@trace_agent` / `@trace_llm` / `@trace_tool` in `src/agents/tracing.py`). Judge model must not be the same endpoint as the agent.
+SPEC.md and PLAN.md live under gitignored `.planning/` (local author drafts). No new agent without a local SPEC and a committed eval dataset. No prompt/tool tweak without an eval delta. Trace every [Foundation Model API](https://docs.databricks.com/aws/en/machine-learning/foundation-model-apis/) path (`@trace_agent` / `@trace_llm` / `@trace_tool` in `src/agents/tracing.py`). Judge model must not be the same endpoint as the agent.
 
 ---
 
