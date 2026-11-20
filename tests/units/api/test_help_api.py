@@ -207,7 +207,7 @@ class TestHelpDocsIndex:
         for term in ("Data Model Health", "AI Insights", "Coverage", "Propose facts", "Ask both", "Activity"):
             assert term in step4, term
         inventory = guide[guide.index("## Feature inventory"):]
-        for term in ("AI Insights", "Scenario workbench", "Compare metrics and report", "Purge Inferences"):
+        for term in ("AI Insights", "Scenario workbench", "Compare metrics and report", "**Purge**"):
             assert term in inventory, term
 
 

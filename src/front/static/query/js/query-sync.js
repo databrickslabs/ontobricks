@@ -527,6 +527,80 @@ function _applyDtExistence(data) {
 }
 
 /**
+ * Paint Graph cache status on the Build tab (Activated / State / Last refresh).
+ * Accepts either domain_info.info fields or the richer graph_cache block from
+ * /dtwin/sync/stats.
+ */
+function renderBuildGraphCacheStatus(source) {
+    var activatedEl = document.getElementById('dtGraphCacheActivated');
+    var stateEl = document.getElementById('dtGraphCacheState');
+    var refreshedEl = document.getElementById('dtGraphCacheRefreshed');
+    if (!activatedEl || !stateEl || !refreshedEl) return;
+
+    var cache = source || {};
+    // domain_info uses graph_cache_*; stats uses graph_cache.{enabled,state,refreshed_at}
+    var supported = cache.supported;
+    if (supported === undefined) {
+        var backend = String(cache.graph_backend || cache.backend || '').toLowerCase();
+        supported = !backend || backend === 'lakebase' || backend === 'databricks';
+    }
+    var enabled = cache.enabled;
+    if (enabled === undefined) enabled = cache.graph_cache_enabled;
+    var state = cache.state || cache.graph_cache_state || '';
+    // Explicit refresh stamp, else the Build that created the companions.
+    var refreshedAt = cache.refreshed_at
+        || cache.graph_cache_refreshed_at
+        || cache.last_built
+        || cache.last_build
+        || '';
+
+    if (!supported) {
+        activatedEl.innerHTML = '<span class="text-muted">Not available</span>';
+        stateEl.innerHTML = '<span class="text-muted">—</span>';
+        refreshedEl.innerHTML = '<span class="text-muted">—</span>';
+        return;
+    }
+
+    if (enabled) {
+        activatedEl.innerHTML =
+            '<span class="badge bg-success bg-opacity-10 text-success border border-success">' +
+            '<i class="bi bi-check-circle me-1"></i>On</span>';
+    } else {
+        activatedEl.innerHTML =
+            '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">' +
+            '<i class="bi bi-slash-circle me-1"></i>Off</span>';
+    }
+
+    var stateKey = String(state || '').toLowerCase();
+    if (!enabled || stateKey === 'disabled') {
+        stateEl.innerHTML = '<span class="text-muted">Disabled</span>';
+    } else if (stateKey === 'ready') {
+        stateEl.innerHTML =
+            '<span class="badge bg-success bg-opacity-10 text-success border border-success">' +
+            '<i class="bi bi-check-circle me-1"></i>Ready</span>';
+    } else {
+        stateEl.innerHTML =
+            '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning">' +
+            '<i class="bi bi-exclamation-triangle me-1"></i>Refresh required</span>';
+    }
+
+    if (refreshedAt) {
+        try {
+            refreshedEl.innerHTML =
+                '<i class="bi bi-check-circle-fill text-success me-1"></i>' +
+                formatDateTime(refreshedAt);
+            refreshedEl.className = 'ms-1';
+        } catch (_) {
+            refreshedEl.textContent = refreshedAt;
+            refreshedEl.className = 'ms-1';
+        }
+    } else {
+        // No dedicated stamp and no Build yet — keep a dash.
+        refreshedEl.innerHTML = '<span class="text-muted">—</span>';
+    }
+}
+
+/**
  * Guard: set to true once the sync section has been fully loaded.
  * Prevents the 300ms-delayed nav click in query.js from re-running the
  * whole initialization a second time.  Reset to false when the user
@@ -571,6 +645,11 @@ async function initSyncSection() {
                 cache: {},
             };
             window.__TRIPLESTORE_CONFIG = cfg;
+            var cacheSource = Object.assign({}, di.info);
+            if (payload && payload.dt_existence && payload.dt_existence.last_built) {
+                cacheSource.last_built = payload.dt_existence.last_built;
+            }
+            renderBuildGraphCacheStatus(cacheSource);
         }
 
         var tableEl = document.getElementById('syncTriplestoreTable');
@@ -734,16 +813,26 @@ function _syncAdjacencyRefreshVisible(backend) {
 }
 
 function _updateSyncAdjacencyActionState() {
-    var btn = document.getElementById('syncAdjacencyRefreshBtn');
-    if (!btn) return;
     var backend = String(_syncTripleStoreBackend() || 'lakebase').toLowerCase();
     var visible = _syncAdjacencyRefreshVisible(backend);
-    btn.classList.toggle('d-none', !visible);
-    btn.disabled = !visible
+    var disabled = !visible
         || !syncIsReady
         || !tripleStoreHasData
         || syncIsRunning
         || adjacencyRefreshRunning;
+    var btn = document.getElementById('syncAdjacencyRefreshBtn');
+    if (btn) {
+        btn.classList.toggle('d-none', !visible);
+        btn.disabled = disabled;
+    }
+    // Header kebab item (Lakebase): keep enabled/disabled in sync; never hide —
+    // the parent action group is already backend-gated.
+    document.querySelectorAll(
+        '#sync-lakebase-actions .js-build-menu-refresh-cache'
+    ).forEach(function (item) {
+        item.disabled = disabled;
+        item.classList.toggle('disabled', disabled);
+    });
 }
 
 /**
@@ -1115,6 +1204,9 @@ async function monitorAdjacencyRefreshTask(taskId) {
                 _loadDtExistence();
                 if (typeof refreshDigitalTwinStatus === 'function') refreshDigitalTwinStatus();
                 if (typeof refreshTasks === 'function') refreshTasks();
+                if (window.BuildCacheModule && typeof window.BuildCacheModule.load === 'function') {
+                    window.BuildCacheModule.load();
+                }
                 updateDataMenus();
                 break;
             }
@@ -1672,13 +1764,21 @@ function _insightCacheStateLabel(cache) {
     if (!cache || !cache.supported) {
         return 'Search cache is only available for Lakehouse and Lakebase.';
     }
+    var refreshed = '';
+    if (cache.refreshed_at) {
+        try {
+            refreshed = ' Last refresh: ' + formatDateTime(cache.refreshed_at) + '.';
+        } catch (_) {
+            refreshed = ' Last refresh: ' + cache.refreshed_at + '.';
+        }
+    }
     if (!cache.enabled) {
-        return 'Off — live reads (adjacency, properties, and entity-search companions are not used).';
+        return 'Off — live reads (adjacency, properties, and entity-search companions are not used).' + refreshed;
     }
     if (cache.state === 'ready') {
-        return 'On — using cached indexes (adjacency in/out, properties, entity search).';
+        return 'On — using cached indexes (adjacency in/out, properties, entity search).' + refreshed;
     }
-    return 'On — rebuild or Refresh cache required (live reads until then).';
+    return 'On — rebuild or Refresh cache required (live reads until then).' + refreshed;
 }
 
 function _companionCount(companions, key) {
@@ -1701,6 +1801,7 @@ function _renderInsightsCache(data) {
     var status = document.getElementById('insightsCacheStatus');
     var row = document.getElementById('insightsCacheRow');
     var cache = data.graph_cache || {};
+    renderBuildGraphCacheStatus(cache);
     if (status) status.textContent = _insightCacheStateLabel(cache);
     if (!row) return;
     if (!cache.supported) {
@@ -1980,8 +2081,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             var btn = e.target.closest('[data-sync-action]');
             if (!btn || !syncRoot.contains(btn)) return;
             var act = btn.getAttribute('data-sync-action');
-            if (act === 'refresh-triple-store') checkTripleStoreStatus(true);
-            else if (act === 'start-triple-store-sync') startTripleStoreSync();
+            if (act === 'start-triple-store-sync') startTripleStoreSync();
             else if (act === 'refresh-adjacency-only') startSyncAdjacencyRefresh();
         });
     }

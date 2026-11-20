@@ -141,20 +141,30 @@ function applyTripleStoreBackendPanels() {
 }
 
 function _updateDbxAdjacencyButton() {
-    const btn = document.getElementById('dbxAdjacencyRefreshBtn');
-    if (!btn) return;
     const backend = String(_tsxBackend() || 'lakebase').toLowerCase();
     const visible = backend === 'databricks';
-    if (backend !== 'databricks') {
-        btn.classList.add('d-none');
-        btn.disabled = true;
-        return;
-    }
-    btn.classList.toggle('d-none', !visible);
-    btn.disabled = !dbxBuildReady
+    const disabled = !visible
+        || !dbxBuildReady
         || !dbxGraphHasData
         || dbxBuildRunning
         || dbxAdjacencyRefreshRunning;
+    const btn = document.getElementById('dbxAdjacencyRefreshBtn');
+    if (btn) {
+        if (!visible) {
+            btn.classList.add('d-none');
+            btn.disabled = true;
+        } else {
+            btn.classList.toggle('d-none', !visible);
+            btn.disabled = disabled;
+        }
+    }
+    // Header kebab item (Lakehouse): mirror disable state; parent group is
+    // already backend-gated so the item stays visible.
+    document.querySelectorAll('.js-dbx-adjacency-refresh').forEach((item) => {
+        if (item.id === 'dbxAdjacencyRefreshBtn') return;
+        item.disabled = disabled;
+        item.classList.toggle('disabled', disabled);
+    });
 }
 
 /**
@@ -366,9 +376,8 @@ async function startDatabricksAdjacencyRefresh() {
     if (!dbxBuildReady || dbxBuildRunning || dbxAdjacencyRefreshRunning || !dbxGraphHasData) {
         return;
     }
-    const btn = document.getElementById('dbxAdjacencyRefreshBtn');
-    if (btn) btn.disabled = true;
     dbxAdjacencyRefreshRunning = true;
+    _updateDbxAdjacencyButton();
     _hideDbxBuildResult();
     _resetDbxProgressBar();
 
@@ -591,7 +600,13 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('dbxBuildRefreshBtn')?.addEventListener('click', loadDatabricksBuildInfo);
     document.getElementById('dbxBuildLoadRetry')?.addEventListener('click', loadDatabricksBuildInfo);
     document.getElementById('dbxBuildStartBtn')?.addEventListener('click', startDatabricksBuild);
-    document.getElementById('dbxAdjacencyRefreshBtn')?.addEventListener('click', startDatabricksAdjacencyRefresh);
+    document.getElementById('dbxAdjacencyRefreshBtn')?.addEventListener(
+        'click', startDatabricksAdjacencyRefresh
+    );
+    document.querySelectorAll('.js-dbx-adjacency-refresh').forEach((el) => {
+        if (el.id === 'dbxAdjacencyRefreshBtn') return;
+        el.addEventListener('click', startDatabricksAdjacencyRefresh);
+    });
     document.getElementById('dbxBuildLogHide')?.addEventListener('click', hideDbxBuildLog);
     document.getElementById('dbxBuildLogExport')?.addEventListener('click', exportDbxBuildLog);
 

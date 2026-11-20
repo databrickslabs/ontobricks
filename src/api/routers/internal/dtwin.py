@@ -2134,6 +2134,35 @@ async def get_inferred_triples(
     }
 
 
+@router.get("/reasoning/inferred/breakdown")
+async def get_inferred_breakdown(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Per-category breakdown (Reasoning / Cohorts / Communities) of inferred triples."""
+    assert_domain_graph_read(session_mgr.request)
+    domain = get_domain(session_mgr)
+    store = _require_graph_store(domain, settings)
+    graph_name = effective_graph_name(domain)
+    if not store.supports_inferred_breakdown:
+        return {
+            "success": True,
+            "graph_name": graph_name,
+            "supported": False,
+            "categories": [],
+            "total": None,
+        }
+    base_uri = (domain.ontology.get("base_uri") or DEFAULT_BASE_URI).strip()
+    categories = await run_blocking(store.get_inferred_breakdown, graph_name, base_uri)
+    return {
+        "success": True,
+        "graph_name": graph_name,
+        "supported": True,
+        "categories": categories,
+        "total": sum(c["triples"] for c in categories),
+    }
+
+
 # ===========================================
 # Graph Chat Assistant (LLM over the knowledge graph)
 # ===========================================

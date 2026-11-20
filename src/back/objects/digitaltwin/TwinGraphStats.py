@@ -141,11 +141,20 @@ class TwinGraphStats:
                 GRAPH_CACHE_STATE_PENDING if enabled else GRAPH_CACHE_STATE_DISABLED
             ),
         )
+        # Prefer the stamp written by mark_graph_cache_ready; fall back to the
+        # last Build time (companions are created during Build when no dedicated
+        # Refresh cache has run yet).
+        refreshed_at = str(info.get("graph_cache_refreshed_at") or "").strip() or None
+        if not refreshed_at:
+            refreshed_at = str(
+                getattr(domain, "last_build", None) or info.get("last_build") or ""
+            ).strip() or None
         return {
             "supported": supported,
             "backend": backend,
             "enabled": enabled,
             "state": state,
+            "refreshed_at": refreshed_at,
             "companions": companions,
         }
 

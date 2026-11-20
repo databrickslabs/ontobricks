@@ -17,10 +17,24 @@ def _read(path: Path) -> str:
 
 
 class TestAdjacencyButtonsExist:
-    def test_build_panels_label_adjacency_refresh_as_refresh_cache(self):
+    def test_cache_tab_hosts_refresh_cache_buttons(self):
         html = _read(BUILD_HTML)
-        assert html.count("Refresh cache") == 4
+        pane = html.split('id="buildPaneCache"', 1)[1]
+        header = html.split('id="buildHeaderActions"', 1)[1].split('id="buildPageTabs"', 1)[0]
+        assert 'id="syncAdjacencyRefreshBtn"' in pane
+        assert 'id="dbxAdjacencyRefreshBtn"' in pane
+        assert 'id="syncAdjacencyRefreshBtn"' not in header
+        assert 'id="dbxAdjacencyRefreshBtn"' not in header
+        # Header kebab also offers Refresh cache (via shared partial).
+        assert '_build_more_actions.html' in header
+        # Role-gated: builder + locked variants for Lakebase and Lakehouse.
+        assert pane.count(">Refresh cache") == 4
         assert ">Refresh adjacency" not in html
+
+    def test_dbx_js_binds_header_kebab_refresh_cache(self):
+        js = _read(DBX_JS)
+        assert "js-dbx-adjacency-refresh" in js
+        assert "startDatabricksAdjacencyRefresh" in js
 
     def test_sync_panel_has_refresh_adjacency_action(self):
         html = _read(BUILD_HTML)
@@ -76,4 +90,9 @@ class TestAdjacencyRefreshFlow:
 
     def test_databricks_button_stays_hidden_outside_lakehouse_backend(self):
         dbx_js = _read(DBX_JS)
-        assert "backend !== 'databricks'" in dbx_js
+        fn = dbx_js.split("function _updateDbxAdjacencyButton()", 1)[1].split(
+            "function _applyDbxStorageKind", 1
+        )[0]
+        assert "backend === 'databricks'" in fn
+        assert "classList.add('d-none')" in fn
+        assert "js-dbx-adjacency-refresh" in fn

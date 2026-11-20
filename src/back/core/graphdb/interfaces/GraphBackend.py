@@ -56,6 +56,10 @@ class GraphBackend(
     """
 
     supports_materialized_inference_purge = False
+    # Per-category breakdown of materialised inferred triples
+    # (back.core.graphdb.inferred_breakdown). False -> the route reports
+    # ``supported: false`` instead of calling the store.
+    supports_inferred_breakdown = False
     supports_adjacency = False
     supports_entity_search = False
     supports_props = False

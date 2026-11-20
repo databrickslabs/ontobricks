@@ -894,6 +894,82 @@ so `main.css` re-pins `.form-control-sm`, `.form-select-sm` and every
 `.input-group-sm > *` to the token — otherwise small joined controls silently
 fall back to Bootstrap's legacy 4px next to their full-size siblings.
 
+#### Kebab / overflow menu (`.ob-dbx-menu`) — Databricks Du Bois style
+
+When a section header has secondary actions that should not compete with the
+primary CTA (purge, refresh cache, import/export, …), put them in a **borderless
+⋮ kebab** immediately **left of** the primary button. Do not invent a second
+overflow pattern.
+
+**Files**
+
+| Piece | Location |
+|-------|----------|
+| Styles | `src/front/static/global/css/components.css` (`.ob-dbx-menu*`) |
+| Reference consumer | `src/front/templates/partials/dtwin/_build_more_actions.html` |
+
+**Skeleton**
+
+```html
+<div class="dropdown">
+    <button type="button"
+            class="btn btn-sm ob-dbx-menu-toggle border-0 shadow-none"
+            id="myMoreActionsBtn"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+            aria-label="More actions"
+            title="More actions">
+        <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end ob-dbx-menu"
+        aria-labelledby="myMoreActionsBtn">
+        <li>
+            <button type="button" class="dropdown-item">
+                <span class="ob-dbx-menu-icon" aria-hidden="true">
+                    <i class="bi bi-trash"></i>
+                </span>
+                <span class="ob-dbx-menu-label">Purge inferences</span>
+            </button>
+        </li>
+        <li>
+            <button type="button" class="dropdown-item">
+                <span class="ob-dbx-menu-icon" aria-hidden="true">
+                    <i class="bi bi-arrow-repeat"></i>
+                </span>
+                <span class="ob-dbx-menu-label">Refresh cache</span>
+            </button>
+        </li>
+    </ul>
+</div>
+```
+
+**Behaviour & style rules**
+
+- Toggle: **no border**, muted icon, hover / open → `--db-hover-indigo` well.
+  Use `bi-three-dots-vertical` (not a caret `dropdown-toggle`).
+- Menu: warm surface, one-pixel `--db-border`, `--db-shadow-md`,
+  `--db-radius-card`, ~13px (`0.8125rem`) labels — Du Bois action-menu density.
+- Each item is **icon + label** via `.ob-dbx-menu-icon` / `.ob-dbx-menu-label`.
+  Icons stay muted (`--db-text-muted`); labels use `--db-text`. Do **not** paint
+  the whole row `text-danger` — keep destructive confirmation in the click
+  handler (`showConfirmDialog`), not in the resting menu colour.
+- Sentence-case labels ("Purge inferences", "Refresh cache").
+- Role-gate items the same way as the equivalent header button (disabled + lock
+  icon for viewers/editors).
+- Wire actions with shared classes / `data-*` hooks (e.g.
+  `js-purge-inferences-btn`, `data-sync-action="…"`); do not use inline
+  `onclick=`.
+- Place the kebab **left of** the primary CTA in `.section-header` actions.
+  Never after the primary.
+
+**Anti-patterns**
+
+- ❌ `btn-outline-secondary` on the ⋮ toggle (Databricks kebabs are borderless).
+- ❌ Bootstrap `dropdown-toggle` caret on a kebab.
+- ❌ Red / danger text on resting menu rows.
+- ❌ Re-declaring `.ob-dbx-menu` styles in an area CSS file — extend
+  `components.css` if the shared contract needs a change.
+
 ### Tabs (`.ob-tabs`) — transparent underline rail
 
 There is **one** tab-navigation treatment across the application. It lives in
@@ -1252,6 +1328,10 @@ These already exist; reuse before reinventing.
 - **Wizard overlay** — `.wizard-form-overlay` for absolute-positioned
   blocking spinners over a form during async tasks.
 - **Keyboard shortcut overlay** — `.ob-shortcut-overlay` + `.ob-shortcut-card`.
+- **Kebab / overflow menu** — `.ob-dbx-menu-toggle` + `.ob-dbx-menu` (Du Bois
+  ⋮ menu). Icon+label rows; styles in `components.css`. Reference:
+  `partials/dtwin/_build_more_actions.html`. See *Section Header → Kebab /
+  overflow menu*.
 
 ### Loading Spinners
 

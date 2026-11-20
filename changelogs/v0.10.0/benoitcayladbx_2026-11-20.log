@@ -1330,3 +1330,376 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 11024 passed, 334 skipped, 8 deselected in 49.50s
 
+================================================================================
+## Build page: Inferred tab with a breakdown of materialized inferred triples
+================================================================================
+
+Context: The Build page (`/dtwin/?section=sync&tab=build`) reported one number
+for inferred triples (Overview "Inferred triples") with no split by origin.
+Operators could not tell how many triples came from reasoning rules, cohort
+runs or community runs. The companion table has no provenance column, so the
+origin is derived at query time from the vocabulary the cohort and community
+features already write (`<base>/cohort/`, `<base>/inCohort<RuleId>`,
+`<base>/fromRule`, `<base>/cohortSize`, `<base>/cluster/`, `<base>/inCluster`,
+`<base>/clusterSize`, `<base>/fromAlgorithm`, `<base>/modularity`,
+`<base>/resolution`). Everything else is Reasoning. The new **Inferred** tab
+shows one row per category with Triples, Entities (distinct subjects) and
+Groups (distinct cohorts or communities; not applicable to Reasoning), and a
+total equal to the Overview figure. Neo4j reports the breakdown as not
+supported.
+
+Changes:
+
+1. src/back/core/graphdb/inferred_breakdown.py (new)
+   - Pure module: `build_breakdown_sql(relation, base_uri, escape)` builds one
+     `GROUP BY category` statement (uses `substr` for prefix matching so it runs
+     on Spark SQL, Postgres and SQLite); `normalise_breakdown(rows)` returns the
+     three categories in display order, zero-filled when absent.
+2. src/back/core/graphdb/interfaces/GraphBackend.py
+   - New capability flag `supports_inferred_breakdown = False` (default unsupported).
+3. src/back/core/graphdb/lakebase/InferredBreakdownMixin.py (new)
+   - Mixin for `FlatStore`: `get_inferred_breakdown(table_name, base_uri)` runs
+     the breakdown over the `*__app` companion table. Extracted as a mixin so
+     `FlatStore` stays within the class size budget (architecture ratchet).
+4. src/back/core/graphdb/lakebase/FlatStore.py
+   - Inherits `InferredBreakdownMixin` (class line only; no body growth).
+5. src/back/core/graphdb/delta/MaterializedStore.py
+   - `supports_inferred_breakdown = True` and `get_inferred_breakdown(...)` over
+     the writable inferred table (`_writable_table_fqn`); zero rows without a domain.
+6. src/api/routers/internal/dtwin.py
+   - New route `GET /dtwin/reasoning/inferred/breakdown` returning
+     `{success, graph_name, supported, categories, total}`; `supported: false`
+     skips the store call. Base URI from the domain ontology, falling back to
+     `DEFAULT_BASE_URI`.
+7. src/front/templates/partials/dtwin/_query_build.html
+   - New **Inferred** tab button after Runs and its pane (`buildPaneInferred`),
+     in the usual list style of the Runs tab: `.ob-filter-bar` with search box,
+     `.ob-runs-count` and Refresh; loading spinner, empty state, inline warning
+     alert on error, `table-responsive > .ob-runs-table`; total line below the table.
+8. src/front/static/query/js/query-build-inferred.js (new)
+   - `InferredBreakdownModule`: loads on every show of the tab and on Refresh;
+     binds the shared `ObListFilter` (rows: "N rows"); renders rows with
+     `textContent`; unsupported backends show a notice; errors show the inline
+     alert (same as Runs) instead of a toast.
+9. src/front/templates/dtwin.html
+   - Loads `query/js/query-build-inferred.js`.
+10. docs/user-guide.md
+    - New "Inferred tab" paragraph and category table under `### Build (Sidebar)`.
+11. Tests (new):
+    - tests/units/graphdb/test_inferred_breakdown_sql.py: SQL run on SQLite
+      checked against an independent Python classifier, plus a cross-check of the
+      prefixes against `CohortVocabulary` / `CommunityVocabulary`.
+    - tests/units/graphdb/test_inferred_breakdown_stores.py: flags and the store
+      wrappers (Delta and Lakebase) with the executor patched.
+    - tests/units/dtwin/test_inferred_breakdown_api.py: route supported,
+      default base URI, and unsupported backend.
+    - tests/units/front/test_build_inferred_tab_contract.py: tab order, pane hooks,
+      no inline style, script wiring, no native dialogs.
+
+Modified files:
+- src/back/core/graphdb/inferred_breakdown.py (new)
+- src/back/core/graphdb/interfaces/GraphBackend.py
+- src/back/core/graphdb/lakebase/InferredBreakdownMixin.py (new)
+- src/back/core/graphdb/lakebase/FlatStore.py
+- src/back/core/graphdb/delta/MaterializedStore.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/static/query/js/query-build-inferred.js (new)
+- src/front/templates/dtwin.html
+- docs/user-guide.md
+- tests/units/graphdb/test_inferred_breakdown_sql.py (new)
+- tests/units/graphdb/test_inferred_breakdown_stores.py (new)
+- tests/units/dtwin/test_inferred_breakdown_api.py (new)
+- tests/units/front/test_build_inferred_tab_contract.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11062 passed, 334 skipped, 8 deselected in 51.37s
+
+================================================================================
+## Build: Inferred loading spinner + Graph cache status on the Build tab
+================================================================================
+
+Context: The Inferred tab needed a clearer loading spinner (matching the Runs
+tab), and the Build tab itself had no surface for Search-cache status next to
+the Refresh cache action. Operators could not see whether the cache was on,
+whether it was ready, or when it was last rebuilt.
+
+Changes:
+
+1. src/front/static/query/js/query-build-inferred.js
+   - Shows `#buildInferredLoading` (Bootstrap spinner) for the whole load;
+     the Refresh button icon also becomes a `spinner-border-sm` while busy.
+2. src/back/core/graphdb/SearchCachePolicy.py
+   - `mark_graph_cache_ready` stamps `graph_cache_refreshed_at` (UTC ISO) on
+     the domain info whenever a companion rebuild succeeds.
+3. src/back/objects/domain/Domain.py / TwinGraphStats.py
+   - Expose `graph_cache_refreshed_at` / `refreshed_at` on domain info and the
+     Overview/stats `graph_cache` block.
+4. src/front/templates/partials/dtwin/_query_sync.html
+   - Build Graph card now shows Graph cache (On/Off), Cache state
+     (Ready / Refresh required / Disabled), and Last cache refresh.
+5. src/front/static/query/js/query-sync.js
+   - `renderBuildGraphCacheStatus` paints those fields from `/dtwin/sync/info`
+     domain info and refreshes them from `/dtwin/sync/stats` graph_cache;
+     Overview cache status text also includes the last refresh when known.
+6. docs/user-guide.md
+   - Documents the Graph cache status rows on Build.
+7. tests/units/front/test_build_inferred_tab_contract.py
+   - Contract for the spinner and the three Build cache status hooks.
+8. tests/units/graphdb/test_v090_graph_access_search_cache_policy.py
+   - Asserts `mark_graph_cache_ready` writes `graph_cache_refreshed_at`.
+
+Modified files:
+- src/front/static/query/js/query-build-inferred.js
+- src/back/core/graphdb/SearchCachePolicy.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/digitaltwin/TwinGraphStats.py
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-sync.js
+- docs/user-guide.md
+- tests/units/front/test_build_inferred_tab_contract.py
+- tests/units/graphdb/test_v090_graph_access_search_cache_policy.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11072 passed, 334 skipped, 8 deselected in 49.14s
+
+================================================================================
+## Build header actions stay visible on Runs and Inferred
+================================================================================
+
+Context: Switching to the Runs tab hid `#buildHeaderActions` (Refresh /
+Refresh cache / Purge / Build). With the new Inferred tab that made the
+graph actions disappear whenever the operator left the Build pane.
+
+Changes:
+
+1. src/front/static/domain/js/domain-runs.js
+   - `_syncBuildPageTab` no longer hides the header actions; it clears
+     `d-none` instead. Also wires `tab=inferred` into the URL / restore path
+     and listens for `buildTabInferredBtn`.
+2. tests/units/front/test_build_inferred_tab_contract.py /
+   tests/units/front/test_runs_page.py
+   - Contracts that the Build header-actions sync function never toggles
+     `d-none` off for Runs/Inferred.
+
+Modified files:
+- src/front/static/domain/js/domain-runs.js
+- tests/units/front/test_build_inferred_tab_contract.py
+- tests/units/front/test_runs_page.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11072 passed, 334 skipped, 8 deselected in 49.14s
+
+================================================================================
+## Build: Cache updated shows Build/creation time instead of Never
+================================================================================
+
+Context: When no dedicated Refresh-cache stamp existed yet, the Build card
+showed "Last cache refresh: Never". Operators want the date/time the cache
+was created (the Build that produced the companions) instead.
+
+Changes:
+
+1. src/back/objects/digitaltwin/TwinGraphStats.py
+   - `graph_cache.refreshed_at` falls back to `domain.last_build` when
+     `graph_cache_refreshed_at` is unset.
+2. src/front/static/query/js/query-sync.js
+   - `renderBuildGraphCacheStatus` falls back to `last_built` / `last_build`
+     and never prints "Never" (dash only when no Build has run).
+3. src/front/templates/partials/dtwin/_query_sync.html
+   - Label renamed to **Cache updated**.
+4. docs/user-guide.md + contract / TwinGraphStats unit tests.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinGraphStats.py
+- src/front/static/query/js/query-sync.js
+- src/front/templates/partials/dtwin/_query_sync.html
+- docs/user-guide.md
+- tests/units/front/test_build_inferred_tab_contract.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11072 passed, 334 skipped, 8 deselected in 49.14s
+
+
+================================================================================
+## Build: Cache tab (status, companions, Activate link, Refresh cache)
+================================================================================
+
+Context: Cache status had been embedded on the Build Graph card, and Refresh
+cache lived in the page header. Operators asked for a dedicated Cache tab
+(after Inferred) with companion-table detail, a link to activate/deactivate
+Search cache in Context Settings, and the Refresh cache action moved into
+that tab.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   - New **Cache** tab after Inferred; status rows, companions table, Activate /
+     deactivate link (`/domain/?section=information#searchCacheSection`),
+     Reload, and both Lakebase / Lakehouse Refresh cache buttons (same IDs as
+     before). Header no longer hosts Refresh cache.
+2. src/front/templates/partials/dtwin/_query_sync.html
+   - Removed the Graph-card cache status rows (moved into the Cache tab).
+3. src/front/static/query/js/query-build-cache.js (new)
+   - Loads `/dtwin/sync/stats` on tab show / Reload; paints companions and
+     reuses `renderBuildGraphCacheStatus`.
+4. src/front/static/domain/js/domain-runs.js / dtwin.html / query-sync.js
+   - Wires `tab=cache`, loads the new script, reloads Cache after a successful
+     adjacency refresh.
+5. docs/user-guide.md + tests/units/front/test_build_cache_tab_contract.py
+   - and test_adjacency_refresh_ui.py updated for the new button location.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-build-cache.js (new)
+- src/front/static/query/js/query-sync.js
+- src/front/static/domain/js/domain-runs.js
+- src/front/templates/dtwin.html
+- docs/user-guide.md
+- tests/units/front/test_build_cache_tab_contract.py (new)
+- tests/units/front/test_build_inferred_tab_contract.py
+- tests/units/front/test_adjacency_refresh_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11085 passed, 334 skipped, 8 deselected in 52.95s
+
+================================================================================
+## Build: move Purge into the Inferred tab (renamed "Purge")
+================================================================================
+
+Context: The Purge Inferences button sat in the Build header actions, next to
+  Refresh and Build. It belongs with the inferred triples it removes, so it
+  moves into the Inferred tab toolbar and is renamed "Purge".
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   - Removed both `_purge_inferences_button.html` includes from
+     `#buildHeaderActions` (Lakebase and Lakehouse groups).
+   - Added the include in `#buildPaneInferred` toolbar, next to the Refresh
+     button (wrapped in a flex group with `ms-auto`).
+2. src/front/templates/partials/dtwin/_purge_inferences_button.html
+   - Label changed from "Purge Inferences" to "Purge". The shared partial also
+     renders on the Reasoning and Cohorts pages, so their label is now "Purge"
+     too. Class `js-purge-inferences-btn` and `data-graph-name` are unchanged.
+3. src/front/static/query/js/query-purge-inferences.js
+   - After a successful purge, reloads the Inferred breakdown via
+     `InferredBreakdownModule.load()` when available.
+4. docs/user-guide.md, docs/intelligence.md
+   - Purge wording updated; Build location now "Build → Inferred".
+5. tests/units/front/test_purge_inferences_ui.py
+   - Label assertion updated; new contract tests for placement (Inferred pane,
+     not header) and the breakdown reload hook.
+6. tests/units/api/test_help_api.py
+   - Feature inventory term updated from "Purge Inferences" to "**Purge**".
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/partials/dtwin/_purge_inferences_button.html
+- src/front/static/query/js/query-purge-inferences.js
+- docs/user-guide.md
+- docs/intelligence.md
+- tests/units/front/test_purge_inferences_ui.py
+- tests/units/api/test_help_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: targeted (purge, reasoning header, cohorts tabs, build inferred/cache,
+  adjacency refresh, help API, runs page) → 141 passed.
+  Full suite: see result line below.
+
+Tests (full): uv run --frozen pytest -q -m "not scenario" → 11087 passed, 334 skipped, 8 deselected
+
+================================================================================
+## Build: remove the header Refresh button (Lakebase)
+================================================================================
+
+Context: The top-right Refresh button in the Build header re-probed the triple
+  store status. Operators asked for it to be removed.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   - Removed the `refresh-triple-store` button from `#sync-lakebase-actions`
+     in `#buildHeaderActions`. It was the only instance in the template.
+2. src/front/static/query/js/query-sync.js
+   - Removed the now-dead `refresh-triple-store` branch from the sync-section
+     click delegate. `checkTripleStoreStatus(true)` is still called by the
+     Inferred purge flow and by other paths.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/static/query/js/query-sync.js
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11087 passed, 334 skipped, 8 deselected
+
+================================================================================
+## Build: header ⋮ menu (Purge inferences, Refresh cache) — Du Bois style
+================================================================================
+
+Context: Secondary Build actions (Purge, Refresh cache) needed a Databricks-style
+  kebab left of Build, always available across tabs. The trigger is borderless;
+  the dropdown mirrors Du Bois action menus (icon + label rows, neutral text,
+  soft hover).
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_build_more_actions.html (new)
+   - Borderless ⋮ toggle (`ob-dbx-menu-toggle`) and `ob-dbx-menu` dropdown with
+     **Purge inferences** and **Refresh cache** (Lakebase / Lakehouse paths).
+2. src/front/templates/partials/dtwin/_query_build.html
+   - Includes the kebab left of Build in both action groups; Purge removed from
+     the Inferred tab toolbar.
+3. src/front/static/query/css/query-sync.css
+   - Du Bois-like menu styles (icon slot, 0.8125rem label, hover well, no
+     outline on the toggle).
+4. src/front/static/query/js/query-sync.js /
+   query-databricks-build.js
+   - Keep header Refresh cache disabled state in sync with the Cache-tab buttons;
+     bind Lakehouse kebab items via `js-dbx-adjacency-refresh`.
+5. docs/user-guide.md + contract tests updated.
+
+Modified files:
+- src/front/templates/partials/dtwin/_build_more_actions.html (new)
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/static/query/css/query-sync.css
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+- docs/user-guide.md
+- tests/units/front/test_purge_inferences_ui.py
+- tests/units/front/test_adjacency_refresh_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11090 passed, 334 skipped, 8 deselected
+
+================================================================================
+## Frontend: promote `.ob-dbx-menu` kebab to shared component
+================================================================================
+
+Context: The Build ⋮ Du Bois menu should be reusable anywhere a section header
+  needs overflow actions. Styles moved out of Build-only CSS into the shared
+  catalog and documented in the design system.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   - Added shared `.ob-dbx-menu-toggle` / `.ob-dbx-menu` (+ icon/label) styles.
+2. src/front/static/query/css/query-sync.css
+   - Removed the `#buildHeaderActions`-scoped duplicate.
+3. .cursor/11-frontend-design.mdc
+   - New *Kebab / overflow menu* subsection under Section Header; catalog entry.
+4. tests/units/front/test_purge_inferences_ui.py
+   - Asserts the shared CSS lives in `components.css`, not `query-sync.css`.
+
+Modified files:
+- src/front/static/global/css/components.css
+- src/front/static/query/css/query-sync.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_purge_inferences_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: see result line below.
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11090 passed, 334 skipped, 8 deselected

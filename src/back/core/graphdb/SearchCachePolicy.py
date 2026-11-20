@@ -173,6 +173,8 @@ class SearchCachePolicy:
     @staticmethod
     def mark_graph_cache_ready(domain: Any) -> None:
         """Record a successful companion rebuild on *domain.info* when enabled."""
+        from datetime import datetime, timezone
+
         info = SearchCachePolicy._domain_info(domain)
         if not info:
             return
@@ -181,6 +183,9 @@ class SearchCachePolicy:
         ):
             return
         info["graph_cache_state"] = GRAPH_CACHE_STATE_READY
+        info["graph_cache_refreshed_at"] = (
+            datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        )
         save = getattr(domain, "save", None)
         if callable(save):
             try:

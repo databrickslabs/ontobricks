@@ -566,6 +566,10 @@ class Domain:
                     self._s.info.get("graph_cache_enabled")
                 ),
             ),
+            "graph_cache_refreshed_at": str(
+                self._s.info.get("graph_cache_refreshed_at") or ""
+            ).strip()
+            or None,
             "knowledge_pages": normalize_knowledge_pages(self._s.info.get("knowledge_pages")),
         }
 

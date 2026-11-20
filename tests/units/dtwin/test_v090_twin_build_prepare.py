@@ -451,3 +451,19 @@ class TestGraphStats:
                 job_blocked_reason="",
             )
         assert payload["relationship_count"] == 0
+
+    def test_graph_cache_refreshed_at_falls_back_to_last_build(self):
+        domain = _domain(last_build="2026-11-01T12:00:00+00:00")
+        block = TwinGraphStats._graph_cache_block(domain, [])
+        assert block["refreshed_at"] == "2026-11-01T12:00:00+00:00"
+
+    def test_graph_cache_refreshed_at_prefers_explicit_stamp(self):
+        domain = _domain(
+            last_build="2026-11-01T12:00:00+00:00",
+            info={
+                "name": "Sales",
+                "graph_cache_refreshed_at": "2026-11-20T09:30:00+00:00",
+            },
+        )
+        block = TwinGraphStats._graph_cache_block(domain, [])
+        assert block["refreshed_at"] == "2026-11-20T09:30:00+00:00"

@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import concurrent.futures
 import time
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.delta import _table_naming, materialize
+from back.core.graphdb.inferred_breakdown import build_breakdown_sql, normalise_breakdown
 from back.core.graphdb.delta.ReadStore import ReadStore
 from back.core.graphdb.props import forget_missing_props
 from back.core.helpers import sql_escape as _escape_sql_string, validate_table_name
@@ -37,6 +38,7 @@ class MaterializedStore(ReadStore, MaterializedGraphBackend):
     """
 
     supports_materialized_inference_purge = True
+    supports_inferred_breakdown = True
     supports_adjacency = True
     supports_entity_search = True
     supports_props = True
@@ -345,3 +347,12 @@ class MaterializedStore(ReadStore, MaterializedGraphBackend):
             return self.count_triples(inferred)
         except Exception:  # noqa: BLE001
             return 0
+
+    def get_inferred_breakdown(self, table_name: str, base_uri: str) -> List[Dict[str, Any]]:
+        """Per-category triples / entities / groups over the writable inferred table."""
+        if self._domain is None:
+            return normalise_breakdown([])
+        inferred = self._writable_table_fqn(table_name)
+        validate_table_name(inferred)
+        sql = build_breakdown_sql(inferred, base_uri, self._sql_escape)
+        return normalise_breakdown(self.execute_query(sql))

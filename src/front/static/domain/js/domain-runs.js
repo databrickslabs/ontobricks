@@ -229,11 +229,19 @@ function showAnalyticsRunDetails(idx) {
 
 window.showAnalyticsRunDetails = showAnalyticsRunDetails;
 
-// ---- Build page tabs (Build | Runs) ------------------------------------
+// ---- Build page tabs (Build | Runs | Inferred | Cache) -----------------
+// Header actions (Refresh / Purge / Build) stay visible on every tab.
+// Refresh cache lives inside the Cache tab.
+
+function _normalizeBuildPageTab(tab) {
+    if (tab === 'runs' || tab === 'inferred' || tab === 'cache') return tab;
+    return 'build';
+}
 
 function _syncBuildPageTab(tab) {
-    const name = tab === 'runs' ? 'runs' : 'build';
-    document.getElementById('buildHeaderActions')?.classList.toggle('d-none', name === 'runs');
+    const name = _normalizeBuildPageTab(tab);
+    const actions = document.getElementById('buildHeaderActions');
+    if (actions) actions.classList.remove('d-none');
     const url = new URL(window.location.href);
     if (url.searchParams.get('section') === 'sync' || !url.searchParams.get('section')) {
         if (url.searchParams.get('tab') !== name) {
@@ -250,10 +258,14 @@ function _syncBuildPageTab(tab) {
 }
 
 function _showBuildPageTab(name) {
-    const tab = name === 'runs' ? 'runs' : 'build';
-    const btn = document.getElementById(
-        tab === 'runs' ? 'buildTabRunsBtn' : 'buildTabBuildBtn',
-    );
+    const tab = _normalizeBuildPageTab(name);
+    const btnId = ({
+        runs: 'buildTabRunsBtn',
+        inferred: 'buildTabInferredBtn',
+        cache: 'buildTabCacheBtn',
+        build: 'buildTabBuildBtn',
+    })[tab];
+    const btn = document.getElementById(btnId);
     if (btn && typeof bootstrap !== 'undefined' && bootstrap.Tab) {
         try { bootstrap.Tab.getOrCreateInstance(btn).show(); } catch (_) { /* noop */ }
     }
@@ -267,6 +279,12 @@ function _initBuildPageTabs() {
     );
     document.getElementById('buildTabRunsBtn')?.addEventListener(
         'shown.bs.tab', () => _syncBuildPageTab('runs'),
+    );
+    document.getElementById('buildTabInferredBtn')?.addEventListener(
+        'shown.bs.tab', () => _syncBuildPageTab('inferred'),
+    );
+    document.getElementById('buildTabCacheBtn')?.addEventListener(
+        'shown.bs.tab', () => _syncBuildPageTab('cache'),
     );
 }
 
@@ -316,7 +334,7 @@ document.addEventListener('sidebarSectionChanged', function (e) {
     const section = e.detail && e.detail.section;
     if (section === 'sync') {
         const tab = new URLSearchParams(window.location.search).get('tab');
-        _showBuildPageTab(tab === 'runs' ? 'runs' : 'build');
+        _showBuildPageTab(tab);
     }
     if (section === 'analytics') {
         const tab = new URLSearchParams(window.location.search).get('tab');
@@ -334,7 +352,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (document.getElementById('buildPageTabs')
             && (section === 'sync' || document.getElementById('sync-section')?.classList.contains('active'))) {
-        _showBuildPageTab(tab === 'runs' ? 'runs' : 'build');
+        _showBuildPageTab(tab);
     }
     if (document.getElementById('analyticsPageTabs')
             && (section === 'analytics' || document.getElementById('analytics-section')?.classList.contains('active'))) {

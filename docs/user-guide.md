@@ -970,6 +970,18 @@ Click **Build** in the sidebar to manage your triple store:
 
 In both modes `…_inferred` stays a Delta table, so reasoning and cohort writes are unaffected.
 
+**Cache tab.** The Build page has a **Cache** tab (after Inferred) for Search cache. It shows whether the cache is **On** or **Off**, the state (**Ready** or **Refresh required**), **Cache updated** (last companion rebuild, or the Build that first created them), and one row per companion table (adjacency out/in, properties, entity search). Use **Activate / deactivate** to open Context Settings → Search cache, and **Refresh cache** (also in the Build page ⋮ menu) to rebuild the companions. Neo4j domains show a notice instead.
+
+**Inferred tab.** The Build page has an **Inferred** tab next to Build and Runs. It breaks down the materialized inferred triples by origin:
+
+| Category | What it counts |
+|----------|----------------|
+| Reasoning | Facts produced by reasoning rules |
+| Cohorts | Cohort membership and cohort metadata written by cohort runs |
+| Communities | Community membership and cluster metadata written by community runs |
+
+Each row shows **Triples**, **Entities** (distinct subjects) and **Groups** (distinct cohorts or communities; not applicable to Reasoning). The total equals the Overview "Inferred triples" figure. The tab reloads each time it is opened; **Refresh** reloads it on demand. Neo4j domains show a notice instead, because the breakdown is not implemented for that backend yet.
+
 **Explorer index snapshot.** Build materialises `_adj_out` / `_adj_in` for
 entity expansion, `_entity_search` (union) and `_entity_search_asserted` for
 Preview, and `_props` for the final expansion payload fetch. The **Refresh cache**
@@ -1312,8 +1324,8 @@ Results are displayed as inferred triples and violations. Inferred triples can b
 
 In the **Business rules** phase tree (Graph → Business rules), rule names are links: clicking one opens the rule editor in place (the IF-THEN graph editor for Simple rules, the SPARQL editor for Complex rules). Users without ontology edit rights see the rule read-only. After you save, the list refreshes and your ticked rules stay ticked.
 
-Builders can use **Purge Inferences** from **Build** (Lakebase and
-Lakehouse), **Inference**, or **Intelligence → Configuration → Cohorts → Runs** to remove all materialized
+Builders can use **Purge inferences** from the Build page ⋮ menu (Lakebase and
+Lakehouse), **Purge** on **Inference**, or **Intelligence → Configuration → Cohorts → Runs** to remove all materialized
 reasoning and cohort triples from the
 active graph. The confirmation dialog names the active graph and shows the
 combined number of generated triples that will be deleted. The Cockpit
@@ -1373,7 +1385,7 @@ Communities and Patterns, you decide the grouping logic.
   assistant draft it.
 - **Runs** — pick a saved rule, **Preview** the groups it finds on the live
   graph, then **Materialise** them as `:inCohort` triples and/or a Unity
-  Catalog table. **Outputs** configures those targets. **Purge Inferences**
+  Catalog table. **Outputs** configures those targets. **Purge**
   removes materialised cohort and reasoning triples.
 
 Saved cohorts can be reused as the scope of a Scenario. Rule reference:
@@ -3195,7 +3207,7 @@ After import you can:
 - **How it works tabs**: Communities, Patterns and Scenarios each have a **How it works** tab with business-friendly diagrams, an energy & utilities example, and collapsed technical details. Every Intelligence page header has the **ontology discussion** button and the graph readiness badge.
 - **Scenario workbench**: **General**, **Hypothetical facts** (Set / Add / Remove; **Add fact** wizard; **Propose facts** drafts facts from plain language for review), **Reasoning** (T-Box, Simple rules, Graph reasoning, Complex rules) and **Results** (Added / Removed tables). Header buttons **Save**, **Run**, **Purge**. **Simulate from here** on an Explorer entity pre-fills the scope.
 - **Compare metrics and report**: the overlay loads for a ready scenario; **Metrics** shows exact counts; **Selection & Guide** explains the clicked node or link; **Evaluate** → **Ask both**, **Business insights**, **Open report** and **Export PDF**.
-- **Cohort runs**: the **Runs** tab previews a rule and materialises it to `:inCohort` and/or a Unity Catalog table (**Outputs**); **Purge Inferences** removes the materialised cohort and reasoning triples.
+- **Cohort runs**: the **Runs** tab previews a rule and materialises it to `:inCohort` and/or a Unity Catalog table (**Outputs**); **Purge inferences** (Build page ⋮ menu) removes the materialised cohort and reasoning triples.
 - **Background runs and history**: long operations appear in the navbar **Activity** panel; Analytics **Runs** and Settings → Automation → Runs (admin) keep the history.
 
 ### Graph (Sync & Explore)

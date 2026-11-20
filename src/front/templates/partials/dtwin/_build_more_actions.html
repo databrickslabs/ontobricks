@@ -1,0 +1,72 @@
+{# Build header kebab: Purge inferences + Refresh cache. Caller sets
+   build_more_backend to "lakebase" or "databricks" so Refresh cache hits the
+   right path. Visual style mirrors Databricks Du Bois action menus. #}
+{% set _dr = get_user_domain_role() %}
+{% set _btn_id = 'buildMoreActionsBtn-' ~ (build_more_backend or 'lakebase') %}
+<div class="dropdown">
+    <button type="button"
+            class="btn btn-sm ob-dbx-menu-toggle border-0 shadow-none"
+            id="{{ _btn_id }}"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+            aria-label="More build actions"
+            title="More actions">
+        <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end ob-dbx-menu" aria-labelledby="{{ _btn_id }}">
+        {% if _dr not in ('viewer', 'editor', 'none') %}
+        <li>
+            <button type="button"
+                    class="dropdown-item js-purge-inferences-btn"
+                    data-graph-name="{{ graph_name or domain_name }}"
+                    title="Remove materialized inference and cohort triples">
+                <span class="ob-dbx-menu-icon" aria-hidden="true">
+                    <i class="bi bi-trash"></i>
+                </span>
+                <span class="ob-dbx-menu-label">Purge inferences</span>
+            </button>
+        </li>
+        <li>
+            {% if build_more_backend == 'databricks' %}
+            <button type="button"
+                    class="dropdown-item js-build-menu-refresh-cache js-dbx-adjacency-refresh"
+                    title="Rebuild graph cache">
+                <span class="ob-dbx-menu-icon" aria-hidden="true">
+                    <i class="bi bi-arrow-repeat"></i>
+                </span>
+                <span class="ob-dbx-menu-label">Refresh cache</span>
+            </button>
+            {% else %}
+            <button type="button"
+                    class="dropdown-item js-build-menu-refresh-cache"
+                    data-sync-action="refresh-adjacency-only"
+                    title="Rebuild graph cache">
+                <span class="ob-dbx-menu-icon" aria-hidden="true">
+                    <i class="bi bi-arrow-repeat"></i>
+                </span>
+                <span class="ob-dbx-menu-label">Refresh cache</span>
+            </button>
+            {% endif %}
+        </li>
+        {% else %}
+        <li>
+            <button type="button" class="dropdown-item disabled" disabled
+                    title="Only builders and admins can purge inferences">
+                <span class="ob-dbx-menu-icon" aria-hidden="true">
+                    <i class="bi bi-lock"></i>
+                </span>
+                <span class="ob-dbx-menu-label">Purge inferences</span>
+            </button>
+        </li>
+        <li>
+            <button type="button" class="dropdown-item disabled" disabled
+                    title="Only builders and admins can refresh the graph cache">
+                <span class="ob-dbx-menu-icon" aria-hidden="true">
+                    <i class="bi bi-lock"></i>
+                </span>
+                <span class="ob-dbx-menu-label">Refresh cache</span>
+            </button>
+        </li>
+        {% endif %}
+    </ul>
+</div>

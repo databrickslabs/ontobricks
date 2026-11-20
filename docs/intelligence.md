@@ -107,7 +107,7 @@ The page has two tabs:
   assistant draft it.
 - **Runs** — pick a saved rule, **Preview** the groups it finds on the live
   graph, and **Materialise** them as `:inCohort` triples and/or a Unity
-  Catalog table. **Outputs** configures those targets. **Purge Inferences**
+  Catalog table. **Outputs** configures those targets. **Purge**
   removes materialised cohort and reasoning triples.
 
 **Example.** Target class *Customer*, linking path `Customer → holds → Contract

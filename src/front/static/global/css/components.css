@@ -1574,3 +1574,110 @@
     background: var(--db-hover);
     color: var(--db-text);
 }
+
+/* ==========================================================================
+   Databricks Du Bois kebab menu (`.ob-dbx-menu`)
+   Borderless ⋮ toggle + icon/label action dropdown. Place the toggle left of
+   the section primary CTA. Reference consumer:
+   partials/dtwin/_build_more_actions.html. Contract: .cursor/11 § Kebab.
+   ========================================================================== */
+.ob-dbx-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    color: var(--db-text-muted);
+    background-color: transparent;
+    border: 0;
+    border-radius: var(--db-radius-control);
+    box-shadow: none;
+    line-height: 1;
+}
+
+.ob-dbx-menu-toggle:hover,
+.ob-dbx-menu-toggle:focus,
+.ob-dbx-menu-toggle[aria-expanded="true"] {
+    color: var(--db-text);
+    background-color: var(--db-hover-indigo);
+}
+
+.ob-dbx-menu-toggle .bi {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.ob-dbx-menu {
+    min-width: 13.5rem;
+    padding: 0.25rem;
+    margin-top: 0.25rem;
+    background-color: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    box-shadow: var(--db-shadow-md);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    --bs-dropdown-link-hover-bg: var(--db-hover-indigo);
+    --bs-dropdown-link-hover-color: var(--db-text);
+    --bs-dropdown-link-active-bg: var(--db-hover-indigo);
+    --bs-dropdown-link-active-color: var(--db-text);
+}
+
+.ob-dbx-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.4rem 0.65rem;
+    margin: 0;
+    border-radius: var(--db-radius-control);
+    color: var(--db-text);
+    font-size: 0.8125rem;
+    font-weight: 400;
+    line-height: 1.25rem;
+    white-space: nowrap;
+}
+
+.ob-dbx-menu .dropdown-item:hover,
+.ob-dbx-menu .dropdown-item:focus {
+    background-color: var(--db-hover-indigo);
+    color: var(--db-text);
+}
+
+.ob-dbx-menu .dropdown-item:active,
+.ob-dbx-menu .dropdown-item.active {
+    background-color: var(--db-hover-indigo);
+    color: var(--db-text);
+}
+
+.ob-dbx-menu .dropdown-item.disabled,
+.ob-dbx-menu .dropdown-item:disabled {
+    color: var(--db-text-muted);
+    background-color: transparent;
+    opacity: 0.65;
+}
+
+.ob-dbx-menu .ob-dbx-menu-icon {
+    flex: 0 0 1rem;
+    width: 1rem;
+    height: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--db-text-muted);
+}
+
+.ob-dbx-menu .ob-dbx-menu-icon .bi {
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.ob-dbx-menu .dropdown-item:hover .ob-dbx-menu-icon,
+.ob-dbx-menu .dropdown-item:focus .ob-dbx-menu-icon {
+    color: var(--db-text-secondary);
+}
+
+.ob-dbx-menu .ob-dbx-menu-label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
