@@ -1005,3 +1005,69 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 11008 passed, 334 skipped, 8 deselected in 50.19s
+
+================================================================================
+## Navbar user menu: Databricks-style name + email header
+================================================================================
+
+Context: The navbar user dropdown only showed the email and role badges.
+Aligned it with the Databricks workspace user popover: display name and email
+in a header row next to the avatar, and a neutral avatar colour instead of the
+brand grey. The display name is derived from the email (no extra SCIM call).
+Avatar colour is a best match to the Databricks UI, not pixel-verified against
+the Databricks page (Okta blocks headless access).
+
+Changes:
+
+1. src/front/fastapi/dependencies.py
+   - New Jinja helper `get_user_display_name` ("first.last@x" → "First Last";
+     falls back to the raw email when no local part). Registered as a template
+     global. Added `import re`.
+2. src/front/templates/base.html
+   - User dropdown identity block: avatar + name (`ob-user-menu-name`) + email
+     in a `ob-user-menu-header` row; role badges kept below.
+3. src/front/static/global/css/main.css
+   - `.ob-user-avatar`: neutral background (`--db-border`) and dark text
+     (`--db-text`) instead of brand primary / white.
+   - New `.ob-user-avatar-lg`, `.ob-user-menu-header`, `.ob-user-menu-who`,
+     `.ob-user-menu-name`; email uses `--db-text-muted` and wraps at word
+     boundaries (`overflow-wrap: anywhere`). Menu min-width 240px.
+4. tests/units/front/test_user_menu_contract.py
+   - Contract: menu renders name + email + large avatar.
+   - Parametrized unit test for `get_user_display_name`.
+
+Modified files:
+- src/front/fastapi/dependencies.py
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- tests/units/front/test_user_menu_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11015 passed, 334 skipped, 8 deselected in 54.41s
+
+================================================================================
+## Navbar user menu: fix oval avatar and wrapping email
+================================================================================
+
+Context: The in-menu avatar was squashed by flex shrink (~27×36) into an
+oval, and `.ob-subnav .dropdown-menu { min-width: 200px }` overrode the
+user-menu width so the email wrapped onto two lines.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - Avatar: `flex-shrink: 0`, `aspect-ratio: 1 / 1`, matching min-width /
+     min-height so the circle stays round in the flex header.
+   - User menu: more specific `.ob-subnav .dropdown-menu.ob-user-menu`
+     with `min-width: 18rem` / `width: max-content` so email fits.
+   - Email + name: `white-space: nowrap` (no mid-address wrap).
+2. tests/units/front/test_user_menu_contract.py
+   - Contract asserts nowrap, flex-shrink, aspect-ratio, and the
+     subnav-specific menu selector.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_user_menu_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_user_menu_contract.py → 9 passed

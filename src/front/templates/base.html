@@ -81,6 +81,7 @@
         {% if m.id == 'settings'   %}{% set settings_m.v = m %}{% endif %}
     {% endfor %}
     {% set _email = get_user_email() %}
+    {% set _display_name = get_user_display_name() %}
     {% set _app_role = get_user_role() or 'user' %}
     {% set _domain_role = get_user_domain_role() %}
     {% set _local = (_email or 'U').split('@')[0] %}
@@ -341,7 +342,13 @@
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end ob-user-menu" aria-labelledby="userMenuDropdown">
                         <li class="ob-user-menu-identity">
-                            <div class="ob-user-menu-email">{{ _email }}</div>
+                            <div class="ob-user-menu-header">
+                                <span class="ob-user-avatar ob-user-avatar-lg" aria-hidden="true">{{ _initials }}</span>
+                                <div class="ob-user-menu-who">
+                                    <div class="ob-user-menu-name">{{ _display_name }}</div>
+                                    <div class="ob-user-menu-email">{{ _email }}</div>
+                                </div>
+                            </div>
                             <div class="ob-user-menu-badges">
                                 {% if _app_role == 'admin' %}
                                 <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Admin</span>

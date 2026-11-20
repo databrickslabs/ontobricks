@@ -285,9 +285,13 @@ body {
     justify-content: center;
     width: 1.75rem;
     height: 1.75rem;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    flex-shrink: 0;
+    aspect-ratio: 1 / 1;
     border-radius: 50%;
-    background: var(--db-primary);
-    color: #fff;
+    background: var(--db-border);
+    color: var(--db-text);
     font-size: 0.68rem;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -296,20 +300,52 @@ body {
     user-select: none;
 }
 
+/* Beat `.ob-subnav .dropdown-menu { min-width: 200px }` so the email stays
+   on one line next to the avatar. */
+.ob-subnav .dropdown-menu.ob-user-menu,
 .ob-user-menu {
-    min-width: 220px;
+    min-width: 18rem;
+    width: max-content;
+    max-width: min(22rem, calc(100vw - 1.5rem));
 }
 
 .ob-user-menu .ob-user-menu-identity {
-    padding: 0.2rem 0.65rem;
+    padding: 0.4rem 0.75rem 0.5rem;
     cursor: default;
+}
+
+.ob-user-menu .ob-user-menu-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.ob-user-avatar.ob-user-avatar-lg {
+    width: 2.25rem;
+    height: 2.25rem;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    font-size: 0.8rem;
+}
+
+.ob-user-menu .ob-user-menu-who {
+    min-width: 0;
+}
+
+.ob-user-menu .ob-user-menu-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--db-text);
+    line-height: 1.25;
+    white-space: nowrap;
 }
 
 .ob-user-menu .ob-user-menu-email {
     font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--db-text);
-    word-break: break-all;
+    font-weight: 400;
+    color: var(--db-text-muted);
+    white-space: nowrap;
+    line-height: 1.3;
 }
 
 .ob-user-menu .ob-user-menu-badges {
