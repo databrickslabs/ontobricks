@@ -1,4 +1,104 @@
 ================================================================================
+## User Guide: full Intelligence feature coverage
+================================================================================
+
+Context: The User Guide's Step 4 was a short map that deferred to
+intelligence.md, and the feature inventory listed Intelligence in a few
+bullets. Users reading the User Guide could not see Home, the Analytics
+Data Model Health / AI Insights / Runs tabs, the Patterns Coverage and bar
+chart, the scenario workbench tabs (facts, reasoning, results, Propose facts),
+Compare metrics / Evaluate, cohort outputs, or the Activity panel.
+
+Changes:
+
+1. docs/user-guide.md (Step 4)
+   Replaced the page table with one section per Intelligence page: Home,
+   Cohorts, Analytics, Communities, Patterns, Scenarios, Compare, plus
+   Activity and run history, Before you start and a typical flow.
+2. docs/user-guide.md (Feature inventory → Intelligence)
+   Analytics tabs, scenario workbench, Compare metrics and report, cohort
+   runs, and background runs / history bullets.
+3. tests/units/api/test_help_api.py
+   New contract: the User Guide documents every Intelligence page heading and
+   key terms (Data Model Health, AI Insights, Coverage, Propose facts,
+   Ask both, Activity) and the inventory names the workbench and report items.
+4. docs/user-guide.md TOC
+   Regenerated with `make docs-toc` (no change to the top-level TOC).
+
+Note: relationship prediction (Intelligence → Relationships) is only a design
+spec (docs/superpowers/specs/2026-11-15-relationship-prediction-design.md);
+it is not in menu_config.json or the code, so it is not documented as a feature.
+
+Modified files:
+- docs/user-guide.md
+- tests/units/api/test_help_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 11001 passed, 334 skipped,
+8 deselected in 49.49s.
+
+================================================================================
+## Document Intelligence capabilities in Help Center, Starter Guide and Sphinx
+================================================================================
+
+Context: Intelligence (Home, Analytics, Communities, Patterns, Cohorts,
+Scenarios, Compare) was already in the operator guide, but the Starter Guide,
+Getting Started first-run, workspace Home resources, README, product deck and
+Architecture still stopped at Explore or described Simulation as Lakebase-only.
+
+Changes:
+
+1. src/front/templates/partials/layout/help_modal.html
+   Starter Guide step 5 (Intelligence); Feature Guide Analytics card; FAQ;
+   glossary; troubleshooting; workflow copy.
+2. src/front/templates/partials/layout/_workspace_home.html
+   Intelligence Home Help / resources open the Intelligence guide; Starter
+   and Workflow copy mention Intelligence.
+3. src/front/config/menu_config.json
+   Intelligence workspace subtitle lists analytics, communities, patterns,
+   cohorts and sandboxes.
+4. src/front/templates/home.html
+   Help Center resource mentions Intelligence in the Starter Guide.
+5. docs/intelligence.md
+   Home landing; Graph-ready badge; Patterns Hops/Entities/Patterns/Coverage
+   KPIs and bar chart.
+6. docs/getting-started.md
+   First Steps §7 Discover and simulate; navigation includes Intelligence.
+7. docs/README.md, README.md, docs/user-guide.md, docs/examples.md,
+   docs/product.md, docs/architecture.md, docs/development.md
+   Online docs, examples, GTM and architecture aligned with Intelligence.
+8. tests/units/front/test_help_center_menu_sync.py
+   Starter Guide and glossary contracts for Intelligence terms.
+9. tests/units/front/test_workspace_home_contract.py
+   Intelligence Home help_doc contract.
+10. tests/units/api/test_help_api.py
+    Catalog assertions for Home, Coverage, Getting Started Intelligence.
+
+Modified files:
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/layout/_workspace_home.html
+- src/front/config/menu_config.json
+- src/front/templates/home.html
+- docs/intelligence.md
+- docs/getting-started.md
+- docs/README.md
+- README.md
+- docs/user-guide.md
+- docs/examples.md
+- docs/product.md
+- docs/architecture.md
+- docs/development.md
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/api/test_help_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10992 passed, 8 failed
+(unrelated: `_InMemoryStore.read_version()` missing `include_simulations`),
+334 skipped, 8 deselected in 51.62s. Targeted help/workspace-home tests:
+83 passed.
+
+================================================================================
 ## Home tiles restyled to Databricks Jobs create-tile pattern
 ================================================================================
 
@@ -282,3 +382,337 @@ Tests:
   32px / 4px / 13px / 500; Create fill #2272B4; Share border #C6C9D1.
 - Live `http://127.0.0.1:8000/` Create CTA: same geometry after reload.
 - `uv run --frozen pytest -q -m "not scenario"`: 10984 passed, 334 skipped, 8 deselected, 0 failed in 51.10s.
+
+================================================================================
+## Navbar Save/Close/Resume: Genie Code chips with Activity hover
+================================================================================
+
+Context: Navbar Save/Close/Resume had been mapped to Create/Share (filled /
+outlined). They now follow a Genie Code-inspired chip (bordered, Du Bois md)
+with the same hover fill as the Activity icon (`--db-hover-indigo`), and no
+gradient. Save and Close are icon-only; Resume keeps the text label "Resume"
+only.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Save/Close: removed visible labels and the Save shortcut keycap; kept
+     icon + dirty dot; added `aria-label` (shortcut remains in Save `title`).
+2. src/front/static/global/js/edit-lock.js
+   - Resume button markup is text-only: label `Resume` (no icon, no "editing").
+3. src/front/static/global/css/main.css
+   - `.ob-subnav-action` is a square Genie chip (white surface, 1px
+     `--db-border`); hover/focus use `--db-hover-indigo` (Activity), never
+     Create/Share fills or a gradient.
+   - Resume is auto-width with warning text colour; same hover fill.
+   - Dirty dot repositioned on the icon chip; shortcut keycap styles removed.
+   - Constrained/mobile rules keep Resume's label visible while other labels
+     stay hidden.
+4. .cursor/11-frontend-design.mdc
+   - Chrome actions documented as Genie chips; Create/Share no longer apply
+     to the navbar.
+5. tests/units/front/test_segmented_subnav_contract.py
+   - Chrome contract asserts Genie chip + Activity hover.
+6. tests/units/front/test_mobile_subnav_contract.py
+   - Icon-only Save/Close, Resume label `Resume`, mobile padding on Resume.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/front/templates/base.html
+- src/front/static/global/js/edit-lock.js
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_mobile_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium: Save/Close 32×32 bordered chips; hover matches Activity
+  (`--db-hover-indigo`); Resume shows "Resume" text only.
+- `uv run --frozen pytest -q -m "not scenario"`: 10984 passed, 334 skipped, 8 deselected, 0 failed in 48.94s.
+
+================================================================================
+## Save and Close: bare icons (no background, no border, no hover)
+================================================================================
+
+Context: After the Genie chip restyle, Save and Close still rendered a chip
+(surface + border) and a hover fill. Requested: Save and Close must have no
+background and no border, and no hover change. Resume keeps its chip.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-subnav-save-btn` and `.ob-subnav-close-btn` are pinned to a transparent
+     background, `border: 0` and the secondary icon colour at rest, on hover and
+     on focus. The pin comes after the generic `.ob-subnav-action:hover` so the
+     chip hover cannot leak back in.
+   - Keyboard focus keeps only the focus ring (`:focus-visible`), not a fill.
+2. tests/units/front/test_segmented_subnav_contract.py
+   - New contract: one pinned rule covers Save/Close rest, hover and focus,
+     with transparent background and no border, placed after the chip hover.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium: Save and Close background rgba(0,0,0,0) and border 0 at rest
+  and on hover; Resume keeps its chip.
+- `uv run --frozen pytest -q -m "not scenario"`: 10985 passed, 334 skipped, 8 deselected, 0 failed in 48.67s.
+
+================================================================================
+## Unified navbar icon hover square (Save, Close, Activity, switcher)
+================================================================================
+
+Context: The hover hit areas differed across navbar icons (Activity was
+padding-sized, the feature switcher used the 2.25rem rail, Save/Close had no
+hover). They now share one 2rem / 4px square; Save and Close stay bare at rest
+and show that hover fill.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - Added `--ob-subnav-icon-hit` (2rem) and `--ob-subnav-icon-radius`
+     (aliases Du Bois button radius). Chrome button height aliases the icon hit.
+   - `.ob-subnav-utility-link` (Activity / User) and `.ob-subnav-app-switcher`
+     use the shared hit square and radius.
+   - Save/Close: transparent + borderless at rest; hover/focus use
+     `--db-hover-indigo` on the same square.
+2. .cursor/11-frontend-design.mdc
+   - Documents the shared icon-hit hover square.
+3. tests/units/front/test_segmented_subnav_contract.py
+   - Contract that the four icon controls share the hit tokens; Save/Close
+     rest vs hover paint.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium: Close/Save/Switcher/Activity all measure 32×32 / 4px at rest;
+  Save/Close transparent; hover uses `--db-hover-indigo`.
+- `uv run --frozen pytest -q -m "not scenario"`: 10985 passed, 334 skipped, 8 deselected, 0 failed in 48.83s.
+
+================================================================================
+## More space between Activity and User (notification badge clearance)
+================================================================================
+
+Context: With a notification bubble on Activity, the badge sat against the
+user avatar because the two utility items only had the default 0.35rem gap.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-subnav-nav .ob-subnav-item:has(#activityCenterToggle) + .ob-subnav-item`
+     uses `margin-inline-start: 0.85rem` so the overflow badge clears the avatar.
+2. tests/units/front/test_segmented_subnav_contract.py
+   - Contract pins that spacing rule.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py`: 12 passed.
+
+================================================================================
+## Workspace map: Save and Close in the Context popup header
+================================================================================
+
+Context: Opening Context opens the workspace map modal (with version switch).
+Save and Close were only in the navbar chrome; they are now also available in
+the modal header, top-right, above the version switch strip.
+
+Changes:
+
+1. src/front/templates/partials/layout/_workspace_map_modal.html
+   - Header actions: Close then Save (`data-navbar-action`, same handlers as
+     the navbar), then the dismiss `btn-close`. Labels/icons come from
+     `menu_config` Context `navbar_actions`.
+2. src/front/static/global/css/components.css
+   - `.ob-workspace-map-header-actions` right-aligns the action group in the
+     modal header.
+3. tests/units/front/test_workspace_map_modal.py
+   - Contract: Save/Close sit in the header above the versions strip.
+4. .cursor/11-frontend-design.mdc
+   - Workspace Map row notes the header Save/Close.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- src/front/static/global/css/components.css
+- tests/units/front/test_workspace_map_modal.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_workspace_map_modal.py`: 16 passed.
+
+================================================================================
+## docs/mcp.md: Genie One connection setup delegated to official Databricks docs
+================================================================================
+
+Context: The "Register the MCP in Unity Catalog and Genie One" section repeated
+the full Databricks setup procedure (service principal, OAuth secret, CAN_USE
+grant, UC HTTP connection creation, Genie One UI steps, worked example). That
+duplicates Databricks documentation and goes stale when the UI changes. The
+section now points to the official Genie One guide and keeps only the
+OntoBricks-specific values and checks.
+
+Changes:
+
+1. docs/mcp.md (Register the MCP in Unity Catalog and Genie One)
+   - Replaced the intro with a reference to the official Genie One external
+     sources guide (plus the HTTP connection and MCP server references).
+   - Added an "OntoBricks values" table (endpoint, OAuth M2M, is_mcp_connection,
+     base path/port, scope, token endpoint, dedicated service principal,
+     CAN_USE on the MCP app, workspace preview, API / MCP domain flag).
+   - Removed the Prerequisites, Variables, and numbered CLI/API setup steps
+     (service principal, CAN_USE grant, connection creation, UI alternative).
+   - Removed the Genie One UI steps (preview enablement, attach-connection
+     walkthrough) and the 08x worked example.
+   - Kept verification prompts and expected-behaviour checks ("Verify in Genie One").
+   - Renumbered the remaining sections (MCP Service, Grants, Playground /
+     Genie Code, Troubleshooting, Security notes) and updated troubleshooting
+     wording that referenced the removed procedure.
+
+Modified files:
+- docs/mcp.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Documentation-only change; no code modified, test suite not affected.
+
+================================================================================
+## Persist Context loading spinner across open/create/validate navigation
+================================================================================
+
+Context: Opening or creating a Context left a long blank wait before the
+navbar name and Save/Close chrome appeared. Registry/home validate/open
+paths never showed the overlay, and a full page navigation dropped it
+even when navbar.js had started it. Persist the overlay in sessionStorage,
+restore it early on the next page, and clear it only after /navbar/state
+paints the chrome.
+
+Changes:
+
+1. src/front/templates/base.html
+   Inline restore of `#domainLoadingOverlay` from `ob_domain_loading`
+   immediately after the overlay markup (before deferred navbar.js runs).
+2. src/front/static/global/js/navbar.js
+   `showDomainLoading` / `hideDomainLoading` persist and clear
+   `ob_domain_loading`; `applyDomainInfo` hides once navbar state paints;
+   `domainNew`, `doDomainSave(afterSave)`, `doDomainLoad`, and import keep
+   the overlay across navigate (no pre-nav `loadNavbarState` clear).
+3. src/front/static/registry/js/registry.js
+   Load Context and Open in Validation show/hide the overlay around
+   load-from-uc + navigation.
+4. src/front/static/home/js/home-tasks.js
+   Home Validate uses the same overlay around open-to-review.
+5. src/front/static/domain/js/domain-versions.js
+   Load version / reload saved version show the overlay across navigate.
+6. src/front/static/domain/js/domain.js
+   Belt-and-suspenders re-show from `ob_domain_loading` on Context page boot.
+7. src/front/static/domain/js/domain-information.js
+   Stop clearing overlay from the obsolete `ob_creating_new_domain` path;
+   chrome paint owns hide.
+8. tests/units/front/test_domain_loading_overlay.py
+   New contracts for persist/restore/call sites.
+9. tests/units/front/test_navbar_domain_badge_persistence.py
+   Align `doDomainLoad` contract with overlay-across-navigate behaviour.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/static/registry/js/registry.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/domain/js/domain.js
+- src/front/static/domain/js/domain-information.js
+- tests/units/front/test_domain_loading_overlay.py
+- tests/units/front/test_navbar_domain_badge_persistence.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10995 passed, 334 skipped, 8 deselected in 48.79s
+
+================================================================================
+## Speed up Context open (skip sims/OWL, paint chrome early)
+================================================================================
+
+Context: Opening a Context felt slow even with the loading spinner. Root
+causes: every load-from-uc attached up to 500 simulation runs (never imported
+into the session), eagerly regenerated OWL/R2RML that save() immediately
+strips, double session saves, artificial 150 ms navigate delays, and the UI
+waiting on /navbar/state before Save/Close appeared.
+
+Changes:
+
+1. src/back/objects/domain/Domain.py
+   Lean load_domain_from_uc: include_simulations=False, no
+   ensure_generated_content, single save; return domain payload for chrome;
+   extract _resolve_uc_load_version / _commit_uc_load_session helpers.
+2. src/back/objects/registry/store/lakebase/Catalog.py
+   read_version(include_simulations=…) skips attach_simulations_to_doc when False.
+3. src/back/objects/registry/store/base.py + RegistryService.py
+   Thread the include_simulations flag; status helper skips sims.
+4. src/api/routers/internal/domain.py
+   run_blocking around load_domain_from_uc so Lakebase I/O does not block the loop.
+5. src/front/static/global/js/navbar.js
+   rememberLoadedDomainOrClear from load response; navigate immediately;
+   clear remembered domain on close.
+6. src/front/static/registry/js/registry.js
+   home-tasks.js, domain-versions.js: remember loaded domain before navigate.
+7. tests/units/domain/test_load_domain_from_uc_perf.py
+   Contracts for sims skip / single save / domain payload.
+8. tests/units/architecture/baseline.json
+   Drop load_domain_from_uc from oversized_functions (now under budget).
+
+Modified files:
+- src/back/objects/domain/Domain.py
+- src/back/objects/registry/store/lakebase/Catalog.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/RegistryService.py
+- src/api/routers/internal/domain.py
+- src/front/static/global/js/navbar.js
+- src/front/static/registry/js/registry.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/domain/js/domain-versions.js
+- tests/units/domain/test_load_domain_from_uc_perf.py
+- tests/units/front/test_domain_loading_overlay.py
+- tests/units/front/test_navbar_domain_badge_persistence.py
+- tests/units/registry/test_registry.py
+- tests/units/registry/test_registry_store.py
+- tests/units/registry/test_github_sync.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11000 passed, 334 skipped, 8 deselected in 49.64s
+
+================================================================================
+## Keep Context loading overlay until Configuration section is active
+================================================================================
+
+Context: After loading a Context the page opened on the default Home section
+instead of Configuration. The previous change stored the loaded-domain payload
+so the next page could paint chrome early; navbar init restored it and called
+applyDomainInfo, which hid the loading overlay before domain.js switched to
+?section=information. The Home section was visible during that window.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   applyDomainInfo no longer hides the overlay. New _settlePendingDomainLoading
+   helper runs in a finally block of loadNavbarState, so the overlay drops only
+   after the fresh /navbar/state (or the error fallback) has settled.
+2. tests/units/front/test_domain_loading_overlay.py
+   Contracts: restore does not hide the overlay; loadNavbarState settles it in finally.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_domain_loading_overlay.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11002 passed, 334 skipped, 8 deselected in 48.70s

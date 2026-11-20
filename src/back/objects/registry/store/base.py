@@ -372,9 +372,17 @@ class RegistryStore(ABC):
 
     @abstractmethod
     def read_version(
-        self, folder: str, version: str
+        self,
+        folder: str,
+        version: str,
+        include_simulations: bool = True,
     ) -> Tuple[bool, Dict[str, Any], str]:
-        """Return the parsed domain document (``info``/``versions``/…)."""
+        """Return the parsed domain document (``info``/``versions``/…).
+
+        ``include_simulations`` attaches scenario specs and run history when
+        True (export / sync paths). Context open should pass False — the
+        session never imports those blobs and the attach is expensive.
+        """
 
     @abstractmethod
     def write_version(
@@ -404,7 +412,9 @@ class RegistryStore(ABC):
         denormalised ``status`` column should override with a cheap query.
         Must NOT raise on missing domain/version.
         """
-        ok, data, _ = self.read_version(folder, version)
+        ok, data, _ = self.read_version(
+            folder, version, include_simulations=False
+        )
         if not ok:
             return None
         return (data.get("info", {}) or {}).get("status")

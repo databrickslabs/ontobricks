@@ -164,7 +164,6 @@
     "back/objects/digitaltwin/query/TwinMapping.py::TwinMapping.execute_spark_query": 126,
     "back/objects/domain/Domain.py::Domain.list_schema_tables_result": 101,
     "back/objects/domain/Domain.py::Domain.list_version_details": 107,
-    "back/objects/domain/Domain.py::Domain.load_domain_from_uc": 101,
     "back/objects/domain/Domain.py::Domain.save_domain_info": 139,
     "back/objects/domain/Domain.py::Domain.save_domain_to_uc": 117,
     "back/objects/domain/Domain.py::Domain.update_mappings_from_metadata": 115,

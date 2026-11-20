@@ -401,6 +401,27 @@
             <span class="ob-spinner-label" id="domainLoadingLabel">Loading context...</span>
         </div>
     </div>
+    <script>
+    /* Restore the domain-loading overlay across a navigation so Context open /
+       create / validate never flash an empty navbar while /navbar/state loads. */
+    (function () {
+        try {
+            var raw = sessionStorage.getItem('ob_domain_loading');
+            if (!raw) return;
+            var data = JSON.parse(raw);
+            if (!data || !data.t || (Date.now() - data.t) > 90000) {
+                sessionStorage.removeItem('ob_domain_loading');
+                return;
+            }
+            var el = document.getElementById('domainLoadingOverlay');
+            if (!el) return;
+            var lbl = document.getElementById('domainLoadingLabel');
+            if (lbl && data.label) lbl.textContent = data.label;
+            el.classList.remove('d-none');
+            el.setAttribute('aria-busy', 'true');
+        } catch (e) {}
+    })();
+    </script>
 
     <!-- Main Content -->
     <div class="content-wrapper">

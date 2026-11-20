@@ -195,6 +195,60 @@ def merge_table_metadata(
         old_table["columns"] = new_columns
 
 
+def _resolve_uc_load_version(
+    svc: RegistryService, domain_name: str, version: str | None
+) -> str:
+    """Resolve active/latest version when the caller did not pass one."""
+    if version:
+        return version
+    active_ver, _ = svc.find_mcp_version(domain_name)
+    if active_ver:
+        logger.info(
+            "No version specified for '%s'; resolved to active v%s",
+            domain_name,
+            active_ver,
+        )
+        return active_ver
+    latest = svc.get_latest_version(domain_name)
+    if not latest:
+        raise NotFoundError(f'No versions found for context "{domain_name}"')
+    logger.info(
+        "No version specified for '%s'; no active version, falling back to latest v%s",
+        domain_name,
+        latest,
+    )
+    return latest
+
+
+def _commit_uc_load_session(session, svc: RegistryService, domain_name: str, version: str, cfg) -> bool:
+    """Stamp folder/registry meta, clear DT caches, persist once.
+
+    Returns whether *version* is the latest. OWL/R2RML stay lazy
+    (``ensure_generated_content``) because ``save`` strips them.
+    """
+    sorted_versions = svc.list_versions_sorted(domain_name)
+    is_latest = sorted_versions[0] == version if sorted_versions else True
+    session.domain_folder = domain_name
+    session.is_active_version = is_latest
+    reg_settings = session.settings.setdefault("registry", {})
+    if not reg_settings.get("catalog"):
+        reg_settings["catalog"] = cfg.catalog
+    if not reg_settings.get("schema"):
+        reg_settings["schema"] = cfg.schema
+    if not reg_settings.get("volume"):
+        reg_settings["volume"] = cfg.volume
+    clear_version_status_cache()
+    invalidate_registry_cache()
+    # Lazy graph load: hydrate on first DT/Build access.
+    ts_stats = session.triplestore.setdefault("stats", {})
+    ts_stats.pop("status", None)
+    ts_stats.pop("dt_existence", None)
+    session.triplestore.pop("_ts_cache_timestamp", None)
+    session.save()
+    return is_latest
+
+
+
 class Domain:
     """Non-HTTP façade for domain lifecycle, registry sync, metadata, and design state.
 
@@ -1219,30 +1273,14 @@ class Domain:
         try:
             if not domain_name:
                 raise ValidationError("Context name is required")
-            if not version:
-                active_ver, _ = svc.find_mcp_version(domain_name)
-                if active_ver:
-                    version = active_ver
-                    logger.info(
-                        "No version specified for '%s'; resolved to active v%s",
-                        domain_name,
-                        version,
-                    )
-                else:
-                    version = svc.get_latest_version(domain_name)
-                    if not version:
-                        raise NotFoundError(
-                            f'No versions found for context "{domain_name}"'
-                        )
-                    logger.info(
-                        "No version specified for '%s'; no active version, falling back to latest v%s",
-                        domain_name,
-                        version,
-                    )
+            version = _resolve_uc_load_version(svc, domain_name, version)
             c = svc.cfg
             if not c.catalog or not c.volume:
                 raise ValidationError("Registry not configured")
-            r_ok, domain_data, r_msg = svc.read_version(domain_name, version)
+            # Skip attaching up to 500 simulation runs — session never imports them.
+            r_ok, domain_data, r_msg = svc.read_version(
+                domain_name, version, include_simulations=False
+            )
             if not r_ok:
                 if r_msg and "not found" in r_msg.lower():
                     raise NotFoundError(r_msg)
@@ -1252,51 +1290,23 @@ class Domain:
 
             self._s.clear_generated_content()
             self._s.import_from_file(domain_data, version=version)
-            loaded_entities = len(self._s.get_entity_mappings())
-            loaded_rels = len(self._s.get_relationship_mappings())
-            loaded_classes = len(self._s.get_classes())
             logger.info(
                 "load-from-uc v%s: %d classes, %d entity mappings, %d rel mappings",
                 version,
-                loaded_classes,
-                loaded_entities,
-                loaded_rels,
+                len(self._s.get_classes()),
+                len(self._s.get_entity_mappings()),
+                len(self._s.get_relationship_mappings()),
             )
-            sorted_versions = svc.list_versions_sorted(domain_name)
-            is_latest = sorted_versions[0] == version if sorted_versions else True
-            self._s.domain_folder = domain_name
-            self._s.is_active_version = is_latest
-            reg_settings = self._s.settings.setdefault("registry", {})
-            if not reg_settings.get("catalog"):
-                reg_settings["catalog"] = c.catalog
-            if not reg_settings.get("schema"):
-                reg_settings["schema"] = c.schema
-            if not reg_settings.get("volume"):
-                reg_settings["volume"] = c.volume
-            self._s.ensure_generated_content()
-            self._s.save()
-            clear_version_status_cache()
-            invalidate_registry_cache()
-            # Lazy graph load: skip eager registry sync here. The graph
-            # backend (Lakebase synced tables) is hydrated on demand on
-            # first DT/Build access. Future engines should follow the
-            # same lazy pattern via GraphDBFactory.
-            ts_stats = self._s.triplestore.setdefault("stats", {})
-            ts_stats.pop("status", None)
-            ts_stats.pop("dt_existence", None)
-            self._s.triplestore.pop("_ts_cache_timestamp", None)
-            self._s.save()
-            # Editability is driven by lifecycle status (DRAFT), not by
-            # whether this is the latest version: an older DRAFT version is
-            # still fully editable.
+            is_latest = _commit_uc_load_session(self._s, svc, domain_name, version, c)
             lifecycle = (self._s.info.get("status") or "DRAFT").upper()
             label = "editable" if lifecycle == "DRAFT" else f"{lifecycle}, read-only"
-            msg = f"Context loaded: {domain_name} v{version} ({label})"
             return {
                 "success": True,
-                "message": msg,
+                "message": f"Context loaded: {domain_name} v{version} ({label})",
                 "is_active": is_latest,
                 "version": version,
+                # Client paints Save/Close chrome before /navbar/state.
+                "domain": self.get_domain_info(),
             }
         except OntoBricksError:
             raise

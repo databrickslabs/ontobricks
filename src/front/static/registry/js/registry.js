@@ -632,6 +632,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!confirmed) return;
 
         try {
+            if (typeof showDomainLoading === 'function') {
+                showDomainLoading('Loading ' + domainName + '…');
+            }
             showNotification('Loading ' + domainName + ' v' + version + '…', 'info', 5000);
             const resp = await fetch('/domain/load-from-uc', {
                 method: 'POST',
@@ -643,18 +646,23 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.success) {
                 showNotification(data.message || 'Context loaded!', 'success');
                 if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
-                // Generic loads open Context → General; do not reload Browse.
-                setTimeout(() => {
-                    if (typeof navigateToDomainGeneral === 'function') {
-                        navigateToDomainGeneral();
-                    } else {
-                        window.location.href = '/domain/?section=information';
-                    }
-                }, 800);
+                if (typeof rememberLoadedDomainOrClear === 'function') {
+                    rememberLoadedDomainOrClear(data);
+                } else if (typeof clearRememberedDomainInfo === 'function') {
+                    clearRememberedDomainInfo();
+                }
+                // Overlay persists via sessionStorage until chrome paints.
+                if (typeof navigateToDomainGeneral === 'function') {
+                    navigateToDomainGeneral();
+                } else {
+                    window.location.href = '/domain/?section=information';
+                }
             } else {
+                if (typeof hideDomainLoading === 'function') hideDomainLoading();
                 showNotification('Error: ' + (data.message || 'Failed to load context'), 'error');
             }
         } catch (e) {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             showNotification('Error loading context: ' + e.message, 'error');
         }
     }
@@ -663,6 +671,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // loading it from Unity Catalog first when it is not already current.
     async function openVersionInValidation(domainName, version, alreadyLoaded) {
         if (alreadyLoaded) {
+            if (typeof showDomainLoading === 'function') {
+                showDomainLoading('Opening validation…');
+            }
             window.location.href = '/domain/?section=review';
             return;
         }
@@ -678,6 +689,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!confirmed) return;
 
         try {
+            if (typeof showDomainLoading === 'function') {
+                showDomainLoading('Opening ' + domainName + '…');
+            }
             showNotification('Opening ' + domainName + ' v' + version + '…', 'info', 5000);
             const resp = await fetch('/domain/load-from-uc', {
                 method: 'POST',
@@ -688,11 +702,18 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await resp.json();
             if (resp.ok && data.success) {
                 if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
+                if (typeof rememberLoadedDomainOrClear === 'function') {
+                    rememberLoadedDomainOrClear(data);
+                } else if (typeof clearRememberedDomainInfo === 'function') {
+                    clearRememberedDomainInfo();
+                }
                 window.location.href = '/domain/?section=review';
             } else {
+                if (typeof hideDomainLoading === 'function') hideDomainLoading();
                 showNotification('Error: ' + (data.message || 'Failed to load context'), 'error');
             }
         } catch (e) {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             showNotification('Error loading context: ' + e.message, 'error');
         }
     }

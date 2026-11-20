@@ -547,9 +547,9 @@ class RegistryService:
         vs = self.list_versions_sorted(folder)
         return vs[0] if vs else None
 
-    def read_version(self, folder: str, version: str) -> Tuple[bool, dict, str]:
+    def read_version(self, folder: str, version: str, include_simulations: bool = True) -> Tuple[bool, dict, str]:
         """Read and parse a version document from Lakebase."""
-        return self._store.read_version(folder, version)
+        return self._store.read_version(folder, version, include_simulations=include_simulations)
 
     @staticmethod
     def version_document_has_ontology(

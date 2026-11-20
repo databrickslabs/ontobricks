@@ -25,15 +25,19 @@ function enforceCamelCase(value) {
 // Configure sidebar navigation
 window.SIDEBAR_NAV_MANUAL_INIT = true;
 document.addEventListener('DOMContentLoaded', function() {
-    // Show the global domain-loading overlay while the Context → General
-    // page boots up after a "New Context" action. domain-information.js
-    // hides it once its Promise.all (info + version-status + LLM
-    // endpoints) resolves. Flag is set by domainNew() in navbar.js right
-    // before it navigates here.
-    let _creatingNewDomain = false;
-    try { _creatingNewDomain = sessionStorage.getItem('ob_creating_new_domain') === '1'; } catch (e) {}
-    if (_creatingNewDomain && typeof showDomainLoading === 'function') {
-        showDomainLoading('Creating new context…');
+    // Overlay restore for open/create/validate is handled by the early
+    // sessionStorage script in base.html (ob_domain_loading). Keep a
+    // belt-and-suspenders re-show if navbar.js already defined the helper.
+    if (typeof showDomainLoading === 'function') {
+        try {
+            const raw = sessionStorage.getItem('ob_domain_loading');
+            if (raw) {
+                const data = JSON.parse(raw);
+                if (data && data.t && (Date.now() - data.t) <= 90000) {
+                    showDomainLoading(data.label || 'Loading context...');
+                }
+            }
+        } catch (e) {}
     }
 
     // Check URL for section parameter

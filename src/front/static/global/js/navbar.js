@@ -3,17 +3,47 @@
  * Shared navigation bar functionality for all pages
  */
 
+const DOMAIN_LOADING_KEY = 'ob_domain_loading';
+
+function _readPendingDomainLoading() {
+    try {
+        const raw = sessionStorage.getItem(DOMAIN_LOADING_KEY);
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        if (!data || !data.t) return null;
+        if (Date.now() - data.t > 90000) {
+            sessionStorage.removeItem(DOMAIN_LOADING_KEY);
+            return null;
+        }
+        return data;
+    } catch (e) {
+        return null;
+    }
+}
+
 function showDomainLoading(label) {
+    const text = label || 'Loading context...';
+    try {
+        sessionStorage.setItem(
+            DOMAIN_LOADING_KEY,
+            JSON.stringify({ label: text, t: Date.now() })
+        );
+    } catch (e) { /* private mode */ }
     const el = document.getElementById('domainLoadingOverlay');
     if (!el) return;
     const lbl = document.getElementById('domainLoadingLabel');
-    if (lbl) lbl.textContent = label || 'Loading context...';
+    if (lbl) lbl.textContent = text;
     el.classList.remove('d-none');
+    el.setAttribute('aria-busy', 'true');
 }
 
 function hideDomainLoading() {
+    try { sessionStorage.removeItem(DOMAIN_LOADING_KEY); } catch (e) {}
+    try { sessionStorage.removeItem('ob_creating_new_domain'); } catch (e) {}
     const el = document.getElementById('domainLoadingOverlay');
-    if (el) el.classList.add('d-none');
+    if (!el) return;
+    el.classList.add('d-none');
+    el.removeAttribute('aria-busy');
 }
 
 // Initialize navbar when DOM is ready
@@ -154,6 +184,20 @@ function clearRememberedDomainInfo() {
     } catch (_) { /* sessionStorage unavailable */ }
 }
 
+/**
+ * After a successful load-from-uc, stash the returned domain payload so the
+ * next page can paint Context chrome immediately via restoreLastConfirmedDomainInfo
+ * (instead of waiting for /navbar/state). Falls back to clearing the stale badge.
+ */
+function rememberLoadedDomainOrClear(payload) {
+    const domain = payload && payload.domain;
+    if (domain && domainIsLoaded(domain)) {
+        rememberDomainInfo(domain);
+        return;
+    }
+    clearRememberedDomainInfo();
+}
+
 function restoreLastConfirmedDomainInfo() {
     try {
         const raw = sessionStorage.getItem(DOMAIN_INFO_STORAGE_KEY);
@@ -171,6 +215,15 @@ function restoreLastConfirmedDomainInfo() {
     }
 }
 
+/**
+ * Drop the domain-loading overlay left by an open/create/validate/close flow.
+ * Only called once the page's navbar state is settled (fresh /navbar/state, or
+ * the fallback restore on error), so the default Home section never shows.
+ */
+function _settlePendingDomainLoading() {
+    if (_readPendingDomainLoading()) hideDomainLoading();
+}
+
 async function loadNavbarState() {
     try {
         const state = await fetchCached('/navbar/state', 15000);
@@ -180,6 +233,8 @@ async function loadNavbarState() {
         console.error('Error loading navbar state:', error);
         restoreLastConfirmedDomainInfo();
         window.OB?.updateLlmAvailability(false);
+    } finally {
+        _settlePendingDomainLoading();
     }
 }
 
@@ -578,6 +633,7 @@ async function domainNew() {
     const input = await showNewDomainDialog();
     if (!input) return;
 
+    showDomainLoading('Creating new context…');
     try {
         // Persist name, description, and LLM endpoint to session.
         const payload = { name: input.name };
@@ -633,9 +689,13 @@ async function domainNew() {
 
         // Register the new domain in the registry directly (no Save popup)
         // and open it on success.
-        const ok = await doDomainSave({ afterSave: '/domain/#information' });
-        if (!ok) return;
+        const ok = await doDomainSave({ afterSave: '/domain/?section=information' });
+        if (!ok) {
+            hideDomainLoading();
+            return;
+        }
     } catch (error) {
+        hideDomainLoading();
         console.error('Error creating new context:', error);
         showNotification('Failed to create new context: ' + error.message, 'error');
     }
@@ -935,14 +995,17 @@ async function doDomainSave(opts = {}) {
             await refreshNavbarIndicators();
             loadDomainName();
             if (opts.afterSave) {
-                setTimeout(() => { window.location.href = opts.afterSave; }, 800);
+                showDomainLoading('Opening context…');
+                window.location.href = opts.afterSave;
             }
             return true;
         } else {
+            if (opts.afterSave) hideDomainLoading();
             showNotification('Error: ' + data.message, 'error');
             return false;
         }
     } catch (error) {
+        if (opts.afterSave) hideDomainLoading();
         showNotification('Error: ' + error.message, 'error');
         return false;
     }
@@ -1012,6 +1075,7 @@ async function closeDomainSession(options = {}) {
             throw new Error(data.message || 'Could not close context');
         }
         invalidateDomainCaches();
+        clearRememberedDomainInfo();
         if (navigate) {
             window.location.href = '/';
         } else {
@@ -1545,14 +1609,13 @@ async function doDomainLoad(domainSlug, version) {
         const data = await response.json();
         if (data.success) {
             showNotification(data.message || 'Context loaded successfully!', 'success');
-            // The server session already points at the new domain. Drop the
-            // stale remembered badge and repaint from the fresh /navbar/state
-            // *before* reloading, so the navbar never keeps showing the
-            // previous domain during the reload delay (or briefly after it).
+            // Session already points at the new domain. Remember the payload so
+            // the next page paints Save/Close immediately; keep the overlay
+            // until restore/applyDomainInfo runs.
             invalidateDomainCaches();
-            clearRememberedDomainInfo();
-            await loadNavbarState();
-            setTimeout(() => navigateToDomainGeneral(), 1000);
+            rememberLoadedDomainOrClear(data);
+            showDomainLoading(`Loading ${domainSlug}...`);
+            navigateToDomainGeneral();
         } else {
             hideDomainLoading();
             showNotification('Error: ' + data.message, 'error');
@@ -1695,7 +1758,9 @@ function handleImportResponse(data) {
         }
         showNotification(msg, 'success');
         invalidateDomainCaches();
-        setTimeout(() => navigateToDomainGeneral(), 1500);
+        rememberLoadedDomainOrClear(data);
+        showDomainLoading('Opening context…');
+        navigateToDomainGeneral();
     } else {
         hideDomainLoading();
         showNotification('Error loading context: ' + data.message, 'error');
@@ -1719,3 +1784,6 @@ window.enableMenusAfterSave = enableMenusAfterSave;
 window.updateMenusForDomainStatus = updateMenusForDomainStatus;
 window.showDomainLoading = showDomainLoading;
 window.hideDomainLoading = hideDomainLoading;
+window.rememberLoadedDomainOrClear = rememberLoadedDomainOrClear;
+window.rememberDomainInfo = rememberDomainInfo;
+window.clearRememberedDomainInfo = clearRememberedDomainInfo;

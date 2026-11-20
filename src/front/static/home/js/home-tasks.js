@@ -164,6 +164,9 @@
 
     async function loadDomainAndReview(domain, version) {
         try {
+            if (typeof showDomainLoading === 'function') {
+                showDomainLoading('Opening ' + domain + '…');
+            }
             showNotification('Opening ' + domain + ' v' + version + '…', 'info', 4000);
             const resp = await fetch('/domain/load-from-uc', {
                 method: 'POST',
@@ -173,11 +176,18 @@
             });
             const data = await resp.json();
             if (!data.success) {
+                if (typeof hideDomainLoading === 'function') hideDomainLoading();
                 showNotification('Error: ' + (data.message || 'Failed to load context'), 'error');
                 return;
             }
+            if (typeof rememberLoadedDomainOrClear === 'function') {
+                rememberLoadedDomainOrClear(data);
+            } else if (typeof clearRememberedDomainInfo === 'function') {
+                clearRememberedDomainInfo();
+            }
             window.location.href = '/domain/?section=review';
         } catch (err) {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             showNotification('Error loading context: ' + err.message, 'error');
         }
     }

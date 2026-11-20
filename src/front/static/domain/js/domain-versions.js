@@ -374,11 +374,15 @@ async function loadVersionFromList(version, triggerButton = null) {
     }
 
     try {
+        if (typeof showDomainLoading === 'function') {
+            showDomainLoading('Loading version ' + version + '…');
+        }
         showNotification('Loading version ' + version + '…', 'info', 3000);
 
         const statusData = await fetch('/domain/version-status', { credentials: 'same-origin' }).then(r => r.json());
         const domainFolder = (statusData && (statusData.domain_folder || statusData.project_folder)) || '';
         if (!domainFolder) {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             showNotification('Cannot determine context folder', 'error');
             return;
         }
@@ -394,6 +398,11 @@ async function loadVersionFromList(version, triggerButton = null) {
         if (data.success) {
             showNotification(data.message || 'Version loaded!', 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
+            if (typeof rememberLoadedDomainOrClear === 'function') {
+                rememberLoadedDomainOrClear(data);
+            } else if (typeof clearRememberedDomainInfo === 'function') {
+                clearRememberedDomainInfo();
+            }
             // Version load opens Context → General rather than staying on Versions.
             if (typeof navigateToDomainGeneral === 'function') {
                 navigateToDomainGeneral();
@@ -401,9 +410,11 @@ async function loadVersionFromList(version, triggerButton = null) {
                 window.location.href = '/domain/?section=information';
             }
         } else {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             showNotification('Error: ' + data.message, 'error');
         }
     } catch (err) {
+        if (typeof hideDomainLoading === 'function') hideDomainLoading();
         showNotification('Error: ' + err.message, 'error');
     }
 }
@@ -423,6 +434,9 @@ async function reloadLastSavedVersion() {
     if (!confirmed) return;
 
     try {
+        if (typeof showDomainLoading === 'function') {
+            showDomainLoading('Reloading saved version…');
+        }
         showNotification('Reloading saved version…', 'info', 3000);
 
         const statusData = await fetch('/domain/version-status', { credentials: 'same-origin' }).then(r => r.json());
@@ -430,6 +444,7 @@ async function reloadLastSavedVersion() {
         const currentVersion = (statusData && statusData.version) || '1';
 
         if (!domainFolder) {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             showNotification('Context must be saved to the registry first', 'warning');
             return;
         }
@@ -443,17 +458,24 @@ async function reloadLastSavedVersion() {
         const data = await response.json();
 
         if (data.success) {
-            showNotification('Version ' + currentVersion + ' reloaded!', 'success');
+            showNotification(data.message || ('Version ' + currentVersion + ' reloaded!'), 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
+            if (typeof rememberLoadedDomainOrClear === 'function') {
+                rememberLoadedDomainOrClear(data);
+            } else if (typeof clearRememberedDomainInfo === 'function') {
+                clearRememberedDomainInfo();
+            }
             if (typeof navigateToDomainGeneral === 'function') {
                 navigateToDomainGeneral();
             } else {
                 window.location.href = '/domain/?section=information';
             }
         } else {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             showNotification('Error: ' + data.message, 'error');
         }
     } catch (err) {
+        if (typeof hideDomainLoading === 'function') hideDomainLoading();
         showNotification('Error: ' + err.message, 'error');
     }
 }

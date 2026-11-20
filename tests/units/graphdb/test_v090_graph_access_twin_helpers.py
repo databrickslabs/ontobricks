@@ -159,7 +159,7 @@ class _Svc:
     def __init__(self, cfg, uc):
         self.calls = []
 
-    def read_version(self, name, version):
+    def read_version(self, name, version, include_simulations=True):
         return self.read_version_result
 
     def load_published_domain_data_cached(self, name):

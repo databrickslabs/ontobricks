@@ -130,7 +130,7 @@ class _InMemoryStore(RegistryStore):
         return True, versions, "ok"
 
     def read_version(
-        self, folder: str, version: str
+        self, folder: str, version: str, include_simulations: bool = True
     ) -> Tuple[bool, Dict[str, Any], str]:
         data = self._versions.get((folder, version))
         if data is None:

@@ -26,6 +26,7 @@ from back.core.errors import (
 from back.core.helpers import (
     get_databricks_client,
     resolve_warehouse_id,
+    run_blocking,
 )
 from back.core.logging import get_logger
 from back.core.task_manager import get_task_manager
@@ -524,8 +525,12 @@ async def load_domain_from_uc(
 
     p = Domain(domain, settings)
     try:
-        result = p.load_domain_from_uc(
-            p.build_registry_service(), domain_name, version
+        # load_domain_from_uc is sync Lakebase I/O — keep the event loop free.
+        result = await run_blocking(
+            p.load_domain_from_uc,
+            p.build_registry_service(),
+            domain_name,
+            version,
         )
     except Exception:
         # Load raised after we freed the previous lock — restore it so a failed

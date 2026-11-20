@@ -42,26 +42,22 @@ def test_remembered_domain_is_restored_before_async_navbar_refresh():
     )
 
 
-def test_domain_load_refreshes_badge_before_reload():
-    """After loading a new domain the navbar badge must be refreshed from the
-    server session *before* navigation, so the badge never keeps showing
-    the previous domain during the delay."""
+def test_domain_load_keeps_overlay_across_navigate():
+    """After loading a new domain the loading overlay persists across
+    navigation (sessionStorage) so the previous badge is never visible;
+    the destination page paints chrome from a fresh /navbar/state."""
     js = _navbar_js()
     match = re.search(r"async function doDomainLoad\([^)]*\) \{(.*?)\n\}", js, re.DOTALL)
 
     assert match is not None
     body = match.group(1)
-    # Stale remembered info is dropped, then the fresh state is fetched and
-    # applied to the badge before Domain → General navigation runs.
-    assert "clearRememberedDomainInfo();" in body
-    assert "await loadNavbarState();" in body
+    assert "rememberLoadedDomainOrClear(data)" in body
+    assert "showDomainLoading(" in body
     assert "navigateToDomainGeneral()" in body
-    assert body.index("await loadNavbarState();") < body.index(
-        "navigateToDomainGeneral()"
-    )
-    assert body.index("clearRememberedDomainInfo();") < body.index(
-        "await loadNavbarState();"
-    )
+    # Pre-navigation loadNavbarState would clear the overlay via applyDomainInfo.
+    success = body.split("if (data.success)")[1].split("} else {")[0]
+    assert "await loadNavbarState()" not in success
+    assert "setTimeout" not in success
     assert "location.reload()" not in body
 
 

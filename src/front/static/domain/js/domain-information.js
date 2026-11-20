@@ -474,16 +474,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         setTimeout(enableVersionSelector, 100);
     } catch (e) {
         console.log('Could not fetch context status:', e);
-    } finally {
-        // Hand-off from navbar.js domainNew(): hide the overlay once the
-        // initial info round-trips have resolved.
-        try {
-            if (sessionStorage.getItem('ob_creating_new_domain') === '1') {
-                sessionStorage.removeItem('ob_creating_new_domain');
-                if (typeof hideDomainLoading === 'function') hideDomainLoading();
-            }
-        } catch (e) {}
     }
+    // Domain-loading overlay is cleared by navbar applyDomainInfo once the
+    // Context name + Save/Close chrome is painted (ob_domain_loading).
 });
 
 

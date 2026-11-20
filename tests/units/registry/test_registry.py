@@ -627,7 +627,7 @@ class TestVersionDelegation:
         ok, result, _ = svc.read_version("proj", "2")
         assert ok is True
         assert result == data
-        store.read_version.assert_called_once_with("proj", "2")
+        store.read_version.assert_called_once_with("proj", "2", include_simulations=True)
 
     def test_write_version_parses_json_string(self):
         store = MagicMock()
