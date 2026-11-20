@@ -1265,3 +1265,68 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 11018 passed, 334 skipped, 8 deselected in 54.35s
+
+================================================================================
+## Digital Twin Reasoning: Run button switched to primary and moved left of discussion
+================================================================================
+
+Context: On Digital Twin → Business rules / Reasoning (`/dtwin/?section=reasoning`),
+the Run button was styled as `btn-outline-primary` and placed before the Purge
+Inferences button. The Run button is the primary CTA of the section; it is now
+styled as `btn-primary` and placed immediately to the left of the discussion
+shortcut button (after the Purge Inferences button).
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_reasoning.html
+   - Switched the Run button class from `btn-outline-primary` to `btn-primary`.
+   - Reordered header action buttons so `_purge_inferences_button.html` comes
+     first, followed by the Run button, followed by the discussion button
+     (`onto-discuss-btn`).
+2. tests/units/front/test_reasoning_header_buttons.py (new)
+   - Added unit test contract verifying that the Run button is styled as
+     `btn-primary` and placed immediately to the left of the discussion button,
+     preceded by the Purge Inferences button.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- tests/units/front/test_reasoning_header_buttons.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11020 passed, 334 skipped, 8 deselected in 50.85s
+
+================================================================================
+## Run buttons: primary style and Run labels (Data Quality, Analytics, Communities)
+================================================================================
+
+Context: The main action of three Knowledge Graph / Intelligence sections was
+not consistent: the Data Quality Run button was outline, the Graph Analytics
+action was labelled "Run Analysis" and sat before the Interpret button, and the
+Communities action was labelled "Detect". The primary action of each header is
+now the filled Run button, placed left of the discussion shortcut.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_dataquality.html
+   - Run button (`#runDQChecksBtn`) switched from `btn-outline-primary` to `btn-primary`.
+2. src/front/templates/partials/intelligence/_intel_analytics.html
+   - Header action (`#analyticsComputeBtn`) relabelled "Run Analysis" → "Run",
+     switched to `btn-primary`, and moved after the Interpret button so it sits
+     immediately left of the discussion button. The scope dialog's confirm button
+     is unchanged.
+3. src/front/templates/partials/intelligence/_intel_communities.html
+   - Header action (`#commDetectBtn`) relabelled "Detect" → "Run". Its in-page
+     hints ("Run Detect to draw…" and the step-by-step help list) now say "Run".
+4. tests/units/front/test_run_button_primary_contract.py (new)
+   - Contract: DQ Run is primary; Analytics Run is labelled Run, primary and
+     directly left of the discussion button; Communities action is labelled Run.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/partials/intelligence/_intel_analytics.html
+- src/front/templates/partials/intelligence/_intel_communities.html
+- tests/units/front/test_run_button_primary_contract.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11024 passed, 334 skipped, 8 deselected in 49.50s
+
