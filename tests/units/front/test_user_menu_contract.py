@@ -35,6 +35,11 @@ def test_user_menu_shows_name_and_email_databricks_style():
     assert "flex-shrink: 0" in css
     assert "aspect-ratio: 1 / 1" in css
     assert ".ob-subnav .dropdown-menu.ob-user-menu" in css
+    # Databricks-style user avatar colour token, white initials.
+    avatar = css[css.index(".ob-user-avatar {") : css.index("}", css.index(".ob-user-avatar {"))]
+    assert "background: var(--db-user-avatar-bg)" in avatar
+    assert "--db-user-avatar-bg: rgb(67, 74, 147)" in css
+    assert "color: #fff" in avatar
 
 
 @pytest.mark.parametrize(

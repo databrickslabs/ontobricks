@@ -85,7 +85,7 @@ def test_workspace_home_partial_groups_by_menu_sections():
 
 def test_app_switcher_always_opens_workspace_home():
     html = _read(BASE_HTML)
-    menu = html[html.index("ob-app-switcher-list") : html.index("activityCenterToggle")]
+    menu = html[html.index("ob-app-switcher-list") : html.index("userMenuDropdown")]
     assert menu.count("?section=home") == 5
     for ns in ("domain_m", "ontology_m", "kg_m", "intel_m", "settings_m"):
         assert f"{ns}.v.route" in menu
@@ -96,7 +96,7 @@ def test_settings_is_admin_only_in_menu_and_switcher():
     settings = _menus()["settings"]
     assert settings.get("admin_only") is True
     html = _read(BASE_HTML)
-    menu = html[html.index("ob-app-switcher-list") : html.index("activityCenterToggle")]
+    menu = html[html.index("ob-app-switcher-list") : html.index("userMenuDropdown")]
     assert "settings_m.v.route" in menu
     assert menu.count('data-requires-app="admin"') == 1
     css = _read(REPO_ROOT / "src/front/static/global/css/permissions.css")

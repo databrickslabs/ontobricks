@@ -100,6 +100,8 @@
     --db-status-danger-soft-bg: #FDECEC;
     --db-status-info: #2563EB;
     --db-status-info-soft-bg: #EAF0FE;
+    /* Current-user avatar (Databricks workspace user icon). */
+    --db-user-avatar-bg: rgb(67, 74, 147);
     --db-status-draft: #7C3AED;
     --db-status-draft-soft-bg: #F3EDFE;
 
@@ -290,8 +292,8 @@ body {
     flex-shrink: 0;
     aspect-ratio: 1 / 1;
     border-radius: 50%;
-    background: var(--db-border);
-    color: var(--db-text);
+    background: var(--db-user-avatar-bg);
+    color: #fff;
     font-size: 0.68rem;
     font-weight: 600;
     letter-spacing: 0.02em;

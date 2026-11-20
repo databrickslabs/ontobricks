@@ -1071,3 +1071,69 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
 
 Tests: uv run --frozen pytest -q tests/units/front/test_user_menu_contract.py → 9 passed
+
+================================================================================
+## Navbar user avatar: blue like Databricks
+================================================================================
+
+Context: In the Databricks workspace the user icon is blue; OntoBricks showed
+a grey circle (after the previous neutral-avatar change).
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-user-avatar` background switched to `var(--db-status-info)`
+     (#2563EB, existing token) with white initials, for both the navbar
+     trigger and the in-menu avatar (contrast ~5:1).
+2. tests/units/front/test_user_menu_contract.py
+   - Asserts the avatar uses the status-info background and white text.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_user_menu_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -p no:cacheprovider
+
+================================================================================
+## Navbar: user avatar colour and Activity icon position
+================================================================================
+
+Context: The user avatar colour is set to the Databricks workspace user-icon
+colour rgb(67, 74, 147). The Activity icon moves one step left, before the
+app switcher (9-dot).
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - New root token `--db-user-avatar-bg: rgb(67, 74, 147)` (next to the
+     status tokens).
+   - `.ob-user-avatar` background uses `var(--db-user-avatar-bg)`, white text.
+2. src/front/templates/base.html
+   - Activity Center `<li>` moved from after the Back-to-context link to
+     before the app switcher block. Visible order on a context page is now:
+     Context · Close/Save · Activity · App switcher · Back-to-context (settings)
+     · User.
+3. Contract tests updated for the new order (the old order was pinned):
+   - tests/units/front/test_app_switcher_contract.py
+   - tests/units/front/test_segmented_subnav_contract.py
+   - tests/units/front/test_settings_subnav_hidden.py (return link now checked
+     before the user menu, not before Activity)
+   - tests/units/front/test_workspace_home_contract.py
+   - tests/units/front/test_no_backend_ui.py
+   - tests/units/front/test_backend_brand_icons.py
+   - Menu slices now end at `userMenuDropdown` (Activity precedes the switcher).
+4. tests/units/front/test_user_menu_contract.py
+   - Asserts the avatar uses `--db-user-avatar-bg` with the rgb value.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/templates/base.html
+- tests/units/front/test_user_menu_contract.py
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_settings_subnav_hidden.py
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_backend_brand_icons.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log

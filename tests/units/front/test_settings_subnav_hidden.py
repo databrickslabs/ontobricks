@@ -108,11 +108,11 @@ def test_settings_return_link_aligned_on_right_before_activity():
     assert "text-align: left" in rule
     assert "background: transparent" in rule
     assert "border: 0" in rule
-    # Aligned on the right, pushed by flex-spacer, right before the activity center
+    # Aligned on the right, pushed by flex-spacer, right before the user menu
     return_pos = html.index('id="settingsDomainReturnNav"')
-    activity_pos = html.index('id="activityCenterToggle"')
+    user_pos = html.index('id="userMenuDropdown"')
     spacer_pos = html.index('class="ob-subnav-flex-spacer"')
-    assert spacer_pos < return_pos < activity_pos
+    assert spacer_pos < return_pos < user_pos
 
 
 def test_settings_return_link_resets_fixed_width_on_mobile():

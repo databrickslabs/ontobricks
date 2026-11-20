@@ -260,7 +260,7 @@ class TestTheMcpTabRehydratesUnderTheConstraint:
 class TestTheNavbarDisablesGraphFeatures:
     def test_the_kg_app_switcher_tile_is_marked(self):
         html = _read(BASE_HTML)
-        menu = html[html.index("ob-app-switcher-list") : html.index("activityCenterToggle")]
+        menu = html[html.index("ob-app-switcher-list") : html.index("userMenuDropdown")]
         assert 'class="ob-app-switcher-item nav-requires-graph"' in menu
         assert "kg_m.v.route" in menu
         assert 'id="subnavMappingDropdown"' not in html

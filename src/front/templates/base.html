@@ -160,6 +160,52 @@
                     {% endif %}
                 </li>
 
+                <!-- Activity Center (background tasks + notifications) -->
+                <li class="ob-subnav-item dropdown">
+                    <a class="ob-subnav-utility-link position-relative" href="#" id="activityCenterToggle"
+                       title="Activity" aria-label="Open activity center">
+                        <i class="bi bi-inboxes" id="activityCenterIcon"></i>
+                        <span id="activityCenterBadge" class="position-absolute start-100 translate-middle badge rounded-pill bg-danger ob-hidden ob-navbar-count-badge">
+                            0
+                        </span>
+                    </a>
+                    <div id="activityCenterDropdown" class="dropdown-menu dropdown-menu-end activity-center-dropdown">
+                        <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+                            <span class="fw-semibold"><i class="bi bi-inboxes me-2"></i>Activity</span>
+                            <span class="d-flex gap-2">
+                                <button type="button" class="btn btn-link btn-sm p-0 text-muted" id="taskTrackerRefreshBtn" title="Refresh tasks">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-muted" id="notifCenterClearBtn" title="Clear notifications">
+                                    <i class="bi bi-trash3"></i>
+                                </button>
+                            </span>
+                        </div>
+                        <div class="activity-center-section">
+                            <div class="activity-center-section-title">
+                                <i class="bi bi-hourglass-split" aria-hidden="true"></i> Background tasks
+                            </div>
+                            <div id="taskTrackerList">
+                                <div class="text-center text-muted py-3">
+                                    <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                    <small>No tasks</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="activity-center-section border-top">
+                            <div class="activity-center-section-title">
+                                <i class="bi bi-bell" aria-hidden="true"></i> Notifications
+                            </div>
+                            <div id="notifCenterList">
+                                <div class="text-center text-muted py-3">
+                                    <i class="bi bi-bell-slash fs-3 d-block mb-2"></i>
+                                    <small>No notifications</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+
                 {# Databricks-style app switcher (9-dot) — after Close/Save. #}
                 <li class="ob-subnav-item dropdown d-none" data-subnav-domain-chrome>
                     <button type="button"
@@ -285,52 +331,6 @@
                         <i class="bi bi-box" aria-hidden="true"></i>
                         <span id="settingsDomainReturnLabel">Back to context</span>
                     </a>
-                </li>
-
-                <!-- Activity Center (background tasks + notifications) -->
-                <li class="ob-subnav-item dropdown">
-                    <a class="ob-subnav-utility-link position-relative" href="#" id="activityCenterToggle"
-                       title="Activity" aria-label="Open activity center">
-                        <i class="bi bi-inboxes" id="activityCenterIcon"></i>
-                        <span id="activityCenterBadge" class="position-absolute start-100 translate-middle badge rounded-pill bg-danger ob-hidden ob-navbar-count-badge">
-                            0
-                        </span>
-                    </a>
-                    <div id="activityCenterDropdown" class="dropdown-menu dropdown-menu-end activity-center-dropdown">
-                        <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
-                            <span class="fw-semibold"><i class="bi bi-inboxes me-2"></i>Activity</span>
-                            <span class="d-flex gap-2">
-                                <button type="button" class="btn btn-link btn-sm p-0 text-muted" id="taskTrackerRefreshBtn" title="Refresh tasks">
-                                    <i class="bi bi-arrow-clockwise"></i>
-                                </button>
-                                <button type="button" class="btn btn-link btn-sm p-0 text-muted" id="notifCenterClearBtn" title="Clear notifications">
-                                    <i class="bi bi-trash3"></i>
-                                </button>
-                            </span>
-                        </div>
-                        <div class="activity-center-section">
-                            <div class="activity-center-section-title">
-                                <i class="bi bi-hourglass-split" aria-hidden="true"></i> Background tasks
-                            </div>
-                            <div id="taskTrackerList">
-                                <div class="text-center text-muted py-3">
-                                    <i class="bi bi-inbox fs-3 d-block mb-2"></i>
-                                    <small>No tasks</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="activity-center-section border-top">
-                            <div class="activity-center-section-title">
-                                <i class="bi bi-bell" aria-hidden="true"></i> Notifications
-                            </div>
-                            <div id="notifCenterList">
-                                <div class="text-center text-muted py-3">
-                                    <i class="bi bi-bell-slash fs-3 d-block mb-2"></i>
-                                    <small>No notifications</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </li>
 
                 <!-- Current user — Databricks-style initials avatar; Help + Report issue live here. -->

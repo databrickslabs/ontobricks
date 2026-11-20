@@ -32,13 +32,13 @@ def test_app_switcher_sits_after_close_save_and_lists_main_workspaces():
     assert html.index("ob-subnav-flex-spacer") < html.index("domainContextTrigger")
     assert html.index("domainContextTrigger") < html.index("ob-subnav-close-btn")
     assert html.index("ob-subnav-close-btn") < html.index("ob-subnav-save-btn")
-    assert html.index("ob-subnav-save-btn") < html.index("obAppSwitcher")
-    assert html.index("obAppSwitcher") < html.index("activityCenterToggle")
-    assert html.index("activityCenterToggle") < html.index("userMenuDropdown")
+    assert html.index("ob-subnav-save-btn") < html.index("activityCenterToggle")
+    assert html.index("activityCenterToggle") < html.index("obAppSwitcher")
+    assert html.index("obAppSwitcher") < html.index("userMenuDropdown")
 
     # Main workspaces only (Mapping lives under Graph). Labels/routes come
     # from menu_config via Jinja (domain / ontology / kg / intel).
-    menu = html[html.index("ob-app-switcher-list") : html.index("activityCenterToggle")]
+    menu = html[html.index("ob-app-switcher-list") : html.index("userMenuDropdown")]
     assert len(re.findall(r'class="ob-app-switcher-item(?:\s[^"]*)?"', menu)) == 5
     assert menu.count("ob-app-switcher-item-check") == 5
     for ns in ("domain_m", "ontology_m", "kg_m", "intel_m", "settings_m"):

@@ -83,9 +83,9 @@ def test_chrome_layout_is_brand_context_actions_switcher_utilities():
     assert html.index("ob-subnav-flex-spacer") < html.index("domainContextTrigger")
     assert html.index("domainContextTrigger") < html.index("ob-subnav-close-btn")
     assert html.index("ob-subnav-close-btn") < html.index("ob-subnav-save-btn")
-    assert html.index("ob-subnav-save-btn") < html.index("obAppSwitcher")
-    assert html.index("obAppSwitcher") < html.index("activityCenterToggle")
-    assert html.index("activityCenterToggle") < html.index("userMenuDropdown")
+    assert html.index("ob-subnav-save-btn") < html.index("activityCenterToggle")
+    assert html.index("activityCenterToggle") < html.index("obAppSwitcher")
+    assert html.index("obAppSwitcher") < html.index("userMenuDropdown")
     assert "ob-subnav-switch-btn" not in html
     assert "ob-subnav-save-dirty" in html
     assert 'aria-label="' in html  # icon-only Save/Close expose their names

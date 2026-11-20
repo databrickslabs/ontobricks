@@ -72,7 +72,7 @@ def test_settings_is_not_a_top_navbar_gear_anymore():
     html = _BASE.read_text(encoding="utf-8")
     assert "settingsGearDropdown" not in html
     assert "Open full settings" not in html
-    menu = html[html.index("ob-app-switcher-list") : html.index("activityCenterToggle")]
+    menu = html[html.index("ob-app-switcher-list") : html.index("userMenuDropdown")]
     assert "settings_m.v.route" in menu
     assert 'data-requires-app="admin"' in menu
 
