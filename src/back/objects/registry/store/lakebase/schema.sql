@@ -252,6 +252,60 @@ CREATE INDEX IF NOT EXISTS idx_simulation_runs_domain_version
     ON simulation_runs(domain_id, version, started_at DESC);
 
 -- ----------------------------------------------------------------
+-- Ontology Evolve runs — one mutable row per run (intent, coverage,
+-- proposal, candidate content, evaluation) guarded by ``revision`` for
+-- compare-and-swap updates, plus an append-only per-question result log.
+-- Candidates live here, not in domain_versions, until a builder accepts
+-- one; an accepted run records the DRAFT version it created.
+-- Keep in sync with EvolutionRuns.evolution_ddl (unit-tested).
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS evolution_runs (
+    domain_id        uuid NOT NULL
+                     REFERENCES domains(id) ON DELETE CASCADE,
+    id               text NOT NULL,
+    parent_version   text NOT NULL,
+    status           text NOT NULL DEFAULT 'CREATED',
+    stage            text NOT NULL DEFAULT '',
+    revision         integer NOT NULL DEFAULT 1,
+    idempotency_key  text NOT NULL,
+    owner            text NOT NULL DEFAULT '',
+    task_id          text NOT NULL DEFAULT '',
+    cancel_requested boolean NOT NULL DEFAULT false,
+    manifest         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    intent           jsonb NOT NULL DEFAULT '{}'::jsonb,
+    coverage         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    proposal         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    candidate        jsonb NOT NULL DEFAULT '{}'::jsonb,
+    evaluation       jsonb NOT NULL DEFAULT '{}'::jsonb,
+    accepted_version text NOT NULL DEFAULT '',
+    error_code       text NOT NULL DEFAULT '',
+    error            text NOT NULL DEFAULT '',
+    heartbeat_at     timestamptz,
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    updated_at       timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (domain_id, id),
+    UNIQUE (domain_id, idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evolution_runs_domain_parent
+    ON evolution_runs(domain_id, parent_version, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS evolution_results (
+    id           bigserial PRIMARY KEY,
+    domain_id    uuid NOT NULL
+                 REFERENCES domains(id) ON DELETE CASCADE,
+    run_id       text NOT NULL,
+    question_id  text NOT NULL,
+    arm          text NOT NULL,
+    status       text NOT NULL,
+    observed     jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_evolution_results_run
+    ON evolution_results(domain_id, run_id, created_at);
+
+-- ----------------------------------------------------------------
 -- Graph analytics cache — the LAST computed knowledge-graph metrics
 -- result per (domain_id, version). Unlike build_runs this is a cache,
 -- not a trace: a single row per tuple, replaced on every successful

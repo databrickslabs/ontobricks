@@ -38,6 +38,7 @@ _READY_FLAGS = (
     "_simulation_tables_ready",
     "_community_runs_ready",
     "_pattern_runs_ready",
+    "_evolution_tables_ready",
 )
 
 

@@ -44,6 +44,9 @@ EXPECTED_TABLES: tuple[str, ...] = (
     # Detect run history (0.10.0, see Step 2b of lakebase-perms.sh).
     "community_runs",
     "pattern_runs",
+    # Ontology Evolve run state (see Step 2b of lakebase-perms.sh).
+    "evolution_runs",
+    "evolution_results",
     "domain_review_events",
     "domain_comments",
     "domain_tasks",

@@ -51,3 +51,67 @@ Tests:
 - `uv run --frozen python tests/eval/run_agent_ontology_evolution.py` —
   schema_valid=1.000, n=30, holdout=10.
 - Live seed on fe-vm-lakebase-praneeth: gold_check 9/9 match.
+
+================================================================================
+## Ontology Evolve: Stage 1 run state, persistence, flag and router
+================================================================================
+
+Context: Evolve keeps each candidate as run-owned state until a builder
+accepts it, because a candidate written as the next domain version would
+become the default target of the external API, MCP, scheduler and GitHub
+mirror (they resolve the numeric-latest version of any status). Run state
+therefore lives in its own Lakebase tables with revision-checked updates.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/EvolutionRuns.py
+   New mixin: evolution_runs (mutable, revision CAS, idempotency key unique
+   per domain) and evolution_results (append-only). Portable SQL only
+   (ON CONFLICT DO NOTHING RETURNING; UPDATE … WHERE revision = %s); writes
+   raise instead of being dropped.
+2. src/back/objects/registry/store/lakebase/{store.py,__init__.py,schema.sql}
+   Wire the mixin, ready flag, known tables and DDL.
+3. src/back/objects/registry/store/base.py
+   Evolution methods raise InfrastructureError on stores without support.
+4. scripts/bootstrap/lakebase-perms.sh, scripts/_internal/_lakebase_preflight.py
+   Owner bootstrap DDL and preflight expectations for the new tables.
+5. src/back/objects/ontology/evolution/
+   RunStatus, CoverageState, Decision, Intent, IntentFilter, content_hash,
+   EvolutionService (explicit parent version + content hash, idempotent
+   create, CAS update, intent edit invalidates derived results, cancel,
+   interrupted recovery, stale-parent check).
+6. src/api/routers/internal/evolution.py, internal/__init__.py,
+   shared/fastapi/main.py
+   /evolution router (capabilities, runs CRUD, intent, cancel); folder must
+   match the loaded context (409 otherwise); builder-only writes;
+   domain-scoped, not status-gated.
+7. src/shared/config/settings.py, app.yaml.template
+   ONTOBRICKS_EVOLUTION_ENABLED, default false.
+
+Files modified:
+- src/back/objects/registry/store/lakebase/EvolutionRuns.py (new)
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/__init__.py
+- src/back/objects/registry/store/lakebase/schema.sql
+- src/back/objects/registry/store/base.py
+- scripts/bootstrap/lakebase-perms.sh
+- scripts/_internal/_lakebase_preflight.py
+- src/back/objects/ontology/evolution/* (new)
+- src/api/routers/internal/evolution.py (new)
+- src/api/routers/internal/__init__.py
+- src/shared/fastapi/main.py
+- src/shared/config/settings.py
+- app.yaml.template
+- tests/units/registry/test_lakebase_evolution_runs.py (new)
+- tests/units/registry/_v090_fake_pg.py
+- tests/units/ontology/evolution/* (new)
+- tests/units/settings/test_app_yaml_template.py
+
+Tests:
+- `uv run --frozen pytest -q tests/units/ontology/evolution tests/units/registry
+  tests/units/architecture tests/units/settings tests/units/scripts tests/units/auth`
+  — 2475 passed.
+- Live store check on Lakebase (fe-vm-lakebase-praneeth), PostgreSQL 17.12 and
+  19.0: schema.sql creates both tables; 8 concurrent creates with one key
+  produce one run; 6 concurrent CAS updates produce one winner; stale revision
+  raises ConflictError; domain_versions untouched.

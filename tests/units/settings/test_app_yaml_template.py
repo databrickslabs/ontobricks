@@ -38,6 +38,10 @@ DTWIN_CHAT_VARS = {
     "ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS": "dtwin_chat_max_tokens",
 }
 
+EVOLUTION_VARS = {
+    "ONTOBRICKS_EVOLUTION_ENABLED": "evolution_enabled",
+}
+
 
 def _pyproject() -> dict:
     with open(REPO_ROOT / "pyproject.toml", "rb") as fh:
@@ -125,6 +129,15 @@ class TestJobToggleIsOptIn:
         # Empty means "derive <app>-graph-analytics", which is what matches the
         # bundle. A hard-coded name here would break every renamed deploy.
         assert env_map["ONTOBRICKS_ANALYTICS_JOB_NAME"] == ""
+
+
+class TestEvolutionToggleIsOptIn:
+    def test_evolve_ships_disabled(self, env_map):
+        assert env_map["ONTOBRICKS_EVOLUTION_ENABLED"] == "false"
+
+    @pytest.mark.parametrize("var,field", sorted(EVOLUTION_VARS.items()))
+    def test_template_matches_settings_default(self, env_map, var, field, monkeypatch):
+        _assert_round_trips(env_map, var, field, monkeypatch)
 
 
 class TestStartCommandExtras:

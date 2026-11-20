@@ -71,6 +71,7 @@ from .DetectRuns import DetectRuns
 from .Bootstrap import Bootstrap
 from .BuildRuns import BuildRuns
 from .Simulations import Simulations
+from .EvolutionRuns import EvolutionRuns
 from .GlobalConfig import GlobalConfig
 from .Catalog import Catalog
 from .Schedules import Schedules
@@ -112,6 +113,8 @@ _KNOWN_TABLES = frozenset(
         "build_runs",
         "simulations",
         "simulation_runs",
+        "evolution_runs",
+        "evolution_results",
         "graph_analytics",
         "graph_analytics_runs",
         "community_runs",
@@ -334,6 +337,7 @@ class LakebaseRegistryStore(
     ChangeEvents,
     BuildRuns,
     Simulations,
+    EvolutionRuns,
     Catalog,
     Schedules,
     Bootstrap,
@@ -369,6 +373,8 @@ class LakebaseRegistryStore(
     # Guards the lazy ``CREATE TABLE IF NOT EXISTS simulations /
     # simulation_runs`` (same pattern as ``_build_runs_ready``).
     _simulation_tables_ready = _SharedStoreState(False)
+    # Lazy CREATE TABLE IF NOT EXISTS evolution_runs / evolution_results.
+    _evolution_tables_ready = _SharedStoreState(False)
     # Guards the lazy ``CREATE TABLE IF NOT EXISTS graph_analytics`` used
     # to self-heal deployments created before the async graph-analytics
     # cache existed (same pattern as ``_build_runs_ready``).
