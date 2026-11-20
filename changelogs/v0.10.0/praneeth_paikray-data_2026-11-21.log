@@ -1,0 +1,53 @@
+================================================================================
+## Ontology Evolve: Stage 0 fixture, eval dataset and baseline runner
+================================================================================
+
+Context: Ontology → Evolve turns a business question the ontology cannot
+answer into a reviewed relationship or mapping fix. Before any feature code,
+the AI-feature lifecycle (rule 12) needs a committed dataset and a baseline
+harness, and the evaluation needs fixture data whose answers are known
+independently of the ontology.
+
+Changes:
+
+1. tests/fixtures/evolution/supply_chain.sql
+   Supply-chain fixture (orders, order lines, products, suppliers) with
+   declared PK/FK constraints, negative variants (no FK, orphan key,
+   duplicate product id, ambiguous supplier name, restricted table) and a
+   hand-authored gold_answers table.
+2. tests/fixtures/evolution/gold_check.sql
+   Recomputes every gold answer with plain SQL; all must match.
+3. tests/fixtures/evolution/seed_supply_chain.py
+   Seeds the fixture through the Databricks CLI, checks gold, prints Delta
+   table versions.
+4. tests/fixtures/evolution/supply_chain_domain.json
+   Fixture domain: Order, OrderLine, Product, Supplier; hasLine and
+   suppliedBy mapped; no OrderLine → Product relationship.
+5. tests/eval/datasets/agent_ontology_evolution/baseline.jsonl
+   30 rows (20 dev, 10 holdout) covering supported, missing relationship,
+   broken mapping, ambiguous term/path, identity, access, missing source,
+   unsupported form, unknown concept, stale, cancel/retry and adversarial.
+6. tests/eval/judges/ontology_evolution.py
+   Rule-based judges (contract, readiness, states, gap, ops, decision,
+   abstention, false-ready, execution-based gold).
+7. tests/eval/run_agent_ontology_evolution.py
+   Runner; dry run validates the dataset contract.
+8. tests/eval/thresholds.yaml
+   ontology_evolution thresholds.
+
+Files modified:
+- tests/fixtures/evolution/supply_chain.sql
+- tests/fixtures/evolution/gold_check.sql
+- tests/fixtures/evolution/seed_supply_chain.py
+- tests/fixtures/evolution/supply_chain_domain.json
+- tests/eval/datasets/agent_ontology_evolution/baseline.jsonl
+- tests/eval/judges/ontology_evolution.py
+- tests/eval/run_agent_ontology_evolution.py
+- tests/eval/thresholds.yaml
+
+Tests:
+- Baseline before changes: `uv run --frozen pytest -q -m "not scenario"` —
+  11090 passed, 335 skipped.
+- `uv run --frozen python tests/eval/run_agent_ontology_evolution.py` —
+  schema_valid=1.000, n=30, holdout=10.
+- Live seed on fe-vm-lakebase-praneeth: gold_check 9/9 match.
