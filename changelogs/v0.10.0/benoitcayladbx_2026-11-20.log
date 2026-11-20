@@ -790,3 +790,218 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 11002 passed, 334 skipped, 8 deselected in 57.37s
+
+
+================================================================================
+## Business Rules header: shorter labels and primary Add button
+================================================================================
+
+Context: On Ontology → Business Rules, the header buttons read "Export rules",
+"Import rules" and "+ Add Rule". The word "rules" is redundant in the section
+context, and the Add action (the main CTA of the section) was rendered as an
+outline button, so it did not stand out. Labels are shortened and Add is made
+the filled primary (Create) action, the rightmost section CTA.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_business_rules.html
+   - "Export rules" button label → "Export" (link still downloads the rules file).
+   - "Import rules" button label → "Import" (title attribute unchanged).
+   - "Add Rule" button → "Add", class `btn-outline-primary` → `btn-primary`.
+   - Complex pane empty-state hint now reads "Click Add to create a CONSTRUCT rule".
+2. docs/user-guide.md (Exporting and importing rules; Simple rule steps)
+   - Button names updated to Export / Import / Add.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11002 passed, 334 skipped, 8 deselected in 48.96s
+
+================================================================================
+## Expressions & Axioms header: primary Add button style
+================================================================================
+
+Context: On Ontology → Expressions & Axioms (`?section=axioms`), the "+ Add"
+button was styled as `btn-outline-primary`. Per the design system
+(`.cursor/11-frontend-design.mdc`), the primary action of a section header
+must use `.btn-primary` (solid Create style).
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_axioms.html
+   - Switched the "+ Add" button class from `btn-outline-primary` to `btn-primary`.
+2. tests/units/front/test_axioms_list_ui.py
+   - Added `test_section_header_add_button_is_primary` contract asserting the
+     primary button styling on the Add button.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_axioms.html
+- tests/units/front/test_axioms_list_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11003 passed, 334 skipped, 8 deselected in 49.06s
+
+================================================================================
+## Data Quality header: "+ Add" renamed and primary
+================================================================================
+
+Context: On Ontology → Data Quality (`?section=dataquality`), the first button of
+the header group was labelled "Add Rule" and styled `btn-outline-primary`. It is
+the main action of the section, so it is renamed "Add" and made the filled
+primary (Create) button, consistent with the Business Rules and Expressions &
+Axioms headers.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_dataquality.html
+   - "Add Rule" label → "Add"; class `btn-outline-primary` → `btn-primary`.
+   - Other group buttons (Auto-generate, Cleanup, SHACL) unchanged.
+2. tests/units/front/test_dataquality_header_buttons.py (new)
+   - Contract: Add button is `btn-primary`, labelled "Add", no "Add Rule" text.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_dataquality.html
+- tests/units/front/test_dataquality_header_buttons.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11004 passed, 334 skipped, 8 deselected in 49.32s
+
+================================================================================
+## Data Quality header: "+ Add" moved left of the discussion button
+================================================================================
+
+Context: On Ontology → Data Quality, "+ Add" sat inside the Auto-generate /
+Cleanup / SHACL button group. It is moved out of the group and placed directly
+left of the discussion button, as a standalone primary button, so it reads as
+its own action.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_dataquality.html
+   - "+ Add" removed from the `btn-group` and re-added as a standalone
+     `btn btn-sm btn-primary ontology-edit-btn` before the discussion button
+     (permission-hidden buttons stay out of a `.btn-group`).
+   - Group spacing `me-2` → `me-3` to separate it from the Add button.
+2. tests/units/front/test_dataquality_header_buttons.py
+   - Contract updated: Add is primary, labelled "Add", outside the group and
+     left of the discussion button.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_dataquality.html
+- tests/units/front/test_dataquality_header_buttons.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11005 passed, 334 skipped, 8 deselected in 48.78s
+
+================================================================================
+## Ontology Studio: remove the Export (OWL) toolbar button
+================================================================================
+
+Context: Ontology Studio had an "Export" button in its top-right toolbar that
+downloaded the generated OWL (Turtle). The same download already lives in
+Ontology → General → OWL (Download), so the Studio button is removed.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_map.html
+   - Removed the `#mapDownloadOwl` "Export" button from the Studio toolbar.
+2. src/front/static/ontology/js/ontology-owl-content.js
+   - Removed the `#mapDownloadOwl` click handler (dead after the removal).
+     `_downloadOwlText` and the OWL tab's `#downloadOwl` handler are unchanged.
+3. src/front/templates/partials/layout/help_modal.html
+   - Help text now points to Ontology → General → OWL → Download.
+4. tests/units/front/test_help_center_menu_sync.py
+   - Asserts the Studio toolbar no longer has `#mapDownloadOwl` / "Export OWL".
+5. tests/e2e/ontology/test_owl_export_flows.py
+   - `test_designer_download_owl_button_present` → `test_designer_has_no_download_owl_button`.
+6. docs/user-guide.md, docs/getting-started.md, docs/development.md
+   - Removed mentions of the Studio Export button; point to the OWL tab's Download.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-owl-content.js
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_help_center_menu_sync.py
+- tests/e2e/ontology/test_owl_export_flows.py
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/development.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11005 passed, 334 skipped, 8 deselected in 48.78s
+(tests/e2e/ontology/test_owl_export_flows.py was updated but not run in this session.)
+
+================================================================================
+## Ontology Studio: View dropdown edit pencil right-border alignment
+================================================================================
+
+Context: In Ontology Studio, the View dropdown (#studioViewMenu) rows had the
+rename pencil button (.studio-view-rename) sticking against the right border of
+the dropdown menu because .btn-link.btn-sm's padding: 0 reset the button padding
+and there was no margin-right separating the pencil glyph from the right border.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   - Added `me-2` to the `studio-view-rename` button and `me-2` to the inner
+     `<i class="bi bi-pencil">` element, matching the spacing used in the
+     Group dropdown.
+2. src/front/static/ontology/css/ontology-map.css
+   - Styled `.studio-view-rename` with `padding: 0 0.5rem !important;` and
+     `margin-right: 0.5rem;`, and added `.studio-view-rename .bi-pencil { margin-right: 0.5rem; }`
+     so the icon has proper spacing from the right border.
+3. tests/units/front/test_studio_views_groups_contract.py
+   - Added contract assertions for `studio-view-rename me-2`, `bi-pencil me-2`,
+     and the `.studio-view-rename .bi-pencil` CSS rules.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- tests/units/front/test_studio_views_groups_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11005 passed, 334 skipped, 8 deselected in 49.45s
+
+================================================================================
+## Entities / Relationships "+ Add" and uniform Import tab buttons
+================================================================================
+
+Context: Ontology → Entities and Relationships headers used "+ Add Entity" and
+"+ Add Relationship". On Ontology → Import, each format tab had a different
+button style and label ("From Local File", "Import Selected Contexts",
+"Import Selected Standards", "Import Selected Domains" in the docs).
+Headers now use "+ Add"; all six Import tab buttons use one style
+(`btn btn-sm btn-primary`) and one label, "Import".
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_entities.html
+   - "+ Add Entity" → "+ Add".
+2. src/front/templates/partials/ontology/_ontology_relationships.html
+   - "+ Add Relationship" → "+ Add".
+3. src/front/templates/partials/ontology/_ontology_import.html
+   - OWL and RDFS "From Local File" buttons → "Import" (icon bi-download).
+   - FIBO, CDISC, IOF, FHIR "Import Selected …" buttons → "Import".
+   - All six buttons: `btn btn-sm btn-primary` (previously mixed outline
+     primary / info / warning / danger).
+4. src/front/static/ontology/js/ontology-import.js
+   - The four post-import button resets restore the "Import" label
+     (previously "Import Selected Contexts" / "Import Selected Standards").
+5. docs/user-guide.md
+   - FIBO, CDISC and IOF steps: "Click **Import**."
+6. tests/units/front/test_ontology_header_labels.py (new)
+   - Contract: Entities/Relationships Add buttons are primary and labelled Add;
+     all six Import buttons share class and label; JS resets use the same label.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_entities.html
+- src/front/templates/partials/ontology/_ontology_relationships.html
+- src/front/templates/partials/ontology/_ontology_import.html
+- src/front/static/ontology/js/ontology-import.js
+- docs/user-guide.md
+- tests/units/front/test_ontology_header_labels.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11008 passed, 334 skipped, 8 deselected in 50.19s

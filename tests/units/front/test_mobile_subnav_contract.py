@@ -42,13 +42,12 @@ def test_mobile_subnav_keeps_controls_but_hides_their_visual_labels():
     html = _read(BASE_HTML)
 
     assert re.search(
-        r"\.ob-subnav-label\s*\{[^}]*display:\s*none",
+        r"\.ob-subnav-action:not\(\.ob-subnav-resume-btn\)\s+\.ob-subnav-label\s*\{[^}]*display:\s*none",
         css,
         flags=re.DOTALL,
     )
-    # Close + Save only (workspace dropdown labels are gone; app switcher is
-    # already icon-only). CSS still hides `.ob-subnav-label` on mobile.
-    assert html.count('class="ob-subnav-label"') == 2
+    # Save/Close are icon-only in markup; Resume injects its label from JS.
+    assert html.count('class="ob-subnav-label"') == 0
 
 
 def test_mobile_subnav_compacts_padding_without_horizontal_scrolling():
@@ -60,7 +59,7 @@ def test_mobile_subnav_compacts_padding_without_horizontal_scrolling():
         flags=re.DOTALL,
     )
     assert re.search(
-        r"\.ob-subnav-action\s*\{[^}]*padding-inline:",
+        r"\.ob-subnav-resume-btn\s*\{[^}]*padding-inline:",
         css,
         flags=re.DOTALL,
     )
@@ -84,4 +83,4 @@ def test_icon_only_mobile_subnav_controls_have_tooltips():
 def test_expired_lease_resume_action_uses_the_responsive_label():
     js = _read(EDIT_LOCK_JS)
 
-    assert '<span class="ob-subnav-label">Resume editing</span>' in js
+    assert '<span class="ob-subnav-label">Resume</span>' in js

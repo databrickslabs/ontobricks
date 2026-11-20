@@ -295,8 +295,8 @@ def test_owl_and_r2rml_are_designer_exports_not_sidebar_items():
 
     ontology_designer = _ONTOLOGY_DESIGNER.read_text(encoding="utf-8")
     mapping_designer = _MAPPING_DESIGNER.read_text(encoding="utf-8")
-    assert 'id="mapDownloadOwl"' in ontology_designer
-    assert "aria-label=\"Export OWL\"" in ontology_designer
+    assert 'id="mapDownloadOwl"' not in ontology_designer
+    assert "aria-label=\"Export OWL\"" not in ontology_designer
     assert 'id="mappingExportR2RMLBtn"' in mapping_designer
     assert "aria-label=\"Export R2RML\"" in mapping_designer
 

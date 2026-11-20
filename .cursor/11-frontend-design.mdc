@@ -180,9 +180,9 @@ surface: `#obSubnav` is transparent; workspace navigation uses the app switcher.
 - Destructive exception: `.btn-danger` and `.btn-outline-danger` keep the Share
   structure with danger colours (`--db-status-danger`). `.btn-link` stays
   text-only; `.btn-close` is unchanged.
-- This covers page CTAs, modal footers, section headers, Studio / graph
-  toolbars, and the navbar chrome: Save is Create, Close is Share. Resume
-  editing stays a warning ghost.
+- This covers page CTAs, modal footers, section headers, and Studio / graph
+  toolbars. Navbar chrome (Save / Close / Resume) uses the Genie chip style
+  instead — see Unified app chrome below.
 - Geometry is Du Bois md for every `.btn` / `.btn-sm` / `.btn-lg`: height
   `--db-btn-height` (32px), radius `--db-btn-radius` (4px), font
   `--db-btn-font-size` / `--db-btn-font-weight` (13px / 500), horizontal
@@ -273,7 +273,7 @@ the entire app chrome — never duplicate or substitute any of it:
 | Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
 | Activity Center dropdown | `#activityCenterDropdown` (`bi-inboxes`) | a per-page tasks + notifications panel |
 | Help Center modal | included via `partials/layout/help_modal.html` | a custom help dialog |
-| Workspace Map modal | included via `partials/layout/_workspace_map_modal.html`, opened from `#domainContextTrigger` | a duplicate workspace launcher |
+| Workspace Map modal | included via `partials/layout/_workspace_map_modal.html`, opened from `#domainContextTrigger`; header top-right has Save/Close (`data-navbar-action`) above the version switch strip | a duplicate workspace launcher |
 | UC File Browser modal | included via `partials/layout/uc_file_browser_modal.html` | another file picker |
 | Body data attributes | `data-app-role`, `data-domain-role`, `data-app-mode` | re-fetching them |
 | Bootstrap JS bundle | loaded after `{% block content %}` | re-loading Bootstrap |
@@ -629,15 +629,17 @@ Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
   specificity required against legacy `!important` zeroing). Right padding
   stays `0.5rem`.
 - Keyboard focus uses `--db-focus-ring` plus a transparent outline for forced-colour support.
-- Action styles: Close, Save, and Resume editing share `.ob-subnav-action`
-  (Databricks Du Bois md: 32px / `--ob-subnav-btn-height`, 4px /
-  `--ob-subnav-btn-radius`, 13px weight 500). Save is **Create** (solid
-  `--db-btn-primary`, hover `--db-btn-primary-hover`). Close is **Share**
-  (`--db-surface-warm` with a `--db-btn-secondary-border` 1px border at rest,
-  hover `--db-btn-secondary-hover`). Resume editing stays a ghost warning
-  control (transparent at rest, `--db-status-warning-soft-bg` on hover).
-  Save retains its dirty dot (`.ob-subnav-save-dirty`) and shortcut keycap
-  (`.ob-subnav-save-kbd`).
+- Action styles: Close, Save, and Resume share `.ob-subnav-action` as Genie
+  Code-inspired chips (Du Bois md: 32px / `--ob-subnav-btn-height`, 4px /
+  `--ob-subnav-btn-radius`, 13px weight 500): white surface, 1px `--db-border`,
+  secondary label/icon. Hover uses the same fill as Activity
+  (`--db-hover-indigo`) — never a gradient and never the Create/Share fills.
+  Save and Close are **icon-only** (visible label removed; `title` + `aria-label`
+  required): bare at rest, and on hover they show the same `--ob-subnav-icon-hit`
+  (2rem) / `--ob-subnav-icon-radius` square as Activity and the feature switcher,
+  filled with `--db-hover-indigo`. Resume is **text-only** (`Resume`, no icon),
+  warning-coloured. Save keeps its dirty dot (`.ob-subnav-save-dirty`). No
+  shortcut keycap.
   Rendered right-side order: Context → Close → Save → app switcher → Activity →
   User. Preserve existing IDs, permission classes, and handlers.
 - Shared ownership: markup in `templates/base.html`, styling in
@@ -685,9 +687,9 @@ Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
   square selected tab or horizontally scrollable strip.
 - ❌ Giving L2 a different left gutter from `.sidebar-layout`; the L2 row
   and sidebar panel must remain vertically aligned.
-- ❌ Solid or outlined borders at rest on Resume editing. It stays a ghost
-  action; Save (Create) and Close (Share) take their Databricks styles from
-  the Theme tokens, never from hard-coded colours.
+- ❌ Filling Save/Close with Create/Share colours, or a hover gradient on
+  chrome actions. Chrome chips stay bordered neutrals; hover is Activity's
+  `--db-hover-indigo` only.
 - ❌ Hard-coding `.is-current` / `aria-current` on app-switcher items in
   Jinja or page code — `navbar.js` owns that state.
 - ❌ Restoring a 2×2 tile grid for the app switcher — keep the Databricks

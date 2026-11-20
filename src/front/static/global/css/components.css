@@ -24,11 +24,30 @@
 }
 
 .ob-workspace-map .modal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
     border-bottom: 1px solid var(--db-border);
+}
+
+.ob-workspace-map .modal-title {
+    margin-right: auto;
 }
 
 .ob-workspace-map .modal-title > i {
     color: var(--db-primary);
+}
+
+/* Save / Close — top-right of the map, above the version switch strip. */
+.ob-workspace-map-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+}
+
+.ob-workspace-map-header-actions .btn-close {
+    margin: 0;
 }
 
 /* Switch Version strip — former dedicated popup, now under the map header. */

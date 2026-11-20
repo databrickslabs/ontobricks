@@ -18,6 +18,9 @@ ONTOLOGY_HTML = (
 MAIN_CSS = (
     ROOT / "src/front/static/global/css/main.css"
 ).read_text(encoding="utf-8")
+AXIOMS_HTML = (
+    ROOT / "src/front/templates/partials/ontology/_ontology_axioms.html"
+).read_text(encoding="utf-8")
 
 
 def test_expressions_and_axioms_reuse_complex_rule_card():
@@ -49,3 +52,9 @@ def test_business_rules_module_loads_after_axioms():
     assert ONTOLOGY_HTML.index("ontology/js/ontology-axioms.js") < ONTOLOGY_HTML.index(
         "ontology/js/ontology-business-rules.js"
     )
+
+
+def test_section_header_add_button_is_primary():
+    assert 'class="btn btn-sm btn-primary ontology-edit-btn"' in AXIOMS_HTML
+    assert "AxiomsModule.addForActiveTab()" in AXIOMS_HTML
+

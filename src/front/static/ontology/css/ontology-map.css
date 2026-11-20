@@ -111,7 +111,12 @@
 
 .studio-view-rename {
     flex-shrink: 0;
-    padding: 0 0.6rem;
+    padding: 0 0.5rem !important;
+    margin-right: 0.5rem;
+}
+
+.studio-view-rename .bi-pencil {
+    margin-right: 0.5rem;
 }
 
 /* Collapse/expand control on entity and group nodes.

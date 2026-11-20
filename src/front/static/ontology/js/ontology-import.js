@@ -481,7 +481,7 @@ document.getElementById('importFiboBtn').addEventListener('click', async functio
         statusEl.textContent = 'Import error.';
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-download"></i> Import Selected Contexts';
+        btn.innerHTML = '<i class="bi bi-download"></i> Import';
         setTimeout(function() { progress.classList.add('d-none'); }, 3000);
     }
 });
@@ -541,7 +541,7 @@ document.getElementById('importCdiscBtn').addEventListener('click', async functi
         statusEl.textContent = 'Import error.';
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-download"></i> Import Selected Standards';
+        btn.innerHTML = '<i class="bi bi-download"></i> Import';
         setTimeout(function() { progress.classList.add('d-none'); }, 3000);
     }
 });
@@ -602,7 +602,7 @@ document.getElementById('importFhirBtn').addEventListener('click', async functio
         statusEl.textContent = 'Import error.';
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-download"></i> Import Selected Contexts';
+        btn.innerHTML = '<i class="bi bi-download"></i> Import';
         setTimeout(function() { progress.classList.add('d-none'); }, 3000);
     }
 });
@@ -665,7 +665,7 @@ document.getElementById('importIofBtn').addEventListener('click', async function
         statusEl.textContent = 'Import error.';
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-download"></i> Import Selected Contexts';
+        btn.innerHTML = '<i class="bi bi-download"></i> Import';
         setTimeout(function() { progress.classList.add('d-none'); }, 3000);
     }
 });

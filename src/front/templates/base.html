@@ -142,20 +142,19 @@
                     <a class="ob-subnav-action ob-subnav-close-btn btn-requires-domain" href="#"
                        data-navbar-action="{{ close_action.v.action }}"
                        {% if close_action.v.element_id %}id="{{ close_action.v.element_id }}"{% endif %}
-                       title="Close the context and release the edit lock">
-                        <i class="bi {{ close_action.v.icon }}"></i>
-                        <span class="ob-subnav-label">{{ close_action.v.label }}</span>
+                       title="Close the context and release the edit lock"
+                       aria-label="{{ close_action.v.label }}">
+                        <i class="bi {{ close_action.v.icon }}" aria-hidden="true"></i>
                     </a>
                     {% endif %}
                     {% if save_action.v %}
                     <a class="ob-subnav-action ob-subnav-save-btn btn-requires-domain" href="#"
                        data-navbar-action="{{ save_action.v.action }}"
                        {% if save_action.v.element_id %}id="{{ save_action.v.element_id }}"{% endif %}
-                       title="Save context to Unity Catalog">
+                       title="Save context to Unity Catalog (Ctrl+S)"
+                       aria-label="{{ save_action.v.label }}">
                         <span class="ob-subnav-save-dirty" aria-hidden="true"></span>
-                        <i class="bi {{ save_action.v.icon }}"></i>
-                        <span class="ob-subnav-label">{{ save_action.v.label }}</span>
-                        <kbd class="ob-subnav-save-kbd" data-os-shortcut aria-hidden="true">Ctrl+S</kbd>
+                        <i class="bi {{ save_action.v.icon }}" aria-hidden="true"></i>
                     </a>
                     {% endif %}
                 </li>

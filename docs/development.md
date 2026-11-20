@@ -767,7 +767,7 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Home `/` | Hero (logo, `OntoBricks` title, tagline); three launch tiles (Contexts, Bridges, My tasks) that select the Registry panel below (`?section=domains\|bridges\|tasks`) |
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
 | Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Runs — admin only, all domains); Developer → API |
-| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships, Sanity Checks), Advanced (Data Quality, Business Rules, Expr. & Axioms); General tabs (Informations, OWL); Studio **Export** (OWL); section divs, OntoViz script |
+| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships, Sanity Checks), Advanced (Data Quality, Business Rules, Expr. & Axioms); General tabs (Informations, OWL, with **Download**); section divs, OntoViz script |
 | Mapping `/mapping` | Graph → Management → Mapping (Informations, Visual, List tabs); toolbar Import / Export (R2RML); Auto-Map and Diagnostics modals; mapping-core.js, mapping-import.js, mapping-r2rml.js |
 | Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Documents, My Tasks, Discussions, Cockpit, Audit trail), section divs |
 | Knowledge Graph `/dtwin/` | Sidebar section groups: Management (Build with Build/Runs tabs, Overview), Navigation (Explorer, Query, Chat), Compute (Data Quality, Business rules); Sigma.js script |

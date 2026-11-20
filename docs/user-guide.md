@@ -347,15 +347,15 @@ Click **Business Rules** in the sidebar to define IF–THEN inference rules.
 
 **Exporting and importing rules.** The Business rules header has two controls:
 
-- **Export rules** downloads `<domain>_rules.json`, one file with all Simple and Complex rules of the domain.
-- **Import rules** opens a file picker and then a confirmation. Rules are matched by name: a rule with the same name is replaced, a new name is added. Each rule is validated on its own. Invalid rules are listed in the **Import summary** and skipped; the valid ones are still imported.
+- **Export** downloads `<domain>_rules.json`, one file with all Simple and Complex rules of the domain.
+- **Import** opens a file picker and then a confirmation. Rules are matched by name: a rule with the same name is replaced, a new name is added. Each rule is validated on its own. Invalid rules are listed in the **Import summary** and skipped; the valid ones are still imported.
 
 Simple rules are no longer written into the generated OWL. Use the rules file to move rules between domains. OWL files exported before this change still bring their Simple rules on import.
 OntoBricks provides a **graphical D3-based editor** for building rules visually.
 Rules are executed as **SHACL-AF** (SHACL Advanced Features); the editor shows
 the generated SHACL-AF live as you build a rule.
 
-1. Click **Add Rule** to open the fullscreen rule editor
+1. Click **Add** to open the fullscreen rule editor
 2. The editor has two panes:
    - **Left**: Interactive D3 graph showing your ontology classes and relationships
    - **Right**: Rule builder with **IF** (antecedent) and **THEN** (consequent) atom lists
@@ -756,7 +756,7 @@ Industry-standard modules are fetched directly from their official servers/repos
 
 ### Preview OWL Output
 
-Open **Ontology → General** and switch to the **OWL** tab to preview the generated OWL in Turtle format (default). Use **Copy**, **Download** or **Regenerate** from that tab. **Studio** also offers **Export** (top right) to download the same OWL. REST clients and MCP can request the same document as W3C [JSON-LD](https://www.w3.org/TR/json-ld11/) via `format=json-ld` on `GET /api/v1/domain/ontology` or `GET /export-owl`.
+Open **Ontology → General** and switch to the **OWL** tab to preview the generated OWL in Turtle format (default). Use **Copy**, **Download** or **Regenerate** from that tab to get the same OWL. REST clients and MCP can request the same document as W3C [JSON-LD](https://www.w3.org/TR/json-ld11/) via `format=json-ld` on `GET /api/v1/domain/ontology` or `GET /export-owl`.
 
 ### Save Your Ontology
 
@@ -2985,7 +2985,7 @@ Import an **RDF Schema** file. RDFS provides a lighter vocabulary than OWL — c
 
 1. Open **Ontology > Import > FIBO**.
 2. Check the domains you want. **Foundations (FND)** is always included because all other domains depend on it.
-3. Click **Import Selected Domains**.
+3. Click **Import**.
 4. OntoBricks fetches the modules from `spec.edmcouncil.org`, merges them with RDFLib, and parses the result.
 5. A summary notification shows the number of classes and properties imported.
 
@@ -3017,7 +3017,7 @@ https://spec.edmcouncil.org/fibo/ontology/master/latest/
 
 1. Open **Ontology > Import > CDISC**.
 2. Check the standards you want. **Schemas** is always included.
-3. Click **Import Selected Standards**.
+3. Click **Import**.
 4. OntoBricks fetches the modules from GitHub, merges them, and applies a custom mapper that translates CDISC-specific constructs (DomainContext, Domain, Dataset, DataElement) into OWL classes and properties.
 
 #### Source
@@ -3056,7 +3056,7 @@ This produces a more meaningful ontology structure than a raw RDF parse.
 
 1. Open **Ontology > Import > IOF**.
 2. Check the domains you want. **Core** is always included because all domain ontologies depend on it.
-3. Click **Import Selected Domains**.
+3. Click **Import**.
 4. OntoBricks fetches the RDF modules from GitHub, merges them with RDFLib, and parses the result.
 5. A post-processing step extracts relationships from OWL restrictions and resolves BFO property labels to human-readable names.
 

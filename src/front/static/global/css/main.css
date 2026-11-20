@@ -545,9 +545,12 @@ body {
     margin: 0;
     padding: 0.15rem 0;
     --ob-subnav-rail-height: 2.25rem;
-    /* Du Bois md button: 32px tall, 4px radius (chrome Close / Save / Resume). */
-    --ob-subnav-btn-height: var(--db-btn-height);
-    --ob-subnav-btn-radius: var(--db-btn-radius);
+    /* Shared hover square for every navbar icon (Save, Close, Activity, switcher). */
+    --ob-subnav-icon-hit: 2rem;
+    --ob-subnav-icon-radius: var(--db-btn-radius);
+    /* Du Bois md button: same hit as the icon square (chrome Close / Save / Resume). */
+    --ob-subnav-btn-height: var(--ob-subnav-icon-hit);
+    --ob-subnav-btn-radius: var(--ob-subnav-icon-radius);
     gap: 0;
     width: 100%;
 }
@@ -568,10 +571,15 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
+    width: var(--ob-subnav-icon-hit);
+    min-width: var(--ob-subnav-icon-hit);
+    height: var(--ob-subnav-icon-hit);
+    min-height: var(--ob-subnav-icon-hit);
+    padding: 0;
     color: var(--db-text-secondary);
     text-decoration: none;
-    padding: 0.3rem 0.45rem;
-    border-radius: var(--db-radius-control);
+    border-radius: var(--ob-subnav-icon-radius);
     line-height: 1;
     transition: color 0.15s ease, background-color 0.15s ease;
 }
@@ -590,7 +598,8 @@ body {
 }
 
 .ob-subnav-utility-link.ob-user-menu-toggle {
-    padding: 0.25rem 0.4rem;
+    /* Same icon-hit square as Activity / Save / Close. */
+    padding: 0;
 }
 
 .ob-subnav-item {
@@ -716,22 +725,28 @@ body {
     margin: 0.5rem 0.45rem;
 }
 
-/* Databricks Du Bois chrome actions (Close / Save / Resume editing).
-   Shared geometry matches workspace header buttons: 32px, 4px radius, 13px/500. */
+/* Chrome actions (Close / Save / Resume) — Genie Code-inspired chip:
+   bordered, icon-first, Du Bois md geometry. Hover matches Activity
+   (`--db-hover-indigo`); never a gradient. */
 .ob-subnav-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.35rem;
+    gap: 0;
     box-sizing: border-box;
+    width: var(--ob-subnav-btn-height);
+    min-width: var(--ob-subnav-btn-height);
     height: var(--ob-subnav-btn-height);
     min-height: var(--ob-subnav-btn-height);
     margin: 0;
-    padding: 0 0.75rem;
+    padding: 0;
     font-family: inherit;
-    font-size: 0.8125rem;
-    font-weight: 500;
+    font-size: var(--db-btn-font-size);
+    font-weight: var(--db-btn-font-weight);
     line-height: 1;
+    color: var(--db-text-secondary);
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
     border-radius: var(--ob-subnav-btn-radius);
     text-decoration: none;
     white-space: nowrap;
@@ -741,30 +756,74 @@ body {
 }
 
 .ob-subnav-action:hover {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
+    border-color: var(--db-border);
     text-decoration: none;
 }
 
 .ob-subnav-action:focus {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
+    border-color: var(--db-border);
+    text-decoration: none;
     box-shadow: var(--db-focus-ring);
     outline: 2px solid transparent;
 }
 
 .ob-subnav-action .bi {
-    font-size: 0.875rem;
+    font-size: 1rem;
     line-height: 1;
 }
 
-/* Resume Editing — warning secondary; ghost at rest, soft warning fill on hover */
+/* Resume — same chip, text-only label (no icon). */
 .ob-subnav-resume-btn {
+    width: auto;
+    min-width: var(--ob-subnav-btn-height);
+    padding: 0 0.75rem;
     color: var(--db-status-warning);
-    background: transparent;
-    border: 1px solid transparent;
 }
 
 .ob-subnav-resume-btn:hover {
     color: var(--db-status-warning);
-    background-color: var(--db-status-warning-soft-bg);
-    border-color: transparent;
+    background: var(--db-hover-indigo);
+    border-color: var(--db-border);
+}
+
+.ob-subnav-resume-btn:focus {
+    color: var(--db-status-warning);
+    background: var(--db-hover-indigo);
+    border-color: var(--db-border);
+}
+
+/* Save and Close: bare icons at rest (no fill, no border). Hover shows the
+   same rounded square as Activity / the feature switcher. */
+.ob-subnav-save-btn,
+.ob-subnav-close-btn {
+    position: relative;
+    color: var(--db-text-secondary);
+    background: transparent;
+    border: 0;
+    border-radius: var(--ob-subnav-icon-radius);
+    text-decoration: none;
+}
+
+.ob-subnav-save-btn:hover,
+.ob-subnav-close-btn:hover {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
+    border: 0;
+    text-decoration: none;
+}
+
+.ob-subnav-save-btn:focus,
+.ob-subnav-close-btn:focus {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
+    border: 0;
+    text-decoration: none;
+    box-shadow: var(--db-focus-ring);
+    outline: 2px solid transparent;
 }
 
 
@@ -903,21 +962,6 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     color: var(--db-text-muted);
 }
 
-/* Save Context — Create (filled primary) in the chrome, same as page CTAs. */
-.ob-subnav-save-btn {
-    position: relative;
-    color: var(--db-btn-primary-on);
-    background: var(--db-btn-primary);
-    border: 1px solid var(--db-btn-primary);
-}
-
-.ob-subnav-save-btn:hover {
-    background: var(--db-btn-primary-hover);
-    border-color: var(--db-btn-primary-hover);
-    color: var(--db-btn-primary-on);
-    text-decoration: none;
-}
-
 .ob-subnav-save-btn.is-saving {
     pointer-events: none;
     cursor: progress;
@@ -935,11 +979,14 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     pointer-events: none;
 }
 
-/* Unsaved registry writes: warning dot before the label */
+/* Unsaved registry writes: warning dot on the icon chip */
 .ob-subnav-save-dirty {
     display: none;
-    width: 0.45rem;
-    height: 0.45rem;
+    position: absolute;
+    top: 0.2rem;
+    right: 0.2rem;
+    width: 0.4rem;
+    height: 0.4rem;
     border-radius: 999px;
     background: var(--db-status-warning);
 }
@@ -948,32 +995,21 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     display: inline-block;
 }
 
-/* Platform shortcut keycap on the Save button */
-.ob-subnav-save-kbd {
-    font-family: inherit;
-    font-size: 0.65rem;
-    font-weight: 600;
-    line-height: 1.2;
-    color: var(--db-btn-primary-on);
-    opacity: 0.75;
-    background: transparent;
-    border: 1px solid currentColor;
-    border-radius: 2px;
-    padding: 0 0.25rem;
-}
-
 /* Databricks-style app switcher (9-dot nav-icon) — left of Close */
 .ob-subnav-app-switcher {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--ob-subnav-rail-height);
-    height: var(--ob-subnav-rail-height);
+    box-sizing: border-box;
+    width: var(--ob-subnav-icon-hit);
+    min-width: var(--ob-subnav-icon-hit);
+    height: var(--ob-subnav-icon-hit);
+    min-height: var(--ob-subnav-icon-hit);
     padding: 0;
     border: none;
     background: transparent;
     color: var(--db-text-secondary);
-    border-radius: 0.375rem;
+    border-radius: var(--ob-subnav-icon-radius);
     cursor: pointer;
     flex: 0 0 auto;
 }
@@ -1129,20 +1165,6 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     visibility: visible;
 }
 
-/* Close Context — Share (outlined secondary), same as page secondary actions. */
-.ob-subnav-close-btn {
-    color: var(--db-btn-secondary);
-    background: var(--db-surface-warm);
-    border: 1px solid var(--db-btn-secondary-border);
-}
-
-.ob-subnav-close-btn:hover {
-    background-color: var(--db-btn-secondary-hover);
-    border-color: var(--db-btn-secondary-border);
-    color: var(--db-btn-secondary);
-    text-decoration: none;
-}
-
 .ob-subnav-close-btn.disabled,
 .ob-subnav-close-btn.btn-requires-domain.disabled {
     opacity: 0.45;
@@ -1160,6 +1182,12 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     margin-inline-start: 0.35rem;
 }
 
+/* Activity sits next to User; the notification bubble overflows to the right
+   of the Activity hit square, so leave extra room before the avatar. */
+.ob-subnav-nav .ob-subnav-item:has(#activityCenterToggle) + .ob-subnav-item {
+    margin-inline-start: 0.85rem;
+}
+
 .ob-subnav-nav .ob-subnav-item:has(.ob-subnav-save-btn) {
     display: flex;
     align-items: center;
@@ -1174,7 +1202,8 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
 }
 
 @media (max-width: 1199.98px) {
-    .ob-subnav-action .ob-subnav-label {
+    /* Save/Close are icon-only; only Resume still has a label and must stay readable. */
+    .ob-subnav-action:not(.ob-subnav-resume-btn) .ob-subnav-label {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -1477,18 +1506,18 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
         transform: none;
     }
 
-    .ob-subnav-save-kbd {
-        display: none;
-    }
-
     .ob-subnav-action {
         justify-content: center;
-        padding-inline: 0.5rem;
         min-width: var(--ob-subnav-btn-height);
     }
 
-    .ob-subnav-label {
+    .ob-subnav-action:not(.ob-subnav-resume-btn) .ob-subnav-label {
         display: none;
+    }
+
+    .ob-subnav-resume-btn {
+        width: auto;
+        padding-inline: 0.6rem;
     }
 
     .ob-subnav-settings-return-link {

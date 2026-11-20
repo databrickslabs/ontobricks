@@ -12,6 +12,15 @@
     {% if menu.id == 'intelligence' %}{% set intel_m.v = menu %}{% endif %}
 {% endfor %}
 {% set workspace_map_menus = [domain_m.v, ontology_m.v, kg_m.v, intel_m.v] %}
+{% set save_action = namespace(v=none) %}
+{% set close_action = namespace(v=none) %}
+{% if domain_m.v %}
+    {% for a in domain_m.v.navbar_actions %}
+        {% if a.action == 'domainSave' %}{% set save_action.v = a %}
+        {% elif a.action == 'domainClose' %}{% set close_action.v = a %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
 
 <div class="modal fade" id="workspaceMapModal" tabindex="-1"
      aria-labelledby="workspaceMapTitle" aria-hidden="true">
@@ -22,8 +31,29 @@
                     <i class="bi bi-box me-2"></i>
                     <span id="workspaceMapDomainLabel">Context</span>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"
-                        aria-label="Close"></button>
+                <div class="ob-workspace-map-header-actions">
+                    {% if close_action.v %}
+                    <a class="btn btn-sm btn-secondary btn-requires-domain"
+                       href="#"
+                       data-navbar-action="{{ close_action.v.action }}"
+                       title="Close the context and release the edit lock">
+                        <i class="bi {{ close_action.v.icon }}" aria-hidden="true"></i>
+                        <span>{{ close_action.v.label }}</span>
+                    </a>
+                    {% endif %}
+                    {% if save_action.v %}
+                    <a class="btn btn-sm btn-primary btn-requires-domain"
+                       href="#"
+                       data-navbar-action="{{ save_action.v.action }}"
+                       title="Save context to Unity Catalog">
+                        <i class="bi {{ save_action.v.icon }}" aria-hidden="true"></i>
+                        <span>{{ save_action.v.label }}</span>
+                    </a>
+                    {% endif %}
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"
+                            aria-label="Dismiss">
+                    </button>
+                </div>
             </div>
             <div class="ob-workspace-map-versions" data-workspace-map-versions>
                 <div class="ob-workspace-map-versions-main">

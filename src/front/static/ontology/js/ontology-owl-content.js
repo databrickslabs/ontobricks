@@ -64,22 +64,3 @@ function _downloadOwlText(owlText) {
 document.getElementById('downloadOwl')?.addEventListener('click', function() {
     _downloadOwlText(document.getElementById('owlPreview')?.value);
 });
-
-// Designer toolbar: generate then download
-document.getElementById('mapDownloadOwl')?.addEventListener('click', async function() {
-    const btn = this;
-    btn.disabled = true;
-    const original = btn.innerHTML;
-    btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Generating...';
-    try {
-        if (typeof autoGenerateOwl === 'function') {
-            await autoGenerateOwl();
-        }
-        _downloadOwlText(document.getElementById('owlPreview')?.value);
-    } catch (error) {
-        showNotification('Error generating OWL: ' + error.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = original;
-    }
-});

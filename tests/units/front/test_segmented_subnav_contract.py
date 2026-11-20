@@ -88,7 +88,7 @@ def test_chrome_layout_is_brand_context_actions_switcher_utilities():
     assert html.index("activityCenterToggle") < html.index("userMenuDropdown")
     assert "ob-subnav-switch-btn" not in html
     assert "ob-subnav-save-dirty" in html
-    assert "ob-subnav-save-kbd" in html
+    assert 'aria-label="' in html  # icon-only Save/Close expose their names
 
 
 def test_subnav_surface_is_transparent_and_borderless():
@@ -150,36 +150,75 @@ def test_app_switcher_owns_current_workspace_state():
     assert "domain-version-badge" in js or "domainContextVersion" in js
 
 
-def test_chrome_actions_use_create_and_share_styles():
+def test_chrome_actions_use_genie_chip_style():
     css = _read(MAIN_CSS)
-    save = _rule(css, ".ob-subnav-save-btn")
     dirty = _rule(css, ".ob-subnav-save-dirty")
-    close = _rule(css, ".ob-subnav-close-btn")
     action = _rule(css, ".ob-subnav-action")
+    action_hover = _rule(css, ".ob-subnav-action:hover")
 
-    assert "--ob-subnav-btn-height: var(--db-btn-height)" in css
-    assert "--ob-subnav-btn-radius: var(--db-btn-radius)" in css
-    assert "--db-btn-height: 2rem;" in css
+    assert "--ob-subnav-btn-height: var(--ob-subnav-icon-hit)" in css
+    assert "--ob-subnav-btn-radius: var(--ob-subnav-icon-radius)" in css
+    assert "--ob-subnav-icon-hit: 2rem;" in css
     assert "--db-btn-radius: 0.25rem;" in css
     assert "height: var(--ob-subnav-btn-height)" in action
+    assert "width: var(--ob-subnav-btn-height)" in action
     assert "border-radius: var(--ob-subnav-btn-radius)" in action
-    assert "font-weight: 500" in action
-    # Save is Create (filled Databricks primary) and Close is Share (outlined)
-    assert "background: var(--db-btn-primary)" in save
-    assert "border: 1px solid var(--db-btn-primary)" in save
-    assert "color: var(--db-btn-primary-on)" in save
-    assert "background: var(--db-surface-warm)" in close
-    assert "border: 1px solid var(--db-btn-secondary-border)" in close
-    assert "color: var(--db-btn-secondary)" in close
+    assert "border: 1px solid var(--db-border)" in action
+    assert "background: var(--db-surface-warm)" in action
+    # Hover matches Activity (no gradient, no Create/Share fill)
+    assert "background: var(--db-hover-indigo)" in action_hover
+    assert "gradient" not in action_hover
+    assert "var(--db-btn-primary)" not in action
+    assert "var(--db-btn-primary)" not in action_hover
     # Dirty indicator on Save
     assert "background: var(--db-status-warning)" in dirty
     assert "display: none" in dirty
     assert re.search(r"\.ob-subnav-save-btn\.is-dirty\s+\.ob-subnav-save-dirty\s*\{[^}]*display:\s*inline-block", css)
-    # Hover tints the fill of each style
-    close_hover = _rule(css, ".ob-subnav-close-btn:hover")
-    assert "background-color: var(--db-btn-secondary-hover)" in close_hover
-    save_hover = _rule(css, ".ob-subnav-save-btn:hover")
-    assert "background: var(--db-btn-primary-hover)" in save_hover
+
+
+def test_navbar_icons_share_one_hover_square():
+    """Save, Close, Activity and the feature switcher use the same hit square."""
+    css = _read(MAIN_CSS)
+    assert "--ob-subnav-icon-hit: 2rem;" in css
+    assert "--ob-subnav-icon-radius: var(--db-btn-radius);" in css
+
+    for selector in (
+        ".ob-subnav-utility-link",
+        ".ob-subnav-app-switcher",
+        ".ob-subnav-action",
+    ):
+        block = _rule(css, selector)
+        assert "var(--ob-subnav-icon-hit)" in block or "var(--ob-subnav-btn-height)" in block, selector
+        assert (
+            "var(--ob-subnav-icon-radius)" in block
+            or "var(--ob-subnav-btn-radius)" in block
+        ), selector
+
+    # Save/Close: bare at rest, Activity hover on hover (no border either way).
+    rest = re.search(
+        r"\.ob-subnav-save-btn,\s*\.ob-subnav-close-btn\s*\{([^}]*)\}",
+        css,
+    )
+    assert rest and "background: transparent" in rest.group(1) and "border: 0" in rest.group(1)
+    hover = re.search(
+        r"\.ob-subnav-save-btn:hover,\s*\.ob-subnav-close-btn:hover\s*\{([^}]*)\}",
+        css,
+    )
+    assert hover and "background: var(--db-hover-indigo)" in hover.group(1)
+    assert "border: 0" in hover.group(1)
+
+
+def test_activity_and_user_have_room_for_the_notification_badge():
+    css = _read(MAIN_CSS)
+    assert (
+        ".ob-subnav-nav .ob-subnav-item:has(#activityCenterToggle) + .ob-subnav-item"
+        in css
+    )
+    rule = re.search(
+        r"\.ob-subnav-nav\s+\.ob-subnav-item:has\(#activityCenterToggle\)\s*\+\s*\.ob-subnav-item\s*\{([^}]*)\}",
+        css,
+    )
+    assert rule and "margin-inline-start: 0.85rem" in rule.group(1)
 
 
 def test_chrome_actions_share_databricks_button_class():
@@ -193,19 +232,19 @@ def test_chrome_actions_share_databricks_button_class():
     css = _read(MAIN_CSS)
     resume = _rule(css, ".ob-subnav-resume-btn")
     assert "color: var(--db-status-warning)" in resume
-    assert "background: transparent" in resume
-    assert "border: 1px solid transparent" in resume
+    assert "width: auto" in resume
     resume_hover = _rule(css, ".ob-subnav-resume-btn:hover")
-    assert "background-color: var(--db-status-warning-soft-bg)" in resume_hover
-    assert "border-color: transparent" in resume_hover
+    assert "background: var(--db-hover-indigo)" in resume_hover
 
 
 def test_mobile_contract_does_not_add_horizontal_scrolling():
     mobile = _mobile_block(_read(MAIN_CSS))
 
     assert re.search(r"\.ob-subnav-context-copy\s*\{[^}]*display\s*:\s*none", mobile)
-    assert re.search(r"\.ob-subnav-save-kbd\s*\{[^}]*display\s*:\s*none", mobile)
-    assert re.search(r"\.ob-subnav-label\s*\{[^}]*display\s*:\s*none", mobile)
+    assert re.search(
+        r"\.ob-subnav-action:not\(\.ob-subnav-resume-btn\)\s+\.ob-subnav-label\s*\{[^}]*display\s*:\s*none",
+        mobile,
+    )
     assert ".ob-subnav" in mobile
     assert ".ob-subnav-nav" in mobile
     assert ".ob-subnav-workspace-list" not in mobile

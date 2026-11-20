@@ -88,11 +88,11 @@ async function refreshStudioViewSelect() {
 
         const rename = document.createElement('button');
         rename.type = 'button';
-        rename.className = 'btn btn-link btn-sm text-muted studio-view-rename';
+        rename.className = 'btn btn-link btn-sm text-muted studio-view-rename me-2';
         rename.dataset.view = name;
         rename.title = 'Rename view';
         rename.setAttribute('aria-label', `Rename Business View ${name}`);
-        rename.innerHTML = '<i class="bi bi-pencil"></i>';
+        rename.innerHTML = '<i class="bi bi-pencil me-2"></i>';
 
         li.appendChild(pick);
         li.appendChild(rename);

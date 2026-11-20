@@ -87,14 +87,12 @@ class TestOntologyOwlSection:
         self._open_owl(page, live_server)
         assert page.locator("#downloadOwl").count() == 1
 
-    def test_designer_download_owl_button_present(self, page, live_server):
+    def test_designer_has_no_download_owl_button(self, page, live_server):
         page.goto(f"{live_server}/ontology")
         page.wait_for_load_state("domcontentloaded")
         page.evaluate('SidebarNav.switchTo("map")')
         page.wait_for_timeout(400)
-        btn = page.locator("#mapDownloadOwl")
-        assert btn.count() == 1
-        assert btn.is_visible()
+        assert page.locator("#mapDownloadOwl").count() == 0
 
     def test_regenerate_button_present(self, page, live_server):
         self._open_owl(page, live_server)

@@ -301,7 +301,7 @@ Alternatively, use the traditional form interface:
 
 ### 4. Preview and Save
 
-1. Open **Studio** and click **Export** (top right) to download the generated ontology as Turtle
+1. Open **Ontology → General**, switch to the **OWL** tab and click **Download** to get the generated ontology as Turtle
 2. Click **Validate** to check your ontology
 3. Click **Save** to write the context to the Lakebase registry
 

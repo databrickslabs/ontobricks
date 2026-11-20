@@ -175,3 +175,20 @@ def test_domain_switch_opens_the_combined_workspace_map():
     switch_fn = js[js.index("async function domainSwitch(") :][:900]
     assert "openWorkspaceMap(" in switch_fn
     assert "showSwitchDomainDialog(" not in switch_fn
+
+
+def test_workspace_map_header_has_save_and_close():
+    """Context popup exposes Save/Close above the version switch."""
+    html = _render_modal()
+    header = html.split("modal-header", 1)[1].split("ob-workspace-map-versions", 1)[0]
+    assert 'data-navbar-action="domainClose"' in header
+    assert 'data-navbar-action="domainSave"' in header
+    assert header.index('data-navbar-action="domainClose"') < header.index(
+        'data-navbar-action="domainSave"'
+    )
+    # Above the version strip: header actions appear before the versions block.
+    assert html.index("ob-workspace-map-header-actions") < html.index(
+        "ob-workspace-map-versions"
+    )
+    css = _read(COMPONENTS_CSS)
+    assert ".ob-workspace-map-header-actions" in css

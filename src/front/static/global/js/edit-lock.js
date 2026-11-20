@@ -201,9 +201,7 @@
         btn.type = 'button';
         btn.id = 'editLockResumeBtn';
         btn.className = 'ob-subnav-action ob-subnav-resume-btn';
-        btn.innerHTML =
-            '<i class="bi bi-arrow-clockwise"></i>' +
-            '<span class="ob-subnav-label">Resume editing</span>';
+        btn.innerHTML = '<span class="ob-subnav-label">Resume</span>';
         btn.setAttribute('aria-label', expiredTooltipText());
         btn.addEventListener('click', onResumeEditingClick);
         saveBtn.parentNode.insertBefore(btn, saveBtn);
