@@ -26,7 +26,7 @@
             "navbar_actions": [
                 {
                     "label": "Save",
-                    "icon": "bi-cloud-upload",
+                    "icon": "bi-check2-square",
                     "action": "domainSave",
                     "element_id": "menuSaveDomain"
                 },
@@ -38,7 +38,7 @@
                 },
                 {
                     "label": "Close",
-                    "icon": "bi-x-circle",
+                    "icon": "bi-box-arrow-right",
                     "action": "domainClose",
                     "element_id": "menuCloseDomain"
                 }

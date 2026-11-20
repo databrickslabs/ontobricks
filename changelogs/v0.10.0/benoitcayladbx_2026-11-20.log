@@ -1137,3 +1137,44 @@ Modified files:
 - tests/units/front/test_no_backend_ui.py
 - tests/units/front/test_backend_brand_icons.py
 - changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+================================================================================
+## Navbar: Save and Close icons
+================================================================================
+
+Context: The navbar Save and Close actions used bi-cloud-upload and bi-x-circle.
+No Databricks icon asset is available in the repo and the Databricks page
+could not be read (Okta), so the closest Bootstrap Icons were chosen:
+bi-floppy for Save and bi-x-lg for Close. Swap the names here if exact
+Databricks icons are supplied.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Domain `navbar_actions` → Save: `bi-cloud-upload` → `bi-floppy`.
+   - Domain `navbar_actions` → Close: `bi-x-circle` → `bi-x-lg`.
+   The in-modal "Save & Close" buttons (navbar.js) are unchanged.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -p no:cacheprovider
+
+================================================================================
+## Navbar: final Save and Close icons
+================================================================================
+
+Context: User chose the final navbar icons after previewing candidates.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Domain `navbar_actions` → Save icon: `bi-check2-square`.
+   - Domain `navbar_actions` → Close icon: `bi-box-arrow-right`.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -p no:cacheprovider
