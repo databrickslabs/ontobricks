@@ -1,0 +1,27 @@
+/* Ontology Evolve — question-driven ontology repair. */
+
+#evolve-section .evo-intent {
+    font-size: 0.8125rem;
+}
+
+#evolve-section .evo-obligations code {
+    font-size: 0.8125rem;
+}
+
+#evolve-section .evo-joins .evo-chosen {
+    font-weight: 600;
+}
+
+#evolve-section .evo-op {
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    background: var(--db-surface-warm);
+}
+
+#evolve-section .evo-sql {
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    margin: 0.25rem 0 0;
+}

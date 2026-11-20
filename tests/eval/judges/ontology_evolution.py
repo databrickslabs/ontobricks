@@ -19,7 +19,15 @@ VARIANTS = {
     "restricted",
     "missing_source",
 }
-DECISIONS = {"PASS", "NO_CHANGE", "BLOCKED", "ABSTAIN", "INCONCLUSIVE", "STALE", "CANCELLED"}
+DECISIONS = {
+    "PASS",
+    "NO_CHANGE",
+    "BLOCKED",
+    "ABSTAIN",
+    "INCONCLUSIVE",
+    "STALE",
+    "CANCELLED",
+}
 EVOLVE_OPS = {"add_relationship", "set_relationship_mapping"}
 NEGATIVE_DECISIONS = {"BLOCKED", "ABSTAIN", "INCONCLUSIVE", "STALE", "CANCELLED"}
 
@@ -81,10 +89,14 @@ def judge_ops(row: Dict[str, Any], observed: Dict[str, Any]) -> float:
     forbidden = set(row["expected"].get("forbidden_ops") or [])
     if forbidden & set(ops) or not set(ops) <= EVOLVE_OPS:
         return 0.0
-    return 1.0 if sorted(ops) == sorted(row["expected"].get("proposal_ops") or []) else 0.0
+    return (
+        1.0 if sorted(ops) == sorted(row["expected"].get("proposal_ops") or []) else 0.0
+    )
 
 
-def judge_gold(row: Dict[str, Any], observed: Dict[str, Any], gold: Dict[str, list]) -> float:
+def judge_gold(
+    row: Dict[str, Any], observed: Dict[str, Any], gold: Dict[str, list]
+) -> float:
     """Execution-based: candidate result set equals the gold set."""
     gid = row["expected"].get("gold_question_id")
     expected_ids = row["expected"].get("gold_ids_override")
@@ -94,4 +106,8 @@ def judge_gold(row: Dict[str, Any], observed: Dict[str, Any], gold: Dict[str, li
         expected_ids = gold.get(gid)
     if expected_ids is None:
         return 0.0
-    return 1.0 if sorted(observed.get("candidate_ids") or []) == sorted(expected_ids) else 0.0
+    return (
+        1.0
+        if sorted(observed.get("candidate_ids") or []) == sorted(expected_ids)
+        else 0.0
+    )

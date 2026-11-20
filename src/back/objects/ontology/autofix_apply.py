@@ -13,17 +13,22 @@ from back.objects.ontology.autofix_ops import ALLOWED_OPS
 logger = get_logger(__name__)
 
 
-def apply_operations(domain, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
+def apply_operations(
+    domain, operations: List[Dict[str, Any]], *, allowed=ALLOWED_OPS
+) -> Dict[str, Any]:
     """Apply confirmed Auto-fix ops atomically to ``domain``.
 
     Works on deep copies; commits only when every op succeeds. Rename/merge
-    triggers URI rewrite and mapping remap.
+    triggers URI rewrite and mapping remap. *allowed* restricts the op
+    vocabulary (Sanity Checks uses ``ALLOWED_OPS``, Evolve ``EVOLVE_OPS``).
+    Relationship-mapping ops run after the ontology ops, so a mapping may
+    target a relationship added in the same batch.
     """
     if not operations:
         return {"success": False, "error": "No operations to apply.", "applied": 0}
 
     for op in operations:
-        if op.get("op") not in ALLOWED_OPS:
+        if op.get("op") not in allowed:
             return {
                 "success": False,
                 "error": f"Unknown operation: {op.get('op')}",
@@ -38,9 +43,14 @@ def apply_operations(domain, operations: List[Dict[str, Any]]) -> Dict[str, Any]
     properties = copy.deepcopy(old_properties)
     groups = copy.deepcopy(old_groups)
 
+    relationships = copy.deepcopy(list(domain.get_relationship_mappings() or []))
     try:
         for op in operations:
-            _apply_one(op, classes, properties, groups)
+            if op.get("op") != "set_relationship_mapping":
+                _apply_one(op, classes, properties, groups)
+        for op in operations:
+            if op.get("op") == "set_relationship_mapping":
+                _set_relationship_mapping(op, classes, properties, relationships)
     except _ApplyError as exc:
         return {"success": False, "error": str(exc), "applied": 0}
 
@@ -52,6 +62,8 @@ def apply_operations(domain, operations: List[Dict[str, Any]]) -> Dict[str, Any]
     ont["classes"] = classes
     ont["properties"] = properties
     ont["groups"] = groups
+    if any(op.get("op") == "set_relationship_mapping" for op in operations):
+        domain._data.setdefault("assignment", {})["relationships"] = relationships
 
     editor = Editor(domain)
     editor.remap_mapping_uris(class_renames, property_renames)
@@ -348,6 +360,71 @@ def _op_merge_into(op, classes, properties, groups) -> None:
         cls["dataProperties"] = [a for a in attrs if a.get("name") != name]
 
 
+def _op_add_relationship(op, classes, properties, groups) -> None:
+    """Add an object property between two existing classes."""
+    name = _target_name(op)
+    params = op.get("params") or {}
+    uri = str(params.get("uri") or "")
+    source, target = str(params.get("domain") or ""), str(params.get("range") or "")
+    if not name or not uri:
+        raise _ApplyError("A new relationship needs a name and a URI.")
+    if name in _existing_names(classes, properties):
+        raise _ApplyError(f"The name '{name}' is already used.")
+    if any(p.get("uri") == uri for p in properties) or any(c.get("uri") == uri for c in classes):
+        raise _ApplyError(f"The URI '{uri}' is already used.")
+    for cls_name in (source, target):
+        if not _find_by_name(classes, cls_name):
+            raise _ApplyError(f"Entity '{cls_name}' not found.")
+    properties.append(
+        {
+            "uri": uri,
+            "name": name,
+            "label": str(params.get("label") or name),
+            "description": str(params.get("description") or ""),
+            "type": "ObjectProperty",
+            "domain": source,
+            "range": target,
+            "direction": "forward",
+            "properties": [],
+        }
+    )
+
+
+_MAPPING_PARAMS = ("sql_query", "source_id_column", "target_id_column")
+
+
+def _set_relationship_mapping(op, classes, properties, relationships) -> None:
+    """Create or replace the mapping of one relationship, keyed by its URI."""
+    name = _target_name(op)
+    params = op.get("params") or {}
+    prop = _find_by_name(properties, name)
+    if not prop or prop.get("type") != "ObjectProperty":
+        raise _ApplyError(f"Relationship '{name}' not found.")
+    missing = [k for k in _MAPPING_PARAMS if not str(params.get(k) or "").strip()]
+    if missing:
+        raise _ApplyError(f"Mapping for '{name}' is missing {', '.join(missing)}.")
+    source = _find_by_name(classes, str(prop.get("domain") or ""))
+    target = _find_by_name(classes, str(prop.get("range") or ""))
+    if not source or not target:
+        raise _ApplyError(f"Relationship '{name}' needs an existing domain and range.")
+    mapping = {
+        "property": prop.get("uri", ""),
+        "property_label": prop.get("label") or name,
+        "sql_query": str(params["sql_query"]),
+        "source_class": source.get("uri", ""),
+        "source_class_label": source.get("label") or source.get("name", ""),
+        "target_class": target.get("uri", ""),
+        "target_class_label": target.get("label") or target.get("name", ""),
+        "source_table": str(params.get("source_table") or ""),
+        "target_table": str(params.get("target_table") or ""),
+        "source_id_column": str(params["source_id_column"]),
+        "target_id_column": str(params["target_id_column"]),
+        "direction": "forward",
+    }
+    relationships[:] = [r for r in relationships if r.get("property") != mapping["property"]]
+    relationships.append(mapping)
+
+
 _HANDLERS: Dict[str, Callable] = {
     "clear_parent": _op_clear_parent,
     "set_parent": _op_set_parent,
@@ -362,6 +439,7 @@ _HANDLERS: Dict[str, Callable] = {
     "set_description": _op_set_description,
     "rename": _op_rename,
     "merge_into": _op_merge_into,
+    "add_relationship": _op_add_relationship,
 }
 
 

@@ -1,0 +1,69 @@
+<!-- Ontology Evolve (question-driven ontology repair) -->
+<!-- JS: /static/ontology/js/ontology-evolve.js -->
+<!-- CSS: /static/ontology/css/ontology-evolve.css -->
+<div class="content-section">
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div class="me-auto">
+        <h4 class="mb-1"><i class="bi bi-signpost-split me-2"></i>Evolve</h4>
+        <p class="text-muted mb-0 small">Check whether this version can answer a question. When it cannot, get a reviewed fix with the evidence behind it. The version itself is never changed here.</p>
+    </div>
+</div>
+
+<div class="alert alert-secondary d-none" id="evoDisabled" role="status"></div>
+
+<div id="evoBody">
+    <div class="card mb-3">
+        <div class="card-header fw-semibold">1. Question</div>
+        <div class="card-body">
+            <label class="form-label small" for="evoQuestion">Business question</label>
+            <input type="text" class="form-control form-control-sm mb-2" id="evoQuestion"
+                   placeholder="Which orders contain products supplied by Acme?">
+            <label class="form-label small" for="evoIntent">Interpreted intent (edit before checking)</label>
+            <textarea class="form-control form-control-sm font-monospace evo-intent" id="evoIntent" rows="8" spellcheck="false"></textarea>
+            <div class="form-text">Output class, filters as <code>{"class", "attribute", "op": "eq", "value"}</code>. Aggregates and other filter operators are reported as unsupported.</div>
+            <div class="mt-2 d-flex gap-2">
+                <button type="button" class="btn btn-primary btn-sm" id="evoCheckBtn">
+                    <i class="bi bi-search me-1"></i>Check coverage
+                </button>
+                <span class="small text-muted align-self-center" id="evoRunInfo"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3 d-none" id="evoCoverageCard">
+        <div class="card-header fw-semibold d-flex justify-content-between">
+            <span>2. Coverage</span>
+            <span class="badge" id="evoReadyBadge"></span>
+        </div>
+        <div class="card-body">
+            <p class="small text-muted mb-2">Coverage checks the preconditions for an answer on the current source tables. It is not an accuracy score.</p>
+            <div id="evoGap" class="mb-2"></div>
+            <table class="table table-sm align-middle evo-obligations">
+                <thead><tr><th>Requirement</th><th>State</th><th>Why</th></tr></thead>
+                <tbody id="evoObligations"></tbody>
+            </table>
+            <div id="evoJoins"></div>
+            <button type="button" class="btn btn-outline-primary btn-sm d-none" id="evoProposeBtn">
+                <i class="bi bi-lightbulb me-1"></i>Propose a fix
+            </button>
+        </div>
+    </div>
+
+    <div class="card mb-3 d-none" id="evoProposalCard">
+        <div class="card-header fw-semibold">3. Proposed change</div>
+        <div class="card-body">
+            <div class="evo-facts mb-3" id="evoFacts"></div>
+            <div id="evoOps"></div>
+            <h6 class="mt-3 small fw-semibold">Validation</h6>
+            <ul class="list-unstyled small mb-0" id="evoChecks"></ul>
+        </div>
+    </div>
+
+    <div class="card mb-3 d-none" id="evoEvaluationCard">
+        <div class="card-header fw-semibold">4. Evaluation</div>
+        <div class="card-body small text-muted" id="evoEvaluation">
+            Build the candidate graph and compare it with the parent on the same data.
+        </div>
+    </div>
+</div>
+</div>

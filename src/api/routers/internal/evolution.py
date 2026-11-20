@@ -13,9 +13,13 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from api.routers.internal._guards import require
 from back.core.errors import ConflictError, ValidationError
-from back.core.helpers import run_blocking
+from back.core.helpers import get_databricks_client, run_blocking
 from back.core.logging import get_logger
-from back.objects.ontology.evolution import EvolutionService
+from back.objects.ontology.evolution import (
+    EvolutionPipeline,
+    EvolutionService,
+    WarehouseSourceProbe,
+)
 from back.objects.registry import ROLE_BUILDER, RegistryService
 from back.objects.session import SessionManager, get_domain, get_session_manager
 from shared.config.settings import Settings, get_settings
@@ -63,6 +67,26 @@ def _service(
             detail=f"requested {folder!r}, loaded {loaded!r}",
         )
     return EvolutionService(RegistryService.from_context(domain, settings), folder)
+
+
+# Per-statement bound for source probes; each is a small aggregate query.
+PROBE_STATEMENT_TIMEOUT_S = 60
+
+
+def _pipeline(
+    session_mgr: SessionManager, settings: Settings, folder: str
+) -> EvolutionPipeline:
+    """Pipeline whose source probe runs as the caller, created in the request."""
+    svc = _service(session_mgr, settings, folder)
+    client = get_databricks_client(get_domain(session_mgr), settings)
+    if client is None:
+        raise ValidationError("A SQL warehouse is required to inspect sources")
+    probe = WarehouseSourceProbe(
+        lambda sql: client.sql.execute_query(
+            sql, statement_timeout_s=PROBE_STATEMENT_TIMEOUT_S
+        )
+    )
+    return EvolutionPipeline(svc, probe)
 
 
 @router.get("/capabilities")
@@ -169,3 +193,37 @@ async def delete_run(
 ):
     svc = _service(session_mgr, settings, domain)
     return {"deleted": await run_blocking(svc.delete_run, run_id)}
+
+
+@router.post("/runs/{run_id}/assess", dependencies=_builder_only)
+async def assess_run(
+    run_id: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Run the coverage check for the run's intent against its parent version."""
+    body = await _json_object(request)
+    pipe = _pipeline(session_mgr, settings, str(body.get("domain") or ""))
+    return {
+        "run": await run_blocking(pipe.assess, run_id, int(body.get("revision") or 0))
+    }
+
+
+@router.post("/runs/{run_id}/proposal", dependencies=_builder_only)
+async def propose(
+    run_id: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Build the rule-based proposal, or validate builder-edited ``operations``."""
+    body = await _json_object(request)
+    pipe = _pipeline(session_mgr, settings, str(body.get("domain") or ""))
+    operations = body.get("operations")
+    if operations is not None and not isinstance(operations, list):
+        raise ValidationError("operations must be a list")
+    run = await run_blocking(
+        pipe.propose, run_id, int(body.get("revision") or 0), operations
+    )
+    return {"run": run}

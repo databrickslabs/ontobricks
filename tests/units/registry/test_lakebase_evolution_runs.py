@@ -248,3 +248,24 @@ def _columns(ddl: str, table: str) -> list[str]:
 def test_lazy_ddl_matches_schema_sql(table):
     lazy = "\n".join(EvolutionRuns.evolution_ddl("s"))
     assert _columns(lazy, table) == _columns(SCHEMA_SQL.read_text(), table)
+
+
+def test_lazy_creation_runs_ddl_once_when_tables_are_missing(fake_psycopg):
+    db = (
+        FakeDB()
+        .on("information_schema.tables", rows=[(0,)])
+        .on("INSERT INTO", rows=[_row()], once=False)
+    )
+    store = make_store(db, ready=False)
+    store.create_evolution_run("supply", _run())
+    assert len(db.sql_with("CREATE TABLE IF NOT EXISTS")) == 2
+    store.create_evolution_run("supply", _run())
+    assert len(db.sql_with("CREATE TABLE IF NOT EXISTS")) == 2
+
+
+def test_delete_removes_results_then_the_run(fake_psycopg):
+    db = FakeDB().on('DELETE FROM "ontobricks_registry".evolution_runs', rowcount=1)
+    store = make_store(db)
+    assert store.delete_evolution_run("supply", "run-1") is True
+    deletes = [c.sql for c in db.calls if c.sql.startswith("DELETE")]
+    assert "evolution_results" in deletes[0] and "evolution_runs" in deletes[1]

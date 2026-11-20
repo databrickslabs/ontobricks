@@ -115,3 +115,79 @@ Tests:
   19.0: schema.sql creates both tables; 8 concurrent creates with one key
   produce one run; 6 concurrent CAS updates produce one winner; stale revision
   raises ConflictError; domain_versions untouched.
+
+================================================================================
+## Ontology Evolve: Stage 2 deterministic coverage, join evidence and fix proposal
+================================================================================
+
+Context: The core of Evolve is telling a builder exactly why a question is not
+supported and, when the data backs it, proposing the smallest typed fix. This
+stage does that without any LLM: the intent is entered by hand, coverage is
+computed from the parent version and read-only probes of its Unity Catalog
+sources, and a proposal is validated against a candidate built from a fresh,
+session-free copy of the parent.
+
+Changes:
+
+1. src/back/objects/ontology/evolution/OntologyIndex.py
+   Class/relationship/mapping lookups, mention resolution (exact form or
+   form ending with the phrase), bounded shortest-first path search.
+2. src/back/objects/ontology/evolution/CoverageService.py
+   Obligations with states (RESOLVED, AMBIGUOUS, MISSING_SEMANTICS,
+   INACCESSIBLE, UNVERIFIED, UNSUPPORTED, SOURCE_UNAVAILABLE) and evidence;
+   readiness only when every obligation is RESOLVED; decision hint.
+   A filter is ambiguous only when it is on the class's label column.
+3. src/back/objects/ontology/evolution/JoinCandidateFinder.py
+   Candidate joins from declared UC foreign keys, id-name matches and value
+   overlap, each with a data profile; two equally strong valid joins without
+   a declared key are reported as ambiguous instead of picked.
+4. src/back/objects/ontology/evolution/{SourceProbe,WarehouseSourceProbe,
+   SourceAccessDenied,SourceUnavailable}.py
+   Read-only source inspection; only regex-validated identifiers reach SQL
+   text and values go through SQLHelpers.sql_literal; access and missing
+   tables are classified, never reported as a pass.
+5. src/back/objects/ontology/evolution/{ProposalBuilder,ProposalValidator,
+   CandidateFactory,EvolutionPipeline}.py
+   Rule-based proposal (ADD_RELATIONSHIP + SET_RELATIONSHIP_MAPPING with
+   server-built SQL), candidate on a deep-copied headless DomainSession,
+   validation ladder (schema, ontology, mapping columns, dangling ids,
+   identity uniqueness, row multiplication; business meaning always
+   "needs review"), assess/propose stages with stale-parent checks.
+6. src/back/objects/ontology/autofix_ops.py, autofix_apply.py
+   EVOLVE_OPS kept separate from ALLOWED_OPS; apply_operations takes an
+   allowed= vocabulary; new add_relationship handler and relationship
+   mapping upsert applied after ontology ops.
+7. src/api/routers/internal/evolution.py
+   POST /evolution/runs/{id}/assess and /proposal (builder only); probes
+   run through the caller-scoped warehouse client with a 60 s statement bound.
+8. src/front/templates/partials/ontology/_ontology_evolve.html,
+   static/ontology/js/ontology-evolve.js, static/ontology/css/ontology-evolve.css,
+   templates/ontology.html, static/ontology/js/ontology-init.js,
+   config/menu_config.json
+   Ontology › Evolve page: question and intent, coverage table, joins with
+   evidence, proposed change with the four facts kept separate.
+9. tests/fixtures/evolution/{memory_probe,memory_registry,variants}.py,
+   tests/eval/evolution_offline.py, tests/eval/run_agent_ontology_evolution.py
+   Offline probe over the fixture rows, domain variants, deterministic
+   runner mode (--deterministic).
+10. tests/eval/datasets/agent_ontology_evolution/baseline.jsonl
+   State keys renamed to the implemented scheme before any baseline was
+   recorded (class:, source:<table>, path:<output>-><filter>,
+   dangling_target_pct; aggregate row also reports the missing link).
+
+Files modified: see the list above, plus
+tests/units/ontology/evolution/test_coverage.py (new),
+tests/units/ontology/evolution/test_evolution_router.py,
+tests/units/front/test_sidebar_content_stretch_contract.py.
+
+Tests:
+- `uv run --frozen python tests/eval/run_agent_ontology_evolution.py --deterministic`
+  — all 30 rows: gap_correct=1.000, false_ready=0.000, abstention=1.000,
+  decision=1.000, validation_failure=1.000. Note: one holdout row informed the
+  label-column rule, so the holdout is not clean for deterministic logic.
+- Live against the seeded UC fixture (serverless warehouse): base finds the
+  declared FK and validates; nofk ambiguous; orphan blocked
+  (dangling_target_pct); dup blocked (target_identity_not_unique); broken
+  mapping repaired; missing source inconclusive. 30–44 probe queries each.
+- Local app (make run) against Lakebase PG17 and the real warehouse: coverage
+  and proposal rendered in the browser; domain_versions unchanged (v1 only).

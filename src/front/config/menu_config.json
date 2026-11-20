@@ -289,6 +289,16 @@
                             "description": "Lint the ontology design for common issues.",
                             "help_jump": "docs",
                             "help_doc": "user-guide"
+                        },
+                        {
+                            "id": "evolve",
+                            "label": "Evolve",
+                            "icon": "bi-signpost-split",
+                            "default": false,
+                            "requires": null,
+                            "description": "Check whether this version can answer a question, and get a reviewed fix when it cannot.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
                         }
                     ]
                 },

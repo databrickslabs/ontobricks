@@ -82,3 +82,5 @@ class TestMiddlewareClassification:
         assert ("/evolution/runs/{run_id}/intent", ("PATCH",)) in guarded
         assert ("/evolution/runs/{run_id}/cancel", ("POST",)) in guarded
         assert ("/evolution/runs/{run_id}", ("DELETE",)) in guarded
+        assert ("/evolution/runs/{run_id}/assess", ("POST",)) in guarded
+        assert ("/evolution/runs/{run_id}/proposal", ("POST",)) in guarded
