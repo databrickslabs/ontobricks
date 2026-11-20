@@ -218,7 +218,7 @@ function restoreLastConfirmedDomainInfo() {
 /**
  * Drop the domain-loading overlay left by an open/create/validate/close flow.
  * Only called once the page's navbar state is settled (fresh /navbar/state, or
- * the fallback restore on error), so the default Home section never shows.
+ * the fallback restore on error). Loads land on Context → Home.
  */
 function _settlePendingDomainLoading() {
     if (_readPendingDomainLoading()) hideDomainLoading();
@@ -292,21 +292,27 @@ function invalidateDomainCaches() {
     }
 }
 
-const DOMAIN_GENERAL_HREF = '/domain/?section=information';
+const DOMAIN_HOME_HREF = '/domain/?section=home';
+/** @deprecated Alias kept for older call sites; prefer navigateToDomainHome. */
+const DOMAIN_GENERAL_HREF = DOMAIN_HOME_HREF;
 
 /**
  * After a domain is loaded (navbar, home, registry, import), land on
- * Context → General. Reloading the current page would keep the user on
- * Home with only the top menus updated.
+ * Context → Home. Reloading the current page would keep the user on the
+ * Registry Home with only the top menus updated.
  */
-function navigateToDomainGeneral() {
+function navigateToDomainHome() {
     const path = (window.location.pathname || '').replace(/\/+$/, '') || '/';
-    const section = new URLSearchParams(window.location.search).get('section') || 'information';
-    if (path === '/domain' && section === 'information') {
+    const section = new URLSearchParams(window.location.search).get('section') || 'home';
+    if (path === '/domain' && section === 'home') {
         window.location.reload();
         return;
     }
-    window.location.href = DOMAIN_GENERAL_HREF;
+    window.location.href = DOMAIN_HOME_HREF;
+}
+
+function navigateToDomainGeneral() {
+    navigateToDomainHome();
 }
 
 window.refreshNavbarIndicators = refreshNavbarIndicators;
@@ -1778,6 +1784,7 @@ window.showDomainSaveDialog = showDomainSaveDialog;
 window.showDomainLoadDialog = showDomainLoadDialog;
 window.doDomainSave = doDomainSave;
 window.doDomainLoad = doDomainLoad;
+window.navigateToDomainHome = navigateToDomainHome;
 window.navigateToDomainGeneral = navigateToDomainGeneral;
 window.checkDomainSavedStatus = loadDomainName;
 window.enableMenusAfterSave = enableMenusAfterSave;

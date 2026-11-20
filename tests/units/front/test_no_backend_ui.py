@@ -320,4 +320,4 @@ class TestThePagesRedirectAGraphlessDomain:
         src = _read(route)
         assert "is_graphless_backend" in src
         assert "RedirectResponse" in src
-        assert "/domain/?section=information" in src
+        assert "/domain/?section=home" in src

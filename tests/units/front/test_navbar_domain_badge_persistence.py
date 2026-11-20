@@ -61,22 +61,25 @@ def test_domain_load_keeps_overlay_across_navigate():
     assert "location.reload()" not in body
 
 
-def test_domain_load_navigates_to_general():
-    """Loading a domain must open Domain → General, not reload the current page."""
+def test_domain_load_navigates_to_home():
+    """Loading a domain must open Context → Home, not reload the current page."""
     js = _navbar_js()
     match = re.search(
-        r"function navigateToDomainGeneral\(\) \{(.*?)\n\}", js, re.DOTALL
+        r"function navigateToDomainHome\(\) \{(.*?)\n\}", js, re.DOTALL
     )
 
     assert match is not None
     body = match.group(1)
-    assert "DOMAIN_GENERAL_HREF" in js
-    assert "/domain/?section=information" in js
-    assert "window.location.href = DOMAIN_GENERAL_HREF;" in body
+    assert "DOMAIN_HOME_HREF" in js
+    assert "/domain/?section=home" in js
+    assert "window.location.href = DOMAIN_HOME_HREF;" in body
     assert "path === '/domain'" in body
     assert "handleImportResponse" in js
     import_match = re.search(
         r"function handleImportResponse\(data\) \{(.*?)\n\}", js, re.DOTALL
     )
     assert import_match is not None
-    assert "navigateToDomainGeneral()" in import_match.group(1)
+    assert (
+        "navigateToDomainGeneral()" in import_match.group(1)
+        or "navigateToDomainHome()" in import_match.group(1)
+    )

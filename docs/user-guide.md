@@ -762,7 +762,7 @@ Open **Ontology → General** and switch to the **OWL** tab to preview the gener
 
 - **Validate**: Click to check for issues
 - **Save**: Write the context to the Lakebase registry
-- **Load**: Load an existing context (opens **Context → Configuration**)
+- **Load**: Load an existing context (opens **Context → Home**)
 
 ---
 
@@ -1911,7 +1911,7 @@ the API/MCP **Active** selection managed in **Registry → Browse**.
 2. Pick a domain and version in the dialog. Editability follows lifecycle
    status: Draft versions are editable, while In Review and Published versions
    are read-only, whether or not they are the latest.
-3. OntoBricks always opens **Context → Configuration** (`/domain/?section=information`).
+3. OntoBricks always opens **Context → Home** (`/domain/?section=home`).
    It does not stay on Home or reload Registry Browse. Publication and
    Validation entry points that already jump to `?section=review` are unchanged.
 
@@ -1933,7 +1933,7 @@ Four related ideas:
 
 ### Context Save/Load
 
-Contexts are saved as versioned documents in the Lakebase registry. Use the **Save** button (in the context sub-navigation; a yellow dot means there are registry changes not yet saved, and **Ctrl+S** / **⌘S** saves) and the **Load Context** option in the top menu to persist and restore your work; after a generic load the app opens **Context → Configuration**. The version crumb (`vN ▾`) reloads the current context or loads another of its versions from the Registry (that also lands on Configuration), and the **Close** button releases the edit lock and returns you to the Home page.
+Contexts are saved as versioned documents in the Lakebase registry. Use the **Save** button (in the context sub-navigation; a yellow dot means there are registry changes not yet saved, and **Ctrl+S** / **⌘S** saves) and the **Load Context** option in the top menu to persist and restore your work; after a generic load the app opens **Context → Home**. The version crumb (`vN ▾`) reloads the current context or loads another of its versions from the Registry (that also lands on Home), and the **Close** button releases the edit lock and returns you to the Registry Home page.
 
 ### Best Practices for Version Control
 
@@ -3246,7 +3246,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Context General (Cockpit)**: Readiness tiles including **Active Version** — the version currently exposed via API/MCP (from the registry), with a *(not loaded)* hint when it differs from the version open in the session. Distinct from “latest on disk” vs read-only UI gating (still driven by whether the loaded version is the latest).
 - **Audit Trail**: Context → Governance → Audit trail splits ontology vs mapping into tabs (plus Status, Builds, and GitHub). Change rows are compact: the icon is the action, and the line names the asset with previous → new values on edits. Events are buffered in the working session and flushed to the registry (`domain_change_events`) on **Save to registry**. A version dropdown scopes the timeline. GitHub pushes that produced a commit or warning appear on the GitHub tab.
 - **New-domain loading**: After **New Context** from the navbar, a full-page spinner runs until Context → Configuration has finished its initial fetches (LLM endpoints, version status, domain info).
-- **Load lands on Context → Configuration**: Home → Open, navbar **Load Context**, Registry → Browse → Load, Context → Versions load/reload, and domain import navigate to `/domain/?section=information` instead of reloading the current page. Publication / Validation jumps keep `?section=review`.
+- **Load lands on Context → Home**: Home → Open, navbar **Load Context**, Registry → Browse → Load, Context → Versions load/reload, and domain import navigate to `/domain/?section=home` instead of reloading the current page. Configuration (`?section=information`) hydrates on demand. Publication / Validation jumps keep `?section=review`. New Context still opens Configuration after the first save.
 - **CamelCase context names**: New contexts must use alphanumeric CamelCase names (no spaces or special characters); the creation UI sanitizes as you type and the backend rejects invalid names.
 - **Context → Configuration — Knowledge Graph fields**: Triple-store FQN and Graph DB table name (e.g. Lakebase `g_<domain>_v<version>`) refresh when the domain name is **committed** (blur / `change`) or the version changes, so previews match naming rules before save. When the backend is Neo4j, a required **Neo4j connection** dropdown lists Settings profiles (no per-domain database override).
 - **Duplicate context names**: Save to registry is blocked when the sanitized name already exists (`/domain/check-name` + guard on **Save**); inline validation clears when the name is cleared or the check errors.

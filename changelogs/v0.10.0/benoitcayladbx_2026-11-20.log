@@ -1703,3 +1703,44 @@ Modified files:
 Tests: see result line below.
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 11090 passed, 334 skipped, 8 deselected
+
+================================================================================
+## Context load lands on Home; defer Configuration hydration
+================================================================================
+
+Context: Opening a Context still felt slow and landed on Configuration
+  (`?section=information`) instead of Context → Home. Configuration was also
+  eagerly fetching `/domain/version-status` and `/domain/info` on every Context
+  page load, even when Home was shown.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   - `navigateToDomainHome()` → `/domain/?section=home`; General alias kept.
+2. registry.js / domain-versions.js / graphless route redirects
+   - Fallbacks and no-backend redirects use Home.
+3. src/front/static/domain/js/domain-information.js
+   - Extract `hydrateInformationSection()`; run only when Configuration is
+     (or becomes) active.
+4. src/front/static/domain/js/domain.js
+   - `loadDomainInfo()` deferred the same way.
+5. docs/user-guide.md + contract tests updated.
+   - New Context still opens Configuration after first save.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain.js
+- src/front/routes/dtwin.py
+- src/front/routes/mapping.py
+- src/front/routes/intelligence.py
+- docs/user-guide.md
+- tests/units/front/test_domain_load_redirect.py
+- tests/units/front/test_navbar_domain_badge_persistence.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/domain/test_domain_neo4j_connection_picker.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11091 passed, 334 skipped, 8 deselected

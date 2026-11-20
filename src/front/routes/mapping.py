@@ -25,7 +25,7 @@ async def mapping_page(
     if redirect is not None:
         return redirect
     if is_graphless_backend((domain_session.info or {}).get("graph_backend")):
-        return RedirectResponse("/domain/?section=information", status_code=303)
+        return RedirectResponse("/domain/?section=home", status_code=303)
 
     query = request.url.query
     if query:

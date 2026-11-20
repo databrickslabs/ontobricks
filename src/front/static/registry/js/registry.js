@@ -655,7 +655,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (typeof navigateToDomainGeneral === 'function') {
                     navigateToDomainGeneral();
                 } else {
-                    window.location.href = '/domain/?section=information';
+                    window.location.href = '/domain/?section=home';
                 }
             } else {
                 if (typeof hideDomainLoading === 'function') hideDomainLoading();

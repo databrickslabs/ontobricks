@@ -50,6 +50,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (section === 'metadata' && typeof initMetadataSection === 'function') {
                 initMetadataSection();
             }
+            // Configuration form fields (name, LLM, …) hydrate on demand.
+            if (section === 'information') {
+                loadDomainInfo();
+                if (typeof window.hydrateInformationSection === 'function') {
+                    window.hydrateInformationSection();
+                }
+            }
             // Load validation details when switching to validation section
             if (section === 'validation') {
                 loadValidationDetails();
@@ -68,11 +75,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-    
-    // Load initial data
-    loadDomainInfo();
 
     initMcpPolicyTab();
+
+    // Configuration-only fetches: skip on Context → Home so open feels snappy.
+    if ((initialSection || 'home') === 'information') {
+        loadDomainInfo();
+    }
 
     var domainFileInput = document.getElementById('domainFileInput');
     if (domainFileInput) {

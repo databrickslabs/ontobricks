@@ -305,82 +305,16 @@ function updateVersionStatusUI(isActive, version, hasRegistry) {
     }
 }
 
-// Fetch and update version status on page load
-document.addEventListener('DOMContentLoaded', async function() {
+/**
+ * Hydrate Context → Configuration (version status, LLM, graph backend, …).
+ * Deferred until that section is shown so Context → Home opens without waiting
+ * on these registry / domain-info round-trips.
+ */
+let _informationHydrated = false;
+async function hydrateInformationSection() {
+    if (_informationHydrated) return;
+    _informationHydrated = true;
     try {
-        refreshDtNamesFromForm();
-
-        // Re-derive the DT names whenever the Triple Store tab is shown
-        // (panel is initially hidden) and whenever the user commits a
-        // change to the domain name (on blur / Enter, NOT per-keystroke).
-        const tsTab = document.getElementById('tab-triplestore');
-        if (tsTab) {
-            tsTab.addEventListener('shown.bs.tab', refreshDtNamesFromForm);
-        }
-        const nameEl = document.getElementById('domainName');
-        if (nameEl) {
-            nameEl.addEventListener('change', refreshDtNamesFromForm);
-            nameEl.addEventListener('blur', refreshDtNamesFromForm);
-            // Duplicate-name guard runs on blur as well as the
-            // existing debounced ``input`` hook in domain.js, so the
-            // user gets immediate feedback when committing the field.
-            // The check itself, the inline ``invalid-feedback`` hint,
-            // and the ``is-invalid`` class are owned by domain.js.
-            if (typeof checkDomainNameAvailability === 'function') {
-                nameEl.addEventListener('blur', () => checkDomainNameAvailability(nameEl));
-            }
-        }
-        const versionEl = document.getElementById('domainVersionSelect');
-        if (versionEl) {
-            versionEl.addEventListener('change', refreshDtNamesFromForm);
-        }
-        const graphBackendEl = document.getElementById('domainGraphBackend');
-        const neo4jDbElInit = document.getElementById('domainNeo4jDatabase');
-        // The template already renders persisted values server-side. Mark
-        // controls dirty on first interaction so the `/domain/info` refresh
-        // below cannot overwrite a newer browser selection.
-        if (graphBackendEl) {
-            graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
-            graphBackendEl.addEventListener('change', syncNeo4jConnectionSection);
-            graphBackendEl.addEventListener('change', toggleLakehouseMaterializationSection);
-            graphBackendEl.addEventListener('change', toggleSearchCacheSection);
-            graphBackendEl.addEventListener('change', applyGraphlessConstraints);
-            graphBackendEl.addEventListener('change', () => {
-                graphBackendEl.dataset.userEdited = '1';
-            });
-        }
-        if (neo4jDbElInit) {
-            neo4jDbElInit.addEventListener('change', () => {
-                neo4jDbElInit.dataset.userEdited = '1';
-            });
-        }
-        const materializationElInit = document.getElementById('domainLakehouseMaterialization');
-        if (materializationElInit) {
-            materializationElInit.addEventListener('change', () => {
-                materializationElInit.dataset.userEdited = '1';
-            });
-        }
-        const cacheElInit = document.getElementById('domainGraphCacheEnabled');
-        if (cacheElInit) {
-            cacheElInit.addEventListener('change', () => {
-                cacheElInit.dataset.userEdited = '1';
-                refreshSearchCacheStatusLine();
-            });
-        }
-        initGraphBackendCards();
-        syncNeo4jConnectionSection();
-        toggleLakehouseMaterializationSection();
-        toggleSearchCacheSection();
-        applyGraphlessConstraints();
-        const refreshDbBtn = document.getElementById('btnRefreshNeo4jDatabases');
-        if (refreshDbBtn) {
-            refreshDbBtn.addEventListener('click', () => loadNeo4jDatabases(true));
-        }
-        const llmBrowse = document.getElementById('domainLlmBrowse');
-        if (llmBrowse) {
-            llmBrowse.addEventListener('click', browseLlmEndpoints);
-        }
-
         const [statusData, infoData] = await Promise.all([
             fetchOnce('/domain/version-status').catch(() => null),
             fetchOnce('/domain/info').catch(() => null)
@@ -438,11 +372,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 materializationEl.value = infoData.info.lakehouse_materialization;
                 materializationEl.dataset.savedValue = infoData.info.lakehouse_materialization;
             }
-            // Runs after the saved value is known, so the freshly fetched
-            // option list keeps it selected. Safe even when the user already
-            // edited the field: it reads the select's *current* value first
-            // (see `_loadNeo4jConnectionOptions`) and only falls back to
-            // `dataset.savedValue` when the select has nothing of its own.
             const cacheEl = document.getElementById('domainGraphCacheEnabled');
             if (cacheEl && !cacheEl.dataset.userEdited && infoData.info) {
                 if (typeof infoData.info.graph_cache_enabled === 'boolean') {
@@ -469,14 +398,94 @@ document.addEventListener('DOMContentLoaded', async function() {
         // version-status; rerun once after status is applied so the FQNs
         // line up with the real registry config.
         refreshDtNamesFromForm();
-        
+
         // Re-enable version selector after a short delay to override any global disabling
         setTimeout(enableVersionSelector, 100);
     } catch (e) {
+        _informationHydrated = false;
         console.log('Could not fetch context status:', e);
     }
-    // Domain-loading overlay is cleared by navbar applyDomainInfo once the
-    // Context name + Save/Close chrome is painted (ob_domain_loading).
+}
+
+window.hydrateInformationSection = hydrateInformationSection;
+
+// Bind Configuration controls on page load; hydrate data only when that
+// section is (or becomes) active.
+document.addEventListener('DOMContentLoaded', function() {
+    refreshDtNamesFromForm();
+
+    // Re-derive the DT names whenever the Triple Store tab is shown
+    // (panel is initially hidden) and whenever the user commits a
+    // change to the domain name (on blur / Enter, NOT per-keystroke).
+    const tsTab = document.getElementById('tab-triplestore');
+    if (tsTab) {
+        tsTab.addEventListener('shown.bs.tab', refreshDtNamesFromForm);
+    }
+    const nameEl = document.getElementById('domainName');
+    if (nameEl) {
+        nameEl.addEventListener('change', refreshDtNamesFromForm);
+        nameEl.addEventListener('blur', refreshDtNamesFromForm);
+        if (typeof checkDomainNameAvailability === 'function') {
+            nameEl.addEventListener('blur', () => checkDomainNameAvailability(nameEl));
+        }
+    }
+    const versionEl = document.getElementById('domainVersionSelect');
+    if (versionEl) {
+        versionEl.addEventListener('change', refreshDtNamesFromForm);
+    }
+    const graphBackendEl = document.getElementById('domainGraphBackend');
+    const neo4jDbElInit = document.getElementById('domainNeo4jDatabase');
+    if (graphBackendEl) {
+        graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
+        graphBackendEl.addEventListener('change', syncNeo4jConnectionSection);
+        graphBackendEl.addEventListener('change', toggleLakehouseMaterializationSection);
+        graphBackendEl.addEventListener('change', toggleSearchCacheSection);
+        graphBackendEl.addEventListener('change', applyGraphlessConstraints);
+        graphBackendEl.addEventListener('change', () => {
+            graphBackendEl.dataset.userEdited = '1';
+        });
+    }
+    if (neo4jDbElInit) {
+        neo4jDbElInit.addEventListener('change', () => {
+            neo4jDbElInit.dataset.userEdited = '1';
+        });
+    }
+    const materializationElInit = document.getElementById('domainLakehouseMaterialization');
+    if (materializationElInit) {
+        materializationElInit.addEventListener('change', () => {
+            materializationElInit.dataset.userEdited = '1';
+        });
+    }
+    const cacheElInit = document.getElementById('domainGraphCacheEnabled');
+    if (cacheElInit) {
+        cacheElInit.addEventListener('change', () => {
+            cacheElInit.dataset.userEdited = '1';
+            refreshSearchCacheStatusLine();
+        });
+    }
+    initGraphBackendCards();
+    syncNeo4jConnectionSection();
+    toggleLakehouseMaterializationSection();
+    toggleSearchCacheSection();
+    applyGraphlessConstraints();
+    const refreshDbBtn = document.getElementById('btnRefreshNeo4jDatabases');
+    if (refreshDbBtn) {
+        refreshDbBtn.addEventListener('click', () => loadNeo4jDatabases(true));
+    }
+    const llmBrowse = document.getElementById('domainLlmBrowse');
+    if (llmBrowse) {
+        llmBrowse.addEventListener('click', browseLlmEndpoints);
+    }
+
+    const initialSection = new URLSearchParams(window.location.search).get('section') || 'home';
+    if (initialSection === 'information') {
+        hydrateInformationSection();
+    }
+    document.addEventListener('sidebarSectionChanged', function (e) {
+        if (e.detail?.section === 'information') {
+            hydrateInformationSection();
+        }
+    });
 });
 
 

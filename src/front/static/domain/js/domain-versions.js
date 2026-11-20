@@ -407,7 +407,7 @@ async function loadVersionFromList(version, triggerButton = null) {
             if (typeof navigateToDomainGeneral === 'function') {
                 navigateToDomainGeneral();
             } else {
-                window.location.href = '/domain/?section=information';
+                window.location.href = '/domain/?section=home';
             }
         } else {
             if (typeof hideDomainLoading === 'function') hideDomainLoading();
@@ -468,7 +468,7 @@ async function reloadLastSavedVersion() {
             if (typeof navigateToDomainGeneral === 'function') {
                 navigateToDomainGeneral();
             } else {
-                window.location.href = '/domain/?section=information';
+                window.location.href = '/domain/?section=home';
             }
         } else {
             if (typeof hideDomainLoading === 'function') hideDomainLoading();
