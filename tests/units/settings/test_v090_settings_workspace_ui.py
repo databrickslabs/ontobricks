@@ -177,10 +177,45 @@ class TestLogoValidation:
 
 
 class TestUiBranding:
-    def _save(self, *, title="Acme", primary="#112233", aurora="", logo=None, mime=None, reset=False):
+    def _save(
+        self,
+        *,
+        title="Acme",
+        primary="#112233",
+        aurora="",
+        logo=None,
+        mime=None,
+        reset=False,
+        button_primary="",
+        button_secondary="",
+    ):
         return WorkspaceUiSettings.save_ui_branding_result(
-            title, primary, aurora, logo, mime, reset, "", "", MagicMock(), MagicMock()
+            title, primary, aurora, logo, mime, reset, "", "", MagicMock(), MagicMock(),
+            button_primary_color=button_primary,
+            button_secondary_color=button_secondary,
         )
+
+    def test_persists_explicit_create_and_share_colors(self, gcs, local_mode):
+        result = self._save(button_primary=" #ff0000 ", button_secondary="#00aa00")
+
+        saved = gcs.set_ui_branding.call_args.args[3]
+        assert saved["button_primary_color"] == "#FF0000"
+        assert saved["button_secondary_color"] == "#00AA00"
+        assert result["branding"]["button_primary_color"] == "#FF0000"
+        assert result["branding"]["palette"]["button_primary"] == "#FF0000"
+        assert result["branding"]["palette"]["button_secondary"] == "#00AA00"
+
+    def test_blank_create_and_share_colors_fall_back_to_databricks_defaults(self, gcs, local_mode):
+        self._save(button_primary="", button_secondary="  ")
+
+        saved = gcs.set_ui_branding.call_args.args[3]
+        assert saved["button_primary_color"] == "#2272B4"
+        assert saved["button_secondary_color"] == "#11171C"
+
+    def test_invalid_create_color_is_rejected(self, gcs, local_mode):
+        with pytest.raises(ValidationError, match="button primary color"):
+            self._save(button_primary="blue")
+        gcs.set_ui_branding.assert_not_called()
 
     def test_get_returns_store_branding(self, gcs, local_mode):
         assert WorkspaceUiSettings.get_ui_branding_result("", "", MagicMock(), MagicMock()) == {
@@ -197,6 +232,8 @@ class TestUiBranding:
             "app_title": "Acme",
             "primary_color": "#112233",
             "aurora_color": "#AABBCC",
+            "button_primary_color": "#2272B4",
+            "button_secondary_color": "#11171C",
             "logo_data_url": "data:image/png;base64,OLD",
         }
         assert result["branding"]["palette"]["aurora"] == "#AABBCC"

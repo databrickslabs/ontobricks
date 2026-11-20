@@ -66,15 +66,16 @@ NEUTRAL_BUTTON_VARIANTS = [
 def test_unfilled_buttons_stay_unfilled_when_focused(variant):
     """Bootstrap's `:focus-visible` repaints a button with its hover palette,
     which for these variants is the solid fill the design drops. Focus must
-    keep the resting background and carry the state in the ring alone."""
+    keep the resting background (transparent, or the white surface token for
+    the Share style) and carry the state in the ring alone."""
     css = _read(COMPONENTS_CSS)
 
     for state in (f"{variant}:focus", f"{variant}:focus-visible"):
         blocks = _blocks_for_selector(css, state)
         assert blocks, f"No focus rule pins {state}"
-        assert _has_declaration(blocks, "background-color", "transparent"), (
-            f"{state} does not pin a transparent background"
-        )
+        assert _has_declaration(
+            blocks, "background-color", r"(?:transparent|var\(--db-surface-warm\))"
+        ), f"{state} does not keep the resting background"
 
     ring_blocks = _blocks_for_selector(css, f"{variant}:focus")
     assert _has_declaration(ring_blocks, "box-shadow", r"var\(--db-focus-ring\)")

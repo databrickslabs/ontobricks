@@ -12,6 +12,8 @@ from back.core.helpers import resolve_app_registry_context
 from back.core.helpers.UIBranding import (
     DEFAULT_APP_TITLE,
     DEFAULT_AURORA_COLOR,
+    DEFAULT_BUTTON_PRIMARY_COLOR,
+    DEFAULT_BUTTON_SECONDARY_COLOR,
     DEFAULT_PRIMARY_COLOR,
     normalize_ui_branding,
 )
@@ -99,6 +101,12 @@ def render_ui_branding_css_vars(branding: Mapping[str, Any]) -> str:
     aurora_dark = str(palette.get("aurora_dark") or "#5B5B5B")
     gradient_end = str(palette.get("gradient_end") or "#6F6F6F")
     canvas_tint = str(palette.get("canvas_tint") or "#F8F8F8")
+    button_primary = str(palette.get("button_primary") or DEFAULT_BUTTON_PRIMARY_COLOR)
+    button_primary_hover = str(palette.get("button_primary_hover") or "#1D629B")
+    button_on_primary = str(palette.get("button_on_primary") or "#FFFFFF")
+    button_secondary = str(palette.get("button_secondary") or DEFAULT_BUTTON_SECONDARY_COLOR)
+    button_secondary_border = str(palette.get("button_secondary_border") or "#C5C7C9")
+    button_secondary_hover = str(palette.get("button_secondary_hover") or "#F0F1F3")
 
     return (
         ":root {\n"
@@ -119,6 +127,12 @@ def render_ui_branding_css_vars(branding: Mapping[str, Any]) -> str:
         f"  --db-aurora-dark: {aurora_dark};\n"
         f"  --db-gradient-end: {gradient_end};\n"
         f"  --db-canvas-warm: {canvas_tint};\n"
+        f"  --db-btn-primary: {button_primary};\n"
+        f"  --db-btn-primary-hover: {button_primary_hover};\n"
+        f"  --db-btn-primary-on: {button_on_primary};\n"
+        f"  --db-btn-secondary: {button_secondary};\n"
+        f"  --db-btn-secondary-border: {button_secondary_border};\n"
+        f"  --db-btn-secondary-hover: {button_secondary_hover};\n"
         "}"
     )
 

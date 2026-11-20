@@ -136,11 +136,10 @@ surface: `#obSubnav` is transparent; workspace navigation uses the app switcher.
   `back.core.helpers.UIBranding._derive_aurora_hex`) — there is no unstyled or
   undefined state.
 - `--db-gradient-primary` (`linear-gradient(120deg, var(--db-primary),
-  var(--db-gradient-end))`) is the only gradient used on filled CTAs
-  (`.btn-primary`, `.ob-subnav-save-btn`) and the current L2 workspace (colour only).
-  `--db-gradient-end` is Primary mixed 45% toward Aurora, contrast-corrected
-  server-side against `--db-on-primary` — never hardcode a second color on a
-  button.
+  var(--db-gradient-end))`) is a defined design token but no component uses it
+  any more: filled CTAs use the solid Create tokens (see below). `--db-gradient-end`
+  is Primary mixed 45% toward Aurora, contrast-corrected server-side against
+  `--db-on-primary` — never hardcode a second color on a button.
 - `--db-gradient-rail` (`linear-gradient(180deg, var(--db-primary),
   var(--db-aurora))`) is reserved for the sidebar's 3px active-row leading bar
   only.
@@ -150,6 +149,34 @@ surface: `#obSubnav` is transparent; workspace navigation uses the app switcher.
 - Resting cards (`.card`) stay flat: 1px border only, `box-shadow: none`.
   Elevation (`--db-shadow-*`) is reserved for floating surfaces
   (dropdowns, modals, overlays, transient toasts).
+
+**Databricks button styles: Create (filled) and Share (outlined)**
+
+- Settings → Configuration → UI → Theme exposes two colour inputs, next to
+  Primary and Aurora: **Create button color** (`button_primary_color`) and
+  **Share button color** (`button_secondary_color`). Both default to the
+  Databricks Catalog browse page values (Create `#2272B4`, Share label
+  `#11171C`) and are stored in the `ui_branding` global-config document.
+- Blank or invalid stored values fall back to the defaults (never a load
+  error), like Aurora. Defaults use the published Databricks companion tints
+  exactly (Create hover `#1D619C`, Share border `#C6C9D1`, Share hover
+  `#F0F1F3`); custom colours derive them (Create hover = 14% toward black,
+  Share border = 76% toward white, Share hover = 6% tint on white, on-Create
+  label = WCAG-safe black or white).
+- The backend derives them in `back.core.helpers.UIBranding.derive_button_palette`;
+  `settings.js` mirrors that derivation for the live preview and must stay
+  numerically identical.
+- The server injects `--db-btn-primary`, `--db-btn-primary-hover`,
+  `--db-btn-primary-on`, `--db-btn-secondary`, `--db-btn-secondary-border`
+  and `--db-btn-secondary-hover` through `#uiBrandingTokens`. `main.css`
+  ships the same defaults in `:root`.
+- Mapping: `.btn-primary` = **Create** (solid `--db-btn-primary`, no gradient,
+  no resting shadow). `.btn-secondary` and `.btn-outline-secondary` = **Share**
+  (white `--db-surface-warm` at rest, `--db-btn-secondary-border` 1px border,
+  `--db-btn-secondary` label, `--db-btn-secondary-hover` on hover).
+- Navbar chrome follows the same mapping: Save (`.ob-subnav-save-btn`) is
+  Create, Close (`.ob-subnav-close-btn`) is Share. Resume editing stays a
+  warning ghost.
 
 ### Accent Use and Button Hierarchy
 
@@ -163,9 +190,10 @@ The Clarity indigo accent (`--db-primary`) is used for high-signal moments:
 
 Button hierarchy in `global/css/components.css` is mandatory:
 
-- `.btn-primary` is the only **filled primary** action and should be the
+- `.btn-primary` (Create) is the only **filled primary** action and should be the
   rightmost section CTA.
-- Secondary solid and non-danger outline variants remain unfilled/neutral.
+- `.btn-secondary` and `.btn-outline-secondary` (Share) are outlined on the
+  white surface; other non-danger outline variants remain unfilled/neutral.
 - `.btn-outline-danger` is the semantic destructive exception (red text/border,
   soft-danger hover background), without turning it into a generic filled CTA.
 - Status/destructive intent cannot rely on color alone; include icon + label.
@@ -590,11 +618,13 @@ Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
 - Keyboard focus uses `--db-focus-ring` plus a transparent outline for forced-colour support.
 - Action styles: Close, Save, and Resume editing share `.ob-subnav-action`
   (Databricks Du Bois md: 32px / `--ob-subnav-btn-height`, 4px /
-  `--ob-subnav-btn-radius`, 13px weight 500). All three are ghost controls at
-  rest (transparent background, transparent 1px border) that reveal a subtle
-  hover fill without borders on hover (`--db-hover-warm` for Close and Save,
-  `--db-status-warning-soft-bg` for Resume editing). Save retains its dirty dot
-  (`.ob-subnav-save-dirty`) and shortcut keycap (`.ob-subnav-save-kbd`).
+  `--ob-subnav-btn-radius`, 13px weight 500). Save is **Create** (solid
+  `--db-btn-primary`, hover `--db-btn-primary-hover`). Close is **Share**
+  (`--db-surface-warm` with a `--db-btn-secondary-border` 1px border at rest,
+  hover `--db-btn-secondary-hover`). Resume editing stays a ghost warning
+  control (transparent at rest, `--db-status-warning-soft-bg` on hover).
+  Save retains its dirty dot (`.ob-subnav-save-dirty`) and shortcut keycap
+  (`.ob-subnav-save-kbd`).
   Rendered right-side order: Context → Close → Save → app switcher → Activity →
   User. Preserve existing IDs, permission classes, and handlers.
 - Shared ownership: markup in `templates/base.html`, styling in
@@ -642,8 +672,9 @@ Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
   square selected tab or horizontally scrollable strip.
 - ❌ Giving L2 a different left gutter from `.sidebar-layout`; the L2 row
   and sidebar panel must remain vertically aligned.
-- ❌ Solid or outlined borders at rest on Close, Save, or Resume editing.
-  They are ghost actions at rest with hover fills.
+- ❌ Solid or outlined borders at rest on Resume editing. It stays a ghost
+  action; Save (Create) and Close (Share) take their Databricks styles from
+  the Theme tokens, never from hard-coded colours.
 - ❌ Hard-coding `.is-current` / `aria-current` on app-switcher items in
   Jinja or page code — `navbar.js` owns that state.
 - ❌ Restoring a 2×2 tile grid for the app switcher — keep the Databricks
@@ -820,11 +851,11 @@ hide inside a Bootstrap `.card-header`.
 
 **States**
 
-`.btn-primary` is the only variant that fills. Everything else — including
-`.btn-secondary`, `.btn-success` and `.btn-danger`, which the app renders as
-outlines — stays unfilled in **every** state: hover tints the background,
-active deepens it slightly, and focus keeps the resting background and shows
-`--db-focus-ring` alone. Bootstrap's own `:focus-visible` repaints a button
+`.btn-primary` (Create) is the only variant that fills. Everything else —
+including `.btn-secondary` (Share), `.btn-success` and `.btn-danger`, which the
+app renders as outlines — stays unfilled in **every** state: hover tints the
+background, active deepens it slightly, and focus keeps the resting background
+(transparent, or the white surface for Share) and shows `--db-focus-ring` alone. Bootstrap's own `:focus-visible` repaints a button
 with its *hover* palette, which for these variants is the solid fill we
 dropped, so `components.css` pins both `:focus` and `:focus-visible`. When you
 add a variant, add it to that list too. `.btn-outline-danger` is the single

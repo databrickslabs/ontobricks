@@ -417,36 +417,37 @@
 }
 
 /* Primary is the only filled action variant */
+/* Create — the filled primary action (Databricks Catalog "Create"). Solid fill,
+   no gradient and no resting shadow: elevation is for floating surfaces only. */
 .btn-primary {
-    background: var(--db-gradient-primary);
-    border-color: var(--db-primary);
-    color: var(--db-on-primary);
-    box-shadow: var(--db-shadow-primary);
+    background: var(--db-btn-primary);
+    border-color: var(--db-btn-primary);
+    color: var(--db-btn-primary-on);
+    box-shadow: none;
 }
 
 .btn-primary:hover {
-    background: var(--db-primary-dark);
-    border-color: var(--db-primary-dark);
-    color: var(--db-on-primary);
+    background: var(--db-btn-primary-hover);
+    border-color: var(--db-btn-primary-hover);
+    color: var(--db-btn-primary-on);
 }
 
 .btn-primary:focus {
-    background: var(--db-primary-dark);
-    border-color: var(--db-primary-dark);
-    color: var(--db-on-primary);
+    background: var(--db-btn-primary-hover);
+    border-color: var(--db-btn-primary-hover);
+    color: var(--db-btn-primary-on);
     box-shadow: var(--db-focus-ring);
 }
 
 .btn-primary:active,
 .btn-primary.active,
 .show > .btn-primary.dropdown-toggle {
-    background-color: var(--db-primary-darker) !important;
-    border-color: var(--db-primary-darker) !important;
-    color: var(--db-on-primary) !important;
+    background-color: var(--db-btn-primary-hover) !important;
+    border-color: var(--db-btn-primary-hover) !important;
+    color: var(--db-btn-primary-on) !important;
 }
 
 /* Keep secondary/semantic solid variants neutral and unfilled */
-.btn-secondary,
 .btn-success,
 .btn-danger,
 .btn-warning,
@@ -458,7 +459,6 @@
     color: var(--db-text-secondary);
 }
 
-.btn-secondary:hover,
 .btn-success:hover,
 .btn-danger:hover,
 .btn-warning:hover,
@@ -470,7 +470,6 @@
     color: var(--db-text);
 }
 
-.btn-secondary:active,
 .btn-success:active,
 .btn-danger:active,
 .btn-warning:active,
@@ -484,7 +483,6 @@
 
 /* Outline buttons stay unfilled */
 .btn-outline-primary,
-.btn-outline-secondary,
 .btn-outline-success,
 .btn-outline-danger,
 .btn-outline-warning,
@@ -497,7 +495,6 @@
 }
 
 .btn-outline-primary:hover,
-.btn-outline-secondary:hover,
 .btn-outline-success:hover,
 .btn-outline-danger:hover,
 .btn-outline-warning:hover,
@@ -515,8 +512,6 @@
    palette and let the ring alone carry the focus. Both `:focus` and
    `:focus-visible` are listed because Bootstrap uses the latter, and matching
    its specificity is what makes these win. */
-.btn-secondary:focus,
-.btn-secondary:focus-visible,
 .btn-success:focus,
 .btn-success:focus-visible,
 .btn-danger:focus,
@@ -531,8 +526,6 @@
 .btn-dark:focus-visible,
 .btn-outline-primary:focus,
 .btn-outline-primary:focus-visible,
-.btn-outline-secondary:focus,
-.btn-outline-secondary:focus-visible,
 .btn-outline-success:focus,
 .btn-outline-success:focus-visible,
 .btn-outline-danger:focus,
@@ -554,9 +547,6 @@
 .btn-outline-primary:active,
 .btn-outline-primary.active,
 .show > .btn-outline-primary.dropdown-toggle,
-.btn-outline-secondary:active,
-.btn-outline-secondary.active,
-.show > .btn-outline-secondary.dropdown-toggle,
 .btn-outline-success:active,
 .btn-outline-success.active,
 .show > .btn-outline-success.dropdown-toggle,
@@ -603,6 +593,44 @@
     color: var(--db-status-danger) !important;
 }
 
+/* Share — the outlined secondary action (Databricks Catalog "Share").
+   Unfilled at rest: white surface, control border, coloured label. Hover tints
+   the surface only. Settings → UI → Theme → Secondary button drives the colours. */
+.btn-secondary,
+.btn-outline-secondary {
+    background-color: var(--db-surface-warm);
+    border-color: var(--db-btn-secondary-border);
+    color: var(--db-btn-secondary);
+}
+
+.btn-secondary:hover,
+.btn-outline-secondary:hover {
+    background-color: var(--db-btn-secondary-hover);
+    border-color: var(--db-btn-secondary-border);
+    color: var(--db-btn-secondary);
+}
+
+.btn-secondary:focus,
+.btn-secondary:focus-visible,
+.btn-outline-secondary:focus,
+.btn-outline-secondary:focus-visible {
+    background-color: var(--db-surface-warm);
+    border-color: var(--db-btn-secondary-border);
+    color: var(--db-btn-secondary);
+    box-shadow: var(--db-focus-ring);
+}
+
+.btn-secondary:active,
+.btn-secondary.active,
+.show > .btn-secondary.dropdown-toggle,
+.btn-outline-secondary:active,
+.btn-outline-secondary.active,
+.show > .btn-outline-secondary.dropdown-toggle {
+    background-color: var(--db-btn-secondary-hover) !important;
+    border-color: var(--db-btn-secondary-border) !important;
+    color: var(--db-btn-secondary) !important;
+}
+
 /* Button icons - ensure grey color */
 .btn i,
 .btn .bi {
@@ -627,9 +655,9 @@
 
 .btn-primary:disabled,
 .btn-primary.disabled {
-    background-color: var(--db-primary);
-    border-color: var(--db-primary);
-    color: #fff;
+    background-color: var(--db-btn-primary);
+    border-color: var(--db-btn-primary);
+    color: var(--db-btn-primary-on);
     opacity: 0.55;
 }
 

@@ -150,7 +150,7 @@ def test_app_switcher_owns_current_workspace_state():
     assert "domain-version-badge" in js or "domainContextVersion" in js
 
 
-def test_chrome_actions_are_borderless_ghost_at_rest():
+def test_chrome_actions_use_create_and_share_styles():
     css = _read(MAIN_CSS)
     save = _rule(css, ".ob-subnav-save-btn")
     dirty = _rule(css, ".ob-subnav-save-dirty")
@@ -162,24 +162,22 @@ def test_chrome_actions_are_borderless_ghost_at_rest():
     assert "height: var(--ob-subnav-btn-height)" in action
     assert "border-radius: var(--ob-subnav-btn-radius)" in action
     assert "font-weight: 500" in action
-    # All chrome buttons are ghost at rest: no border, transparent background
-    assert "background: transparent" in save
-    assert "border: 1px solid transparent" in save
-    assert "color: var(--db-text)" in save
-    assert "background: transparent" in close
-    assert "border: 1px solid transparent" in close
-    assert "color: var(--db-text)" in close
+    # Save is Create (filled Databricks primary) and Close is Share (outlined)
+    assert "background: var(--db-btn-primary)" in save
+    assert "border: 1px solid var(--db-btn-primary)" in save
+    assert "color: var(--db-btn-primary-on)" in save
+    assert "background: var(--db-surface-warm)" in close
+    assert "border: 1px solid var(--db-btn-secondary-border)" in close
+    assert "color: var(--db-btn-secondary)" in close
     # Dirty indicator on Save
     assert "background: var(--db-status-warning)" in dirty
     assert "display: none" in dirty
     assert re.search(r"\.ob-subnav-save-btn\.is-dirty\s+\.ob-subnav-save-dirty\s*\{[^}]*display:\s*inline-block", css)
-    # Hover gives subtle background fill without borders
+    # Hover tints the fill of each style
     close_hover = _rule(css, ".ob-subnav-close-btn:hover")
-    assert "background-color: var(--db-hover-warm)" in close_hover
-    assert "border-color: transparent" in close_hover
+    assert "background-color: var(--db-btn-secondary-hover)" in close_hover
     save_hover = _rule(css, ".ob-subnav-save-btn:hover")
-    assert "background-color: var(--db-hover-warm)" in save_hover
-    assert "border-color: transparent" in save_hover
+    assert "background: var(--db-btn-primary-hover)" in save_hover
 
 
 def test_chrome_actions_share_databricks_button_class():

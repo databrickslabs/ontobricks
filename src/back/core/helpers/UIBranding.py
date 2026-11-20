@@ -10,6 +10,12 @@ from typing import Any, Mapping
 DEFAULT_APP_TITLE = "OntoBricks"
 DEFAULT_PRIMARY_COLOR = "#737373"
 DEFAULT_AURORA_COLOR = "#6B6B6B"
+# Databricks defaults: Create (filled primary) and Share (outlined secondary).
+DEFAULT_BUTTON_PRIMARY_COLOR = "#2272B4"
+DEFAULT_BUTTON_SECONDARY_COLOR = "#11171C"
+DATABRICKS_CREATE_HOVER = "#1D619C"
+DATABRICKS_SHARE_BORDER = "#C6C9D1"
+DATABRICKS_SHARE_HOVER = "#F0F1F3"
 DEFAULT_LOGO_PATH = "/static/global/img/favicon.svg"
 
 _DARK_TEXT = "#111827"
@@ -258,6 +264,12 @@ class BrandPalette:
     aurora_dark: str
     gradient_end: str
     canvas_tint: str
+    button_primary: str
+    button_primary_hover: str
+    button_on_primary: str
+    button_secondary: str
+    button_secondary_border: str
+    button_secondary_hover: str
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -269,6 +281,8 @@ class UIBranding:
     app_title: str
     primary_color: str
     aurora_color: str
+    button_primary_color: str
+    button_secondary_color: str
     logo_data_url: str
     logo_url: str
     is_custom_logo: bool
@@ -278,8 +292,52 @@ class UIBranding:
         return asdict(self)
 
 
+def derive_button_palette(
+    button_primary_color: str | None = None,
+    button_secondary_color: str | None = None,
+) -> dict[str, str]:
+    """Derive the Create (filled primary) and Share (outlined secondary) styles.
+
+    ``None`` falls back to the Databricks defaults. Explicit values must already
+    be valid ``#RRGGBB`` strings (the normalizer filters invalid stored values).
+    """
+    primary_hex = _normalize_hex_color(button_primary_color or DEFAULT_BUTTON_PRIMARY_COLOR)
+    secondary_hex = _normalize_hex_color(
+        button_secondary_color or DEFAULT_BUTTON_SECONDARY_COLOR
+    )
+    primary_rgb = _hex_to_rgb(primary_hex)
+    secondary_rgb = _hex_to_rgb(secondary_hex)
+    # The Databricks defaults use their published hex values exactly; custom
+    # colors get derived companions so the tints track the chosen hue.
+    is_default_primary = primary_hex == DEFAULT_BUTTON_PRIMARY_COLOR
+    is_default_secondary = secondary_hex == DEFAULT_BUTTON_SECONDARY_COLOR
+    return {
+        "button_primary": primary_hex,
+        "button_primary_hover": (
+            DATABRICKS_CREATE_HOVER
+            if is_default_primary
+            else _rgb_to_hex(_mix_with_black(primary_rgb, 0.14))
+        ),
+        "button_on_primary": _choose_on_primary(primary_rgb),
+        "button_secondary": secondary_hex,
+        "button_secondary_border": (
+            DATABRICKS_SHARE_BORDER
+            if is_default_secondary
+            else _rgb_to_hex(_mix_colors(secondary_rgb, _WHITE_RGB, 0.76))
+        ),
+        "button_secondary_hover": (
+            DATABRICKS_SHARE_HOVER
+            if is_default_secondary
+            else _rgb_to_hex(_composite_on_surface(secondary_rgb, 0.06, _WHITE_RGB))
+        ),
+    }
+
+
 def derive_brand_palette(
-    primary_color: str, aurora_color: str | None = None
+    primary_color: str,
+    aurora_color: str | None = None,
+    button_primary_color: str | None = None,
+    button_secondary_color: str | None = None,
 ) -> BrandPalette:
     """Derive the full Aurora Pro palette from Primary (and optional Aurora).
 
@@ -322,7 +380,19 @@ def derive_brand_palette(
         aurora_dark=_rgb_to_hex(_mix_with_black(aurora_rgb, 0.15)),
         gradient_end=_derive_gradient_end(rgb, aurora_rgb, on_primary),
         canvas_tint=_derive_canvas_tint(rgb),
+        **derive_button_palette(button_primary_color, button_secondary_color),
     )
+
+
+def _optional_hex_or_none(value: Any) -> str | None:
+    """Return a normalized ``#RRGGBB`` value, or ``None`` when blank or invalid."""
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return _normalize_hex_color(raw)
+    except ValueError:
+        return None
 
 
 def normalize_ui_branding(raw: Mapping[str, Any]) -> UIBranding:
@@ -350,7 +420,14 @@ def normalize_ui_branding(raw: Mapping[str, Any]) -> UIBranding:
         except ValueError:
             aurora_color = None
 
-    palette = derive_brand_palette(primary_color, aurora_color)
+    # Button colors follow the same rule as Aurora: an invalid or blank stored
+    # value falls back to the Databricks default instead of failing the load.
+    palette = derive_brand_palette(
+        primary_color,
+        aurora_color,
+        button_primary_color=_optional_hex_or_none(data.get("button_primary_color")),
+        button_secondary_color=_optional_hex_or_none(data.get("button_secondary_color")),
+    )
 
     logo_data_url = str(data.get("logo_data_url", "") or "").strip()
     logo_url = logo_data_url if logo_data_url else DEFAULT_LOGO_PATH
@@ -360,6 +437,8 @@ def normalize_ui_branding(raw: Mapping[str, Any]) -> UIBranding:
         app_title=title,
         primary_color=primary_color,
         aurora_color=palette.aurora,
+        button_primary_color=palette.button_primary,
+        button_secondary_color=palette.button_secondary,
         logo_data_url=logo_data_url,
         logo_url=logo_url,
         is_custom_logo=bool(logo_data_url),

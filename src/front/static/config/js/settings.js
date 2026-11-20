@@ -109,6 +109,8 @@ document.addEventListener('DOMContentLoaded', function () {
         app_title: 'OntoBricks',
         primary_color: '#737373',
         aurora_color: '#6B6B6B',
+        button_primary_color: '#2272B4',
+        button_secondary_color: '#11171C',
         logo_url: '/static/global/img/favicon.svg',
         logo_data_url: '',
         is_custom_logo: false,
@@ -126,8 +128,34 @@ document.addEventListener('DOMContentLoaded', function () {
             aurora_dark: '#5B5B5B',
             gradient_end: '#6F6F6F',
             canvas_tint: '#F8F8F8',
+            // Databricks button styles: Create (filled) and Share (outlined).
+            button_primary: '#2272B4',
+            button_primary_hover: '#1D619C',
+            button_on_primary: '#FFFFFF',
+            button_secondary: '#11171C',
+            button_secondary_border: '#C6C9D1',
+            button_secondary_hover: '#F0F1F3',
         },
     };
+    // Settings → UI → Theme pickers for the two Databricks button styles.
+    const BUTTON_COLOR_FIELDS = [
+        {
+            field: 'button_primary_color',
+            key: 'primary',
+            colorId: 'uiBrandingButtonPrimaryColor',
+            hexId: 'uiBrandingButtonPrimaryHex',
+            errorId: 'uiBrandingButtonPrimaryError',
+            label: 'Create button',
+        },
+        {
+            field: 'button_secondary_color',
+            key: 'secondary',
+            colorId: 'uiBrandingButtonSecondaryColor',
+            hexId: 'uiBrandingButtonSecondaryHex',
+            errorId: 'uiBrandingButtonSecondaryError',
+            label: 'Share button',
+        },
+    ];
     let savedUIBranding = null;
     let draftUIBranding = null;
     let uiBrandingLoaded = false;
@@ -939,7 +967,35 @@ document.addEventListener('DOMContentLoaded', function () {
         return rgbToHex(composited);
     }
 
-    function deriveBrandPalette(primaryColor, auroraColor) {
+    // Mirrors back.core.helpers.UIBranding.derive_button_palette. Defaults use the
+    // published Databricks hex values; custom colors get derived companions.
+    function deriveButtonPalette(buttonPrimaryColor, buttonSecondaryColor) {
+        const defaults = UI_BRANDING_DEFAULTS.palette;
+        const primaryHex = parseHexColor(buttonPrimaryColor) || UI_BRANDING_DEFAULTS.button_primary_color;
+        const secondaryHex = parseHexColor(buttonSecondaryColor) || UI_BRANDING_DEFAULTS.button_secondary_color;
+        const primaryRgb = hexToRgb(primaryHex);
+        const secondaryRgb = hexToRgb(secondaryHex);
+        const white = [255, 255, 255];
+        const isDefaultPrimary = primaryHex === UI_BRANDING_DEFAULTS.button_primary_color;
+        const isDefaultSecondary = secondaryHex === UI_BRANDING_DEFAULTS.button_secondary_color;
+        const secondaryHover = secondaryRgb.map((channel, i) => Math.round(channel * 0.06 + white[i] * 0.94));
+        return {
+            button_primary: primaryHex,
+            button_primary_hover: isDefaultPrimary
+                ? defaults.button_primary_hover
+                : rgbToHex(mixWithBlack(primaryRgb, 0.14)),
+            button_on_primary: chooseOnPrimary(primaryRgb),
+            button_secondary: secondaryHex,
+            button_secondary_border: isDefaultSecondary
+                ? defaults.button_secondary_border
+                : rgbToHex(mixColors(secondaryRgb, white, 0.76)),
+            button_secondary_hover: isDefaultSecondary
+                ? defaults.button_secondary_hover
+                : rgbToHex(secondaryHover),
+        };
+    }
+
+    function deriveBrandPalette(primaryColor, auroraColor, buttonPrimaryColor, buttonSecondaryColor) {
         const rgb = hexToRgb(primaryColor);
         if (!rgb) return { ...UI_BRANDING_DEFAULTS.palette };
         const csv = `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`;
@@ -961,6 +1017,24 @@ document.addEventListener('DOMContentLoaded', function () {
             aurora_dark: rgbToHex(mixWithBlack(auroraRgb, 0.15)),
             gradient_end: deriveGradientEnd(rgb, auroraRgb, onPrimary),
             canvas_tint: deriveCanvasTint(rgb),
+            ...deriveButtonPalette(buttonPrimaryColor, buttonSecondaryColor),
+        };
+    }
+
+    // Full palette for a draft, so button colors survive primary/Aurora edits.
+    function draftPalette(draft) {
+        return deriveBrandPalette(
+            draft.primary_color,
+            draft.aurora_color,
+            draft.button_primary_color,
+            draft.button_secondary_color,
+        );
+    }
+
+    function effectiveButtonColors(branding) {
+        return {
+            primary: parseHexColor(branding?.button_primary_color) || UI_BRANDING_DEFAULTS.button_primary_color,
+            secondary: parseHexColor(branding?.button_secondary_color) || UI_BRANDING_DEFAULTS.button_secondary_color,
         };
     }
 
@@ -974,32 +1048,24 @@ document.addEventListener('DOMContentLoaded', function () {
         const normalizedTitle = title || UI_BRANDING_DEFAULTS.app_title;
         const normalizedColor = parseHexColor(source.primary_color) || UI_BRANDING_DEFAULTS.primary_color;
         const normalizedAurora = parseHexColor(source.aurora_color) || UI_BRANDING_DEFAULTS.aurora_color;
-        const palette = source.palette && source.palette.primary_rgb
-            ? source.palette
-            : deriveBrandPalette(normalizedColor, normalizedAurora);
+        const buttons = effectiveButtonColors(source);
+        const fallback = deriveBrandPalette(normalizedColor, normalizedAurora, buttons.primary, buttons.secondary);
+        const palette = source.palette && source.palette.primary_rgb ? source.palette : fallback;
+        const normalizedPalette = {};
+        Object.keys(fallback).forEach((key) => {
+            normalizedPalette[key] = String(palette[key] || fallback[key]);
+        });
         return {
             version: Number(source.version || 1),
             app_title: normalizedTitle,
             primary_color: normalizedColor,
             aurora_color: normalizedAurora,
+            button_primary_color: buttons.primary,
+            button_secondary_color: buttons.secondary,
             logo_data_url: String(source.logo_data_url || ''),
             logo_url: String(source.logo_url || source.logo_data_url || UI_BRANDING_DEFAULTS.logo_url),
             is_custom_logo: Boolean(source.is_custom_logo || source.logo_data_url),
-            palette: {
-                primary_rgb: String(palette.primary_rgb || deriveBrandPalette(normalizedColor, normalizedAurora).primary_rgb),
-                primary_dark: String(palette.primary_dark || deriveBrandPalette(normalizedColor, normalizedAurora).primary_dark),
-                primary_darker: String(palette.primary_darker || deriveBrandPalette(normalizedColor, normalizedAurora).primary_darker),
-                primary_light: String(palette.primary_light || deriveBrandPalette(normalizedColor, normalizedAurora).primary_light),
-                hover: String(palette.hover || deriveBrandPalette(normalizedColor, normalizedAurora).hover),
-                focus: String(palette.focus || deriveBrandPalette(normalizedColor, normalizedAurora).focus),
-                on_primary: String(palette.on_primary || deriveBrandPalette(normalizedColor, normalizedAurora).on_primary),
-                selected_text: String(palette.selected_text || deriveBrandPalette(normalizedColor, normalizedAurora).selected_text),
-                aurora: String(palette.aurora || deriveBrandPalette(normalizedColor, normalizedAurora).aurora),
-                aurora_rgb: String(palette.aurora_rgb || deriveBrandPalette(normalizedColor, normalizedAurora).aurora_rgb),
-                aurora_dark: String(palette.aurora_dark || deriveBrandPalette(normalizedColor, normalizedAurora).aurora_dark),
-                gradient_end: String(palette.gradient_end || deriveBrandPalette(normalizedColor, normalizedAurora).gradient_end),
-                canvas_tint: String(palette.canvas_tint || deriveBrandPalette(normalizedColor, normalizedAurora).canvas_tint),
-            },
+            palette: normalizedPalette,
         };
     }
 
@@ -1097,6 +1163,12 @@ document.addEventListener('DOMContentLoaded', function () {
         document.documentElement.style.setProperty('--db-gradient-end', palette.gradient_end);
         document.documentElement.style.setProperty('--db-canvas-warm', palette.canvas_tint);
         document.documentElement.style.setProperty('--db-shadow-primary', `0 8px 20px rgba(${palette.primary_rgb}, 0.35)`);
+        document.documentElement.style.setProperty('--db-btn-primary', palette.button_primary);
+        document.documentElement.style.setProperty('--db-btn-primary-hover', palette.button_primary_hover);
+        document.documentElement.style.setProperty('--db-btn-primary-on', palette.button_on_primary);
+        document.documentElement.style.setProperty('--db-btn-secondary', palette.button_secondary);
+        document.documentElement.style.setProperty('--db-btn-secondary-border', palette.button_secondary_border);
+        document.documentElement.style.setProperty('--db-btn-secondary-hover', palette.button_secondary_hover);
 
         if (section) {
             section.style.setProperty('--ui-preview-primary', draft.primary_color);
@@ -1163,7 +1235,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const auroraErrorMessage = auroraValid ? '' : 'Aurora color must use #RRGGBB or be left blank.';
 
-        uiBrandingValid = !titleErrorMessage && !colorErrorMessage && !auroraErrorMessage;
+        const buttonsValid = BUTTON_COLOR_FIELDS.map(updateButtonColorValidity).every(Boolean);
+        uiBrandingValid = !titleErrorMessage && !colorErrorMessage && !auroraErrorMessage && buttonsValid;
         setBrandingInputErrorState(titleInput, titleError, titleErrorMessage);
         setBrandingInputErrorState(hexInput, colorError, colorErrorMessage);
         setBrandingInputErrorState(colorInput, colorError, colorErrorMessage);
@@ -1175,6 +1248,18 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (uiBrandingValid) {
             showUIBrandingStatus('', 'info');
         }
+    }
+
+    function updateButtonColorValidity(cfg) {
+        const colorInput = document.getElementById(cfg.colorId);
+        const hexInput = document.getElementById(cfg.hexId);
+        const errorEl = document.getElementById(cfg.errorId);
+        const hexValue = String(hexInput?.value || '').trim();
+        const valid = hexValue === '' || Boolean(parseHexColor(hexValue));
+        const message = valid ? '' : `${cfg.label} color must use #RRGGBB or be left blank.`;
+        setBrandingInputErrorState(hexInput, errorEl, message);
+        setBrandingInputErrorState(colorInput, errorEl, message);
+        return valid;
     }
 
     function isCustomLogoBranding(branding) {
@@ -1190,6 +1275,8 @@ document.addEventListener('DOMContentLoaded', function () {
             normalizeTitle(savedUIBranding.app_title) === UI_BRANDING_DEFAULTS.app_title
             && parseHexColor(savedUIBranding.primary_color) === UI_BRANDING_DEFAULTS.primary_color
             && (parseHexColor(savedUIBranding.aurora_color) || savedUIBranding.palette.aurora) === UI_BRANDING_DEFAULTS.aurora_color
+            && effectiveButtonColors(savedUIBranding).primary === UI_BRANDING_DEFAULTS.button_primary_color
+            && effectiveButtonColors(savedUIBranding).secondary === UI_BRANDING_DEFAULTS.button_secondary_color
             && !isCustomLogoBranding(savedUIBranding)
         );
     }
@@ -1206,11 +1293,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const draftColor = parseHexColor(draftUIBranding.primary_color) || UI_BRANDING_DEFAULTS.primary_color;
         const savedAurora = savedUIBranding.aurora_color || savedUIBranding.palette.aurora;
         const draftAurora = draftUIBranding.aurora_color || draftUIBranding.palette.aurora;
+        const savedButtons = effectiveButtonColors(savedUIBranding);
+        const draftButtons = effectiveButtonColors(draftUIBranding);
         const resetChangesLogo = uiBrandingResetLogo && isCustomLogoBranding(savedUIBranding);
         uiBrandingDirty = (
             savedTitle !== draftTitle
             || savedColor !== draftColor
             || savedAurora !== draftAurora
+            || savedButtons.primary !== draftButtons.primary
+            || savedButtons.secondary !== draftButtons.secondary
             || resetChangesLogo
             || Boolean(uiBrandingPendingLogoFile)
         );
@@ -1230,13 +1321,30 @@ document.addEventListener('DOMContentLoaded', function () {
         const auroraEffective = draftUIBranding.aurora_color || draftUIBranding.palette.aurora;
         if (auroraColorInput) auroraColorInput.value = auroraEffective;
         if (auroraHexInput) auroraHexInput.value = auroraEffective;
+        const buttons = effectiveButtonColors(draftUIBranding);
+        BUTTON_COLOR_FIELDS.forEach((cfg) => {
+            const value = buttons[cfg.key];
+            const colorEl = document.getElementById(cfg.colorId);
+            const hexEl = document.getElementById(cfg.hexId);
+            if (colorEl) colorEl.value = value;
+            if (hexEl) hexEl.value = value;
+        });
     }
 
     function updateDraftColor(colorValue) {
         const normalized = parseHexColor(colorValue);
         if (!normalized || !draftUIBranding) return;
         draftUIBranding.primary_color = normalized;
-        draftUIBranding.palette = deriveBrandPalette(normalized, draftUIBranding.aurora_color);
+        draftUIBranding.palette = draftPalette({ ...draftUIBranding, primary_color: normalized });
+        previewUIBranding(draftUIBranding);
+        updateUIBrandingDirtyState();
+        updateUIBrandingValidity();
+    }
+
+    function updateDraftButtonColor(field, colorValue) {
+        if (!draftUIBranding) return;
+        draftUIBranding[field] = parseHexColor(colorValue) || '';
+        draftUIBranding.palette = draftPalette(draftUIBranding);
         previewUIBranding(draftUIBranding);
         updateUIBrandingDirtyState();
         updateUIBrandingValidity();
@@ -1246,10 +1354,38 @@ document.addEventListener('DOMContentLoaded', function () {
         const normalized = parseHexColor(colorValue);
         if (!draftUIBranding) return;
         draftUIBranding.aurora_color = normalized || '';
-        draftUIBranding.palette = deriveBrandPalette(draftUIBranding.primary_color, draftUIBranding.aurora_color);
+        draftUIBranding.palette = draftPalette(draftUIBranding);
         previewUIBranding(draftUIBranding);
         updateUIBrandingDirtyState();
         updateUIBrandingValidity();
+    }
+
+    function bindButtonColorInputs(cfg) {
+        const colorInput = document.getElementById(cfg.colorId);
+        const hexInput = document.getElementById(cfg.hexId);
+        if (colorInput) {
+            colorInput.addEventListener('input', () => {
+                if (hexInput) hexInput.value = String(colorInput.value || '').toUpperCase();
+                updateDraftButtonColor(cfg.field, colorInput.value);
+            });
+        }
+        if (hexInput) {
+            hexInput.addEventListener('input', () => {
+                const upper = String(hexInput.value || '').toUpperCase();
+                hexInput.value = upper;
+                const normalized = parseHexColor(upper);
+                if (normalized && colorInput) colorInput.value = normalized;
+                if (normalized || upper === '') updateDraftButtonColor(cfg.field, normalized || '');
+                else updateUIBrandingValidity();
+            });
+            hexInput.addEventListener('blur', () => {
+                if (!draftUIBranding) return;
+                const value = effectiveButtonColors(draftUIBranding)[cfg.key];
+                hexInput.value = value;
+                if (colorInput) colorInput.value = value;
+                updateUIBrandingValidity();
+            });
+        }
     }
 
     function bindUIBrandingInputEvents() {
@@ -1320,6 +1456,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 updateUIBrandingValidity();
             });
         }
+
+        BUTTON_COLOR_FIELDS.forEach(bindButtonColorInputs);
 
         if (logoInput) {
             logoInput.addEventListener('change', () => {
@@ -1432,6 +1570,8 @@ document.addEventListener('DOMContentLoaded', function () {
             formData.append('app_title', normalizeTitle(draftUIBranding.app_title));
             formData.append('primary_color', draftUIBranding.primary_color);
             formData.append('aurora_color', draftUIBranding.aurora_color || '');
+            formData.append('button_primary_color', draftUIBranding.button_primary_color || '');
+            formData.append('button_secondary_color', draftUIBranding.button_secondary_color || '');
             formData.append('reset_logo', uiBrandingResetLogo ? 'true' : 'false');
             if (uiBrandingPendingLogoFile) {
                 formData.append('logo_file', uiBrandingPendingLogoFile);

@@ -35,6 +35,16 @@
     --db-gradient-rail: linear-gradient(180deg, var(--db-primary), var(--db-aurora));
     --db-halo: radial-gradient(circle at 30% 20%, rgba(var(--db-aurora-rgb), 0.35), transparent 60%);
 
+    /* Databricks button styles (Settings → UI → Theme, admin-configurable).
+       Create = filled primary; Share = outlined secondary. Defaults match the
+       Databricks Catalog browse page; the server injects the saved values. */
+    --db-btn-primary: #2272B4;
+    --db-btn-primary-hover: #1D619C;
+    --db-btn-primary-on: #FFFFFF;
+    --db-btn-secondary: #11171C;
+    --db-btn-secondary-border: #C6C9D1;
+    --db-btn-secondary-hover: #F0F1F3;
+
     /* Warm neutral surfaces */
     --db-canvas-warm: #F8F8F8; /* derived: Primary at 5% alpha on white (Aurora Pro) */
     --db-surface-warm: #FFFFFF;
@@ -887,18 +897,18 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     color: var(--db-text-muted);
 }
 
-/* Save Context — ghost action at rest; hover background on hover */
+/* Save Context — Create (filled primary) in the chrome, same as page CTAs. */
 .ob-subnav-save-btn {
     position: relative;
-    color: var(--db-text);
-    background: transparent;
-    border: 1px solid transparent;
+    color: var(--db-btn-primary-on);
+    background: var(--db-btn-primary);
+    border: 1px solid var(--db-btn-primary);
 }
 
 .ob-subnav-save-btn:hover {
-    background-color: var(--db-hover-warm);
-    border-color: transparent;
-    color: var(--db-text);
+    background: var(--db-btn-primary-hover);
+    border-color: var(--db-btn-primary-hover);
+    color: var(--db-btn-primary-on);
     text-decoration: none;
 }
 
@@ -938,10 +948,10 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     font-size: 0.65rem;
     font-weight: 600;
     line-height: 1.2;
-    color: var(--db-text-muted);
-    opacity: 0.85;
+    color: var(--db-btn-primary-on);
+    opacity: 0.75;
     background: transparent;
-    border: 1px solid var(--db-border-control);
+    border: 1px solid currentColor;
     border-radius: 2px;
     padding: 0 0.25rem;
 }
@@ -1113,17 +1123,17 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     visibility: visible;
 }
 
-/* Close Context — ghost at rest; hover fill on hover */
+/* Close Context — Share (outlined secondary), same as page secondary actions. */
 .ob-subnav-close-btn {
-    color: var(--db-text);
-    background: transparent;
-    border: 1px solid transparent;
+    color: var(--db-btn-secondary);
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-btn-secondary-border);
 }
 
 .ob-subnav-close-btn:hover {
-    background-color: var(--db-hover-warm);
-    border-color: transparent;
-    color: var(--db-text);
+    background-color: var(--db-btn-secondary-hover);
+    border-color: var(--db-btn-secondary-border);
+    color: var(--db-btn-secondary);
     text-decoration: none;
 }
 

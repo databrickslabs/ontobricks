@@ -1175,6 +1175,58 @@
                                 </div>
                             </div>
 
+                            <div class="row g-3 align-items-end mb-3">
+                                <div class="col-12 col-lg-4">
+                                    <label for="uiBrandingButtonPrimaryColor" class="form-label fw-semibold">Create button color</label>
+                                    <input type="color"
+                                           class="form-control form-control-color"
+                                           id="uiBrandingButtonPrimaryColor"
+                                           aria-describedby="uiBrandingButtonPrimaryHelp uiBrandingButtonPrimaryError"
+                                           value="#2272B4">
+                                </div>
+                                <div class="col-12 col-lg-8">
+                                    <label for="uiBrandingButtonPrimaryHex" class="form-label fw-semibold">Hex value</label>
+                                    <input type="text"
+                                           class="form-control form-control-sm font-monospace text-uppercase"
+                                           id="uiBrandingButtonPrimaryHex"
+                                           aria-describedby="uiBrandingButtonPrimaryHelp uiBrandingButtonPrimaryError"
+                                           maxlength="7"
+                                           autocomplete="off"
+                                           value="#2272B4"
+                                           placeholder="#2272B4">
+                                </div>
+                                <div class="col-12">
+                                    <div id="uiBrandingButtonPrimaryHelp" class="form-text">Filled button used for Create and Save (Databricks default #2272B4). Hover and text colors are derived automatically.</div>
+                                    <div id="uiBrandingButtonPrimaryError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 align-items-end mb-3">
+                                <div class="col-12 col-lg-4">
+                                    <label for="uiBrandingButtonSecondaryColor" class="form-label fw-semibold">Share button color</label>
+                                    <input type="color"
+                                           class="form-control form-control-color"
+                                           id="uiBrandingButtonSecondaryColor"
+                                           aria-describedby="uiBrandingButtonSecondaryHelp uiBrandingButtonSecondaryError"
+                                           value="#11171C">
+                                </div>
+                                <div class="col-12 col-lg-8">
+                                    <label for="uiBrandingButtonSecondaryHex" class="form-label fw-semibold">Hex value</label>
+                                    <input type="text"
+                                           class="form-control form-control-sm font-monospace text-uppercase"
+                                           id="uiBrandingButtonSecondaryHex"
+                                           aria-describedby="uiBrandingButtonSecondaryHelp uiBrandingButtonSecondaryError"
+                                           maxlength="7"
+                                           autocomplete="off"
+                                           value="#11171C"
+                                           placeholder="#11171C">
+                                </div>
+                                <div class="col-12">
+                                    <div id="uiBrandingButtonSecondaryHelp" class="form-text">Outlined button used for Share and Close (Databricks default #11171C). Border and hover tint are derived automatically.</div>
+                                    <div id="uiBrandingButtonSecondaryError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
+                                </div>
+                            </div>
+
                             <div class="row g-2 mb-3 ui-branding-swatches">
                                 <div class="col-6 col-lg-4">
                                     <div class="ui-branding-swatch ui-branding-swatch-primary" id="uiSwatchPrimary" role="img" aria-label="Primary color #737373" title="Primary color #737373">Primary</div>
@@ -1198,6 +1250,7 @@
 
                             <div class="ui-branding-preview" id="uiBrandingPreview" aria-hidden="true">
                                 <button type="button" class="btn btn-sm btn-primary ui-branding-preview-btn">Primary button</button>
+                                <button type="button" class="btn btn-sm btn-secondary ui-branding-preview-btn">Secondary button</button>
                                 <div class="ui-branding-preview-active">Active navigation item</div>
                                 <div class="ui-branding-preview-hover">Hover well</div>
                                 <input type="text" class="form-control form-control-sm ui-branding-preview-focus" value="Focused control" readonly>

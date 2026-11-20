@@ -22,6 +22,8 @@ from back.core.logging import get_logger
 from back.core.helpers import (
     DEFAULT_APP_TITLE,
     DEFAULT_AURORA_COLOR,
+    DEFAULT_BUTTON_PRIMARY_COLOR,
+    DEFAULT_BUTTON_SECONDARY_COLOR,
     DEFAULT_PRIMARY_COLOR,
     normalize_ui_branding,
 )
@@ -373,6 +375,8 @@ class GlobalConfigService:
         merged["app_title"] = normalized.app_title
         merged["primary_color"] = normalized.primary_color
         merged["aurora_color"] = normalized.aurora_color
+        merged["button_primary_color"] = normalized.button_primary_color
+        merged["button_secondary_color"] = normalized.button_secondary_color
         merged["logo_data_url"] = normalized.logo_data_url
 
         updates = {
@@ -694,6 +698,8 @@ class GlobalConfigService:
                 "app_title": DEFAULT_APP_TITLE,
                 "primary_color": DEFAULT_PRIMARY_COLOR,
                 "aurora_color": DEFAULT_AURORA_COLOR,
+                "button_primary_color": DEFAULT_BUTTON_PRIMARY_COLOR,
+                "button_secondary_color": DEFAULT_BUTTON_SECONDARY_COLOR,
                 "logo_data_url": "",
             },
             "use_cloud_fetch": True,

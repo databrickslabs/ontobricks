@@ -202,24 +202,28 @@ def test_components_css_keeps_only_primary_button_filled():
     outline_primary_blocks = _rule_blocks_for_exact_class(css, ".btn-outline-primary")
 
     assert primary_blocks, "No CSS rule targets .btn-primary"
+    # Create: solid Databricks primary driven by the configurable button token.
     assert _any_block_has_declaration(
-        primary_blocks, r"(?:background|background-color)", r"var\(--db-gradient-primary\)"
+        primary_blocks, r"(?:background|background-color)", r"var\(--db-btn-primary\)"
     )
+    assert _any_block_has_declaration(primary_blocks, r"box-shadow", r"none")
     assert _any_block_has_declaration(
-        primary_blocks, r"box-shadow", r"var\(--db-shadow-primary\)"
-    )
-    assert _any_block_has_declaration(
-        primary_blocks, r"color", r"var\(--db-on-primary\)"
+        primary_blocks, r"color", r"var\(--db-btn-primary-on\)"
     )
 
-    # Semantic outcome: neutral and outline button variants stay visually unfilled.
+    # Share: outlined secondary sits on the white surface token, never a fill.
     assert secondary_blocks, "No CSS rule targets .btn-secondary"
     assert _any_block_has_declaration(
-        secondary_blocks, r"(?:background|background-color)", r"transparent"
+        secondary_blocks, r"(?:background|background-color)", r"var\(--db-surface-warm\)"
     )
     assert outline_secondary_blocks, "No CSS rule targets .btn-outline-secondary"
     assert _any_block_has_declaration(
-        outline_secondary_blocks, r"(?:background|background-color)", r"transparent"
+        outline_secondary_blocks, r"(?:background|background-color)", r"var\(--db-surface-warm\)"
+    )
+    # Semantic outcome: outline primary variants stay visually unfilled.
+    assert outline_primary_blocks, "No CSS rule targets .btn-outline-primary"
+    assert _any_block_has_declaration(
+        outline_primary_blocks, r"(?:background|background-color)", r"transparent"
     )
     assert outline_primary_blocks, "No CSS rule targets .btn-outline-primary"
     assert _any_block_has_declaration(

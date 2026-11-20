@@ -130,8 +130,13 @@ class WorkspaceUiSettings:
         user_token: str,
         session_mgr: SessionManager,
         settings: Settings,
+        button_primary_color: str = "",
+        button_secondary_color: str = "",
     ) -> Dict[str, Any]:
-        """Validate and persist title/color/Aurora/logo atomically (admin only)."""
+        """Validate and persist title/colors/logo atomically (admin only).
+
+        Blank button colors resolve to the Databricks defaults during normalize.
+        """
         SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
         if logo_content is not None and reset_logo:
@@ -139,6 +144,12 @@ class WorkspaceUiSettings:
 
         try:
             validated_aurora = _ss.validate_optional_hex_color(aurora_color, "aurora color")
+            validated_button_primary = _ss.validate_optional_hex_color(
+                button_primary_color, "button primary color"
+            )
+            validated_button_secondary = _ss.validate_optional_hex_color(
+                button_secondary_color, "button secondary color"
+            )
         except ValueError as exc:
             raise ValidationError(str(exc)) from exc
 
@@ -160,6 +171,8 @@ class WorkspaceUiSettings:
                     "app_title": app_title,
                     "primary_color": primary_color,
                     "aurora_color": validated_aurora,
+                    "button_primary_color": validated_button_primary,
+                    "button_secondary_color": validated_button_secondary,
                     "logo_data_url": logo_data_url,
                 }
             )
@@ -175,6 +188,8 @@ class WorkspaceUiSettings:
                 "app_title": normalized.app_title,
                 "primary_color": normalized.primary_color,
                 "aurora_color": normalized.aurora_color,
+                "button_primary_color": normalized.button_primary_color,
+                "button_secondary_color": normalized.button_secondary_color,
                 "logo_data_url": normalized.logo_data_url,
             },
         )
