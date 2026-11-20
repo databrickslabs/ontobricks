@@ -111,7 +111,7 @@ var OntologyGroups = (function () {
                 '<span class="group-color-dot flex-shrink-0" style="background-color:' + _esc(color) + '"></span>' +
                 '<span class="studio-group-icon flex-shrink-0 me-1">' + _esc(icon) + '</span>' +
                 '<span class="studio-group-name flex-grow-1 text-truncate me-2">' + _esc(label) + '</span>' +
-                '<i class="bi bi-pencil text-muted flex-shrink-0 ms-auto"></i>' +
+                '<i class="bi bi-pencil text-muted flex-shrink-0 ms-auto me-2"></i>' +
                 '</button>';
             li.querySelector('button').addEventListener('click', function (e) {
                 e.preventDefault();

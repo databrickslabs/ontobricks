@@ -762,3 +762,31 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 11002 passed, 334 skipped, 8 deselected in 48.70s
+
+================================================================================
+## Fix Ontology Studio Group dropdown edit pencil right-border alignment
+================================================================================
+
+Context: In Ontology Studio, each item in the Group dropdown toolbar menu
+(#studioGroupsMenu) had its edit pencil icon pushed to the far right via ms-auto
+without any right margin, causing the top-right slanted edge of the icon glyph to
+stick against the right border of the dropdown menu.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-groups.js
+   Added `me-2` to the edit pencil `<i>` element in `_populateStudioMenu` so it has
+   balanced margin-right (0.5rem), matching the Business Views dropdown rename pencil.
+2. src/front/static/ontology/css/ontology-groups.css
+   Added `.studio-group-menu-item .bi-pencil { margin-left: auto; margin-right: 0.5rem; }`
+   rule to guarantee margin-right even when styled independently.
+3. tests/units/front/test_studio_views_groups_contract.py
+   Updated contracts to assert `me-2` and `.studio-group-menu-item .bi-pencil` styling.
+
+Modified files:
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/static/ontology/css/ontology-groups.css
+- tests/units/front/test_studio_views_groups_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11002 passed, 334 skipped, 8 deselected in 57.37s

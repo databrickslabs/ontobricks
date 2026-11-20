@@ -92,3 +92,8 @@
     min-width: 0;
 }
 
+.studio-group-menu-item .bi-pencil {
+    margin-left: auto;
+    margin-right: 0.5rem;
+}
+

@@ -90,7 +90,9 @@ def test_groups_modal_has_delete_and_no_sidebar_section():
     assert 'id="groupsList"' not in groups_html
     assert 'studio-group-menu-item' in groups_js
     assert 'flex-nowrap' in groups_js
+    assert 'bi-pencil text-muted flex-shrink-0 ms-auto me-2' in groups_js
     assert 'white-space: nowrap' in groups_css
+    assert '.studio-group-menu-item .bi-pencil' in groups_css
     assert 'sharedEntityGroup' in _read(
         REPO_ROOT / "src/front/static/ontology/js/ontology-shared-panels.js"
     )
@@ -214,6 +216,13 @@ def test_business_view_rename_is_wired_from_dropdown():
 
     perms = _read(REPO_ROOT / "src/front/static/global/css/permissions.css")
     assert ".studio-view-rename" in perms
+
+    css = _read(MAP_CSS)
+    assert ".studio-view-rename" in css
+    assert ".studio-view-rename .bi-pencil" in css
+    assert "margin-right: 0.5rem" in css
+    assert 'bi-pencil me-2' in js
+    assert 'studio-view-rename me-2' in js
 
 
 def test_groups_crud_refreshes_studio():
