@@ -220,14 +220,10 @@ def test_components_css_keeps_only_primary_button_filled():
     assert _any_block_has_declaration(
         outline_secondary_blocks, r"(?:background|background-color)", r"var\(--db-surface-warm\)"
     )
-    # Semantic outcome: outline primary variants stay visually unfilled.
+    # Outline primary joins the Share family (same paint as secondary).
     assert outline_primary_blocks, "No CSS rule targets .btn-outline-primary"
     assert _any_block_has_declaration(
-        outline_primary_blocks, r"(?:background|background-color)", r"transparent"
-    )
-    assert outline_primary_blocks, "No CSS rule targets .btn-outline-primary"
-    assert _any_block_has_declaration(
-        outline_primary_blocks, r"(?:background|background-color)", r"transparent"
+        outline_primary_blocks, r"(?:background|background-color)", r"var\(--db-surface-warm\)"
     )
 
 

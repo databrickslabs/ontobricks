@@ -397,13 +397,39 @@
    Button Overrides - Clarity hierarchy
    ========================================================================== */
 
-/* Base neutral button styling */
+/* Base button — Databricks Du Bois md geometry (Catalog Create/Share).
+   Colour variants below paint Create / Share; size is shared so page CTAs
+   match the navbar chrome. */
 .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    box-sizing: border-box;
+    height: var(--db-btn-height);
+    min-height: var(--db-btn-height);
+    padding: 0 var(--db-btn-padding-x);
+    font-size: var(--db-btn-font-size);
+    font-weight: var(--db-btn-font-weight);
+    line-height: 1;
     border-color: var(--db-border);
     color: var(--db-text);
     background-color: var(--db-surface-warm);
-    border-radius: var(--db-radius-control);
+    border-radius: var(--db-btn-radius);
     transition: var(--db-transition-fast);
+}
+
+/* Bootstrap's -sm / -lg ramps override padding/font/radius; pin them back to
+   Du Bois md so `btn-sm` (used on almost every page CTA) still looks right. */
+.btn-sm,
+.btn-lg {
+    height: var(--db-btn-height);
+    min-height: var(--db-btn-height);
+    padding: 0 var(--db-btn-padding-x);
+    font-size: var(--db-btn-font-size);
+    font-weight: var(--db-btn-font-weight);
+    line-height: 1;
+    border-radius: var(--db-btn-radius);
 }
 
 .btn:hover {
@@ -447,75 +473,56 @@
     color: var(--db-btn-primary-on) !important;
 }
 
-/* Keep secondary/semantic solid variants neutral and unfilled */
+/* Share — the outlined secondary action (Databricks Catalog "Share").
+   Every non-Create Bootstrap action variant uses this style so the app has
+   only two button looks: Create (filled) and Share (outlined). Settings →
+   UI → Theme → Secondary button drives the colours. Semantic names
+   (success, warning, info, outline-primary, …) keep their class for
+   intent/JS, but share the same paint. */
+.btn-secondary,
+.btn-outline-secondary,
 .btn-success,
-.btn-danger,
 .btn-warning,
 .btn-info,
 .btn-light,
-.btn-dark {
-    background-color: transparent;
-    border-color: var(--db-border);
-    color: var(--db-text-secondary);
-}
-
-.btn-success:hover,
-.btn-danger:hover,
-.btn-warning:hover,
-.btn-info:hover,
-.btn-light:hover,
-.btn-dark:hover {
-    background-color: var(--db-hover-warm);
-    border-color: var(--db-border);
-    color: var(--db-text);
-}
-
-.btn-success:active,
-.btn-danger:active,
-.btn-warning:active,
-.btn-info:active,
-.btn-light:active,
-.btn-dark:active {
-    background-color: var(--db-line-soft) !important;
-    border-color: var(--db-border) !important;
-    color: var(--db-text) !important;
-}
-
-/* Outline buttons stay unfilled */
+.btn-dark,
 .btn-outline-primary,
 .btn-outline-success,
-.btn-outline-danger,
 .btn-outline-warning,
 .btn-outline-info,
 .btn-outline-light,
 .btn-outline-dark {
-    background-color: transparent;
-    border-color: var(--db-border);
-    color: var(--db-text-secondary);
+    background-color: var(--db-surface-warm);
+    border-color: var(--db-btn-secondary-border);
+    color: var(--db-btn-secondary);
 }
 
+.btn-secondary:hover,
+.btn-outline-secondary:hover,
+.btn-success:hover,
+.btn-warning:hover,
+.btn-info:hover,
+.btn-light:hover,
+.btn-dark:hover,
 .btn-outline-primary:hover,
 .btn-outline-success:hover,
-.btn-outline-danger:hover,
 .btn-outline-warning:hover,
 .btn-outline-info:hover,
 .btn-outline-light:hover,
 .btn-outline-dark:hover {
-    background-color: var(--db-hover-warm);
-    border-color: var(--db-border);
-    color: var(--db-text);
+    background-color: var(--db-btn-secondary-hover);
+    border-color: var(--db-btn-secondary-border);
+    color: var(--db-btn-secondary);
 }
 
-/* Bootstrap's own `:focus-visible` repaints a button with its *hover* palette,
-   which for these variants is the solid fill we deliberately dropped — so a
-   focused outline button turned solid grey / blue / red. Pin the resting
-   palette and let the ring alone carry the focus. Both `:focus` and
-   `:focus-visible` are listed because Bootstrap uses the latter, and matching
-   its specificity is what makes these win. */
+/* Bootstrap's `:focus-visible` repaints with the hover palette; pin the
+   resting Share surface so focus is carried by the ring alone. */
+.btn-secondary:focus,
+.btn-secondary:focus-visible,
+.btn-outline-secondary:focus,
+.btn-outline-secondary:focus-visible,
 .btn-success:focus,
 .btn-success:focus-visible,
-.btn-danger:focus,
-.btn-danger:focus-visible,
 .btn-warning:focus,
 .btn-warning:focus-visible,
 .btn-info:focus,
@@ -528,8 +535,6 @@
 .btn-outline-primary:focus-visible,
 .btn-outline-success:focus,
 .btn-outline-success:focus-visible,
-.btn-outline-danger:focus,
-.btn-outline-danger:focus-visible,
 .btn-outline-warning:focus,
 .btn-outline-warning:focus-visible,
 .btn-outline-info:focus,
@@ -538,12 +543,33 @@
 .btn-outline-light:focus-visible,
 .btn-outline-dark:focus,
 .btn-outline-dark:focus-visible {
-    background-color: transparent;
-    border-color: var(--db-border);
-    color: var(--db-text-secondary);
+    background-color: var(--db-surface-warm);
+    border-color: var(--db-btn-secondary-border);
+    color: var(--db-btn-secondary);
     box-shadow: var(--db-focus-ring);
 }
 
+.btn-secondary:active,
+.btn-secondary.active,
+.show > .btn-secondary.dropdown-toggle,
+.btn-outline-secondary:active,
+.btn-outline-secondary.active,
+.show > .btn-outline-secondary.dropdown-toggle,
+.btn-success:active,
+.btn-success.active,
+.show > .btn-success.dropdown-toggle,
+.btn-warning:active,
+.btn-warning.active,
+.show > .btn-warning.dropdown-toggle,
+.btn-info:active,
+.btn-info.active,
+.show > .btn-info.dropdown-toggle,
+.btn-light:active,
+.btn-light.active,
+.show > .btn-light.dropdown-toggle,
+.btn-dark:active,
+.btn-dark.active,
+.show > .btn-dark.dropdown-toggle,
 .btn-outline-primary:active,
 .btn-outline-primary.active,
 .show > .btn-outline-primary.dropdown-toggle,
@@ -562,73 +588,45 @@
 .btn-outline-dark:active,
 .btn-outline-dark.active,
 .show > .btn-outline-dark.dropdown-toggle {
-    background-color: transparent !important;
-    border-color: var(--db-border) !important;
-    color: var(--db-text-secondary) !important;
+    background-color: var(--db-btn-secondary-hover) !important;
+    border-color: var(--db-btn-secondary-border) !important;
+    color: var(--db-btn-secondary) !important;
 }
 
+/* Destructive — Share structure with danger colours (the only semantic paint). */
+.btn-danger,
 .btn-outline-danger {
-    color: var(--db-status-danger);
+    background-color: var(--db-surface-warm);
     border-color: rgba(220, 38, 38, 0.35);
+    color: var(--db-status-danger);
 }
 
+.btn-danger:hover,
 .btn-outline-danger:hover {
     color: var(--db-status-danger);
     border-color: var(--db-status-danger);
     background-color: var(--db-status-danger-soft-bg);
 }
 
-/* Danger keeps its red lettering when focused, unlike the neutral variants. */
+.btn-danger:focus,
+.btn-danger:focus-visible,
 .btn-outline-danger:focus,
 .btn-outline-danger:focus-visible {
+    background-color: var(--db-surface-warm);
     color: var(--db-status-danger);
     border-color: rgba(220, 38, 38, 0.35);
-}
-
-.btn-outline-danger:active,
-.btn-outline-danger.active,
-.show > .btn-outline-danger.dropdown-toggle {
-    background-color: transparent !important;
-    border-color: var(--db-status-danger) !important;
-    color: var(--db-status-danger) !important;
-}
-
-/* Share — the outlined secondary action (Databricks Catalog "Share").
-   Unfilled at rest: white surface, control border, coloured label. Hover tints
-   the surface only. Settings → UI → Theme → Secondary button drives the colours. */
-.btn-secondary,
-.btn-outline-secondary {
-    background-color: var(--db-surface-warm);
-    border-color: var(--db-btn-secondary-border);
-    color: var(--db-btn-secondary);
-}
-
-.btn-secondary:hover,
-.btn-outline-secondary:hover {
-    background-color: var(--db-btn-secondary-hover);
-    border-color: var(--db-btn-secondary-border);
-    color: var(--db-btn-secondary);
-}
-
-.btn-secondary:focus,
-.btn-secondary:focus-visible,
-.btn-outline-secondary:focus,
-.btn-outline-secondary:focus-visible {
-    background-color: var(--db-surface-warm);
-    border-color: var(--db-btn-secondary-border);
-    color: var(--db-btn-secondary);
     box-shadow: var(--db-focus-ring);
 }
 
-.btn-secondary:active,
-.btn-secondary.active,
-.show > .btn-secondary.dropdown-toggle,
-.btn-outline-secondary:active,
-.btn-outline-secondary.active,
-.show > .btn-outline-secondary.dropdown-toggle {
-    background-color: var(--db-btn-secondary-hover) !important;
-    border-color: var(--db-btn-secondary-border) !important;
-    color: var(--db-btn-secondary) !important;
+.btn-danger:active,
+.btn-danger.active,
+.show > .btn-danger.dropdown-toggle,
+.btn-outline-danger:active,
+.btn-outline-danger.active,
+.show > .btn-outline-danger.dropdown-toggle {
+    background-color: var(--db-status-danger-soft-bg) !important;
+    border-color: var(--db-status-danger) !important;
+    color: var(--db-status-danger) !important;
 }
 
 /* Button icons - ensure grey color */
@@ -637,8 +635,11 @@
     color: inherit;
 }
 
-/* Button close - keep default Bootstrap styling */
+/* Button close - keep default Bootstrap styling (not a Du Bois action). */
 .btn-close {
+    height: auto;
+    min-height: 0;
+    padding: 0.25em;
     background-color: transparent;
     border: none;
 }
@@ -661,8 +662,18 @@
     opacity: 0.55;
 }
 
-/* Button link variant - text only */
-.btn-link {
+/* Button link variant - text only; not a Du Bois action button. */
+.btn-link,
+.btn-link.btn-sm,
+.btn-link.btn-lg {
+    display: inline;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    font-size: inherit;
+    font-weight: 400;
+    line-height: inherit;
+    border-radius: 0;
     color: var(--db-text-secondary);
     background-color: transparent;
     border-color: transparent;

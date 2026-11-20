@@ -73,3 +73,49 @@ def test_components_css_uses_tokens_not_gradients_for_create():
     css = _read(COMPONENTS_CSS)
     assert "var(--db-btn-primary)" in css
     assert "var(--db-btn-secondary-border)" in css
+
+
+def test_outline_primary_joins_share_family():
+    """btn-outline-primary is the most common secondary CTA in templates;
+    it must paint as Share, not the old neutral grey outline."""
+    css = _read(COMPONENTS_CSS)
+    assert "btn-outline-primary" in css
+    # The Share selector list includes outline-primary next to secondary.
+    assert "--db-btn-secondary-border" in css
+    # Resting paint for outline-primary is the white surface (Share), not transparent.
+    import re
+    blocks = re.findall(
+        r"([^{}]+)\{([^{}]*)\}",
+        re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL),
+        flags=re.DOTALL,
+    )
+    matched = [
+        decls for selectors, decls in blocks
+        if any(part.strip() == ".btn-outline-primary" for part in selectors.split(","))
+        and "background-color" in decls
+        and ":hover" not in selectors
+        and ":focus" not in selectors
+        and ":active" not in selectors
+    ]
+    assert matched, "No resting rule for .btn-outline-primary"
+    assert any("var(--db-surface-warm)" in d for d in matched)
+    assert any("var(--db-btn-secondary-border)" in d for d in matched)
+
+
+def test_btn_uses_du_bois_md_geometry():
+    """Page CTAs must match Catalog Create/Share geometry, not Bootstrap defaults."""
+    main = _read(MAIN_CSS)
+    components = _read(COMPONENTS_CSS)
+    for token in (
+        "--db-btn-height: 2rem;",
+        "--db-btn-radius: 0.25rem;",
+        "--db-btn-font-size: 0.8125rem;",
+        "--db-btn-font-weight: 500;",
+    ):
+        assert token in main, token
+    assert "height: var(--db-btn-height)" in components
+    assert "border-radius: var(--db-btn-radius)" in components
+    assert "font-size: var(--db-btn-font-size)" in components
+    assert "font-weight: var(--db-btn-font-weight)" in components
+    # btn-sm is the size used on almost every page CTA — it must stay Du Bois md.
+    assert ".btn-sm," in components or ".btn-sm {" in components

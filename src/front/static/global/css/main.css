@@ -44,6 +44,12 @@
     --db-btn-secondary: #11171C;
     --db-btn-secondary-border: #C6C9D1;
     --db-btn-secondary-hover: #F0F1F3;
+    /* Du Bois md geometry — matches Catalog Create/Share (and the navbar chrome). */
+    --db-btn-height: 2rem;
+    --db-btn-radius: 0.25rem;
+    --db-btn-font-size: 0.8125rem;
+    --db-btn-font-weight: 500;
+    --db-btn-padding-x: 0.75rem;
 
     /* Warm neutral surfaces */
     --db-canvas-warm: #F8F8F8; /* derived: Primary at 5% alpha on white (Aurora Pro) */
@@ -540,8 +546,8 @@ body {
     padding: 0.15rem 0;
     --ob-subnav-rail-height: 2.25rem;
     /* Du Bois md button: 32px tall, 4px radius (chrome Close / Save / Resume). */
-    --ob-subnav-btn-height: 2rem;
-    --ob-subnav-btn-radius: 0.25rem;
+    --ob-subnav-btn-height: var(--db-btn-height);
+    --ob-subnav-btn-radius: var(--db-btn-radius);
     gap: 0;
     width: 100%;
 }
@@ -1242,17 +1248,22 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
 .form-select-sm,
 .input-group-sm > .form-control,
 .input-group-sm > .form-select,
-.input-group-sm > .input-group-text,
-.input-group-sm > .btn {
+.input-group-sm > .input-group-text {
     border-radius: var(--db-radius-control);
+}
+
+.input-group-sm > .btn,
+.input-group-lg > .btn,
+.btn-group-sm > .btn,
+.btn-group-lg > .btn {
+    border-radius: var(--db-btn-radius);
 }
 
 .form-control-lg,
 .form-select-lg,
 .input-group-lg > .form-control,
 .input-group-lg > .form-select,
-.input-group-lg > .input-group-text,
-.input-group-lg > .btn {
+.input-group-lg > .input-group-text {
     border-radius: var(--db-radius-control);
 }
 
@@ -1500,7 +1511,7 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     .section-header .btn-group > .btn {
         flex: 0 0 auto;
         white-space: nowrap;
-        border-radius: var(--db-radius-control);
+        border-radius: var(--db-btn-radius);
         margin-left: 0;
     }
 }

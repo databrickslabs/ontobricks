@@ -157,8 +157,10 @@ def test_chrome_actions_use_create_and_share_styles():
     close = _rule(css, ".ob-subnav-close-btn")
     action = _rule(css, ".ob-subnav-action")
 
-    assert "--ob-subnav-btn-height: 2rem" in css
-    assert "--ob-subnav-btn-radius: 0.25rem" in css
+    assert "--ob-subnav-btn-height: var(--db-btn-height)" in css
+    assert "--ob-subnav-btn-radius: var(--db-btn-radius)" in css
+    assert "--db-btn-height: 2rem;" in css
+    assert "--db-btn-radius: 0.25rem;" in css
     assert "height: var(--ob-subnav-btn-height)" in action
     assert "border-radius: var(--ob-subnav-btn-radius)" in action
     assert "font-weight: 500" in action

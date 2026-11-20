@@ -171,12 +171,24 @@ surface: `#obSubnav` is transparent; workspace navigation uses the app switcher.
   and `--db-btn-secondary-hover` through `#uiBrandingTokens`. `main.css`
   ships the same defaults in `:root`.
 - Mapping: `.btn-primary` = **Create** (solid `--db-btn-primary`, no gradient,
-  no resting shadow). `.btn-secondary` and `.btn-outline-secondary` = **Share**
-  (white `--db-surface-warm` at rest, `--db-btn-secondary-border` 1px border,
-  `--db-btn-secondary` label, `--db-btn-secondary-hover` on hover).
-- Navbar chrome follows the same mapping: Save (`.ob-subnav-save-btn`) is
-  Create, Close (`.ob-subnav-close-btn`) is Share. Resume editing stays a
-  warning ghost.
+  no resting shadow). Every other Bootstrap action variant = **Share**
+  (`.btn-secondary`, `.btn-outline-secondary`, `.btn-outline-primary`,
+  `.btn-success`, `.btn-warning`, `.btn-info`, `.btn-light`, `.btn-dark` and
+  their outline forms): white `--db-surface-warm` at rest, `--db-btn-secondary-border`
+  1px border, `--db-btn-secondary` label, `--db-btn-secondary-hover` on hover.
+  Class names may stay semantic for JS/intent; the paint is Share.
+- Destructive exception: `.btn-danger` and `.btn-outline-danger` keep the Share
+  structure with danger colours (`--db-status-danger`). `.btn-link` stays
+  text-only; `.btn-close` is unchanged.
+- This covers page CTAs, modal footers, section headers, Studio / graph
+  toolbars, and the navbar chrome: Save is Create, Close is Share. Resume
+  editing stays a warning ghost.
+- Geometry is Du Bois md for every `.btn` / `.btn-sm` / `.btn-lg`: height
+  `--db-btn-height` (32px), radius `--db-btn-radius` (4px), font
+  `--db-btn-font-size` / `--db-btn-font-weight` (13px / 500), horizontal
+  padding `--db-btn-padding-x`. Navbar chrome reuses the same tokens.
+  `.btn-link` and `.btn-close` stay out of that ramp. Form fields keep
+  `--db-radius-control` (2px); only buttons use `--db-btn-radius`.
 
 ### Accent Use and Button Hierarchy
 
@@ -192,10 +204,11 @@ Button hierarchy in `global/css/components.css` is mandatory:
 
 - `.btn-primary` (Create) is the only **filled primary** action and should be the
   rightmost section CTA.
-- `.btn-secondary` and `.btn-outline-secondary` (Share) are outlined on the
-  white surface; other non-danger outline variants remain unfilled/neutral.
-- `.btn-outline-danger` is the semantic destructive exception (red text/border,
-  soft-danger hover background), without turning it into a generic filled CTA.
+- Every other non-danger action variant is **Share** (outlined on the white
+  surface with the secondary button tokens) — including `.btn-outline-primary`
+  and the solid/outline success/warning/info/light/dark classes.
+- `.btn-danger` / `.btn-outline-danger` are the semantic destructive exception
+  (Share structure, red text/border, soft-danger hover), never a filled CTA.
 - Status/destructive intent cannot rely on color alone; include icon + label.
 
 ### Typography
@@ -851,11 +864,10 @@ hide inside a Bootstrap `.card-header`.
 
 **States**
 
-`.btn-primary` (Create) is the only variant that fills. Everything else —
-including `.btn-secondary` (Share), `.btn-success` and `.btn-danger`, which the
-app renders as outlines — stays unfilled in **every** state: hover tints the
-background, active deepens it slightly, and focus keeps the resting background
-(transparent, or the white surface for Share) and shows `--db-focus-ring` alone. Bootstrap's own `:focus-visible` repaints a button
+`.btn-primary` (Create) is the only variant that fills. Everything else is
+Share (or danger-Share): white surface at rest, hover tints the surface,
+active keeps the hover tint, and focus keeps the resting surface and shows
+`--db-focus-ring` alone. Bootstrap's own `:focus-visible` repaints a button
 with its *hover* palette, which for these variants is the solid fill we
 dropped, so `components.css` pins both `:focus` and `:focus-visible`. When you
 add a variant, add it to that list too. `.btn-outline-danger` is the single

@@ -186,3 +186,99 @@ Tests:
   and #11171C Share; custom colours (#FF0000 / #00AA00) propagate to all buttons.
 - JS vs Python `derive_button_palette` compared numerically: identical output.
 - `uv run --frozen pytest -q -m "not scenario"`: 10982 passed, 334 skipped, 8 deselected, 0 failed in 49.16s.
+
+================================================================================
+## Apply Create/Share button paint to every Bootstrap action variant
+================================================================================
+
+Context: Create and Share were wired for `.btn-primary` / `.btn-secondary` /
+`.btn-outline-secondary`, but ~127 `btn-outline-primary` usages (and the
+success/warning/info/light/dark solid and outline classes) still used the old
+neutral grey outline. The app now has only two button looks everywhere:
+Create (filled) and Share (outlined), including Studio / graph toolbars that
+already use those Bootstrap classes. Destructive keeps Share structure with
+danger colours; `.btn-link` stays text-only.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   - Folded `.btn-outline-primary`, `.btn-success`, `.btn-warning`, `.btn-info`,
+     `.btn-light`, `.btn-dark` and their outline forms into the Share selector
+     family (same `--db-btn-secondary*` tokens, white surface, hover tint).
+   - `.btn-danger` joins `.btn-outline-danger` as the destructive Share paint
+     (red label/border, soft-danger hover, white surface at rest/focus).
+   - Removed the old transparent/neutral outline blocks those variants used.
+2. .cursor/11-frontend-design.mdc
+   - Documents the universal Create/Share mapping and the danger exception.
+3. tests/units/front/test_button_design_contract.py
+   - Share-family focus contract covers the expanded list; danger focus keeps
+     the red label for both `.btn-danger` and `.btn-outline-danger`.
+4. tests/units/front/test_clarity_design_contract.py
+   - `.btn-outline-primary` asserts the Share white surface token.
+5. tests/units/front/test_ui_button_styles_contract.py
+   - New resting-paint contract: outline-primary uses Share surface + border.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/components.css
+- tests/units/front/test_button_design_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_ui_button_styles_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium: outline-primary / success / warning / info match Share
+  (#FFFFFF / #C6C9D1 / #11171C); danger matches red Share; primary stays Create.
+- `uv run --frozen pytest -q -m "not scenario"`: 10983 passed, 334 skipped, 8 deselected, 0 failed in 48.60s.
+
+================================================================================
+## Du Bois md geometry for page buttons (Create/Share look on every CTA)
+================================================================================
+
+Context: Create/Share colour tokens were applied, but page buttons (e.g.
+Context → Versions) still looked Bootstrap-native: auto height, 2px radius,
+14px / weight 400. Databricks Catalog Create/Share use Du Bois md geometry
+(32px, 4px, 13px / 500). Page CTAs now share that geometry with the navbar
+chrome.
+
+Root cause: `components.css` only restyled colour on `.btn-*` variants; the
+base `.btn` / `.btn-sm` size ramp was still Bootstrap's.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - Added `--db-btn-height` (2rem), `--db-btn-radius` (0.25rem),
+     `--db-btn-font-size` (0.8125rem), `--db-btn-font-weight` (500),
+     `--db-btn-padding-x` (0.75rem).
+   - Navbar chrome tokens `--ob-subnav-btn-*` now alias those values.
+   - Input-group / btn-group size ramps: form fields keep `--db-radius-control`;
+     buttons use `--db-btn-radius`. Section-header wrapped groups use the
+     button radius.
+2. src/front/static/global/css/components.css
+   - `.btn` / `.btn-sm` / `.btn-lg` use Du Bois md geometry (inline-flex,
+     fixed height, 13px/500, 4px radius). `.btn-link` and `.btn-close` are
+     excluded from that ramp.
+3. .cursor/11-frontend-design.mdc
+   - Documents the shared button geometry tokens.
+4. tests/units/front/test_button_design_contract.py
+   - Button radius assertions use `--db-btn-radius`; form fields stay on
+     `--db-radius-control`.
+5. tests/units/front/test_segmented_subnav_contract.py
+   - Chrome height/radius assert the alias to `--db-btn-*`.
+6. tests/units/front/test_ui_button_styles_contract.py
+   - New contract for Du Bois md geometry tokens and `.btn` usage.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- tests/units/front/test_button_design_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_ui_button_styles_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium with Bootstrap CDN: Versions-style header buttons measure
+  32px / 4px / 13px / 500; Create fill #2272B4; Share border #C6C9D1.
+- Live `http://127.0.0.1:8000/` Create CTA: same geometry after reload.
+- `uv run --frozen pytest -q -m "not scenario"`: 10984 passed, 334 skipped, 8 deselected, 0 failed in 51.10s.

@@ -49,44 +49,44 @@ def _has_declaration(blocks: list[str], prop: str, value: str) -> bool:
     )
 
 
-NEUTRAL_BUTTON_VARIANTS = [
+# All non-Create action variants use the Share (or danger-Share) paint.
+SHARE_BUTTON_VARIANTS = [
     ".btn-secondary",
     ".btn-success",
-    ".btn-danger",
     ".btn-warning",
     ".btn-info",
     ".btn-outline-primary",
     ".btn-outline-secondary",
     ".btn-outline-success",
+    ".btn-danger",
     ".btn-outline-danger",
 ]
 
 
-@pytest.mark.parametrize("variant", NEUTRAL_BUTTON_VARIANTS)
+@pytest.mark.parametrize("variant", SHARE_BUTTON_VARIANTS)
 def test_unfilled_buttons_stay_unfilled_when_focused(variant):
     """Bootstrap's `:focus-visible` repaints a button with its hover palette,
     which for these variants is the solid fill the design drops. Focus must
-    keep the resting background (transparent, or the white surface token for
-    the Share style) and carry the state in the ring alone."""
+    keep the Share white surface and carry the state in the ring alone."""
     css = _read(COMPONENTS_CSS)
 
     for state in (f"{variant}:focus", f"{variant}:focus-visible"):
         blocks = _blocks_for_selector(css, state)
         assert blocks, f"No focus rule pins {state}"
         assert _has_declaration(
-            blocks, "background-color", r"(?:transparent|var\(--db-surface-warm\))"
-        ), f"{state} does not keep the resting background"
+            blocks, "background-color", r"var\(--db-surface-warm\)"
+        ), f"{state} does not keep the Share resting background"
 
     ring_blocks = _blocks_for_selector(css, f"{variant}:focus")
     assert _has_declaration(ring_blocks, "box-shadow", r"var\(--db-focus-ring\)")
 
 
 def test_outline_danger_keeps_its_red_lettering_on_focus():
-    """The shared focus rule neutralises colour; danger opts back out."""
+    """Destructive Share keeps the danger label when focused."""
     css = _read(COMPONENTS_CSS)
-    blocks = _blocks_for_selector(css, ".btn-outline-danger:focus")
-
-    assert _has_declaration(blocks, "color", r"var\(--db-status-danger\)")
+    for selector in (".btn-outline-danger:focus", ".btn-danger:focus"):
+        blocks = _blocks_for_selector(css, selector)
+        assert _has_declaration(blocks, "color", r"var\(--db-status-danger\)")
 
 
 def test_small_joined_controls_use_the_control_radius_token():
@@ -96,13 +96,16 @@ def test_small_joined_controls_use_the_control_radius_token():
     css = _read(MAIN_CSS)
 
     for selector in (
-        ".input-group-sm > .btn",
         ".input-group-sm > .form-control",
         ".form-control-sm",
     ):
         blocks = _blocks_for_selector(css, selector)
         assert blocks, f"No radius rule for {selector}"
         assert _has_declaration(blocks, "border-radius", r"var\(--db-radius-control\)")
+
+    btn_blocks = _blocks_for_selector(css, ".input-group-sm > .btn")
+    assert btn_blocks, "No radius rule for .input-group-sm > .btn"
+    assert _has_declaration(btn_blocks, "border-radius", r"var\(--db-btn-radius\)")
 
 
 def test_section_headers_wrap_their_control_cluster():
@@ -132,7 +135,7 @@ def test_grouped_buttons_become_pills_when_they_have_to_wrap():
     assert re.search(r"\.section-header\s+\.btn-group\s*\{[^}]*flex-wrap:\s*wrap", body)
     assert re.search(
         r"\.section-header\s+\.btn-group\s*>\s*\.btn\s*\{[^}]*"
-        r"border-radius:\s*var\(--db-radius-control\)",
+        r"border-radius:\s*var\(--db-btn-radius\)",
         body,
         flags=re.DOTALL,
     )
