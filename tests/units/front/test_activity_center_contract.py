@@ -8,6 +8,7 @@ pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[3]
 BASE = REPO / "src/front/templates/base.html"
+CSS = REPO / "src/front/static/global/css/main.css"
 UTILS = REPO / "src/front/static/global/js/utils.js"
 TASKS = REPO / "src/front/static/global/js/task-tracker.js"
 HANDLERS = REPO / "src/front/static/global/js/base-ui-handlers.js"
@@ -39,3 +40,11 @@ def test_activity_center_js_owns_toggle_and_combined_badge():
     assert "activityCenterToggle" in handlers
     assert "taskTrackerToggle" not in handlers
     assert "notifCenterToggle" not in handlers
+
+
+def test_activity_center_hidden_on_home_page():
+    html = BASE.read_text(encoding="utf-8")
+    assert 'id="activityCenterNavItem"' in html
+    css = CSS.read_text(encoding="utf-8")
+    assert 'body[data-page="home"] #activityCenterNavItem' in css
+    assert "display: none !important" in css

@@ -68,13 +68,16 @@ def test_brand_icon_assets_are_local_and_colored():
 
 
 def test_settings_is_not_a_top_navbar_gear_anymore():
-    """Settings moved to the L2 app switcher; the top-right gear is gone."""
+    """Settings lives in the user dropdown; the top-right gear is gone."""
     html = _BASE.read_text(encoding="utf-8")
     assert "settingsGearDropdown" not in html
     assert "Open full settings" not in html
-    menu = html[html.index("ob-app-switcher-list") : html.index("userMenuDropdown")]
+    menu = html[html.index("ob-user-menu") : html.index("</ul>", html.index("ob-user-menu"))]
+    assert 'id="navSettingsLink"' in menu
     assert "settings_m.v.route" in menu
     assert 'data-requires-app="admin"' in menu
+    switcher = html[html.index("ob-app-switcher-list") : html.index("userMenuDropdown")]
+    assert "settings_m.v.route" not in switcher
 
 
 def test_databricks_settings_uses_official_databricks_icon():

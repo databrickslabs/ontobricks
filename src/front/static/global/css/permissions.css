@@ -79,7 +79,7 @@ body[data-app-role="admin"] [data-requires-app="admin"] {
  * is the only ``data-requires-app="admin"`` nav-link, so it loses
  * ``display: flex`` for admins and the icon falls back to inline
  * positioning, ignoring ``gap`` and ``align-items``). Dropdown and
- * app-switcher admin rows need the same flex restore so icon + label
+ * workspace-home admin rows need the same flex restore so icon + label
  * stay aligned.
  */
 body[data-app-role="admin"] .sidebar-nav .nav-link[data-requires-app="admin"] {
@@ -87,10 +87,6 @@ body[data-app-role="admin"] .sidebar-nav .nav-link[data-requires-app="admin"] {
 }
 
 body[data-app-role="admin"] .dropdown-item[data-requires-app="admin"] {
-    display: flex !important;
-}
-
-body[data-app-role="admin"] .ob-app-switcher-item[data-requires-app="admin"] {
     display: flex !important;
 }
 

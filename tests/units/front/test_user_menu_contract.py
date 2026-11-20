@@ -76,3 +76,26 @@ def test_help_and_report_issue_live_in_user_dropdown():
     before = html[: html.index("userMenuDropdown")]
     assert "helpCenterToggle" not in before
     assert "navReportIssue" not in before
+
+
+def test_settings_lives_in_user_dropdown_not_feature_selector():
+    html = BASE.read_text(encoding="utf-8")
+    menu = html[html.index("ob-user-menu") : html.index("</ul>", html.index("ob-user-menu"))]
+    assert 'id="navSettingsLink"' in menu
+    assert "settings_m.v.route" in menu
+    assert 'data-requires-app="admin"' in menu
+    assert menu.index("navSettingsLink") < menu.index("helpCenterToggle")
+    switcher = html[html.index("ob-app-switcher-list") : html.index("userMenuDropdown")]
+    assert "settings_m.v.route" not in switcher
+    assert "navSettingsLink" not in switcher
+
+
+def test_settings_has_separator_underneath_in_user_dropdown():
+    html = BASE.read_text(encoding="utf-8")
+    menu = html[html.index("ob-user-menu") : html.index("</ul>", html.index("ob-user-menu"))]
+    settings_idx = menu.index('id="navSettingsLink"')
+    help_idx = menu.index('id="helpCenterToggle"')
+    # A dropdown-divider sits between Settings and Help
+    divider_sub = menu[settings_idx:help_idx]
+    assert "dropdown-divider" in divider_sub
+    assert 'data-requires-app="admin"' in divider_sub

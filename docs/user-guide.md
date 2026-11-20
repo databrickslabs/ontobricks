@@ -2535,7 +2535,7 @@ Step 7: Validate with quality checks
 
 ### Step 1: Configure Databricks Connection
 
-Navigate to **Settings** from the L2 app switcher (admins only), or open `/settings`.
+Navigate to **Settings** from the User dropdown (admins only), or open `/settings`.
 
 1. Enter your **Databricks Host** URL (e.g., `https://your-workspace.cloud.databricks.com`).
 2. Enter your **Personal Access Token**.

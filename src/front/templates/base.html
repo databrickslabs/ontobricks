@@ -161,7 +161,7 @@
                 </li>
 
                 <!-- Activity Center (background tasks + notifications) -->
-                <li class="ob-subnav-item dropdown">
+                <li class="ob-subnav-item dropdown" id="activityCenterNavItem">
                     <a class="ob-subnav-utility-link position-relative" href="#" id="activityCenterToggle"
                        title="Activity" aria-label="Open activity center">
                         <i class="bi bi-inboxes" id="activityCenterIcon"></i>
@@ -292,23 +292,6 @@
                                 <i class="bi bi-check2 ob-app-switcher-item-check" aria-hidden="true"></i>
                             </a>
                             {% endif %}
-                            {% if settings_m.v %}
-                            <a class="ob-app-switcher-item"
-                               href="{{ settings_m.v.route }}?section=home"
-                               data-subnav-route="{{ settings_m.v.route }}"
-                               data-requires-app="admin"
-                               role="menuitem"
-                               title="{{ settings_m.v.label }}">
-                                <span class="ob-app-switcher-item-icon" aria-hidden="true">
-                                    <i class="bi {{ settings_m.v.icon }}"></i>
-                                </span>
-                                <span class="ob-app-switcher-item-copy">
-                                    <span class="ob-app-switcher-item-label">{{ settings_m.v.label }}</span>
-                                    <span class="ob-app-switcher-item-desc">{{ settings_m.v.description }}</span>
-                                </span>
-                                <i class="bi bi-check2 ob-app-switcher-item-check" aria-hidden="true"></i>
-                            </a>
-                            {% endif %}
                         </div>
                     </div>
                 </li>
@@ -333,7 +316,7 @@
                     </a>
                 </li>
 
-                <!-- Current user — Databricks-style initials avatar; Help + Report issue live here. -->
+                <!-- Current user — Databricks-style initials avatar; Settings + Help + Report issue live here. -->
                 <li class="ob-subnav-item dropdown">
                     <a class="ob-subnav-utility-link ob-user-menu-toggle" href="#" id="userMenuDropdown" role="button"
                        data-bs-toggle="dropdown" aria-expanded="false"
@@ -361,6 +344,17 @@
                             </div>
                         </li>
                         <li><hr class="dropdown-divider"></li>
+                        {% if settings_m.v %}
+                        <li>
+                            <a class="dropdown-item" href="{{ settings_m.v.route }}?section=home"
+                               id="navSettingsLink"
+                               data-requires-app="admin">
+                                <span class="ob-dropdown-icon" aria-hidden="true"><i class="bi {{ settings_m.v.icon }}"></i></span>
+                                <span class="ob-dropdown-label">{{ settings_m.v.label }}</span>
+                            </a>
+                        </li>
+                        <li data-requires-app="admin"><hr class="dropdown-divider"></li>
+                        {% endif %}
                         <li>
                             <a class="dropdown-item" href="#" id="helpCenterToggle">
                                 <span class="ob-dropdown-icon" aria-hidden="true"><i class="bi bi-question-circle"></i></span>

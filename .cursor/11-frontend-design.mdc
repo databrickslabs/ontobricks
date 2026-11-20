@@ -555,7 +555,8 @@ The app chrome is **one horizontal bar** provided by `base.html`
 (`<nav id="obSubnav" class="ob-subnav navbar navbar-light">`). Former L1 and
 L2 are merged; do not restore a second top nav.
 
-- Always visible. Brand, Activity, and User never hide with domain state.
+- Always visible. Brand, Activity, and User never hide with domain state
+  (on Home, the Activity button is not necessary and is hidden via CSS).
 - Domain chrome toggles via `updateDomainMenuVisibility(hasDomain)` in
   `navbar.js` (elements marked `data-subnav-domain-chrome`):
   - **Workspace page + loaded domain:** show Context crumb, Close/Save, app switcher.
@@ -563,8 +564,9 @@ L2 are merged; do not restore a second top nav.
     (hide workspace domain chrome).
   - **No loaded domain:** hide domain chrome and the settings return.
 - User control is a Databricks-style initials avatar (`.ob-user-avatar`), not
-  `bi-person-circle`. Help and Report an issue live inside the user dropdown.
-  Settings is the admin-only fifth row of `#obAppSwitcher` (no gear in chrome).
+  `bi-person-circle`. Settings (admin-only, `#navSettingsLink` with a separator
+  underneath), Help, and Report an issue live inside the user dropdown. No gear
+  in chrome and no Settings row in `#obAppSwitcher`.
 - Visual contract: transparent bar over the canvas grey (no bottom border),
   dark text, indigo hover/active emphasis.
 
@@ -578,7 +580,7 @@ L2 are merged; do not restore a second top nav.
 | Mapping | `assignment` | `bi-shuffle` |
 | Graph | `digitaltwin` | `bi-radar` |
 | Intelligence | `intelligence` | `bi-sliders2-vertical` |
-| Settings | `settings` | `bi-gear` (app switcher only) |
+| Settings | `settings` | `bi-gear` (user dropdown only) |
 
 Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
 `tests/units/front/test_knowledge_graph_icon.py` asserts Domain ≠ Graph.
@@ -602,15 +604,16 @@ Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
 7. **App switcher** (`#obAppSwitcher`, `.ob-subnav-app-switcher`): Databricks-style
    9-dot `nav-icon` after Close/Save. Opens `.ob-app-switcher-menu` as a vertical
    list (icon + title + subtitle + check) for Context / Ontology / Graph /
-   Intelligence / Settings. Each item opens that workspace's **Home**
-   (`?section=home`). Graph + Intelligence carry `nav-requires-graph`; Settings
-   carries `data-requires-app="admin"`. Current workspace gets `.is-current` via
-   `initAppSwitcherActiveState()`. Popover min-width `22rem`; menu/items use
-   rounded boxes (`0.5rem` / `0.375rem`). Workspace Home tiles follow the
-   Databricks MCP card pattern in `_workspace_home.html`.
+   Intelligence. Each item opens that workspace's **Home** (`?section=home`).
+   Graph + Intelligence carry `nav-requires-graph`. Current workspace gets
+   `.is-current` via `initAppSwitcherActiveState()`. Popover min-width `22rem`;
+   menu/items use rounded boxes (`0.5rem` / `0.375rem`). Workspace Home tiles
+   follow the Databricks MCP card pattern in `_workspace_home.html`.
 8. **Settings/Home return link** (`#settingsDomainReturnNav`): when active on
    Settings/Home, aligned on the right immediately preceding Activity.
 9. **Activity** (`#activityCenterToggle`) then **User** (`#userMenuDropdown`).
+   Settings is the admin-gated `#navSettingsLink` inside the user dropdown
+   (`data-requires-app="admin"`), not an app-switcher row.
 
 - The old segmented workspace dropdown rail and the separate L1 top navbar are
   **removed**. Do not restore them. Per-section navigation stays in each page's

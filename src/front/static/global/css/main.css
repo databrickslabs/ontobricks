@@ -1226,6 +1226,16 @@ html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
     margin-inline-start: 0.85rem;
 }
 
+/* Home page: Activity button is not necessary on the landing page */
+body[data-page="home"] #activityCenterNavItem,
+body[data-page="home"] .ob-subnav-item:has(#activityCenterToggle) {
+    display: none !important;
+}
+
+body[data-page="home"] .ob-subnav-nav .ob-subnav-item:has(#activityCenterToggle) + .ob-subnav-item {
+    margin-inline-start: 0.35rem;
+}
+
 .ob-subnav-nav .ob-subnav-item:has(.ob-subnav-save-btn) {
     display: flex;
     align-items: center;

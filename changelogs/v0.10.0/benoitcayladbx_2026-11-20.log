@@ -1178,3 +1178,90 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -p no:cacheprovider
+
+================================================================================
+## Move Settings from feature selector into User dropdown
+================================================================================
+
+Context: Settings was the admin-only fifth row of the feature selector
+(#obAppSwitcher). Users expect Settings with other account utilities, so
+it now lives in the User dropdown and is removed from the feature selector.
+
+Changes:
+
+1. src/front/templates/base.html
+   Removed the Settings app-switcher row; added admin-gated #navSettingsLink
+   in the User dropdown (before Help / Report an issue).
+2. src/front/static/global/css/permissions.css
+   Dropped the unused .ob-app-switcher-item[data-requires-app="admin"] flex
+   restore; dropdown-item admin gate remains for the new Settings link.
+3. .cursor/11-frontend-design.mdc
+   Documented Settings as user-dropdown-only (not an app-switcher row).
+4. docs/user-guide.md
+   Updated the Settings navigation instruction to the User dropdown.
+5. tests/units/front/test_app_switcher_contract.py
+   Feature selector now expects four workspaces and no Settings row.
+6. tests/units/front/test_user_menu_contract.py
+   Added contract that Settings lives in the User dropdown, not the switcher.
+7. tests/units/front/test_backend_brand_icons.py
+   Updated the "no top-navbar gear" contract for the user-dropdown link.
+8. tests/units/front/test_workspace_home_contract.py
+   Renamed/updated admin-only Settings assertions for the user dropdown.
+9. tests/units/api/test_ui_rendering.py
+   Asserts #navSettingsLink instead of any /settings anchor.
+10. tests/e2e/navigation/test_navigation_flows.py
+    Updated comment to match the new Settings entry point.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/permissions.css
+- .cursor/11-frontend-design.mdc
+- docs/user-guide.md
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_user_menu_contract.py
+- tests/units/front/test_backend_brand_icons.py
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/navigation/test_navigation_flows.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11016 passed, 334 skipped, 8 deselected in 54.48s
+
+================================================================================
+## Separator under Settings and hide Activity on Home page
+================================================================================
+
+Context: In the User dropdown, Settings needed a visual divider separating
+it from the general Help / Report issue items below. On the Home page
+(the landing Registry surface), the Activity button is not necessary and
+caused visual clutter.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Added an admin-gated `<hr class="dropdown-divider">` immediately below
+     Settings in the User dropdown.
+   - Added `id="activityCenterNavItem"` to the Activity Center `<li>` element.
+2. src/front/static/global/css/main.css
+   - Added rule hiding `#activityCenterNavItem` on `body[data-page="home"]`.
+   - Adjusted sibling margin to maintain clean spacing next to User dropdown.
+3. .cursor/11-frontend-design.mdc
+   - Documented the separator under Settings in the User dropdown.
+   - Documented that Activity button is hidden on the Home page.
+4. tests/units/front/test_user_menu_contract.py
+   - Added test verifying the separator between Settings and Help.
+5. tests/units/front/test_activity_center_contract.py
+   - Added test verifying Activity Center is hidden on the Home page.
+6. tests/units/front/test_workspace_home_contract.py
+   - Updated count of admin-gated elements in user dropdown (link + divider).
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_user_menu_contract.py
+- tests/units/front/test_activity_center_contract.py
+- tests/units/front/test_workspace_home_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11018 passed, 334 skipped, 8 deselected in 54.35s

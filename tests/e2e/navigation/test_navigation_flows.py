@@ -49,7 +49,7 @@ class TestNavigation:
         )
 
     def test_settings_page_loads(self, page, live_server):
-        # Settings is reached via the L2 app switcher (admin-only), not a
+        # Settings is reached via the User dropdown (admin-only), not a
         # top-navbar gear. Direct navigation still works for the route contract.
         page.goto(f"{live_server}/settings")
         page.wait_for_load_state("domcontentloaded")

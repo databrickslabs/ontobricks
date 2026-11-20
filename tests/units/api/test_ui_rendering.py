@@ -229,13 +229,11 @@ class TestBaseTemplate:
         assert 'id="subnavMappingDropdown"' not in home
 
     def test_navbar_has_settings_link(self, client):
-        """Settings is reached from the L2 app switcher (admin-only), not the L1 gear."""
+        """Settings is reached from the User dropdown (admin-only), not the L1 gear."""
         html = _html(client, "/")
-        tags = _tags(html)
-        assert any(
-            t == "a" and str(a.get("href", "")).startswith("/settings") for t, a in tags
-        )
-        assert "Settings" in html
+        assert _find(_tags(html), id_="navSettingsLink") is not None
+        assert 'id="navSettingsLink"' in html
+        assert "settingsGearDropdown" not in html
 
     def test_navbar_has_no_warehouse_status(self, client):
         """SQL Warehouse status lives in Settings, not the top navbar."""
