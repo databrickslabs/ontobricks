@@ -21,6 +21,13 @@ def _dt():
     return DigitalTwin
 
 
+def _utc_now_naive_iso() -> str:
+    """Naive UTC ISO timestamp (same shape as the former ``datetime.utcnow()``)."""
+    import datetime as dt
+
+    return dt.datetime.now(dt.UTC).replace(tzinfo=None).isoformat()
+
+
 class TwinBackgroundTasks:
     """Run Knowledge Graph jobs inside worker threads (TaskManager progress)."""
 
@@ -441,8 +448,6 @@ class TwinBackgroundTasks:
         build_kind: str = "session",
     ) -> None:
         """Run ReasoningService phases; ``options`` drive append/materialize."""
-        import datetime as _dt_mod
-
         from back.core.helpers import get_databricks_client, is_uri
         from back.core.reasoning import ReasoningService
         from back.core.reasoning.results.ReasoningResult import ReasoningResult as _RR
@@ -511,7 +516,7 @@ class TwinBackgroundTasks:
             result_dict = result.to_dict()
             if not is_api:
                 result_dict.pop("violations", None)
-            result_dict["last_run"] = _dt_mod.datetime.utcnow().isoformat()
+            result_dict["last_run"] = _utc_now_naive_iso()
             result_dict["inferred_count"] = len(result.inferred_triples)
             if is_api:
                 result_dict["violations_count"] = len(result.violations)
