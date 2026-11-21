@@ -269,3 +269,94 @@ def test_delete_removes_results_then_the_run(fake_psycopg):
     assert store.delete_evolution_run("supply", "run-1") is True
     deletes = [c.sql for c in db.calls if c.sql.startswith("DELETE")]
     assert "evolution_results" in deletes[0] and "evolution_runs" in deletes[1]
+
+
+VERSION_ROW = {
+    "info": {"name": "Evo", "mcp_enabled": True, "last_update": "2026-11-21"},
+    "ontology": {"classes": []},
+    "assignment": {"entities": []},
+    "design_layout": {},
+    "metadata": {},
+}
+
+
+class TestAccept:
+    def _db(self, run, next_version=4, inserted=True):
+        db = FakeDB()
+        db.on("FROM " + QSCHEMA + ".domains WHERE", rows=[{"id": "dom-1"}])
+        db.on("FROM " + QSCHEMA + ".evolution_runs WHERE", rows=[run])
+        db.on("COALESCE(MAX(version::integer)", rows=[{"next": next_version}])
+        db.on(
+            "INSERT INTO " + QSCHEMA + ".domain_versions",
+            rows=[{"version": str(next_version)}] if inserted else [],
+        )
+        db.on(
+            "UPDATE " + QSCHEMA + ".evolution_runs",
+            rows=[
+                _row(status="ACCEPTED", accepted_version=str(next_version), revision=8)
+            ],
+        )
+        return db
+
+    def test_inserts_the_next_version_in_one_locked_transaction(self, fake_psycopg):
+        db = self._db(_row(status="EVALUATED", revision=7))
+        store = make_store(db)
+        out = store.accept_evolution_run("Evo", "run-1", 7, VERSION_ROW)
+        assert out["version"] == "4" and out["created"] is True
+        assert out["run"]["status"] == "ACCEPTED"
+        assert db.transactions == 1
+        assert "FOR UPDATE" in db.one("FROM " + QSCHEMA + ".domains WHERE").sql
+        assert "FOR UPDATE" in db.one("FROM " + QSCHEMA + ".evolution_runs WHERE").sql
+        insert = db.one("INSERT INTO " + QSCHEMA + ".domain_versions")
+        assert "ON CONFLICT (domain_id, version) DO NOTHING" in insert.sql
+        assert "'DRAFT'" in insert.sql
+        assert insert.params[1] == "4"
+        # The domains row (review_quorum, mcp_policy) is never written.
+        assert not db.sql_with("INSERT INTO " + QSCHEMA + ".domains")
+        assert not db.sql_with("UPDATE " + QSCHEMA + ".domains")
+
+    def test_repeat_accept_returns_the_existing_version(self, fake_psycopg):
+        db = self._db(_row(status="ACCEPTED", accepted_version="4", revision=8))
+        store = make_store(db)
+        out = store.accept_evolution_run("Evo", "run-1", 2, VERSION_ROW)
+        assert out == {**out, "version": "4", "created": False}
+        assert not db.sql_with("INSERT INTO " + QSCHEMA + ".domain_versions")
+
+    @pytest.mark.parametrize(
+        "run,revision",
+        [
+            (_row(status="EVALUATED", revision=7), 6),
+            (_row(status="PROPOSED", revision=7), 7),
+        ],
+    )
+    def test_stale_or_unevaluated_run_conflicts(self, fake_psycopg, run, revision):
+        db = self._db(run)
+        store = make_store(db)
+        with pytest.raises(ConflictError):
+            store.accept_evolution_run("Evo", "run-1", revision, VERSION_ROW)
+        assert not db.sql_with("INSERT INTO " + QSCHEMA + ".domain_versions")
+
+    def test_lost_version_race_conflicts(self, fake_psycopg):
+        db = self._db(_row(status="EVALUATED", revision=7), inserted=False)
+        store = make_store(db)
+        with pytest.raises(ConflictError):
+            store.accept_evolution_run("Evo", "run-1", 7, VERSION_ROW)
+        assert not db.sql_with("UPDATE " + QSCHEMA + ".evolution_runs")
+
+    @pytest.mark.parametrize("missing", ["domain", "run"])
+    def test_missing_domain_or_run(self, fake_psycopg, missing):
+        db = FakeDB()
+        if missing == "run":
+            db.on("FROM " + QSCHEMA + ".domains WHERE", rows=[{"id": "dom-1"}])
+        store = make_store(db)
+        with pytest.raises(NotFoundError):
+            store.accept_evolution_run("Evo", "run-1", 1, VERSION_ROW)
+
+
+def test_heartbeat_does_not_bump_revision(fake_psycopg):
+    db = FakeDB()
+    store = make_store(db)
+    store.touch_evolution_heartbeat("Evo", "run-1")
+    call = db.one("SET heartbeat_at = now()")
+    assert "revision" not in call.sql and "status = 'RUNNING'" in call.sql
+    assert call.params == (REGISTRY_ID, "Evo", "run-1")

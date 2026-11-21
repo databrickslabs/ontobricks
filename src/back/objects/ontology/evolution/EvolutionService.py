@@ -40,6 +40,10 @@ class EvolutionService:
     def folder(self) -> str:
         return self._folder
 
+    @property
+    def registry(self) -> Any:
+        return self._registry
+
     def read_parent(self, parent_version: str) -> Dict[str, Any]:
         """Return the parent version document; NotFoundError when it is missing."""
         ok, data, msg = self._registry.read_version(
@@ -139,6 +143,24 @@ class EvolutionService:
         if run["status"] == RunStatus.RUNNING.value:
             raise ConflictError("Cancel the run before deleting it")
         return self._store.delete_evolution_run(self._folder, run_id)
+
+    def heartbeat(self, run_id: str) -> None:
+        """Keep a RUNNING run from being marked INTERRUPTED (no revision bump)."""
+        self._store.touch_evolution_heartbeat(self._folder, run_id)
+
+    def append_result(self, run_id: str, result: Dict[str, Any]) -> None:
+        self._store.append_evolution_result(self._folder, run_id, result)
+
+    def list_results(self, run_id: str) -> List[Dict[str, Any]]:
+        self.get_run(run_id)
+        return self._store.list_evolution_results(self._folder, run_id)
+
+    def accept_version(
+        self, run_id: str, revision: int, version_row: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        return self._store.accept_evolution_run(
+            self._folder, run_id, int(revision), version_row
+        )
 
     def recover_interrupted(self) -> int:
         """Mark runs whose worker stopped heart-beating as INTERRUPTED."""

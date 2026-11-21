@@ -50,3 +50,15 @@ class SourceProbe(ABC):
 
         ``*_entity`` are ``{table, id_column}`` of the mapped endpoint classes.
         """
+
+    @abstractmethod
+    def table_version(self, table: str) -> int:
+        """Current Delta version of *table* (``DESCRIBE HISTORY … LIMIT 1``)."""
+
+    @abstractmethod
+    def gold_ids(self, table: str, question_id: str) -> List[str]:
+        """Expected ids for *question_id* from a ``(question_id, expected_ids)`` table.
+
+        Raises :class:`~back.core.errors.NotFoundError` when the question is
+        not in the table.
+        """

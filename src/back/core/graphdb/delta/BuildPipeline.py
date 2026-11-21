@@ -61,6 +61,7 @@ class BuildPipeline:
         ontology_config: Any,
         base_uri: str,
         build_kind: str = "ui",
+        record_history: bool = True,
     ) -> None:
         self.tm = tm
         self.task_id = task_id
@@ -77,6 +78,10 @@ class BuildPipeline:
         self.ontology_config = ontology_config
         self.base_uri = base_uri
         self.build_kind = build_kind
+        # ``False`` for throwaway builds (Ontology Evolve arms) whose relation
+        # names are not the domain's own, so no build history is recorded
+        # against the registry version they were derived from.
+        self.record_history = record_history
         self.is_api = build_kind == "api"
         self.start_time = time.time()
         self.phase_times: Dict[str, float] = {}
@@ -414,6 +419,8 @@ class BuildPipeline:
         if self._build_recorded:
             return
         self._build_recorded = True
+        if not getattr(self, "record_history", True):
+            return
         try:
             from back.objects.registry.RegistryService import RegistryService
             from back.objects.session import sanitize_domain_folder

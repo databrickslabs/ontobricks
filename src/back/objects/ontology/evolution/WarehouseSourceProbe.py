@@ -190,3 +190,31 @@ class WarehouseSourceProbe(SourceProbe):
             k: int(row.get(k) or 0)
             for k in ("rows", "dangling_source", "dangling_target")
         }
+
+    def table_version(self, table: str) -> int:
+        rows = self._run(f"DESCRIBE HISTORY {quote_fqn(table)} LIMIT 1", table)
+        if not rows:
+            raise SourceUnavailable("The table has no Delta history", detail=table)
+        return int(rows[0]["version"])
+
+    def gold_ids(self, table: str, question_id: str) -> List[str]:
+        from back.core.errors import NotFoundError
+
+        rows = self._run(
+            f"SELECT expected_ids FROM {quote_fqn(table)} "
+            f"WHERE question_id = {SQLHelpers.sql_literal(str(question_id))} LIMIT 2",
+            table,
+        )
+        if len(rows) != 1:
+            raise NotFoundError(
+                "The question is not in the gold table (or is listed twice)",
+                detail=str(question_id),
+            )
+        ids = rows[0]["expected_ids"]
+        if isinstance(ids, str):
+            import json
+
+            ids = json.loads(ids)
+        # The SQL connector returns ARRAY columns as numpy arrays, whose truth
+        # value is ambiguous, so never test the value itself for emptiness.
+        return sorted(str(i) for i in (list(ids) if ids is not None else []))

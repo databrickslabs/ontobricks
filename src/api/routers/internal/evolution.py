@@ -7,7 +7,8 @@ The prefix sits outside the status gate on purpose: Evolve reads a parent
 version of any status and never edits it.
 """
 
-from typing import Optional
+import threading
+from typing import Callable, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 
@@ -16,8 +17,11 @@ from back.core.errors import ConflictError, ValidationError
 from back.core.helpers import get_databricks_client, run_blocking
 from back.core.logging import get_logger
 from back.objects.ontology.evolution import (
+    CandidateBuilder,
+    EvaluationService,
     EvolutionPipeline,
     EvolutionService,
+    VersionAllocator,
     WarehouseSourceProbe,
 )
 from back.objects.registry import ROLE_BUILDER, RegistryService
@@ -73,20 +77,56 @@ def _service(
 PROBE_STATEMENT_TIMEOUT_S = 60
 
 
-def _pipeline(
-    session_mgr: SessionManager, settings: Settings, folder: str
-) -> EvolutionPipeline:
-    """Pipeline whose source probe runs as the caller, created in the request."""
-    svc = _service(session_mgr, settings, folder)
+def _probe(session_mgr: SessionManager, settings: Settings) -> WarehouseSourceProbe:
+    """Source probe on the query warehouse, created in the request (runs as the caller)."""
     client = get_databricks_client(get_domain(session_mgr), settings)
     if client is None:
         raise ValidationError("A SQL warehouse is required to inspect sources")
-    probe = WarehouseSourceProbe(
+    return WarehouseSourceProbe(
         lambda sql: client.sql.execute_query(
             sql, statement_timeout_s=PROBE_STATEMENT_TIMEOUT_S
         )
     )
-    return EvolutionPipeline(svc, probe)
+
+
+def _pipeline(
+    session_mgr: SessionManager, settings: Settings, folder: str
+) -> EvolutionPipeline:
+    svc = _service(session_mgr, settings, folder)
+    return EvolutionPipeline(svc, _probe(session_mgr, settings))
+
+
+def _candidate_builder(session_mgr: SessionManager, settings: Settings):
+    return CandidateBuilder(settings, get_domain(session_mgr).settings)
+
+
+# Seconds between worker heartbeats; well inside INTERRUPTED_AFTER_S.
+HEARTBEAT_EVERY_S = 60
+
+
+def _spawn(target: Callable[[], None]) -> None:
+    threading.Thread(target=target, daemon=True).start()
+
+
+def _evaluation_worker(evaluator: EvaluationService, svc: EvolutionService, run_id: str):
+    """Worker body: heart-beat while the evaluation runs, never leave it RUNNING."""
+    stop = threading.Event()
+
+    def beat() -> None:
+        while not stop.wait(HEARTBEAT_EVERY_S):
+            try:
+                svc.heartbeat(run_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Evolve heartbeat for %s failed: %s", run_id, exc)
+
+    def work() -> None:
+        _spawn(beat)
+        try:
+            evaluator.execute(run_id)
+        finally:
+            stop.set()
+
+    return work
 
 
 @router.get("/capabilities")
@@ -115,6 +155,7 @@ async def list_runs(
     settings: Settings = Depends(get_settings),
 ):
     svc = _service(session_mgr, settings, domain)
+    await run_blocking(svc.recover_interrupted)
     return {"runs": await run_blocking(svc.list_runs, parent_version)}
 
 
@@ -149,6 +190,7 @@ async def get_run(
     settings: Settings = Depends(get_settings),
 ):
     svc = _service(session_mgr, settings, domain)
+    await run_blocking(svc.recover_interrupted)
     return {"run": await run_blocking(svc.get_run, run_id)}
 
 
@@ -191,8 +233,15 @@ async def delete_run(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
+    """Delete a run and drop the run-owned graph relations it built."""
     svc = _service(session_mgr, settings, domain)
-    return {"deleted": await run_blocking(svc.delete_run, run_id)}
+    run = await run_blocking(svc.get_run, run_id)
+    builds = (run.get("manifest") or {}).get("builds") or []
+    dropped = []
+    if builds:
+        builder = _candidate_builder(session_mgr, settings)
+        dropped = await run_blocking(builder.drop, get_domain(session_mgr), builds)
+    return {"deleted": await run_blocking(svc.delete_run, run_id), "dropped": dropped}
 
 
 @router.post("/runs/{run_id}/assess", dependencies=_builder_only)
@@ -227,3 +276,82 @@ async def propose(
         pipe.propose, run_id, int(body.get("revision") or 0), operations
     )
     return {"run": run}
+
+
+@router.post("/runs/{run_id}/evaluate", status_code=202, dependencies=_builder_only)
+async def evaluate(
+    run_id: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Build both arms and compare them; returns at once, poll the run.
+
+    Body: ``revision`` plus the expected answer of the run's question —
+    ``expected_ids`` inline, or ``gold_table`` + ``target_question_id`` —
+    and optional protected ``checks`` (``question_id``, ``intent``,
+    ``expected_ids``). Access to every source is checked here, as the
+    caller; the builds then run as the app on the Build warehouse.
+    """
+    body = await _json_object(request)
+    svc = _service(session_mgr, settings, str(body.get("domain") or ""))
+    probe = _probe(session_mgr, settings)
+    evaluator = EvaluationService(
+        svc, _candidate_builder(session_mgr, settings), probe, settings=settings
+    )
+    run = await run_blocking(
+        evaluator.prepare, run_id, int(body.get("revision") or 0), body
+    )
+    _spawn(_evaluation_worker(evaluator, svc, run_id))
+    return {"run": run}
+
+
+@router.get("/runs/{run_id}/results")
+async def results(
+    run_id: str,
+    domain: str = Query(...),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    svc = _service(session_mgr, settings, domain)
+    return {"results": await run_blocking(svc.list_results, run_id)}
+
+
+@router.post("/runs/{run_id}/accept", dependencies=_builder_only)
+async def accept(
+    run_id: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Create the next DRAFT version from a PASS run (idempotent)."""
+    body = await _json_object(request)
+    svc = _service(session_mgr, settings, str(body.get("domain") or ""))
+    allocator = VersionAllocator(svc, svc.registry, _probe(session_mgr, settings))
+    result = await run_blocking(
+        allocator.accept, run_id, int(body.get("revision") or 0)
+    )
+    return result
+
+
+@router.post("/runs/{run_id}/cleanup", dependencies=_builder_only)
+async def cleanup(
+    run_id: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Drop the run-owned graph relations but keep the run as evidence.
+
+    For accepted runs, whose record backs the new version's review link.
+    Dropping is idempotent (``IF EXISTS``) and limited to ``__evo`` names.
+    """
+    body = await _json_object(request)
+    svc = _service(session_mgr, settings, str(body.get("domain") or ""))
+    run = await run_blocking(svc.get_run, run_id)
+    if run["status"] == "RUNNING":
+        raise ConflictError("Wait for the evaluation to finish or cancel it first")
+    builds = (run.get("manifest") or {}).get("builds") or []
+    builder = _candidate_builder(session_mgr, settings)
+    dropped = await run_blocking(builder.drop, get_domain(session_mgr), builds)
+    return {"dropped": dropped}

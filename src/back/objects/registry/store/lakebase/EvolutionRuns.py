@@ -442,3 +442,172 @@ class EvolutionRuns:
                 (self._registry(), int(stale_after_s)),
             )
             return int(cur.rowcount or 0)
+
+    def touch_evolution_heartbeat(self, folder: str, run_id: str) -> None:
+        """Refresh a RUNNING run's heartbeat without bumping its revision."""
+        self._require_evolution_tables()
+        sch = self._q(self._schema)
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                UPDATE {sch}.evolution_runs r SET heartbeat_at = now()
+                FROM {sch}.domains d
+                WHERE d.id = r.domain_id AND d.registry_id = %s
+                  AND d.folder = %s AND r.id = %s AND r.status = 'RUNNING'
+                """,
+                (self._registry(), folder, str(run_id)),
+            )
+
+    # -- review link ------------------------------------------------------
+
+    def _evolution_review_meta(self, folder: str, version: str) -> Dict[str, Any]:
+        """Evolve evidence of *version*; ValidationError when it went stale."""
+        from back.objects.ontology.evolution.EvolutionReviewLink import (
+            EvolutionReviewLink,
+        )
+
+        ok, data, _msg = self.read_version(folder, version, include_simulations=False)
+        return EvolutionReviewLink.review_meta(data, version) if ok else {}
+
+    def update_version_status(self, folder: str, version: str, status: str):
+        """Refuse review of an Evolve version that changed after its evaluation.
+
+        Every route into review (lifecycle change, review submit) reaches
+        the store through here, so the gate cannot be bypassed.
+        """
+        if (status or "").upper() == "IN-REVIEW":
+            self._evolution_review_meta(folder, version)
+        return super().update_version_status(folder, version, status)
+
+    def with_evolution_review_meta(
+        self, folder: str, version: str, meta: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """*meta* plus the evaluation summary; best-effort so the audit row lands."""
+        try:
+            return {**(meta or {}), **self._evolution_review_meta(folder, version)}
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "evolution review meta skipped for %s/%s: %s", folder, version, exc
+            )
+            return dict(meta or {})
+
+    # -- accept -----------------------------------------------------------
+
+    def accept_evolution_run(
+        self,
+        folder: str,
+        run_id: str,
+        expected_revision: int,
+        version_row: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Insert the next DRAFT version from an evaluated run, exactly once.
+
+        One transaction: lock the domain row (serialises concurrent
+        allocators), lock the run, allocate ``max(numeric version) + 1``,
+        insert the version *without* touching the ``domains`` row (so
+        ``review_quorum`` / ``mcp_policy`` are kept), then mark the run
+        ACCEPTED. A repeated accept of the same run returns the version it
+        already created. Returns ``{"version", "created", "run"}``.
+        """
+        from back.objects.registry.registry_cache import invalidate_registry_cache
+
+        self._require_evolution_tables()
+        _psycopg, dict_row = _require_psycopg()
+        with self._connect() as conn, conn.transaction():
+            with conn.cursor(row_factory=dict_row) as cur:
+                domain_id, run = self._lock_run_for_accept(cur, folder, run_id)
+                if run["accepted_version"]:
+                    return {
+                        "version": run["accepted_version"],
+                        "created": False,
+                        "run": self._evolution_row(run),
+                    }
+                if int(run["revision"]) != int(expected_revision):
+                    raise ConflictError(
+                        "The run changed since it was read — reload and retry",
+                        detail=f"expected revision {expected_revision}, "
+                        f"current {run['revision']}",
+                    )
+                if run["status"] != "EVALUATED":
+                    raise ConflictError(f"A {run['status']} run cannot be accepted")
+                version = self._insert_next_version(cur, domain_id, version_row)
+                cur.execute(
+                    f"""
+                    UPDATE {self._q(self._schema)}.evolution_runs
+                    SET status = 'ACCEPTED', accepted_version = %s,
+                        revision = revision + 1, updated_at = now()
+                    WHERE domain_id = %s AND id = %s
+                    RETURNING {_RUN_COLUMNS}
+                    """,
+                    (version, domain_id, str(run_id)),
+                )
+                accepted = cur.fetchone()
+        invalidate_registry_cache(self.cache_key)
+        return {
+            "version": version,
+            "created": True,
+            "run": self._evolution_row(accepted),
+        }
+
+    def _lock_run_for_accept(self, cur, folder: str, run_id: str):
+        sch = self._q(self._schema)
+        cur.execute(
+            f"SELECT id FROM {sch}.domains "
+            "WHERE registry_id = %s AND folder = %s FOR UPDATE",
+            (self._registry(), folder),
+        )
+        domain = cur.fetchone()
+        if not domain:
+            raise NotFoundError("Context not found", detail=folder)
+        cur.execute(
+            f"SELECT {_RUN_COLUMNS} FROM {sch}.evolution_runs "
+            "WHERE domain_id = %s AND id = %s FOR UPDATE",
+            (domain["id"], str(run_id)),
+        )
+        run = cur.fetchone()
+        if not run:
+            raise NotFoundError("Evolution run not found", detail=str(run_id))
+        return domain["id"], run
+
+    def _insert_next_version(
+        self, cur, domain_id: Any, version_row: Dict[str, Any]
+    ) -> str:
+        sch = self._q(self._schema)
+        cur.execute(
+            f"""
+            SELECT COALESCE(MAX(version::integer), 0) + 1 AS next
+            FROM {sch}.domain_versions
+            WHERE domain_id = %s AND version ~ '^[0-9]+$'
+            """,
+            (domain_id,),
+        )
+        version = str(cur.fetchone()["next"])
+        info = dict(version_row.get("info") or {})
+        cur.execute(
+            f"""
+            INSERT INTO {sch}.domain_versions
+                (domain_id, version, info, ontology, assignment,
+                 design_layout, metadata, mcp_enabled, status,
+                 last_update, last_build)
+            VALUES (%s, %s, %s::jsonb, %s::jsonb, %s::jsonb,
+                    %s::jsonb, %s::jsonb, %s, 'DRAFT', %s, '')
+            ON CONFLICT (domain_id, version) DO NOTHING
+            RETURNING version
+            """,
+            (
+                domain_id,
+                version,
+                json.dumps(info),
+                json.dumps(version_row.get("ontology") or {}),
+                json.dumps(version_row.get("assignment") or {}),
+                json.dumps(version_row.get("design_layout") or {}),
+                json.dumps(version_row.get("metadata") or {}),
+                bool(info.get("mcp_enabled")),
+                str(info.get("last_update") or ""),
+            ),
+        )
+        if not cur.fetchone():
+            raise ConflictError(
+                "Another version was created at the same time — retry", detail=version
+            )
+        return version

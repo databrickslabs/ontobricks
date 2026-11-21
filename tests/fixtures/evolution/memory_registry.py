@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -72,7 +73,8 @@ class FakeEvolutionStore:
         if row["revision"] != expected_revision:
             raise ConflictError("stale", detail=f"current {row['revision']}")
         changes = dict(changes)
-        changes.pop("touch_heartbeat", None)
+        if changes.pop("touch_heartbeat", None):
+            row["_beat"] = time.monotonic()
         row.update(copy.deepcopy(changes))
         row["revision"] += 1
         return self._public(row)
@@ -87,11 +89,50 @@ class FakeEvolutionStore:
         return [r for f, i, r in self.results if f == folder and i == run_id]
 
     def mark_interrupted_evolution_runs(self, stale_after_s):
-        hits = [r for r in self.runs.values() if r["status"] == "RUNNING"]
+        now = time.monotonic()
+        hits = [
+            r
+            for r in self.runs.values()
+            if r["status"] == "RUNNING"
+            and now - r.get("_beat", float("-inf")) > stale_after_s
+        ]
         for r in hits:
             r["status"] = "INTERRUPTED"
             r["revision"] += 1
         return len(hits)
+
+    def touch_evolution_heartbeat(self, folder, run_id):
+        row = self.runs.get(run_id)
+        if row and row["status"] == "RUNNING":
+            row["_beat"] = time.monotonic()
+
+    def accept_evolution_run(self, folder, run_id, expected_revision, version_row):
+        row = self.runs.get(run_id)
+        if not row or row["_folder"] != folder:
+            raise NotFoundError("Evolution run not found")
+        if row["accepted_version"]:
+            return {
+                "version": row["accepted_version"],
+                "created": False,
+                "run": self._public(row),
+            }
+        if row["revision"] != expected_revision:
+            raise ConflictError("stale")
+        if row["status"] != "EVALUATED":
+            raise ConflictError(f"A {row['status']} run cannot be accepted")
+        version = str(max(int(v) for v in self.registry.documents) + 1)
+        self.registry.documents[version] = {
+            "info": {**copy.deepcopy(version_row["info"]), "status": "DRAFT"},
+            "versions": {
+                version: {
+                    k: copy.deepcopy(version_row[k])
+                    for k in ("ontology", "assignment", "design_layout", "metadata")
+                }
+            },
+        }
+        row.update(status="ACCEPTED", accepted_version=version)
+        row["revision"] += 1
+        return {"version": version, "created": True, "run": self._public(row)}
 
     @staticmethod
     def _public(row):
@@ -103,6 +144,7 @@ class FakeRegistry:
 
     def __init__(self, documents: Optional[Dict[str, Dict[str, Any]]] = None):
         self.store = FakeEvolutionStore()
+        self.store.registry = self
         self.documents = (
             documents if documents is not None else {"1": fixture_document()}
         )
@@ -113,3 +155,7 @@ class FakeRegistry:
         if doc is None:
             return False, {}, f"Version {version} not found"
         return True, copy.deepcopy(doc), ""
+
+    def copy_version_documents(self, folder, src_version, dst_version):
+        self.writes.append(("copy_documents", src_version, dst_version))
+        return 0, []

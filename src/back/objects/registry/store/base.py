@@ -23,6 +23,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
+from .EvolutionStoreDefaults import EvolutionStoreDefaults
+
 
 _SCHEDULE_KEY_SEP = "::"
 
@@ -301,7 +303,7 @@ class DocumentRow(TypedDict, total=False):
     parsed_at: str           # ISO timestamp ('' until terminal)
 
 
-class RegistryStore(ABC):
+class RegistryStore(EvolutionStoreDefaults, ABC):
     """Single seam in front of all registry-shaped JSON storage."""
 
     # ------------------------------------------------------------------
@@ -751,54 +753,6 @@ class RegistryStore(ABC):
         :meth:`load_all_graph_analytics_runs`. Default is ``([], 0)``.
         """
         return [], 0
-
-    # ------------------------------------------------------------------
-    # Ontology Evolve runs
-    #
-    # Unlike the run-history tables above these rows are feature state,
-    # so stores that cannot hold them raise instead of silently dropping
-    # writes. Only the Lakebase store implements them.
-    # ------------------------------------------------------------------
-
-    def _evolution_unsupported(self):
-        from back.core.errors import InfrastructureError
-
-        return InfrastructureError(
-            "Ontology Evolve needs the Lakebase registry",
-            detail=type(self).__name__,
-        )
-
-    def create_evolution_run(self, folder: str, run: Dict[str, Any]) -> Dict[str, Any]:
-        """Insert a run or return the one with the same idempotency key."""
-        raise self._evolution_unsupported()
-
-    def load_evolution_run(self, folder: str, run_id: str) -> Optional[Dict[str, Any]]:
-        raise self._evolution_unsupported()
-
-    def list_evolution_runs(
-        self, folder: str, parent_version: Optional[str] = None, limit: int = 50
-    ) -> List[Dict[str, Any]]:
-        raise self._evolution_unsupported()
-
-    def update_evolution_run(
-        self, folder: str, run_id: str, expected_revision: int, changes: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Compare-and-swap update; ConflictError on a stale revision."""
-        raise self._evolution_unsupported()
-
-    def delete_evolution_run(self, folder: str, run_id: str) -> bool:
-        raise self._evolution_unsupported()
-
-    def append_evolution_result(
-        self, folder: str, run_id: str, result: Dict[str, Any]
-    ) -> None:
-        raise self._evolution_unsupported()
-
-    def list_evolution_results(self, folder: str, run_id: str) -> List[Dict[str, Any]]:
-        raise self._evolution_unsupported()
-
-    def mark_interrupted_evolution_runs(self, stale_after_s: int) -> int:
-        raise self._evolution_unsupported()
 
     # ------------------------------------------------------------------
     # Review / validation audit log

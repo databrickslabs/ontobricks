@@ -29,6 +29,7 @@ removed in v0.4.0. Operators with on-Volume registry data must run
 
 from __future__ import annotations
 
+from .EvolutionStoreDefaults import EvolutionStoreDefaults
 from .base import (
     BuildRunEntry,
     ChangeEvent,
@@ -46,6 +47,7 @@ from .base import (
 from .factory import RegistryFactory
 
 __all__ = [
+    "EvolutionStoreDefaults",
     "BuildRunEntry",
     "ChangeEvent",
     "DocumentRow",

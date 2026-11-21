@@ -114,6 +114,19 @@ def _rows(name: str) -> List[Dict[str, object]]:
     return [dict(zip(cols, r)) for r in data]
 
 
+GOLD = {
+    "acme_orders": ["O1", "O3", "O5"],
+    "globex_orders": ["O1", "O2"],
+    "umbrella_orders": ["O5", "O6"],
+    "initech_orders": ["O4"],
+    "acme_products": ["P1", "P3"],
+    "globex_products": ["P2"],
+    "o1_lines": ["L1", "L2"],
+    "o5_lines": ["L6", "L7"],
+    "northwind_lines": ["L1", "L2", "L5"],
+}
+
+
 class MemorySourceProbe(SourceProbe):
     """Fixture tables under ``<catalog>.<schema>``; *denied* tables raise access errors."""
 
@@ -123,6 +136,7 @@ class MemorySourceProbe(SourceProbe):
         self._prefix = f"{catalog}.{schema}."
         self._denied: Set[str] = set(denied)
         self.calls: List[str] = []
+        self.versions: Dict[str, int] = {}
 
     def _name(self, table: str) -> str:
         self.calls.append(table)
@@ -198,6 +212,17 @@ class MemorySourceProbe(SourceProbe):
             "dangling_source": sum(1 for s, _ in pairs if s not in src_ids),
             "dangling_target": sum(1 for _, t in pairs if t not in tgt_ids),
         }
+
+    def table_version(self, table: str) -> int:
+        self._name(table)
+        return self.versions.get(table, 1)
+
+    def gold_ids(self, table: str, question_id: str) -> List[str]:
+        from back.core.errors import NotFoundError
+
+        if question_id not in GOLD:
+            raise NotFoundError("unknown question", detail=question_id)
+        return sorted(GOLD[question_id])
 
     def run_pairs(self, sql: str) -> List[tuple]:
         """Rows of a two-column mapping SELECT (test helper)."""

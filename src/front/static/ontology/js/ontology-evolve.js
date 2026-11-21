@@ -49,6 +49,8 @@ window.EvolveModule = {
         if (!this._bound) {
             document.getElementById('evoCheckBtn').addEventListener('click', () => this.check());
             document.getElementById('evoProposeBtn').addEventListener('click', () => this.propose());
+            document.getElementById('evoEvaluateBtn').addEventListener('click', () => this.evaluate());
+            document.getElementById('evoAcceptBtn').addEventListener('click', () => this.accept());
             this._bound = true;
         }
         const intentBox = document.getElementById('evoIntent');
@@ -123,6 +125,7 @@ window.EvolveModule = {
             this._run = assessed.run;
             this._renderCoverage(this._run.coverage);
             document.getElementById('evoProposalCard').classList.add('d-none');
+            document.getElementById('evoEvaluationCard').classList.add('d-none');
         } catch (err) {
             showNotification('Coverage check failed: ' + err.message, 'danger');
         } finally {
@@ -217,5 +220,127 @@ window.EvolveModule = {
             ' me-1"></i>' + escapeHtml(c.name.replace(/_/g, ' ')) +
             (c.reason ? ' — ' + escapeHtml(c.reason.replace(/_/g, ' ')) : '') + '</li>').join('');
         document.getElementById('evoEvaluationCard').classList.toggle('d-none', !val.passed);
+    },
+
+    OUTCOMES: {
+        fixed: ['bg-success', 'Fixed'],
+        unchanged: ['bg-light text-dark border', 'Unchanged'],
+        already_correct: ['bg-light text-dark border', 'Already correct'],
+        new_answer: ['bg-info text-dark', 'Newly answerable'],
+        still_broken: ['bg-danger', 'Still wrong'],
+        regressed: ['bg-danger', 'Regressed'],
+        inconclusive: ['bg-secondary', 'Inconclusive'],
+    },
+
+    DECISIONS: {
+        PASS: 'bg-success',
+        FAIL: 'bg-danger',
+        NO_CHANGE: 'bg-secondary',
+        INCONCLUSIVE: 'bg-warning text-dark',
+        CANCELLED: 'bg-secondary',
+    },
+
+    _evaluationBody() {
+        const body = { revision: this._run.revision };
+        const expected = document.getElementById('evoExpected').value.trim();
+        const table = document.getElementById('evoGoldTable').value.trim();
+        const qid = document.getElementById('evoGoldQuestion').value.trim();
+        if (expected) body.expected_ids = expected.split(',').map((s) => s.trim()).filter(Boolean);
+        if (table) body.gold_table = table;
+        if (qid) body.target_question_id = qid;
+        const checks = document.getElementById('evoChecksInput').value.trim();
+        if (checks) body.checks = JSON.parse(checks);
+        return body;
+    },
+
+    async evaluate() {
+        if (!this._run) return;
+        let body;
+        try {
+            body = this._evaluationBody();
+        } catch (_) {
+            showNotification('The protected questions are not valid JSON', 'warning');
+            return;
+        }
+        const btn = document.getElementById('evoEvaluateBtn');
+        btn.disabled = true;
+        document.getElementById('evoAcceptBox').classList.add('d-none');
+        try {
+            const out = await this._post('/evolution/runs/' + encodeURIComponent(this._run.id) + '/evaluate', body);
+            this._run = out.run;
+            await this._poll();
+        } catch (err) {
+            showNotification('Evaluation failed: ' + err.message, 'danger');
+        } finally {
+            btn.disabled = false;
+        }
+    },
+
+    async _poll() {
+        const status = document.getElementById('evoEvalStatus');
+        const started = Date.now();
+        while (this._run.status === 'RUNNING') {
+            const secs = Math.round((Date.now() - started) / 1000);
+            status.textContent = 'Building both graphs and comparing… ' + secs + 's';
+            await new Promise((r) => setTimeout(r, 3000));
+            const data = await this._get('/evolution/runs/' + encodeURIComponent(this._run.id) +
+                '?domain=' + encodeURIComponent(this._folder()));
+            if (data && data.run) this._run = data.run;
+        }
+        status.textContent = '';
+        this._renderEvaluation(this._run.evaluation || {});
+    },
+
+    _ids(arm) {
+        if (!arm) return '';
+        if (arm.status === 'unresolved') return '<span class="text-muted">cannot be answered</span>';
+        if (arm.status === 'error') return '<span class="text-danger">error</span>';
+        return escapeHtml((arm.ids || []).join(', ') || '(none)') + (arm.truncated ? ' …' : '');
+    },
+
+    _renderEvaluation(ev) {
+        const badge = document.getElementById('evoDecisionBadge');
+        badge.className = 'badge ' + (this.DECISIONS[ev.decision] || 'bg-secondary');
+        badge.textContent = ev.decision || '';
+        const rows = (ev.questions || []).map((q) => {
+            const out = this.OUTCOMES[q.outcome] || ['bg-secondary', q.outcome];
+            return '<tr><td><code>' + escapeHtml(q.question_id) + '</code>' +
+                (q.role === 'target' ? ' <span class="badge bg-light text-dark border">question</span>' : '') +
+                '</td><td>' + this._ids(q.parent) + '</td><td>' + this._ids(q.candidate) + '</td><td>' +
+                escapeHtml(q.expected_ids ? q.expected_ids.join(', ') : '—') + '</td><td><span class="badge ' +
+                out[0] + '">' + escapeHtml(out[1]) + '</span></td></tr>';
+        });
+        const reasons = (ev.reasons || []).map((r) => r.replace(/_/g, ' ')).join('; ');
+        document.getElementById('evoEvaluation').innerHTML =
+            (rows.length ? '<table class="table table-sm align-middle evo-answers"><thead><tr><th>Question</th>' +
+                '<th>Parent</th><th>Candidate</th><th>Expected</th><th>Result</th></tr></thead><tbody>' +
+                rows.join('') + '</tbody></table>' : '') +
+            (reasons ? '<p class="small text-muted mb-1">' + escapeHtml(reasons) + '</p>' : '') +
+            (ev.error ? '<p class="small text-danger mb-1">' + escapeHtml(ev.error) + '</p>' : '');
+        document.getElementById('evoAcceptBox').classList.toggle('d-none', ev.decision !== 'PASS');
+    },
+
+    async accept() {
+        if (!this._run) return;
+        const ok = await showConfirmDialog({
+            title: 'Accept as a new draft version?',
+            message: 'This creates the next DRAFT version of the context from the candidate. The parent version is not changed.',
+            confirmText: 'Accept',
+            confirmClass: 'btn-success',
+        });
+        if (!ok) return;
+        const btn = document.getElementById('evoAcceptBtn');
+        btn.disabled = true;
+        try {
+            const out = await this._post('/evolution/runs/' + encodeURIComponent(this._run.id) + '/accept',
+                { revision: this._run.revision });
+            this._run = out.run;
+            showNotification('Version ' + out.version + ' created as DRAFT. Submit it for review from the registry.', 'success');
+            document.getElementById('evoAcceptBox').classList.add('d-none');
+        } catch (err) {
+            showNotification('Accept failed: ' + err.message, 'danger');
+        } finally {
+            btn.disabled = false;
+        }
     },
 };

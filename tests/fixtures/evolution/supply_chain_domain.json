@@ -3,7 +3,8 @@
     "name": "EvoSupplyChain",
     "description": "OntoBricks Evolve fixture: orders, order lines, products and suppliers. The parent version has no OrderLine to Product relationship.",
     "author": "ontobricks-evolve fixture",
-    "llm_endpoint": ""
+    "llm_endpoint": "",
+    "graph_backend": "databricks"
   },
   "versions": {
     "1": {

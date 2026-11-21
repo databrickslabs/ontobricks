@@ -191,3 +191,69 @@ Tests:
   mapping repaired; missing source inconclusive. 30–44 probe queries each.
 - Local app (make run) against Lakebase PG17 and the real warehouse: coverage
   and proposal rendered in the browser; domain_versions unchanged (v1 only).
+
+## Ontology Evolve — Stage 3: paired evaluation, accept, review link
+
+Why: a proposal that validates on the data still has to be shown to answer
+the question, on the same data, without breaking what already works —
+and only then become a normal reviewed version.
+
+1. back/core/graphdb/delta/{BuildPipeline,Builder}.py
+   `record_history=False` skips the build-run write-back, so throwaway
+   builds never touch the parent version's build_runs.
+2. back/objects/ontology/evolution/CandidateBuilder.py
+   Builds the parent and candidate arms from deep copies of the parent
+   version under run-owned names (`<name>__evo<run8><p|c>`), materialized,
+   no search companions, no history. Cleanup drops only `__evo` relations.
+3. back/objects/ontology/evolution/{PathQueryBuilder,ArmGraphQuery}.py
+   Deterministic GraphQL path query per filter on each arm's own schema.
+   Attributes mapped to the label column are read from `label` (the build
+   emits them only as rdfs:label). Arm stores read with the search cache
+   off, and the store is probed directly because the resolver swallows
+   store errors (an unreadable arm is INCONCLUSIVE, not an empty answer).
+4. back/objects/ontology/evolution/EvaluationService.py
+   prepare (request, as the caller): expected answers inline or from a UC
+   gold table, source access check. execute (worker): source Delta
+   versions before/after (drift → INCONCLUSIVE), both builds, per-question
+   per-arm results appended to evolution_results, decision
+   PASS / FAIL / NO_CHANGE / INCONCLUSIVE, evaluation hash.
+5. back/objects/ontology/evolution/VersionAllocator.py and
+   store/lakebase/EvolutionRuns.accept_evolution_run
+   Accept: PASS + unchanged candidate hash + unchanged parent + access
+   re-check, then one Lakebase transaction (domain row and run locked,
+   next numeric version inserted with ON CONFLICT DO NOTHING, run marked
+   ACCEPTED). The domains row is never written, so review_quorum and
+   mcp_policy are kept. Repeat accepts return the same version.
+6. back/objects/ontology/evolution/EvolutionReviewLink.py,
+   store/lakebase/EvolutionRuns.update_version_status,
+   store/lakebase/ReviewEvents.record_review_event
+   A version with info.evolution cannot enter review once its design hash
+   no longer matches the evaluation; the submit event carries the run id,
+   decision and evaluation hash. Lives in the store, so both review routes
+   (review submit, lifecycle change) go through it.
+7. store/EvolutionStoreDefaults.py
+   Evolve store defaults moved out of RegistryStore (size budget).
+8. api/routers/internal/evolution.py
+   POST /runs/{id}/evaluate (202, worker thread with heartbeat),
+   GET /runs/{id}/results, POST /runs/{id}/accept, POST /runs/{id}/cleanup;
+   DELETE also drops the run's relations; GET routes recover interrupted runs.
+9. Evolve page: Evaluation panel (expected answer or gold table, protected
+   questions, per-question parent/candidate/expected table) and Accept.
+
+Tests:
+- tests/units/ontology/evolution/test_evaluation.py (real GraphQL schema over
+  an in-memory triple store that mirrors the Delta build), test_review_gate.py,
+  router tests, store SQL tests (FakeDB), BuildPipeline record_history test.
+- Live, local app on Lakebase PG17 + serverless warehouse, fixture domain
+  with its own built graph: Acme question PASS — parent cannot answer,
+  candidate O1,O3,O5 = gold; three protected questions unchanged; source
+  versions unchanged. Isolation before vs after evaluation: domain_versions,
+  domains row, build_runs, parent graph Delta versions and row counts and
+  fixture table versions unchanged; only 8 `__evo` relations added; cleanup
+  returned UC to the before state. Two concurrent accepts → one v2 DRAFT.
+  Submit of v2 carries the evaluation; after an edit both review routes
+  return 400.
+- Live store SQL on PG17.12 and PG19.0: 6 concurrent accepts → 1 version,
+  domains row unchanged, stale version blocked, heartbeat keeps revision.
+- Found live and fixed: ARRAY gold column arrives as a numpy array;
+  label-column attributes; arm store defaulting to the `_props` companion.

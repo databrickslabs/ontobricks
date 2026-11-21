@@ -84,3 +84,129 @@ class TestMiddlewareClassification:
         assert ("/evolution/runs/{run_id}", ("DELETE",)) in guarded
         assert ("/evolution/runs/{run_id}/assess", ("POST",)) in guarded
         assert ("/evolution/runs/{run_id}/proposal", ("POST",)) in guarded
+        assert ("/evolution/runs/{run_id}/evaluate", ("POST",)) in guarded
+        assert ("/evolution/runs/{run_id}/accept", ("POST",)) in guarded
+        assert ("/evolution/runs/{run_id}/cleanup", ("POST",)) in guarded
+
+
+class _Request:
+    def __init__(self, body):
+        self._body = body
+        self.state = SimpleNamespace(user_email="a@x")
+        self.headers = {}
+
+    async def json(self):
+        return self._body
+
+
+@pytest.fixture
+def wired(monkeypatch):
+    """Router handlers on the in-memory world; workers collected, not started."""
+    from tests.fixtures.evolution.memory_graph import memory_query_factory
+    from tests.fixtures.evolution.memory_probe import MemorySourceProbe
+    from tests.units.ontology.evolution.test_evaluation import (
+        ACME,
+        FakeGraphBuilder,
+        _proposed,
+        _world,
+    )
+
+    svc, _evaluator, probe, registry, log = _world()
+    session_domain = SimpleNamespace(domain_folder="EvoSupplyChain", settings={})
+    spawned = []
+    monkeypatch.setattr(router_module, "_service", lambda m, s, f: svc)
+    monkeypatch.setattr(router_module, "_probe", lambda m, s: MemorySourceProbe())
+    monkeypatch.setattr(router_module, "get_domain", lambda m: session_domain)
+    monkeypatch.setattr(
+        router_module,
+        "_candidate_builder",
+        lambda m, s: router_module.CandidateBuilder(
+            None, {}, builder_factory=lambda d: FakeGraphBuilder(d, log)
+        ),
+    )
+    real = router_module.EvaluationService
+    monkeypatch.setattr(
+        router_module,
+        "EvaluationService",
+        lambda *a, **k: real(*a, query_factory=memory_query_factory()),
+    )
+    monkeypatch.setattr(router_module, "_spawn", spawned.append)
+    run = _proposed(svc, probe, ACME)
+    return SimpleNamespace(
+        svc=svc, run=run, spawned=spawned, registry=registry, log=log
+    )
+
+
+@pytest.fixture(autouse=True)
+def _credentials(monkeypatch):
+    from back.core.helpers.DatabricksHelpers import DatabricksHelpers
+
+    monkeypatch.setattr(
+        DatabricksHelpers,
+        "get_triplestore_sql_credentials",
+        staticmethod(lambda d, s: ("https://h", "", "wh")),
+    )
+
+
+async def test_evaluate_accept_results_and_delete(wired):
+    body = {
+        "domain": "EvoSupplyChain",
+        "revision": wired.run["revision"],
+        "expected_ids": ["O1", "O3", "O5"],
+    }
+    out = await router_module.evaluate(
+        wired.run["id"], _Request(body), session_mgr=object(), settings=_settings()
+    )
+    assert out["run"]["status"] == "RUNNING"
+    (work,) = wired.spawned
+    work()
+    assert len(wired.spawned) == 2  # the heartbeat ticker was started
+    run = wired.svc.get_run(wired.run["id"])
+    assert run["evaluation"]["decision"] == "PASS"
+
+    res = await router_module.results(
+        run["id"], domain="EvoSupplyChain", session_mgr=object(), settings=_settings()
+    )
+    assert len(res["results"]) == 2
+
+    accepted = await router_module.accept(
+        run["id"],
+        _Request({"domain": "EvoSupplyChain", "revision": run["revision"]}),
+        session_mgr=object(),
+        settings=_settings(),
+    )
+    assert accepted["version"] == "2" and accepted["created"]
+
+    cleaned = await router_module.cleanup(
+        run["id"],
+        _Request({"domain": "EvoSupplyChain"}),
+        session_mgr=object(),
+        settings=_settings(),
+    )
+    assert len(cleaned["dropped"]) == 8
+    assert wired.svc.get_run(run["id"])["status"] == "ACCEPTED"
+
+    other = wired.svc.create_run(
+        "1", run["intent"], question="q", owner="o", idempotency_key="other"
+    )
+    other = wired.svc.update(
+        other["id"], other["revision"], {"manifest": run["manifest"]}
+    )
+    gone = await router_module.delete_run(
+        other["id"], domain="EvoSupplyChain", session_mgr=object(), settings=_settings()
+    )
+    assert gone["deleted"] is True and len(gone["dropped"]) == 8
+
+
+def test_worker_heartbeat_ticks_until_the_work_ends(monkeypatch):
+    beats = []
+    svc = SimpleNamespace(heartbeat=lambda run_id: beats.append(run_id))
+    evaluator = SimpleNamespace(execute=lambda run_id: None)
+    started = []
+    monkeypatch.setattr(router_module, "_spawn", started.append)
+    monkeypatch.setattr(router_module, "HEARTBEAT_EVERY_S", 0)
+    work = router_module._evaluation_worker(evaluator, svc, "r1")
+    work()
+    (beat,) = started
+    beat()  # the stop event is already set once the work finished
+    assert beats == []

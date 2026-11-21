@@ -393,3 +393,30 @@ class TestBuilderAndValidatorBranches:
         ops = run["proposal"]["alternatives"][0]["operations"]
         result = ProposalValidator(Failing()).validate(ops, run["candidate"])
         assert reason in result["failures"]
+
+
+class TestWarehouseVersionsAndGold:
+    def test_table_version_reads_delta_history(self):
+        ex = FakeExec([[{"version": 7, "operation": "WRITE"}]])
+        assert WarehouseSourceProbe(ex).table_version(T) == 7
+        assert ex.sql[0] == "DESCRIBE HISTORY `c`.`s`.`order_lines` LIMIT 1"
+
+    def test_table_without_history_is_unavailable(self):
+        with pytest.raises(SourceUnavailable):
+            WarehouseSourceProbe(FakeExec([[]])).table_version(T)
+
+    @pytest.mark.parametrize(
+        "ids", [["O3", "O1"], '["O3", "O1"]', __import__("numpy").array(["O3", "O1"])]
+    )
+    def test_gold_ids_bind_the_question_and_sort(self, ids):
+        ex = FakeExec([[{"expected_ids": ids}]])
+        out = WarehouseSourceProbe(ex).gold_ids("c.s.gold", "acme'; --")
+        assert out == ["O1", "O3"]
+        assert "question_id = 'acme''; --'" in ex.sql[0]
+
+    @pytest.mark.parametrize("rows", [[], [{"expected_ids": []}, {"expected_ids": []}]])
+    def test_missing_or_duplicate_gold_question(self, rows):
+        from back.core.errors import NotFoundError
+
+        with pytest.raises(NotFoundError):
+            WarehouseSourceProbe(FakeExec([rows])).gold_ids("c.s.gold", "q")

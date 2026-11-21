@@ -60,9 +60,40 @@
     </div>
 
     <div class="card mb-3 d-none" id="evoEvaluationCard">
-        <div class="card-header fw-semibold">4. Evaluation</div>
-        <div class="card-body small text-muted" id="evoEvaluation">
-            Build the candidate graph and compare it with the parent on the same data.
+        <div class="card-header fw-semibold d-flex justify-content-between">
+            <span>4. Evaluation</span>
+            <span class="badge" id="evoDecisionBadge"></span>
+        </div>
+        <div class="card-body">
+            <p class="small text-muted mb-2">Builds the parent and the candidate into separate, temporary graphs from the same source data, runs the question on both and compares each answer with the expected one. The parent graph and version are not touched.</p>
+            <div class="row g-2 mb-2">
+                <div class="col-md-6">
+                    <label class="form-label small" for="evoExpected">Expected answer (ids, comma separated)</label>
+                    <input type="text" class="form-control form-control-sm" id="evoExpected" placeholder="O1, O3, O5">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small" for="evoGoldTable">or a gold table and question id</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" id="evoGoldTable" placeholder="catalog.schema.gold_answers">
+                        <input type="text" class="form-control evo-gold-qid" id="evoGoldQuestion" placeholder="question id">
+                    </div>
+                </div>
+            </div>
+            <label class="form-label small" for="evoChecksInput">Questions that must not change (optional JSON list)</label>
+            <textarea class="form-control form-control-sm font-monospace evo-intent mb-2" id="evoChecksInput" rows="3" spellcheck="false" placeholder='[{"question_id": "acme_products", "intent": {"output_class": "Product", "filters": [...]}}]'></textarea>
+            <div class="d-flex gap-2 align-items-center">
+                <button type="button" class="btn btn-primary btn-sm" id="evoEvaluateBtn">
+                    <i class="bi bi-play-circle me-1"></i>Build and compare
+                </button>
+                <span class="small text-muted" id="evoEvalStatus"></span>
+            </div>
+            <div id="evoEvaluation" class="mt-3"></div>
+            <div class="mt-2 d-none" id="evoAcceptBox">
+                <button type="button" class="btn btn-success btn-sm" id="evoAcceptBtn">
+                    <i class="bi bi-check2-circle me-1"></i>Accept as a new draft version
+                </button>
+                <span class="small text-muted ms-2">Creates the next DRAFT version from the candidate. Review and publish work as usual.</span>
+            </div>
         </div>
     </div>
 </div>

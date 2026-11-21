@@ -286,3 +286,35 @@ def test_run_sets_terminal_step_statuses_with_real_task_manager(
             assert step_statuses[step_name] == expected_status
     finally:
         tm.delete_task(task.id)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("record_history,calls", [(True, 1), (False, 0)])
+def test_record_history_flag_controls_registry_write_back(record_history, calls) -> None:
+    """Ontology Evolve arm builds must not write build_runs for the parent folder."""
+    pipe = BuildPipeline.__new__(BuildPipeline)
+    pipe.record_history = record_history
+    pipe._build_recorded = False
+    pipe.domain = SimpleNamespace(uc_domain_folder="dom", current_version="3")
+    pipe.domain_snap = SimpleNamespace(current_version="3", ontology={}, assignment={})
+    pipe.domain_name = "dom"
+    pipe.settings = SimpleNamespace()
+    pipe.start_time = 0.0
+    pipe.phase_times = {}
+    pipe.build_kind = "evolution"
+    pipe.triple_count = 1
+    pipe.entity_mappings = []
+    pipe.relationship_mappings = []
+    pipe.spark_sql = ""
+    pipe.materialization = "table"
+    pipe.view_table = "c.s.v"
+    pipe.data_table = "c.s.v_data"
+    pipe.task_id = "t"
+    svc = MagicMock()
+    with patch(
+        "back.objects.registry.RegistryService.RegistryService.from_context",
+        return_value=svc,
+    ):
+        pipe._record_build_run("success")
+    assert svc.record_build_run.call_count == calls
+    assert pipe._build_recorded is True
