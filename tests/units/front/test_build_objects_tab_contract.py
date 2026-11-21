@@ -61,6 +61,18 @@ def test_drops_go_through_the_admin_settings_endpoints():
         assert endpoint in OBJECTS_JS
 
 
+def test_group_by_toggle_defaults_to_usage():
+    assert 'name="buildObjectsGroupBy" id="buildObjectsGroupByUsage"' in OBJECTS_HTML
+    assert 'value="usage" autocomplete="off" checked' in OBJECTS_HTML
+    assert 'id="buildObjectsGroupBySource"' in OBJECTS_HTML
+    assert "groupBy = 'usage'" in OBJECTS_JS
+
+
+def test_usage_view_is_fed_by_server_usages():
+    assert "usages: data.usages" in OBJECTS_JS or "data.usages || []" in OBJECTS_JS
+    assert "buckets.get(item.usage)" in OBJECTS_JS
+
+
 def test_domain_runs_wires_objects_tab():
     assert "buildTabObjectsBtn" in RUNS_JS
     assert "'objects'" in RUNS_JS

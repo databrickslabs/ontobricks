@@ -29,7 +29,12 @@ const BuildObjectsModule = (() => {
         graph: 'bg-success-subtle text-success-emphasis',
     };
 
-    let current = { groups: [], can_drop: false };
+    // Sort rank inside a usage bucket: views, then tables, then registrations.
+    const KIND_RANK = { view: 0, table: 1, sync: 2, graph: 3, metrics: 4, work: 5 };
+
+    let current = { groups: [], usages: [], can_drop: false };
+    let lastData = null;
+    let groupBy = 'usage';
     let busy = false;
 
     const el = (id) => document.getElementById(id);
@@ -73,7 +78,9 @@ const BuildObjectsModule = (() => {
         return btn;
     }
 
-    function itemRow(item, canDrop) {
+    /** One object row. `sourceTitle` is set only in the by-usage view, where rows
+     *  from several sources share a table and need their origin shown. */
+    function itemRow(item, canDrop, sourceTitle) {
         const tr = document.createElement('tr');
         const kindCell = node('td');
         kindCell.style.width = '90px';
@@ -85,10 +92,15 @@ const BuildObjectsModule = (() => {
         if (item.error) {
             nameCell.appendChild(node('div', 'text-danger', item.error));
         }
-        const infoCell = node('td', 'small text-muted', item.state || '');
+        const cells = [kindCell, nameCell];
+        if (sourceTitle) {
+            cells.push(node('td', 'small text-muted', sourceTitle));
+        }
+        cells.push(node('td', 'small text-muted', item.state || ''));
         const actionCell = node('td', 'text-end');
         if (canDrop) actionCell.appendChild(dropButton(item));
-        [kindCell, nameCell, infoCell, actionCell].forEach((td) => tr.appendChild(td));
+        cells.push(actionCell);
+        cells.forEach((td) => tr.appendChild(td));
         return tr;
     }
 
@@ -121,8 +133,67 @@ const BuildObjectsModule = (() => {
         return current.groups.flatMap((group) => group.items);
     }
 
+    /** By-source view: one table per backend group, as the server returns them. */
+    function renderBySource(canDrop) {
+        const wrap = node('div', 'p-3');
+        current.groups.forEach((group) => wrap.appendChild(groupBlock(group, canDrop)));
+        return wrap;
+    }
+
+    function sortEntries(entries) {
+        const rank = (kind) => (kind in KIND_RANK ? KIND_RANK[kind] : 9);
+        return [...entries].sort((a, b) => (
+            rank(a.item.kind) - rank(b.item.kind) || a.item.name.localeCompare(b.item.name)
+        ));
+    }
+
+    function usageBlock(usage, entries, canDrop) {
+        const block = node('div', 'mb-4');
+        const header = node('div', 'd-flex align-items-center gap-2 mb-2');
+        header.appendChild(node('h6', 'mb-0', usage.title));
+        header.appendChild(node('span', 'badge bg-secondary-subtle text-secondary-emphasis border', String(entries.length)));
+        block.appendChild(header);
+        const wrap = node('div', 'table-responsive');
+        const table = node('table', 'table table-hover align-middle ob-runs-table mb-0');
+        const tbody = document.createElement('tbody');
+        sortEntries(entries).forEach(({ item, source }) => {
+            tbody.appendChild(itemRow(item, canDrop, source));
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        block.appendChild(wrap);
+        return block;
+    }
+
+    /** By-usage view: objects from every source, bucketed by what they are for.
+     *  Sections that failed to load stay visible on top, as in the source view. */
+    function renderByUsage(canDrop) {
+        const wrap = node('div', 'p-3');
+        current.groups
+            .filter((group) => group.error)
+            .forEach((group) => wrap.appendChild(groupBlock(group, canDrop)));
+
+        const buckets = new Map(current.usages.map((usage) => [usage.key, []]));
+        current.groups.forEach((group) => {
+            group.items.forEach((item) => {
+                const bucket = buckets.get(item.usage);
+                if (bucket) bucket.push({ item, source: group.title });
+            });
+        });
+        current.usages.forEach((usage) => {
+            const entries = buckets.get(usage.key);
+            if (entries.length) wrap.appendChild(usageBlock(usage, entries, canDrop));
+        });
+        return wrap;
+    }
+
     function render(data) {
-        current = { groups: data.groups || [], can_drop: !!data.can_drop };
+        lastData = data;
+        current = {
+            groups: data.groups || [],
+            usages: data.usages || [],
+            can_drop: !!data.can_drop,
+        };
         const count = allItems().length;
         const hasProblem = current.groups.some((group) => group.error);
         const deleteAll = el('buildObjectsDeleteAllBtn');
@@ -141,9 +212,9 @@ const BuildObjectsModule = (() => {
         }
         const content = el('buildObjectsContent');
         content.textContent = '';
-        const wrap = node('div', 'p-3');
-        current.groups.forEach((group) => wrap.appendChild(groupBlock(group, current.can_drop)));
-        content.appendChild(wrap);
+        content.appendChild(groupBy === 'usage'
+            ? renderByUsage(current.can_drop)
+            : renderBySource(current.can_drop));
         showOnly('buildObjectsContent');
     }
 
@@ -231,6 +302,13 @@ const BuildObjectsModule = (() => {
         if (deleteAll) {
             deleteAll.addEventListener('click', () => confirmAndDrop(allItems(), 'this context version'));
         }
+        document.querySelectorAll('input[name="buildObjectsGroupBy"]').forEach((input) => {
+            input.addEventListener('change', () => {
+                if (!input.checked) return;
+                groupBy = input.value;
+                if (lastData) render(lastData);
+            });
+        });
     }
 
     return { init, load, render };

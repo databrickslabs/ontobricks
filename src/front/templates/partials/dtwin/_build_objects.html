@@ -6,6 +6,14 @@
         Tables, views, sync registrations and graphs this context version built
     </span>
     <div class="d-flex align-items-center gap-2 ms-auto">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Group objects by">
+            <input type="radio" class="btn-check" name="buildObjectsGroupBy" id="buildObjectsGroupByUsage"
+                   value="usage" autocomplete="off" checked>
+            <label class="btn btn-outline-secondary" for="buildObjectsGroupByUsage">By usage</label>
+            <input type="radio" class="btn-check" name="buildObjectsGroupBy" id="buildObjectsGroupBySource"
+                   value="source" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="buildObjectsGroupBySource">By source</label>
+        </div>
         <button type="button" class="btn btn-sm btn-outline-danger d-none"
                 id="buildObjectsDeleteAllBtn"
                 title="Drop every object listed below (admins only)">

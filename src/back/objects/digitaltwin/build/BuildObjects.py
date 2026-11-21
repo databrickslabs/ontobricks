@@ -37,6 +37,42 @@ _PG_TABLE_SUFFIXES: Tuple[str, ...] = (
 _SIM_SUFFIX_RE = re.compile(r"__(sim|smu|sms|smp|smb|smo)_[a-z0-9]+$", re.I)
 _GRAPH_NAME_RE = re.compile(r"^(?P<safe>.+)_V(?P<version>[^_]+)$", re.I)
 
+# Usage buckets in display order. Titles reuse the Build → Cache vocabulary.
+USAGES: Tuple[Tuple[str, str], ...] = (
+    ("graph", "Graph data"),
+    ("inferred", "Inferred"),
+    ("cache", "Search cache"),
+    ("simulation", "Simulations"),
+    ("analytics", "Analytics"),
+)
+_INFERRED_SUFFIXES: Tuple[str, ...] = ("__app", "_inferred")
+_CACHE_SUFFIXES: Tuple[str, ...] = (
+    "_adj_out",
+    "_adj_in",
+    "_props",
+    "_entity_search",
+    "_entity_search_asserted",
+)
+
+
+def usage_of(name: str) -> str:
+    """Classify one physical object by what the graph uses it for.
+
+    Simulation sandboxes first (their ``__sim_<id>`` suffix can follow a cache
+    suffix), then analytics output, then the writable companions, then the
+    search cache. Anything else is graph data: the union view, the ``_sync``
+    bulk table, the Delta ``_data`` / ``_graph`` relations and the R2RML view.
+    """
+    if _SIM_SUFFIX_RE.search(name):
+        return "simulation"
+    if name.startswith("graph_metrics_") or name.endswith("_analytics"):
+        return "analytics"
+    if name.endswith(_INFERRED_SUFFIXES):
+        return "inferred"
+    if name.endswith(_CACHE_SUFFIXES):
+        return "cache"
+    return "graph"
+
 
 class BuildObjects:
     """Per-backend inventory of the current context version's physical objects."""
@@ -57,6 +93,7 @@ class BuildObjects:
             "backend": backend,
             "graph_name": effective_graph_name(domain),
             "groups": groups,
+            "usages": [{"key": key, "title": title} for key, title in USAGES],
             "message": "" if build else "This context has no graph backend.",
         }
 
@@ -258,11 +295,12 @@ class BuildObjects:
         *,
         error: str = "",
     ) -> Dict[str, Any]:
+        tagged = [{**item, "usage": usage_of(item["name"])} for item in items]
         return {
             "key": key,
             "title": title,
             "location": location,
-            "items": items,
+            "items": tagged,
             "error": error,
         }
 

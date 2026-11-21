@@ -56,3 +56,41 @@ Modified files:
 - tests/units/front/test_build_objects_tab_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11125 passed, 334 skipped, 8 deselected
+
+--------------------------------------------------------------------------------
+Graph / Build / Objects: group and sort by usage
+--------------------------------------------------------------------------------
+
+Context:
+The user asked to also sort and group the Objects tab by usage, the way the
+Cache tab names its companion tables. Grouping by source (backend) stays
+available through a toggle.
+
+Changes:
+1. src/back/objects/digitaltwin/build/BuildObjects.py
+   - New usage_of(name) classifier and USAGES order: Graph data, Inferred,
+     Search cache, Simulations, Analytics. Every item is tagged with its usage
+     in _group(); the response gains `usages` (ordered keys and titles).
+2. src/front/templates/partials/dtwin/_build_objects.html
+   - "By usage" / "By source" toggle in the filter bar; By usage is the default.
+3. src/front/static/query/js/query-build-objects.js
+   - By-usage view: one block per bucket, rows sorted by kind (views, tables,
+     registrations) then name, each row showing its source. Failed sections stay
+     visible on top. Delete all keeps the drop-safe source order in both views.
+4. docs/user-guide.md
+   - Describes the usage grouping and the toggle.
+5. tests/units/dtwin/test_build_objects.py,
+   tests/units/front/test_build_objects_tab_contract.py
+   - usage_of cases, usage tags and view-first ordering on Postgres objects,
+     usages order in the response, toggle default and usage-view wiring.
+
+Modified files:
+- src/back/objects/digitaltwin/build/BuildObjects.py
+- src/front/templates/partials/dtwin/_build_objects.html
+- src/front/static/query/js/query-build-objects.js
+- docs/user-guide.md
+- tests/units/dtwin/test_build_objects.py
+- tests/units/front/test_build_objects_tab_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-21.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11145 passed, 334 skipped, 8 deselected

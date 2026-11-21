@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from back.objects.digitaltwin.build.BuildObjects import BuildObjects
+from back.objects.digitaltwin.build.BuildObjects import BuildObjects, usage_of
 
 pytestmark = pytest.mark.unit
 
@@ -255,6 +255,71 @@ def test_neo4j_lists_only_the_versions_graph_with_its_connection():
             "kind": "graph",
             "name": "Sales_V1",
             "detail": "12 nodes · 7 edges",
+            "usage": "graph",
             "drop": {"api": "neo4j", "label": "Sales_V1", "connection_name": "aura"},
         }
+    ]
+    assert [u["key"] for u in out["usages"]] == [
+        "graph",
+        "inferred",
+        "cache",
+        "simulation",
+        "analytics",
+    ]
+
+
+# --- usage ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name,usage",
+    [
+        ("sales_v1", "graph"),
+        ("sales_v1_sync", "graph"),
+        ("triplestore_sales_V1_data", "graph"),
+        ("triplestore_sales_V1_graph", "graph"),
+        ("Sales_V1", "graph"),
+        ("sales_v1__app", "inferred"),
+        ("triplestore_sales_V1_inferred", "inferred"),
+        ("sales_v1_adj_out", "cache"),
+        ("sales_v1_adj_in", "cache"),
+        ("sales_v1_props", "cache"),
+        ("sales_v1_entity_search", "cache"),
+        ("sales_v1_entity_search_asserted", "cache"),
+        ("sales_v1__sim_ab12", "simulation"),
+        ("sales_v1_adj_out__smu_ab12", "simulation"),
+        ("graph_metrics_sales_1", "analytics"),
+        ("graph_metrics_sales_1_work_x", "analytics"),
+        ("triplestore_sales_V1_analytics", "analytics"),
+    ],
+)
+def test_usage_of(name, usage):
+    assert usage_of(name) == usage
+
+
+def test_pg_items_carry_their_usage_and_views_stay_first():
+    pg = {
+        "registry_schema": "ontobricks_registry",
+        "views": [{"schema": "graph", "name": "sales_v1"}],
+        "tables": [
+            {"schema": "graph", "name": "sales_v1__app"},
+            {"schema": "graph", "name": "sales_v1_adj_out"},
+            {"schema": "graph", "name": "sales_v1_sync"},
+        ],
+    }
+    with patch(_FACTORY) as factory, patch(
+        f"{_SETTINGS}.graph_engine_lakebase_objects_result", return_value=pg
+    ), patch(
+        f"{_SETTINGS}.graph_engine_lakebase_sync_objects_result",
+        return_value={"uc_tables": []},
+    ), patch(f"{_SETTINGS}._analytics_objects", return_value=("main.reg", [], "")):
+        factory._resolve_graph_backend.return_value = "lakebase"
+        factory.get_health_probe.return_value = _delta_probe([])
+        out = BuildObjects.list_for_domain(_domain("lakebase"), MagicMock(), MagicMock())
+    items = out["groups"][0]["items"]
+    assert [(i["name"], i["usage"]) for i in items] == [
+        ("sales_v1", "graph"),
+        ("sales_v1__app", "inferred"),
+        ("sales_v1_adj_out", "cache"),
+        ("sales_v1_sync", "graph"),
     ]
