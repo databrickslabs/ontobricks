@@ -1260,9 +1260,7 @@ class DomainSession:
             "description": self._data["domain"]["info"].get("description", ""),
             "author": self._data["domain"]["info"].get("author", ""),
             "llm_endpoint": self._data["domain"]["info"].get("llm_endpoint", ""),
-            "llm_endpoint_kind": self._data["domain"]["info"].get(
-                "llm_endpoint_kind", ""
-            ),
+            "llm_endpoint_kind": self._data["domain"]["info"].get("llm_endpoint_kind", ""),
             "mcp_enabled": self._data["domain"]["info"].get("mcp_enabled", False),
             "status": self._data["domain"]["info"].get("status", "DRAFT"),
             "review_quorum": max(
@@ -1298,6 +1296,7 @@ class DomainSession:
             "name": self._data["ontology"].get("name", ""),
             "base_uri": self._data["ontology"].get("base_uri", ""),
             "base_uri_auto": self._data["ontology"].get("base_uri_auto", False),
+            "identity_scope": self._data["ontology"].get("identity_scope", "class"),
             "description": self._data["ontology"].get("description", ""),
             "label_lang": self._data["ontology"].get("label_lang"),
             "comment_lang": self._data["ontology"].get("comment_lang"),

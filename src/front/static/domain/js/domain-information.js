@@ -453,6 +453,11 @@ document.addEventListener('DOMContentLoaded', async function() {
                     cacheEl.dataset.cacheState = infoData.info.graph_cache_state;
                 }
             }
+            const scopeEl = document.getElementById('domainIdentityScope');
+            if (scopeEl && !scopeEl.dataset.userEdited && infoData.info && infoData.info.identity_scope) {
+                scopeEl.value = infoData.info.identity_scope;
+                scopeEl.dataset.savedValue = infoData.info.identity_scope;
+            }
             syncNeo4jConnectionSection();
             toggleLakehouseMaterializationSection();
             toggleSearchCacheSection();

@@ -1,0 +1,32 @@
+## Update v0.9.3 release notes and README after deployment validation
+
+Context:
+The 0.9.3 build was deployed to the `ontobricks-09x` instance and validated
+live (app smoke, MCP smoke, scenario campaign). The release notes did not yet
+cover the dependency security work, the lockfile URL fix, or the test-hygiene
+and timestamp cleanups, and they did not record the live validation. The
+README "What's new in 0.9.3" block also lacked the security floors. The Graph
+Chat upgrade note claimed 8192 is a Foundation Model ceiling, which the code
+does not establish; it now states the configured range only.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.9.3.md
+   Added live validation results to the test status header.
+   Added a "Dependency security floors" highlight (Dependabot #318, #325–#329).
+   Added a "Dependencies and maintenance" section (security floors, public
+   lockfile URLs, pytest/pyproject warning filters, `utcnow` replacement).
+   Reworded the Graph Chat `max_tokens` upgrade note to the accepted range.
+   Added a dependency upgrade note (`databricks-sql-connector` ≥ 4.7.0, `make deploy`).
+2. README.md
+   Added a "Dependency security floors" bullet to the 0.9.3 "What's new" block.
+
+Modified files:
+- releases/ReleaseNotes_V0.9.3.md
+- README.md
+- changelogs/v0.9.3/benoitcayladbx_2026-11-21.log
+
+Tests: documentation-only change; no code modified. Last full run before this
+update: `uv run --frozen pytest -q -m "not scenario"` → 9712 passed, 337 skipped,
+8 deselected. Live validation on `ontobricks-09x`: app smoke 11 passed, MCP
+smoke 6 passed, scenario campaign 7 passed (validation 13 passed, 0 failed).

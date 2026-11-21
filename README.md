@@ -2,7 +2,7 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks 0.9.2</h1>
+<h1 align="center">OntoBricks 0.9.3</h1>
 
 <p align="center">
   <strong>Turn your Databricks tables into a living knowledge graph — in four clicks.</strong>
@@ -26,6 +26,16 @@
 </p>
 
 ---
+
+### What's new in 0.9.3
+
+- **Hierarchy instance IRI scope**: opt-in root-class URIs so a parent and subclass mapped with the same business id share one Knowledge Graph node.
+- **Registry import consistency**: Add missing versions (never overwrite), Rename rewrites ontology URIs, highest new version starts as DRAFT.
+- **Graph Chat `max_tokens`**: configurable via `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS` (default 8192) for reasoning models.
+- **Docs match shipped transfer paths**: OBX UI + GitHub mirror only; the undocumented `registry_transfer` CLI section is gone.
+- **Dependency security floors**: Dependabot alerts for `oauthlib`, `opentelemetry-api`, and `dnspython` are closed; `databricks-sql-connector` ≥ 4.7.0 is required.
+
+Full details are in the [Release Notes](releases/ReleaseNotes_V0.9.3.md). Product direction: [Roadmap November 2026](releases/Roadmap_2026-11.md).
 
 ### What's new in 0.9.2
 
@@ -173,8 +183,8 @@ Every domain version carries a **DRAFT / IN-REVIEW / PUBLISHED** status enforced
 server-side. A **single editor** holds a DRAFT at a time (auto-releasing leases,
 admin take-over), a business-friendly **review workflow** collects sign-offs
 with a configurable quorum, and every decision is persisted append-only. Move
-domains between environments with the **OBX** export/import (UI or
-[CLI](docs/advanced_features.md#registry-import-and-export)).
+domains between environments with the **OBX** export/import or the
+[GitHub mirror](docs/advanced_features.md#registry-import-and-export).
 
 ### Pluggable graph engine
 Pick a backend **per domain**: **Lakebase (Postgres)** by default,

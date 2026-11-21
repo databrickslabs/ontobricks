@@ -1,8 +1,11 @@
 # OntoBricks — Product Roadmap
 
+> **Superseded** by `releases/Roadmap_2026-11.md` (Asana / November 2026).
+> Kept as the October 2026 historical snapshot.
+
 > **Version:** 0.9.1 shipped → 0.10.0 and beyond<br>
 > **Last updated:** 2026-10-29<br>
-> **Status:** Living vision — direction of travel, not a delivery contract<br>
+> **Status:** Historical snapshot — superseded by Roadmap_2026-11.md<br>
 > **Scheduling policy:** themes and sequencing are directional. This document
 > contains no delivery-date commitments.
 

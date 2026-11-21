@@ -7,6 +7,7 @@ from rdflib.namespace import RDF, RDFS, XSD
 import re
 
 from back.core.logging import get_logger
+from back.core.w3c.r2rml.InstanceIdentity import InstanceIdentity
 from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
@@ -25,6 +26,7 @@ class R2RMLGenerator:
         self.base_uri = self._safe_uri(normalized)
         self.rr = Namespace("http://www.w3.org/ns/r2rml#")
         self.ont = Namespace(self.base_uri)
+        self._segment_map: Dict[str, str] = {}
 
     def generate_mapping(
         self, mapping_config: Dict[str, Any], ontology_config: Dict[str, Any] = None
@@ -52,9 +54,8 @@ class R2RMLGenerator:
         all_dsm = mapping_config.get(
             "entities", mapping_config.get("data_source_mappings", [])
         )
-        excluded_class_uris = {
-            m.get("ontology_class") for m in all_dsm if m.get("excluded")
-        }
+        excluded_class_uris = {m.get("ontology_class") for m in all_dsm if m.get("excluded")}
+        self._segment_map = InstanceIdentity.segment_map(ontology_config)
 
         excluded_class_names = set()
         if ontology_config:
@@ -578,6 +579,11 @@ class R2RMLGenerator:
             result = entity_lookup.get(table)
         return result or {}
 
+    def _segment(self, name: str) -> str:
+        """Instance-URI class segment; the hierarchy scope swaps in the root class."""
+        segment = self._sanitize_name(name)
+        return self._segment_map.get(segment, segment)
+
     def _entity_uri_name(self, class_uri: str, class_label: str, table: str) -> str:
         """Compute the class-name segment of an entity's subject URI template.
 
@@ -590,7 +596,7 @@ class R2RMLGenerator:
         name = (
             self._extract_local_name(class_uri) if class_uri else (class_label or table)
         )
-        return self._sanitize_name(name)
+        return self._segment(name)
 
     def _resolve_class_name(
         self,
@@ -631,7 +637,7 @@ class R2RMLGenerator:
         if class_from_entity:
             name = self._extract_local_name(class_from_entity)
             if name:
-                return self._sanitize_name(name)
+                return self._segment(name)
 
         # Priority 3: Class label from relationship config
         if class_label:
@@ -639,19 +645,19 @@ class R2RMLGenerator:
             if class_label.startswith("http://") or class_label.startswith("https://"):
                 name = self._extract_local_name(class_label)
                 if name:
-                    return self._sanitize_name(name)
+                    return self._segment(name)
             else:
-                return self._sanitize_name(class_label)
+                return self._segment(class_label)
 
         # Priority 4: Extract local name from the class URI directly
         if class_uri:
             name = self._extract_local_name(class_uri)
             if name:
-                return self._sanitize_name(name)
+                return self._segment(name)
 
         # Priority 5: Table name
         if table:
-            return self._sanitize_name(table)
+            return self._segment(table)
 
         # Should not reach here — log a warning
         logger.warning(
@@ -685,10 +691,7 @@ class R2RMLGenerator:
 
     def _sanitize_name(self, name: str) -> str:
         """Sanitize a name for use in URIs."""
-        if name is None:
-            return "unknown"
-        sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", str(name))
-        return sanitized or "unknown"
+        return InstanceIdentity.sanitize_segment(name)
 
     @staticmethod
     def _safe_uri(uri: str) -> str:

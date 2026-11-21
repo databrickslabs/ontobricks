@@ -289,6 +289,28 @@
                             </div>
                         </fieldset>
 
+                        <!-- Instance IRI scope (issue #228) -->
+                        <div class="mb-4" id="identityScopeSection">
+                            <label for="domainIdentityScope" class="form-label fw-semibold">
+                                <i class="bi bi-diagram-3 me-1"></i> Instance IRI scope
+                            </label>
+                            <select class="form-select domain-editable" id="domainIdentityScope"
+                                    data-saved-value="{{ domain.identity_scope or 'class' }}">
+                                <option value="class" {% if (domain.identity_scope or 'class') != 'hierarchy' %}selected{% endif %}>Per class &mdash; one node per mapped class</option>
+                                <option value="hierarchy" {% if domain.identity_scope == 'hierarchy' %}selected{% endif %}>Per hierarchy &mdash; subclasses share their root class node</option>
+                            </select>
+                            <small class="text-muted d-block">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>Per hierarchy</strong> builds instance URIs from the root class, so a
+                                parent and a subclass mapped with the same ID become one node carrying both
+                                types and all their relationships. Sibling subclasses must then use distinct IDs.
+                            </small>
+                            <div class="alert alert-warning border small mt-2 py-2 mb-0">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Changing the scope requires rebuilding the Knowledge Graph.
+                            </div>
+                        </div>
+
                         <!-- Access type (shown only when backend = Lakehouse) -->
                         <div class="mb-4 {% if domain.graph_backend != 'databricks' %}d-none{% endif %}" id="lakehouseMaterializationSection">
                             <label for="domainLakehouseMaterialization" class="form-label fw-semibold">

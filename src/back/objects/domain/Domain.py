@@ -46,6 +46,7 @@ from back.core.helpers import (
     run_blocking,
 )
 from back.core.logging import get_logger
+from back.core.w3c.r2rml.InstanceIdentity import InstanceIdentity
 from back.core.mcp_tools import (
     MCP_CONTEXT_FEATURES,
     MCP_DOMAIN_TOOLS,
@@ -252,6 +253,7 @@ class Domain:
             "version": self._s.current_version,
             "base_uri": self._s.ontology.get("base_uri", ""),
             "base_uri_auto": self._s.ontology.get("base_uri_auto", None),
+            "identity_scope": InstanceIdentity.normalize_scope(self._s.ontology.get("identity_scope")),
             "llm_endpoint": llm_endpoint,
             "llm_endpoint_kind": (
                 normalize_llm_endpoint_kind(
@@ -410,15 +412,11 @@ class Domain:
         self._s.info.update(
             {
                 "name": domain_name,
-                "description": data.get(
-                    "description", self._s.info.get("description", "")
-                ),
+                "description": data.get("description", self._s.info.get("description", "")),
                 "author": data.get("author", self._s.info.get("author", "")),
                 "llm_endpoint": llm_endpoint,
                 "llm_endpoint_kind": llm_endpoint_kind,
-                "mcp_enabled": data.get(
-                    "mcp_enabled", self._s.info.get("mcp_enabled", False)
-                ),
+                "mcp_enabled": data.get("mcp_enabled", self._s.info.get("mcp_enabled", False)),
                 "review_quorum": self._coerce_quorum(
                     data.get(
                         "review_quorum",
@@ -486,6 +484,8 @@ class Domain:
             domain_name, provided, auto=auto
         )
         self._s.ontology["base_uri_auto"] = auto
+        if InstanceIdentity.apply_scope(self._s.ontology, data):
+            self._s.set_r2rml("")
 
         # Update version separately
         if data.get("version"):
@@ -625,22 +625,17 @@ class Domain:
     def _resolve_base_uri(
         self, domain_name: str, provided: str = "", *, auto: bool = True
     ) -> str:
-        """Return the effective ontology base URI for ``domain_name``.
-
-        Mirrors the frontend ``updateAutoBaseUri`` (``{default}/{Name}#``):
-        a custom (non-auto) value is kept (after IRI sanitization), while auto
-        mode — or an empty custom value — is generated from the globally
-        configured default base URI domain and a sanitized domain name.
-        Guarantees a non-empty, well-formed URI so a new domain never persists
-        an empty or sentinel base_uri.
-        """
+        """Return the ontology base URI (custom kept; auto from global default)."""
         if not auto and provided:
             return self._sanitize_base_uri(provided)
         try:
             default_domain = resolve_default_base_uri(self._s, self._settings)
-        except Exception as exc:  # noqa: BLE001 — never fail a save on URI gen
-            logger.debug("default base URI resolve failed: %s", exc)
-            default_domain = ""
+        except Exception as exc:  # noqa: BLE001 — surface resolve failures
+            logger.warning("default base URI resolve failed: %s", exc)
+            raise ValidationError(
+                "Could not resolve the default ontology base URI. "
+                "Check Databricks credentials and the global default base URI."
+            ) from exc
         return self._sanitize_base_uri(
             build_auto_base_uri(domain_name, default_domain)
         )
@@ -662,6 +657,7 @@ class Domain:
             "description": self._s.info.get("description", ""),
             "base_uri": self._s.ontology.get("base_uri", ""),
             "base_uri_auto": self._s.ontology.get("base_uri_auto", None),
+            "identity_scope": InstanceIdentity.normalize_scope(self._s.ontology.get("identity_scope")),
             "version": self._s.current_version,
             "author": self._s.info.get("author", ""),
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),

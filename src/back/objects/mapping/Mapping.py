@@ -22,6 +22,7 @@ from shared.config.constants import (
 from back.core.databricks import DocumentParseService
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
+from back.core.w3c.r2rml.InstanceIdentity import InstanceIdentity
 from back.core.errors import InfrastructureError, ValidationError
 from back.objects.session import is_valid_session_id
 
@@ -2288,9 +2289,8 @@ class Mapping:
             and not self._references_excluded_entity(r, excluded_lookup)
         ]
 
-        entity_results = [
-            self._diagnose_entity(ent, ont_index) for ent in active_entities
-        ]
+        entity_results = [self._diagnose_entity(ent, ont_index) for ent in active_entities]
+        InstanceIdentity.flag_collisions(ontology, active_entities, entity_results)
         rel_results = [
             self._diagnose_relationship(rel, entity_lookup, ont_index)
             for rel in active_rels

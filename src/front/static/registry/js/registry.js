@@ -1008,7 +1008,11 @@ document.addEventListener('DOMContentLoaded', function () {
         tbody.innerHTML = (data.domains || []).map((d, idx) => {
             const versionBadges = (d.incoming_versions || []).map(v => {
                 const conflict = (d.conflicting_versions || []).includes(v);
-                return '<span class="badge ' + (conflict ? 'bg-warning text-dark' : 'bg-secondary') + ' me-1">v' + escapeHtml(v) + '</span>';
+                const title = conflict
+                    ? ' title="Exists locally — will be skipped"'
+                    : ' title="Will be written"';
+                return '<span class="badge ' + (conflict ? 'bg-warning text-dark' : 'bg-secondary') +
+                    ' me-1"' + title + '>v' + escapeHtml(v) + '</span>';
             }).join('');
             const statusBadge = d.exists
                 ? '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Exists</span>'
@@ -1019,7 +1023,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const actionControls = d.exists
                 ? '<div class="btn-group btn-group-sm import-obx-conflict-actions" role="group">' +
                       actionRadio(idx, 'skip', 'Skip', true, false) +
-                      actionRadio(idx, 'overwrite', 'Overwrite', false, false) +
+                      actionRadio(idx, 'add_missing', 'Add missing versions', false, false) +
                   '</div>' +
                   '<span class="small text-muted import-obx-create-action d-none">' +
                       '<i class="bi bi-plus-circle me-1"></i>Create new</span>'
@@ -1071,10 +1075,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function actionRadio(rowIdx, value, label, checked, disabled) {
         const id = 'obx-action-' + rowIdx + '-' + value;
+        const outline = value === 'add_missing' ? 'primary' : 'secondary';
         return '<input type="radio" class="btn-check" name="obx-action-' + rowIdx + '" ' +
                     'id="' + id + '" value="' + value + '" ' +
                     (checked ? 'checked' : '') + ' ' + (disabled ? 'disabled' : '') + '>' +
-                '<label class="btn btn-outline-' + (value === 'overwrite' ? 'warning' : 'secondary') +
+                '<label class="btn btn-outline-' + outline +
                     '" for="' + id + '">' + escapeHtml(label) + '</label>';
     }
 
@@ -1114,12 +1119,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     new_name: importName
                 });
             } else if (row.dataset.exists === '1') {
+                const chosen = row.querySelector('input[type="radio"]:checked')?.value || 'skip';
                 decisions.push({
                     name: sourceFolder,
-                    action: row.querySelector('input[type="radio"]:checked')?.value || 'skip'
+                    action: chosen === 'skip' ? 'skip' : 'add_missing'
                 });
             } else {
-                decisions.push({ name: sourceFolder, action: 'overwrite' });
+                decisions.push({ name: sourceFolder, action: 'add_missing' });
             }
         });
 
@@ -1140,14 +1146,18 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const overwrites = decisions.filter(d => d.action === 'overwrite').length;
-        if (overwrites > 0) {
+        const addMissing = decisions.filter(d =>
+            d.action === 'overwrite' || d.action === 'add_missing'
+        ).length;
+        if (addMissing > 0) {
             const ok = await showConfirmDialog({
-                title: 'Confirm overwrite',
-                message: 'You are about to overwrite ' + overwrites + ' existing domain(s). This cannot be undone.',
-                confirmText: 'Import & overwrite',
-                confirmClass: 'btn-warning',
-                icon: 'exclamation-triangle'
+                title: 'Confirm import',
+                message:
+                    'Existing versions will be left unchanged. Only missing ' +
+                    'versions will be added (' + addMissing + ' domain(s)).',
+                confirmText: 'Import',
+                confirmClass: 'btn-primary',
+                icon: 'info-circle'
             });
             if (!ok) return;
         }
@@ -1175,7 +1185,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 showNotification(data.message || 'Import failed', 'error');
                 return;
             }
-            showNotification(data.message || 'Import complete', 'success');
+            let successMsg = data.message || 'Import complete';
+            const skippedBits = (data.domains || [])
+                .filter(d => (d.skipped_versions || []).length)
+                .map(d => d.name + ' v' + d.skipped_versions.join(', v'));
+            if (skippedBits.length) {
+                successMsg += ' — skipped existing: ' + skippedBits.join('; ');
+            }
+            showNotification(successMsg, 'success');
             if (data.errors && data.errors.length) {
                 console.warn('OBX import warnings:', data.errors);
             }

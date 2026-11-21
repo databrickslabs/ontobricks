@@ -1,0 +1,87 @@
+## Remove undocumented registry_transfer CLI docs (#227)
+
+Context: docs/advanced_features.md described scripts/registry_transfer.sh and
+src/cli/registry_transfer.py, which were never shipped (docs-only since Apr 2026).
+Issue #227 reported the gap. Doc correction already landed on 0.9.2 and 0.10.0;
+this backports it to the 0.9.3 milestone branch so published guidance matches
+shipped OBX UI + GitHub mirror paths only.
+
+Changes:
+
+1. docs/advanced_features.md
+   Drop the non-existent CLI zip / registry_transfer.sh workflow; keep OBX UI and
+   GitHub mirror; add Listing domains (Registry → Browse) and Large registries
+   workarounds (batch OBX by domain, or restore via GitHub).
+2. docs/README.md
+   Point the advanced-features index blurb at shipped transfer paths only.
+3. README.md
+   Remove registry_transfer CLI references from the top-level docs pointers.
+4. tests/units/api/test_help_api.py
+   Align Help API expectations with the corrected advanced_features content.
+
+Modified files:
+- docs/advanced_features.md
+- docs/README.md
+- README.md
+- tests/units/api/test_help_api.py
+- changelogs/v0.9.3/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9712 passed, 337 skipped, 8 deselected, 39 warnings in 52.75s
+
+## Add V0.9.3 release notes and November 2026 roadmap
+
+Context: After closing the 0.9.3 milestone themes (#227–#229, Graph Chat
+max_tokens), publish operator-facing Release Notes and a November product
+roadmap synthesised from Asana OntoBricks-Product (sections 0.10.0 / 0.11.0 /
+0.12.0) and the October vision document.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.9.3.md
+   Patch release notes for hierarchy IRI scope, registry import consistency,
+   Graph Chat max_tokens, and registry_transfer doc correction.
+2. releases/Roadmap_2026-11.md
+   November living roadmap: 0.9.3 available, 0.10.0 closing, 0.11.0 next,
+   0.12.0+ toward GA; supersedes Roadmap_2026-10.md.
+3. releases/Roadmap_2026-10.md
+   Mark superseded by the November roadmap.
+4. README.md, docs/README.md
+   Point What's new / docs index at V0.9.3 notes and the November roadmap.
+
+Modified files:
+- releases/ReleaseNotes_V0.9.3.md
+- releases/Roadmap_2026-11.md
+- releases/Roadmap_2026-10.md
+- README.md
+- docs/README.md
+- changelogs/v0.9.3/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9712 passed, 337 skipped, 8 deselected, 39 warnings in 47.50s
+
+## Clear pytest deprecation warnings (utcnow, pyshacl default_context)
+
+Context: The frozen non-scenario suite reported 39 warnings. Two sources:
+(1) our `datetime.utcnow()` in TwinBackgroundTasks (deprecated since Python 3.12),
+and (2) upstream `Dataset.default_context is deprecated` raised inside pyshacl 0.31
+and rdflib 7.6 during SHACL validation. Upgrading pyshacl to 0.40.2 was probed
+and still touches `default_context` (clone.py), so the lockfile is left untouched.
+
+Changes:
+
+1. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   New module helper `_utc_now_naive_iso()` (timezone-aware UTC, tzinfo stripped to
+   keep the naive ISO shape) replaces `datetime.utcnow()` for `last_run`; drop the
+   now-unused local `datetime` import in `run_inference_task`.
+2. pytest.ini
+   Scoped ignore for the upstream `Dataset.default_context is deprecated` message
+   (modules `pyshacl.*` and `rdflib.graph` only).
+3. pyproject.toml
+   Mirror of the same scoped ignore in `[tool.pytest.ini_options]`.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- pytest.ini
+- pyproject.toml
+- changelogs/v0.9.3/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9712 passed, 337 skipped, 8 deselected in 45.00s, 0 warnings (was 39)

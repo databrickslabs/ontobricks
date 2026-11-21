@@ -88,6 +88,7 @@ async function loadOntologyClasses() {
             for (const cls of allClasses) {
                 const classInfo = {
                     name: cls.name || '',
+                    parent: cls.parent || '',
                     label: cls.label || cls.name || '',
                     emoji: cls.emoji || '📦',
                     dashboard: cls.dashboard || null,
@@ -233,6 +234,20 @@ function findOntologyClass(classRef) {
         if (key.includes(localPart) || localPart.includes(key)) return info;
     }
     return null;
+}
+
+function ontologyClassDepth(typeRef) {
+    let info = findOntologyClass(typeRef);
+    const seen = new Set();
+    while (info && info.parent && !seen.has(info.parent)) {
+        seen.add(info.parent);
+        info = ontologyClasses[info.parent.toLowerCase()];
+    }
+    return seen.size;
+}
+
+function isMoreSpecificType(candidateUri, currentUri) {
+    return ontologyClassDepth(candidateUri) > ontologyClassDepth(currentUri);
 }
 
 function findOntologyProperty(propRef) {
