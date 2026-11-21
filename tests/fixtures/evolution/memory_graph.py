@@ -3,15 +3,16 @@
 Mirrors the R2RML the Delta build generates for the fixture: subjects
 ``<base>/<Class>/<id>``, ``rdf:type`` the class URI, data and object
 predicates ``<base>/<name>`` (the base URI with ``#`` normalised to ``/``),
-so the real GraphQL schema resolves against it exactly as it does against
-a built ``…_graph`` view.
+so the compiled path SQL runs against it exactly as it does against a
+built ``…_graph`` view.
 """
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Any, Dict, List
 
-from back.objects.ontology.evolution import ArmGraphQuery, OntologyIndex
+from back.objects.ontology.evolution import ArmSqlQuery, OntologyIndex
 from tests.fixtures.evolution.memory_probe import MemorySourceProbe, table_rows
 
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
@@ -22,35 +23,28 @@ def _norm(base: str) -> str:
     return base.rstrip("/").rstrip("#") + "/"
 
 
-class MemoryTripleStore:
-    def __init__(
-        self, triples: List[Dict[str, str]], fail: bool = False, fail_load: bool = False
-    ):
-        self.triples = triples
-        self.fail = fail
-        self.fail_load = fail_load
-        self.search_cache_mode = None
+def sqlite_execute(triples: List[Dict[str, str]]):
+    """``execute`` over an in-memory SQLite ``t(subject, predicate, object)``.
 
-    def set_search_cache_mode(self, mode):
-        self.search_cache_mode = mode
+    The compiled path SQL is portable, so the unit tests run the exact
+    statements the warehouse would.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE t (subject TEXT, predicate TEXT, object TEXT)")
+    conn.executemany(
+        "INSERT INTO t VALUES (?, ?, ?)",
+        [(x["subject"], x["predicate"], x["object"]) for x in triples],
+    )
+    conn.row_factory = sqlite3.Row
 
-    def find_subjects_by_type(self, table, cls_uri, limit, offset, search):
-        if self.fail:
-            raise RuntimeError("[TABLE_OR_VIEW_NOT_FOUND] arm graph")
-        subjects = sorted(
-            {
-                t["subject"]
-                for t in self.triples
-                if t["predicate"] == RDF_TYPE and t["object"] == cls_uri
-            }
-        )
-        return subjects[offset : offset + limit]
+    def execute(sql: str):
+        return [dict(r) for r in conn.execute(sql).fetchall()]
 
-    def get_triples_for_subjects(self, table, uris):
-        if self.fail_load:
-            raise RuntimeError("[TABLE_OR_VIEW_NOT_FOUND] arm_props")
-        wanted = set(uris)
-        return [t for t in self.triples if t["subject"] in wanted]
+    return execute
+
+
+def _failing(sql: str):
+    raise RuntimeError("[TABLE_OR_VIEW_NOT_FOUND] arm graph")
 
 
 def arm_triples(
@@ -106,11 +100,11 @@ def arm_triples(
 
 
 def memory_query_factory(fail_arms=()):
-    """``query_factory`` for EvaluationService: real GraphQL over in-memory triples."""
+    """``query_factory`` for EvaluationService: compiled SQL over in-memory triples."""
 
     def factory(domain):
         arm = "parent" if domain.info["name"].endswith("p") else "candidate"
-        store = MemoryTripleStore(arm_triples(domain), fail=arm in fail_arms)
-        return ArmGraphQuery(domain, None, store=store, table=f"mem.{arm}")
+        execute = _failing if arm in fail_arms else sqlite_execute(arm_triples(domain))
+        return ArmSqlQuery(domain, None, execute=execute, table="t")
 
     return factory

@@ -6,7 +6,10 @@ from typing import Any, Dict, List, Optional
 
 from back.objects.ontology.evolution.CoverageState import CoverageState as S
 from back.objects.ontology.evolution.Intent import Intent
-from back.objects.ontology.evolution.JoinCandidateFinder import JoinCandidateFinder
+from back.objects.ontology.evolution.JoinCandidateFinder import (
+    JoinCandidateFinder,
+    key_stem,
+)
 from back.objects.ontology.evolution.OntologyIndex import Edge, OntologyIndex
 from back.objects.ontology.evolution.SourceAccessDenied import SourceAccessDenied
 from back.objects.ontology.evolution.SourceProbe import SourceProbe
@@ -69,14 +72,14 @@ class CoverageService:
             return fn(*args)
         except SourceAccessDenied:
             self._ob(
-                f"source:{table.split('.')[-1]}",
+                f"source:{_leaves(table)}",
                 "source",
                 S.INACCESSIBLE,
                 "access_denied",
             )
         except SourceUnavailable:
             self._ob(
-                f"source:{table.split('.')[-1]}",
+                f"source:{_leaves(table)}",
                 "source",
                 S.SOURCE_UNAVAILABLE,
                 "unavailable",
@@ -181,7 +184,11 @@ class CoverageService:
                 f"entity:{cls}", "mapping", S.MISSING_SEMANTICS, "class_not_mapped"
             )
             return None
-        if self._guard(self._probe.columns, entity["table"], entity["table"]) is None:
+        columns = self._guard(self._probe.columns, entity["table"], entity["table"])
+        if columns is None:
+            return None
+        if entity["id_column"] not in columns:
+            self._ob(f"entity:{cls}", "mapping", S.UNSUPPORTED, "computed_entity_id")
             return None
         unique = self._guard(
             self._probe.key_is_unique,
@@ -269,6 +276,23 @@ class CoverageService:
                     S.AMBIGUOUS,
                     "several_paths",
                     candidates=[[e[0] for e in p] for p in shortest],
+                )
+                return {}
+            hinted = set(intent.path_hint) >= {e[0] for e in shortest[0]}
+            shortcut = (
+                {}
+                if hinted
+                else self._unmodelled_shortcut(start, goal, shortest[0], intent)
+            )
+            if shortcut:
+                return shortcut
+            if not hinted and _meets_at_shared_reference(self._index, shortest[0]):
+                self._ob(
+                    f"path:{start}->{goal}",
+                    "relationship",
+                    S.AMBIGUOUS,
+                    "shared_reference_path",
+                    candidates=[[e[0] for e in shortest[0]]],
                 )
                 return {}
             return self._check_edges(shortest[0])
@@ -402,7 +426,111 @@ class CoverageService:
             "join": self._join_entry(chosen, cands, ambiguous),
         }
 
+    def _unmodelled_shortcut(
+        self, start: str, goal: str, path: List[Edge], intent: Intent
+    ) -> Dict[str, Any]:
+        """A declared FK the ontology does not model that would give a path no longer than *path*.
+
+        A path that exists is not necessarily the one the question means:
+        Order→Customer→Nation←Supplier connects orders to suppliers, but as
+        "same country", not "supplied the line". When the catalog declares
+        a key between a class on the way and the goal class that has no
+        relationship in the ontology, the shorter route is proposed instead
+        of reporting the question as ready. ``path_hint`` keeps the existing
+        path.
+        """
+        goal_table = (self._index.entity(goal) or {}).get("table", "")
+        if not goal_table:
+            return {}
+        linked = {
+            frozenset((r["domain"], r["range"]))
+            for r in self._index.relationships.values()
+        }
+        for cls in sorted(self._index.classes):
+            entity = self._index.entity(cls)
+            if cls == goal or not entity or frozenset((cls, goal)) in linked:
+                continue
+            hops = (
+                0
+                if cls == start
+                else len(
+                    (
+                        self._index.paths(start, cls, intent.max_edges, limit=1)
+                        or [[None] * 99]
+                    )[0]
+                )
+            )
+            if hops + 1 > min(len(path), intent.max_edges):
+                continue
+            if not self._may_link(entity, goal_table, goal):
+                continue
+            cands = [
+                c
+                for c in self._guarded_candidates(cls, goal)
+                if "declared_fk" in c["evidence"]
+                or ("key_name_match" in c["evidence"] and c["data_valid"])
+            ]
+            chosen, ambiguous = JoinCandidateFinder.choose(cands)
+            if not chosen:
+                continue
+            src, tgt = chosen["source_class"], chosen["target_class"]
+            self._ob(
+                f"path:{start}->{goal}",
+                "relationship",
+                S.MISSING_SEMANTICS,
+                "unmodelled_direct_link",
+                candidates=[[e[0] for e in path], [f"{src}->{tgt}"]],
+            )
+            self._ob(
+                f"relationship:{src}->{tgt}",
+                "relationship",
+                S.MISSING_SEMANTICS,
+                "relationship_not_in_ontology",
+            )
+            return {
+                "gap": {"kind": "relationship", "source": src, "target": tgt},
+                "join": self._join_entry(chosen, cands, ambiguous),
+            }
+        return {}
+
+    def _may_link(self, entity: Dict[str, str], goal_table: str, goal: str) -> bool:
+        """Cheap pre-check before profiling joins: a declared key, or a key-named column."""
+        keys = (
+            self._guard(self._probe.foreign_keys, entity["table"], entity["table"])
+            or []
+        )
+        back = self._guard(self._probe.foreign_keys, goal_table, goal_table) or []
+        if any(k["ref_table"] == goal_table for k in keys) or any(
+            k["ref_table"] == entity["table"] for k in back
+        ):
+            return True
+        stem = key_stem((self._index.entity(goal) or {}).get("id_column", ""))
+        columns = (
+            self._guard(self._probe.columns, entity["table"], entity["table"]) or {}
+        )
+        return bool(stem) and any(
+            key_stem(c) == stem and c != entity["id_column"] for c in columns
+        )
+
+    def _joinable(self, cls: str) -> bool:
+        """The class maps to a table whose id column exists (duplicates are left to validation)."""
+        entity = self._index.entity(cls)
+        if not entity or not entity["table"] or not entity["id_column"]:
+            return False
+        columns = self._guard(self._probe.columns, entity["table"], entity["table"])
+        if columns is None:
+            return False
+        if entity["id_column"] not in columns:
+            self._entity(cls)
+            return False
+        return True
+
     def _guarded_candidates(self, a: str, b: str) -> List[Dict[str, Any]]:
+        # Only profile joins between classes whose own mapping checks out, so a
+        # bad entity (computed id, missing table) is reported as itself rather
+        # than as a failed join between two tables.
+        if not (self._joinable(a) and self._joinable(b)):
+            return []
         tables = ",".join(
             t
             for t in (
@@ -473,3 +601,19 @@ def _path_len_with(index: OntologyIndex, start: str, goal: str, a: str, b: str) 
         return len(paths[0]) if paths else 99
 
     return min(dist(start, a) + 1 + dist(b, goal), dist(start, b) + 1 + dist(a, goal))
+
+
+def _meets_at_shared_reference(index: OntologyIndex, path: List[Edge]) -> bool:
+    """True when the walk goes up to an entity and straight back down (A→X←B).
+
+    Two entities linked only because both reference the same third one
+    (orders and suppliers "in the same nation") are related by that
+    reference, which is rarely what a question about A and B means.
+    """
+    forward = [index.relationships[name]["domain"] == a for name, a, _b in path]
+    return any(f and not nxt for f, nxt in zip(forward, forward[1:]))
+
+
+def _leaves(tables: str) -> str:
+    """``cat.sch.a,cat.sch.b`` → ``a,b`` for obligation keys."""
+    return ",".join(t.split(".")[-1] for t in str(tables).split(",") if t)

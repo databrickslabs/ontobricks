@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from back.core.errors import ValidationError
 from back.core.helpers.SQLHelpers import SQLHelpers
@@ -191,11 +191,26 @@ class WarehouseSourceProbe(SourceProbe):
             for k in ("rows", "dangling_source", "dangling_target")
         }
 
-    def table_version(self, table: str) -> int:
-        rows = self._run(f"DESCRIBE HISTORY {quote_fqn(table)} LIMIT 1", table)
+    def table_version(self, table: str) -> Optional[int]:
+        try:
+            rows = self._run(f"DESCRIBE HISTORY {quote_fqn(table)} LIMIT 1", table)
+        except SourceUnavailable:
+            if self._table_type(table) == "VIEW":
+                return None
+            raise
         if not rows:
             raise SourceUnavailable("The table has no Delta history", detail=table)
         return int(rows[0]["version"])
+
+    def _table_type(self, table: str) -> str:
+        catalog, schema, name = split_fqn(table)
+        rows = self._run(
+            f"SELECT table_type FROM `{catalog}`.information_schema.tables "
+            f"WHERE table_schema = {SQLHelpers.sql_literal(schema)} "
+            f"AND table_name = {SQLHelpers.sql_literal(name)}",
+            table,
+        )
+        return str(rows[0]["table_type"]).upper() if rows else ""
 
     def gold_ids(self, table: str, question_id: str) -> List[str]:
         from back.core.errors import NotFoundError

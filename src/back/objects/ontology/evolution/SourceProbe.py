@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 class SourceProbe(ABC):
@@ -52,8 +52,8 @@ class SourceProbe(ABC):
         """
 
     @abstractmethod
-    def table_version(self, table: str) -> int:
-        """Current Delta version of *table* (``DESCRIBE HISTORY … LIMIT 1``)."""
+    def table_version(self, table: str) -> Optional[int]:
+        """Current Delta version of *table*; ``None`` for a view (nothing to pin)."""
 
     @abstractmethod
     def gold_ids(self, table: str, question_id: str) -> List[str]:

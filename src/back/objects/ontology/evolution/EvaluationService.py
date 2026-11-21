@@ -22,7 +22,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from back.core.errors import ConflictError, OntoBricksError, ValidationError
 from back.core.logging import get_logger
-from back.objects.ontology.evolution.ArmGraphQuery import ArmGraphQuery
+from back.objects.ontology.evolution.ArmSqlQuery import ArmSqlQuery
 from back.objects.ontology.evolution.CandidateBuilder import ARMS, CandidateBuilder
 from back.objects.ontology.evolution.Decision import Decision
 from back.objects.ontology.evolution.EvolutionPipeline import parent_slice
@@ -43,7 +43,7 @@ _TABLE_REF = re.compile(
     r"\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){2})\b", re.I
 )
 
-QueryFactory = Callable[[Any], ArmGraphQuery]
+QueryFactory = Callable[[Any], ArmSqlQuery]
 
 
 def source_tables(ontology: Dict[str, Any], assignment: Dict[str, Any]) -> List[str]:
@@ -79,7 +79,7 @@ class EvaluationService:
         self._builder = builder
         self._probe = probe
         self._settings = settings
-        self._query_factory = query_factory or (lambda d: ArmGraphQuery(d, settings))
+        self._query_factory = query_factory or (lambda d: ArmSqlQuery(d, settings))
 
     # -- request side -----------------------------------------------------
 
@@ -245,14 +245,19 @@ class EvaluationService:
             )
         after = {t: self._probe.table_version(t) for t in tables}
         self._check_cancel(run_id)
+        queries = {arm: self._query_factory(domains[arm]) for arm in ARMS}
         questions = [
-            self._question(run_id, q, domains)
+            self._question(run_id, q, domains, queries)
             for q in (evaluation.get("request") or {}).get("questions") or []
         ]
         reasons: List[str] = []
         if before != after:
             reasons.append("source_changed_between_arms")
         decision = self._decide(questions, reasons)
+        # Views have no Delta version, so a change between the two builds
+        # cannot be ruled out; say so next to the decision.
+        unpinned = sorted(t for t, v in before.items() if v is None)
+        notes = ["unpinned_sources"] if unpinned else []
         payload = {
             "run_id": run_id,
             "parent_content_hash": run["manifest"].get("parent_content_hash"),
@@ -272,12 +277,14 @@ class EvaluationService:
             "questions": questions,
             "builds": builds,
             "source_versions": {"before": before, "after": after},
+            "unpinned_sources": unpinned,
+            "notes": notes,
             "candidate_design_hash": payload["candidate_design_hash"],
             "evaluation_hash": evaluation_hash(payload),
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    def _question(self, run_id, q, domains) -> Dict[str, Any]:
+    def _question(self, run_id, q, domains, queries) -> Dict[str, Any]:
         intent = Intent.from_dict(q["intent"])
         out = {
             "question_id": q["question_id"],
@@ -289,11 +296,7 @@ class EvaluationService:
             plan = PathQueryBuilder(
                 OntologyIndex(domain.ontology or {}, domain.assignment or {})
             ).plan(intent)
-            if plan["unresolved"]:
-                result = ArmGraphQuery.run(plan, lambda *_: {})
-            else:
-                query = self._query_factory(domain)
-                result = ArmGraphQuery.run(plan, query.execute, query.probe)
+            result = queries[arm].run(plan)
             out[arm] = result
             self._svc.append_result(
                 run_id,

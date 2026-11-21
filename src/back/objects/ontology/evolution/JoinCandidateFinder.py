@@ -12,6 +12,19 @@ _STRING_TYPES = ("STRING", "VARCHAR", "CHAR")
 _MAX_OVERLAP_PROBES = 15
 
 
+def key_stem(column: str) -> str:
+    """Key column name without a per-table prefix: ``l_suppkey`` / ``s_suppkey`` → ``suppkey``.
+
+    Warehouse schemas often prefix every column with a table code (TPC-H,
+    many ERPs), so the foreign key and the key it references never share
+    a name. Stems shorter than four characters never match.
+    """
+    name = str(column or "").lower()
+    head, sep, tail = name.partition("_")
+    stem = tail if sep and len(head) <= 3 and tail else name
+    return stem if len(stem) >= 4 else ""
+
+
 class JoinCandidateFinder:
     """Rank candidate joins between two mapped classes, with their evidence.
 
@@ -73,6 +86,11 @@ class JoinCandidateFinder:
                 add(fk["column"], fk["ref_column"], "declared_fk")
         if et["id_column"] in src_cols and et["id_column"] != es["id_column"]:
             add(et["id_column"], et["id_column"], "name_match")
+        for column in src_cols:
+            if column not in (es["id_column"], et["id_column"]) and key_stem(
+                column
+            ) == key_stem(et["id_column"]):
+                add(column, et["id_column"], "key_name_match")
         self._value_overlap_candidates(src_cols, tgt_cols, es, et, add)
 
         target_ids_unique = self._probe.key_is_unique(et["table"], et["id_column"])

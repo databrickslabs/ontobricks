@@ -257,3 +257,40 @@ Tests:
   domains row unchanged, stale version blocked, heartbeat keeps revision.
 - Found live and fixed: ARRAY gold column arrives as a numpy array;
   label-column attributes; arm store defaulting to the `_props` companion.
+
+## Ontology Evolve — realistic testing on TPC-H (S / M / L) and what it changed
+
+Why: the hand-written fixture had one path between any two classes, clean
+key names and 20 rows. TPC-H (samples.tpch, cut to 750 orders / 1M lines /
+6M lines) exposed four problems the fixture could not.
+
+1. False "ready" on a wrong path. Order→Customer→Nation←Supplier connects
+   orders to suppliers as "same country". Coverage now (a) proposes the
+   missing link when the catalog declares — or a prefix-insensitive key
+   name plus a data check shows — a shorter route the ontology does not
+   model (CoverageService._unmodelled_shortcut, JoinCandidateFinder
+   key_name_match / key_stem), and (b) marks a path that only meets at a
+   shared reference (A→X←B) AMBIGUOUS unless path_hint confirms it.
+2. GraphQL list resolvers do not scale for evaluation: root listing is
+   capped (1,000) and relationships only go forwards. Arm answers are now
+   SQL semi-joins over the arm `…_graph` relation (ArmSqlQuery), run by the
+   arm's graph store on the query warehouse (Lakehouse//RT when set), with
+   predicates named by the GraphQL schema rules. Unit tests run the same
+   SQL on SQLite. ArmGraphQuery removed.
+3. Composite keys computed in mapping SQL were reported as an unavailable
+   table; now `entity:<Class>` UNSUPPORTED (computed_entity_id).
+4. Views have no Delta history: recorded as unpinned (evaluation note)
+   instead of failing the run.
+
+Live results (local app services, Lakebase PG17 registry):
+- S (60k triples/arm): orders-by-supplier PASS, orders-by-part PASS; no FK,
+  key cast to string, 5% null keys: PASS via key-name match; view PASS
+  with unpinned note; composite BLOCKED (computed id); many-to-many through
+  partsupp BLOCKED (bridge tables not supported).
+- M (7.8M / 8.8M triples): PASS, 136 s (114 s with RT reads).
+- L (35M / 41M triples): PASS, 161 s. Parent answered 59,435 orders by the
+  wrong path vs gold 170; candidate 170.
+- Coverage stays ~40 s / 22–28 queries across tiers.
+
+Files: tests/fixtures/evolution/tpch/{seed_tpch,tpch_domain}.py,
+tests/eval/evolution_live.py (live driver).

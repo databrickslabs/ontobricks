@@ -420,3 +420,29 @@ class TestWarehouseVersionsAndGold:
 
         with pytest.raises(NotFoundError):
             WarehouseSourceProbe(FakeExec([rows])).gold_ids("c.s.gold", "q")
+
+
+class TestViewsHaveNoVersion:
+    def _probe(self, table_type):
+        calls = []
+
+        def execute(sql):
+            calls.append(sql)
+            if sql.startswith("DESCRIBE HISTORY"):
+                raise RuntimeError(
+                    "[DELTA_ONLY_OPERATION] DESCRIBE HISTORY is only supported for Delta tables"
+                )
+            return [{"table_type": table_type}] if table_type else []
+
+        return WarehouseSourceProbe(execute), calls
+
+    def test_view_is_unpinned(self):
+        probe, calls = self._probe("VIEW")
+        assert probe.table_version(T) is None
+        assert "information_schema.tables" in calls[1]
+
+    @pytest.mark.parametrize("table_type", ["MANAGED", ""])
+    def test_a_table_without_history_still_fails(self, table_type):
+        probe, _ = self._probe(table_type)
+        with pytest.raises(SourceUnavailable):
+            probe.table_version(T)

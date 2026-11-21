@@ -27,7 +27,8 @@ from back.objects.ontology.evolution import (
     SourceAccessDenied,
     VersionAllocator,
 )
-from back.objects.ontology.evolution.ArmGraphQuery import ArmGraphQuery
+from back.objects.ontology.evolution.ArmSqlQuery import ArmSqlQuery
+from back.objects.ontology.evolution.PathQueryBuilder import RDFS_LABEL
 from back.objects.ontology.evolution.EvaluationService import source_tables
 from tests.fixtures.evolution.memory_graph import memory_query_factory
 from tests.fixtures.evolution.memory_probe import MemorySourceProbe
@@ -129,8 +130,29 @@ def _evaluate(evaluator, svc, run, body):
 GOLD = {"gold_table": "cat.fix.gold_answers", "target_question_id": "acme_orders"}
 
 
+def _base_domain(variant="base", mutate=None, arm="candidate"):
+    """Arm domain with the candidate ops applied (``candidate``) or the parent."""
+    svc, _evaluator, probe, *_ = _world(variant)
+    run = _proposed(svc, probe)
+    doc = variant_document(variant)
+    if mutate:
+        mutate(doc["versions"]["1"])
+    return CandidateBuilder(None, {}).arm_domain(doc, run, arm, "F")
+
+
+def _answer(domain, intent):
+    from tests.fixtures.evolution.memory_graph import arm_triples, sqlite_execute
+
+    index = OntologyIndex(domain.ontology, domain.assignment)
+    plan = PathQueryBuilder(index).plan(Intent.from_dict(intent))
+    query = ArmSqlQuery(
+        domain, None, execute=sqlite_execute(arm_triples(domain)), table="t"
+    )
+    return plan, query.run(plan)
+
+
 class TestPathQueries:
-    def _plan(self, intent, variant="base", candidate_ops=None):
+    def _plan(self, intent, variant="base"):
         doc = variant_document(variant)
         sl = doc["versions"]["1"]
         return PathQueryBuilder(OntologyIndex(sl["ontology"], sl["assignment"])).plan(
@@ -144,43 +166,76 @@ class TestPathQueries:
             {"filter": "Supplier.supplierName=Acme", "reason": "no_unique_path"}
         ]
 
-    def test_forward_path_query_uses_schema_field_names(self):
-        plan = self._plan(ACME_PRODUCTS)
-        (item,) = plan["queries"]
-        assert item["mode"] == "forward" and plan["depth"] == 1
-        assert item["query"] == (
-            "{ products(limit: 1000) { id suppliedBy { id label } } }"
-        )
+    def test_label_column_attribute_matches_rdfs_label(self):
+        (item,) = self._plan(ACME_PRODUCTS)["queries"]
+        assert item["match"]["predicate"] == RDFS_LABEL
+        assert item["edges"] == [
+            {
+                "predicate": "http://ontobricks.local/evo/supplychain/suppliedBy",
+                "forward": True,
+            }
+        ]
 
-    def test_reverse_path_is_queried_from_the_filter_class(self):
-        intent = {
+    def test_candidate_answers_the_three_hop_question(self):
+        _plan, result = _answer(_base_domain(), ACME)
+        assert result["status"] == "answered"
+        assert result["ids"] == ["O1", "O3", "O5"]
+
+    def test_reverse_and_mixed_paths_are_answered(self):
+        northwind = {
             "output_class": "OrderLine",
-            "filters": [{"class": "Order", "attribute": "customerName", "value": "N"}],
+            "filters": [
+                {"class": "Order", "attribute": "customerName", "value": "Northwind"}
+            ],
         }
-        (item,) = self._plan(intent)["queries"]
-        # OrderLine -> Order walks hasLine against its direction.
-        assert item["mode"] == "reverse" and item["root_field"] == "orders"
-        assert item["query"] == (
-            "{ orders(limit: 1000) { id customerName hasLine { id } } }"
-        )
-        intent = {
+        plan, result = _answer(_base_domain(), northwind)
+        assert plan["queries"][0]["edges"][0]["forward"] is False
+        assert result["ids"] == ["L1", "L2", "L5"]
+        # Supplier <- Product <- OrderLine <- Order: three reversed hops.
+        suppliers = {
             "output_class": "Supplier",
-            "filters": [{"class": "Product", "attribute": "sku", "value": "X"}],
+            "filters": [{"class": "Order", "attribute": "id", "value": "O1"}],
         }
-        (item,) = self._plan(intent)["queries"]
-        assert item["mode"] == "reverse" and item["root_field"] == "products"
+        _plan, result = _answer(_base_domain(), suppliers)
+        assert result["ids"] == ["S1", "S2"]
 
     def test_root_filter_and_no_filter(self):
-        intent = {
+        acme = {
             "output_class": "Supplier",
             "filters": [
                 {"class": "Supplier", "attribute": "supplierName", "value": "Acme"}
             ],
         }
-        (item,) = self._plan(intent)["queries"]
-        assert item["query"] == "{ suppliers(limit: 1000) { id label } }"
-        (item,) = self._plan({"output_class": "Supplier"})["queries"]
-        assert item["mode"] == "root" and item["attribute"] == ""
+        _plan, result = _answer(_base_domain(), acme)
+        assert result["ids"] == ["S1"]
+        _plan, result = _answer(_base_domain(), {"output_class": "Supplier"})
+        assert result["ids"] == ["S1", "S2", "S3", "S4"]
+
+    def test_several_filters_intersect(self):
+        both = {
+            "output_class": "Order",
+            "filters": [
+                {"class": "Supplier", "attribute": "supplierName", "value": "Acme"},
+                {"class": "Order", "attribute": "customerName", "value": "Northwind"},
+            ],
+        }
+        _plan, result = _answer(_base_domain(), both)
+        assert result["ids"] == ["O1"]
+
+    def test_values_are_literals_in_the_sql(self):
+        evil = {
+            "output_class": "Supplier",
+            "filters": [
+                {
+                    "class": "Supplier",
+                    "attribute": "supplierName",
+                    "value": "x'; DROP TABLE t; --",
+                }
+            ],
+        }
+        plan, result = _answer(_base_domain(), evil)
+        assert result["status"] == "answered" and result["ids"] == []
+        assert "'x''; DROP TABLE t; --'" in result["queries"][0]
 
     @pytest.mark.parametrize(
         "intent,reason",
@@ -214,36 +269,20 @@ class TestPathQueries:
     def test_unresolved_reasons(self, intent, reason):
         assert self._plan(intent)["unresolved"][0]["reason"] == reason
 
-    def test_mixed_direction_path_is_unresolved(self):
-        doc = variant_document("base")
-        sl = doc["versions"]["1"]
-        # Order -hasLine-> OrderLine <-lineOf- Product: one edge each way.
-        sl["ontology"]["properties"].append(
-            {
-                "name": "lineOf",
-                "type": "ObjectProperty",
-                "domain": "Product",
-                "range": "OrderLine",
-            }
+    def test_truncation_and_store_errors(self):
+        domain = _base_domain()
+        plan = PathQueryBuilder(OntologyIndex(domain.ontology, domain.assignment)).plan(
+            Intent.from_dict({"output_class": "Supplier"})
         )
-        index = OntologyIndex(sl["ontology"], sl["assignment"])
-        intent = {
-            "output_class": "Order",
-            "filters": [{"class": "Product", "attribute": "sku", "value": "X"}],
-        }
-        plan = PathQueryBuilder(index).plan(Intent.from_dict(intent))
-        assert plan["unresolved"][0]["reason"] == "mixed_direction_path"
+        many = [{"n": f"u/{i}"} for i in range(ArmSqlQuery.MAX_IDS + 1)]
+        out = ArmSqlQuery(domain, None, execute=lambda sql: many, table="t").run(plan)
+        assert out["truncated"] is True
 
-    def test_answer_flags_truncation(self):
-        item = {
-            "root_field": "suppliers",
-            "mode": "root",
-            "attribute": "",
-            "value": None,
-            "steps": [],
-        }
-        rows = [{"id": str(i)} for i in range(PathQueryBuilder.LIMIT)]
-        assert PathQueryBuilder.answer(item, {"suppliers": rows})["truncated"] is True
+        def boom(sql):
+            raise InfrastructureError("warehouse stopped")
+
+        out = ArmSqlQuery(domain, None, execute=boom, table="t").run(plan)
+        assert out["status"] == "error"
 
 
 class TestEvaluation:
@@ -288,6 +327,14 @@ class TestEvaluation:
         run = _evaluate(evaluator, svc, _proposed(svc, probe), GOLD)
         assert run["evaluation"]["decision"] == "INCONCLUSIVE"
         assert "source_changed_between_arms" in run["evaluation"]["reasons"]
+
+    def test_view_sources_are_reported_unpinned_without_blocking(self):
+        svc, evaluator, probe, *_ = _world()
+        probe.versions["cat.fix.suppliers"] = None
+        run = _evaluate(evaluator, svc, _proposed(svc, probe), GOLD)
+        assert run["evaluation"]["decision"] == "PASS"
+        assert run["evaluation"]["unpinned_sources"] == ["cat.fix.suppliers"]
+        assert run["evaluation"]["notes"] == ["unpinned_sources"]
 
     def test_unreadable_arm_graph_is_inconclusive_not_empty(self):
         svc, evaluator, probe, *_ = _world(fail_arms=("candidate",))
@@ -578,46 +625,21 @@ class TestCandidateBuilder:
         assert "c.s.triplestore_x_V1_data" not in kinds
 
 
-class TestArmGraphQuery:
-    def test_graphql_errors_raise(self):
-        from tests.fixtures.evolution.memory_graph import MemoryTripleStore
-
-        domain = CandidateBuilder(None, {}).arm_domain(
-            variant_document("base"),
-            {"id": "abcdef123456", "parent_version": "1"},
-            "parent",
-            "F",
-        )
-        q = ArmGraphQuery(domain, None, store=MemoryTripleStore([]), table="t")
-        with pytest.raises(InfrastructureError):
-            q.execute("{ nope }", 1)
-        assert q.table == "t"
-
+class TestArmSqlQueryDefaults:
     def test_missing_store_raises(self, monkeypatch):
         import back.core.graphdb as graphdb
 
         monkeypatch.setattr(graphdb, "get_graphdb", lambda d, s: None)
-        domain = CandidateBuilder(None, {}).arm_domain(
-            variant_document("base"),
-            {"id": "abcdef123456", "parent_version": "1"},
-            "parent",
-            "F",
-        )
         with pytest.raises(InfrastructureError):
-            ArmGraphQuery(domain, None)
+            ArmSqlQuery(_base_domain(), None)
 
+    def test_store_and_table_come_from_the_arm(self, monkeypatch):
+        import back.core.graphdb as graphdb
+        from back.objects.digitaltwin import TwinGraphAccess
 
-def test_arm_store_reads_without_search_companions_and_probes_triple_loading():
-    from tests.fixtures.evolution.memory_graph import MemoryTripleStore, arm_triples
-
-    domain = CandidateBuilder(None, {}).arm_domain(
-        variant_document("base"),
-        {"id": "abcdef123456", "parent_version": "1"},
-        "parent",
-        "F",
-    )
-    store = MemoryTripleStore(arm_triples(domain), fail_load=True)
-    q = ArmGraphQuery(domain, None, store=store, table="t")
-    assert store.search_cache_mode == "force_off"
-    with pytest.raises(InfrastructureError):
-        q.probe("Supplier")
+        store = type("S", (), {"execute_query": lambda self, sql: []})()
+        monkeypatch.setattr(graphdb, "get_graphdb", lambda d, s: store)
+        monkeypatch.setattr(
+            TwinGraphAccess, "graph_query_table", staticmethod(lambda *a, **k: "c.s.g")
+        )
+        assert ArmSqlQuery(_base_domain(), None).table == "c.s.g"

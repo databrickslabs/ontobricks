@@ -326,3 +326,113 @@ class TestAutofixAllowlists:
             is False
         )
         assert apply_operations(domain, [dup], allowed=EVOLVE_OPS)["success"] is False
+
+
+class TestUnmodelledDirectLink:
+    """A path exists, but the catalog declares a shorter link the ontology lacks."""
+
+    def _index(self):
+        sl = variant_document("base")["versions"]["1"]
+        sl["ontology"]["properties"].append(
+            {
+                "uri": "http://ontobricks.local/evo/supplychain#featured",
+                "name": "featured",
+                "type": "ObjectProperty",
+                "domain": "Order",
+                "range": "Product",
+            }
+        )
+        return OntologyIndex(sl["ontology"], sl["assignment"])
+
+    INTENT = {
+        "output_class": "OrderLine",
+        "filters": [{"class": "Product", "attribute": "sku", "value": "SKU-1"}],
+    }
+
+    def test_shorter_declared_key_is_proposed_instead_of_ready(self):
+        report = CoverageService(self._index(), MemorySourceProbe()).assess(
+            Intent.from_dict(self.INTENT)
+        )
+        assert report["ready"] is False and report["decision_hint"] == "PROPOSE"
+        assert report["states"]["path:OrderLine->Product"] == "MISSING_SEMANTICS"
+        assert report["gap"] == {
+            "kind": "relationship",
+            "source": "OrderLine",
+            "target": "Product",
+        }
+        assert report["join"]["chosen"]["source_column"] == "product_id"
+
+    def test_path_hint_keeps_the_existing_path(self):
+        intent = {**self.INTENT, "path_hint": ["hasLine", "featured"]}
+        report = CoverageService(self._index(), MemorySourceProbe()).assess(
+            Intent.from_dict(intent)
+        )
+        assert "path:OrderLine->Product" not in report["states"]
+        assert report["states"]["mapping:featured"] == "MISSING_SEMANTICS"
+
+
+class TestRealisticSchemaRules:
+    """Rules found on TPC-H: prefixed key names, shared-reference paths, computed ids."""
+
+    @pytest.mark.parametrize(
+        "column,stem",
+        [
+            ("l_suppkey", "suppkey"),
+            ("s_suppkey", "suppkey"),
+            ("product_id", "product_id"),
+            ("id", ""),
+            ("c_name", "name"),
+        ],
+    )
+    def test_key_stem(self, column, stem):
+        from back.objects.ontology.evolution.JoinCandidateFinder import key_stem
+
+        assert key_stem(column) == stem
+
+    def _shared_reference_index(self):
+        sl = variant_document("nofk")["versions"]["1"]
+        sl["ontology"]["properties"].append(
+            {
+                "uri": "http://ontobricks.local/evo/supplychain#lineSupplier",
+                "name": "lineSupplier",
+                "type": "ObjectProperty",
+                "domain": "OrderLine",
+                "range": "Supplier",
+            }
+        )
+        return OntologyIndex(sl["ontology"], sl["assignment"])
+
+    INTENT = {
+        "output_class": "Product",
+        "filters": [{"class": "OrderLine", "attribute": "quantity", "value": "2"}],
+    }
+
+    def test_path_meeting_at_a_shared_reference_is_not_ready(self):
+        report = CoverageService(
+            self._shared_reference_index(), MemorySourceProbe()
+        ).assess(Intent.from_dict(self.INTENT))
+        assert report["states"]["path:Product->OrderLine"] == "AMBIGUOUS"
+        assert report["ready"] is False and report["decision_hint"] == "BLOCKED"
+
+    def test_path_hint_confirms_the_shared_reference(self):
+        intent = {**self.INTENT, "path_hint": ["suppliedBy", "lineSupplier"]}
+        report = CoverageService(
+            self._shared_reference_index(), MemorySourceProbe()
+        ).assess(Intent.from_dict(intent))
+        assert "path:Product->OrderLine" not in report["states"]
+
+    def test_entity_id_computed_in_mapping_sql_is_unsupported(self):
+        sl = variant_document("base")["versions"]["1"]
+        sl["assignment"]["entities"][3]["id_column"] = "supplier_key"
+        index = OntologyIndex(sl["ontology"], sl["assignment"])
+        report = CoverageService(index, MemorySourceProbe()).assess(
+            Intent.from_dict({**ACME_ORDERS, "output_class": "Product"})
+        )
+        assert report["states"]["entity:Supplier"] == "UNSUPPORTED"
+        assert report["decision_hint"] == "BLOCKED"
+
+    def test_prefixed_key_without_declaration_is_found_and_checked(self):
+        cands = JoinCandidateFinder(_index("nofk"), MemorySourceProbe()).candidates(
+            "OrderLine", "Product"
+        )
+        assert any("name_match" in c["evidence"] for c in cands)

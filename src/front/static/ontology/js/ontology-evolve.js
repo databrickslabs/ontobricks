@@ -37,6 +37,9 @@ window.EvolveModule = {
         path_exceeds_budget: 'The entities are too far apart for this check.',
         class_not_in_ontology: 'The ontology has no such entity. Evolve cannot add entities yet.',
         no_join_evidence: 'No join in the data supports a link.',
+        shared_reference_path: 'These entities are connected only because both point at the same third entity (for example the same country). That is rarely what the question means; confirm the path with path_hint.',
+        computed_entity_id: 'The entity id is computed in its mapping SQL. Evolve needs a key column on the table.',
+        unmodelled_direct_link: 'A path exists, but the catalog declares a shorter link the ontology does not model. The existing path may not mean what the question asks; keep it with path_hint.',
     },
 
     DEFAULT_INTENT: {
@@ -311,11 +314,14 @@ window.EvolveModule = {
                 out[0] + '">' + escapeHtml(out[1]) + '</span></td></tr>';
         });
         const reasons = (ev.reasons || []).map((r) => r.replace(/_/g, ' ')).join('; ');
+        const unpinned = (ev.unpinned_sources || []).map((t) => t.split('.').pop()).join(', ');
         document.getElementById('evoEvaluation').innerHTML =
             (rows.length ? '<table class="table table-sm align-middle evo-answers"><thead><tr><th>Question</th>' +
                 '<th>Parent</th><th>Candidate</th><th>Expected</th><th>Result</th></tr></thead><tbody>' +
                 rows.join('') + '</tbody></table>' : '') +
             (reasons ? '<p class="small text-muted mb-1">' + escapeHtml(reasons) + '</p>' : '') +
+            (unpinned ? '<p class="small text-warning-emphasis mb-1">Views have no Delta version, so a change during the run cannot be ruled out: ' +
+                escapeHtml(unpinned) + '</p>' : '') +
             (ev.error ? '<p class="small text-danger mb-1">' + escapeHtml(ev.error) + '</p>' : '');
         document.getElementById('evoAcceptBox').classList.toggle('d-none', ev.decision !== 'PASS');
     },

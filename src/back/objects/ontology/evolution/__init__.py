@@ -1,6 +1,6 @@
 """Ontology Evolve: turn an unanswerable question into a reviewed ontology fix."""
 
-from back.objects.ontology.evolution.ArmGraphQuery import ArmGraphQuery
+from back.objects.ontology.evolution.ArmSqlQuery import ArmSqlQuery
 from back.objects.ontology.evolution.CandidateBuilder import CandidateBuilder
 from back.objects.ontology.evolution.CandidateFactory import CandidateFactory
 from back.objects.ontology.evolution.CoverageService import CoverageService
@@ -29,7 +29,7 @@ from back.objects.ontology.evolution.content_hash import (
 )
 
 __all__ = [
-    "ArmGraphQuery",
+    "ArmSqlQuery",
     "CandidateBuilder",
     "CandidateFactory",
     "CoverageService",
