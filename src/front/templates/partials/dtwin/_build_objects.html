@@ -1,0 +1,38 @@
+{# Graph → Build → Objects: physical objects of the current context version.
+   Read-only for everyone; the Drop buttons are rendered by query-build-objects.js
+   only when GET /dtwin/build/objects reports can_drop (app admins). #}
+<div class="ob-filter-bar">
+    <span class="text-muted small" id="buildObjectsSubtitle">
+        Tables, views, sync registrations and graphs this context version built
+    </span>
+    <div class="d-flex align-items-center gap-2 ms-auto">
+        <button type="button" class="btn btn-sm btn-outline-danger d-none"
+                id="buildObjectsDeleteAllBtn"
+                title="Drop every object listed below (admins only)">
+            <i class="bi bi-trash3 me-1"></i>Delete all
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                id="buildObjectsReloadBtn" title="Reload the object list">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Reload
+        </button>
+    </div>
+</div>
+
+<div id="buildObjectsLoading" class="text-center py-5 d-none">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="text-muted mt-2 small">Loading objects&hellip;</p>
+</div>
+
+<div id="buildObjectsNotice" class="alert alert-secondary m-3 d-none" role="status">
+    <i class="bi bi-info-circle me-1"></i>
+    <span id="buildObjectsNoticeMessage">Nothing built yet.</span>
+</div>
+
+<div id="buildObjectsError" class="alert alert-warning m-3 d-none" role="alert">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    <span id="buildObjectsErrorMessage"></span>
+</div>
+
+<div id="buildObjectsContent" class="d-none"></div>

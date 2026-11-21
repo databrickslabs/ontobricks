@@ -1,0 +1,240 @@
+/**
+ * Build page → Objects tab: physical objects of the current context version.
+ *
+ * Loads `/dtwin/build/objects` (already scoped to the current version and to
+ * the backend it uses) and renders one table per group. Every item carries a
+ * `drop` descriptor naming the Settings drop endpoint and its payload, so this
+ * module has no per-backend logic. Drop buttons only appear when the server
+ * reports `can_drop` (app admins); the drop endpoints are admin-only anyway.
+ */
+const BuildObjectsModule = (() => {
+    const ENDPOINT = '/dtwin/build/objects';
+    const STATE_IDS = [
+        'buildObjectsLoading',
+        'buildObjectsNotice',
+        'buildObjectsError',
+        'buildObjectsContent',
+    ];
+    const DROP_ENDPOINTS = {
+        uc: '/settings/graph-engine/drop-uc-object',
+        lakebase: '/settings/graph-engine/lakebase-drop-object',
+        neo4j: '/settings/graph-engine/neo4j-drop-label',
+    };
+    const KIND_BADGES = {
+        view: 'bg-info-subtle text-info-emphasis',
+        table: 'bg-primary-subtle text-primary-emphasis',
+        sync: 'bg-warning-subtle text-warning-emphasis',
+        metrics: 'bg-primary-subtle text-primary-emphasis',
+        work: 'bg-warning-subtle text-warning-emphasis',
+        graph: 'bg-success-subtle text-success-emphasis',
+    };
+
+    let current = { groups: [], can_drop: false };
+    let busy = false;
+
+    const el = (id) => document.getElementById(id);
+
+    function showOnly(visibleId) {
+        STATE_IDS.forEach((id) => {
+            const node = el(id);
+            if (node) node.classList.toggle('d-none', id !== visibleId);
+        });
+    }
+
+    function setBusy(isBusy) {
+        busy = isBusy;
+        ['buildObjectsReloadBtn', 'buildObjectsDeleteAllBtn'].forEach((id) => {
+            const btn = el(id);
+            if (btn) btn.disabled = isBusy;
+        });
+        document.querySelectorAll('.js-build-object-drop').forEach((btn) => {
+            btn.disabled = isBusy;
+        });
+    }
+
+    function node(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text != null) element.textContent = text;
+        return element;
+    }
+
+    function badge(kind) {
+        const cls = KIND_BADGES[kind] || 'bg-secondary-subtle text-secondary-emphasis';
+        return node('span', `badge border ${cls}`, kind.charAt(0).toUpperCase() + kind.slice(1));
+    }
+
+    function dropButton(item) {
+        const btn = node('button', 'btn btn-outline-danger btn-sm py-0 px-2 js-build-object-drop');
+        btn.type = 'button';
+        btn.title = `Drop ${item.kind} ${item.name}`;
+        btn.innerHTML = '<i class="bi bi-trash3"></i>';
+        btn.addEventListener('click', () => confirmAndDrop([item], item.name));
+        return btn;
+    }
+
+    function itemRow(item, canDrop) {
+        const tr = document.createElement('tr');
+        const kindCell = node('td');
+        kindCell.style.width = '90px';
+        kindCell.appendChild(badge(item.kind));
+        const nameCell = node('td', 'font-monospace small', item.name);
+        if (item.detail) {
+            nameCell.appendChild(node('div', 'text-muted', item.detail));
+        }
+        if (item.error) {
+            nameCell.appendChild(node('div', 'text-danger', item.error));
+        }
+        const infoCell = node('td', 'small text-muted', item.state || '');
+        const actionCell = node('td', 'text-end');
+        if (canDrop) actionCell.appendChild(dropButton(item));
+        [kindCell, nameCell, infoCell, actionCell].forEach((td) => tr.appendChild(td));
+        return tr;
+    }
+
+    function groupBlock(group, canDrop) {
+        const block = node('div', 'mb-4');
+        const header = node('div', 'd-flex align-items-center gap-2 mb-2');
+        header.appendChild(node('h6', 'mb-0', group.title));
+        if (group.location) {
+            header.appendChild(node('span', 'badge bg-light border text-muted font-monospace', group.location));
+        }
+        block.appendChild(header);
+        if (group.error) {
+            block.appendChild(node('div', 'alert alert-warning small py-2 mb-2', group.error));
+        }
+        if (!group.items.length) {
+            if (!group.error) block.appendChild(node('p', 'text-muted small mb-0', 'No objects.'));
+            return block;
+        }
+        const wrap = node('div', 'table-responsive');
+        const table = node('table', 'table table-hover align-middle ob-runs-table mb-0');
+        const tbody = document.createElement('tbody');
+        group.items.forEach((item) => tbody.appendChild(itemRow(item, canDrop)));
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        block.appendChild(wrap);
+        return block;
+    }
+
+    function allItems() {
+        return current.groups.flatMap((group) => group.items);
+    }
+
+    function render(data) {
+        current = { groups: data.groups || [], can_drop: !!data.can_drop };
+        const count = allItems().length;
+        const hasProblem = current.groups.some((group) => group.error);
+        const deleteAll = el('buildObjectsDeleteAllBtn');
+        if (deleteAll) deleteAll.classList.toggle('d-none', !(current.can_drop && count));
+
+        if (data.message) {
+            el('buildObjectsNoticeMessage').textContent = data.message;
+            showOnly('buildObjectsNotice');
+            return;
+        }
+        if (!count && !hasProblem) {
+            el('buildObjectsNoticeMessage').textContent =
+                'Nothing built yet. Run Build to create the graph objects.';
+            showOnly('buildObjectsNotice');
+            return;
+        }
+        const content = el('buildObjectsContent');
+        content.textContent = '';
+        const wrap = node('div', 'p-3');
+        current.groups.forEach((group) => wrap.appendChild(groupBlock(group, current.can_drop)));
+        content.appendChild(wrap);
+        showOnly('buildObjectsContent');
+    }
+
+    async function load() {
+        if (busy) return;
+        setBusy(true);
+        showOnly('buildObjectsLoading');
+        try {
+            const response = await fetch(ENDPOINT, { method: 'GET', credentials: 'include' });
+            const data = await response.json();
+            if (!response.ok || data.success === false) {
+                throw new Error(data.message || data.detail || 'Could not load objects');
+            }
+            render(data);
+        } catch (error) {
+            el('buildObjectsErrorMessage').textContent = error.message || 'Could not load objects';
+            showOnly('buildObjectsError');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function dropOne(item) {
+        const drop = item.drop || {};
+        const url = DROP_ENDPOINTS[drop.api];
+        if (!url) throw new Error('Unsupported object type');
+        const { api, ...payload } = drop;
+        if (api === 'lakebase') Object.assign(payload, { database: '', branch_path: '' });
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload),
+        });
+        let data = {};
+        try { data = await response.json(); } catch (_) { /* non-JSON body */ }
+        if (!response.ok || !data.success) {
+            throw new Error(data.detail || data.message || `HTTP ${response.status}`);
+        }
+    }
+
+    async function confirmAndDrop(items, label) {
+        if (busy || !current.can_drop || !items.length) return;
+        const list = items
+            .map((item) => `<li class="font-monospace small">${escapeHtml(item.kind)}: ${escapeHtml(item.name)}</li>`)
+            .join('');
+        const confirmed = await showConfirmDialog({
+            title: 'Drop objects?',
+            message: `Drop ${items.length} object${items.length === 1 ? '' : 's'} for `
+                + `<code>${escapeHtml(label)}</code>? This cannot be undone.`,
+            detailHtml: `<ul class="mb-0 ps-3">${list}</ul>`,
+            confirmText: 'Drop',
+            confirmClass: 'btn-danger',
+            icon: 'trash',
+        });
+        if (!confirmed) return;
+
+        setBusy(true);
+        const errors = [];
+        for (const item of items) {
+            try {
+                await dropOne(item);
+            } catch (error) {
+                errors.push(`${item.kind} ${item.name}: ${error.message || 'failed'}`);
+            }
+        }
+        busy = false;
+        if (errors.length) {
+            showNotification(`Drops failed:\n${errors.join('\n')}`, 'danger');
+        } else {
+            showNotification(items.length === 1 ? `Dropped ${items[0].name}` : 'Objects dropped', 'success');
+        }
+        if (typeof checkTripleStoreStatus === 'function') {
+            try { checkTripleStoreStatus(true); } catch (_) { /* status card may be absent */ }
+        }
+        await load();
+    }
+
+    function init() {
+        const tabBtn = el('buildTabObjectsBtn');
+        if (tabBtn) tabBtn.addEventListener('shown.bs.tab', load);
+        const reloadBtn = el('buildObjectsReloadBtn');
+        if (reloadBtn) reloadBtn.addEventListener('click', load);
+        const deleteAll = el('buildObjectsDeleteAllBtn');
+        if (deleteAll) {
+            deleteAll.addEventListener('click', () => confirmAndDrop(allItems(), 'this context version'));
+        }
+    }
+
+    return { init, load, render };
+})();
+
+window.BuildObjectsModule = BuildObjectsModule;
+document.addEventListener('DOMContentLoaded', () => BuildObjectsModule.init());

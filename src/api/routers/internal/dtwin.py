@@ -18,7 +18,7 @@ from back.core.errors import (
 )
 from api.routers.internal._guards import require
 from api.routers.internal._graph_access import assert_domain_graph_read
-from back.objects.registry import ROLE_BUILDER
+from back.objects.registry import ROLE_ADMIN, ROLE_BUILDER, role_level
 from shared.config.constants import DEFAULT_BASE_URI
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
@@ -33,6 +33,7 @@ from back.core.graph_analysis import (
     pattern_job_status,
 )
 from back.objects.digitaltwin import (
+    BuildObjects,
     CohortEngineContext,
     CohortService,
     DigitalTwin,
@@ -1786,6 +1787,34 @@ async def start_databricks_triplestore_build(
 
     threading.Thread(target=run_build, daemon=True).start()
     return {"success": True, "task_id": task.id}
+
+
+# ===========================================
+# Build → Objects (physical objects of the current context version)
+# ===========================================
+
+
+@router.get("/build/objects")
+async def build_objects(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List the tables, views, sync registrations and graphs this version built.
+
+    Read-only for every caller; ``can_drop`` tells the page whether to offer the
+    Drop buttons (the drop endpoints themselves are admin-only).
+    """
+    from api.routers.internal._helpers import map_route_errors
+
+    domain = get_domain(session_mgr)
+    with map_route_errors("build objects", logger):
+        data = await run_blocking(
+            BuildObjects.list_for_domain, domain, session_mgr, settings
+        )
+    role = getattr(request.state, "user_role", "") or ""
+    data["can_drop"] = role_level(role) >= role_level(ROLE_ADMIN)
+    return data
 
 
 # ===========================================

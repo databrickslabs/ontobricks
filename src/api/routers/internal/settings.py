@@ -1333,7 +1333,10 @@ async def get_graph_engine_neo4j_health(
         )
 
 
-@router.post("/graph-engine/neo4j-drop-label")
+@router.post(
+    "/graph-engine/neo4j-drop-label",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def post_graph_engine_neo4j_drop_label(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -1462,7 +1465,10 @@ async def get_graph_engine_lakebase_sync_objects(
         )
 
 
-@router.post("/graph-engine/drop-uc-object")
+@router.post(
+    "/graph-engine/drop-uc-object",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def post_graph_engine_drop_uc_object(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -1481,7 +1487,10 @@ async def post_graph_engine_drop_uc_object(
         )
 
 
-@router.post("/graph-engine/lakebase-drop-object")
+@router.post(
+    "/graph-engine/lakebase-drop-object",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def post_graph_engine_lakebase_drop_object(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),

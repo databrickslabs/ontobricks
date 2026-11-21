@@ -1,0 +1,58 @@
+================================================================================
+Graph / Build: new "Objects" tab (per-context objects, admin-only delete)
+================================================================================
+
+Context:
+The user asked for a tab in Graph / Build listing the objects shown in
+Settings -> Lakebase / Delta / Neo4j -> Objects, with Delete offered to admins
+only. Agreed scope: current context version and its backend only; non-admins
+get a read-only list; Settings tabs unchanged. Spec:
+docs/superpowers/specs/2026-11-21-build-objects-tab-design.md
+
+Changes:
+1. src/back/objects/digitaltwin/build/BuildObjects.py (new)
+   - Per-backend inventory of the current version (Delta UC objects, Lakebase
+     Postgres + UC sync objects, Neo4j graph, analytics output) as drop-ordered
+     groups with a backend-agnostic `drop` descriptor per item. A failing
+     section yields an error group instead of failing the tab.
+2. src/api/routers/internal/dtwin.py
+   - New GET /dtwin/build/objects; returns `can_drop` (true for app admins only).
+3. src/api/routers/internal/settings.py
+   - drop-uc-object, lakebase-drop-object and neo4j-drop-label now require the
+     admin role at the route level (previously only the Settings page gated them).
+4. src/front/templates/partials/dtwin/_build_objects.html (new),
+   src/front/templates/partials/dtwin/_query_build.html,
+   src/front/templates/dtwin.html
+   - New "Objects" tab after Cache and its pane; script included.
+5. src/front/static/query/js/query-build-objects.js (new)
+   - Lazy-loads on tab show, renders one table per group, Drop / Delete all
+     only when `can_drop`, confirm dialog, sequential drops, reload.
+6. src/front/static/domain/js/domain-runs.js
+   - `?tab=objects` deep link support for the Build tabs.
+7. src/back/objects/digitaltwin/__init__.py, build/__init__.py
+   - Export BuildObjects.
+8. docs/user-guide.md, docs/superpowers/specs/2026-11-21-build-objects-tab-design.md
+   - Documented the tab; added the design spec.
+9. tests/units/dtwin/test_build_objects.py, tests/units/api/test_build_objects_endpoint.py,
+   tests/units/front/test_build_objects_tab_contract.py (new)
+   - Naming rules, per-backend filtering/ordering, error groups, can_drop per
+     role, admin guard on the three drop routes, tab/pane/script contract.
+
+Modified files:
+- src/back/objects/digitaltwin/build/BuildObjects.py
+- src/back/objects/digitaltwin/__init__.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/settings.py
+- src/front/templates/partials/dtwin/_build_objects.html
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-build-objects.js
+- src/front/static/domain/js/domain-runs.js
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-21-build-objects-tab-design.md
+- tests/units/dtwin/test_build_objects.py
+- tests/units/api/test_build_objects_endpoint.py
+- tests/units/front/test_build_objects_tab_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11125 passed, 334 skipped, 8 deselected

@@ -82,6 +82,13 @@
                         <i class="bi bi-lightning-charge me-1"></i>Cache
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="buildTabObjectsBtn" data-bs-toggle="tab"
+                            data-bs-target="#buildPaneObjects" type="button" role="tab"
+                            aria-controls="buildPaneObjects" aria-selected="false">
+                        <i class="bi bi-table me-1"></i>Objects
+                    </button>
+                </li>
             </ul>
 
             <div class="tab-content p-3" id="buildPageTabContent">
@@ -256,6 +263,10 @@
                             No companion tables yet. Run <strong>Build</strong> or rebuild the graph cache.
                         </p>
                     </div>
+                </div>
+                <div class="tab-pane fade" id="buildPaneObjects" role="tabpanel"
+                     aria-labelledby="buildTabObjectsBtn">
+                    {% include "partials/dtwin/_build_objects.html" %}
                 </div>
             </div>
         </div>

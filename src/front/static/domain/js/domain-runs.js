@@ -229,12 +229,13 @@ function showAnalyticsRunDetails(idx) {
 
 window.showAnalyticsRunDetails = showAnalyticsRunDetails;
 
-// ---- Build page tabs (Build | Runs | Inferred | Cache) -----------------
+// ---- Build page tabs (Build | Runs | Inferred | Cache | Objects) -----------------
 // Header actions (Refresh / Purge / Build) stay visible on every tab.
 // Refresh cache lives inside the Cache tab.
 
 function _normalizeBuildPageTab(tab) {
-    if (tab === 'runs' || tab === 'inferred' || tab === 'cache') return tab;
+    if (tab === 'runs' || tab === 'inferred' || tab === 'cache'
+        || tab === 'objects') return tab;
     return 'build';
 }
 
@@ -263,6 +264,7 @@ function _showBuildPageTab(name) {
         runs: 'buildTabRunsBtn',
         inferred: 'buildTabInferredBtn',
         cache: 'buildTabCacheBtn',
+        objects: 'buildTabObjectsBtn',
         build: 'buildTabBuildBtn',
     })[tab];
     const btn = document.getElementById(btnId);
@@ -285,6 +287,9 @@ function _initBuildPageTabs() {
     );
     document.getElementById('buildTabCacheBtn')?.addEventListener(
         'shown.bs.tab', () => _syncBuildPageTab('cache'),
+    );
+    document.getElementById('buildTabObjectsBtn')?.addEventListener(
+        'shown.bs.tab', () => _syncBuildPageTab('objects'),
     );
 }
 

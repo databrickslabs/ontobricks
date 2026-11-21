@@ -19,6 +19,7 @@ from back.objects.digitaltwin.TwinResolve import TwinResolve
 from back.objects.digitaltwin.cache.TwinAssistantCache import TwinAssistantCache
 from back.objects.digitaltwin.explorer.TwinNeighborTriples import TwinNeighborTriples
 from back.objects.digitaltwin.TwinGraphAccess import TwinGraphAccess
+from back.objects.digitaltwin.build.BuildObjects import BuildObjects
 from back.objects.digitaltwin.build.TwinGraphBuild import TwinGraphBuild
 from back.objects.digitaltwin.quality.DataQualitySnapshot import DataQualitySnapshot
 from back.objects.digitaltwin.quality.TwinDataQualityRun import TwinDataQualityRun
@@ -34,6 +35,7 @@ from back.objects.digitaltwin.node.NodeShaclService import NodeShaclService
 from back.objects.digitaltwin.node.VirtualAttributeService import VirtualAttributeService
 
 __all__ = [
+    "BuildObjects",
     "CohortEngineContext",
     "CohortService",
     "DataQualitySnapshot",
