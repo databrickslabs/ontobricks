@@ -27,6 +27,16 @@
 
 ---
 
+### What's new in 0.9.3
+
+- **Hierarchy instance IRI scope**: opt-in root-class URIs so a parent and subclass mapped with the same business id share one Knowledge Graph node.
+- **Registry import consistency**: Add missing versions (never overwrite), Rename rewrites ontology URIs, highest new version starts as DRAFT.
+- **Graph Chat `max_tokens`**: configurable via `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS` (default 8192) for reasoning models.
+- **Docs match shipped transfer paths**: OBX UI + GitHub mirror only; the undocumented `registry_transfer` CLI section is gone.
+- **Dependency security floors**: Dependabot alerts for `oauthlib`, `opentelemetry-api`, and `dnspython` are closed; `databricks-sql-connector` ≥ 4.7.0 is required.
+
+Full details are in the [Release Notes](releases/ReleaseNotes_V0.9.3.md). Product direction: [Roadmap November 2026](releases/Roadmap_2026-11.md).
+
 ### What's new in 0.9.2
 
 - **Several datasets per class**: Ontology Studio links multiple Unity Catalog tables, views, or **metric views** to one class. Graph Explorer, Graph Chat, and MCP surface all of them.

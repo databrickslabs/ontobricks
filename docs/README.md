@@ -11,6 +11,19 @@ Center and the Sphinx site include the same files, grouped the same way.
 **New here?** [Get Started](getting-started.md) → [Examples](examples.md) →
 [User Guide](user-guide.md).
 
+## What's new in 0.9.3
+
+Patch on 0.9.2. Full details:
+[Release notes V0.9.3](../releases/ReleaseNotes_V0.9.3.md).
+Product direction: [Roadmap November 2026](../releases/Roadmap_2026-11.md).
+
+| Feature | Where it is documented |
+|---------|------------------------|
+| Hierarchy instance IRI scope (opt-in root-class URIs) | [User Guide](user-guide.md), [Advanced features](advanced_features.md#ontology-specifics), [Architecture](architecture.md) |
+| Registry import Add missing / Rename / DRAFT newest | [User Guide](user-guide.md), [Advanced features](advanced_features.md#registry-import-and-export) |
+| Graph Chat `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS` (default 8192) | [Getting Started](getting-started.md) |
+| OBX + GitHub only (no `registry_transfer` CLI) | [Advanced features](advanced_features.md#registry-import-and-export) |
+
 ## What's new in 0.9.2
 
 Patch on 0.9.1. Full details:
@@ -131,6 +144,7 @@ Project overview: root [README](../README.md).
 ## Quick links
 
 - [Main README](../README.md)
-- [Release notes V0.9.1](../releases/ReleaseNotes_V0.9.1.md)
-- [Release notes V0.9.0](../releases/ReleaseNotes_V0.9.0.md)
+- [Release notes V0.9.3](../releases/ReleaseNotes_V0.9.3.md)
+- [Release notes V0.9.2](../releases/ReleaseNotes_V0.9.2.md)
+- [Roadmap November 2026](../releases/Roadmap_2026-11.md)
 - [Swagger UI](http://localhost:8000/docs) (local run)
