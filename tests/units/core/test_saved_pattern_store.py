@@ -407,6 +407,98 @@ def test_catalog_survives_a_new_detect_run(wh):
     assert store.shape(sid, pattern_id=PID)["diagram"]["nodes"]
 
 
+def test_no_pattern_is_certified_by_default(wh):
+    store = wh.store()
+    sid = store.save(PID, "FR buyers")["saved_id"]
+    catalog = store.patterns(sid)
+    assert [p["certified"] for p in catalog["patterns"]] == [False, False]
+    assert catalog["stats"]["certified_pattern_count"] == 0
+    assert catalog["stats"]["certified_count"] == 0
+
+
+def test_certify_flags_one_pattern_and_reports_certified_entities(wh):
+    store = wh.store()
+    sid = store.save(PID, "FR buyers")["saved_id"]
+    out = store.set_certified(sid, PID, True)
+    assert out == {"saved_id": sid, "pattern_id": PID, "certified": True}
+    catalog = store.patterns(sid)
+    by_id = {p["id"]: p["certified"] for p in catalog["patterns"]}
+    assert by_id == {PID: True, PID2: False}
+    # PID has support 2 → 2 certified entities out of population 10.
+    assert catalog["stats"]["certified_pattern_count"] == 1
+    assert catalog["stats"]["certified_count"] == 2
+    store.set_certified(sid, PID, False)
+    assert store.patterns(sid)["stats"]["certified_pattern_count"] == 0
+
+
+def test_certification_is_scoped_to_its_saved_run(wh):
+    store = wh.store()
+    a = store.save(PID, "A")["saved_id"]
+    b = store.save(PID, "B")["saved_id"]
+    store.set_certified(a, PID, True)
+    assert store.patterns(a)["stats"]["certified_pattern_count"] == 1
+    assert store.patterns(b)["stats"]["certified_pattern_count"] == 0
+
+
+def test_members_can_be_narrowed_to_certified_or_not_certified_patterns(wh):
+    store = wh.store()
+    sid = store.save(PID, "A")["saved_id"]
+    store.set_certified(sid, PID, True)
+    certified = store.members(sid, certified=True)
+    assert {m["uri"] for m in certified["members"]} == {"http://ex/Alice", "http://ex/Bob"}
+    rest = store.members(sid, certified=False)
+    assert {m["uri"] for m in rest["members"]} == {"http://ex/Carol"}
+    # No filter: both groups; an explicit pattern_id wins over the filter.
+    assert store.members(sid)["total"] == 3
+    assert store.members(sid, pattern_id=PID2, certified=True)["total"] == 1
+
+
+def test_members_certified_filter_on_legacy_member_rows(wh):
+    wh.conn.execute(
+        f"CREATE TABLE {SAVED} (saved_id TEXT, saved_label TEXT, pattern_id TEXT, "
+        "focus_pattern_id TEXT, anchor_uri TEXT, anchor_label TEXT, type_uri TEXT, "
+        "hop_count INT, support INT, type_count INT, relation_count INT, "
+        "pattern_count INT, seed_label TEXT, shape_json TEXT, diagram_json TEXT, "
+        "saved_at TIMESTAMP, anchor_count INT, population_count INT)"
+    )
+    wh.conn.executemany(
+        f"INSERT INTO {SAVED} (saved_id, pattern_id, anchor_uri, support) VALUES (?, ?, ?, 1)",
+        [("old-1", "p1", "http://ex/a"), ("old-1", "p2", "http://ex/b")],
+    )
+    wh.conn.commit()
+    store = wh.store()
+    store.set_certified("old-1", "p1", True)
+    assert [m["uri"] for m in store.members("old-1", certified=True)["members"]] == ["http://ex/a"]
+    assert [m["uri"] for m in store.members("old-1", certified=False)["members"]] == ["http://ex/b"]
+
+
+def test_certify_rejects_unknown_pattern_and_missing_id(wh):
+    store = wh.store()
+    sid = store.save(PID, "A")["saved_id"]
+    with pytest.raises(ValidationError, match="Unknown pattern"):
+        store.set_certified(sid, "nope", True)
+    with pytest.raises(ValidationError, match="pattern_id is required"):
+        store.set_certified(sid, " ", True)
+
+
+def test_certified_column_is_added_to_tables_saved_before_it_existed(wh):
+    wh.conn.execute(
+        f"CREATE TABLE {SAVED} (saved_id TEXT, saved_label TEXT, pattern_id TEXT, "
+        "focus_pattern_id TEXT, anchor_uri TEXT, anchor_label TEXT, type_uri TEXT, "
+        "hop_count INT, support INT, type_count INT, relation_count INT, "
+        "pattern_count INT, seed_label TEXT, shape_json TEXT, diagram_json TEXT, "
+        "saved_at TIMESTAMP, anchor_count INT, population_count INT)"
+    )
+    wh.conn.execute(
+        f"INSERT INTO {SAVED} (saved_id, pattern_id, support) VALUES ('old-1', 'p1', 5)"
+    )
+    wh.conn.commit()
+    store = wh.store()
+    assert store.patterns("old-1")["patterns"][0]["certified"] is False
+    store.set_certified("old-1", "p1", True)
+    assert store.patterns("old-1")["patterns"][0]["certified"] is True
+
+
 def test_save_rejects_unknown_or_empty_pattern(wh):
     with pytest.raises(ValidationError, match="Unknown or empty"):
         wh.store().save("nope", "X")

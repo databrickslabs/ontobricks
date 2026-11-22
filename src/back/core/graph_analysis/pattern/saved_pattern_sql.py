@@ -17,6 +17,13 @@ _SAVED_COLUMNS = (
 )
 
 
+def as_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def sql_lit(value: str) -> str:
     """Quote *value* as a Spark SQL string literal (escapes ``\\`` and ``'``)."""
     escaped = (value or "").replace("\\", "\\\\").replace("'", "''")

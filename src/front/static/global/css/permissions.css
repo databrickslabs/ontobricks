@@ -190,6 +190,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .dq-shape-card .btn
 /* Pattern Saved: keep Open (read navigation) clickable; Delete stays blocked. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) .ob-rule-card .btn-group button:not([data-pat-open]),
 body:is(.read-only-version, .role-viewer, .read-only-locked) .ob-rule-card .btn-group button[data-pat-delete],
+body:is(.read-only-version, .role-viewer, .read-only-locked) .pat-cert-btn,
 /* --- Save Context navbar item: still rendered, but neutralised. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #menuSaveDomain {
     pointer-events: none !important;

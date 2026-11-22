@@ -1436,6 +1436,182 @@ a.sim-uri-link:focus-visible {
     stroke: var(--db-primary, #737373);
 }
 
+/* Saved runs: bars are green when the pattern is certified, red otherwise. */
+.pat-chart-bar--certified .pat-chart-bar-rect {
+    fill: var(--db-status-success-soft-bg, rgba(16, 185, 129, 0.18));
+    stroke: var(--db-status-success, #10B981);
+}
+
+.pat-chart-bar--uncertified .pat-chart-bar-rect {
+    fill: var(--db-status-danger-soft-bg, rgba(239, 68, 68, 0.18));
+    stroke: var(--db-status-danger, #EF4444);
+}
+
+.pat-chart-bar--certified:hover .pat-chart-bar-rect {
+    fill: var(--db-status-success, #10B981);
+    fill-opacity: 0.45;
+}
+
+.pat-chart-bar--uncertified:hover .pat-chart-bar-rect {
+    fill: var(--db-status-danger, #EF4444);
+    fill-opacity: 0.45;
+}
+
+.pat-chart-bar--certified.pat-chart-bar--active .pat-chart-bar-rect {
+    fill: var(--db-status-success, #10B981);
+    fill-opacity: 1;
+    stroke: var(--db-status-success, #10B981);
+}
+
+.pat-chart-bar--uncertified.pat-chart-bar--active .pat-chart-bar-rect {
+    fill: var(--db-status-danger, #EF4444);
+    fill-opacity: 1;
+    stroke: var(--db-status-danger, #EF4444);
+}
+
+.pat-chart-bar--certified.pat-chart-bar--active .pat-chart-bar-label {
+    fill: var(--db-success-text, #0A6E4D);
+}
+
+.pat-chart-bar--uncertified.pat-chart-bar--active .pat-chart-bar-label {
+    fill: var(--db-danger-text, #B42318);
+}
+
+.pat-chart-legend {
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: 0.75rem;
+    font-size: 0.68rem;
+    color: var(--db-text-muted, #6F6B65);
+}
+
+.pat-chart-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.pat-chart-swatch {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 2px;
+}
+
+.pat-chart-swatch--ok { background: var(--db-status-success, #10B981); }
+.pat-chart-swatch--bad { background: var(--db-status-danger, #EF4444); }
+
+/* Group-by-certification switch (chart head) and the group detail canvas. */
+.pat-chart-group-switch {
+    margin: 0 0.75rem 0 0;
+    min-height: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+.pat-chart-group-switch .form-check-input {
+    margin: 0;
+    float: none;
+    cursor: pointer;
+}
+
+.pat-chart-group-switch .form-check-label {
+    cursor: pointer;
+    color: var(--db-text-muted, #6F6B65);
+}
+
+.pat-uncert-icon {
+    color: var(--db-status-danger, #EF4444);
+}
+
+.pat-group-panel {
+    min-width: 0;
+}
+
+.pat-group-table tbody tr[data-pat-id] {
+    cursor: pointer;
+}
+
+.pat-group-table tbody tr[data-pat-id]:hover,
+.pat-group-table tbody tr[data-pat-id]:focus {
+    background: var(--db-primary-light, rgba(115, 115, 115, 0.1));
+    outline: none;
+}
+
+.pat-group-meter-cell {
+    width: 35%;
+    min-width: 6rem;
+}
+
+.pat-group-meter {
+    display: block;
+    height: 0.6rem;
+    border-radius: 3px;
+}
+
+.pat-group-meter--ok { background: var(--db-status-success, #10B981); }
+.pat-group-meter--bad { background: var(--db-status-danger, #EF4444); }
+
+/* Certification: toggle button + certified/not-certified gauge. */
+.pat-cert-btn {
+    height: var(--pat-chip-h, 2.25rem);
+    min-height: var(--pat-chip-h, 2.25rem);
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.pat-cert-btn .bi,
+.pat-cert-icon {
+    color: var(--db-status-success, #10B981);
+}
+
+.pat-cert-btn:not(.is-certified) .bi {
+    color: var(--db-text-muted, #6F6B65);
+}
+
+.pat-cert-gauge {
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    gap: 0.4rem;
+    height: var(--pat-chip-h, 2.25rem);
+    box-sizing: border-box;
+    padding: 0 0.65rem;
+    border: 1px solid var(--db-border, #ECEAE6);
+    border-radius: var(--db-radius-control, 10px);
+    background: var(--db-surface-warm, #fff);
+    white-space: nowrap;
+    cursor: help;
+}
+
+.pat-cert-gauge-svg circle {
+    fill: none;
+    stroke-width: 5;
+}
+
+.pat-cert-gauge-bad { stroke: var(--db-status-danger, #EF4444); }
+.pat-cert-gauge-ok { stroke: var(--db-status-success, #10B981); }
+
+.pat-cert-gauge-pct {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.pat-cert-gauge-label {
+    font-size: 0.6875rem;
+    line-height: 1;
+    color: var(--db-text-muted, #6F6B65);
+}
+
 .pat-chart-bar-value {
     font-size: 0.65rem;
     font-weight: 600;

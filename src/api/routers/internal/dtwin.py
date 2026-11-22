@@ -729,6 +729,10 @@ async def saved_pattern_members(
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     pattern_id: str = Query("", description="Limit to one pattern in the saved run"),
+    certified: Optional[bool] = Query(
+        None,
+        description="Without pattern_id: only certified (true) or non-certified (false) patterns",
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -744,6 +748,7 @@ async def saved_pattern_members(
         limit,
         settings,
         pattern_id,
+        certified,
     )
     return {"success": True, **result}
 
@@ -769,6 +774,43 @@ async def saved_pattern_shape(
     )
     if not result:
         raise ValidationError(f"Unknown saved pattern: {saved_id}")
+    return {"success": True, **result}
+
+
+@router.put(
+    "/patterns/saved/{saved_id}/certification",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def certify_saved_pattern(
+    request: Request,
+    saved_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Certify (or un-certify) one pattern of a saved Detect run."""
+    assert_domain_graph_read(request)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    pattern_id = data.get("pattern_id")
+    certified = data.get("certified")
+    if not isinstance(pattern_id, str) or not pattern_id.strip():
+        raise ValidationError("pattern_id is required")
+    if not isinstance(certified, bool):
+        raise ValidationError("certified must be a boolean")
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).certify_saved_pattern,
+        graph_name,
+        saved_id,
+        pattern_id.strip(),
+        certified,
+        settings,
+    )
     return {"success": True, **result}
 
 

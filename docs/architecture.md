@@ -1525,7 +1525,16 @@ job-only gate as Community (analytics toggle +
    `GET …/saved/{id}/patterns` (picker catalog),
    `GET …/saved/{id}/members?pattern_id=` (paged from live Detect, or from
    legacy member-row snapshots),
-   `GET …/saved/{id}/shape?pattern_id=` (diagram), `DELETE …/saved/{id}`.
+   `GET …/saved/{id}/shape?pattern_id=` (diagram), `DELETE …/saved/{id}`,
+   `PUT …/saved/{id}/certification` (`{pattern_id, certified}`, builder role).
+   Certification is a user-set `certified BOOLEAN` column on the saved
+   catalog rows (default NULL = not certified; Save never writes it). The
+   catalog read returns `certified` per pattern plus
+   `stats.certified_pattern_count` / `stats.certified_count` (entities in
+   certified patterns) for the UI gauge.
+   `GET …/saved/{id}/members?certified=true|false` (without `pattern_id`)
+   pages the members of all certified / non-certified patterns, which backs
+   the chart's *Group by certification* switch.
    Catalog and diagrams survive the next Detect; member lists for a new-style
    save follow the live Detect output.
 

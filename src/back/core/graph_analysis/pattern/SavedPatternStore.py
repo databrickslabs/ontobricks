@@ -33,7 +33,9 @@ from back.core.graph_analysis.pattern.JobPatterns import (
     shape_query,
     shapes_bulk_query,
 )
+from back.core.graph_analysis.pattern.SavedKpiBackfill import SavedKpiBackfill
 from back.core.graph_analysis.pattern.saved_pattern_sql import (
+    as_int as _as_int,
     insert_catalog_sql,
     insert_rest_sql,
     kpi_sql,
@@ -75,6 +77,10 @@ _SHAPE_COLUMNS = (
     ("focus_pattern_id", "STRING"),
 )
 
+# User-set flag per (saved run, pattern). NULL / false = not certified, which
+# is the default for every pattern: Save never writes this column.
+_CERT_COLUMNS = (("certified", "BOOLEAN"),)
+
 
 def slug_saved_id(label: str, pattern_id: str) -> str:
     """Build a stable ``[a-z0-9-]`` id from *label* + a short hash suffix."""
@@ -110,7 +116,7 @@ def _diagram_needs_rebuild(diagram: Any, hop_count: int) -> bool:
     return False
 
 
-class SavedPatternStore:
+class SavedPatternStore(SavedKpiBackfill):
     """Save, list, page and delete saved Detect runs through the Build warehouse.
 
     *query* runs a SELECT and returns rows; *execute* runs DDL/DML.
@@ -290,6 +296,7 @@ class SavedPatternStore:
             "max(focus_pattern_id) AS focus_pattern_id, "
             "max(anchor_count) AS anchor_count, "
             "max(population_count) AS population_count, "
+            "max(CASE WHEN certified THEN 1 ELSE 0 END) AS certified, "
             "max(support) AS size "
             f"FROM {self._saved} WHERE saved_id = {_lit(saved_id)} "
             "GROUP BY pattern_id ORDER BY support DESC, pattern_id"
@@ -299,6 +306,8 @@ class SavedPatternStore:
         anchor_count = 0
         population_count = 0
         covered = 0
+        certified_count = 0
+        certified_covered = 0
         for row in rows:
             pid = str(row.get("id") or "")
             if not pid:
@@ -308,6 +317,10 @@ class SavedPatternStore:
             label = str(row.get("label") or "") or pid[:8]
             support = _as_int(row.get("support")) or _as_int(row.get("size"))
             covered += support
+            certified = bool(_as_int(row.get("certified")))
+            if certified:
+                certified_count += 1
+                certified_covered += support
             anchor_count = max(anchor_count, _as_int(row.get("anchor_count")))
             population_count = max(
                 population_count, _as_int(row.get("population_count"))
@@ -321,6 +334,7 @@ class SavedPatternStore:
                     "type_count": _as_int(row.get("type_count")),
                     "relation_count": _as_int(row.get("relation_count")),
                     "size": _as_int(row.get("size")),
+                    "certified": certified,
                 }
             )
         return {
@@ -334,8 +348,30 @@ class SavedPatternStore:
                 "population_count": population_count,
                 "covered_count": covered,
                 "pattern_count": len(patterns),
+                "certified_pattern_count": certified_count,
+                "certified_count": certified_covered,
             },
         }
+
+    def set_certified(
+        self, saved_id: str, pattern_id: str, certified: bool
+    ) -> Dict[str, Any]:
+        """Mark one pattern of a saved run as certified (or not).
+
+        Certification is a per-snapshot, user-set flag: Detect and Save never
+        touch it, and every pattern starts non-certified.
+        """
+        self._check_saved_id(saved_id)
+        pid = (pattern_id or "").strip()
+        if not pid:
+            raise ValidationError("pattern_id is required")
+        self._ensure_table()
+        where = f"saved_id = {_lit(saved_id)} AND pattern_id = {_lit(pid)}"
+        if not self._member_count_where(where):
+            raise ValidationError(f"Unknown pattern {pid!r} in saved run {saved_id!r}")
+        flag = "TRUE" if certified else "FALSE"
+        self._execute(f"UPDATE {self._saved} SET certified = {flag} WHERE {where}")
+        return {"saved_id": saved_id, "pattern_id": pid, "certified": bool(certified)}
 
     def members(
         self,
@@ -343,8 +379,12 @@ class SavedPatternStore:
         offset: int = 0,
         limit: int = DEFAULT_MEMBERS_PAGE,
         pattern_id: str = "",
+        certified: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Page of members for a saved run.
+
+        With no *pattern_id*, *certified* narrows the page to the patterns
+        that are (``True``) or are not (``False``) certified.
 
         Catalog saves keep no member rows: members are read from the live
         Detect output while that run is still current. Legacy member-row
@@ -356,8 +396,8 @@ class SavedPatternStore:
         start = max(0, _as_int(offset))
         pid = (pattern_id or "").strip()
         if self._has_member_rows(saved_id, pid):
-            return self._members_from_saved(saved_id, pid, start, page)
-        return self._members_from_detect(saved_id, pid, start, page)
+            return self._members_from_saved(saved_id, pid, start, page, certified)
+        return self._members_from_detect(saved_id, pid, start, page, certified)
 
     def shape(
         self, saved_id: str, pattern_id: str = ""
@@ -441,7 +481,7 @@ class SavedPatternStore:
             "hop_count INT, support INT, type_count INT, relation_count INT, "
             "pattern_count INT, seed_label STRING, shape_json STRING, "
             "diagram_json STRING, saved_at TIMESTAMP, anchor_count INT, "
-            "population_count INT) USING DELTA"
+            "population_count INT, certified BOOLEAN) USING DELTA"
         )
         self._migrate_extra_columns()
         self._table_ready = True
@@ -449,7 +489,7 @@ class SavedPatternStore:
     def _migrate_extra_columns(self) -> None:
         """Add KPI/shape columns on tables created before they were in the schema."""
         existing = self._column_names()
-        for name, typ in _KPI_COLUMNS + _SHAPE_COLUMNS:
+        for name, typ in _KPI_COLUMNS + _SHAPE_COLUMNS + _CERT_COLUMNS:
             if name.lower() in existing:
                 continue
             try:
@@ -532,11 +572,18 @@ class SavedPatternStore:
         return bool(rows)
 
     def _members_from_saved(
-        self, saved_id: str, pattern_id: str, start: int, page: int
+        self,
+        saved_id: str,
+        pattern_id: str,
+        start: int,
+        page: int,
+        certified: Optional[bool] = None,
     ) -> Dict[str, Any]:
         where = f"saved_id = {_lit(saved_id)} AND coalesce(anchor_uri, '') <> ''"
         if pattern_id:
             where += f" AND pattern_id = {_lit(pattern_id)}"
+        elif certified is not None:
+            where += f" AND coalesce(certified, FALSE) = {'TRUE' if certified else 'FALSE'}"
         total = self._member_count_where(where)
         rows = self._rows(
             "SELECT anchor_uri AS uri, anchor_label AS label, type_uri "
@@ -546,11 +593,22 @@ class SavedPatternStore:
         return self._members_payload(saved_id, pattern_id, start, page, total, rows)
 
     def _members_from_detect(
-        self, saved_id: str, pattern_id: str, start: int, page: int
+        self,
+        saved_id: str,
+        pattern_id: str,
+        start: int,
+        page: int,
+        certified: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Page members from the live Detect output for patterns in this save."""
         catalog = self.patterns(saved_id)
         allowed = {str(p["id"]) for p in catalog.get("patterns") or []}
+        if certified is not None and not pattern_id:
+            allowed = {
+                str(p["id"])
+                for p in catalog.get("patterns") or []
+                if bool(p.get("certified")) == certified
+            }
         if pattern_id:
             if pattern_id not in allowed:
                 return self._members_payload(saved_id, pattern_id, start, page, 0, [])
@@ -604,104 +662,6 @@ class SavedPatternStore:
             "members": members,
             "has_more": start + len(members) < total,
         }
-
-    def _kpis_incomplete(self, item: Dict[str, Any]) -> bool:
-        return not (
-            _as_int(item.get("hop_count"))
-            and _as_int(item.get("type_count"))
-            and _as_int(item.get("relation_count"))
-            and _as_int(item.get("pattern_count"))
-        )
-
-    def _live_metrics_map(self) -> Dict[str, Dict[str, int]]:
-        """pattern_id → Discover KPIs from the latest Detect tables."""
-        summary = self._safe_rows(f"SELECT pattern_count FROM {self._out}_summary")
-        pattern_count = _as_int(summary[0].get("pattern_count")) if summary else 0
-        shapes = self._safe_rows(
-            f"SELECT pattern_id, hop_count, support FROM {self._out}_shapes"
-        )
-        edges = self._safe_rows(
-            "SELECT pattern_id, parent_type, child_type "
-            f"FROM {self._out}_shape_edges"
-        )
-        types_by: Dict[str, set[str]] = {}
-        rel_by: Dict[str, int] = {}
-        for edge in edges:
-            pid = str(edge.get("pattern_id") or "")
-            if not pid:
-                continue
-            rel_by[pid] = rel_by.get(pid, 0) + 1
-            bucket = types_by.setdefault(pid, set())
-            parent = str(edge.get("parent_type") or "")
-            child = str(edge.get("child_type") or "")
-            if parent:
-                bucket.add(parent)
-            if child:
-                bucket.add(child)
-        out: Dict[str, Dict[str, int]] = {}
-        for row in shapes:
-            pid = str(row.get("pattern_id") or "")
-            if not pid:
-                continue
-            types = types_by.get(pid) or set()
-            out[pid] = {
-                "hop_count": _as_int(row.get("hop_count")),
-                "support": _as_int(row.get("support")),
-                "type_count": len(types) or 1,
-                "relation_count": rel_by.get(pid, 0),
-                "pattern_count": pattern_count,
-            }
-        return out
-
-    def _enrich_missing_kpis(self, items: List[Dict[str, Any]]) -> None:
-        """Fill / persist KPIs for rows saved before the snapshot columns existed."""
-        missing = [item for item in items if self._kpis_incomplete(item)]
-        if not missing:
-            return
-        live = self._live_metrics_map()
-        summary = self._safe_rows(f"SELECT pattern_count FROM {self._out}_summary")
-        run_count = _as_int(summary[0].get("pattern_count")) if summary else 0
-        for item in missing:
-            metrics = dict(live.get(item["pattern_id"]) or {})
-            if run_count and not metrics.get("pattern_count"):
-                metrics["pattern_count"] = run_count
-            if not metrics and not item.get("type_count"):
-                continue
-            changed = False
-            for key in (
-                "hop_count",
-                "support",
-                "type_count",
-                "relation_count",
-                "pattern_count",
-            ):
-                if _as_int(item.get(key)):
-                    continue
-                value = _as_int(metrics.get(key))
-                if not value and key == "support":
-                    value = _as_int(item.get("size"))
-                if value:
-                    item[key] = value
-                    changed = True
-            if changed:
-                self._persist_kpis(item)
-
-    def _persist_kpis(self, item: Dict[str, Any]) -> None:
-        sid = str(item.get("id") or "")
-        if not sid:
-            return
-        try:
-            self._execute(
-                f"UPDATE {self._saved} SET "
-                f"hop_count = {int(item.get('hop_count') or 0)}, "
-                f"support = {int(item.get('support') or item.get('size') or 0)}, "
-                f"type_count = {int(item.get('type_count') or 0)}, "
-                f"relation_count = {int(item.get('relation_count') or 0)}, "
-                f"pattern_count = {int(item.get('pattern_count') or 0)} "
-                f"WHERE saved_id = {_lit(sid)}"
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("SavedPatternStore: could not backfill KPIs for %s: %s", sid, exc)
 
     def _live_shape_payload(
         self, pattern_id: str, *, stats: Optional[Dict[str, Any]] = None
@@ -872,13 +832,6 @@ class SavedPatternStore:
     def _check_saved_id(saved_id: str) -> None:
         if not _SAVED_ID_RE.match(saved_id or ""):
             raise ValidationError(f"Invalid saved pattern id: {saved_id!r}")
-
-
-def _as_int(value: Any) -> int:
-    try:
-        return int(value or 0)
-    except (TypeError, ValueError):
-        return 0
 
 
 def _parse_json(value: Any) -> Any:

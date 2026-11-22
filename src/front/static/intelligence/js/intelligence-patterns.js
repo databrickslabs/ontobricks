@@ -60,20 +60,34 @@ const IntelligencePatterns = {
                     this.openMembersModal();
                     return;
                 }
+                if (e.target.closest('[data-pat-certify]')) {
+                    this.toggleCertified();
+                    return;
+                }
                 if (e.target.closest('[data-pat-chart-toggle]')) {
                     e.preventDefault();
                     this._toggleChart();
                     return;
                 }
+                const grp = e.target.closest('[data-pat-group]');
+                if (grp && grp.dataset.patGroup) {
+                    this.selectGroup(grp.dataset.patGroup);
+                    return;
+                }
                 const opt = e.target.closest('[data-pat-id]');
                 if (opt && opt.dataset.patId) this.selectPattern(opt.dataset.patId);
             });
+            details.addEventListener('change', (e) => {
+                const sw = e.target.closest('[data-pat-group-toggle]');
+                if (sw) this.toggleGrouping(sw.checked);
+            });
             details.addEventListener('keydown', (e) => {
                 if (e.key !== 'Enter' && e.key !== ' ') return;
-                const bar = e.target.closest('.pat-chart-bar[data-pat-id]');
+                const bar = e.target.closest('.pat-chart-bar[data-pat-id], .pat-chart-bar[data-pat-group], tr[data-pat-id]');
                 if (!bar) return;
                 e.preventDefault();
-                this.selectPattern(bar.dataset.patId);
+                if (bar.dataset.patGroup) this.selectGroup(bar.dataset.patGroup);
+                else this.selectPattern(bar.dataset.patId);
             });
         }
         const membersBody = document.getElementById('patMembersModalBody');
@@ -407,14 +421,135 @@ const IntelligencePatterns = {
         return hit ? hit.support : null;
     },
 
+    // Certification is a per-snapshot flag, so it only exists on a saved run.
+    _certifiable() {
+        return !!this._viewingSavedId;
+    },
+
+    _isCertified(patternId) {
+        const hit = this._patternOf(patternId);
+        return !!(hit && hit.certified);
+    },
+
+    // Share of the entities of the type that follow a certified pattern.
+    // Denominator = the run's whole population (runs saved before it was
+    // persisted fall back to the entities covered by a pattern); everything
+    // else — uncertified patterns and entities outside any pattern — counts
+    // as not certified.
+    _certStats() {
+        const patterns = (this.latest && this.latest.patterns) || [];
+        const stats = (this.latest && this.latest.stats) || {};
+        const covered = patterns.reduce((s, p) => s + (Number(p.support) || 0), 0);
+        const total = Number(stats.population_count) || covered;
+        const certified = Math.min(total, patterns.reduce(
+            (s, p) => s + (p.certified ? (Number(p.support) || 0) : 0), 0,
+        ));
+        const certifiedPatterns = patterns.filter((p) => p.certified).length;
+        return {
+            total,
+            certified,
+            certifiedPatterns,
+            patternCount: patterns.length,
+            pct: total ? Math.round((certified / total) * 100) : 0,
+        };
+    },
+
+    // Compact donut next to "Matching entities": green = certified,
+    // red = not certified, plus the percentage.
+    _certGaugeHtml() {
+        if (!this._certifiable()) return '';
+        const st = this._certStats();
+        const tip = st.total
+            ? `${this._fmtNum(st.certified)} of ${this._fmtNum(st.total)} entities `
+                + `(${st.pct}%) follow a certified pattern; the rest is not certified. `
+                + `${this._fmtNum(st.certifiedPatterns)} of ${this._fmtNum(st.patternCount)} `
+                + 'patterns certified.'
+            : 'No entities in this run.';
+        const C = 2 * Math.PI * 11;
+        const green = (st.pct / 100) * C;
+        return `<div class="pat-cert-gauge" id="patCertGauge" role="img" title="${this._esc(tip)}"`
+            + ` aria-label="${this._esc(`${st.pct}% certified. ${tip}`)}">`
+            + '<svg class="pat-cert-gauge-svg" viewBox="0 0 28 28" width="24" height="24" aria-hidden="true">'
+            + '<circle class="pat-cert-gauge-bad" cx="14" cy="14" r="11"/>'
+            + (green > 0
+                ? `<circle class="pat-cert-gauge-ok" cx="14" cy="14" r="11"`
+                    + ` stroke-dasharray="${green.toFixed(2)} ${C.toFixed(2)}"`
+                    + ' transform="rotate(-90 14 14)"/>'
+                : '')
+            + '</svg>'
+            + `<span class="pat-cert-gauge-pct">${st.pct}%</span>`
+            + '<span class="pat-cert-gauge-label">certified</span>'
+            + '</div>';
+    },
+
+    _certifyBtnHtml(selectedId) {
+        if (!this._certifiable()) return '';
+        const on = this._isCertified(selectedId);
+        const disabled = this._canEdit() ? '' : ' disabled';
+        return `<button type="button" class="btn btn-sm btn-outline-secondary pat-cert-btn${on ? ' is-certified' : ''}"`
+            + ` data-pat-certify aria-pressed="${on ? 'true' : 'false'}"${disabled}`
+            + ` title="${on ? 'Certified — click to remove the certification' : 'Not certified — click to certify this pattern'}">`
+            + `<i class="bi ${on ? 'bi-patch-check-fill' : 'bi-patch-check'} me-1" aria-hidden="true"></i>`
+            + `${on ? 'Certified' : 'Certify'}</button>`;
+    },
+
+    async toggleCertified() {
+        const savedId = this._viewingSavedId;
+        const patternId = this.selectedId;
+        if (!savedId || !patternId || !this._canEdit()) return;
+        const hit = this._patternOf(patternId);
+        if (!hit) return;
+        const next = !hit.certified;
+        const btn = document.querySelector('#patDetails [data-pat-certify]');
+        if (btn) btn.disabled = true;
+        try {
+            await this._json(
+                `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/certification`,
+                {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pattern_id: patternId, certified: next }),
+                },
+            );
+            hit.certified = next;
+            this._refreshCertUi();
+        } catch (err) {
+            if (btn) btn.disabled = !this._canEdit();
+            this._notify(err.message || 'Could not update the certification', 'danger');
+        }
+    },
+
+    // Re-render only the certification-aware bits (toolbar, picker, chart),
+    // leaving the diagram and its scroll position untouched.
+    _refreshCertUi() {
+        const details = document.getElementById('patDetails');
+        if (!details || !this.selectedId) return;
+        const toolbar = details.querySelector('.pat-detail-toolbar');
+        if (toolbar) {
+            const kpis = details.querySelector('#patDetailKpis');
+            const wrap = document.createElement('div');
+            wrap.innerHTML = this._toolbarHtml(this.selectedId, kpis ? kpis.innerHTML : '');
+            toolbar.replaceWith(wrap.firstElementChild);
+        }
+        const chart = details.querySelector('.pat-chart-card');
+        if (chart) {
+            const wrap = document.createElement('div');
+            wrap.innerHTML = this._patternsChartHtml(this.selectedId);
+            if (wrap.firstElementChild) chart.replaceWith(wrap.firstElementChild);
+        }
+    },
+
     _patternMenuHtml(selectedId) {
         const patterns = (this.latest && this.latest.patterns) || [];
         return patterns.map((p, i) => {
             const label = `Pattern #${i + 1}`;
             const active = p.id === selectedId ? ' active' : '';
+            const cert = this._certifiable() && p.certified
+                ? '<i class="bi bi-patch-check-fill pat-cert-icon ms-1" title="Certified" aria-label="Certified"></i>'
+                : '';
             return `<li><button type="button" class="dropdown-item pat-pattern-option${active}" `
                 + `data-pat-id="${this._esc(p.id)}">`
-                + `<span class="pat-pattern-option-label">${this._esc(label)}</span>`
+                + `<span class="pat-pattern-option-label">${this._esc(label)}${cert}</span>`
                 + `<span class="badge pat-support-badge">${this._esc(this._fmtNum(p.support))}</span>`
                 + `</button></li>`;
         }).join('');
@@ -464,6 +599,8 @@ const IntelligencePatterns = {
         if (!patternId) return;
         const savedId = this._viewingSavedId;
         this.selectedId = patternId;
+        this._chartGrouped = false;
+        this._groupSel = null;
         if (!savedId) {
             this._clearSavedView();
             this.rememberPattern(patternId);
@@ -645,10 +782,12 @@ const IntelligencePatterns = {
                     </ul>
                 </div>
                 <div class="pat-kpi-row pat-detail-kpis" id="patDetailKpis">${kpisHtml}</div>
+                ${this._certifyBtnHtml(selectedId)}
                 <button type="button" class="btn btn-sm btn-outline-secondary pat-members-btn"
                         data-pat-members title="Show entities that match this pattern">
                     <i class="bi bi-people me-1" aria-hidden="true"></i>Matching entities
                 </button>
+                ${this._certGaugeHtml()}
             </div>`;
     },
 
@@ -704,44 +843,90 @@ const IntelligencePatterns = {
         const patterns = (this.latest && this.latest.patterns) || [];
         if (!patterns.length) return '';
         const collapsed = !!this._chartCollapsed;
+        const byCert = this._certifiable();
+        const grouped = byCert && !!this._chartGrouped;
         const universe = Number((this.latest && this.latest.stats || {}).population_count) || 0;
-        const max = Math.max(1, ...patterns.map((p) => Number(p.support) || 0));
-        const SLOT = 54;
-        const BAR = 30;
+        // One bar per pattern, or (grouped) one bar per certification state.
+        const items = grouped
+            ? ['certified', 'uncertified'].map((kind) => {
+                const g = this._groupStats(kind);
+                return {
+                    attr: `data-pat-group="${kind}"`,
+                    value: g.entities,
+                    label: kind === 'certified' ? 'Certified' : 'Not certified',
+                    sub: `${this._fmtNum(g.patterns.length)} pattern${g.patterns.length === 1 ? '' : 's'}`,
+                    active: this._groupSel === kind,
+                    cert: kind === 'certified',
+                    aria: `${kind === 'certified' ? 'Certified' : 'Not certified'} patterns`
+                        + ` (${this._fmtNum(g.patterns.length)})`,
+                };
+            })
+            : patterns.map((p, i) => ({
+                attr: `data-pat-id="${this._esc(p.id)}"`,
+                value: Number(p.support) || 0,
+                label: `#${i + 1}`,
+                active: p.id === selectedId,
+                cert: !!p.certified,
+                aria: `Pattern #${i + 1}`,
+            }));
+        const max = Math.max(1, ...items.map((it) => it.value));
+        const SLOT = grouped ? 120 : 54;
+        const BAR = grouped ? 56 : 30;
         const PLOT = 120;
         const TOP = 30;          // room for the value + (percentage) above bars
         const LEFT = 4;
         const BASE = TOP + PLOT;
-        const H = BASE + 24;     // room for the #N labels under each bar
-        const W = Math.max(LEFT + patterns.length * SLOT + 8, 220);
-        const bars = patterns.map((p, i) => {
-            const v = Number(p.support) || 0;
+        const H = BASE + (grouped ? 38 : 24);     // room for the labels under each bar
+        const W = Math.max(LEFT + items.length * SLOT + 8, 220);
+        const bars = items.map((it, i) => {
+            const v = it.value;
             const h = max > 0 ? Math.round((v / max) * PLOT) : 0;
             const x = LEFT + i * SLOT + (SLOT - BAR) / 2 + 4;
             const y = BASE - h;
-            const active = p.id === selectedId ? ' pat-chart-bar--active' : '';
-            // Share of all entities of the type this pattern accounts for.
+            const active = it.active ? ' pat-chart-bar--active' : '';
+            // Saved runs colour each bar by certification: green / red.
+            const certClass = byCert
+                ? (it.cert ? ' pat-chart-bar--certified' : ' pat-chart-bar--uncertified')
+                : '';
+            const certAria = byCert && !grouped ? (it.cert ? ', certified' : ', not certified') : '';
+            // Share of all entities of the type this bar accounts for.
             const pct = universe ? Math.round((v / universe) * 100) : null;
-            const aria = pct != null
-                ? `Pattern #${i + 1}: ${this._fmtNum(v)} entities (${pct}%)`
-                : `Pattern #${i + 1}: ${this._fmtNum(v)} entities`;
+            const aria = (pct != null
+                ? `${it.aria}: ${this._fmtNum(v)} entities (${pct}%)`
+                : `${it.aria}: ${this._fmtNum(v)} entities`) + certAria;
             const pctText = pct != null
                 ? `<text class="pat-chart-bar-pct" x="${x + BAR / 2}" y="${y - 4}" text-anchor="middle">(${pct}%)</text>`
                 : '';
             const valueY = pct != null ? y - 15 : y - 4;
-            return `<g class="pat-chart-bar${active}" data-pat-id="${this._esc(p.id)}"`
+            const sub = it.sub
+                ? `<text class="pat-chart-bar-label" x="${x + BAR / 2}" y="${BASE + 30}" text-anchor="middle">${this._esc(it.sub)}</text>`
+                : '';
+            return `<g class="pat-chart-bar${active}${certClass}" ${it.attr}`
                 + ` role="button" tabindex="0" aria-label="${this._esc(aria)}">`
                 + `<title>${this._esc(aria)}</title>`
                 + `<rect class="pat-chart-bar-rect" x="${x}" y="${y}" width="${BAR}" height="${Math.max(h, 1)}" rx="3"></rect>`
                 + `<text class="pat-chart-bar-value" x="${x + BAR / 2}" y="${valueY}" text-anchor="middle">${this._esc(this._fmtNum(v))}</text>`
                 + pctText
-                + `<text class="pat-chart-bar-label" x="${x + BAR / 2}" y="${BASE + 16}" text-anchor="middle">#${i + 1}</text>`
+                + `<text class="pat-chart-bar-label" x="${x + BAR / 2}" y="${BASE + 16}" text-anchor="middle">${this._esc(it.label)}</text>`
+                + sub
                 + `</g>`;
         }).join('');
+        const groupSwitch = byCert
+            ? `<div class="form-check form-switch pat-chart-group-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="patChartGroupSwitch"
+                               data-pat-group-toggle${grouped ? ' checked' : ''}>
+                        <label class="form-check-label small" for="patChartGroupSwitch">Group by certification</label>
+                    </div>`
+            : '';
         return `
             <div class="pat-chart-card mb-3${collapsed ? ' is-collapsed' : ''}">
                 <div class="pat-chart-head">
                     <span class="pat-chart-title">Matching entities per pattern</span>
+                    ${byCert ? `<span class="pat-chart-legend" aria-hidden="true">
+                        <span class="pat-chart-legend-item"><i class="pat-chart-swatch pat-chart-swatch--ok"></i>Certified</span>
+                        <span class="pat-chart-legend-item"><i class="pat-chart-swatch pat-chart-swatch--bad"></i>Not certified</span>
+                    </span>` : ''}
+                    ${groupSwitch}
                     <a href="#" class="pat-chart-toggle small" data-pat-chart-toggle role="button"
                        aria-expanded="${collapsed ? 'false' : 'true'}">
                         <i class="bi ${collapsed ? 'bi-chevron-down' : 'bi-chevron-up'} me-1" aria-hidden="true"></i>${collapsed ? 'Expand' : 'Collapse'}
@@ -752,14 +937,136 @@ const IntelligencePatterns = {
                         <span class="pat-chart-axis-title pat-chart-ylabel">Matching entities</span>
                         <svg class="pat-chart-svg" viewBox="0 0 ${W} ${H}" width="100%" height="${H}"
                              preserveAspectRatio="xMidYMid meet" role="img"
-                             aria-label="Bar chart of matching entities per pattern">
+                             aria-label="Bar chart of matching entities per ${grouped ? 'certification group' : 'pattern'}">
                             <line class="pat-chart-axis" x1="${LEFT}" y1="${BASE}" x2="${W}" y2="${BASE}"></line>
                             ${bars}
                         </svg>
                     </div>
-                    <div class="pat-chart-axis-title pat-chart-xlabel">Patterns</div>
+                    <div class="pat-chart-axis-title pat-chart-xlabel">${grouped ? 'Certification' : 'Patterns'}</div>
                 </div>
             </div>`;
+    },
+
+    // ---- Grouping by certification (chart switch) -------------------------
+
+    // Patterns of one certification state, strongest first, with their total.
+    _groupStats(kind) {
+        const all = (this.latest && this.latest.patterns) || [];
+        const want = kind === 'certified';
+        const patterns = all
+            .map((p, i) => ({ ...p, _ordinal: i + 1 }))
+            .filter((p) => !!p.certified === want)
+            .sort((a, b) => (Number(b.support) || 0) - (Number(a.support) || 0));
+        const entities = patterns.reduce((s, p) => s + (Number(p.support) || 0), 0);
+        const st = this._certStats();
+        return {
+            patterns,
+            entities,
+            total: st.total,
+            pct: st.total ? Math.round((entities / st.total) * 100) : 0,
+        };
+    },
+
+    toggleGrouping(on) {
+        if (!this._certifiable()) return;
+        this._chartGrouped = !!on;
+        if (on) {
+            this._groupSel = this._groupSel
+                || (this._groupStats('certified').patterns.length ? 'certified' : 'uncertified');
+            this._renderGroupView();
+        } else {
+            this._groupSel = null;
+            if (this.selectedId) this.selectPattern(this.selectedId, { sync: false });
+        }
+    },
+
+    selectGroup(kind) {
+        if (kind !== 'certified' && kind !== 'uncertified') return;
+        this._chartGrouped = true;
+        this._groupSel = kind;
+        this._renderGroupView();
+    },
+
+    _renderGroupView() {
+        const details = document.getElementById('patDetails');
+        if (!details) return;
+        const kind = this._groupSel || 'certified';
+        this._members = null;
+        details.innerHTML = this._groupToolbarHtml(kind)
+            + this._patternsChartHtml(this.selectedId)
+            + `<div id="patDetailBody" class="pat-detail-body">${this._groupBodyHtml(kind)}</div>`;
+    },
+
+    _groupToolbarHtml(kind) {
+        const g = this._groupStats(kind);
+        const ok = kind === 'certified';
+        const title = ok ? 'Certified patterns' : 'Not certified patterns';
+        const kpis = this._kpiTile('Patterns', this._fmtNum(g.patterns.length),
+                `${title} in this run`)
+            + this._kpiTile('Entities', this._fmtNum(g.entities),
+                `Entities that follow one of the ${title.toLowerCase()}`)
+            + this._kpiTile('Share', g.total ? `${g.pct}%` : '—',
+                'Share of the entities of this type in the run');
+        return `
+            <div class="pat-detail-toolbar mb-3">
+                <div class="pat-pattern-picker">
+                    <div class="pat-pattern-toggle pat-pattern-static">
+                        <span class="badge bg-success">saved</span>
+                        <i class="bi ${ok ? 'bi-patch-check-fill pat-cert-icon' : 'bi-patch-exclamation pat-uncert-icon'}" aria-hidden="true"></i>
+                        <span class="pat-pattern-label">${this._esc(title)}</span>
+                        <span class="badge pat-support-badge">${this._esc(this._fmtNum(g.entities))}</span>
+                    </div>
+                </div>
+                <div class="pat-kpi-row pat-detail-kpis" id="patDetailKpis">${kpis}</div>
+                <button type="button" class="btn btn-sm btn-outline-secondary pat-members-btn"
+                        data-pat-members title="Show entities that match these patterns">
+                    <i class="bi bi-people me-1" aria-hidden="true"></i>Matching entities
+                </button>
+                ${this._certGaugeHtml()}
+            </div>`;
+    },
+
+    // Detail canvas for a group: every pattern it holds with its values.
+    _groupBodyHtml(kind) {
+        const g = this._groupStats(kind);
+        const ok = kind === 'certified';
+        const word = ok ? 'certified' : 'not certified';
+        if (!g.patterns.length) {
+            return `<p class="text-muted small mb-0">${ok
+                ? 'No pattern is certified yet. Open a pattern and use <strong>Certify</strong>.'
+                : 'Every pattern of this run is certified.'}</p>`;
+        }
+        const CAP = 100;
+        const max = Math.max(1, ...g.patterns.map((p) => Number(p.support) || 0));
+        const rows = g.patterns.slice(0, CAP).map((p) => {
+            const v = Number(p.support) || 0;
+            const share = g.total ? Math.round((v / g.total) * 100) : null;
+            return `<tr data-pat-id="${this._esc(p.id)}" role="button" tabindex="0" title="Open this pattern">`
+                + `<td class="fw-medium">Pattern #${p._ordinal}`
+                + `<span class="text-muted small ms-2">${this._esc(p.label || '')}</span></td>`
+                + `<td class="text-end">${this._esc(this._fmtNum(v))}</td>`
+                + `<td class="text-end">${share != null ? `${share}%` : '—'}</td>`
+                + `<td class="pat-group-meter-cell"><span class="pat-group-meter pat-group-meter--${ok ? 'ok' : 'bad'}"`
+                + ` style="width:${Math.max(2, Math.round((v / max) * 100))}%"></span></td>`
+                + `</tr>`;
+        }).join('');
+        const more = g.patterns.length > CAP
+            ? `<p class="text-muted small mt-2 mb-0">Showing the ${CAP} strongest of ${this._fmtNum(g.patterns.length)} patterns.</p>`
+            : '';
+        return `<div class="pat-group-panel">
+            <p class="text-muted small mb-2">
+                ${this._esc(this._fmtNum(g.patterns.length))} ${word} pattern${g.patterns.length === 1 ? '' : 's'} together match
+                <strong>${this._esc(this._fmtNum(g.entities))}</strong> entities${g.total ? ` (${g.pct}% of ${this._esc(this._fmtNum(g.total))})` : ''}.
+                Click a pattern to open it.
+            </p>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0 pat-group-table">
+                    <thead><tr><th>Pattern</th><th class="text-end">Entities</th><th class="text-end">Share</th><th></th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            ${more}
+        </div>`;
     },
 
     _toggleChart() {
@@ -804,9 +1111,19 @@ const IntelligencePatterns = {
             + more;
     },
 
+    // What the members modal lists: one pattern, or a whole certification group.
+    _membersScope() {
+        return this._groupSel ? `group:${this._groupSel}` : (this.selectedId || '');
+    },
+
     _membersUrl({ offset = 0 } = {}) {
         const patternId = this.selectedId || '';
         const savedId = this._viewingSavedId;
+        if (savedId && this._groupSel) {
+            return `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/members`
+                + `?certified=${this._groupSel === 'certified'}`
+                + `&offset=${offset}&limit=${this.MEMBERS_PAGE}`;
+        }
         if (savedId) {
             return `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/members`
                 + `?pattern_id=${encodeURIComponent(patternId)}`
@@ -823,12 +1140,12 @@ const IntelligencePatterns = {
         if (this._membersModal) this._membersModal.show();
         body.innerHTML = this._membersLoadingHtml();
         try {
-            if (!this._members || this._members._patternId !== this.selectedId
+            if (!this._members || this._members._patternId !== this._membersScope()
                 || this._members._savedId !== (this._viewingSavedId || null)) {
                 const members = await this._json(this._membersUrl({ offset: 0 }));
                 this._members = {
                     ...members,
-                    _patternId: this.selectedId,
+                    _patternId: this._membersScope(),
                     _savedId: this._viewingSavedId || null,
                 };
             }

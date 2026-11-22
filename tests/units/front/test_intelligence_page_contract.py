@@ -982,7 +982,7 @@ def test_patterns_section_owns_discovery():
     assert "pat-chart-axis-title" in js
     assert "pat-chart-xlabel" in js
     assert "pat-chart-ylabel" in js
-    assert ">Patterns</div>" in js
+    assert "'Patterns'}</div>" in js
     assert ">Matching entities</span>" in js
     assert 'class="pat-dg-edge-name"' in js
     assert "pat-dg-edge-badge" in js
@@ -1006,6 +1006,29 @@ def test_patterns_section_owns_discovery():
     assert "_coveragePct" in js
     # Each bar also shows its share of the type population in parentheses.
     assert "pat-chart-bar-pct" in js
+    # Certified patterns: per-pattern toggle (saved runs only), green/red bars,
+    # certified/not-certified gauge beside "Matching entities".
+    assert "data-pat-certify" in js
+    assert "/certification`" in js
+    assert "method: 'PUT'" in js
+    assert "_certGaugeHtml" in js
+    assert "_certStats" in js
+    assert "pat-chart-bar--certified" in js
+    assert "pat-chart-bar--uncertified" in js
+    assert js.index("data-pat-members") < js.index("${this._certGaugeHtml()}")
+    pat_css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".pat-cert-gauge" in pat_css
+    assert "--db-status-success" in pat_css.split(".pat-chart-bar--certified .pat-chart-bar-rect", 1)[1].split("}", 1)[0]
+    assert "--db-status-danger" in pat_css.split(".pat-chart-bar--uncertified .pat-chart-bar-rect", 1)[1].split("}", 1)[0]
+    assert ".pat-cert-btn" in _read(FRONT / "static/global/css/permissions.css")
+    # Group-by-certification switch: two bars + a detail canvas listing the group.
+    assert "data-pat-group-toggle" in js
+    assert "data-pat-group=" in js
+    assert "toggleGrouping" in js
+    assert "_groupBodyHtml" in js
+    assert "certified=${this._groupSel === 'certified'}" in js
+    assert ".pat-chart-group-switch" in pat_css
+    assert ".pat-group-table" in pat_css
     assert "Matching entities" in js
     assert "data-pat-members" in js
     assert "openMembersModal" in js
