@@ -2676,8 +2676,8 @@ async def ontology_assistant_invoke(
     base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
 
     custom_inputs = data.get("custom_inputs", {})
-    custom_inputs["host"] = host
-    custom_inputs["token"] = token
+    custom_inputs.pop("host", None)
+    custom_inputs.pop("token", None)
     custom_inputs["endpoint_name"] = llm_endpoint
     custom_inputs["endpoint_kind"] = llm_endpoint_kind
     custom_inputs.setdefault("base_uri", base_uri)
@@ -2686,7 +2686,7 @@ async def ontology_assistant_invoke(
     data["custom_inputs"] = custom_inputs
 
     with map_route_errors("Ontology assistant invoke failed", logger):
-        agent = OntologyAssistantResponsesAgent()
+        agent = OntologyAssistantResponsesAgent(host=host, token=token)
         ra_request = RAReq(**data)
         response = agent.predict(ra_request)
 

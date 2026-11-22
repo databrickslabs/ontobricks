@@ -178,7 +178,7 @@ function notifyTaskTransition(task) {
     }
 
     if (typeof NotificationCenter !== 'undefined' && NotificationCenter.add) {
-        NotificationCenter.add(body, type);
+        NotificationCenter.add(body, type, true);
     } else if (typeof showNotification === 'function') {
         showNotification(body, type);
     }

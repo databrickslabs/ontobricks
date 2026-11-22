@@ -444,7 +444,7 @@ async function confirmResetMappings() {
     }
     const confirmed = await showConfirmDialog({
         title: 'Unmap All',
-        message: 'This will delete <strong>all entity and relationship mappings</strong>.<br>Hidden (excluded) entities, relationships and attributes stay hidden.<br><br>Are you sure you want to continue?',
+        messageHtml: 'This will delete <strong>all entity and relationship mappings</strong>.<br>Hidden (excluded) entities, relationships and attributes stay hidden.<br><br>Are you sure you want to continue?',
         confirmText: 'Unmap all',
         confirmClass: 'btn-danger',
         icon: 'exclamation-triangle'

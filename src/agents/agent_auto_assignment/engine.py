@@ -30,6 +30,7 @@ from agents.engine_base import (
     accumulate_usage,
 )
 from agents.tracing import trace_agent
+from agents.llm_utils import llm_failure_message
 
 logger = get_logger(__name__)
 
@@ -324,7 +325,7 @@ def run_agent(
                 notify("Endpoint does not support tools – aborting.")
                 result.error = "LLM endpoint does not support function calling"
                 return result
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             logger.error(
                 "Agent: LLM request failed at iteration %d: %s", iteration + 1, exc
             )
@@ -334,7 +335,7 @@ def run_agent(
             logger.error("Agent: timeout at iteration %d", iteration + 1)
             return result
         except requests.exceptions.RequestException as exc:
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             logger.error(
                 "Agent: request exception at iteration %d: %s", iteration + 1, exc
             )

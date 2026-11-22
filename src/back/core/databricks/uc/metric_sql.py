@@ -11,11 +11,6 @@ from typing import Any, Dict, List, Optional
 from .identifiers import quote_uc_fqn, quote_uc_identifier
 
 
-def _escape_sql_literal(value: str) -> str:
-    """Escape a single-quoted SQL string literal (double any quotes)."""
-    return str(value).replace("'", "''")
-
-
 def build_metric_view_base_sql(
     entry: Dict[str, Any], *, selected_columns: Optional[List[str]] = None
 ) -> str:
@@ -73,9 +68,12 @@ def build_metric_view_entity_sql(
     ``GROUP BY``) so the key is applied as a dimension predicate. Callers must
     pass a validated ``key_column`` identifier.
     """
+    # back.core.helpers imports back.core.databricks: import lazily to avoid a cycle.
+    from back.core.helpers import sql_literal
+
     base = build_metric_view_base_sql(entry, selected_columns=selected_columns)
     key_ident = quote_uc_identifier(key_column, role="column")
-    where = f"WHERE {key_ident} = '{_escape_sql_literal(key_value)}'"
+    where = f"WHERE {key_ident} = {sql_literal(key_value)}"
     if "\nGROUP BY" in base:
         sql = base.replace("\nGROUP BY", f"\n{where}\nGROUP BY", 1)
     else:

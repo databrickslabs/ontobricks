@@ -52,6 +52,16 @@ class Task:
     steps: List[TaskStep] = field(default_factory=list)
     current_step: int = 0
     log_entries: List[TaskLogEntry] = field(default_factory=list)
+    # Email of the requesting user; empty for system tasks (scheduler, startup).
+    owner: str = ""
+
+    def visible_to(self, email: str, is_admin: bool) -> bool:
+        """Admins see every task; users see their own and system tasks."""
+        return is_admin or not self.owner or self.owner == email
+
+    def cancellable_by(self, email: str, is_admin: bool) -> bool:
+        """Only the owner (or an admin) may cancel; system tasks are admin-only."""
+        return is_admin or (bool(self.owner) and self.owner == email)
 
     def duration_seconds(self) -> Optional[float]:
         """Wall-clock duration in seconds.

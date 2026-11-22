@@ -13,7 +13,7 @@
 document.getElementById('resetOntology')?.addEventListener('click', async function() {
     const confirmed = await showConfirmDialog({
         title: 'Reset Ontology',
-        message: 'Are you sure you want to reset the ontology? All entities and relationships will be cleared. <strong>This action cannot be undone.</strong>',
+        messageHtml: 'Are you sure you want to reset the ontology? All entities and relationships will be cleared. <strong>This action cannot be undone.</strong>',
         confirmText: 'Reset',
         confirmClass: 'btn-danger',
         icon: 'exclamation-triangle'

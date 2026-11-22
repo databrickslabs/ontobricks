@@ -277,6 +277,7 @@ _STATUS_GATE_EDIT_PATHS = (
     "/domain/design-views/delete",
     "/domain/metadata/",
     "/domain/documents/",
+    "/clear-ontology",
 )
 
 # Non-mutating POST endpoints that live under an editing prefix but only

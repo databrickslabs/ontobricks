@@ -328,7 +328,7 @@ class TestOntologyRoutes:
         ), patch(
             "agents.agent_ontology_assistant.OntologyAssistantResponsesAgent",
             return_value=agent,
-        ), patch(
+        ) as agent_cls, patch(
             "mlflow.types.responses.ResponsesAgentRequest",
             side_effect=lambda **kwargs: kwargs,
         ):
@@ -337,9 +337,10 @@ class TestOntologyRoutes:
             )
 
         assert result == {"success": True}
+        agent_cls.assert_called_once_with(host="https://h", token="t")
         custom_inputs = agent.predict.call_args.args[0]["custom_inputs"]
-        assert custom_inputs["host"] == "https://h"
-        assert custom_inputs["token"] == "t"
+        assert "host" not in custom_inputs
+        assert "token" not in custom_inputs
         assert custom_inputs["endpoint_name"] == "main.ai.saved"
         assert custom_inputs["endpoint_kind"] == "ai_gateway"
 

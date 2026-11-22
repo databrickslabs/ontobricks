@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence
 
 from back.core.errors import InfrastructureError
+from back.core.helpers import sql_literal
 from back.core.graph_analysis.pattern.pattern_diagram import (
     MAX_DIAGRAM_EDGES,
     build_pattern_diagram,
@@ -66,10 +67,6 @@ def _bounded(value: Any, default: int, upper: int) -> int:
     return max(1, min(n, upper))
 
 
-def _sql_str(value: str) -> str:
-    return "'" + (value or "").replace("'", "''") + "'"
-
-
 def summary_query(out: str) -> str:
     return f"SELECT * FROM {out}_summary"
 
@@ -107,14 +104,14 @@ def preview_edges_query(out: str) -> str:
 def pattern_support_query(out: str, pattern_id: str) -> str:
     return (
         f"SELECT support FROM {out}_shapes "
-        f"WHERE pattern_id = {_sql_str(pattern_id)}"
+        f"WHERE pattern_id = {sql_literal(pattern_id)}"
     )
 
 
 def members_query(out: str, pattern_id: str, offset: int, limit: int) -> str:
     return (
         "SELECT anchor_uri, label, type_uri "
-        f"FROM {out} WHERE pattern_id = {_sql_str(pattern_id)} "
+        f"FROM {out} WHERE pattern_id = {sql_literal(pattern_id)} "
         "ORDER BY anchor_uri "
         f"LIMIT {int(limit)} OFFSET {max(0, int(offset))}"
     )
@@ -124,7 +121,7 @@ def shape_query(out: str, pattern_id: str) -> str:
     return (
         "SELECT pattern_id, support, hop_count, shape_json, seed_label, "
         "refined, near_duplicate_count "
-        f"FROM {out}_shapes WHERE pattern_id = {_sql_str(pattern_id)}"
+        f"FROM {out}_shapes WHERE pattern_id = {sql_literal(pattern_id)}"
     )
 
 
@@ -151,7 +148,7 @@ def shape_edges_query(
     cols = _edge_cols(legacy, stats)
     return (
         f"SELECT {cols} FROM {out}_shape_edges "
-        f"WHERE pattern_id = {_sql_str(pattern_id)} "
+        f"WHERE pattern_id = {sql_literal(pattern_id)} "
         f"ORDER BY hop, member_count DESC, via LIMIT {MAX_DIAGRAM_EDGES + 1}"
     )
 
@@ -180,7 +177,7 @@ def _missing_edge_stats_column(exc: Exception) -> bool:
 
 def shapes_bulk_query(out: str, pattern_ids: Sequence[str]) -> str:
     """Shape rows (tokens, seed label, KPIs) for several patterns at once."""
-    ids = ", ".join(_sql_str(pid) for pid in pattern_ids)
+    ids = ", ".join(sql_literal(pid) for pid in pattern_ids)
     return (
         "SELECT pattern_id, support, hop_count, shape_json, seed_label "
         f"FROM {out}_shapes WHERE pattern_id IN ({ids})"
@@ -192,7 +189,7 @@ def shape_edges_bulk_query(
 ) -> str:
     """Typed edges for several patterns, capped per pattern like the single query."""
     cols = _edge_cols(legacy, stats)
-    ids = ", ".join(_sql_str(pid) for pid in pattern_ids)
+    ids = ", ".join(sql_literal(pid) for pid in pattern_ids)
     return (
         f"SELECT pattern_id, {cols} FROM ("
         f"SELECT pattern_id, {cols}, ROW_NUMBER() OVER ("
@@ -289,8 +286,8 @@ def fetch_shape_edges_for(
 def membership_batch_query(out: str, pattern_id: str, after_uri: str, limit: int) -> str:
     return (
         f"SELECT anchor_uri, pattern_id FROM {out} "
-        f"WHERE pattern_id = {_sql_str(pattern_id)} "
-        f"AND anchor_uri > {_sql_str(after_uri)} "
+        f"WHERE pattern_id = {sql_literal(pattern_id)} "
+        f"AND anchor_uri > {sql_literal(after_uri)} "
         f"ORDER BY anchor_uri LIMIT {int(limit)}"
     )
 

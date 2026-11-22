@@ -2497,9 +2497,12 @@ Content-Type: application/json
 ```
 
 The route overwrites `custom_inputs` with the saved domain LLM target
-(`host`, `token`, `endpoint_name`, `endpoint_kind`) and fills ontology context
-from the active session. Caller-supplied credentials or endpoint names are
-ignored. If the ontology is modified, the domain is saved.
+(`endpoint_name`, `endpoint_kind`) and fills ontology context from the active
+session. Databricks credentials are passed to the agent constructor
+(`OntologyAssistantResponsesAgent(host=..., token=...)`), never through
+`custom_inputs`: MLflow auto-traces `predict` / `predict_stream` and records
+the whole request as span inputs. Caller-supplied `host` / `token` keys are
+dropped. If the ontology is modified, the domain is saved.
 
 ##### Usage — Log to MLflow
 
@@ -2507,14 +2510,12 @@ ignored. If the ontology is modified, the domain is saved.
 python -m agents.agent_ontology_assistant.log_model
 ```
 
-This creates an MLflow run with the agent model, which can then be registered in Unity Catalog and served via Databricks Model Serving.
+This creates an MLflow run with the agent model, which can then be registered in Unity Catalog and served via Databricks Model Serving. A served endpoint reads its credentials from the `DATABRICKS_HOST` / `DATABRICKS_TOKEN` environment variables (bind them to a secret scope).
 
 ##### Custom inputs / outputs
 
 | Field | Direction | Contents |
 |-------|-----------|----------|
-| `custom_inputs.host` | in | Databricks workspace URL |
-| `custom_inputs.token` | in | Databricks access token |
 | `custom_inputs.endpoint_name` | in | AI Gateway FQN or Model Serving endpoint name |
 | `custom_inputs.endpoint_kind` | in | `ai_gateway` or `serving` (authoritative; do not infer from the name) |
 | `custom_inputs.classes` | in | Current ontology classes (list of dicts) |

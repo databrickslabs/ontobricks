@@ -5,6 +5,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from back.core.databricks.request_identity import get_request_identity
 from back.core.logging import get_logger
 from back.core.task_manager.Task import Task, TaskLogEntry, TaskStep
 from back.core.task_manager.TaskStatus import TaskStatus
@@ -79,7 +80,13 @@ class TaskManager:
                         description=step_def.get("description", ""),
                     )
                 )
-        task = Task(id=task_id, name=name, task_type=task_type, steps=task_steps)
+        task = Task(
+            id=task_id,
+            name=name,
+            task_type=task_type,
+            steps=task_steps,
+            owner=get_request_identity().email,
+        )
         self._tasks[task_id] = task
         self._cleanup_old_tasks()
         logger.info("Created task %s: %s", task_id, name)

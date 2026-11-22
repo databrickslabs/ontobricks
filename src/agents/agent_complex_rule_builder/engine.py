@@ -29,6 +29,7 @@ from agents.engine_base import (
     dispatch_tool,
 )
 from agents.tracing import trace_agent
+from agents.llm_utils import llm_failure_message
 
 logger = get_logger(__name__)
 
@@ -224,7 +225,7 @@ def run_agent(
                 endpoint_kind=endpoint_kind,
             )
         except Exception as exc:  # noqa: BLE001
-            error_msg = f"LLM request failed: {exc}"
+            error_msg = llm_failure_message(exc)
             logger.error(
                 "complex_rule_builder: %s at iteration %d", error_msg, iteration + 1
             )

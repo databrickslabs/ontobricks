@@ -181,7 +181,8 @@ class TestRunAgent:
                 user_message="hi",
             )
         assert result.success is False
-        assert "boom" in result.error
+        assert result.error == "LLM request failed."
+        assert "boom" not in result.error
 
 
 class TestSystemPrompt:

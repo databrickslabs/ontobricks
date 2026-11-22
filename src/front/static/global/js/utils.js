@@ -17,11 +17,16 @@ const NotificationCenter = {
         'info':    { icon: 'bi-info-circle-fill', color: '#0d6efd', label: 'Info' }
     },
 
-    add(message, type) {
+    /**
+     * @param {string} message - Plain text, escaped on render
+     * @param {string} type - 'success', 'error', 'warning', 'info'
+     * @param {boolean} isHtml - Trusted markup whose dynamic parts the caller escaped
+     */
+    add(message, type, isHtml = false) {
         const cfg = this.TYPE_CONFIG[type] || this.TYPE_CONFIG.info;
         this.messages.unshift({
             id: Date.now() + Math.random(),
-            message,
+            html: isHtml ? String(message) : escapeHtml(message),
             type,
             icon: cfg.icon,
             color: cfg.color,
@@ -91,7 +96,7 @@ const NotificationCenter = {
         list.innerHTML = this.messages.map(m =>
             '<div class="notif-item d-flex align-items-start px-3 py-2 border-bottom">' +
             '<i class="bi ' + m.icon + ' me-2 mt-1" style="color:' + m.color + ';"></i>' +
-            '<div class="flex-grow-1 small" style="word-break:break-word;">' + m.message +
+            '<div class="flex-grow-1 small" style="word-break:break-word;">' + m.html +
             '<div class="text-muted" style="font-size:0.7rem;">' + this._timeAgo(m.time) + '</div>' +
             '</div></div>'
         ).join('');
@@ -101,7 +106,7 @@ const NotificationCenter = {
 /**
  * Show a notification message (pushes into the Notification Center).
  * Errors also display a temporary floating toast so they are immediately visible.
- * @param {string} message - The message to display
+ * @param {string} message - Plain text to display (HTML-escaped)
  * @param {string} type - 'success', 'error', 'warning', 'info'
  * @param {number} duration - For errors: toast display time in ms (default 6000)
  */
@@ -138,7 +143,7 @@ function _showToast(message, cssClass, iconClass, closeWhite, duration) {
     toast.className = cssClass + ' fade show d-flex align-items-start';
     toast.innerHTML =
         '<i class="bi ' + iconClass + ' me-2 mt-1"></i>' +
-        '<div class="flex-grow-1">' + message + '</div>' +
+        '<div class="flex-grow-1">' + escapeHtml(message) + '</div>' +
         '<button type="button" class="btn-close' + (closeWhite ? ' btn-close-white' : '') + ' ms-2" aria-label="Close"></button>';
     toast.querySelector('.btn-close').addEventListener('click', function() {
         toast.classList.remove('show');
@@ -506,7 +511,9 @@ function showStackedModal(modalEl) {
  * Show a confirmation dialog (replaces native confirm())
  * @param {Object} options - Dialog options
  * @param {string} options.title - Dialog title (default: 'Confirm')
- * @param {string} options.message - Message to display
+ * @param {string} options.message - Plain-text message (HTML-escaped)
+ * @param {string} options.messageHtml - Trusted markup used instead of `message`;
+ *   the caller must escape every dynamic value with escapeHtml()
  * @param {string} options.confirmText - Confirm button text (default: 'Yes')
  * @param {string} options.cancelText - Cancel button text (default: 'Cancel')
  * @param {string} options.confirmClass - Bootstrap button class for confirm (default: 'btn-primary')
@@ -524,6 +531,7 @@ function showConfirmDialog(options = {}) {
         const {
             title = 'Confirm',
             message = 'Are you sure?',
+            messageHtml = '',
             confirmText = 'Yes',
             cancelText = 'Cancel',
             confirmClass = 'btn-primary',
@@ -558,7 +566,7 @@ function showConfirmDialog(options = {}) {
                             <button type="button" class="btn-close ${closeClass}" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <p class="mb-0">${message}</p>
+                            <p class="mb-0">${messageHtml || escapeHtml(message)}</p>
                             ${checkboxBlock}
                             ${detailBlock}
                         </div>
@@ -630,7 +638,7 @@ function showInfoDialog(options = {}) {
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <p class="mb-0">${message}</p>
+                            <p class="mb-0">${escapeHtml(message)}</p>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn ${okClass}" id="${modalId}_ok">
@@ -665,7 +673,7 @@ function showInfoDialog(options = {}) {
 function showDeleteConfirm(itemName, itemType = 'item') {
     return showConfirmDialog({
         title: 'Confirm Delete',
-        message: `Are you sure you want to delete ${itemType} "<strong>${itemName}</strong>"? This action cannot be undone.`,
+        messageHtml: `Are you sure you want to delete ${escapeHtml(itemType)} "<strong>${escapeHtml(itemName)}</strong>"? This action cannot be undone.`,
         confirmText: 'Delete',
         cancelText: 'Cancel',
         confirmClass: 'btn-danger',

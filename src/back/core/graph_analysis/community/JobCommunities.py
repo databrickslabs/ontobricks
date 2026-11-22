@@ -26,6 +26,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from back.core.errors import InfrastructureError
 from back.core.graph_analysis.preflight import names_a_missing_object
+from back.core.helpers import sql_literal
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -124,10 +125,9 @@ def members_query(out: str, cluster_id: int, offset: int, limit: int) -> str:
 
 def membership_batch_query(out: str, after_uri: str, limit: int) -> str:
     """Keyset page of ``(node_uri, community_rank)`` — no OFFSET scan."""
-    esc = (after_uri or "").replace("'", "''")
     return (
         f"SELECT node_uri, community_rank FROM {out} "
-        f"WHERE node_uri > '{esc}' ORDER BY node_uri LIMIT {int(limit)}"
+        f"WHERE node_uri > {sql_literal(after_uri)} ORDER BY node_uri LIMIT {int(limit)}"
     )
 
 

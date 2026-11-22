@@ -48,6 +48,9 @@ class _SqlStore:
     def _sql_relation(self, name: str) -> str:
         return name
 
+    def sql_flavor(self) -> str:
+        return "postgres"
+
     def execute_query(self, sql: str) -> List[Dict[str, Any]]:
         self.queries.append(sql)
         return [dict(r) for r in self.conn.execute(sql).fetchall()]

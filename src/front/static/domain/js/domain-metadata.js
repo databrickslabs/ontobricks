@@ -864,7 +864,7 @@ function confirmMetadataDiff(diff) {
         title: 'Review Metadata Changes',
         size: 'modal-lg',
         icon: 'arrow-repeat',
-        message: `
+        messageHtml: `
             Unity Catalog reports ${changeCount} column change(s) across
             ${tableCount} table(s).
             ${droppedCount > 0 ? `
@@ -1200,8 +1200,8 @@ async function confirmRemovalWithImpact(identifiers, plain) {
         size: 'modal-lg',
         headerClass: 'bg-danger text-white',
         icon: 'exclamation-triangle',
-        message: `
-            ${plain.message}
+        messageHtml: `
+            ${escapeHtml(plain.message)}
             <div class="alert alert-danger mt-3 mb-0">
                 <i class="bi bi-exclamation-triangle me-2"></i>
                 <strong>Warning:</strong> ${affectedTables} of these data asset(s)

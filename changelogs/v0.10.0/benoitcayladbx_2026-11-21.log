@@ -94,3 +94,131 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-21.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11145 passed, 334 skipped, 8 deselected
+
+--------------------------------------------------------------------------------
+Security hardening from the global code review
+--------------------------------------------------------------------------------
+
+Context:
+The global code review found four verified security issues: Spark SQL literals
+that only doubled quotes, a Databricks token captured in MLflow traces, raw HTML
+in the shared toast/notification/dialog helpers, and routes without role guards.
+LLM failures also surfaced the serving URL and upstream response body to users.
+The user approved the security batch only; no other review item is changed.
+
+Changes:
+1. src/back/core/graph_analysis/pattern/JobPatterns.py,
+   src/back/core/graph_analysis/community/JobCommunities.py,
+   src/back/core/graph_analysis/community/CommunityMaterializer.py,
+   src/back/core/databricks/uc/metric_sql.py
+   - Hand-rolled quote-doubling replaced by SQLHelpers.sql_literal / sql_escape,
+     which double backslashes for Spark (pattern_id comes from the URL path).
+     CommunityMaterializer escapes per store dialect via sql_flavor().
+2. src/jobs/graph_analytics_job.py, src/jobs/contract_demo.py
+   - Standalone job sql_escape now doubles backslashes before quotes.
+3. src/agents/agent_ontology_assistant/responses_agent.py, log_model.py,
+   src/api/routers/internal/ontology.py
+   - Credentials go to the agent constructor (or DATABRICKS_HOST/TOKEN when
+     served), never through custom_inputs: MLflow auto-traces predict and
+     predict_stream with the full request. Raw @mlflow.trace decorators that
+     recorded the token argument removed; tool calls use trace_tool.
+4. src/agents/llm_utils.py and 15 agent engines
+   - New llm_failure_message(exc): users see the HTTP status or transport
+     failure only; the full exception stays in the server log.
+   - src/api/routers/internal/simulation.py recognises the new 404 summary.
+5. src/front/static/global/js/utils.js, task-tracker.js and dialog callers
+   - showNotification, the Notification Center, showConfirmDialog and
+     showInfoDialog escape `message`. New `messageHtml` option (and
+     NotificationCenter.add isHtml flag) for trusted markup; 17 callers moved
+     to it with escapeHtml on every dynamic value; callers that pre-escaped
+     plain text no longer double-escape.
+6. src/back/core/task_manager/Task.py, TaskManager.py,
+   src/api/routers/internal/tasks.py
+   - Tasks record their owner from the request identity. Users see their own
+     and system tasks; only the owner or an admin can cancel; clear-completed
+     is admin-only.
+7. src/api/routers/internal/dtwin.py, home.py, src/shared/fastapi/main.py
+   - /dtwin/reasoning/materialize requires domain Builder (as main.py already
+     claimed). /clear-ontology requires domain Editor and is lifecycle
+     status-gated. Unused /write-volume-file (unguarded write with app
+     credentials) removed.
+8. docs/architecture.md, docs/api.md
+   - Assistant credential flow and owner-scoped task endpoints.
+9. Tests
+   - New: tests/units/core/test_graph_analysis_sql_escaping.py,
+     tests/units/agents/test_llm_secret_hygiene.py,
+     tests/units/api/test_route_authorization_hardening.py,
+     tests/units/front/test_notification_escaping_contract.py.
+   - Updated to the new contracts: five agent LLM-failure tests, the assistant
+     invoke route test, two registry confirmation tests, and the community
+     materializer test store (sql_flavor).
+
+Follow-ups (not in this batch):
+- /read-volume-file reads any path with the app credentials (needs OBO).
+- agent_supervisor ResponsesAgent still reads host/token from custom_inputs
+  (in-process run mode only; no caller in the app).
+- Module-local raw-HTML sinks (ontology names in several renderers) remain.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- src/back/core/graph_analysis/community/JobCommunities.py
+- src/back/core/graph_analysis/community/CommunityMaterializer.py
+- src/back/core/databricks/uc/metric_sql.py
+- src/jobs/graph_analytics_job.py
+- src/jobs/contract_demo.py
+- src/agents/llm_utils.py
+- src/agents/agent_ontology_assistant/responses_agent.py
+- src/agents/agent_ontology_assistant/log_model.py
+- src/agents/agent_ontology_assistant/engine.py
+- src/agents/agent_auto_assignment/engine.py
+- src/agents/agent_auto_icon_assign/engine.py
+- src/agents/agent_business_rules_generator/engine.py
+- src/agents/agent_cohort/engine.py
+- src/agents/agent_complex_rule_builder/engine.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/agents/agent_graph_interpreter/engine.py
+- src/agents/agent_mapping_pge/planner.py
+- src/agents/agent_mapping_pge/evaluator/critic.py
+- src/agents/agent_mapping_pge/generators/entity.py
+- src/agents/agent_mapping_pge/generators/relationship.py
+- src/agents/agent_owl_generator/engine.py
+- src/agents/agent_simulation_facts/engine.py
+- src/agents/agent_simulation_insights/engine.py
+- src/api/routers/internal/ontology.py
+- src/api/routers/internal/simulation.py
+- src/api/routers/internal/tasks.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/home.py
+- src/shared/fastapi/main.py
+- src/back/core/task_manager/Task.py
+- src/back/core/task_manager/TaskManager.py
+- src/front/static/global/js/utils.js
+- src/front/static/global/js/task-tracker.js
+- src/front/static/global/js/mapping-information.js
+- src/front/static/domain/js/domain-metadata.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/intelligence/js/simulation.js
+- src/front/static/mapping/js/mapping-entity-modal.js
+- src/front/static/mapping/js/mapping-relationship-modal.js
+- src/front/static/ontology/js/ontology-import.js
+- src/front/static/ontology/js/ontology-information.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/query/js/query-build-objects.js
+- src/front/static/registry/js/registry.js
+- docs/architecture.md
+- docs/api.md
+- tests/units/core/test_graph_analysis_sql_escaping.py
+- tests/units/core/test_community_materializer.py
+- tests/units/agents/test_llm_secret_hygiene.py
+- tests/units/agents/test_agent_business_rules_generator.py
+- tests/units/agents/test_agent_cohort_engine.py
+- tests/units/agents/test_agent_complex_rule_builder.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/agents/test_simulation_insights_engine.py
+- tests/units/api/test_route_authorization_hardening.py
+- tests/units/api/test_routes.py
+- tests/units/front/test_notification_escaping_contract.py
+- tests/units/front/test_domain_versions_cards.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-21.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11183 passed, 334 skipped, 8 deselected

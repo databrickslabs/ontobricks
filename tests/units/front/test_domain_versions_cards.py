@@ -421,7 +421,7 @@ def test_registry_delete_control_keeps_untrusted_values_in_dom_properties():
     )
 
 
-def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
+def test_registry_enabled_delete_confirmation_passes_untrusted_values_as_text():
     _run_renderer_assertions(
         r"""
         (async () => {
@@ -451,13 +451,12 @@ def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
                 button.dataset.version
             );
 
+            // showConfirmDialog escapes `message`; only `messageHtml` is raw.
             assert.equal(confirmation.title, 'Delete Version');
-            assert.equal(confirmation.message.includes('<script'), false);
-            assert.equal(confirmation.message.includes('<img'), false);
-            assert.equal(confirmation.message.includes('&lt;script'), true);
-            assert.equal(confirmation.message.includes('&lt;img'), true);
-            assert.equal(confirmation.message.includes(domain), false);
-            assert.equal(confirmation.message.includes(version), false);
+            assert.equal(confirmation.messageHtml, undefined);
+            assert.equal(confirmation.message.includes(domain), true);
+            assert.equal(confirmation.message.includes(version), true);
+            assert.equal(confirmation.message.includes('&lt;'), false);
             assert.equal(confirmation.message.includes('Documents'), true);
             assert.equal(confirmation.message.includes('permanently'), true);
         })().catch((error) => {
@@ -469,13 +468,14 @@ def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
     )
 
 
-def test_registry_domain_delete_confirmation_escapes_name_and_names_documents():
+def test_registry_domain_delete_confirmation_uses_plain_text_and_names_documents():
     js = REGISTRY_JS.read_text(encoding="utf-8")
     delete_domain = js[
         js.index("async function deleteRegistryDomain") :
         js.index("document.addEventListener")
     ]
-    assert "escapeHtml(domainName)" in delete_domain
+    assert "message: 'Permanently delete context \"' + domainName" in delete_domain
+    assert "messageHtml" not in delete_domain
     assert "Documents" in delete_domain
     assert "githubDomainDeleteExtras(registryGithubEnabled)" in delete_domain
     assert "deleteGithubQuery" in delete_domain

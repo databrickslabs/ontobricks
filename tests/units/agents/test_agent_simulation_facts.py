@@ -473,7 +473,8 @@ def test_run_agent_reports_llm_failure():
             user_message="hi",
         )
     assert result.success is False
-    assert "boom" in result.error
+    assert result.error == "LLM request failed."
+    assert "boom" not in result.error
 
 
 def test_run_agent_no_choices(monkeypatch):

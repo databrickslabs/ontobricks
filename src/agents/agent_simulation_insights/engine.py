@@ -23,6 +23,7 @@ from agents.engine_base import (
 from agents.tools.context import ToolContext
 from agents.tracing import trace_agent
 from back.core.logging import get_logger
+from agents.llm_utils import llm_failure_message
 
 logger = get_logger(__name__)
 
@@ -254,7 +255,7 @@ def run_agent(
                 endpoint_kind=endpoint_kind,
             )
         except Exception as exc:
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             logger.error("simulation_insights: %s", result.error)
             return result
 

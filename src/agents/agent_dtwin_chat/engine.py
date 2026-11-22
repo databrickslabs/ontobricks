@@ -29,6 +29,7 @@ from agents.engine_base import (
     dispatch_tool,
 )
 from agents.tracing import trace_agent
+from agents.llm_utils import llm_failure_message
 
 logger = get_logger(__name__)
 
@@ -382,7 +383,7 @@ def run_agent(
                 trace_name=_TRACE_NAME, endpoint_kind=endpoint_kind,
             )
         except Exception as exc:
-            error_msg = f"LLM request failed: {exc}"
+            error_msg = llm_failure_message(exc)
             logger.error(
                 "dtwin_chat: %s at iteration %d", error_msg, iteration + 1
             )

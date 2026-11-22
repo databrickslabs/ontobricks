@@ -20,6 +20,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from back.core.graph_analysis.community.CommunityVocabulary import CommunityVocabulary
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
+from back.core.helpers import SQL_DIALECT_SPARK, sql_escape
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -188,7 +189,7 @@ class CommunityMaterializer:
         return getattr(self._store, "query_dialect", "sql") == "sql"
 
     def _esc(self, value: str) -> str:
-        return (value or "").replace("'", "''")
+        return sql_escape(value, self._store.sql_flavor() or SQL_DIALECT_SPARK)
 
     def _rel(self) -> str:
         return self._store._sql_relation(self._graph_name)

@@ -369,7 +369,7 @@ async function removeEntityMappingByClass(classUri) {
     
     const confirmed = await showConfirmDialog({
         title: 'Remove Mapping',
-        message: `Are you sure you want to remove the mapping for "<strong>${mapping.ontology_class_label}</strong>"?<br><br>The entity will move back to the unmapped list.`,
+        messageHtml: `Are you sure you want to remove the mapping for "<strong>${escapeHtml(mapping.ontology_class_label)}</strong>"?<br><br>The entity will move back to the unmapped list.`,
         confirmText: 'Remove',
         confirmClass: 'btn-danger',
         icon: 'trash'

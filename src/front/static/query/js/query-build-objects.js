@@ -263,7 +263,7 @@ const BuildObjectsModule = (() => {
             .join('');
         const confirmed = await showConfirmDialog({
             title: 'Drop objects?',
-            message: `Drop ${items.length} object${items.length === 1 ? '' : 's'} for `
+            messageHtml: `Drop ${items.length} object${items.length === 1 ? '' : 's'} for `
                 + `<code>${escapeHtml(label)}</code>? This cannot be undone.`,
             detailHtml: `<ul class="mb-0 ps-3">${list}</ul>`,
             confirmText: 'Drop',

@@ -2080,7 +2080,10 @@ async def start_reasoning(
     return {"success": True, "task_id": task.id, "message": "Inference started"}
 
 
-@router.post("/reasoning/materialize")
+@router.post(
+    "/reasoning/materialize",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
 async def materialize_inferred(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),

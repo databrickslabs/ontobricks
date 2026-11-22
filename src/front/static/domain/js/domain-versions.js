@@ -285,8 +285,7 @@ async function transitionVersion(
 ) {
     const confirmed = await showConfirmDialog({
         title: 'Update Lifecycle Status',
-        message: 'Change version v' + escapeHtml(version) + ' to '
-            + escapeHtml(targetStatus) + '?',
+        message: 'Change version v' + version + ' to ' + targetStatus + '?',
         confirmText: 'Update Status',
         confirmClass: 'btn-primary',
         icon: 'arrow-repeat'

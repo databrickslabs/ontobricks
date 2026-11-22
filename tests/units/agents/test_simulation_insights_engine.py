@@ -211,7 +211,8 @@ def test_llm_failure_sets_error_and_no_reply(monkeypatch):
 
     assert result.success is False
     assert result.reply == ""
-    assert "endpoint down" in result.error
+    assert result.error == "LLM request failed."
+    assert "endpoint down" not in result.error
 
 
 def test_empty_answer_is_reported_as_error(monkeypatch):

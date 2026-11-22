@@ -12,6 +12,7 @@ from agents.engine_base import AgentStep, accumulate_usage, call_serving_endpoin
 from agents.tools.context import ToolContext
 from agents.tracing import trace_agent
 from back.core.logging import get_logger
+from agents.llm_utils import llm_failure_message
 
 logger = get_logger(__name__)
 
@@ -192,7 +193,7 @@ def run_agent(
                 endpoint_kind=endpoint_kind,
             )
         except Exception as exc:
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             logger.error("simulation_facts_agent: %s", result.error)
             return result
         accumulate_usage(result.usage, llm_response.get("usage", {}))

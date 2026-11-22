@@ -38,6 +38,7 @@ from agents.engine_base import (
     accumulate_usage,
 )
 from agents.tracing import trace_agent
+from agents.llm_utils import llm_failure_message
 
 logger = get_logger(__name__)
 
@@ -401,11 +402,11 @@ def run_agent(
                         trace_name=_TRACE_NAME,
                     )
                 except Exception as inner:
-                    result.error = f"LLM request failed: {inner}"
+                    result.error = llm_failure_message(inner)
                     logger.error("business_rules_agent: fallback call failed: %s", inner)
                     return result
             else:
-                result.error = f"LLM request failed: {exc}"
+                result.error = llm_failure_message(exc)
                 logger.error(
                     "business_rules_agent: LLM request failed at iter %d: %s",
                     iteration + 1,
@@ -417,11 +418,11 @@ def run_agent(
             logger.error("business_rules_agent: timeout at iter %d", iteration + 1)
             return result
         except requests.exceptions.RequestException as exc:
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             logger.error("business_rules_agent: request exception: %s", exc)
             return result
         except Exception as exc:  # pragma: no cover - defensive
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             logger.error("business_rules_agent: unexpected error at iter %d: %s", iteration + 1, exc)
             return result
 

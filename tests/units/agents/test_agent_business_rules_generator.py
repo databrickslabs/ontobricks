@@ -204,7 +204,8 @@ class TestRunAgent:
                 base_uri="http://ex.org/",
             )
         assert result.success is False
-        assert "boom" in result.error
+        assert result.error == "LLM request failed."
+        assert "boom" not in result.error
 
 
 class TestOntologyDesignTool:

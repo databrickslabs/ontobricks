@@ -436,7 +436,7 @@ document.getElementById('importFiboBtn').addEventListener('click', async functio
     if (domains.length === 1) {
         const proceed = await showConfirmDialog({
             title: 'Import Foundations only?',
-            message: 'Only <strong>Foundations (FND)</strong> is selected. This imports core concepts only.<br><br>Select additional contexts (BE, FBC, etc.) for a richer ontology.',
+            messageHtml: 'Only <strong>Foundations (FND)</strong> is selected. This imports core concepts only.<br><br>Select additional contexts (BE, FBC, etc.) for a richer ontology.',
             confirmText: 'Proceed with FND only',
             cancelText: 'Cancel',
             confirmClass: 'btn-primary',
@@ -499,7 +499,7 @@ document.getElementById('importCdiscBtn').addEventListener('click', async functi
     if (domains.length === 1) {
         const proceed = await showConfirmDialog({
             title: 'Import Schemas only?',
-            message: 'Only <strong>Schemas</strong> is selected. This imports the meta-model only.<br><br>Select additional standards (SDTM, CDASH, etc.) for a richer ontology.',
+            messageHtml: 'Only <strong>Schemas</strong> is selected. This imports the meta-model only.<br><br>Select additional standards (SDTM, CDASH, etc.) for a richer ontology.',
             confirmText: 'Proceed with Schemas only',
             cancelText: 'Cancel',
             confirmClass: 'btn-primary',
@@ -561,7 +561,7 @@ document.getElementById('importFhirBtn').addEventListener('click', async functio
     if (domains.length === 1) {
         const proceed = await showConfirmDialog({
             title: 'Import Foundation only?',
-            message: 'Only <strong>Foundation</strong> is selected. This imports base FHIR resource types only.<br><br>Select additional contexts (Clinical, Diagnostics, etc.) for a richer ontology.',
+            messageHtml: 'Only <strong>Foundation</strong> is selected. This imports base FHIR resource types only.<br><br>Select additional contexts (Clinical, Diagnostics, etc.) for a richer ontology.',
             confirmText: 'Proceed with Foundation only',
             cancelText: 'Cancel',
             confirmClass: 'btn-primary',
@@ -620,7 +620,7 @@ document.getElementById('importIofBtn').addEventListener('click', async function
     if (domains.length === 1) {
         const proceed = await showConfirmDialog({
             title: 'Import Core only?',
-            message: 'Only <strong>Core</strong> is selected. This imports foundational manufacturing concepts only.<br><br>Select additional contexts (Maintenance, Supply Chain) for a richer ontology.',
+            messageHtml: 'Only <strong>Core</strong> is selected. This imports foundational manufacturing concepts only.<br><br>Select additional contexts (Maintenance, Supply Chain) for a richer ontology.',
             confirmText: 'Proceed with Core only',
             cancelText: 'Cancel',
             confirmClass: 'btn-primary',

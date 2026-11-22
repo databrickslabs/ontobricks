@@ -503,7 +503,7 @@ async function removeRelationshipMappingByProperty(propertyUri) {
     
     const confirmed = await showConfirmDialog({
         title: 'Remove Mapping',
-        message: `Are you sure you want to remove the mapping for "<strong>${mapping.property_label}</strong>"?<br><br>The property will move back to the unmapped list.`,
+        messageHtml: `Are you sure you want to remove the mapping for "<strong>${escapeHtml(mapping.property_label)}</strong>"?<br><br>The property will move back to the unmapped list.`,
         confirmText: 'Remove',
         confirmClass: 'btn-danger',
         icon: 'trash'

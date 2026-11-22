@@ -2480,7 +2480,7 @@ async function removeSharedEntityVirtualAttribute(index) {
     const count = (group.attributes || []).length;
     const confirmed = await showConfirmDialog({
         title: 'Remove virtual attributes',
-        message: `Remove <strong>${escapeHtml(group.function || group.fullName)}</strong> and its ${count} virtual attribute${count === 1 ? '' : 's'}?`,
+        messageHtml: `Remove <strong>${escapeHtml(group.function || group.fullName)}</strong> and its ${count} virtual attribute${count === 1 ? '' : 's'}?`,
         confirmText: 'Remove',
         confirmClass: 'btn-danger',
         icon: 'trash'

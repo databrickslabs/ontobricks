@@ -55,7 +55,7 @@ function createRegistryVersionDeleteControl(v, domainName) {
 async function deleteRegistryDomain(domainName) {
     const options = {
         title: 'Delete Context',
-        message: 'Permanently delete context "' + escapeHtml(domainName)
+        message: 'Permanently delete context "' + domainName
             + '" and all its versions from the registry? This permanently '
             + 'removes all Documents content and cannot be undone.',
         confirmText: 'Delete',
@@ -99,12 +99,12 @@ async function deleteRegistryVersion(
     const options = {
         title: deletesDomain ? 'Delete last version and context' : 'Delete Version',
         message: deletesDomain
-            ? 'Version v' + escapeHtml(String(version))
-                + ' is the only version of "' + escapeHtml(String(domainName))
+            ? 'Version v' + version
+                + ' is the only version of "' + domainName
                 + '". Deleting it will also delete the context and all Knowledge '
                 + 'Store content. This cannot be undone.'
-            : 'Permanently delete version v' + escapeHtml(String(version)) +
-                ' from context "' + escapeHtml(String(domainName)) +
+            : 'Permanently delete version v' + version +
+                ' from context "' + domainName +
                 '"? This permanently removes its Documents content '
                 + 'and cannot be undone.',
         confirmText: 'Delete',
@@ -624,7 +624,7 @@ document.addEventListener('DOMContentLoaded', function () {
     async function loadRegistryDomainVersion(domainName, version) {
         const confirmed = await showConfirmDialog({
             title: 'Load Context',
-            message: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' + escapeHtml(version) + '</strong>? Any unsaved changes to the current context will be lost.',
+            messageHtml: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' + escapeHtml(version) + '</strong>? Any unsaved changes to the current context will be lost.',
             confirmText: 'Load',
             confirmClass: 'btn-primary',
             icon: 'box-arrow-in-down'
@@ -679,7 +679,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         const confirmed = await showConfirmDialog({
             title: 'Open in Validation',
-            message: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' +
+            messageHtml: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' +
                 escapeHtml(version) + '</strong> and open its Validation workspace? ' +
                 'Any unsaved changes to the current context will be lost.',
             confirmText: 'Open',

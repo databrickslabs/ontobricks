@@ -1773,8 +1773,9 @@ POST /ontology/assistant/invoke
 
 OpenAI Responses-compatible wrapper around the same agent. The route injects
 the saved domain LLM target into `custom_inputs` (`endpoint_name`,
-`endpoint_kind`, credentials). Request-supplied host, token, or endpoint
-fields are ignored.
+`endpoint_kind`) and hands the credentials to the agent constructor, so they
+never appear in the MLflow-traced request. Request-supplied host, token, or
+endpoint fields are ignored.
 
 ---
 
@@ -3307,7 +3308,7 @@ HTML routes are thin; they call **domain objects** under `back/objects/*` and **
 | `front/routes/mapping.py`, `api/routers/internal/mapping.py` | `back/objects/mapping/mapping.py`, `back/core/w3c/r2rml/*` | Table mapping & R2RML |
 | `front/routes/dtwin.py`, `api/routers/internal/dtwin.py` | `back/objects/digitaltwin/digitaltwin.py`, `back/core/w3c/sparql/SparqlTranslator.py` | Knowledge Graph, SPARQL, query UI |
 | `front/routes/domain.py`, `api/routers/internal/domain.py` | `back/objects/domain/Domain.py`, `back/objects/session/DomainSession.py` | Domain save/load & registry UX |
-| `api/routers/internal/tasks.py` | (handlers in routes; registry scheduler via `back/objects/registry`) | Task status / triggers |
+| `api/routers/internal/tasks.py` | `back/core/task_manager` | Task status / cancel. Owner-scoped: users see their own and system tasks, admins see all; `clear-completed` is admin-only |
 | `api/routers/v1.py`, `api/routers/domains.py`, `api/routers/digitaltwin.py` | `api/service.py` | External stateless REST |
 | `back/fastapi/graphql_routes.py` | `back/core/graphql/GraphQLSchemaBuilder.py`, `back/core/graphql/ResolverFactory.py` | GraphQL (also mounted under `/api/v1/graphql`) |
 

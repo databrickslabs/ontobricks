@@ -5,7 +5,9 @@ Moved from app/frontend/home/routes.py during the front/back split.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from api.routers.internal._guards import require
 from back.core.errors import ValidationError, InfrastructureError
+from back.objects.registry import ROLE_EDITOR
 from back.objects.session import SessionManager, get_session_manager
 
 from shared.config.settings import get_settings, Settings
@@ -171,42 +173,15 @@ async def read_volume_file(
     return {"success": True, "content": content}
 
 
-@router.post("/write-volume-file")
-async def write_volume_file(
-    request: Request,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Write a file to Unity Catalog volume."""
-    data = await request.json()
-    # Accept both 'path' and 'file_path' for compatibility
-    path = data.get("path") or data.get("file_path")
-    content = data.get("content")
-
-    if not path or content is None:
-        raise ValidationError("Path and content are required")
-
-    from back.core.databricks import VolumeFileService
-
-    domain = get_domain(session_mgr)
-    host = domain.databricks.get("host") or settings.databricks_host
-    token = domain.databricks.get("token") or settings.databricks_token
-
-    uc_service = VolumeFileService(host=host, token=token)
-    success, message = uc_service.write_file(path, content)
-
-    if not success:
-        raise InfrastructureError(message or f"Could not write file: {path}")
-
-    return {"success": True, "message": message}
-
-
 # ===========================================
 # Ontology/Mapping Clear
 # ===========================================
 
 
-@router.post("/clear-ontology")
+@router.post(
+    "/clear-ontology",
+    dependencies=[Depends(require(ROLE_EDITOR, scope="domain"))],
+)
 async def clear_ontology(session_mgr: SessionManager = Depends(get_session_manager)):
     """Clear ontology, associated mappings, and design layout from session."""
     domain = get_domain(session_mgr)

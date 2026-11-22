@@ -428,7 +428,7 @@ const SimulationPage = {
         const label = this.esc(sim ? sim.label : id);
         const ok = await showConfirmDialog({
             title: 'Purge simulation sandbox?',
-            message: `Drop the sandbox after-picture for "<strong>${label}</strong>"? `
+            messageHtml: `Drop the sandbox after-picture for "<strong>${label}</strong>"? `
                 + 'The scenario definition is kept as a draft so you can run it again.',
             confirmText: 'Purge',
             cancelText: 'Cancel',

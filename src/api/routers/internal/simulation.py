@@ -145,7 +145,11 @@ def _facts_failure_message(error: Optional[str]) -> str:
     """Client-safe reason for a failed propose-facts turn (detail is stripped)."""
     text = str(error or "")
     low = text.lower()
-    if "endpoint_not_found" in low or "endpoint does not exist" in low:
+    if (
+        "endpoint_not_found" in low
+        or "endpoint does not exist" in low
+        or "endpoint not found" in low
+    ):
         return (
             "Could not propose hypothetical facts: the selected LLM was not found. "
             "Pick a model in Configuration → AI."

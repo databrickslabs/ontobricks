@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from agents.agent_mapping_pge.contracts import SourceModel
 
 from back.core.logging import get_logger
+from agents.llm_utils import llm_failure_message
 from agents.engine_base import (
     call_serving_endpoint,
     dispatch_tool,
@@ -512,7 +513,7 @@ def run_planner(
                     "Planner: endpoint refused tools — cannot produce a SourceModel"
                 )
                 return result
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             result.iterations = current_iteration
             result.usage = total_usage
             logger.error(
@@ -528,7 +529,7 @@ def run_planner(
             logger.error("Planner: timeout at iteration %d", current_iteration)
             return result
         except requests.exceptions.RequestException as exc:
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             result.iterations = current_iteration
             result.usage = total_usage
             logger.error(
