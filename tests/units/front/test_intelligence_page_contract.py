@@ -1029,6 +1029,12 @@ def test_patterns_section_owns_discovery():
     assert "certified=${this._groupSel === 'certified'}" in js
     assert ".pat-chart-group-switch" in pat_css
     assert ".pat-group-table" in pat_css
+    # Outside bar: entities in no pattern, shown in both chart modes, not clickable.
+    assert "pat-chart-bar--outside" in js
+    assert "aria-label=\"${this._esc(aria)}\"" in js
+    assert "not in a pattern" in js
+    assert "population - covered" in js or "universe - covered" in js
+    assert ".pat-chart-bar.pat-chart-bar--outside" in pat_css
     assert "Matching entities" in js
     assert "data-pat-members" in js
     assert "openMembersModal" in js

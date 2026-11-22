@@ -869,48 +869,79 @@ const IntelligencePatterns = {
                 cert: !!p.certified,
                 aria: `Pattern #${i + 1}`,
             }));
+        // Entities of the type that follow no pattern: always the last bar.
+        // Patterns partition the anchors, so the rest is population - covered.
+        const covered = patterns.reduce((s, p) => s + (Number(p.support) || 0), 0);
+        items.push({
+            outside: true,
+            value: universe ? Math.max(0, universe - covered) : 0,
+            label: 'Outside',
+            sub: 'not in a pattern',
+            active: false,
+            cert: false,
+            aria: 'Not in any pattern',
+        });
         const max = Math.max(1, ...items.map((it) => it.value));
         const SLOT = grouped ? 120 : 54;
         const BAR = grouped ? 56 : 30;
+        const OUT_SLOT = 120;     // wide enough for the "not in a pattern" caption
         const PLOT = 120;
         const TOP = 30;          // room for the value + (percentage) above bars
         const LEFT = 4;
         const BASE = TOP + PLOT;
-        const H = BASE + (grouped ? 38 : 24);     // room for the labels under each bar
-        const W = Math.max(LEFT + items.length * SLOT + 8, 220);
-        const bars = items.map((it, i) => {
+        const H = BASE + 38;     // room for the label and sub-label under each bar
+        let cursor = LEFT;
+        const bars = items.map((it) => {
+            const slot = it.outside ? OUT_SLOT : SLOT;
+            const barW = BAR;
+            const slotLeft = cursor;
+            cursor += slot;
+            const x = slotLeft + (slot - barW) / 2;
+            const cx = x + barW / 2;
             const v = it.value;
             const h = max > 0 ? Math.round((v / max) * PLOT) : 0;
-            const x = LEFT + i * SLOT + (SLOT - BAR) / 2 + 4;
             const y = BASE - h;
-            const active = it.active ? ' pat-chart-bar--active' : '';
-            // Saved runs colour each bar by certification: green / red.
-            const certClass = byCert
+            const active = !it.outside && it.active ? ' pat-chart-bar--active' : '';
+            // Saved runs colour each pattern bar by certification: green / red.
+            const certClass = byCert && !it.outside
                 ? (it.cert ? ' pat-chart-bar--certified' : ' pat-chart-bar--uncertified')
                 : '';
-            const certAria = byCert && !grouped ? (it.cert ? ', certified' : ', not certified') : '';
+            const certAria = byCert && !grouped && !it.outside
+                ? (it.cert ? ', certified' : ', not certified')
+                : '';
             // Share of all entities of the type this bar accounts for.
+            const known = !!universe || !it.outside;
             const pct = universe ? Math.round((v / universe) * 100) : null;
-            const aria = (pct != null
-                ? `${it.aria}: ${this._fmtNum(v)} entities (${pct}%)`
-                : `${it.aria}: ${this._fmtNum(v)} entities`) + certAria;
+            const valueText = known ? this._fmtNum(v) : '—';
+            const aria = known
+                ? `${it.aria}: ${this._fmtNum(v)} entities`
+                    + (pct != null ? ` (${pct}%)` : '') + certAria
+                : `${it.aria}: population unknown`;
             const pctText = pct != null
-                ? `<text class="pat-chart-bar-pct" x="${x + BAR / 2}" y="${y - 4}" text-anchor="middle">(${pct}%)</text>`
+                ? `<text class="pat-chart-bar-pct" x="${cx}" y="${y - 4}" text-anchor="middle">(${pct}%)</text>`
                 : '';
             const valueY = pct != null ? y - 15 : y - 4;
             const sub = it.sub
-                ? `<text class="pat-chart-bar-label" x="${x + BAR / 2}" y="${BASE + 30}" text-anchor="middle">${this._esc(it.sub)}</text>`
+                ? `<text class="pat-chart-bar-label" x="${cx}" y="${BASE + 30}" text-anchor="middle">${this._esc(it.sub)}</text>`
                 : '';
-            return `<g class="pat-chart-bar${active}${certClass}" ${it.attr}`
-                + ` role="button" tabindex="0" aria-label="${this._esc(aria)}">`
+            // The outside bar is informational: no data-pat-id, no role=button.
+            const attrs = it.outside
+                ? `role="img" aria-label="${this._esc(aria)}"`
+                : `${it.attr} role="button" tabindex="0" aria-label="${this._esc(aria)}"`;
+            const separator = it.outside
+                ? `<line class="pat-chart-sep" x1="${slotLeft}" y1="${TOP - 6}" x2="${slotLeft}" y2="${BASE + 34}"></line>`
+                : '';
+            return separator
+                + `<g class="pat-chart-bar${active}${certClass}${it.outside ? ' pat-chart-bar--outside' : ''}" ${attrs}>`
                 + `<title>${this._esc(aria)}</title>`
-                + `<rect class="pat-chart-bar-rect" x="${x}" y="${y}" width="${BAR}" height="${Math.max(h, 1)}" rx="3"></rect>`
-                + `<text class="pat-chart-bar-value" x="${x + BAR / 2}" y="${valueY}" text-anchor="middle">${this._esc(this._fmtNum(v))}</text>`
+                + `<rect class="pat-chart-bar-rect" x="${x}" y="${y}" width="${barW}" height="${Math.max(h, 1)}" rx="3"></rect>`
+                + `<text class="pat-chart-bar-value" x="${cx}" y="${valueY}" text-anchor="middle">${this._esc(valueText)}</text>`
                 + pctText
-                + `<text class="pat-chart-bar-label" x="${x + BAR / 2}" y="${BASE + 16}" text-anchor="middle">${this._esc(it.label)}</text>`
+                + `<text class="pat-chart-bar-label" x="${cx}" y="${BASE + 16}" text-anchor="middle">${this._esc(it.label)}</text>`
                 + sub
                 + `</g>`;
         }).join('');
+        const W = Math.max(cursor + 8, 220);
         const groupSwitch = byCert
             ? `<div class="form-check form-switch pat-chart-group-switch">
                         <input class="form-check-input" type="checkbox" role="switch" id="patChartGroupSwitch"

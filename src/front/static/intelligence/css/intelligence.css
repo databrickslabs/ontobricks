@@ -1436,6 +1436,26 @@ a.sim-uri-link:focus-visible {
     stroke: var(--db-primary, #737373);
 }
 
+/* "Outside" bar: entities that follow no pattern. Informational, so no
+   pointer, no hover tint, dashed outline to tell it apart from the patterns. */
+.pat-chart-bar.pat-chart-bar--outside {
+    cursor: default;
+}
+
+.pat-chart-bar.pat-chart-bar--outside .pat-chart-bar-rect,
+.pat-chart-bar.pat-chart-bar--outside:hover .pat-chart-bar-rect {
+    fill: transparent;
+    stroke: var(--db-text-muted, #6F6B65);
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+}
+
+.pat-chart-sep {
+    stroke: var(--db-border, #ECEAE6);
+    stroke-width: 1;
+    stroke-dasharray: 2 3;
+}
+
 /* Saved runs: bars are green when the pattern is certified, red otherwise. */
 .pat-chart-bar--certified .pat-chart-bar-rect {
     fill: var(--db-status-success-soft-bg, rgba(16, 185, 129, 0.18));

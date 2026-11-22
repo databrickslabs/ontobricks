@@ -169,3 +169,43 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11194 passed, 334 skipped, 8 deselected
 (Not browser-tested: the Patterns UI needs a Databricks run.)
+
+================================================================================
+Intelligence → Patterns: "Outside" bar in the matching-entities chart
+================================================================================
+
+Context:
+Both chart modes (one bar per pattern, and grouped by certification) now end
+with an "Outside" bar: the entities of the type that follow no pattern, shown
+with their count and percentage of the population. The bar is informational
+and not clickable.
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   - _patternsChartHtml appends an outside item:
+     population_count - sum of pattern supports (clamped at 0). Rendered with
+     role="img", no data-pat-id, dashed outline, and a separator line before it.
+     Unknown population (older runs) shows "—" and "population unknown".
+   - The outside value takes part in the bar-height scale, so bars stay
+     proportional to the population.
+2. src/front/static/intelligence/css/intelligence.css
+   - Dashed, transparent outside bar with no pointer or hover tint; dashed
+     separator line.
+3. src/front/templates/partials/intelligence/_intel_patterns_saved.html,
+   src/front/templates/partials/layout/help_modal.html
+   - Help text for the Outside bar.
+4. tests/units/front/test_intelligence_page_contract.py
+   - Contract assertions for the outside bar and its styles.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-22.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11194 passed, 334 skipped, 8 deselected
+Render check: chart HTML generated under Node for saved/live, grouped/not
+grouped, and unknown population (bar labels and values verified).
+(Not browser-tested: the Patterns UI needs a Databricks run.)
