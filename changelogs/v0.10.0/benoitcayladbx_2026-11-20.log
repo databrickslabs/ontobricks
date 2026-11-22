@@ -1744,3 +1744,27 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 11091 passed, 334 skipped, 8 deselected
+
+================================================================================
+Release Notes for v0.10.0
+================================================================================
+
+Context:
+The user asked for the 0.10.0 Release Notes (and a December 2026 roadmap from
+Asana). The Release Notes were built from every changelog under
+changelogs/v0.10.0/ (2026-10-22 to 2026-11-20) following the structure of
+releases/ReleaseNotes_V0.9.0.md. The roadmap is not part of this change: the
+Asana MCP server could not be authorized from the local session.
+
+Changes:
+1. releases/ReleaseNotes_V0.10.0.md (new)
+   - Highlights, Intelligence workspace (Simulation sandbox, Patterns,
+     Communities), SHACL-AF business rules, Ontology and Mapping, Graph /
+     Build / Explorer, Home and chrome, Registry / identity / MCP,
+     Documentation, Bug Fixes, Security (Dependabot), Upgrade Notes.
+
+Modified files:
+- releases/ReleaseNotes_V0.10.0.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11091 passed, 334 skipped, 8 deselected (documentation-only change)
