@@ -20,15 +20,6 @@ const BuildObjectsModule = (() => {
         lakebase: '/settings/graph-engine/lakebase-drop-object',
         neo4j: '/settings/graph-engine/neo4j-drop-label',
     };
-    const KIND_BADGES = {
-        view: 'bg-info-subtle text-info-emphasis',
-        table: 'bg-primary-subtle text-primary-emphasis',
-        sync: 'bg-warning-subtle text-warning-emphasis',
-        metrics: 'bg-primary-subtle text-primary-emphasis',
-        work: 'bg-warning-subtle text-warning-emphasis',
-        graph: 'bg-success-subtle text-success-emphasis',
-    };
-
     // Sort rank inside a usage bucket: views, then tables, then registrations.
     const KIND_RANK = { view: 0, table: 1, sync: 2, graph: 3, metrics: 4, work: 5 };
 
@@ -36,6 +27,7 @@ const BuildObjectsModule = (() => {
     let lastData = null;
     let groupBy = 'usage';
     let busy = false;
+    let listFilter = null;
 
     const el = (id) => document.getElementById(id);
 
@@ -64,9 +56,17 @@ const BuildObjectsModule = (() => {
         return element;
     }
 
-    function badge(kind) {
-        const cls = KIND_BADGES[kind] || 'bg-secondary-subtle text-secondary-emphasis';
-        return node('span', `badge border ${cls}`, kind.charAt(0).toUpperCase() + kind.slice(1));
+    function kindLabel(kind) {
+        return kind.charAt(0).toUpperCase() + kind.slice(1);
+    }
+
+    /** Work-list header row: sentence-case columns on a transparent band. */
+    function tableHead(columns) {
+        const thead = node('thead');
+        const tr = node('tr');
+        columns.forEach((label) => tr.appendChild(node('th', null, label)));
+        thead.appendChild(tr);
+        return thead;
     }
 
     function dropButton(item) {
@@ -82,10 +82,8 @@ const BuildObjectsModule = (() => {
      *  from several sources share a table and need their origin shown. */
     function itemRow(item, canDrop, sourceTitle) {
         const tr = document.createElement('tr');
-        const kindCell = node('td');
-        kindCell.style.width = '90px';
-        kindCell.appendChild(badge(item.kind));
-        const nameCell = node('td', 'font-monospace small', item.name);
+        const kindCell = node('td', null, kindLabel(item.kind));
+        const nameCell = node('td', 'font-monospace', item.name);
         if (item.detail) {
             nameCell.appendChild(node('div', 'text-muted', item.detail));
         }
@@ -109,7 +107,7 @@ const BuildObjectsModule = (() => {
         const header = node('div', 'd-flex align-items-center gap-2 mb-2');
         header.appendChild(node('h6', 'mb-0', group.title));
         if (group.location) {
-            header.appendChild(node('span', 'badge bg-light border text-muted font-monospace', group.location));
+            header.appendChild(node('span', 'text-muted small font-monospace', group.location));
         }
         block.appendChild(header);
         if (group.error) {
@@ -121,6 +119,7 @@ const BuildObjectsModule = (() => {
         }
         const wrap = node('div', 'table-responsive');
         const table = node('table', 'table table-hover align-middle ob-runs-table mb-0');
+        table.appendChild(tableHead(['Kind', 'Name', 'State', '']));
         const tbody = document.createElement('tbody');
         group.items.forEach((item) => tbody.appendChild(itemRow(item, canDrop)));
         table.appendChild(tbody);
@@ -151,10 +150,11 @@ const BuildObjectsModule = (() => {
         const block = node('div', 'mb-4');
         const header = node('div', 'd-flex align-items-center gap-2 mb-2');
         header.appendChild(node('h6', 'mb-0', usage.title));
-        header.appendChild(node('span', 'badge bg-secondary-subtle text-secondary-emphasis border', String(entries.length)));
+        header.appendChild(node('span', 'ob-runs-count', String(entries.length)));
         block.appendChild(header);
         const wrap = node('div', 'table-responsive');
         const table = node('table', 'table table-hover align-middle ob-runs-table mb-0');
+        table.appendChild(tableHead(['Kind', 'Name', 'Source', 'State', '']));
         const tbody = document.createElement('tbody');
         sortEntries(entries).forEach(({ item, source }) => {
             tbody.appendChild(itemRow(item, canDrop, source));
@@ -187,6 +187,16 @@ const BuildObjectsModule = (() => {
         return wrap;
     }
 
+    /** Re-apply the free-text filter; the row count follows the visible rows. */
+    function applyFilter() {
+        if (listFilter) listFilter.apply();
+    }
+
+    function clearContent() {
+        el('buildObjectsContent').textContent = '';
+        applyFilter();
+    }
+
     function render(data) {
         lastData = data;
         current = {
@@ -199,14 +209,10 @@ const BuildObjectsModule = (() => {
         const deleteAll = el('buildObjectsDeleteAllBtn');
         if (deleteAll) deleteAll.classList.toggle('d-none', !(current.can_drop && count));
 
-        if (data.message) {
-            el('buildObjectsNoticeMessage').textContent = data.message;
-            showOnly('buildObjectsNotice');
-            return;
-        }
-        if (!count && !hasProblem) {
-            el('buildObjectsNoticeMessage').textContent =
-                'Nothing built yet. Run Build to create the graph objects.';
+        if (data.message || (!count && !hasProblem)) {
+            el('buildObjectsNoticeMessage').textContent = data.message
+                || 'Nothing built yet. Run Build to create the graph objects.';
+            clearContent();
             showOnly('buildObjectsNotice');
             return;
         }
@@ -215,6 +221,7 @@ const BuildObjectsModule = (() => {
         content.appendChild(groupBy === 'usage'
             ? renderByUsage(current.can_drop)
             : renderBySource(current.can_drop));
+        applyFilter();
         showOnly('buildObjectsContent');
     }
 
@@ -231,6 +238,7 @@ const BuildObjectsModule = (() => {
             render(data);
         } catch (error) {
             el('buildObjectsErrorMessage').textContent = error.message || 'Could not load objects';
+            clearContent();
             showOnly('buildObjectsError');
         } finally {
             setBusy(false);
@@ -294,6 +302,11 @@ const BuildObjectsModule = (() => {
     }
 
     function init() {
+        // The content wrapper holds one table per group/bucket; the filter
+        // matches every row across them.
+        listFilter = window.ObListFilter.bind(
+            el('buildObjectsFilter'), el('buildObjectsContent'), el('buildObjectsCount'), 'object'
+        );
         const tabBtn = el('buildTabObjectsBtn');
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', load);
         const reloadBtn = el('buildObjectsReloadBtn');

@@ -1,0 +1,48 @@
+================================================================================
+2026-11-22 — Graph / Build / Objects: work-list styling
+================================================================================
+
+--------------------------------------------------------------------------------
+Objects tab uses the shared Databricks work-list style
+--------------------------------------------------------------------------------
+
+Context:
+The Objects tab (Graph → Build → Objects) rendered plain tables without column
+headers, with coloured kind pills and an inline column width. The user asked for
+the usual Databricks list styling. The app's Work-List template (filter bar +
+.ob-runs-table, as in Build → Runs) is the reference, so the Objects tab now
+follows it.
+
+Changes:
+1. src/front/templates/partials/dtwin/_build_objects.html
+   - Filter bar uses the work-list layout: search box (.ob-filter-search),
+     row count (.ob-runs-count) and trailing actions. The subtitle line is
+     removed. The Reload button is renamed Refresh.
+2. src/front/static/query/js/query-build-objects.js
+   - Each table has a sentence-case header row (tableHead): Kind, Name, State
+     and an actions column; by-usage adds Source.
+   - Kind is plain text. Coloured kind badges (KIND_BADGES) and the inline
+     90px width are removed; group location and usage counts are muted text.
+   - The shared ObListFilter filters the rows across all group tables and
+     drives the row count. It is re-applied after every render, including the
+     notice and error states, which now clear the content.
+3. src/front/static/global/js/list-filter.js
+   - Counts and filters body rows only (tbody > tr), so header rows of a
+     multi-table container are never counted or hidden. Existing callers pass a
+     tbody and are unaffected.
+4. tests/units/front/test_build_objects_tab_contract.py
+   - Checks the work-list markup, header rows, no filled badges or inline widths,
+     filter binding and the body-row selector.
+
+Not changed:
+- Settings → Objects tables still use table-light and the ob-table class, which
+  has no CSS rule. They are the older style and are left as they are.
+
+Modified files:
+- src/front/templates/partials/dtwin/_build_objects.html
+- src/front/static/query/js/query-build-objects.js
+- src/front/static/global/js/list-filter.js
+- tests/units/front/test_build_objects_tab_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-22.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11187 passed, 334 skipped, 8 deselected

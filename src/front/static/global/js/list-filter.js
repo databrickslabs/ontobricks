@@ -4,6 +4,8 @@
  *
  * Markup: an <input type="search"> inside .ob-filter-bar, a <tbody> with
  * one <tr> per row, and an optional count element (.ob-runs-count).
+ * The container may also hold several tables (one per group); only body rows
+ * count, so <thead> header rows are never filtered or counted.
  * Rows are matched on their visible text; the count reads "N of M runs"
  * while a filter is active.
  *
@@ -18,7 +20,7 @@ window.ObListFilter = (function () {
 
         function apply() {
             const q = input.value.trim().toLowerCase();
-            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const rows = Array.from(tbody.querySelectorAll('tbody > tr'));
             let shown = 0;
             rows.forEach(function (tr) {
                 const hit = !q || tr.textContent.toLowerCase().indexOf(q) !== -1;

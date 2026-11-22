@@ -76,3 +76,33 @@ def test_usage_view_is_fed_by_server_usages():
 def test_domain_runs_wires_objects_tab():
     assert "buildTabObjectsBtn" in RUNS_JS
     assert "'objects'" in RUNS_JS
+
+
+def test_objects_list_uses_the_work_list_template():
+    # Same layout as Build → Runs: filter bar with search, row count, one
+    # .ob-runs-table per group, sentence-case header row, no table-light band.
+    assert 'class="ob-filter-search"' in OBJECTS_HTML
+    assert 'id="buildObjectsFilter"' in OBJECTS_HTML
+    assert 'class="ob-runs-count" id="buildObjectsCount"' in OBJECTS_HTML
+    assert "table table-hover align-middle ob-runs-table mb-0" in OBJECTS_JS
+    assert "table-light" not in OBJECTS_JS
+    assert "ob-runs-table" in OBJECTS_JS
+
+
+def test_objects_list_has_header_row_and_no_filled_badges():
+    assert "function tableHead(columns)" in OBJECTS_JS
+    assert "tableHead(['Kind', 'Name', 'State', ''])" in OBJECTS_JS
+    assert "tableHead(['Kind', 'Name', 'Source', 'State', ''])" in OBJECTS_JS
+    assert "KIND_BADGES" not in OBJECTS_JS
+    assert "style.width" not in OBJECTS_JS
+
+
+def test_objects_filter_is_bound_to_content_and_reapplied_on_render():
+    assert "ObListFilter.bind(" in OBJECTS_JS
+    assert "el('buildObjectsContent'), el('buildObjectsCount'), 'object'" in OBJECTS_JS
+    assert OBJECTS_JS.count("applyFilter();") >= 2  # render + clearContent
+
+
+def test_list_filter_counts_body_rows_only():
+    list_filter = (ROOT / "src/front/static/global/js/list-filter.js").read_text(encoding="utf-8")
+    assert "querySelectorAll('tbody > tr')" in list_filter

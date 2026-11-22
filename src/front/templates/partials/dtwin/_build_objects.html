@@ -1,10 +1,14 @@
 {# Graph → Build → Objects: physical objects of the current context version.
+   Work-list template (.ob-filter-bar + .ob-runs-table), like Build → Runs.
    Read-only for everyone; the Drop buttons are rendered by query-build-objects.js
    only when GET /dtwin/build/objects reports can_drop (app admins). #}
 <div class="ob-filter-bar">
-    <span class="text-muted small" id="buildObjectsSubtitle">
-        Tables, views, sync registrations and graphs this context version built
-    </span>
+    <div class="ob-filter-search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" class="form-control form-control-sm" id="buildObjectsFilter"
+               placeholder="Filter objects" aria-label="Filter objects">
+    </div>
+    <span class="ob-runs-count" id="buildObjectsCount" aria-live="polite"></span>
     <div class="d-flex align-items-center gap-2 ms-auto">
         <div class="btn-group btn-group-sm" role="group" aria-label="Group objects by">
             <input type="radio" class="btn-check" name="buildObjectsGroupBy" id="buildObjectsGroupByUsage"
@@ -21,7 +25,7 @@
         </button>
         <button type="button" class="btn btn-sm btn-outline-secondary"
                 id="buildObjectsReloadBtn" title="Reload the object list">
-            <i class="bi bi-arrow-counterclockwise me-1"></i>Reload
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Refresh
         </button>
     </div>
 </div>
