@@ -449,3 +449,46 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11235 passed, 334 skipped, 8 deselected
+
+================================================================================
+Delta engine: Certified Graph composition objects
+================================================================================
+
+Context:
+Third step toward the two-phase graph. The Certified Graph is composed in
+Delta for every backend: a base VIEW over the Original `…_data` (no copy),
+an enrichments TABLE that carries `kind` / `provenance` / `run_id`, and a
+union VIEW that is the certified content. This change adds the naming, the
+DDL and the Delta builder entry point; nothing calls it yet (the certified
+build comes next). The composition lives in the Delta engine and is reached
+through `GraphDBFactory.get_builder(engine="delta")`, so no class in
+`back/objects` merely forwards to it.
+
+Changes:
+1. src/back/core/graphdb/delta/_table_naming.py
+   - `cert_base_fqn`, `cert_enriched_fqn`, `certified_view_fqn`
+     (`…_cert_base`, `…_cert_enriched`, `…_certified`); the three suffixes
+     are stripped by `strip_graph_leaf_suffix`.
+   - Duplicated Code: `data_table_fqn`, `inferred_table_fqn` and
+     `graph_view_fqn` share the new `_suffixed_fqn` helper.
+2. src/back/core/graphdb/delta/materialize.py
+   - `build_ensure_cert_enriched_sql`: enrichments TABLE (subject,
+     predicate, object, kind, provenance, run_id, created_at).
+   - `ensure_certified_composition`: base VIEW over `…_data`, enrichments
+     TABLE (create once, never cleared), union VIEW base ∪ enrichments.
+3. src/back/core/graphdb/delta/Builder.py
+   - `cert_base_fqn`, `cert_enriched_fqn`, `certified_view_fqn`,
+     `ensure_certified_composition`.
+4. tests/units/graphdb/delta/test_certified_composition.py (new)
+   - Naming, suffix stripping, enrichments DDL, statement order of the
+     composition, the composition never truncates / deletes / drops, and
+     the builder composes from the domain `…_data`.
+
+Modified files:
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/Builder.py
+- tests/units/graphdb/delta/test_certified_composition.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11244 passed, 334 skipped, 8 deselected

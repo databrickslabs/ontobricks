@@ -62,6 +62,21 @@ class Builder(GraphBuilder):
 
         return _table_naming.inferred_table_fqn(self._domain, self._settings)
 
+    def cert_base_fqn(self) -> str:
+        from back.core.graphdb.delta import _table_naming
+
+        return _table_naming.cert_base_fqn(self._domain, self._settings)
+
+    def cert_enriched_fqn(self) -> str:
+        from back.core.graphdb.delta import _table_naming
+
+        return _table_naming.cert_enriched_fqn(self._domain, self._settings)
+
+    def certified_view_fqn(self) -> str:
+        from back.core.graphdb.delta import _table_naming
+
+        return _table_naming.certified_view_fqn(self._domain, self._settings)
+
     def dq_snapshot_fqn(self, task_id: str = "") -> str:
         from back.core.graphdb.delta import _table_naming
 
@@ -96,6 +111,18 @@ class Builder(GraphBuilder):
 
         materialize.apply_data_relation(
             self._get_client(), view_fqn, table_fqn, mode=mode
+        )
+
+    def ensure_certified_composition(self) -> None:
+        """Create the Certified Graph composition over the domain's ``…_data``."""
+        from back.core.graphdb.delta import materialize
+
+        materialize.ensure_certified_composition(
+            self._get_client(),
+            data_fqn=self.data_table_fqn(),
+            base_fqn=self.cert_base_fqn(),
+            enriched_fqn=self.cert_enriched_fqn(),
+            certified_fqn=self.certified_view_fqn(),
         )
 
     def drop_relation(self, fqn: str, *, kind: str = "table") -> None:

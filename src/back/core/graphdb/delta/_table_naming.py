@@ -17,11 +17,17 @@ _SUFFIX_ADJ_IN = "_adj_in"
 _SUFFIX_ENTITY_SEARCH = "_entity_search"
 _SUFFIX_ENTITY_SEARCH_ASSERTED = "_entity_search_asserted"
 _SUFFIX_PROPS = "_props"
+_SUFFIX_CERT_BASE = "_cert_base"
+_SUFFIX_CERT_ENRICHED = "_cert_enriched"
+_SUFFIX_CERTIFIED = "_certified"
 
 
 def graph_leaf_suffixes() -> tuple[str, ...]:
     """Longest-first suffixes stripped when deriving the mapping-view stem."""
     return (
+        _SUFFIX_CERT_ENRICHED,
+        _SUFFIX_CERT_BASE,
+        _SUFFIX_CERTIFIED,
         _SUFFIX_ENTITY_SEARCH_ASSERTED,
         _SUFFIX_ENTITY_SEARCH,
         _SUFFIX_ADJ_OUT,
@@ -46,31 +52,41 @@ def view_fqn(domain: Any, settings: Any = None) -> str:
     return SQLHelpers.effective_view_table(domain, settings)
 
 
-def data_table_fqn(domain: Any, settings: Any = None) -> str:
-    """Materialized base triples Delta TABLE (``…_data``)."""
+def _suffixed_fqn(domain: Any, settings: Any, suffix: str) -> str:
     view = view_fqn(domain, settings)
     if not view or view.count(".") != 2:
         return ""
-    cat, sch, base = view.split(".", 2)
-    return f"{cat}.{sch}.{base}{_SUFFIX_DATA}"
+    return f"{view}{suffix}"
+
+
+def data_table_fqn(domain: Any, settings: Any = None) -> str:
+    """Materialized base triples Delta TABLE (``…_data``)."""
+    return _suffixed_fqn(domain, settings, _SUFFIX_DATA)
 
 
 def inferred_table_fqn(domain: Any, settings: Any = None) -> str:
     """Companion table for reasoning / app-written triples."""
-    view = view_fqn(domain, settings)
-    if not view or view.count(".") != 2:
-        return ""
-    cat, sch, base = view.split(".", 2)
-    return f"{cat}.{sch}.{base}{_SUFFIX_INFERRED}"
+    return _suffixed_fqn(domain, settings, _SUFFIX_INFERRED)
 
 
 def graph_view_fqn(domain: Any, settings: Any = None) -> str:
     """Union VIEW (``…_data`` UNION ALL ``…_inferred``) for graph read queries."""
-    view = view_fqn(domain, settings)
-    if not view or view.count(".") != 2:
-        return ""
-    cat, sch, base = view.split(".", 2)
-    return f"{cat}.{sch}.{base}{_SUFFIX_GRAPH}"
+    return _suffixed_fqn(domain, settings, _SUFFIX_GRAPH)
+
+
+def cert_base_fqn(domain: Any, settings: Any = None) -> str:
+    """Certified Graph base VIEW over the Original ``…_data`` (no copy)."""
+    return _suffixed_fqn(domain, settings, _SUFFIX_CERT_BASE)
+
+
+def cert_enriched_fqn(domain: Any, settings: Any = None) -> str:
+    """Certified Graph enrichments TABLE (inferences, rules, cohorts, communities)."""
+    return _suffixed_fqn(domain, settings, _SUFFIX_CERT_ENRICHED)
+
+
+def certified_view_fqn(domain: Any, settings: Any = None) -> str:
+    """Certified Graph union VIEW (base ∪ enrichments)."""
+    return _suffixed_fqn(domain, settings, _SUFFIX_CERTIFIED)
 
 
 def analytics_snapshot_fqn(domain: Any, settings: Any = None) -> str:

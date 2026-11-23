@@ -157,6 +157,17 @@ def build_union_view_sql(graph_fqn: str, data_fqn: str, inferred_fqn: str) -> st
     )
 
 
+def build_ensure_cert_enriched_sql(table_fqn: str) -> str:
+    """Certified Graph enrichments TABLE: triples plus where each one comes from."""
+    validate_table_name(table_fqn)
+    return (
+        f"CREATE TABLE IF NOT EXISTS {table_fqn} "
+        "(subject STRING, predicate STRING, object STRING, kind STRING, "
+        "provenance STRING, run_id STRING, created_at TIMESTAMP) USING DELTA "
+        "CLUSTER BY (predicate, subject)"
+    )
+
+
 def build_truncate_sql(table_fqn: str) -> str:
     validate_table_name(table_fqn)
     return f"TRUNCATE TABLE {table_fqn}"
@@ -228,6 +239,31 @@ def ensure_graph_view(
         inferred_fqn,
     )
     run_sql(client, sql)
+
+
+def ensure_certified_composition(
+    client: Any,
+    *,
+    data_fqn: str,
+    base_fqn: str,
+    enriched_fqn: str,
+    certified_fqn: str,
+) -> None:
+    """Create the Certified Graph composition over the Original ``…_data``.
+
+    The base is a VIEW, so the Original data is never copied; the enrichments
+    TABLE is created once and never cleared here, so its rows survive a
+    rebuild of the composition.
+    """
+    logger.info(
+        "Ensuring Certified Graph composition: %s (base=%s, enriched=%s)",
+        certified_fqn,
+        base_fqn,
+        enriched_fqn,
+    )
+    create_data_view(client, data_fqn, base_fqn)
+    run_sql(client, build_ensure_cert_enriched_sql(enriched_fqn))
+    run_sql(client, build_union_view_sql(certified_fqn, base_fqn, enriched_fqn))
 
 
 def truncate_table(client: Any, table_fqn: str) -> None:
