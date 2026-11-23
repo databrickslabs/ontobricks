@@ -892,16 +892,16 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         rule: str,
         domain_name: Optional[str] = None,
     ) -> str:
-        """Trigger an IF-THEN business rule declared on an entity's class.
+        """Preview an IF-THEN business rule declared on an entity's class.
 
         Pass ``domain_name`` when the client does not reuse an MCP session.
         Requires the Builder role on that domain. Discover the available rules with
         get_entity_context or describe_entity — only rules declared on the
-        entity's ontology class can be triggered.
+        entity's ontology class can be evaluated.
 
-        The rule is evaluated for this entity only and the inferred triples
-        are WRITTEN to the knowledge graph (idempotent: facts already present
-        are not inferred again).
+        Evaluated for this entity only, over the published Certified Graph:
+        returns the triples it would infer and writes nothing (a published
+        version is read-only). Facts already present are not inferred again.
 
         Args:
             entity_uri: Full URI of the entity (e.g. from describe_entity).

@@ -9,3 +9,7 @@ RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 GRAPH_VARIANT_ORIGINAL = "original"
 GRAPH_VARIANT_CERTIFIED = "certified"
 GRAPH_VARIANTS = (GRAPH_VARIANT_ORIGINAL, GRAPH_VARIANT_CERTIFIED)
+
+# Certified enrichment kind whose rows replace the base values of their
+# (subject, predicate) in ``…_certified`` (set-attribute business rules).
+CERT_KIND_OVERRIDE = "override"

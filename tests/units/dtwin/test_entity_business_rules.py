@@ -10,6 +10,8 @@ from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import ShaclFlatSqlBack
 from back.core.w3c.owl.OntologyGenerator import OntologyGenerator
 from back.core.w3c.owl.OntologyParser import OntologyParser
 from back.objects.digitaltwin import NodeBusinessRuleService, NodeContextService
+from back.objects.digitaltwin.TwinGraphAccess import TwinGraphAccess
+from back.objects.digitaltwin.certify import CertifiedGraphWriter
 from back.objects.ontology import Rules
 from back.objects.ontology.ClassModel import ClassModel
 
@@ -214,11 +216,15 @@ def test_resolve_rejects_undeclared_rule_and_disabled_feature():
 def _patch_store(monkeypatch, store):
     module = sys.modules["back.objects.digitaltwin.node.NodeBusinessRuleService"]
 
-    def _get_graphdb(snap, settings, *, for_write=False):
+    def _get_graphdb(snap, settings, *, for_write=False, variant=None):
         store.for_write = for_write
+        store.variant = variant
         return store
 
     monkeypatch.setattr(module, "get_graphdb", _get_graphdb)
+    monkeypatch.setattr(
+        TwinGraphAccess, "served_query_table", staticmethod(lambda *a, **k: "g_certified")
+    )
 
 
 class _FakeStore:
@@ -226,96 +232,122 @@ class _FakeStore:
         self.rows = rows
         self.queries = []
         self.inserted = []
-        self.deleted_pairs = []
-
-    def sql_table_reference(self, table_name):
-        return "g"
-
-    def execute_query(self, sql):
-        self.queries.append(sql)
-        return self.rows
 
     def insert_triples(self, table_name, triples):
         self.inserted.extend(triples)
         return len(triples)
 
-    def delete_subject_predicate(self, table_name, pairs):
-        self.deleted_pairs.extend(pairs)
-        return len(pairs)
+    def sql_table_reference(self, table_name):
+        return table_name
+
+    def execute_query(self, sql):
+        self.queries.append(sql)
+        return self.rows
 
 
-async def test_run_business_rule_scopes_inference_and_materialises(monkeypatch):
-    rows = [
-        {
-            "subject": ENTITY,
-            "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
-            "object": BASE + "VIP",
-        }
-    ]
-    store = _FakeStore(rows)
-    _patch_store(monkeypatch, store)
+class _FakeWriter:
+    """Records the Certified Graph writes of one run."""
 
-    result = await NodeContextService.run_business_rule(
-        _domain(), object(), entity_uri=ENTITY, rule_name="VipCustomer"
+    calls: list = []
+
+    def __init__(self, domain, settings):
+        pass
+
+    def add_enrichments(self, triples, *, kind, run_id=""):
+        _FakeWriter.calls.append(("add", kind, None, list(triples)))
+        return len(triples)
+
+    def replace_scope(self, triples, *, kind, provenance, run_id=""):
+        _FakeWriter.calls.append(("replace", kind, provenance, list(triples)))
+        return len(triples)
+
+
+@pytest.fixture
+def writer(monkeypatch):
+    module = sys.modules["back.objects.digitaltwin.node.NodeBusinessRuleService"]
+    _FakeWriter.calls = []
+    _FakeWriter.KIND_RULE = CertifiedGraphWriter.KIND_RULE
+    _FakeWriter.KIND_OVERRIDE = CertifiedGraphWriter.KIND_OVERRIDE
+    _FakeWriter.drop_attribute_values = CertifiedGraphWriter.drop_attribute_values
+    monkeypatch.setattr(module, "CertifiedGraphWriter", _FakeWriter)
+    return _FakeWriter
+
+
+_VIP_ROW = {
+    "subject": ENTITY,
+    "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+    "object": BASE + "VIP",
+}
+_POINTS_ROW = {"subject": ENTITY, "predicate": BASE + "loyaltypoints", "object": "100"}
+
+
+async def _run(rule="VipCustomer", **kwargs):
+    return await NodeContextService.run_business_rule(
+        _domain(), object(), entity_uri=ENTITY, rule_name=rule, **kwargs
     )
 
+
+async def test_the_rule_reads_the_served_certified_graph_scoped_to_the_entity(
+    monkeypatch, writer
+):
+    store = _FakeStore([_VIP_ROW])
+    _patch_store(monkeypatch, store)
+
+    await _run()
+
+    assert store.variant == "certified"
+    assert "g_certified" in store.queries[0]
     assert f"a1.subject = '{ENTITY}'" in store.queries[0]
-    assert store.inserted == rows
-    assert result["inferred_count"] == 1
+
+
+async def test_new_facts_are_added_to_the_certified_graph(monkeypatch, writer):
+    _patch_store(monkeypatch, _FakeStore([_VIP_ROW]))
+
+    result = await _run()
+
+    provenance = f"if_then:VipCustomer@{ENTITY}"
+    assert writer.calls == [("add", "rule", None, [{**_VIP_ROW, "provenance": provenance}])]
+    assert result["graph_target"] == "certified"
     assert result["materialized_count"] == 1
-    assert result["rule"] == "VipCustomer"
     assert result["class_name"] == "Customer"
 
 
-async def test_run_business_rule_writes_through_the_build_warehouse(monkeypatch):
-    """The Lakehouse query warehouse may be read-only; the write needs the build one."""
-    store = _FakeStore([])
-    _patch_store(monkeypatch, store)
-    await NodeContextService.run_business_rule(
-        _domain(), object(), entity_uri=ENTITY, rule_name="VipCustomer"
-    )
-    assert store.for_write is True
+async def test_a_set_attribute_overrides_the_current_value(monkeypatch, writer):
+    _patch_store(monkeypatch, _FakeStore([_POINTS_ROW]))
 
+    result = await _run("ActiveContract100Points")
 
-async def test_run_business_rule_without_new_facts_writes_nothing(monkeypatch):
-    store = _FakeStore([])
-    _patch_store(monkeypatch, store)
-    result = await NodeContextService.run_business_rule(
-        _domain(), object(), entity_uri=ENTITY, rule_name="VipCustomer"
-    )
-    assert result["inferred_count"] == 0
-    assert result["materialized_count"] == 0
-    assert result["graph_target"] == "live"
-    assert store.inserted == []
-
-
-async def test_run_business_rule_materialises_literal_set_attribute(monkeypatch):
-    """Set-attribute consequents (literal objects) must be written, not URI-filtered away."""
-    rows = [
-        {
-            "subject": ENTITY,
-            "predicate": BASE + "loyaltypoints",
-            "object": "100",
-        }
-    ]
-    store = _FakeStore(rows)
-    _patch_store(monkeypatch, store)
-
-    result = await NodeContextService.run_business_rule(
-        _domain(),
-        object(),
-        entity_uri=ENTITY,
-        rule_name="ActiveContract100Points",
-    )
-
-    assert result["inferred_count"] == 1
-    assert result["materialized_count"] == 1
-    assert store.inserted == rows
-    # Replace semantics: clear prior (s, p, *) before inserting the new literal.
-    assert store.deleted_pairs == [
-        {"subject": ENTITY, "predicate": BASE + "loyaltypoints"}
+    assert writer.calls == [
+        (
+            "replace",
+            "override",
+            f"if_then:ActiveContract100Points@{ENTITY}",
+            [_POINTS_ROW],
+        )
     ]
     assert result["triples"][0]["object"] == "100"
+
+
+async def test_without_new_facts_nothing_is_written(monkeypatch, writer):
+    _patch_store(monkeypatch, _FakeStore([]))
+
+    result = await _run()
+
+    assert result["inferred_count"] == 0
+    assert result["materialized_count"] == 0
+    assert writer.calls == []
+
+
+async def test_a_preview_returns_the_triples_and_writes_nothing(monkeypatch, writer):
+    _patch_store(monkeypatch, _FakeStore([_VIP_ROW]))
+
+    result = await _run(preview=True)
+
+    assert writer.calls == []
+    assert result["graph_target"] == "preview"
+    assert result["inferred_count"] == 1
+    assert result["materialized_count"] == 0
+    assert result["triples"] == [_VIP_ROW]
 
 
 async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
@@ -359,6 +391,9 @@ async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
             assert store is sandbox_store
             assert table == "g__sim_sim1"
             self._store = store
+
+        def _get_graph_name(self):
+            return "g__sim_sim1"
 
         def run_if_then_rules(self, rule_names=None, focus=None):
             assert focus["uri"] == ENTITY

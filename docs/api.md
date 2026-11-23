@@ -976,8 +976,10 @@ with `success: false` and nothing is executed. Table-valued UC functions run as
 #### `POST /api/v1/digitaltwin/nodes/business-rule`
 
 Run one of the IF-THEN business rules attached to the node's class (Ontology →
-Studio → Behaviour → **Inference rules (IF-THEN)**), **scoped to that entity**, and
-materialise the inferred triples into the graph.
+Studio → Behaviour → **Inference rules (IF-THEN)**), **scoped to that entity**,
+over the Certified Graph of the **PUBLISHED** version, and return the triples it
+infers. This is a **preview**: a PUBLISHED version is read-only, so nothing is
+written (`graph_target: "preview"`, `materialized_count: 0`).
 
 **Body:**
 - `entity_uri`: Instance URI of the node the rule is triggered on
@@ -987,13 +989,13 @@ materialise the inferred triples into the graph.
 Only rules declared on the resolved class (and still present and enabled in the
 domain's IF-THEN rules) can be run — the ontology is the allow-list. The rule's
 antecedent gets an extra predicate binding the class variable(s) to
-`entity_uri`, so only facts involving that entity are inferred. Re-running is
-idempotent: facts already in the graph are not inserted twice.
+`entity_uri`, so only facts involving that entity are inferred. Facts already
+in the graph are not inferred again.
 
-**Response:** `success`, `entity_uri`, `class_name`, `rule`, `inferred_count`,
-`materialized_count`, `triples` (capped at 200) and `truncated`.
+**Response:** `success`, `entity_uri`, `class_name`, `rule`, `graph_target`,
+`inferred_count`, `materialized_count`, `triples` (capped at 200) and `truncated`.
 
-> **Permissions.** This route writes to the graph: in app mode the caller needs
+> **Permissions.** In app mode the caller needs
 > the **Builder** role (or higher) on the domain; viewers get `403`. If the
 > domain sets **Business rules** to **Disabled** in its MCP policy, every call
 > is refused.
@@ -1005,6 +1007,12 @@ The Graph Explorer uses a confirm-gated internal flow instead:
 `POST /dtwin/nodes/business-rule/request` mints a short-lived token,
 `POST /dtwin/nodes/business-rule/confirm` runs the rule, and
 `POST /dtwin/nodes/business-rule/cancel` discards the token. These routes also require Builder.
+On a DRAFT version the confirmed run writes to the **Certified Graph**
+(`graph_target: "certified"`): new facts are added as `rule` enrichments and a
+set-attribute value overrides the current one (`override`, which hides the
+base value in `…_certified`), both with provenance `if_then:<rule>@<entity>`.
+An IN-REVIEW or PUBLISHED version answers `409`. With a simulation selected the
+run reads and writes its sandbox (`graph_target: "simulation"`).
 
 #### `GET /api/v1/digitaltwin/nodes/virtual-attributes`
 

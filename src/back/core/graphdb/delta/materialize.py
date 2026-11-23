@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Literal
 
 from back.core.errors import InfrastructureError, OntoBricksError
+from back.core.graphdb.constants import CERT_KIND_OVERRIDE
 from back.core.graphdb.adjacency import typed_in_select, typed_out_select
 from back.core.graphdb.entity_search import entity_search_select
 from back.core.graphdb.props import props_select
@@ -157,6 +158,22 @@ def build_union_view_sql(graph_fqn: str, data_fqn: str, inferred_fqn: str) -> st
     )
 
 
+def build_certified_view_sql(
+    certified_fqn: str, base_fqn: str, enriched_fqn: str, *, replace: bool = True
+) -> str:
+    """``…_certified``: the base, minus values shadowed by an override, plus enrichments."""
+    for fqn in (certified_fqn, base_fqn, enriched_fqn):
+        validate_table_name(fqn)
+    create = "CREATE OR REPLACE VIEW" if replace else "CREATE VIEW IF NOT EXISTS"
+    return (
+        f"{create} {certified_fqn} AS "
+        f"SELECT b.subject, b.predicate, b.object FROM {base_fqn} AS b WHERE NOT EXISTS "
+        f"(SELECT 1 FROM {enriched_fqn} AS o WHERE o.kind = '{CERT_KIND_OVERRIDE}' "
+        "AND o.subject = b.subject AND o.predicate = b.predicate) "
+        f"UNION ALL SELECT subject, predicate, object FROM {enriched_fqn}"
+    )
+
+
 def build_ensure_cert_enriched_sql(table_fqn: str) -> str:
     """Certified Graph enrichments TABLE: triples plus where each one comes from."""
     validate_table_name(table_fqn)
@@ -286,9 +303,7 @@ def ensure_certified_objects(
     run_sql(client, build_ensure_cert_enriched_sql(enriched_fqn))
     run_sql(
         client,
-        f"CREATE VIEW IF NOT EXISTS {certified_fqn} AS "
-        f"SELECT subject, predicate, object FROM {base_fqn} UNION ALL "
-        f"SELECT subject, predicate, object FROM {enriched_fqn}",
+        build_certified_view_sql(certified_fqn, base_fqn, enriched_fqn, replace=False),
     )
 
 
@@ -407,7 +422,7 @@ def ensure_certified_composition(
     )
     create_data_view(client, data_fqn, base_fqn)
     run_sql(client, build_ensure_cert_enriched_sql(enriched_fqn))
-    run_sql(client, build_union_view_sql(certified_fqn, base_fqn, enriched_fqn))
+    run_sql(client, build_certified_view_sql(certified_fqn, base_fqn, enriched_fqn))
 
 
 def materialize_certified_base(
@@ -420,7 +435,7 @@ def materialize_certified_base(
 ) -> None:
     """Copy the certified base into a TABLE and serve the union over the copy."""
     materialize_from_view(client, base_fqn, cert_data_fqn)
-    run_sql(client, build_union_view_sql(certified_fqn, cert_data_fqn, enriched_fqn))
+    run_sql(client, build_certified_view_sql(certified_fqn, cert_data_fqn, enriched_fqn))
 
 
 def create_view(client: Any, view_fqn: str, select_sql: str) -> None:

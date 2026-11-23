@@ -366,7 +366,7 @@ class NodeBusinessRuleResponse(BaseModel):
     entity_local_id: str = ""
     class_name: Optional[str] = None
     rule: Optional[str] = None
-    graph_target: str = "live"
+    graph_target: str = "preview"
     inferred_count: int = 0
     materialized_count: int = 0
     triples: List[InferredTripleOut] = []
@@ -1881,11 +1881,13 @@ async def dt_nodes_action(
     "/nodes/business-rule",
     response_model=NodeBusinessRuleResponse,
     response_model_exclude_none=True,
-    summary="Trigger an IF-THEN business rule on a node",
+    summary="Preview an IF-THEN business rule on a node",
     description="Run one of the IF-THEN business rules declared on the node's "
-    "ontology class, restricted to that node, and write the inferred triples "
-    "to the graph. Requires the Builder role on the context. Only rules "
-    "declared on the resolved class may be triggered.",
+    "ontology class, restricted to that node, over the Certified Graph of the "
+    "PUBLISHED version, and return the triples it infers. Nothing is written: "
+    "a PUBLISHED version is read-only (graph_target is 'preview'). Requires "
+    "the Builder role on the context. Only rules declared on the resolved "
+    "class may be triggered.",
 )
 async def dt_nodes_business_rule(
     payload: NodeBusinessRuleRequest,
@@ -1896,7 +1898,7 @@ async def dt_nodes_business_rule(
     domain = DigitalTwin.resolve_domain(
         payload.domain_name, session_mgr, settings,
         payload.registry_catalog, payload.registry_schema, payload.registry_volume,
-        payload.domain_version, read_only=True,
+        payload.domain_version, read_only=True, published_only=True,
     )
     assert_public_graph_write(request, domain, settings)
     result = await NodeContextService.run_business_rule(
@@ -1905,6 +1907,7 @@ async def dt_nodes_business_rule(
         entity_uri=payload.entity_uri,
         rule_name=payload.rule,
         context_policy=NodeContextService.resolve_context_policy(domain),
+        preview=True,
     )
     return NodeBusinessRuleResponse(**result)
 

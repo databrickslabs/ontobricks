@@ -1406,3 +1406,76 @@ and 390 px shows target Lakebase, served relation ContactCenter_V1, status
 PUBLISHED, the read-only notice and a disabled Build; Runs tab shows the empty
 state; no horizontal overflow; no 4xx/5xx (remaining "Failed to fetch" console
 entries come from requests cut by the script's back-to-back navigations).
+
+================================================================================
+Entity business rules write the Certified Graph; MCP / REST v1 preview only
+================================================================================
+
+Context:
+certified-graph P1 step 5 (business rules). An entity business rule now reads
+the Certified Graph and writes its result there through `CertifiedGraphWriter`
+(DRAFT versions only, D9). MCP and REST v1 serve PUBLISHED (read-only)
+versions, so `run_entity_business_rule` / `POST /api/v1/digitaltwin/nodes/
+business-rule` became a preview that returns the inferred triples and writes
+nothing. Set-attribute values replace the current value through a new
+`override` enrichment kind that `…_certified` uses to hide the base values.
+
+1. src/back/core/graphdb/constants.py — `CERT_KIND_OVERRIDE = "override"`.
+2. src/back/core/graphdb/delta/materialize.py — new `build_certified_view_sql`:
+   `…_certified` = base rows not shadowed by an `override` row of the same
+   (subject, predicate) ∪ `…_cert_enriched`; used by the composition, the
+   materialized copy and the write-time `ensure_certified_objects`.
+3. src/back/objects/digitaltwin/certify/CertifiedGraphWriter.py —
+   `KIND_OVERRIDE`; an override scope drops the backend's current
+   (subject, predicate) values before inserting (Lakebase / Neo4j copies);
+   `drop_attribute_values` (moved from NodeBusinessRuleService, also used for
+   simulation sandboxes).
+4. src/back/objects/digitaltwin/node/NodeBusinessRuleService.py — `execute`
+   reads the served Certified relation (`Reasoning` over
+   `served_query_table`), adds new facts as `rule` enrichments and replaces
+   set-attribute values as an `override` scope (provenance
+   `if_then:<rule>@<entity>`); `preview=True` writes nothing;
+   `graph_target` is `certified`, `preview` or `simulation`. Removed the
+   store-specific literal replace helpers (Move Method to the writer).
+5. src/back/objects/digitaltwin/node/NodeContextService.py — `run_business_rule`
+   forwards `preview`.
+6. src/api/routers/digitaltwin.py — `POST /nodes/business-rule` resolves the
+   PUBLISHED version (`published_only=True`) and runs a preview; response
+   default `graph_target` is `preview`; route summary/description updated.
+7. src/mcp-server/server/tools.py, src/mcp-server/server/formatting.py,
+   src/back/core/mcp_tools.py — tool docstring, catalogue description, hints
+   and response text describe a preview that writes nothing.
+8. src/front/static/query/js/query-business-rules.js — result reads
+   "written to the Certified Graph".
+9. docs/api.md, docs/mcp.md, docs/architecture.md, docs/user-guide.md —
+   preview contract, Certified Graph writes, override semantics, 409 on a
+   read-only version.
+10. tests — `TestOverrideShadowing` (composition SQL), `TestOverrideScope` and
+    `TestDropAttributeValues` (writer), rewritten execution tests in
+    `test_entity_business_rules.py`, published preview test in
+    `test_dtwin_nodes_business_rule.py`, preview copy tests in
+    `test_business_rule_tool.py`.
+
+Modified files:
+- src/back/core/graphdb/constants.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/objects/digitaltwin/certify/CertifiedGraphWriter.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/api/routers/digitaltwin.py
+- src/mcp-server/server/tools.py
+- src/mcp-server/server/formatting.py
+- src/back/core/mcp_tools.py
+- src/front/static/query/js/query-business-rules.js
+- docs/api.md
+- docs/mcp.md
+- docs/architecture.md
+- docs/user-guide.md
+- tests/units/graphdb/delta/test_certified_composition.py
+- tests/units/dtwin/test_certified_graph_writer.py
+- tests/units/dtwin/test_entity_business_rules.py
+- tests/units/api/test_dtwin_nodes_business_rule.py
+- tests/units/mcp/test_business_rule_tool.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11333 passed, 334 skipped, 8 deselected

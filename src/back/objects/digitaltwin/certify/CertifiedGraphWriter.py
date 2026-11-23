@@ -6,7 +6,9 @@ copy (Lakebase, Neo4j). A Lakehouse Certified Graph reads the composition, so
 the first write is enough. Rows are grouped in *scopes* (``kind`` +
 ``provenance``, e.g. ``cohort`` / ``cohort:<rule>``) so a re-run replaces
 exactly its own rows. Writes are refused on a read-only (IN-REVIEW or
-PUBLISHED) version.
+PUBLISHED) version. An ``override`` scope replaces the values of its
+(subject, predicate): ``…_certified`` hides the base values, and the backend
+copy drops them before the new value is inserted.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List, Sequence
 
 from back.core.errors import InfrastructureError
-from back.core.graphdb.constants import GRAPH_VARIANT_CERTIFIED
+from back.core.graphdb.constants import CERT_KIND_OVERRIDE, GRAPH_VARIANT_CERTIFIED
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.logging import get_logger
@@ -32,6 +34,7 @@ class CertifiedGraphWriter:
     KIND_RULE = "rule"
     KIND_COHORT = "cohort"
     KIND_COMMUNITY = "community"
+    KIND_OVERRIDE = CERT_KIND_OVERRIDE
 
     def __init__(self, domain: Any, settings: Any) -> None:
         self.domain = domain
@@ -78,6 +81,10 @@ class CertifiedGraphWriter:
         if rows:
             builder.insert_cert_enriched(rows, kind=kind, run_id=run_id)
             if self._graph_engine:
+                if kind == self.KIND_OVERRIDE:
+                    self.drop_attribute_values(
+                        self._backend(), SQLHelpers.effective_graph_name(self.domain), rows
+                    )
                 self._backend_insert(rows)
         if self._graph_engine:
             self._refresh_backend_cache()
@@ -188,3 +195,61 @@ class CertifiedGraphWriter:
             rebuild_graph_cache_if_enabled(
                 store, SQLHelpers.effective_graph_name(self.domain), self.domain
             )
+
+    @staticmethod
+    def drop_attribute_values(store: Any, table: str, triples: List[Dict[str, str]]) -> None:
+        """Delete the current ``(s, p, *)`` values of the literal triples in *store*.
+
+        Uses the store's pair delete when it has one; otherwise reads the
+        current rows with SQL and deletes them exactly (a store without SQL
+        keeps its values). Also used on simulation sandboxes.
+        """
+        pairs = CertifiedGraphWriter._attribute_pairs(triples)
+        if not pairs:
+            return
+        deleter = getattr(store, "delete_subject_predicate", None)
+        if callable(deleter):
+            deleter(table, pairs)
+            return
+        execute = getattr(store, "execute_query", None)
+        sql_ref = getattr(store, "sql_table_reference", None)
+        if not (callable(execute) and callable(sql_ref)):
+            return
+        current = CertifiedGraphWriter._current_values(execute, sql_ref(table), pairs)
+        if current:
+            store.delete_triples(table, current)
+
+    @staticmethod
+    def _attribute_pairs(triples: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Unique ``(subject, predicate)`` pairs of the literal-object triples."""
+        from back.core.helpers import is_uri
+
+        pairs: Dict[tuple, Dict[str, str]] = {}
+        for t in triples:
+            if not is_uri(t.get("object", "")):
+                key = (t["subject"], t["predicate"])
+                pairs.setdefault(key, {"subject": key[0], "predicate": key[1]})
+        return list(pairs.values())
+
+    @staticmethod
+    def _current_values(execute: Any, relation: str, pairs: List[Dict[str, str]]):
+        from back.core.helpers import SQL_DIALECT_POSTGRES, sql_literal
+
+        rows: List[Dict[str, str]] = []
+        for pair in pairs:
+            s = sql_literal(pair["subject"], SQL_DIALECT_POSTGRES)
+            p = sql_literal(pair["predicate"], SQL_DIALECT_POSTGRES)
+            for row in execute(
+                f"SELECT subject, predicate, object FROM {relation} "
+                f"WHERE subject = {s} AND predicate = {p}"
+            ) or []:
+                obj = row.get("object", "")
+                if obj not in (None, ""):
+                    rows.append(
+                        {
+                            "subject": str(row.get("subject", "") or ""),
+                            "predicate": str(row.get("predicate", "") or ""),
+                            "object": str(obj),
+                        }
+                    )
+        return rows

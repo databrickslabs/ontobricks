@@ -269,7 +269,7 @@ function _brRenderResult(result, esc) {
     const more = result.truncated ? `<div class="small text-muted mt-1">Showing the first ${(result.triples || []).length} triples.</div>` : '';
     return `
         <div class="alert alert-success py-2 mb-3"><i class="bi bi-check-circle me-1"></i>
-            ${inferred} triple(s) inferred, ${result.materialized_count || 0} written to the ${result.graph_target === 'simulation' ? 'simulation sandbox' : 'graph'}.</div>
+            ${inferred} triple(s) inferred, ${result.materialized_count || 0} written to the ${result.graph_target === 'simulation' ? 'simulation sandbox' : 'Certified Graph'}.</div>
         <div class="table-responsive"><table class="table table-sm table-striped table-bordered mb-0">
             <thead class="table-light"><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead>
             <tbody>${rows}</tbody>

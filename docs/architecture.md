@@ -3278,7 +3278,7 @@ traffic. Data-plane routes are fail-closed when no user identity is forwarded.
 | `get_entity_context` | `GET /api/v1/digitaltwin/nodes/context` | REST | Class resolution + optional **Spark SQL** dataset read and bridge traversal |
 | `compute_virtual_attributes` | `GET /api/v1/digitaltwin/nodes/virtual-attributes` | REST | **Unity Catalog function** call for declared virtual attributes |
 | `invoke_entity_action` | `POST /api/v1/digitaltwin/nodes/action` | REST | **Unity Catalog function** via SQL warehouse, or Databricks Job `run_now` (`job:<id>`) tracked in TaskManager |
-| `run_entity_business_rule` | `POST /api/v1/digitaltwin/nodes/business-rule` | REST | IF-THEN rule → entity-scoped **Spark SQL** inference + insert into the graph (Builder role required) |
+| `run_entity_business_rule` | `POST /api/v1/digitaltwin/nodes/business-rule` | REST | IF-THEN rule → entity-scoped inference over the published Certified Graph, returned as a **preview** (nothing written; Builder role required) |
 | `check_entity_shacl_facets` | `GET /api/v1/digitaltwin/nodes/shacl` | REST | Applicable SHACL shapes (class + ancestors + global) → one entity-scoped `UNION ALL` **Spark SQL** batch, per-shape fallback on error. Explorer UI uses `POST /dtwin/nodes/shacl/start` + task poll for a live activity log |
 | `get_status` | `GET /api/v1/digitaltwin/status` | REST | Same as `select_domain` |
 | `get_graphql_schema` | `GET /graphql/{domain}/schema` | **GraphQL** | `GraphQLSchemaBuilder` (no DB hit; SDL only) |

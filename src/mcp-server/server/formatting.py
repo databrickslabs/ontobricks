@@ -218,9 +218,9 @@ def _format_class_context_block(
                 "business_rules",
                 directive="    → when the user asks to apply or evaluate one of "
                 "these rules, call run_entity_business_rule(entity_uri, rule) — it "
-                "writes the inferred facts to the graph",
+                "returns the facts the rule infers and writes nothing",
                 neutral="    → call run_entity_business_rule(entity_uri, rule) to "
-                "apply one (writes inferred facts to the graph)",
+                "preview one (returns the inferred facts, writes nothing)",
             )
         )
 
@@ -365,11 +365,11 @@ def _node_business_rule_lines(
         _hint(
             context_policy,
             "business_rules",
-            directive="  → when asked to apply a rule, call "
-            "run_entity_business_rule(entity_uri, rule) — it writes the "
-            "inferred facts to the graph",
+            directive="  → when asked to apply or evaluate a rule, call "
+            "run_entity_business_rule(entity_uri, rule) — it returns the "
+            "facts the rule infers and writes nothing",
             neutral="  → call run_entity_business_rule(entity_uri, rule) to "
-            "apply one (writes inferred facts to the graph)",
+            "preview one (returns the inferred facts, writes nothing)",
         )
     )
     return lines
@@ -638,10 +638,13 @@ def _format_node_business_rule_response(data: dict, max_triples: int = 20) -> st
         lines.append("Completed — the rule produced no new facts for this entity.")
         return "\n".join(lines)
 
-    lines.append(
-        f"Inferred {inferred} triple{'s' if inferred != 1 else ''}, "
-        f"{written} written to the graph:"
-    )
+    plural = "s" if inferred != 1 else ""
+    if data.get("graph_target") == "preview":
+        lines.append(
+            f"Preview — the rule would infer {inferred} triple{plural} (nothing written):"
+        )
+    else:
+        lines.append(f"Inferred {inferred} triple{plural}, {written} written to the graph:")
     triples = data.get("triples") or []
     for t in triples[:max_triples]:
         lines.append(

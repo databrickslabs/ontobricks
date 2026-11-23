@@ -220,3 +220,71 @@ def test_the_backend_cache_is_rebuilt_once_per_scope_operation():
 
     assert store.insert_triples.call_count == 3
     rebuild.assert_called_once()
+
+
+class TestOverrideScope:
+    """Set-attribute values replace the backend value of their (subject, predicate)."""
+
+    _VALUE = [{"subject": "c1", "predicate": "points", "object": "100"}]
+
+    def _override(self, backend):
+        return _scope(
+            backend,
+            lambda w: w.replace_scope(
+                self._VALUE,
+                kind=CertifiedGraphWriter.KIND_OVERRIDE,
+                provenance="if_then:Points@c1",
+            ),
+        )
+
+    def test_a_graph_engine_drops_the_previous_value_before_inserting(self):
+        _count, _builder, store = self._override("lakebase")
+
+        store.delete_subject_predicate.assert_called_once_with(
+            "Dom_V2", [{"subject": "c1", "predicate": "points"}]
+        )
+        assert store.insert_triples.call_args.args == ("Dom_V2", self._VALUE)
+
+    def test_a_lakehouse_override_is_left_to_the_certified_view(self):
+        _count, builder, store = self._override("databricks")
+
+        assert builder.insert_cert_enriched.call_args.kwargs["kind"] == "override"
+        store.delete_subject_predicate.assert_not_called()
+
+    def test_other_kinds_keep_the_backend_values(self):
+        _count, _builder, store = _scope(
+            "lakebase",
+            lambda w: w.replace_scope(
+                self._VALUE, kind=CertifiedGraphWriter.KIND_RULE, provenance="r"
+            ),
+        )
+
+        store.delete_subject_predicate.assert_not_called()
+
+
+class TestDropAttributeValues:
+    def test_a_store_without_pair_delete_drops_the_exact_current_rows(self):
+        store = SimpleNamespace(
+            sql_table_reference=lambda table: "g",
+            execute_query=MagicMock(
+                return_value=[{"subject": "c1", "predicate": "points", "object": "5"}]
+            ),
+            delete_triples=MagicMock(),
+        )
+
+        CertifiedGraphWriter.drop_attribute_values(
+            store, "Dom_V2", [{"subject": "c1", "predicate": "points", "object": "100"}]
+        )
+
+        store.delete_triples.assert_called_once_with(
+            "Dom_V2", [{"subject": "c1", "predicate": "points", "object": "5"}]
+        )
+
+    def test_uri_objects_are_not_attribute_values(self):
+        store = MagicMock()
+
+        CertifiedGraphWriter.drop_attribute_values(
+            store, "Dom_V2", [{"subject": "c1", "predicate": "p", "object": "https://x/o"}]
+        )
+
+        store.delete_subject_predicate.assert_not_called()

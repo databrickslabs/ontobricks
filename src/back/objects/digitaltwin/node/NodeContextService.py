@@ -646,6 +646,7 @@ class NodeContextService:
         rule_name: str,
         context_policy: Optional[Dict[str, str]] = None,
         simulation_id: Optional[str] = None,
+        preview: bool = False,
     ) -> Dict[str, Any]:
         """Trigger a class-declared IF-THEN business rule on *entity_uri*.
 
@@ -653,8 +654,9 @@ class NodeContextService:
         every execution, independently of whether the
         ``run_entity_business_rule`` MCP tool is still exposed.
 
-        When *simulation_id* is set, inference reads and writes that
-        simulation's sandbox (the live graph is left untouched).
+        The rule reads the Certified Graph and writes its result there;
+        *preview* writes nothing. When *simulation_id* is set, inference reads
+        and writes that simulation's sandbox instead.
         """
         resolved = NodeContextService.resolve_business_rule(
             domain,
@@ -669,6 +671,7 @@ class NodeContextService:
             matched_cls=resolved["matched_cls"],
             rule_name=resolved["rule"]["name"],
             simulation_id=simulation_id,
+            preview=preview,
         )
 
     # ------------------------------------------------------------------

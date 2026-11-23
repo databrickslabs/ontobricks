@@ -52,6 +52,7 @@ def test_node_context_lists_business_rules_with_hint(fmt) -> None:
     assert "VipCustomer" in text
     assert "Customer(?c) ^ hasOrder(?c, ?o) -> VIP(?c)" in text
     assert "run_entity_business_rule(entity_uri, rule)" in text
+    assert "writes nothing" in text
 
 
 def test_class_context_block_mentions_business_rules(fmt) -> None:
@@ -60,6 +61,7 @@ def test_class_context_block_mentions_business_rules(fmt) -> None:
     )
     assert "Business rules:" in text
     assert "run_entity_business_rule" in text
+    assert "writes nothing" in text
 
 
 def test_business_rule_response_formatting(fmt) -> None:
@@ -69,8 +71,9 @@ def test_business_rule_response_formatting(fmt) -> None:
             "entity_local_id": "CUST001",
             "class_name": "Customer",
             "rule": "VipCustomer",
+            "graph_target": "preview",
             "inferred_count": 1,
-            "materialized_count": 1,
+            "materialized_count": 0,
             "triples": [
                 {
                     "subject": "https://example.com/Customer/CUST001",
@@ -80,7 +83,7 @@ def test_business_rule_response_formatting(fmt) -> None:
             ],
         }
     )
-    assert "Inferred 1 triple, 1 written to the graph" in text
+    assert "Preview — the rule would infer 1 triple (nothing written):" in text
     assert "CUST001  type  VIP" in text
 
 
@@ -112,3 +115,11 @@ async def test_disabled_element_refuses_without_backend_call(mcp_env) -> None:
     message = await tools["run_entity_business_rule"](entity_uri="u", rule="r")
     assert "Business rules are disabled" in message
     assert state["get_calls"] == []
+
+
+def test_the_tool_describes_a_preview(mcp_env) -> None:
+    tools, _state = mcp_env
+    doc = tools["run_entity_business_rule"].__doc__ or ""
+
+    assert "preview" in doc.lower()
+    assert "WRITTEN" not in doc

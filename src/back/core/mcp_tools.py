@@ -138,8 +138,8 @@ MCP_DOMAIN_TOOLS: tuple[Dict[str, Any], ...] = (
     {
         "name": "run_entity_business_rule",
         "label": "Run entity business rule",
-        "description": "Trigger an IF-THEN business rule declared on the entity's "
-        "class and write the inferred triples to the graph (Builder role).",
+        "description": "Preview an IF-THEN business rule declared on the entity's "
+        "class: return the triples it infers, without writing (Builder role).",
         "requires_graph": True,
     },
     {

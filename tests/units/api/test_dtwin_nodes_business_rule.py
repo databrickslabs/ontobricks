@@ -277,3 +277,25 @@ def test_if_then_rename_and_delete_cascade_to_class_refs(client, monkeypatch):
     resp = client.post("/ontology/if-then/delete", json={"index": 0})
     assert resp.status_code == 200
     assert classes[0]["business_rules"] == []
+
+
+async def test_public_route_previews_the_published_version(monkeypatch, domain):
+    """MCP and REST v1 only see PUBLISHED (read-only) versions: the rule writes nothing."""
+    domain.info = {"name": "Customer 360", "mcp_policy": {}}
+    dt, run = _patch_public(monkeypatch, domain, role="builder")
+    resolved = []
+    monkeypatch.setattr(
+        dt.DigitalTwin,
+        "resolve_domain",
+        classmethod(lambda cls, *a, **k: resolved.append(k) or domain),
+    )
+
+    await dt.dt_nodes_business_rule(
+        payload=dt.NodeBusinessRuleRequest(entity_uri=_ENTITY, rule="VipCustomer"),
+        request=_pub_req(),
+        session_mgr=MagicMock(),
+        settings=MagicMock(),
+    )
+
+    assert resolved[0]["published_only"] is True
+    assert run.call_args.kwargs["preview"] is True

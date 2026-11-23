@@ -262,3 +262,47 @@ class TestCertEnrichedWrites:
         assert sql.startswith("INSERT INTO c.s.v_cert_enriched")
         assert "'community', 'community', 't-9', current_timestamp()" in sql
         assert "FROM (SELECT 's' AS subject" in sql
+
+
+class TestOverrideShadowing:
+    """An ``override`` enrichment replaces the base values of its (subject, predicate)."""
+
+    _FQNS = dict(
+        data_fqn="c.s.v_data",
+        base_fqn="c.s.v_cert_base",
+        enriched_fqn="c.s.v_cert_enriched",
+        certified_fqn="c.s.v_certified",
+    )
+
+    @staticmethod
+    def _certified_view(statements):
+        return next(s for s in statements if " c.s.v_certified AS " in s)
+
+    def _assert_shadows(self, sql, base):
+        assert f"FROM {base} AS b WHERE NOT EXISTS" in sql
+        assert "o.kind = 'override'" in sql
+        assert "o.subject = b.subject AND o.predicate = b.predicate" in sql
+
+    def test_the_composition_hides_overridden_base_values(self):
+        client = MagicMock()
+        materialize.ensure_certified_composition(client, **self._FQNS)
+
+        self._assert_shadows(self._certified_view(_statements(client)), "c.s.v_cert_base")
+
+    def test_a_write_created_composition_hides_overridden_base_values(self):
+        client = MagicMock()
+        materialize.ensure_certified_objects(client, **self._FQNS)
+
+        self._assert_shadows(self._certified_view(_statements(client)), "c.s.v_cert_base")
+
+    def test_the_materialized_copy_hides_overridden_base_values(self):
+        client = MagicMock()
+        materialize.materialize_certified_base(
+            client,
+            base_fqn="c.s.v_cert_base",
+            cert_data_fqn="c.s.v_cert_data",
+            enriched_fqn="c.s.v_cert_enriched",
+            certified_fqn="c.s.v_certified",
+        )
+
+        self._assert_shadows(self._certified_view(_statements(client)), "c.s.v_cert_data")

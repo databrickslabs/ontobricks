@@ -3,7 +3,8 @@
 A business rule is an existing IF-THEN rule of the domain, referenced by name
 from ``cls["business_rules"]``. Triggering it on one entity runs the rule's
 inference restricted to that entity (the class-typed variables of the rule
-are bound to the entity URI) and writes the inferred triples to the graph.
+are bound to the entity URI) over the Certified Graph and writes the inferred
+triples there (or only returns them, as a preview).
 
 Kept out of :mod:`NodeContextService` so the declare/trigger pair reads as one
 unit; that module only adds the policy check and class matching in front.
@@ -13,14 +14,16 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from back.core.errors import InfrastructureError, ValidationError
+from back.core.errors import InfrastructureError, OntoBricksError, ValidationError
 from back.core.graphdb import get_graphdb
+from back.core.graphdb.constants import GRAPH_VARIANT_CERTIFIED
 from back.core.helpers import run_blocking
 from back.core.logging import get_logger
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 from back.objects.digitaltwin.TwinGraphAccess import TwinGraphAccess
 from back.objects.digitaltwin.models import DomainSnapshot
 from back.objects.digitaltwin.build.TwinInferredMaterialize import TwinInferredMaterialize
+from back.objects.digitaltwin.certify import CertifiedGraphWriter
 from back.objects.ontology.Rules import Rules
 
 logger = get_logger(__name__)
@@ -30,6 +33,11 @@ BUSINESS_RULES_FEATURE = "business_rules"
 
 # Cap on the triples echoed back to the caller (all of them are written).
 MAX_RETURNED_TRIPLES = 200
+
+# Where a run reads and writes (``graph_target`` of the response).
+TARGET_CERTIFIED = "certified"
+TARGET_PREVIEW = "preview"
+TARGET_SIMULATION = "simulation"
 
 
 class NodeBusinessRuleService:
@@ -90,16 +98,21 @@ class NodeBusinessRuleService:
         matched_cls: Dict[str, Any],
         rule_name: str,
         simulation_id: Optional[str] = None,
+        preview: bool = False,
     ) -> Dict[str, Any]:
-        """Run *rule_name* on *entity_uri* and materialise the inferred triples.
+        """Run *rule_name* on *entity_uri* over the Certified Graph and write the result.
 
-        When *simulation_id* is set, the rule runs against that ready sandbox
-        and inferred triples are written there, not to the live graph.
+        The new facts are added to the Certified Graph and set-attribute
+        values override the current ones (scope ``if_then:<rule>@<entity>``).
+        *preview* returns the inferred triples and writes nothing (external
+        callers only see PUBLISHED, read-only versions). *simulation_id*
+        reads and writes that ready sandbox instead.
 
         Raises:
             ValidationError: rule not declared on the class, or the rule has no
                 variable typed by the entity's class (or one of its ancestors).
-            InfrastructureError: no writable graph store, or the rule failed.
+            ConflictError: the version is read-only (no preview, no simulation).
+            InfrastructureError: no graph store, or the rule failed.
         """
         class_name, requested, focus_vars = NodeBusinessRuleService._focus_rule(
             domain, matched_cls, rule_name
@@ -107,12 +120,8 @@ class NodeBusinessRuleService:
         local_id = DigitalTwin.extract_local_id(entity_uri)
         snap = DomainSnapshot(domain)
         sid = TwinGraphAccess.sandbox_id(simulation_id)
-        store = get_graphdb(snap, settings, for_write=sid is None)
-        if store is None:
-            raise InfrastructureError("Graph store is not available for this context")
-
         svc, graph_target, after_write = NodeBusinessRuleService._reasoning_target(
-            domain, settings, snap, store, entity_uri, sid
+            domain, settings, snap, entity_uri, sid, preview
         )
         logger.info(
             "nodes/business-rule: running %s on entity=%s class=%s focus=%s target=%s",
@@ -129,8 +138,14 @@ class NodeBusinessRuleService:
         )
         if (result.stats or {}).get("errors"):
             raise InfrastructureError(f"Business rule {requested!r} failed to run")
-        triples, written = await NodeBusinessRuleService._materialize_inferred(
-            svc, requested, entity_uri, result.inferred_triples
+        triples = TwinInferredMaterialize.writable_triples(
+            [
+                {"subject": t.subject, "predicate": t.predicate, "object": t.object}
+                for t in result.inferred_triples
+            ]
+        )
+        written = await NodeBusinessRuleService._write(
+            domain, settings, svc, graph_target, requested, entity_uri, triples
         )
         if after_write is not None:
             after_write()
@@ -187,26 +202,70 @@ class NodeBusinessRuleService:
         return class_name, requested, focus_vars
 
     @staticmethod
-    async def _materialize_inferred(
-        svc: Any, requested: str, entity_uri: str, inferred_triples: Any
-    ):
-        """Write inferred triples (URI or literal objects); return ``(triples, written)``.
+    async def _write(
+        domain: Any,
+        settings: Any,
+        svc: Any,
+        graph_target: str,
+        requested: str,
+        entity_uri: str,
+        triples: List[Dict[str, str]],
+    ) -> int:
+        """Write *triples* to *graph_target*; return how many were written."""
+        if not triples or graph_target == TARGET_PREVIEW:
+            return 0
+        try:
+            if graph_target == TARGET_SIMULATION:
+                return await run_blocking(
+                    NodeBusinessRuleService._write_sandbox, svc, requested, triples
+                )
+            return await run_blocking(
+                NodeBusinessRuleService._write_certified,
+                domain,
+                settings,
+                f"if_then:{requested}@{entity_uri}",
+                triples,
+            )
+        except OntoBricksError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "nodes/business-rule: writing %s failed for %s: %s",
+                requested,
+                entity_uri,
+                exc,
+            )
+            raise InfrastructureError(
+                "Writing inferred triples to the graph failed", detail=str(exc)
+            ) from exc
 
-        Set-attribute consequents carry a literal object; those used to be
-        dropped by the URI-only filter.  Literal writes use replace semantics
-        (delete existing ``(s, p, *)`` then insert) when the store supports it.
-        """
+    @staticmethod
+    def _write_certified(
+        domain: Any, settings: Any, provenance: str, triples: List[Dict[str, str]]
+    ) -> int:
+        """Add the new facts; replace the attribute values the rule sets."""
+        from back.core.helpers import is_uri
+
+        writer = CertifiedGraphWriter(domain, settings)
+        facts = [{**t, "provenance": provenance} for t in triples if is_uri(t["object"])]
+        values = [t for t in triples if not is_uri(t["object"])]
+        written = 0
+        if facts:
+            written += writer.add_enrichments(facts, kind=CertifiedGraphWriter.KIND_RULE)
+        if values:
+            written += writer.replace_scope(
+                values, kind=CertifiedGraphWriter.KIND_OVERRIDE, provenance=provenance
+            )
+        return written
+
+    @staticmethod
+    def _write_sandbox(svc: Any, requested: str, triples: List[Dict[str, str]]) -> int:
+        """Replace the sandbox attribute values, then materialise the triples there."""
         from back.core.reasoning import InferredTriple, ReasoningResult
 
-        triples = TwinInferredMaterialize.writable_triples(
-            [
-                {"subject": t.subject, "predicate": t.predicate, "object": t.object}
-                for t in inferred_triples
-            ]
+        CertifiedGraphWriter.drop_attribute_values(
+            svc._store, svc._get_graph_name(), triples
         )
-        if not triples:
-            return triples, 0
-        NodeBusinessRuleService._replace_literal_attributes(svc, triples)
         inferred = [
             InferredTriple(
                 subject=t["subject"],
@@ -217,129 +276,34 @@ class NodeBusinessRuleService:
             )
             for t in triples
         ]
-        try:
-            written = await run_blocking(
-                svc.materialize_inferred, ReasoningResult(inferred_triples=inferred)
-            )
-        except Exception as exc:
-            logger.warning(
-                "nodes/business-rule: materialising %s failed for %s: %s",
-                requested,
-                entity_uri,
-                exc,
-            )
-            raise InfrastructureError(
-                "Writing inferred triples to the graph failed", detail=str(exc)
-            ) from exc
-        return triples, written
-
-    @staticmethod
-    def _literal_attribute_pairs(
-        triples: List[Dict[str, Any]],
-    ) -> List[Dict[str, str]]:
-        """Unique ``(subject, predicate)`` pairs for literal-object triples."""
-        from back.core.helpers import is_uri
-
-        pairs: List[Dict[str, str]] = []
-        seen = set()
-        for t in triples:
-            if is_uri(t.get("object", "")):
-                continue
-            key = (t["subject"], t["predicate"])
-            if key in seen:
-                continue
-            seen.add(key)
-            pairs.append({"subject": t["subject"], "predicate": t["predicate"]})
-        return pairs
-
-    @staticmethod
-    def _graph_table_for(svc: Any) -> str:
-        getter = getattr(svc, "_get_graph_name", None)
-        if callable(getter):
-            name = getter() or ""
-            if name:
-                return name
-        return getattr(svc, "table", "") or getattr(svc, "_table", "") or ""
-
-    @staticmethod
-    def _replace_literal_attributes(svc: Any, triples: List[Dict[str, Any]]) -> None:
-        """Delete prior ``(s, p, *)`` rows for set-attribute (literal object) triples."""
-        store = getattr(svc, "_store", None)
-        if store is None:
-            return
-        pairs = NodeBusinessRuleService._literal_attribute_pairs(triples)
-        if not pairs:
-            return
-        table = NodeBusinessRuleService._graph_table_for(svc)
-        if not table:
-            logger.warning(
-                "nodes/business-rule: cannot replace literal attributes — no graph table"
-            )
-            return
-        deleter = getattr(store, "delete_subject_predicate", None)
-        if callable(deleter):
-            deleter(table, pairs)
-            return
-        # FlatStore (live): exact-delete current objects, then insert replaces them.
-        NodeBusinessRuleService._replace_via_exact_delete(store, table, pairs)
-
-    @staticmethod
-    def _replace_via_exact_delete(store: Any, table: str, pairs: List[Dict[str, str]]) -> None:
-        delete_triples = getattr(store, "delete_triples", None)
-        execute = getattr(store, "execute_query", None)
-        sql_ref = getattr(store, "sql_table_reference", None)
-        if not all(callable(fn) for fn in (delete_triples, execute, sql_ref)):
-            return
-        from back.core.helpers import SQL_DIALECT_POSTGRES, sql_literal
-
-        relation = sql_ref(table)
-        to_delete: List[Dict[str, str]] = []
-        for pair in pairs:
-            s = sql_literal(pair["subject"], SQL_DIALECT_POSTGRES)
-            p = sql_literal(pair["predicate"], SQL_DIALECT_POSTGRES)
-            rows = (
-                execute(
-                    f"SELECT subject, predicate, object FROM {relation} "
-                    f"WHERE subject = {s} AND predicate = {p}"
-                )
-                or []
-            )
-            for row in rows:
-                obj = row.get("object", "")
-                if obj is None or obj == "":
-                    continue
-                to_delete.append(
-                    {
-                        "subject": str(row.get("subject", "") or ""),
-                        "predicate": str(row.get("predicate", "") or ""),
-                        "object": str(obj),
-                    }
-                )
-        if to_delete:
-            delete_triples(table, to_delete)
+        return svc.materialize_inferred(ReasoningResult(inferred_triples=inferred))
 
     @staticmethod
     def _reasoning_target(
         domain: Any,
         settings: Any,
         snap: Any,
-        store: Any,
         entity_uri: str,
         simulation_id: Optional[str],
+        preview: bool,
     ):
-        """Return ``(service, graph_target, after_write)`` for live or sandbox IF-THEN."""
-        from back.core.reasoning import ReasoningService
+        """Return ``(service, graph_target, after_write)`` for the run."""
+        from back.objects.intelligence import Reasoning
 
         if not simulation_id:
-            return ReasoningService(snap, store), "live", None
+            store = get_graphdb(snap, settings, variant=GRAPH_VARIANT_CERTIFIED)
+            if store is None:
+                raise InfrastructureError("Graph store is not available for this context")
+            table = TwinGraphAccess.served_query_table(domain, settings, store)
+            target = TARGET_PREVIEW if preview else TARGET_CERTIFIED
+            return Reasoning(snap, store, table), target, None
 
         from back.core.helpers import effective_graph_name, effective_graph_query_table
-        from back.objects.intelligence import (
-            Simulation,
-            Reasoning,
-            Sandbox,
-        )
+        from back.objects.intelligence import Sandbox, Simulation
 
+        store = get_graphdb(snap, settings)
+        if store is None:
+            raise InfrastructureError("Graph store is not available for this context")
         sim = Simulation(domain, settings)
         sim.sandbox_relation(simulation_id)
         sandbox = Sandbox(store, effective_graph_name(domain), simulation_id)
@@ -357,4 +321,4 @@ class NodeBusinessRuleService:
             )
             ensure(live_union)
 
-        return svc, "simulation", _refresh_views
+        return svc, TARGET_SIMULATION, _refresh_views
