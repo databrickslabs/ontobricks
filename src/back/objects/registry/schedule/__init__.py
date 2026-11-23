@@ -66,12 +66,12 @@ class TaskTypeSpec:
 TASK_TYPES: Dict[str, TaskTypeSpec] = {
     TASK_BUILD: TaskTypeSpec(
         key=TASK_BUILD,
-        label="Knowledge Graph Build",
+        label="Original Graph Build",
         task_tag="scheduled_build",
         steps=[
             {"name": "prepare", "description": "Loading context and generating SQL"},
             {"name": "view", "description": "Creating Triple-Store VIEW in Unity Catalog"},
-            {"name": "graph", "description": "Populating the graph store"},
+            {"name": "graph", "description": "Exposing the Original Graph"},
         ],
         normalize_config=build.normalize_config,
         run=build.run,

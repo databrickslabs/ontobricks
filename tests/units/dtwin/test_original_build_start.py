@@ -76,3 +76,16 @@ def test_the_task_runs_the_delta_original_build():
     assert kwargs["view_table"] == "c.s.v"
     assert kwargs["data_table"] == "c.s.v_data"
     assert kwargs["build_kind"] == "session"
+
+
+def test_the_external_build_starts_the_original_build(api_client):
+    domain = MagicMock()
+    with (
+        patch("api.routers.digitaltwin.DigitalTwin.resolve_domain", return_value=domain),
+        patch.object(TwinLakehouseBuild, "start", return_value="t-api") as start,
+    ):
+        response = api_client.post("/api/v1/digitaltwin/build?domain_name=demo", json={})
+
+    assert response.status_code == 200
+    assert response.json()["task_id"] == "t-api"
+    assert start.call_args.kwargs == {"build_kind": "api"}

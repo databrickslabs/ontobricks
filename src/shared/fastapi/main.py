@@ -257,12 +257,14 @@ _STATUS_GATE_EDIT_PREFIXES = (
 # Specific mutating endpoints outside the editing prefixes (domain
 # metadata/layout saves, document uploads) that persist into the loaded
 # version's *design*.
-# NOTE: KG data-refresh ops (/dtwin/sync/start, /dtwin/sync/load,
-# /dtwin/reasoning/materialize) are intentionally NOT listed here — they
-# re-materialise triples from source data using the frozen design but do
-# not mutate the design itself. They must remain usable on PUBLISHED /
-# IN-REVIEW versions so the graph can be refreshed without reverting to
-# DRAFT. They remain builder-gated via their endpoint role decorators.
+# NOTE: the Original Graph build (/dtwin/sync/start) and graph reads
+# (/dtwin/sync/load, …) are intentionally NOT listed here: the Original Graph
+# is a set of views over the source data and the frozen design, never served
+# externally, so refreshing it on a PUBLISHED / IN-REVIEW version changes
+# nothing that is served. Writes to the Certified Graph (certified build,
+# reasoning / cohort / community materialisation) are refused on non-DRAFT
+# versions by their own lifecycle check (CertifiedBuild.ensure_editable), so a
+# served graph never changes. Builder-gated via their endpoint role decorators.
 _STATUS_GATE_EDIT_PATHS = (
     "/domain/save",
     "/domain/info",

@@ -65,7 +65,6 @@
     "back/core/w3c/owl/OntologyParser.py::OntologyParser": 1091,
     "back/core/w3c/shacl/SHACLService.py::SHACLService": 1663,
     "back/core/w3c/sparql/SparqlTranslator.py::SparqlTranslator": 2389,
-    "back/objects/digitaltwin/build/_build_pipeline.py::_BuildPipeline": 919,
     "back/objects/domain/Domain.py::Domain": 2249,
     "back/objects/domain/settings/SettingsService.py::SettingsService": 1382,
     "back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py::GraphEngineLakebaseSettings": 1107,

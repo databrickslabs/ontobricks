@@ -21,7 +21,7 @@ def _progress_messages(tm):
 
 
 # ---------------------------------------------------------------------------
-# complete_dq_task / run_build_task
+# complete_dq_task
 # ---------------------------------------------------------------------------
 
 
@@ -49,24 +49,6 @@ class TestCompleteDqTask:
         assert kwargs["message"] == (
             "Data quality checks complete: 2 passed, 1 failed, 2 warnings"
         )
-
-
-class TestRunBuildTask:
-    def test_delegates_every_input_to_the_build_pipeline(self):
-        with patch(
-            "back.objects.digitaltwin.build._build_pipeline._BuildPipeline"
-        ) as pipeline:
-            TwinBackgroundTasks.run_build_task(
-                "tm", "t1", "dom", "settings", "snap", "h", "tok", "wh",
-                "c.s.v", "g", "r2rml", "http://b/", {"m": 1}, {"o": 1}, {"d": 1},
-                build_kind="api",
-            )
-        pipeline.assert_called_once_with(
-            "tm", "t1", "dom", "settings", "snap", "h", "tok", "wh",
-            "c.s.v", "g", "r2rml", "http://b/", {"m": 1}, {"o": 1}, {"d": 1},
-            build_kind="api",
-        )
-        pipeline.return_value.run.assert_called_once_with()
 
 
 # ---------------------------------------------------------------------------

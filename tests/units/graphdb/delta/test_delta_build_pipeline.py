@@ -18,7 +18,6 @@ def test_original_build_steps() -> None:
         "prepare",
         "view",
         "data",
-        "cleanup",
         "adjacency",
     ]
 
@@ -132,11 +131,12 @@ def test_run_builds_adjacency_on_the_data_view() -> None:
 
 
 @pytest.mark.unit
-def test_run_drops_the_legacy_inferred_objects() -> None:
+def test_the_data_view_step_drops_the_legacy_inferred_objects() -> None:
     pipe = _minimal_run_pipeline()
+    del pipe._build_data_view
 
-    with patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore"):
-        pipe.run()
+    with patch("back.core.graphdb.delta.materialize.count_triples", return_value=5):
+        assert pipe._build_data_view() is True
 
     statements = _statements(pipe.source_client)
     assert f"DROP VIEW IF EXISTS {pipe.graph_view}" in statements
@@ -186,13 +186,13 @@ def test_data_view_is_built_after_counting_the_gateway_view() -> None:
             side_effect=lambda *_a: order.append("count") or 7,
         ),
         patch(
-            "back.core.graphdb.delta.materialize.apply_data_relation",
-            side_effect=lambda *_a, mode: order.append(("data", mode)),
+            "back.core.graphdb.delta.materialize.apply_original_graph",
+            side_effect=lambda *_a, **kw: order.append(("data", kw["data_fqn"])),
         ),
     ):
         assert pipe._build_data_view() is True
 
-    assert order == ["count", ("data", "view")]
+    assert order == ["count", ("data", pipe.data_table)]
     assert pipe.triple_count == 7
 
 
@@ -203,7 +203,7 @@ def test_an_empty_mapping_stops_before_the_data_view() -> None:
     pipe._finish_without_triples = MagicMock()
     with (
         patch("back.core.graphdb.delta.materialize.count_triples", return_value=0),
-        patch("back.core.graphdb.delta.materialize.apply_data_relation") as apply,
+        patch("back.core.graphdb.delta.materialize.apply_original_graph") as apply,
     ):
         assert pipe._build_data_view() is False
 
@@ -244,7 +244,6 @@ def test_run_sets_terminal_step_statuses_with_real_task_manager() -> None:
             "prepare": "completed",
             "view": "completed",
             "data": "completed",
-            "cleanup": "completed",
             "adjacency": "completed",
         }
     finally:

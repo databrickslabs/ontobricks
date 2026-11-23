@@ -233,6 +233,28 @@ class Builder(GraphBuilder):
 
         materialize.create_view(self._get_client(), view_fqn, select_sql)
 
+    def apply_original_graph(self, view_fqn: str) -> None:
+        """Expose the domain's ``…_data`` VIEW over *view_fqn*; drop legacy objects."""
+        from back.core.graphdb.delta import materialize
+
+        materialize.apply_original_graph(
+            self._get_client(),
+            view_fqn=view_fqn,
+            data_fqn=self.data_table_fqn(),
+            graph_view_fqn=self.graph_view_fqn(),
+            inferred_fqn=self.inferred_table_fqn(),
+        )
+
+    def rebuild_original_companions(self) -> None:
+        """Rebuild the adjacency / search companions of the Original ``…_data``."""
+        from back.core.graphdb.delta.MaterializedStore import MaterializedStore
+        from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
+
+        store = MaterializedStore(
+            self._get_client(), domain=self._domain, settings=self._settings
+        )
+        rebuild_graph_cache_if_enabled(store, self.data_table_fqn(), self._domain)
+
     def drop_relation(self, fqn: str, *, kind: str = "table") -> None:
         from back.core.graphdb.delta import materialize
 

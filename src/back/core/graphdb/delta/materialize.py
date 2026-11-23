@@ -344,6 +344,26 @@ def apply_data_relation(
     materialize_from_view(client, view_fqn, data_fqn)
 
 
+def apply_original_graph(
+    client: Any,
+    *,
+    view_fqn: str,
+    data_fqn: str,
+    graph_view_fqn: str = "",
+    inferred_fqn: str = "",
+) -> None:
+    """Expose ``…_data`` as a VIEW over the gateway and drop the legacy objects.
+
+    The Original Graph copies nothing; enrichments live in the Certified
+    Graph, so the old ``…_graph`` union view and ``…_inferred`` table go.
+    """
+    apply_data_relation(client, view_fqn, data_fqn, mode="view")
+    if graph_view_fqn:
+        drop_relation(client, graph_view_fqn, kind="view")
+    if inferred_fqn:
+        drop_relation(client, inferred_fqn, kind="table")
+
+
 def ensure_inferred_table(client: Any, table_fqn: str) -> None:
     """Create the writable companion TABLE if it does not exist yet."""
     sql = build_ensure_inferred_sql(table_fqn)

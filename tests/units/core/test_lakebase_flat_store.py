@@ -813,21 +813,6 @@ def test_create_triple_table_migrates_legacy_before_indexes():
     assert any("CREATE INDEX IF NOT EXISTS" in s and "object_hash" in s for s in executed)
 
 
-def test_scheduled_view_sql_wraps_object_hash_for_managed_synced():
-    from back.objects.registry.schedule.build import _view_sql_for_graph_store
-
-    inner = "SELECT subject, predicate, object FROM t"
-    managed = MagicMock()
-    managed.is_synced = True
-    wrapped = _view_sql_for_graph_store(inner, managed)
-    assert "object_hash" in wrapped
-    assert inner in wrapped
-
-    app_managed = MagicMock()
-    app_managed.is_synced = False
-    assert _view_sql_for_graph_store(inner, app_managed) == inner
-    assert _view_sql_for_graph_store(inner, None) == inner
-
 
 def test_find_subjects_by_patterns_empty(auth):
     store = FlatStore(auth, schema="ontobricks_graph")

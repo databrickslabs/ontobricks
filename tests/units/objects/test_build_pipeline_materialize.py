@@ -1,13 +1,8 @@
-"""Tests that every engine's build produces the mapped-triples relation.
+"""The Original Graph build exposes the mapped triples as the ``…_data`` VIEW.
 
-``_BuildPipeline._materialize_data_table`` runs unconditionally in ``run()``
-between ``_post_create_view_progress`` and ``_apply_full_rebuild``.  Analytics
-reads the ``…_data`` relation and nothing else, so a build that skips this step
-would leave a domain that looks successful and cannot be analysed.
-
-The *shape* of that relation is a Lakehouse-only choice: a materialized Delta
-table by default, or a pass-through view when the domain opted out of copying.
-Lakebase and Neo4j always get the table.
+Analytics reads ``…_data`` and nothing else, so a build that skips it would
+leave a domain that looks successful and cannot be analysed. The Original
+Graph is virtual for every backend: nothing is copied.
 """
 
 from __future__ import annotations
@@ -20,7 +15,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from databricks.sql.exc import RequestError
 
-from back.objects.digitaltwin.build._build_pipeline import _BuildPipeline
 
 _VIEW = "cat.sch.triplestore_dom_V3"
 _DATA = "cat.sch.triplestore_dom_V3_data"
@@ -92,198 +86,6 @@ class _RecordingClient:
 def _reads(sql: str, relation: str) -> bool:
     """True when *sql* selects from *relation* itself, not a longer name."""
     return re.search(rf"\bFROM\s+{re.escape(relation)}(?![\w.])", sql) is not None
-
-
-def _bare_pipeline(
-    tm=None,
-    *,
-    view_table: str = "cat.sch.triplestore_dom_V3",
-    info: dict | None = None,
-):
-    """Return a ``_BuildPipeline`` with only the attributes needed by ``run()``.
-
-    All heavy I/O phases are replaced by ``MagicMock`` so the fixture
-    exercises only the ``_materialize_data_table`` step that sits between
-    ``_post_create_view_progress`` and ``_apply_full_rebuild``.
-
-    *info* overrides the domain's ``info`` dict, which is where the graph
-    backend and the Lakehouse materialization mode are read from.
-    """
-    pipe = object.__new__(_BuildPipeline)
-    pipe.tm = tm if tm is not None else _StubTM()
-    pipe.task_id = "t-test"
-    # Domain attributes must satisfy _table_naming.data_table_fqn, which
-    # calls SQLHelpers.effective_view_table(domain, settings) internally.
-    pipe.domain = SimpleNamespace(
-        info={"name": "dom", **(info or {})},
-        current_version=3,
-        delta={"catalog": "cat", "schema": "sch"},
-        uc_domain_folder="dom",
-    )
-    pipe.settings = SimpleNamespace(databricks_triplestore_table="")
-    pipe.domain_snap = MagicMock()
-    pipe.domain_name = "dom"
-    pipe.view_table = view_table
-    pipe.source_relation = view_table
-    pipe.delta_cfg = {"catalog": "cat", "schema": "sch"}
-    pipe.graph_name = "G_V3"
-    pipe.warehouse_id = "wh-1"
-    pipe.source_client = MagicMock()
-    pipe.store = MagicMock()
-    pipe.parts = view_table.split(".")
-    pipe.phase_times = {}
-    pipe.start_time = time.time()
-    pipe.triple_count = 0
-    pipe.entity_mappings = []
-    pipe.relationship_mappings = []
-    pipe.spark_sql = ""
-    pipe.build_kind = "session"
-    pipe.is_api = False
-    pipe._build_recorded = False
-    pipe._lakebase_engine_config = {}
-    pipe._graph_engine = "lakebase"
-    pipe._is_lakebase_synced = False
-
-    # Replace all phases except _materialize_data_table with no-ops so the
-    # test controls exactly what reaches the materialise step.
-    pipe._log_start = MagicMock()
-    pipe._prepare_translation = MagicMock(return_value=True)
-    pipe._resolve_lakebase_mode = MagicMock()
-    pipe._open_store = MagicMock(return_value=True)
-    pipe._sync_flags_from_store = MagicMock()
-    pipe._create_view = MagicMock(return_value=True)
-    pipe._post_create_view_progress = MagicMock()
-    pipe._announce_apply_step = MagicMock()
-    pipe._apply_full_rebuild = MagicMock(return_value=True)
-    pipe._populate_session_cache = MagicMock()
-    pipe._complete_task = MagicMock()
-    pipe._record_build_run = MagicMock()
-    pipe._is_cancelled = MagicMock(return_value=False)
-    pipe._log_phase = MagicMock()
-    return pipe
-
-
-@pytest.fixture
-def lakebase_pipeline():
-    """Shared pipeline simulating a Lakebase engine build."""
-    pipe = _bare_pipeline()
-    pipe._graph_engine = "lakebase"
-    return pipe
-
-
-@pytest.fixture
-def delta_pipeline():
-    """Shared pipeline simulating a Lakehouse / Delta engine build."""
-    pipe = _bare_pipeline(info={"graph_backend": "databricks"})
-    pipe._graph_engine = "delta"
-    return pipe
-
-
-@pytest.fixture
-def delta_view_only_pipeline():
-    """Lakehouse build for a domain that opted out of copying the triples."""
-    pipe = _bare_pipeline(
-        info={
-            "graph_backend": "databricks",
-            "lakehouse_materialization": "view",
-        }
-    )
-    pipe._graph_engine = "delta"
-    return pipe
-
-
-def test_every_engine_materialises_the_mapped_snapshot(lakebase_pipeline):
-    """Analytics depends on …_data, so Lakebase builds must produce it too."""
-    calls = []
-    with patch(
-        "back.core.graphdb.delta.materialize.materialize_from_view",
-        side_effect=lambda client, view, table: calls.append((view, table)),
-    ):
-        lakebase_pipeline.run()
-
-    assert calls == [(
-        "cat.sch.triplestore_dom_V3",
-        "cat.sch.triplestore_dom_V3_data",
-    )]
-
-
-def test_a_failed_materialisation_fails_the_build(lakebase_pipeline):
-    """A domain that cannot be analysed must not report a green build."""
-    with patch(
-        "back.core.graphdb.delta.materialize.materialize_from_view",
-        side_effect=RuntimeError("no permission on cat.sch"),
-    ):
-        lakebase_pipeline.run()
-
-    assert lakebase_pipeline.tm.failed is True
-    assert "no permission" in lakebase_pipeline.tm.failure_message
-
-
-def test_a_failed_triple_count_fails_the_build(lakebase_pipeline):
-    """A lost connection while counting is an error, not an empty mapping.
-
-    The count used to swallow the error, return 0 and finish the build with
-    "no triples generated (check your mappings)".
-    """
-    pipe = lakebase_pipeline
-    del pipe._apply_full_rebuild  # run the real phase that counts the VIEW
-    pipe._uses_synced_pipeline = MagicMock(return_value=False)
-    pipe.source_client = _RecordingClient(fail_on="COUNT(*)")
-
-    with patch("back.core.graphdb.delta.materialize.materialize_from_view"):
-        pipe.run()
-
-    assert pipe.tm.failed is True
-    assert "Error during request to server" in pipe.tm.failure_message
-
-
-def test_the_graph_engine_pipeline_materialises_once(delta_pipeline):
-    """The Lakehouse pipeline must call materialize_from_view exactly once."""
-    calls = []
-    with patch(
-        "back.core.graphdb.delta.materialize.materialize_from_view",
-        side_effect=lambda client, view, table: calls.append(table),
-    ):
-        delta_pipeline.run()
-
-    assert len(calls) == 1
-
-
-def _relation_modes(pipeline):
-    """Run *pipeline* and return the mode of every ..._data relation it built."""
-    modes = []
-    with patch(
-        "back.core.graphdb.delta.materialize.apply_data_relation",
-        side_effect=lambda client, view, table, *, mode: modes.append((table, mode)),
-    ):
-        pipeline.run()
-    return modes
-
-
-def test_view_only_lakehouse_copies_nothing(delta_view_only_pipeline):
-    """The whole point of the mode: ..._data is a view, not a copy."""
-    assert _relation_modes(delta_view_only_pipeline) == [
-        ("cat.sch.triplestore_dom_V3_data", "view")
-    ]
-
-
-def test_lakehouse_materialises_by_default(delta_pipeline):
-    assert _relation_modes(delta_pipeline) == [
-        ("cat.sch.triplestore_dom_V3_data", "table")
-    ]
-
-
-def test_lakebase_ignores_a_view_only_setting():
-    """A Lakebase graph is unreadable by the analytics job, so the snapshot stands.
-
-    The setting can linger on a domain that used to run on Lakehouse, and
-    honouring it here would silently break analytics for that domain.
-    """
-    pipe = _bare_pipeline(
-        info={"graph_backend": "lakebase", "lakehouse_materialization": "view"}
-    )
-    pipe._graph_engine = "lakebase"
-    assert _relation_modes(pipe) == [("cat.sch.triplestore_dom_V3_data", "table")]
 
 
 def test_the_original_build_copies_nothing():

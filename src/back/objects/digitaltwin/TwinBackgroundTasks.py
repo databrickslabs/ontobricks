@@ -61,56 +61,6 @@ class TwinBackgroundTasks:
         )
 
     @staticmethod
-    def run_build_task(
-        tm,
-        task_id: str,
-        domain,
-        settings,
-        domain_snap: DomainSnapshot,
-        host: str,
-        token: str,
-        warehouse_id: str,
-        view_table: str,
-        graph_name: str,
-        r2rml_content: str,
-        base_uri: str,
-        mapping_config,
-        ontology_config,
-        delta_cfg: dict,
-        *,
-        build_kind: str = "session",
-    ) -> None:
-        """Execute Knowledge Graph build/sync in a worker thread.
-
-        ``build_kind``:
-          * ``"session"`` — UI/internal build (diagnostics, progress callbacks,
-            session cache, volume archive, phase timings).
-          * ``"api"`` — external REST build (matches legacy ``digitaltwin.dt_build``).
-
-        Implementation lives in :class:`_BuildPipeline`.
-        """
-        from back.objects.digitaltwin.build._build_pipeline import _BuildPipeline
-
-        _BuildPipeline(
-            tm,
-            task_id,
-            domain,
-            settings,
-            domain_snap,
-            host,
-            token,
-            warehouse_id,
-            view_table,
-            graph_name,
-            r2rml_content,
-            base_uri,
-            mapping_config,
-            ontology_config,
-            delta_cfg,
-            build_kind=build_kind,
-        ).run()
-
-    @staticmethod
     def run_adjacency_refresh_task(
         tm,
         task_id: str,

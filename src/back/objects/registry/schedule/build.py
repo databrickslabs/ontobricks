@@ -1,10 +1,10 @@
-"""Scheduled Knowledge Graph build.
+"""Scheduled Original Graph build.
 
-Regenerates the Triple-Store VIEW from the domain's R2RML mappings and
-repopulates the graph store. Scheduled builds are always full rebuilds:
-the persisted ``drop_existing`` option is kept for backward
-compatibility with older schedule configs but no longer changes
-behaviour.
+Regenerates the R2RML gateway VIEW, exposes the Original Graph ``…_data``
+VIEW and refreshes its Delta companions, for every backend. Nothing is loaded
+into Lakebase / Neo4j: the certified build does that. The persisted
+``drop_existing`` option is kept for backward compatibility with older
+schedule configs but no longer changes behaviour.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from back.core.errors import InfrastructureError, ValidationError
 from back.core.logging import get_logger
@@ -78,175 +78,22 @@ def _generate_sql_from_r2rml(domain, domain_name: str):
     return res["sql"], view_table, graph_name, base_uri, ent, rels
 
 
-def _stream_into_store(
-    store, src, graph_name: str, select_sql: str, batch: int = 5000
-) -> int:
-    """Stream warehouse rows into ``store.bulk_insert_iter`` (or list fallback)."""
-    rows = src.iter_rows(select_sql, batch_size=batch)
-    if hasattr(store, "bulk_insert_iter"):
-        return store.bulk_insert_iter(graph_name, rows, batch_size=batch)
-    return store.insert_triples(graph_name, list(rows), batch_size=min(batch, 500))
+def _build_original(src, view_table: str, domain: Any, settings: Any, domain_name: str) -> int:
+    """Expose ``…_data`` over *view_table* and refresh its companions; return the count.
 
-
-def _is_managed_synced(store) -> bool:
-    """Lakebase store in managed_synced mode -- bulk goes via Lakeflow."""
-    return bool(getattr(store, "is_synced", False))
-
-
-def _view_sql_for_graph_store(sql_text: str, store) -> str:
-    """Return VIEW DDL, emitting ``object_hash`` when Lakeflow sync is active."""
-    if store and _is_managed_synced(store):
-        from back.core.graphdb.GraphDBFactory import GraphDBFactory
-
-        builder = GraphDBFactory.get_builder(None, engine="lakebase")
-        return builder.wrap_view_sql_for_lakeflow(sql_text)
-    return sql_text
-
-
-def _apply_synced_pipeline(
-    store,
-    src,
-    delta_cfg: Dict[str, Any],
-    graph_name: str,
-    view_table: str,
-    *,
-    full: bool,
-    domain_name: str,
-    domain: Any = None,
-    settings: Any = None,
-) -> None:
-    """Trigger the Lakeflow synced-table refresh for *graph_name*.
-
-    Mirrors :meth:`SyncedGraphLoad.run` so scheduled
-    builds also keep bulk data movement on the data plane.
+    The count runs first, so an empty mapping leaves ``…_data`` untouched;
+    a count that cannot run raises :class:`InfrastructureError`.
     """
     from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-    builder = GraphDBFactory.get_builder(domain, settings, engine="lakebase")
-    mgr = store.synced_manager()
-    if domain is not None and settings is not None:
-        fallback_cat = builder.resolve_sync_uc_fallback_catalog(delta_cfg)
-    else:
-        fallback_cat = (delta_cfg or {}).get("catalog", "")
-    synced_uc = store.synced_uc_name(graph_name, fallback_catalog=fallback_cat)
+    builder = GraphDBFactory.get_builder(domain, settings, engine="delta", client=src)
+    triple_count = builder.count_triples(view_table)
     logger.info(
-        "Scheduled build [%s]: managed-sync UC target %s "
-        "(sync_uc_catalog=%r; fallback_catalog=%r; graph_schema=%s)",
-        domain_name,
-        synced_uc,
-        (store.sync_uc_catalog or "").strip() or None,
-        fallback_cat or None,
-        store.graph_schema,
+        "Scheduled build [%s]: %d triples reported by VIEW", domain_name, triple_count
     )
-    builder.ensure_uc_schema_for_synced(
-        src,
-        synced_uc,
-        task_log_prefix=f"Scheduled build [{domain_name}]",
-    )
-    mgr.ensure(
-        synced_uc,
-        source_table_full_name=view_table,
-        primary_key_columns=builder.lakeflow_primary_key(),
-        sync_mode=store.sync_table_mode,
-    )
-    store.ensure_synced_companion(graph_name)
-    state = mgr.trigger_and_wait(synced_uc, timeout_s=store.sync_timeout_s)
-    logger.info(
-        "Scheduled build [%s]: synced table %s state=%s",
-        domain_name,
-        synced_uc,
-        state,
-    )
-    store.ensure_synced_union_view(graph_name)
-    if full:
-        try:
-            store.truncate_companion(graph_name)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "Scheduled build [%s]: companion truncate failed (non-fatal): %s",
-                domain_name,
-                exc,
-            )
-
-
-def _count_view_triples(
-    src, view_table: str, domain: Any = None, settings: Any = None
-) -> int:
-    """Return the server-side triple count for *view_table*.
-
-    Raises :class:`InfrastructureError` when the count cannot run, so a
-    scheduled rebuild does not look like an empty mapping.
-    """
-    from back.core.graphdb.GraphDBFactory import GraphDBFactory
-
-    builder = GraphDBFactory.get_builder(
-        domain, settings, engine="delta", client=src
-    )
-    return builder.count_triples(view_table)
-
-
-def _write_graph_triples(
-    store,
-    src,
-    graph_name: str,
-    view_table: str,
-    domain_name: str,
-    delta_cfg: Optional[Dict[str, Any]] = None,
-    domain: Any = None,
-    settings: Any = None,
-) -> int:
-    """Write triples to the graph store. Returns the triple count.
-
-    When the store is in Lakebase ``managed_synced`` mode the entire branch is
-    replaced by a Lakeflow snapshot refresh — triples never enter this process.
-    Otherwise a full drop-and-rebuild is performed.
-    """
-    if _is_managed_synced(store):
-        _apply_synced_pipeline(
-            store,
-            src,
-            delta_cfg or {},
-            graph_name,
-            view_table,
-            full=True,
-            domain_name=domain_name,
-            domain=domain,
-            settings=settings,
-        )
-        try:
-            return _count_view_triples(src, view_table, domain, settings)
-        except InfrastructureError as exc:
-            logger.warning(
-                "Scheduled build [%s]: could not count the synced triples "
-                "(the sync itself succeeded): %s",
-                domain_name,
-                exc,
-            )
-            return 0
-
-    triple_count = _count_view_triples(src, view_table, domain, settings)
-    logger.info(
-        "Scheduled build [%s]: %d triples reported by VIEW",
-        domain_name,
-        triple_count,
-    )
-
     if triple_count > 0:
-        store.drop_table(graph_name)
-        store.create_table(graph_name)
-        _stream_into_store(
-            store,
-            src,
-            graph_name,
-            f"SELECT subject, predicate, object FROM {view_table}",
-        )
-        store.optimize_table(graph_name)
-        logger.info(
-            "Scheduled build [%s]: graph '%s' populated with %d triples",
-            domain_name,
-            graph_name,
-            triple_count,
-        )
+        builder.apply_original_graph(view_table)
+        builder.rebuild_original_companions()
     return triple_count
 
 
@@ -277,7 +124,7 @@ def _persist_domain_metadata(svc, domain, version: str, build_ts: str, domain_na
 
 
 def run(ctx: TaskContext) -> RunOutcome:
-    """Rebuild the domain's VIEW and repopulate its graph store."""
+    """Rebuild the domain's gateway VIEW and its Original Graph."""
     start = time.time()
     domain_name = ctx.domain_name
 
@@ -290,7 +137,7 @@ def run(ctx: TaskContext) -> RunOutcome:
         _generate_sql_from_r2rml(domain, domain_name)
     )
 
-    from back.objects.digitaltwin.build._build_pipeline import collect_domain_stats
+    from back.objects.digitaltwin.build import BuildRunStats
 
     ctx.scratch.update(
         {
@@ -301,7 +148,7 @@ def run(ctx: TaskContext) -> RunOutcome:
             "sql_chars": len(sql_text or ""),
             "version": str(version),
             # Ontology + mapping stats for the build-run trace (Cockpit picture).
-            "stats": collect_domain_stats(
+            "stats": BuildRunStats.domain_stats(
                 getattr(domain, "ontology", {}),
                 getattr(domain, "assignment", {}),
                 constraints=getattr(domain, "constraints", None),
@@ -312,16 +159,12 @@ def run(ctx: TaskContext) -> RunOutcome:
         }
     )
 
-    # Resolve the graph backend before VIEW creation so managed_synced builds
-    # can emit object_hash (Lakeflow keys the synced PK on that column).
-    store = ctx.graph_store
     src = ctx.warehouse_client
 
     ctx.advance(f"Creating VIEW {view_table}...")
-    view_sql = _view_sql_for_graph_store(sql_text, store)
     cat, sch, vname = view_table.split(".")
     logger.info("Scheduled build [%s]: creating VIEW %s", domain_name, view_table)
-    view_ok, view_msg = src.create_or_replace_view(cat, sch, vname, view_sql)
+    view_ok, view_msg = src.create_or_replace_view(cat, sch, vname, sql_text)
     if not view_ok:
         from back.objects.digitaltwin import DigitalTwin
 
@@ -332,20 +175,8 @@ def run(ctx: TaskContext) -> RunOutcome:
         raise InfrastructureError(f"Failed to create VIEW: {detail}")
     ctx.progress(40, "VIEW created")
 
-    ctx.advance(f"Applying to graph {graph_name}...")
-    if not store:
-        raise InfrastructureError("Could not initialize graph backend")
-
-    triple_count = _write_graph_triples(
-        store,
-        src,
-        graph_name,
-        view_table,
-        domain_name,
-        delta_cfg=getattr(domain, "delta", None) or {},
-        domain=domain,
-        settings=ctx.settings,
-    )
+    ctx.advance("Exposing the Original Graph...")
+    triple_count = _build_original(src, view_table, domain, ctx.settings, domain_name)
 
     ctx.progress(95, "Saving context metadata...")
     _persist_domain_metadata(
@@ -374,7 +205,7 @@ def on_finish(ctx: TaskContext, outcome: RunOutcome, duration_s: float) -> None:
     if ctx._svc is None:
         return
     try:
-        from back.objects.digitaltwin.build._build_pipeline import step_times_from_task
+        from back.objects.digitaltwin.build import BuildRunStats
 
         task = ctx.tm.get_task(ctx.task_id) if ctx.tm else None
         scratch = ctx.scratch
@@ -398,7 +229,7 @@ def on_finish(ctx: TaskContext, outcome: RunOutcome, duration_s: float) -> None:
                 "view_table": scratch.get("view_table", ""),
                 "graph_name": scratch.get("graph_name", ""),
                 "task_id": ctx.task_id or "",
-                "phase_times": step_times_from_task(task) if task else {},
+                "phase_times": BuildRunStats.step_times(task) if task else {},
                 "stats": scratch.get("stats", {}),
             },
         )

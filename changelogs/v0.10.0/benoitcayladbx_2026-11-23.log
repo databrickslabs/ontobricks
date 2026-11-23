@@ -1172,3 +1172,89 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11346 passed, 334 skipped, 8 deselected
+
+================================================================================
+External and scheduled builds build the Original Graph; legacy pipeline removed
+================================================================================
+
+Context:
+Step (c3). The external `POST /api/v1/digitaltwin/build` and the scheduled
+"build" task now build the Original Graph like the internal build (gateway
+VIEW, `…_data` VIEW, companions, legacy objects dropped). Nothing loads a
+graph backend from the mapping any more, so `_BuildPipeline` (919 LOC), the
+`run_build_task` delegators and the scheduler's own copies of the streamed
+and Lakeflow loads are gone; the certified build is the only way into
+Lakebase / Neo4j. The issue #78 note and the lifecycle docs now say what
+holds: the Original Graph can be rebuilt on any status, the Certified Graph
+is frozen from IN-REVIEW on (D9).
+
+Changes:
+1. src/back/core/graphdb/delta/materialize.py, src/back/core/graphdb/delta/Builder.py
+   - `apply_original_graph` (`…_data` VIEW over the gateway, drop of
+     `…_graph` / `…_inferred`) and `rebuild_original_companions`, shared by
+     the Delta pipeline and the scheduled build.
+2. src/back/core/graphdb/delta/BuildPipeline.py
+   - `_build_data_view` uses `apply_original_graph`; steps are prepare,
+     view, data, adjacency.
+3. src/back/objects/digitaltwin/build/BuildRunStats.py (new)
+   - `domain_stats` and `step_times` (were `collect_domain_stats` /
+     `step_times_from_task` in `_build_pipeline.py`); re-exported.
+4. src/back/objects/digitaltwin/build/_build_pipeline.py
+   - Deleted.
+5. src/back/objects/digitaltwin/TwinBackgroundTasks.py,
+   src/back/objects/digitaltwin/DigitalTwin.py
+   - Removed `run_build_task`.
+6. src/api/routers/digitaltwin.py
+   - `POST /build` starts `TwinLakehouseBuild.start(..., build_kind="api")`;
+     summary / description updated; unused imports removed.
+7. src/back/objects/registry/schedule/build.py, src/back/objects/registry/schedule/__init__.py
+   - `run` creates the gateway VIEW, then `_build_original`; removed
+     `_stream_into_store`, `_is_managed_synced`, `_view_sql_for_graph_store`,
+     `_apply_synced_pipeline`, `_count_view_triples`, `_write_graph_triples`.
+     Task label "Original Graph Build".
+8. src/shared/fastapi/main.py, docs/user-guide.md, docs/architecture.md, docs/api.md
+   - Lifecycle / status-gate wording (Original Graph on any status, Certified
+     Graph writes DRAFT-only); build table and `/dtwin/sync/start` section.
+9. Tests
+   - tests/units/dtwin/test_build_run_stats.py (from the streaming tests),
+     tests/units/registry/test_schedule_build_original.py (new),
+     tests/units/dtwin/test_original_build_start.py (external build),
+     tests/units/graphdb/delta/test_delta_build_pipeline.py (steps, drops in
+     the data step).
+   - Removed: tests/units/dtwin/test_build_pipeline_streaming.py,
+     tests/back/core/digitaltwin/test_build_pipeline_units.py, the
+     `_BuildPipeline` parts of tests/units/objects/test_build_pipeline_materialize.py,
+     the `run_build_task` and `_view_sql_for_graph_store` tests.
+   - tests/units/settings/test_v090_settings_schedule.py: task label.
+   - tests/units/architecture/baseline.json: `_BuildPipeline` entry gone.
+
+Modified files:
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/Builder.py
+- src/back/core/graphdb/delta/BuildPipeline.py
+- src/back/objects/digitaltwin/build/BuildRunStats.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py (deleted)
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/digitaltwin.py
+- src/back/objects/registry/schedule/build.py
+- src/back/objects/registry/schedule/__init__.py
+- src/shared/fastapi/main.py
+- docs/user-guide.md
+- docs/architecture.md
+- docs/api.md
+- tests/units/dtwin/test_build_run_stats.py
+- tests/units/registry/test_schedule_build_original.py
+- tests/units/dtwin/test_original_build_start.py
+- tests/units/graphdb/delta/test_delta_build_pipeline.py
+- tests/units/objects/test_build_pipeline_materialize.py
+- tests/units/dtwin/test_v090_twin_background_tasks.py
+- tests/units/core/test_lakebase_flat_store.py
+- tests/units/settings/test_v090_settings_schedule.py
+- tests/units/dtwin/test_build_pipeline_streaming.py (deleted)
+- tests/back/core/digitaltwin/test_build_pipeline_units.py (deleted)
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11309 passed, 334 skipped, 8 deselected

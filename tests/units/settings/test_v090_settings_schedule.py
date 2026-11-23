@@ -82,7 +82,7 @@ class TestListSchedules:
         assert result["schedules"] == [{"task_type": "build"}]
         labels = {t["key"]: t["label"] for t in result["task_types"]}
         assert labels[TASK_CACHE_REFRESH] == "Graph Cache Refresh"
-        assert labels[TASK_BUILD] == "Knowledge Graph Build"
+        assert labels[TASK_BUILD] == "Original Graph Build"
         scheduler.get_all_schedules.assert_called_once_with("h", "t", CFG)
 
     def test_unexpected_error_is_wrapped(self, scheduler):

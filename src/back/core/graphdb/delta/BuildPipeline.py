@@ -16,7 +16,7 @@ from back.core.errors import OntoBricksError, OperationCancelledError
 from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.logging import get_logger
-from back.objects.digitaltwin.build._build_pipeline import collect_domain_stats
+from back.objects.digitaltwin.build import BuildRunStats
 from back.objects.digitaltwin.models import DomainSnapshot
 
 logger = get_logger(__name__)
@@ -27,7 +27,6 @@ def lakehouse_build_steps() -> list[dict[str, str]]:
         {"name": "prepare", "description": "Preparing mappings and generating queries"},
         {"name": "view", "description": "Creating the R2RML SQL view"},
         {"name": "data", "description": "Exposing the pass-through data view"},
-        {"name": "cleanup", "description": "Removing legacy inferred objects"},
         {"name": "adjacency", "description": "Building adjacency indexes"},
     ]
 
@@ -124,11 +123,6 @@ class BuildPipeline:
             if not self._build_data_view():
                 return
             self._log_phase("data_view", t_phase)
-
-            t_phase = time.time()
-            self.tm.advance_step(self.task_id, "Removing legacy inferred objects...")
-            self._drop_legacy_inferred_objects()
-            self._log_phase("cleanup", t_phase)
 
             t_phase = time.time()
             self.tm.advance_step(self.task_id, "Building adjacency indexes...")
@@ -240,7 +234,7 @@ class BuildPipeline:
             return False
 
     def _build_data_view(self) -> bool:
-        """Count the gateway VIEW, then expose it as the ``…_data`` VIEW.
+        """Count the gateway VIEW, expose it as ``…_data``, drop the legacy objects.
 
         Nothing is copied, so the gateway VIEW is what gets counted, and an
         empty mapping stops the build before ``…_data`` points at it. A count
@@ -257,11 +251,12 @@ class BuildPipeline:
             self._finish_without_triples()
             return False
         try:
-            materialize.apply_data_relation(
+            materialize.apply_original_graph(
                 self.source_client,
-                self.view_table,
-                self.data_table,
-                mode=self.MATERIALIZATION,
+                view_fqn=self.view_table,
+                data_fqn=self.data_table,
+                graph_view_fqn=self.graph_view,
+                inferred_fqn=self.inferred_table,
             )
         except Exception as exc:  # noqa: BLE001
             self.tm.fail_task(
@@ -289,15 +284,6 @@ class BuildPipeline:
             message=msg,
         )
         self._record_build_run("success", message=msg)
-
-    def _drop_legacy_inferred_objects(self) -> None:
-        """Drop ``…_graph`` and ``…_inferred``: enrichments live in the Certified Graph."""
-        if self.graph_view:
-            materialize.drop_relation(self.source_client, self.graph_view, kind="view")
-        if self.inferred_table:
-            materialize.drop_relation(
-                self.source_client, self.inferred_table, kind="table"
-            )
 
     def _rebuild_adjacency_index(self) -> None:
         source = self.data_table
@@ -364,7 +350,7 @@ class BuildPipeline:
                 "data_table": self.data_table,
                 "task_id": self.task_id,
                 "phase_times": dict(self.phase_times),
-                "stats": collect_domain_stats(
+                "stats": BuildRunStats.domain_stats(
                     getattr(self.domain_snap, "ontology", {}),
                     getattr(self.domain_snap, "assignment", {}),
                     constraints=getattr(self.domain_snap, "constraints", None),

@@ -28,7 +28,6 @@ from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError, NotFoundError, InfrastructureError
-from api.constants import DEFAULT_BASE_URI
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
 from back.core.graphdb import get_graphdb
@@ -39,7 +38,6 @@ from back.core.graphdb.search_cache import (
     search_cache_usage,
 )
 from back.core.helpers import (
-    get_triplestore_sql_credentials,
     get_databricks_client,
     sql_escape,
     effective_view_table,
@@ -50,10 +48,10 @@ from back.core.helpers import (
 from back.objects.digitaltwin import (
     CohortService,
     DigitalTwin,
-    DomainSnapshot,
     NodeContextService,
     NodeShaclResponse,
     NodeShaclService,
+    TwinLakehouseBuild,
 )
 from back.objects.digitaltwin.TwinGraphAccess import TwinGraphAccess
 
@@ -721,9 +719,10 @@ async def dt_stats(
 @router.post(
     "/build",
     response_model=BuildStartedResponse,
-    summary="Start a Knowledge Graph build",
-    description="Generate all triples from the current ontology + mapping configuration "
-    "and write them to the configured triple store backend. "
+    summary="Start an Original Graph build",
+    description="Rebuild the Original Graph from the current ontology + mapping "
+    "configuration: the R2RML gateway VIEW and the pass-through `…_data` VIEW. "
+    "Nothing is loaded into the serving backend (the certified build does that). "
     "Returns a `task_id` that can be polled via `GET /build/{task_id}`.",
 )
 async def dt_build(
@@ -750,9 +749,6 @@ async def dt_build(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    import threading
-    from back.core.task_manager import get_task_manager
-
     domain = DigitalTwin.resolve_domain(
         domain_name,
         session_mgr,
@@ -762,66 +758,10 @@ async def dt_build(
         registry_volume,
         domain_version,
     )
-    view_table = effective_view_table(domain, settings).strip()
-    graph_name = effective_graph_name(domain)
-    if not view_table:
-        raise ValidationError("View location not configured")
-
-    parts = view_table.split(".")
-    if len(parts) != 3:
-        raise ValidationError("View must be fully qualified: catalog.schema.view_name")
-
-    domain.ensure_generated_content()
-    r2rml = domain.get_r2rml()
-    if not r2rml:
-        raise ValidationError("No R2RML mapping available")
-
-    host, token, warehouse_id = get_triplestore_sql_credentials(domain, settings)
-    if not host or not token:
-        raise ValidationError("Databricks not configured")
-    if not warehouse_id:
-        raise ValidationError("No SQL warehouse configured")
-
-    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
-    mapping_config = domain.assignment
-    ontology_config = domain.ontology
-
-    snap = DomainSnapshot(domain)
-    delta_cfg = domain.delta or {}
-
-    tm = get_task_manager()
-    task = tm.create_task(
-        name="Knowledge Graph Build (API)",
-        task_type="triplestore_sync",
-        steps=[
-            {"name": "prepare", "description": "Preparing"},
-            {"name": "view", "description": "Creating VIEW"},
-            {"name": "graph", "description": "Applying to graph"},
-        ],
+    task_id = await run_blocking(
+        TwinLakehouseBuild.start, domain, settings, build_kind="api"
     )
-
-    def _run():
-        DigitalTwin.run_build_task(
-            tm,
-            task.id,
-            domain,
-            settings,
-            snap,
-            host,
-            token,
-            warehouse_id,
-            view_table,
-            graph_name,
-            r2rml,
-            base_uri,
-            mapping_config,
-            ontology_config,
-            delta_cfg,
-            build_kind="api",
-        )
-
-    threading.Thread(target=_run, daemon=True).start()
-    return BuildStartedResponse(success=True, task_id=task.id, message="Build started")
+    return BuildStartedResponse(success=True, task_id=task_id, message="Build started")
 
 
 # ---------------------------------------------------------------------------

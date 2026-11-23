@@ -2528,18 +2528,19 @@ POST /dtwin/execute
 
 #### Build Knowledge Graph
 
-> **Status gate.** `POST /dtwin/sync/start` and `POST /dtwin/sync/load` are
-> blocked when the loaded domain version is `IN-REVIEW` or `PUBLISHED`. All
-> read-only sync operations (filter, stats, status, etc.) remain accessible
-> regardless of lifecycle status.
+> **Status gate.** None: the Original Graph is never served externally, so it
+> can be rebuilt on any lifecycle status. Writes to the Certified Graph are
+> DRAFT-only (see "Build the Certified Graph").
 
 ```http
 POST /dtwin/sync/start
 ```
 
-Start an async Knowledge Graph build (CREATE VIEW then populate the graph store).
-Always performs a full rebuild. Returns a `task_id` for progress polling via
-`GET /tasks/{task_id}`.
+Start an async Original Graph build, whatever the domain backend: the R2RML
+gateway VIEW, then `…_data` as a pass-through VIEW and its Delta companions.
+Nothing is loaded into Lakebase / Neo4j (the certified build does that), and the
+legacy `…_inferred` / `…_graph` objects are dropped. Returns a `task_id` for
+progress polling via `GET /tasks/{task_id}`.
 
 **Response:**
 ```json

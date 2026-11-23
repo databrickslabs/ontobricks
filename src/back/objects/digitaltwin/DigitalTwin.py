@@ -287,45 +287,6 @@ class DigitalTwin:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def run_build_task(
-        tm,
-        task_id: str,
-        domain,
-        settings,
-        domain_snap: DomainSnapshot,
-        host: str,
-        token: str,
-        warehouse_id: str,
-        view_table: str,
-        graph_name: str,
-        r2rml_content: str,
-        base_uri: str,
-        mapping_config,
-        ontology_config,
-        delta_cfg: dict,
-        *,
-        build_kind: str = "session",
-    ) -> None:
-        return TwinBackgroundTasks.run_build_task(
-            tm,
-            task_id,
-            domain,
-            settings,
-            domain_snap,
-            host,
-            token,
-            warehouse_id,
-            view_table,
-            graph_name,
-            r2rml_content,
-            base_uri,
-            mapping_config,
-            ontology_config,
-            delta_cfg,
-            build_kind=build_kind,
-        )
-
-    @staticmethod
     def run_adjacency_refresh_task(
         tm,
         task_id: str,

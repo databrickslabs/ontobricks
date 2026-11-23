@@ -1953,11 +1953,14 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 > - **Design edits** (ontology/mapping changes, metadata saves, document
 >   uploads, design-view CRUD) are blocked on non-DRAFT versions for all
 >   roles — the design is frozen.
-> - **Data-refresh ops** (`/dtwin/sync/start`, `/dtwin/sync/load`,
->   `/dtwin/reasoning/materialize`) are **not** status-gated. They
->   re-materialise graph triples from source data using the frozen design and
->   can be triggered on PUBLISHED / IN-REVIEW versions without reverting to
->   DRAFT. They remain guarded by the builder role.
+> - **Original Graph ops** (`/dtwin/sync/start`, `/dtwin/sync/load`) are
+>   **not** status-gated: the Original Graph is a set of views over the source
+>   data and the frozen design, never served externally. They remain guarded by
+>   the builder role.
+> - **Certified Graph writes** (`/dtwin/certified-build/start`,
+>   `/dtwin/reasoning/materialize`, cohort / community materialisation) are
+>   refused on IN-REVIEW / PUBLISHED versions (`409`): the served graph of a
+>   published version never changes.
 > - **Read-only operations** (Explorer filter, stats, status, SPARQL, GraphQL)
 >   remain accessible on all statuses.
 >
@@ -3226,7 +3229,8 @@ storage.
 | **Query → SPARQL playground** | `query-execute.js` | `POST /dtwin/execute` | **SPARQL** | `SparqlTranslator` → **Spark SQL** on the SQL Warehouse (Delta view); read-only safety gate blocks update verbs |
 | **GraphQL** | `query-graphql.js` | `GET /graphql/{domain}/schema`, `POST /graphql/{domain}`, `GET /graphql/settings/depth` | **GraphQL** | Schema generated from OWL; resolvers call `DomainQueryService` → SPARQL → **Spark SQL** |
 | **Graph Chat** | `query-chat.js`, agent `agent_dtwin_chat` | `POST /dtwin/assistant/chat`, `GET/DELETE /dtwin/assistant/history` | REST → LLM tool-calling | LLM calls REST + GraphQL + SPARQL tools (see §6) |
-| **Build** (materialize triple store) | `query-sync.js` | `POST /dtwin/sync/start`, `POST /dtwin/sync/load` | REST | `_BuildPipeline` runs the R2RML SQL on the Warehouse (Delta `CREATE OR REPLACE VIEW`) and streams the rows into the active Graph DB engine via `bulk_insert_iter` (`COPY FROM STDIN` on Lakebase) |
+| **Original Graph build** | `query-sync.js` | `POST /dtwin/sync/start`, `POST /dtwin/sync/load` | REST | The Delta `BuildPipeline` runs the R2RML SQL on the Warehouse (gateway `CREATE OR REPLACE VIEW`) and exposes `…_data` as a pass-through VIEW for every backend |
+| **Certified Graph build** | — | `POST /dtwin/certified-build/start` | REST | `CertifiedBuild` composes `…_certified` in Delta, then serves it (Lakehouse) or loads Lakebase / Neo4j through `GraphLoad` / `SyncedGraphLoad` (`COPY FROM STDIN` / Lakeflow on Lakebase) |
 | **Data Quality** (SHACL execution) | `query-dataquality.js` | `POST /dtwin/dataquality/start`, `POST /dtwin/dataquality/execute` | REST | `SHACLService` translates shapes to **SQL** SELECTs that find violations |
 | **Inference (Reasoning)** | `query-reasoning.js`, `query-purge-inferences.js` | `POST /dtwin/reasoning/start`, `POST /dtwin/reasoning/materialize`, `GET/DELETE /dtwin/reasoning/inferred` | REST | `ReasoningService`: OWL-RL closure (rdflib) **+** IF-THEN rules compiled to **SQL** (Spark SQL on Delta, Postgres SQL on Lakebase) **or** `SPARQLRuleEngine`; GET counts the generated companion shared by reasoning and cohorts, while DELETE truncates only that companion. On [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/), companion DDL/DML (CREATE, INSERT, TRUNCATE, OPTIMIZE, graph-index rebuild) uses INLINE Statement Execution — the same path as graph reads — because Apps cannot open a Thrift SQL session. |
 | **Cockpit → Knowledge Graph** | `domain-validation.js` | `GET /validate/detailed`, `GET /dtwin/reasoning/inferred` | REST | Displays mapped graph health plus the live combined materialized reasoning-and-cohort count; unsupported source-indistinguishable backends return the count as unavailable |
