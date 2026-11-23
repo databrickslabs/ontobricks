@@ -674,6 +674,15 @@ has not been built yet.
 > otherwise). The external build, data-quality / inference starts, cohort
 > dry-run / materialize and entity business rules still target the latest
 > version. Lifecycle still locks **design edits** on non-DRAFT versions.
+>
+> **Served graph.** External graph reads (status, stats, triples, triples/find,
+> external GraphQL) read the **Certified Graph** of the served version:
+> `…_certified` on the Lakehouse, the versioned graph (`<name>_V<n>`) on
+> Lakebase / Neo4j. A Lakehouse domain that has no certified build yet keeps
+> serving its current graph relation; `GET /api/v1/digitaltwin/status`
+> reports `certified: false` until a certified build succeeds.
+> `backend=view` on `GET /api/v1/digitaltwin/triples` (the Original Graph) is
+> refused with `400`.
 
 ---
 
@@ -788,7 +797,9 @@ Returns a comprehensive readiness status including ontology, metadata, and mappi
 
 #### `GET /api/v1/digitaltwin/status`
 
-Check backend type, table name, data availability, and triple count.
+Check backend type, table name, data availability, and triple count of the
+served graph. `certified` is `true` once a certified build succeeded for the
+served version.
 
 **Parameters:**
 - `project_name` (query, optional): Domain name in the registry

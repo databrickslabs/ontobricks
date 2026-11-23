@@ -66,6 +66,46 @@ class TwinGraphAccess:
         )
 
     @staticmethod
+    def served_query_table(
+        domain,
+        settings,
+        store,
+        *,
+        include_inferred: bool = True,
+        simulation_id: Optional[str] = None,
+    ) -> str:
+        """Relation an external read serves: the Certified Graph.
+
+        A Lakehouse domain that has no ``…_certified`` view yet (no certified
+        build so far) keeps serving its current graph relation, so domains
+        published before the certified build stay readable; ``include_inferred``
+        only applies to that fallback. A simulation id still selects its
+        sandbox.
+        """
+        from back.core.graphdb.constants import GRAPH_VARIANT_CERTIFIED
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        if TwinGraphAccess.sandbox_id(simulation_id):
+            return TwinGraphAccess.graph_query_table(
+                domain, settings, store, simulation_id=simulation_id
+            )
+        table = TwinGraphAccess.graph_query_table(
+            domain, settings, store, variant=GRAPH_VARIANT_CERTIFIED
+        )
+        if GraphDBFactory._resolve_graph_backend(domain) != "databricks":
+            return table
+        if store is not None and store.table_exists(table):
+            return table
+        logger.info(
+            "Serving the uncertified graph of %s: %s does not exist yet",
+            (getattr(domain, "info", None) or {}).get("name", "?"),
+            table,
+        )
+        return TwinGraphAccess.graph_query_table(
+            domain, settings, store, include_inferred=include_inferred
+        )
+
+    @staticmethod
     def source_from_payload(data: Any) -> tuple[bool, Optional[str]]:
         """Parse include_inferred + simulation_id from a request body or mapping."""
         payload = data if isinstance(data, dict) else {}

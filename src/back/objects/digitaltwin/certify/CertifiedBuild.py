@@ -93,6 +93,25 @@ class CertifiedBuild:
             )
 
     @staticmethod
+    def has_succeeded(domain: Any, settings: Any) -> bool:
+        """True when the registry records a successful certified build of the version."""
+        from back.objects.registry.RegistryService import RegistryService
+
+        version = str(getattr(domain, "current_version", "") or "")
+        try:
+            runs = RegistryService.from_context(domain, settings).load_build_runs(
+                CertifiedBuild._folder(domain), version=version
+            )
+        except Exception as exc:  # noqa: BLE001 — a status flag must not fail a read
+            logger.warning("Could not read the certified build runs: %s", exc)
+            return False
+        return any(
+            r.get("build_kind") == CertifiedBuild.BUILD_KIND
+            and r.get("status") == "success"
+            for r in runs or []
+        )
+
+    @staticmethod
     def task_steps(domain: Any, settings: Any) -> List[Dict[str, str]]:
         """Task steps: compose, then serve (Lakehouse) or the backend load steps."""
         steps = [{"name": "compose", "description": "Composing the certified graph"}]

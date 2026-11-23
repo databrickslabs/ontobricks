@@ -232,8 +232,12 @@ def _get_schema_and_context(
     *,
     include_inferred: bool = True,
     simulation_id: Optional[str] = None,
+    served: bool = False,
 ):
     """Build (or retrieve cached) GraphQL schema and execution context.
+
+    *served* (external mount) reads the Certified Graph through
+    :meth:`TwinGraphAccess.served_query_table`.
 
     Raises :class:`ValidationError` only when the ontology is genuinely
     unusable. For the "no classes / no properties" cases the caller
@@ -270,7 +274,12 @@ def _get_schema_and_context(
             "Graph backend not configured or unreachable."
         )
 
-    table = TwinGraphAccess.graph_query_table(
+    resolve_table = (
+        TwinGraphAccess.served_query_table
+        if served
+        else TwinGraphAccess.graph_query_table
+    )
+    table = resolve_table(
         domain,
         settings,
         store,
@@ -363,7 +372,7 @@ async def graphql_playground(
         external=is_external,
         domain_version=domain_version,
     )
-    _get_schema_and_context(domain, settings)
+    _get_schema_and_context(domain, settings, served=is_external)
 
     display_name = (domain.info or {}).get("name", domain_name)
     api_prefix = (
@@ -424,6 +433,7 @@ async def graphql_execute(
         settings,
         include_inferred=include_inferred,
         simulation_id=simulation_id,
+        served=is_external,
     )
     store = context.get("triplestore")
     if store is not None:
@@ -509,7 +519,7 @@ async def graphql_sdl(
             },
         })
 
-    schema, _ = _get_schema_and_context(domain, settings)
+    schema, _ = _get_schema_and_context(domain, settings, served=is_external)
 
     from strawberry.printer import print_schema
 
@@ -541,7 +551,7 @@ async def graphql_debug(
         domain_version=domain_version,
     )
     assert_public_graph_read(request, domain, settings)
-    schema, context = _get_schema_and_context(domain, settings)
+    schema, context = _get_schema_and_context(domain, settings, served=is_external)
 
     from back.core.graphql import build_schema_for_domain
 

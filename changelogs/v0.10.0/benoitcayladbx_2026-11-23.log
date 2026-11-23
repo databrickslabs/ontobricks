@@ -749,3 +749,59 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11305 passed, 334 skipped, 8 deselected
+
+================================================================================
+External reads are served from the Certified Graph (Lakehouse fallback)
+================================================================================
+
+Context:
+External graph reads (REST v1 status / stats / triples / triples/find,
+external GraphQL, hence MCP) now read the Certified Graph of the served
+PUBLISHED version: `…_certified` on the Lakehouse, `<name>_V<n>` on Lakebase
+/ Neo4j. Migration option A: a Lakehouse domain without `…_certified` (no
+certified build yet) keeps serving its current graph relation, and
+`/status` reports `certified: false`. `backend=view` on `/triples` read the
+Original Graph and is now refused externally.
+
+Changes:
+1. src/back/objects/digitaltwin/TwinGraphAccess.py
+   - `served_query_table`: certified variant; Lakehouse fallback to the
+     current relation when `…_certified` does not exist (`include_inferred`
+     only applies to the fallback); a simulation id still selects its
+     sandbox.
+2. src/back/objects/digitaltwin/certify/CertifiedBuild.py
+   - `has_succeeded`: a successful `certified` build run is recorded for
+     the version (registry `build_runs`); an unreadable registry reads as
+     not certified.
+3. src/api/routers/digitaltwin.py
+   - `_graph_read_table` serves `served_query_table`; `backend=view`
+     raises `ValidationError`.
+   - `/status` reads the served relation and returns `certified`
+     (`StatusResponse.certified`).
+4. src/back/fastapi/graphql_routes.py
+   - `_get_schema_and_context(..., served=False)`: the external mount reads
+     `served_query_table`.
+5. docs/api.md
+   - "Served graph" note; `/status` describes `certified`.
+6. Tests
+   - tests/units/graphdb/test_graph_variants.py: served relation per
+     backend, Lakehouse fallback (inferred / asserted), simulation precedence.
+   - tests/units/dtwin/test_certified_build.py: `has_succeeded`.
+   - tests/units/api/test_external_served_graph.py (new): `/status` reads the
+     served relation and reports `certified`; external GraphQL reads the
+     served relation.
+   - tests/units/dtwin/test_digitaltwin_api.py: `backend=view` is refused.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/objects/digitaltwin/certify/CertifiedBuild.py
+- src/api/routers/digitaltwin.py
+- src/back/fastapi/graphql_routes.py
+- docs/api.md
+- tests/units/graphdb/test_graph_variants.py
+- tests/units/dtwin/test_certified_build.py
+- tests/units/api/test_external_served_graph.py
+- tests/units/dtwin/test_digitaltwin_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11316 passed, 334 skipped, 8 deselected

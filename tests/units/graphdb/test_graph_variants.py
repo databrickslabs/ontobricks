@@ -111,3 +111,52 @@ class TestTwinGraphAccessVariant:
             )
 
         assert table == "sim_union"
+
+
+class TestServedQueryTable:
+    """External reads target the Certified Graph, with a Lakehouse fallback (option A)."""
+
+    def test_a_certified_lakehouse_serves_the_certified_view(self):
+        store = MagicMock()
+        store.table_exists.return_value = True
+
+        table = TwinGraphAccess.served_query_table(_domain("databricks"), None, store)
+
+        assert table == _VIEW + "_certified"
+
+    def test_an_uncertified_lakehouse_falls_back_to_the_current_graph(self):
+        store = MagicMock()
+        store.table_exists.return_value = False
+
+        table = TwinGraphAccess.served_query_table(_domain("databricks"), None, store)
+
+        assert table == _VIEW + "_graph"
+
+    def test_the_fallback_keeps_the_asserted_only_choice(self):
+        store = MagicMock()
+        store.table_exists.return_value = False
+
+        table = TwinGraphAccess.served_query_table(
+            _domain("databricks"), None, store, include_inferred=False
+        )
+
+        assert table == _VIEW + "_data"
+
+    @pytest.mark.parametrize("backend", ["lakebase", "neo4j"])
+    def test_a_graph_engine_serves_the_versioned_graph(self, backend):
+        store = MagicMock()
+
+        table = TwinGraphAccess.served_query_table(_domain(backend), None, store)
+
+        assert table == "Dom_V2"
+        store.table_exists.assert_not_called()
+
+    def test_a_simulation_is_still_served_from_its_sandbox(self):
+        from back.objects.intelligence import Simulation
+
+        with patch.object(Simulation, "explorer_relation", return_value="sim_union"):
+            table = TwinGraphAccess.served_query_table(
+                _domain("databricks"), None, MagicMock(), simulation_id="s0123abcd"
+            )
+
+        assert table == "sim_union"

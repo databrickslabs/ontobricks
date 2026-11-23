@@ -633,23 +633,26 @@ class TestDtTriplesBackendSelection:
     )
     @patch("api.routers.digitaltwin.get_graphdb")
     @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")
-    async def test_view_backend_queries_view_table(
+    async def test_view_backend_is_refused_externally(
         self, mock_resolve, mock_store, _query, _view
     ):
+        """``backend=view`` reads the Original Graph, which is not served."""
         from api.routers.digitaltwin import dt_triples
+        from back.core.errors import ValidationError
 
         mock_resolve.return_value = MagicMock()
         store = self._store()
         mock_store.return_value = store
 
-        await dt_triples(
-            request=MagicMock(),
-            backend="view",
-            session_mgr=MagicMock(),
-            settings=MagicMock(),
-        )
+        with pytest.raises(ValidationError, match="Original Graph"):
+            await dt_triples(
+                request=MagicMock(),
+                backend="view",
+                session_mgr=MagicMock(),
+                settings=MagicMock(),
+            )
 
-        assert store.paginated_count.call_args[0][0] == "c.s.view_V1"
+        store.paginated_count.assert_not_called()
 
 
 class TestTriplesFindHasMorePropagation:

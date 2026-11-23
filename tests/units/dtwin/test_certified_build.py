@@ -300,3 +300,45 @@ class TestStart:
                 CertifiedBuild.start(_domain(), SimpleNamespace())
 
         tm.run_background_task.assert_not_called()
+
+
+class TestHasSucceeded:
+    def _runs(self, runs):
+        registry = MagicMock()
+        registry.load_build_runs.return_value = runs
+        with patch(
+            "back.objects.registry.RegistryService.RegistryService.from_context",
+            return_value=registry,
+        ):
+            ok = CertifiedBuild.has_succeeded(_domain(), SimpleNamespace())
+        return ok, registry
+
+    def test_a_successful_certified_run_counts(self):
+        ok, registry = self._runs(
+            [
+                {"build_kind": "session", "status": "success"},
+                {"build_kind": "certified", "status": "success"},
+            ]
+        )
+
+        assert ok is True
+        registry.load_build_runs.assert_called_once_with("dom", version="2")
+
+    def test_failed_or_non_certified_runs_do_not_count(self):
+        ok, _ = self._runs(
+            [
+                {"build_kind": "certified", "status": "error"},
+                {"build_kind": "session", "status": "success"},
+            ]
+        )
+
+        assert ok is False
+
+    def test_an_unreadable_registry_reads_as_not_certified(self):
+        registry = MagicMock()
+        registry.load_build_runs.side_effect = RuntimeError("down")
+        with patch(
+            "back.objects.registry.RegistryService.RegistryService.from_context",
+            return_value=registry,
+        ):
+            assert CertifiedBuild.has_succeeded(_domain(), SimpleNamespace()) is False

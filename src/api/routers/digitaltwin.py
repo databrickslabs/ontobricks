@@ -32,6 +32,7 @@ from api.constants import DEFAULT_BASE_URI
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
 from back.core.graphdb import get_graphdb
+from back.objects.digitaltwin.certify import CertifiedBuild
 from back.core.graphdb.search_cache import (
     apply_search_cache_to_store,
     parse_cache_param,
@@ -113,6 +114,11 @@ class StatusResponse(BaseModel):
     last_modified: Optional[str] = None
     reason: Optional[str] = None
     message: Optional[str] = None
+    certified: bool = Field(
+        False,
+        description="A certified build succeeded for this version; otherwise the "
+        "served graph is the uncertified one.",
+    )
 
 
 class EntityTypeStat(BaseModel):
@@ -510,7 +516,8 @@ async def dt_status(
             reason="Graph backend not configured",
         )
 
-    query_table = effective_graph_query_table(domain, settings, store=graph_store)
+    query_table = TwinGraphAccess.served_query_table(domain, settings, graph_store)
+    certified = CertifiedBuild.has_succeeded(domain, settings)
 
     try:
         if not graph_store.table_exists(query_table):
@@ -519,6 +526,7 @@ async def dt_status(
                 view_table=view_table,
                 graph_name=graph_name,
                 reason="Graph does not exist yet",
+                certified=certified,
             )
         status = graph_store.get_status(query_table)
         count = status.get("count", 0)
@@ -530,6 +538,7 @@ async def dt_status(
             has_data=count > 0,
             count=count,
             last_modified=str(last_mod) if last_mod else None,
+            certified=certified,
         )
     except Exception as e:
         logger.exception("dt_status failed: %s", e)
@@ -572,13 +581,20 @@ def _graph_read_table(
     simulation_id,
     backend=None,
 ) -> str:
-    """Live inferred/asserted graph, a ready sandbox, or the R2RML view."""
+    """Served relation of an external read: the Certified Graph, or a sandbox.
+
+    ``backend="view"`` used to read the R2RML view, i.e. the Original Graph,
+    which is not served externally.
+    """
     if backend == "view" and not TwinGraphAccess.sandbox_id(simulation_id):
-        return effective_view_table(domain, settings).strip()
-    return TwinGraphAccess.graph_query_table(
+        raise ValidationError(
+            "backend=view reads the Original Graph, which is not served "
+            "externally; use backend=graph"
+        )
+    return TwinGraphAccess.served_query_table(
         domain,
         settings,
-        store=store,
+        store,
         include_inferred=include_inferred,
         simulation_id=simulation_id,
     )
@@ -992,7 +1008,7 @@ async def dt_triples(
     limit: int = 1000,
     offset: int = 0,
     backend: Optional[str] = Query(
-        "graph", description="Backend: 'view' or 'graph' (default graph)"
+        "graph", description="'graph' (default); 'view' is refused externally"
     ),
     domain_name: Optional[str] = Query(
         None,
