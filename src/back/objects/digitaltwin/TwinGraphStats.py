@@ -28,7 +28,9 @@ class TwinGraphStats:
         inconsistent = bool(cached.get("entity_types")) and not cached.get(
             "total_triples"
         )
-        has_graph_cache = "graph_cache" in cached
+        # Entries cached before the Original / Certified split carry no cache
+        # location (and may hold Certified figures): recompute them.
+        has_graph_cache = "location" in (cached.get("graph_cache") or {})
         return bool(has_kind and has_job_reason and has_graph_cache and not inconsistent)
 
     @staticmethod
@@ -155,6 +157,10 @@ class TwinGraphStats:
         return {
             "supported": supported,
             "backend": backend,
+            # Where the companions live (``catalog.schema`` / ``database.schema``).
+            "location": next(
+                (c.get("location") for c in companions if c.get("location")), ""
+            ),
             "enabled": enabled,
             "state": state,
             "refreshed_at": refreshed_at,

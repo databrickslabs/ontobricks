@@ -56,17 +56,21 @@
 
 <div id="{{ cache_id }}CacheContent" class="d-none">
     <div class="row g-3 mb-3">
-        <div class="col-md-4">
+        <div class="col-6 col-md-3">
             <div class="small text-muted mb-1">Activated</div>
             <div id="{{ cache_id }}CacheActivated" class="text-muted">&mdash;</div>
         </div>
-        <div class="col-md-4">
+        <div class="col-6 col-md-3">
             <div class="small text-muted mb-1">State</div>
             <div id="{{ cache_id }}CacheState" class="text-muted">&mdash;</div>
         </div>
-        <div class="col-md-4">
+        <div class="col-6 col-md-3">
             <div class="small text-muted mb-1">Cache updated</div>
             <div id="{{ cache_id }}CacheRefreshed" class="text-muted">&mdash;</div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="small text-muted mb-1">Stored in</div>
+            <div id="{{ cache_id }}CacheLocation" class="text-muted text-break">&mdash;</div>
         </div>
     </div>
     <p class="text-muted small mb-2" id="{{ cache_id }}CacheStatusLine"></p>

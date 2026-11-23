@@ -299,9 +299,17 @@ class TestGraphStats:
         cached = {
             "top_predicates": [{"uri": "p", "kind": "attribute"}],
             "analytics_job_blocked_reason": "",
-            "graph_cache": {"supported": True},
+            "graph_cache": {"supported": True, "location": "cat.sch"},
         }
         assert TwinGraphStats.cache_is_fresh(cached) is True
+
+    def test_cache_from_before_the_original_certified_split_is_stale(self):
+        cached = {
+            "top_predicates": [{"uri": "p", "kind": "attribute"}],
+            "analytics_job_blocked_reason": "",
+            "graph_cache": {"supported": True},
+        }
+        assert TwinGraphStats.cache_is_fresh(cached) is False
 
     def test_cache_without_graph_cache_is_stale(self):
         cached = {
@@ -410,3 +418,11 @@ class TestGraphCacheBackend:
             block = TwinGraphStats._graph_cache_block(_domain(), [])
 
         assert block["supported"] is False
+
+
+def test_the_cache_block_reports_where_the_companions_live():
+    block = TwinGraphStats._graph_cache_block(
+        _domain(), [{"key": "adj_out", "location": "cat.sch"}], backend="databricks"
+    )
+
+    assert block["location"] == "cat.sch"

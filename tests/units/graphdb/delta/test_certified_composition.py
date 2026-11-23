@@ -347,3 +347,36 @@ class TestCertifiedCacheCompanions:
     def test_certified_companions_strip_back_to_the_gateway_leaf(self):
         for leaf in ("v_cert_adj_out", "v_cert_entity_search_asserted", "v_cert_props"):
             assert _table_naming.strip_graph_leaf_suffix(leaf) == "v"
+
+
+class TestCacheLocation:
+    """The Cache tab says where each graph's companions live."""
+
+    def test_the_original_companions_live_in_the_lakehouse_schema_of_the_gateway(self):
+        from back.core.graphdb.delta.MaterializedStore import MaterializedStore
+
+        domain = _domain()
+        view = _table_naming.view_fqn(domain)
+        store = MaterializedStore(MagicMock(), domain=domain, settings=None)
+        store._companion_tables_exist = lambda fqn: False
+
+        rows = store.companion_inventory(view + "_data")
+
+        cat_sch = view.rsplit(".", 1)[0]
+        assert {r["location"] for r in rows} == {cat_sch}
+        assert rows[0]["table"] == view.rsplit(".", 1)[1] + "_adj_out"
+
+    def test_lakebase_companions_live_in_the_graph_schema(self):
+        from back.core.graphdb.lakebase.Base import Base
+
+        from types import SimpleNamespace
+
+        store = SimpleNamespace(
+            _auth=SimpleNamespace(database="ontobricks_db"),
+            _schema="graphs",
+            _database_override="",
+        )
+
+        location = Base.companion_location(store, "contactcenter_v1_adj_out")
+
+        assert location == "ontobricks_db.graphs"

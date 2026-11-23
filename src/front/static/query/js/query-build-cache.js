@@ -115,6 +115,23 @@ function GraphCachePane({ prefix, source, tabBtnId, feedsOverview }) {
         showOnly(prefix + 'CacheError');
     }
 
+    const ENGINE_LABELS = { databricks: 'Lakehouse', delta: 'Lakehouse', lakebase: 'Lakebase' };
+
+    function renderLocation(cache) {
+        const node = el(prefix + 'CacheLocation');
+        if (!node) return;
+        const engine = ENGINE_LABELS[String(cache.backend || '').toLowerCase()] || '';
+        node.replaceChildren();
+        if (engine) node.append(engine);
+        if (cache.location) {
+            if (engine) node.append(' \u00b7 ');
+            const code = document.createElement('code');
+            code.textContent = cache.location;
+            node.appendChild(code);
+        }
+        if (!engine && !cache.location) node.textContent = '\u2014';
+    }
+
     function render(data) {
         const cache = (data && data.graph_cache) || {};
         if (typeof renderBuildGraphCacheStatus === 'function') {
@@ -128,15 +145,18 @@ function GraphCachePane({ prefix, source, tabBtnId, feedsOverview }) {
             showUnsupported();
             return;
         }
+        renderLocation(cache);
         renderCompanions(cache);
         showOnly(prefix + 'CacheContent');
     }
 
-    async function load() {
+    async function load(forceRefresh) {
         setReloadBusy(true);
         showOnly(prefix + 'CacheLoading');
         try {
-            const response = await fetch(ENDPOINT, { method: 'GET', credentials: 'include' });
+            // Reload bypasses the server-side stats cache.
+            const url = forceRefresh === true ? ENDPOINT + '&refresh=true' : ENDPOINT;
+            const response = await fetch(url, { method: 'GET', credentials: 'include' });
             const data = await response.json();
             if (!response.ok || data.success === false) {
                 throw new Error(data.message || 'Could not load graph cache status');
@@ -160,7 +180,7 @@ function GraphCachePane({ prefix, source, tabBtnId, feedsOverview }) {
         const tabBtn = el(tabBtnId);
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', load);
         const reloadBtn = el(prefix + 'CacheReloadBtn');
-        if (reloadBtn) reloadBtn.addEventListener('click', load);
+        if (reloadBtn) reloadBtn.addEventListener('click', () => load(true));
     }
 
     return { init, load, render };

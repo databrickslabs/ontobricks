@@ -98,3 +98,15 @@ def test_cache_updated_falls_back_to_last_build_not_never():
     assert '"Never"' not in body
     assert "last_built" in body
     assert "Cache updated" in PANE_HTML
+
+
+def test_each_pane_says_where_its_cache_is_stored():
+    assert 'id="{{ cache_id }}CacheLocation"' in PANE_HTML
+    assert "Stored in" in PANE_HTML
+    assert "databricks: 'Lakehouse'" in CACHE_JS
+    assert "cache.location" in CACHE_JS
+
+
+def test_reload_bypasses_the_stats_cache():
+    assert "ENDPOINT + '&refresh=true'" in CACHE_JS
+    assert "() => load(true)" in CACHE_JS

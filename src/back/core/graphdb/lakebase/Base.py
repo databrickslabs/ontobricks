@@ -201,6 +201,11 @@ class Base(MaterializedGraphBackend):
         # Spark TRY_CAST, which is a syntax error on the default backend.
         return ShaclFlatSqlBackend(dialect="postgres")
 
+    def companion_location(self, table_fqn: str) -> str:
+        """Lakebase companions live in the graph schema of the Postgres database."""
+        database = self._database_override or str(getattr(self._auth, "database", "") or "")
+        return ".".join(p for p in (database, self._schema) if p)
+
     def get_connection(self) -> Any:
         raise InfrastructureError(
             "Lakebase graph backend does not expose a native driver connection — "

@@ -170,6 +170,7 @@ class SearchCacheMixin:
                         "key": key,
                         "label": label,
                         "table": "",
+                        "location": "",
                         "ready": False,
                         "row_count": None,
                     }
@@ -181,11 +182,16 @@ class SearchCacheMixin:
                     "key": key,
                     "label": label,
                     "table": fqn.rsplit(".", 1)[-1],
+                    "location": self.companion_location(fqn),
                     "ready": ready,
                     "row_count": self._count_companion_rows(fqn) if ready else None,
                 }
             )
         return inventory
+
+    def companion_location(self, table_fqn: str) -> str:
+        """Where a companion lives: its qualifier (``catalog.schema`` on the Lakehouse)."""
+        return table_fqn.rsplit(".", 1)[0] if "." in table_fqn else ""
 
     def _count_companion_rows(self, table_fqn: str) -> Optional[int]:
         """``COUNT(*)`` of a companion, or ``None`` when the relation is missing."""

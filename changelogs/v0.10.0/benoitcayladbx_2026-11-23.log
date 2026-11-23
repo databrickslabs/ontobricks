@@ -1939,3 +1939,44 @@ Tests: uv run --frozen pytest -q -m "not scenario" -> 11325 passed, 334 skipped,
 Browser check: not repeated — the only loaded context on port 8011 is a
 PUBLISHED Lakebase version with no built graph, so neither cache has tables
 to list; covered by the unit tests above.
+
+================================================================================
+UI: each Cache tab says where its cache is stored (Original = Lakehouse)
+================================================================================
+
+Context:
+The Cache tab listed only the leaf name of each companion, so the Original
+Graph's Lakehouse companions and a Lakebase copy's Postgres companions looked
+alike. Each tab now shows where its cache lives: the Original Graph's in the
+Lakehouse (catalog.schema of the gateway view, for every domain), the
+Certified Graph's in the Lakehouse (`_cert_*`) or in Lakebase
+(database.schema). Stats cached before the Original / Certified split (which
+could hold Certified figures) are recomputed, and Reload bypasses the stats
+cache.
+
+1. src/back/core/graphdb/interfaces/SearchCacheMixin.py — `companion_location`
+   (the companion's qualifier) and a `location` per inventory row.
+2. src/back/core/graphdb/lakebase/Base.py — Lakebase companions live in
+   `<database>.<graph schema>`.
+3. src/back/objects/digitaltwin/TwinGraphStats.py — the cache block carries
+   `location`; cached stats without it are stale.
+4. src/front/templates/partials/dtwin/_graph_cache_pane.html — "Stored in"
+   cell next to Activated / State / Cache updated.
+5. src/front/static/query/js/query-build-cache.js — renders the engine
+   (Lakehouse / Lakebase) and location; Reload requests `refresh=true`.
+6. tests — location of the Original (Lakehouse) and Lakebase companions, the
+   cache block location, stale pre-split cache entries, pane contract.
+
+Modified files:
+- src/back/core/graphdb/interfaces/SearchCacheMixin.py
+- src/back/core/graphdb/lakebase/Base.py
+- src/back/objects/digitaltwin/TwinGraphStats.py
+- src/front/templates/partials/dtwin/_graph_cache_pane.html
+- src/front/static/query/js/query-build-cache.js
+- tests/units/graphdb/delta/test_certified_composition.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- tests/units/front/test_build_cache_tab_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11331 passed, 334 skipped, 8 deselected
+Browser check: not repeated on port 8011 (no built graph in that environment).
