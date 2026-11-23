@@ -340,3 +340,43 @@ Tests: uv run --frozen pytest -q -m "not scenario" -> 11228 passed, 334 skipped,
 Browser check (Playwright, headless Chromium): one- and two-line toasts now
 have icon, first text line and X centred on the same y (757.5 / 683.5 px);
 modal-header close is 30x30 px, centred on the title.
+
+================================================================================
+Build pipeline: load phases read an explicit source relation
+================================================================================
+
+Context:
+First refactoring step toward the two-phase graph (Original Graph, then
+Certified Graph). The load phases of the Knowledge Graph build read triples
+from the gateway VIEW by name. They now read `source_relation`, which a
+certified build can point at its composed relation. Behaviour is unchanged:
+`source_relation` is the gateway VIEW for today's build. Refactorings:
+Introduce Parameter Object (source relation of a load), Rename Method.
+
+Changes:
+1. src/back/objects/digitaltwin/build/_build_pipeline.py
+   - `_BuildPipeline.source_relation`, set to the gateway VIEW.
+   - `_count_view_triples` renamed `_count_source_triples`; it counts
+     `source_relation`.
+   - `_apply_full_rebuild` streams `SELECT ... FROM source_relation`; the
+     Lakebase managed-synced path registers the synced table on
+     `source_relation`. Log templates name the source instead of "VIEW".
+2. tests/units/dtwin/test_build_pipeline_streaming.py
+   - Bare pipeline sets `source_relation`; patches use
+     `_count_source_triples`.
+   - New: the full rebuild streams from `source_relation`; the synced table
+     is registered on `source_relation`.
+3. tests/units/objects/test_build_pipeline_materialize.py
+   - Bare pipeline sets `source_relation`.
+4. tests/units/architecture/baseline.json
+   - Ratchet: `_BuildPipeline` 1421 -> 1419 LOC (plus `Domain` and
+     `SettingsService`, which had already shrunk).
+
+Modified files:
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- tests/units/dtwin/test_build_pipeline_streaming.py
+- tests/units/objects/test_build_pipeline_materialize.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11230 passed, 334 skipped, 8 deselected

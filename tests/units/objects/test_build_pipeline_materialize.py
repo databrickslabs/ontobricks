@@ -124,6 +124,7 @@ def _bare_pipeline(
     pipe.domain_snap = MagicMock()
     pipe.domain_name = "dom"
     pipe.view_table = view_table
+    pipe.source_relation = view_table
     pipe.graph_name = "G_V3"
     pipe.warehouse_id = "wh-1"
     pipe.source_client = MagicMock()

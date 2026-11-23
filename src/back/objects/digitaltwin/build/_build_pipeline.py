@@ -169,7 +169,7 @@ def _report_post_sync_triple_count(pipe: Any) -> None:
     """
     counted = False
     try:
-        pipe.triple_count = pipe._count_view_triples()
+        pipe.triple_count = pipe._count_source_triples()
         counted = True
     except InfrastructureError as exc:
         logger.warning(
@@ -237,6 +237,7 @@ class _BuildPipeline:
         self.token = token
         self.warehouse_id = warehouse_id
         self.view_table = view_table
+        self.source_relation = view_table  # what the load phases read triples from
         self.graph_name = graph_name
         self.r2rml_content = r2rml_content
         self.base_uri = base_uri
@@ -393,19 +394,16 @@ class _BuildPipeline:
             self.domain, self.settings, engine="lakebase"
         )
 
-    def _count_view_triples(self) -> int:
-        """Return the number of triples in the VIEW (server-side COUNT).
+    def _count_source_triples(self) -> int:
+        """Return the number of triples in the source relation (server-side COUNT).
 
         Raises :class:`InfrastructureError` when the count cannot run, so a
         lost connection fails the build instead of reading as 0 triples.
         """
-        logger.debug("[DT-BUILD %s] counting VIEW %s", self.task_id, self.view_table)
-        count = self._delta_write_builder().count_triples(self.view_table)
+        logger.debug("[DT-BUILD %s] counting %s", self.task_id, self.source_relation)
+        count = self._delta_write_builder().count_triples(self.source_relation)
         logger.debug(
-            "[DT-BUILD %s] VIEW %s has %d triple(s)",
-            self.task_id,
-            self.view_table,
-            count,
+            "[DT-BUILD %s] %s: %d triple(s)", self.task_id, self.source_relation, count
         )
         return count
 
@@ -809,33 +807,33 @@ class _BuildPipeline:
 
         t_fetch = time.time()
         logger.info(
-            "[DT-BUILD %s] full rebuild: reading all triples from VIEW %s",
+            "[DT-BUILD %s] full rebuild: reading all triples from %s",
             self.task_id,
-            self.view_table,
+            self.source_relation,
         )
         if not self.is_api:
             self.tm.update_progress(
                 self.task_id, 40, "Reading all triples from VIEW..."
             )
 
-        triple_count = self._count_view_triples()
+        triple_count = self._count_source_triples()
         self._log_phase("fetch_triples", t_fetch)
 
         self.triple_count = triple_count
         logger.info(
-            "[DT-BUILD %s] VIEW reports %d triples to ingest",
+            "[DT-BUILD %s] source reports %d triples to ingest",
             self.task_id,
             triple_count,
         )
         if triple_count == 0:
             logger.warning(
-                "[DT-BUILD %s] VIEW %s returned 0 triples — "
+                "[DT-BUILD %s] source %s returned 0 triples — "
                 "possible causes: (1) R2RML mappings do not match source table "
                 "columns, (2) source tables are empty, (3) SQL query filters "
                 "out all rows. The VIEW was created successfully but the graph "
                 "will be empty until mappings are corrected.",
                 self.task_id,
-                self.view_table,
+                self.source_relation,
             )
             empty_msg = (
                 "VIEW created but no triples generated (check your mappings)"
@@ -896,7 +894,7 @@ class _BuildPipeline:
             triple_count,
             self.graph_name,
         )
-        select_sql = f"SELECT subject, predicate, object FROM {self.view_table}"
+        select_sql = f"SELECT subject, predicate, object FROM {self.source_relation}"
         if hasattr(self.store, "bulk_load_into_sync"):
             # Lakebase app_managed: warehouse data goes into *_sync; app writes
             # (reasoning / materialise) target the companion (*__app) via
@@ -1079,12 +1077,12 @@ class _BuildPipeline:
                 "(source=%s sync_mode=%s)",
                 self.task_id,
                 synced_uc,
-                self.view_table,
+                self.source_relation,
                 self.store.sync_table_mode,
             )
             _synced_obj = mgr.ensure(
                 synced_uc,
-                source_table_full_name=self.view_table,
+                source_table_full_name=self.source_relation,
                 primary_key_columns=builder.lakeflow_primary_key(),
                 sync_mode=self.store.sync_table_mode,
             )
@@ -1110,11 +1108,11 @@ class _BuildPipeline:
         except Exception as exc:  # noqa: BLE001
             logger.exception(
                 "[DT-BUILD %s] failed to register synced table %s: %s "
-                "(source_view=%s pg_schema=%s sync_table_mode=%s)",
+                "(source=%s pg_schema=%s sync_table_mode=%s)",
                 self.task_id,
                 synced_uc,
                 exc,
-                self.view_table,
+                self.source_relation,
                 getattr(self.store, "graph_schema", "?"),
                 getattr(self.store, "sync_table_mode", "?"),
             )

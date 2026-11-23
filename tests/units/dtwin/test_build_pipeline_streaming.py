@@ -27,6 +27,7 @@ def _bare_pipeline(**overrides):
     pipe.graph_name = "G_V1"
     pipe.view_table = "cat.sch.v_g"
     pipe.parts = pipe.view_table.split(".")
+    pipe.source_relation = pipe.view_table
     pipe.source_client = MagicMock()
     pipe.store = MagicMock()
     pipe.tm = MagicMock()
@@ -102,7 +103,7 @@ class TestFullRebuildProgressMessage:
         pipe = _bare_pipeline(is_api=False)
         pipe.start_time = 0.0
         # Mock the server-side count.
-        pipe._count_view_triples = MagicMock(return_value=view_total)
+        pipe._count_source_triples = MagicMock(return_value=view_total)
         pipe._captured: list = []
         pipe.tm.update_progress = MagicMock(
             side_effect=lambda tid, pct, msg: pipe._captured.append((pct, msg))
@@ -136,6 +137,15 @@ class TestFullRebuildProgressMessage:
         assert any("Written 4500/15000 triples" in m for m in msgs), msgs
         assert any("Written 15000/15000 triples" in m for m in msgs), msgs
         assert not any("Written 4500/4500" in m for m in msgs), msgs
+
+    def test_full_rebuild_reads_triples_from_source_relation(self):
+        pipe = self._full_pipe(view_total=10)
+        pipe.source_relation = "cat.sch.composed_relation"
+
+        pipe._apply_full_rebuild()
+
+        select_sql = pipe.source_client.iter_rows.call_args.args[0]
+        assert select_sql.endswith("FROM cat.sch.composed_relation")
 
     def test_full_rebuild_rebuilds_adjacency_for_postgres_store(self):
         pipe = self._full_pipe(view_total=10)
@@ -192,7 +202,7 @@ class TestApplyViaSyncedPipeline:
         pipe.store.ensure_synced_companion = MagicMock()
         pipe.store.ensure_synced_union_view = MagicMock()
         pipe.store.truncate_companion = MagicMock()
-        pipe._count_view_triples = MagicMock(return_value=1234)
+        pipe._count_source_triples = MagicMock(return_value=1234)
         pipe.spark_sql = "SELECT 's' AS subject, 'p' AS predicate, 'o' AS object"
         pipe.source_client.create_or_replace_view.return_value = (True, "ok")
         pipe._mgr = mgr
@@ -204,7 +214,7 @@ class TestApplyViaSyncedPipeline:
     def test_a_failed_post_sync_count_does_not_fail_the_sync(self):
         """The count after a successful sync only feeds the progress message."""
         pipe = self._synced_pipe()
-        pipe._count_view_triples = MagicMock(
+        pipe._count_source_triples = MagicMock(
             side_effect=InfrastructureError(
                 "Could not count the triples in cat.sch.v_g: "
                 "Error during request to server"
@@ -246,6 +256,16 @@ class TestApplyViaSyncedPipeline:
         pipe.store.bulk_delete_iter.assert_not_called()
         pipe.source_client.iter_rows.assert_not_called()
         assert pipe.triple_count == 1234
+
+    def test_synced_table_is_registered_on_source_relation(self):
+        pipe = self._synced_pipe()
+        pipe.source_relation = "cat.sch.composed_relation"
+
+        pipe._apply_via_synced_pipeline()
+
+        mgr = pipe.store.synced_manager.return_value
+        ensure_kwargs = mgr.ensure.call_args.kwargs
+        assert ensure_kwargs["source_table_full_name"] == "cat.sch.composed_relation"
 
     def test_apply_full_rebuild_branches_to_synced_path(self):
         pipe = self._synced_pipe()
