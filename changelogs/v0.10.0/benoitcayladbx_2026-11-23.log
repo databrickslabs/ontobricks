@@ -1080,3 +1080,95 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11349 passed, 334 skipped, 8 deselected
+
+================================================================================
+Original Graph build for every backend; internal reads default to it
+================================================================================
+
+Context:
+Steps (c1) and (c2) of the two-phase graph. The internal build
+(`/dtwin/sync/start` and `/dtwin/databricks-build/start`) now builds the
+Original Graph for every domain, whatever its backend: gateway VIEW, then
+`…_data` as a pass-through VIEW, then Delta companions. It no longer loads
+Lakebase / Neo4j (the certified build does), never materializes `…_data`,
+and drops the legacy `…_inferred` table and `…_graph` view (enrichments live
+in the Certified Graph). The Explorer-family routes read the Original Graph
+by default: an empty source and the "live" / "live:inferred" tokens map to
+it. Graph analytics always snapshots `…_data`, now a view for every domain.
+The external build and the scheduled build still use the legacy pipeline
+until (c3).
+
+Changes:
+1. src/back/core/graphdb/delta/BuildPipeline.py
+   - Original build only: `lakehouse_build_steps()` (prepare, view, data,
+     cleanup, adjacency); `_build_data_view` (count the gateway VIEW, then
+     the `…_data` VIEW); `_drop_legacy_inferred_objects`; adjacency on
+     `…_data`. Removed the table mode, OPTIMIZE, the inferred companion and
+     the union view. A successful build stamps `last_build` in the registry
+     (the Submit-for-Review gate reads it).
+2. src/back/core/graphdb/delta/Builder.py
+   - `build_steps()` takes no materialization.
+3. src/back/objects/digitaltwin/build/TwinLakehouseBuild.py
+   - Accepts every backend; `start()` runs the build as a TaskManager task
+     ("Original Graph Build", `original_build`); `_run` calls the Delta
+     builder. Removed the `materialization` field.
+4. src/back/objects/digitaltwin/build/_databricks_triplestore_build.py
+   - Deleted (Remove Middle Man).
+5. src/back/objects/digitaltwin/build/TwinGraphBuild.py
+   - Deleted: `prepare_session_sync` had no caller left;
+     `pipeline_steps` moved to `CertifiedBuild.load_steps` (its only user).
+6. src/api/routers/internal/dtwin.py
+   - `/sync/start` and `/databricks-build/start` call
+     `TwinLakehouseBuild.start`.
+   - `/sync/load`, `/sync/filter`, `/sync/stats`, `/graphql/execute`,
+     `/triples/find`, `/neighbors` normalise their source with
+     `TwinGraphAccess.explorer_source`; the session stats cache is used for
+     the Original Graph only; `/neighbors` reads the resolved relation.
+7. src/back/objects/digitaltwin/TwinGraphAccess.py
+   - `explorer_source`: sandbox / variant tokens kept, anything else is the
+     Original Graph.
+8. src/back/core/graph_analysis/metrics/JobMetrics.py
+   - `analytics_snapshot` always snapshots the Original `…_data`.
+9. Tests
+   - tests/units/graphdb/delta/test_delta_build_pipeline.py: rewritten for
+     the Original build (steps, adjacency on `…_data`, legacy drops, no
+     materialization / OPTIMIZE, count then view, empty mapping, step
+     statuses).
+   - tests/units/objects/test_build_pipeline_materialize.py: Delta parts
+     ported (view only, reporting, counting, `last_build` stamp).
+   - tests/units/dtwin/test_original_build_start.py (new): both routes start
+     the Original build; tracked task and steps; the task runs the Delta
+     build.
+   - tests/units/dtwin/test_v090_twin_build_prepare.py: every backend
+     accepted; load steps on `CertifiedBuild`; session-sync prep removed.
+   - tests/units/core/test_job_metrics.py, tests/units/dtwin/test_dtwin_analytics.py:
+     snapshot for every backend.
+   - tests/units/dtwin/test_internal_graph_source.py: "live", "live:inferred"
+     and no source read the Original Graph.
+   - tests/units/dtwin/test_certified_build.py, tests/units/api/test_help_api.py:
+     renamed references.
+
+Modified files:
+- src/back/core/graphdb/delta/BuildPipeline.py
+- src/back/core/graphdb/delta/Builder.py
+- src/back/objects/digitaltwin/build/TwinLakehouseBuild.py
+- src/back/objects/digitaltwin/build/_databricks_triplestore_build.py (deleted)
+- src/back/objects/digitaltwin/build/TwinGraphBuild.py (deleted)
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/__init__.py
+- src/back/objects/digitaltwin/certify/CertifiedBuild.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/core/graph_analysis/metrics/JobMetrics.py
+- src/api/routers/internal/dtwin.py
+- tests/units/graphdb/delta/test_delta_build_pipeline.py
+- tests/units/objects/test_build_pipeline_materialize.py
+- tests/units/dtwin/test_original_build_start.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- tests/units/core/test_job_metrics.py
+- tests/units/dtwin/test_dtwin_analytics.py
+- tests/units/dtwin/test_internal_graph_source.py
+- tests/units/dtwin/test_certified_build.py
+- tests/units/api/test_help_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11346 passed, 334 skipped, 8 deselected

@@ -116,11 +116,23 @@ def _view_only_domain():
     )
 
 
-def test_a_materialized_domain_is_scanned_in_place():
-    """Nothing to prepare, and nothing to clean up, when ..._data is a table."""
-    domain = SimpleNamespace(info={"graph_backend": "databricks"})
+@pytest.mark.parametrize("backend", ["lakebase", "neo4j", "databricks"])
+def test_every_domain_gets_a_disposable_snapshot(monkeypatch, backend):
+    """The Original ``…_data`` is a view for every backend, so it is always snapshotted."""
+    statements: List[str] = []
+    client = SimpleNamespace(execute_statement=statements.append)
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.Base.create_databricks_client",
+        lambda domain, settings=None, *, for_write=False: client,
+    )
+    domain = SimpleNamespace(
+        info={"name": "Dom", "graph_backend": backend, "lakehouse_materialization": "table"},
+        current_version=3,
+        delta={"catalog": "cat", "schema": "sch"},
+    )
+
     with analytics_snapshot(domain, None, "cat.sch.t_data") as table:
-        assert table == "cat.sch.t_data"
+        assert table == "cat.sch.triplestore_dom_V3_analytics"
 
 
 def test_a_view_only_domain_gets_a_disposable_snapshot(monkeypatch):

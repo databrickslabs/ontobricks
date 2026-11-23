@@ -251,12 +251,12 @@ class Builder(GraphBuilder):
         return self._get_client().execute_statement(sql)
 
     # -- Triple-store build pipeline -----------------------------------
-    def build_steps(self, materialization: str) -> List[str]:
+    def build_steps(self) -> List[str]:
         from back.core.graphdb.delta.BuildPipeline import (
             lakehouse_build_steps,
         )
 
-        return lakehouse_build_steps(materialization)
+        return lakehouse_build_steps()
 
     def run_triplestore_build(
         self,

@@ -1,6 +1,8 @@
-"""Prepare a session Databricks (Delta) triple-store materialization.
+"""Prepare a session Original Graph build (gateway VIEW → ``…_data`` VIEW).
 
 Extracted from ``api.routers.internal.dtwin.start_databricks_triplestore_build``.
+The Original Graph is virtual for every domain, whatever its Certified Graph
+backend.
 """
 
 from __future__ import annotations
@@ -10,14 +12,13 @@ from datetime import datetime, timezone as tz
 from typing import Any, Callable
 
 from back.core.errors import ValidationError
-from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.objects.digitaltwin.models import DomainSnapshot
 from shared.config.constants import DEFAULT_BASE_URI
 
 
 @dataclass
 class TwinLakehouseBuild:
-    """Validated inputs for ``run_databricks_triplestore_build``."""
+    """Validated inputs of an Original Graph build, and its background start."""
 
     view_table: str
     data_table: str
@@ -29,7 +30,56 @@ class TwinLakehouseBuild:
     mapping_config: Any
     ontology_config: Any
     domain_snap: DomainSnapshot
-    materialization: str
+
+    @classmethod
+    def start(cls, domain, settings, *, build_kind: str = "session") -> str:
+        """Validate the domain and run the Original build as a tracked task."""
+        from back.core.databricks import is_databricks_app
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.helpers import (
+            effective_databricks_table,
+            effective_view_table,
+            get_triplestore_sql_credentials,
+        )
+        from back.core.task_manager import get_task_manager
+
+        plan = cls.prepare_session(
+            domain,
+            settings,
+            view_table_fn=effective_view_table,
+            data_table_fn=effective_databricks_table,
+            get_credentials=get_triplestore_sql_credentials,
+            is_databricks_app_fn=is_databricks_app,
+        )
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        tm = get_task_manager()
+        task = tm.run_background_task(
+            "Original Graph Build",
+            "original_build",
+            plan._run,
+            tm,
+            builder,
+            build_kind,
+            steps=builder.build_steps(),
+        )
+        return task.id
+
+    def _run(self, task: Any, tm: Any, builder: Any, build_kind: str) -> None:
+        builder.run_triplestore_build(
+            tm=tm,
+            task_id=task.id,
+            domain_snap=self.domain_snap,
+            host=self.host,
+            token=self.token,
+            warehouse_id=self.warehouse_id,
+            view_table=self.view_table,
+            data_table=self.data_table,
+            r2rml_content=self.r2rml_content,
+            mapping_config=self.mapping_config,
+            ontology_config=self.ontology_config,
+            base_uri=self.base_uri,
+            build_kind=build_kind,
+        )
 
     @classmethod
     def prepare_session(
@@ -42,12 +92,6 @@ class TwinLakehouseBuild:
         get_credentials: Callable,
         is_databricks_app_fn: Callable,
     ) -> TwinLakehouseBuild:
-        if GraphDBFactory._resolve_triple_store_backend(domain, settings) != "databricks":
-            raise ValidationError(
-                "Databricks triple-store build is only available when "
-                "triple_store_backend is 'databricks' (Settings → Back end)."
-            )
-
         view_table = view_table_fn(domain)
         data_table = data_table_fn(domain, settings)
         if len(view_table.split(".")) != 3:
@@ -91,7 +135,4 @@ class TwinLakehouseBuild:
             mapping_config=domain.assignment,
             ontology_config=domain.ontology,
             domain_snap=DomainSnapshot(domain),
-            materialization=GraphDBFactory.resolve_lakehouse_materialization(
-                domain, settings
-            ),
         )

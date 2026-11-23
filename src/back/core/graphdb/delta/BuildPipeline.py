@@ -1,4 +1,10 @@
-"""Narrow build pipeline: R2RML VIEW → ``…_data`` relation (no Lakebase)."""
+"""Original Graph build: R2RML gateway VIEW → ``…_data`` pass-through VIEW.
+
+The Original Graph is virtual for every domain, whatever its Certified Graph
+backend: nothing is copied and nothing is loaded into Lakebase or Neo4j (the
+certified build does that). Enrichments never live here, so the legacy
+``…_inferred`` table and ``…_graph`` union view are dropped.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +13,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from back.core.errors import OntoBricksError, OperationCancelledError
-from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.logging import get_logger
@@ -17,31 +22,21 @@ from back.objects.digitaltwin.models import DomainSnapshot
 logger = get_logger(__name__)
 
 
-def lakehouse_build_steps(materialization: str) -> list[dict[str, str]]:
-    materialize_description = (
-        "Exposing pass-through data view"
-        if materialization == "view"
-        else "Materializing Delta table in Unity Catalog"
-    )
+def lakehouse_build_steps() -> list[dict[str, str]]:
     return [
         {"name": "prepare", "description": "Preparing mappings and generating queries"},
         {"name": "view", "description": "Creating the R2RML SQL view"},
-        {"name": "materialize", "description": materialize_description},
-        {"name": "inferred", "description": "Preparing inferred-triples table"},
-        {"name": "graph_view", "description": "Creating knowledge graph view"},
-        {"name": "optimize", "description": "Optimizing Delta table"},
+        {"name": "data", "description": "Exposing the pass-through data view"},
+        {"name": "cleanup", "description": "Removing legacy inferred objects"},
         {"name": "adjacency", "description": "Building adjacency indexes"},
     ]
 
 
 class BuildPipeline:
-    """Build the UC Delta triple store from R2RML mappings only.
+    """Build the Original Graph: gateway VIEW and ``…_data`` pass-through VIEW."""
 
-    ``…_data`` is either materialized (CTAS) or exposed as a pass-through view
-    over the gateway VIEW, depending on the domain's Lakehouse materialization
-    setting. Everything downstream — the inferred companion, the union graph
-    view — is identical either way.
-    """
+    MATERIALIZATION = "view"
+    BUILD_MODE = "delta_view"
 
     def __init__(
         self,
@@ -90,9 +85,6 @@ class BuildPipeline:
         self.triple_count: int = 0
         self.inferred_table = _table_naming.inferred_table_fqn(domain, settings)
         self.graph_view = _table_naming.graph_view_fqn(domain, settings)
-        self.materialization = GraphDBFactory.resolve_lakehouse_materialization(
-            domain, settings
-        )
 
     def _log_phase(self, name: str, t0_phase: float) -> None:
         elapsed = time.time() - t0_phase
@@ -109,12 +101,11 @@ class BuildPipeline:
 
     def run(self) -> None:
         logger.info(
-            "[DT-DELTA-BUILD %s] START domain=%s view=%s data=%s materialization=%s",
+            "[DT-DELTA-BUILD %s] START domain=%s view=%s data=%s",
             self.task_id,
             self.domain_name,
             self.view_table,
             self.data_table,
-            self.materialization,
         )
         try:
             t_phase = time.time()
@@ -130,41 +121,17 @@ class BuildPipeline:
             self.tm.update_progress(self.task_id, 40, "VIEW created")
 
             t_phase = time.time()
-            if not self._materialize_data_table():
+            if not self._build_data_view():
                 return
-            self._log_phase("materialize", t_phase)
+            self._log_phase("data_view", t_phase)
 
             t_phase = time.time()
-            self.tm.advance_step(self.task_id, "Preparing inferred-triples table...")
-            self._ensure_inferred_companion()
-            self._log_phase("ensure_inferred", t_phase)
+            self.tm.advance_step(self.task_id, "Removing legacy inferred objects...")
+            self._drop_legacy_inferred_objects()
+            self._log_phase("cleanup", t_phase)
 
             t_phase = time.time()
-            self._truncate_inferred()
-            self._log_phase("truncate_inferred", t_phase)
-
-            t_phase = time.time()
-            self.tm.advance_step(self.task_id, "Creating knowledge graph view...")
-            self._ensure_graph_view()
-            self._log_phase("ensure_graph_view", t_phase)
-
-            # Move from graph_view to optimize for both materialization modes.
-            self.tm.advance_step(self.task_id, "Optimizing Delta table...")
-
-            # Nothing to compact when ``…_data`` is a view — OPTIMIZE only
-            # applies to a Delta table.
-            if not self._is_view_mode:
-                t_phase = time.time()
-                materialize.optimize_table(self.source_client, self.data_table)
-                self._log_phase("optimize", t_phase)
-                self.tm.advance_step(self.task_id, "Building adjacency indexes...")
-            else:
-                self.tm.skip_step(
-                    self.task_id,
-                    "Optimization not needed for pass-through view",
-                )
-
-            t_phase = time.time()
+            self.tm.advance_step(self.task_id, "Building adjacency indexes...")
             self._rebuild_adjacency_index()
             self._log_phase("rebuild_adjacency", t_phase)
 
@@ -272,78 +239,39 @@ class BuildPipeline:
             self.tm.fail_task(self.task_id, f"Failed to create VIEW: {detail}")
             return False
 
-    @property
-    def _is_view_mode(self) -> bool:
-        return self.materialization == "view"
+    def _build_data_view(self) -> bool:
+        """Count the gateway VIEW, then expose it as the ``…_data`` VIEW.
 
-    @property
-    def build_mode(self) -> str:
-        return "delta_view" if self._is_view_mode else "delta_full"
-
-    def _materialize_data_table(self) -> bool:
-        """Build ``…_data`` and count its triples.
-
-        A count that cannot run raises :class:`InfrastructureError`, which
-        ``run()`` turns into a failed build rather than an empty one.
+        Nothing is copied, so the gateway VIEW is what gets counted, and an
+        empty mapping stops the build before ``…_data`` points at it. A count
+        that cannot run raises :class:`InfrastructureError`, which ``run()``
+        turns into a failed build rather than an empty one.
         """
-        step = (
-            f"Creating pass-through VIEW {self.data_table}..."
-            if self._is_view_mode
-            else f"Materializing Delta table {self.data_table}..."
+        self.tm.advance_step(
+            self.task_id, f"Creating pass-through VIEW {self.data_table}..."
         )
-        self.tm.advance_step(self.task_id, step)
-        if self._is_view_mode:
-            # Nothing is copied, so the gateway VIEW is what gets counted, and
-            # an empty mapping stops the build before ``…_data`` points at it.
-            self.triple_count = materialize.count_triples(
-                self.source_client, self.view_table
-            )
-            if self.triple_count == 0:
-                self._finish_without_triples()
-                return False
-            if not self._build_data_relation():
-                return False
-        else:
-            # Count the table once it is built. Counting the gateway VIEW
-            # first re-ran every mapped source query: two full scans per build.
-            if not self._build_data_relation():
-                return False
-            self.triple_count = materialize.count_triples(
-                self.source_client, self.data_table
-            )
-            if self.triple_count == 0:
-                self._finish_without_triples()
-                return False
-
-        self.tm.update_progress(
-            self.task_id,
-            85,
-            (
-                f"Exposed {self.triple_count} triples through a view"
-                if self._is_view_mode
-                else f"Materialized {self.triple_count} triples"
-            ),
+        self.triple_count = materialize.count_triples(
+            self.source_client, self.view_table
         )
-        return True
-
-    def _build_data_relation(self) -> bool:
-        """Create ``…_data``; on failure, fail the task and return ``False``."""
-        # This pipeline is a separate entry point from _BuildPipeline — the
-        # /dtwin/databricks-build/start endpoint reaches only this one — so the
-        # snapshot has to be taken here too. The two never run in the same
-        # build, so this is not a second materialisation of the same table.
+        if self.triple_count == 0:
+            self._finish_without_triples()
+            return False
         try:
             materialize.apply_data_relation(
                 self.source_client,
                 self.view_table,
                 self.data_table,
-                mode=self.materialization,
+                mode=self.MATERIALIZATION,
             )
-            return True
         except Exception as exc:  # noqa: BLE001
-            what = "pass-through view" if self._is_view_mode else "Delta table"
-            self.tm.fail_task(self.task_id, f"Failed to create the {what}: {exc}")
+            self.tm.fail_task(
+                self.task_id, f"Failed to create the pass-through view: {exc}"
+            )
             return False
+        self.tm.update_progress(
+            self.task_id, 85, f"Exposed {self.triple_count} triples through a view"
+        )
+        return True
 
     def _finish_without_triples(self) -> None:
         """Complete the build with the "mappings produced nothing" warning."""
@@ -354,36 +282,25 @@ class BuildPipeline:
                 "triple_count": 0,
                 "view_table": self.view_table,
                 "data_table": self.data_table,
-                "build_mode": self.build_mode,
-                "materialization": self.materialization,
+                "build_mode": self.BUILD_MODE,
+                "materialization": self.MATERIALIZATION,
                 "duration_seconds": time.time() - self.start_time,
             },
             message=msg,
         )
         self._record_build_run("success", message=msg)
 
-    def _ensure_inferred_companion(self) -> None:
-        if not self.inferred_table:
-            return
-        materialize.ensure_inferred_table(self.source_client, self.inferred_table)
-
-    def _truncate_inferred(self) -> None:
-        if not self.inferred_table:
-            return
-        materialize.truncate_table(self.source_client, self.inferred_table)
-
-    def _ensure_graph_view(self) -> None:
-        if not self.graph_view or not self.data_table or not self.inferred_table:
-            return
-        materialize.ensure_graph_view(
-            self.source_client,
-            self.graph_view,
-            self.data_table,
-            self.inferred_table,
-        )
+    def _drop_legacy_inferred_objects(self) -> None:
+        """Drop ``…_graph`` and ``…_inferred``: enrichments live in the Certified Graph."""
+        if self.graph_view:
+            materialize.drop_relation(self.source_client, self.graph_view, kind="view")
+        if self.inferred_table:
+            materialize.drop_relation(
+                self.source_client, self.inferred_table, kind="table"
+            )
 
     def _rebuild_adjacency_index(self) -> None:
-        source = getattr(self, "graph_view", "") or self.data_table
+        source = self.data_table
         if not source:
             return
         from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
@@ -402,8 +319,8 @@ class BuildPipeline:
                 "triple_count": self.triple_count,
                 "view_table": self.view_table,
                 "data_table": self.data_table,
-                "build_mode": self.build_mode,
-                "materialization": self.materialization,
+                "build_mode": self.BUILD_MODE,
+                "materialization": self.MATERIALIZATION,
                 "duration_seconds": duration,
             },
             message=msg,
@@ -442,7 +359,7 @@ class BuildPipeline:
                 "relationship_count": len(self.relationship_mappings or []),
                 "sql_chars": len(self.spark_sql or ""),
                 "triple_store_backend": "databricks",
-                "materialization": self.materialization,
+                "materialization": self.MATERIALIZATION,
                 "view_table": self.view_table,
                 "data_table": self.data_table,
                 "task_id": self.task_id,
@@ -458,6 +375,10 @@ class BuildPipeline:
             }
             svc = RegistryService.from_context(self.domain, self.settings)
             svc.record_build_run(folder, entry)
+            if status == "success" and version:
+                # The Submit-for-Review gate reads ``domain_versions.last_build``.
+                build_ts = getattr(self.domain, "last_build", "") or entry["finished_at"]
+                svc._store.stamp_last_build(folder, str(version), build_ts)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "[DT-DELTA-BUILD %s] could not record build run: %s",

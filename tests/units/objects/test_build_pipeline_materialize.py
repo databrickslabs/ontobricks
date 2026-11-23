@@ -237,7 +237,7 @@ def test_a_failed_triple_count_fails_the_build(lakebase_pipeline):
     assert "Error during request to server" in pipe.tm.failure_message
 
 
-def test_the_delta_pipeline_materialises_once(delta_pipeline):
+def test_the_graph_engine_pipeline_materialises_once(delta_pipeline):
     """The Lakehouse pipeline must call materialize_from_view exactly once."""
     calls = []
     with patch(
@@ -286,30 +286,25 @@ def test_lakebase_ignores_a_view_only_setting():
     assert _relation_modes(pipe) == [("cat.sch.triplestore_dom_V3_data", "table")]
 
 
-def test_the_databricks_build_endpoint_also_materialises():
-    """``/dtwin/databricks-build/start`` never reaches ``_BuildPipeline``.
-
-    It drives ``BuildPipeline`` directly, so that pipeline has
-    to take the snapshot itself. The two are alternative entry points, never
-    both run for one build, so this is not a duplicate of the step above.
-    """
+def test_the_original_build_copies_nothing():
+    """The Original Graph is virtual for every backend: ``…_data`` is a view."""
     pipe = _bare_delta_pipeline()
 
     calls = []
     with patch(
         "back.core.graphdb.delta.materialize.materialize_from_view",
         side_effect=lambda client, view, table: calls.append((view, table)),
-    ), patch("back.core.graphdb.delta.materialize.optimize_table"):
+    ):
         pipe.run()
 
-    assert calls == [(
-        "cat.sch.triplestore_dom_V3",
-        "cat.sch.triplestore_dom_V3_data",
-    )]
+    assert calls == []
+    assert any(
+        sql.startswith(f"CREATE OR REPLACE VIEW {_DATA} ")
+        for sql in pipe.source_client.calls
+    )
 
 
 def _bare_delta_pipeline(
-    materialization: str = "table",
     *,
     triple_count: int = 5,
     real_reporting: bool = False,
@@ -333,7 +328,8 @@ def _bare_delta_pipeline(
     pipe.domain_name = "dom"
     pipe.view_table = "cat.sch.triplestore_dom_V3"
     pipe.data_table = "cat.sch.triplestore_dom_V3_data"
-    pipe.materialization = materialization
+    pipe.inferred_table = "cat.sch.triplestore_dom_V3_inferred"
+    pipe.graph_view = "cat.sch.triplestore_dom_V3_graph"
     pipe.source_client = _RecordingClient(count=triple_count)
     pipe.start_time = time.time()
     pipe.triple_count = 0
@@ -341,9 +337,6 @@ def _bare_delta_pipeline(
 
     pipe._prepare_translation = MagicMock(return_value=True)
     pipe._create_view = MagicMock(return_value=True)
-    pipe._ensure_inferred_companion = MagicMock()
-    pipe._truncate_inferred = MagicMock()
-    pipe._ensure_graph_view = MagicMock()
     pipe._rebuild_adjacency_index = MagicMock()
     pipe._log_phase = MagicMock()
 
@@ -383,8 +376,8 @@ def _run_capturing_reports(pipe):
     return pipe.tm.results, entries
 
 
-def test_the_databricks_build_endpoint_honours_view_only():
-    pipe = _bare_delta_pipeline("view")
+def test_the_original_build_exposes_data_as_a_view():
+    pipe = _bare_delta_pipeline()
 
     modes = []
     with patch(
@@ -399,34 +392,13 @@ def test_the_databricks_build_endpoint_honours_view_only():
     optimize.assert_not_called()
 
 
-def test_the_databricks_build_optimizes_a_materialized_table():
-    pipe = _bare_delta_pipeline("table")
-
-    with patch(
-        "back.core.graphdb.delta.materialize.apply_data_relation"
-    ), patch("back.core.graphdb.delta.materialize.optimize_table") as optimize:
-        pipe.run()
-
-    optimize.assert_called_once()
-    assert optimize.call_args[0][1] == "cat.sch.triplestore_dom_V3_data"
-
-
 def test_the_build_step_says_which_object_it_is_creating():
     """"Materializing Delta table" is a lie when nothing is being copied."""
-    view_pipe = _bare_delta_pipeline("view")
-    with patch("back.core.graphdb.delta.materialize.apply_data_relation"), patch(
-        "back.core.graphdb.delta.materialize.optimize_table"
-    ):
+    view_pipe = _bare_delta_pipeline()
+    with patch("back.core.graphdb.delta.materialize.apply_data_relation"):
         view_pipe.run()
     assert any("pass-through VIEW" in s for s in view_pipe.tm.steps)
     assert not any("Materializing Delta table" in s for s in view_pipe.tm.steps)
-
-    table_pipe = _bare_delta_pipeline("table")
-    with patch("back.core.graphdb.delta.materialize.apply_data_relation"), patch(
-        "back.core.graphdb.delta.materialize.optimize_table"
-    ):
-        table_pipe.run()
-    assert any("Materializing Delta table" in s for s in table_pipe.tm.steps)
 
 
 class TestWhatABuildReports:
@@ -439,24 +411,30 @@ class TestWhatABuildReports:
 
     def test_a_view_only_build_reports_its_mode(self):
         results, entries = _run_capturing_reports(
-            _bare_delta_pipeline("view", real_reporting=True)
+            _bare_delta_pipeline(real_reporting=True)
         )
         assert results[0]["build_mode"] == "delta_view"
         assert results[0]["materialization"] == "view"
         assert entries[0]["materialization"] == "view"
 
-    def test_a_materialized_build_reports_its_mode(self):
-        results, entries = _run_capturing_reports(
-            _bare_delta_pipeline("table", real_reporting=True)
+    def test_a_successful_build_stamps_last_build_for_the_review_gate(self):
+        pipe = _bare_delta_pipeline(real_reporting=True)
+        pipe.domain.last_build = "2026-11-23T10:00:00+00:00"
+        registry = MagicMock()
+        with patch("back.core.graphdb.delta.materialize.apply_data_relation"), patch(
+            "back.objects.registry.RegistryService.RegistryService.from_context",
+            return_value=registry,
+        ):
+            pipe.run()
+
+        registry._store.stamp_last_build.assert_called_once_with(
+            "dom", "3", "2026-11-23T10:00:00+00:00"
         )
-        assert results[0]["build_mode"] == "delta_full"
-        assert results[0]["materialization"] == "table"
-        assert entries[0]["materialization"] == "table"
 
     def test_an_empty_mapping_still_reports_the_mode(self):
         """The early exit has its own payload, which used to hardcode the mode."""
         results, entries = _run_capturing_reports(
-            _bare_delta_pipeline("view", triple_count=0, real_reporting=True)
+            _bare_delta_pipeline(triple_count=0, real_reporting=True)
         )
         assert results[0]["triple_count"] == 0
         assert results[0]["build_mode"] == "delta_view"
@@ -472,9 +450,8 @@ class TestCountingTriples:
     were reported as successful builds with "no triples generated".
     """
 
-    @pytest.mark.parametrize("materialization", ["table", "view"])
-    def test_a_failed_count_fails_the_task_with_the_real_error(self, materialization):
-        pipe = _bare_delta_pipeline(materialization, real_reporting=True)
+    def test_a_failed_count_fails_the_task_with_the_real_error(self):
+        pipe = _bare_delta_pipeline(real_reporting=True)
         pipe.source_client = _RecordingClient(fail_on="COUNT(*)")
 
         _run_capturing_reports(pipe)
@@ -482,42 +459,28 @@ class TestCountingTriples:
         assert pipe.tm.failed is True
         assert "Error during request to server" in pipe.tm.failure_message
 
-    @pytest.mark.parametrize("materialization", ["table", "view"])
-    def test_a_failed_count_is_audited_as_an_error(self, materialization):
-        pipe = _bare_delta_pipeline(materialization, real_reporting=True)
+    def test_a_failed_count_is_audited_as_an_error(self):
+        pipe = _bare_delta_pipeline(real_reporting=True)
         pipe.source_client = _RecordingClient(fail_on="COUNT(*)")
 
         _, entries = _run_capturing_reports(pipe)
 
         assert [entry["status"] for entry in entries] == ["error"]
 
-    def test_a_materialized_build_scans_the_gateway_view_once(self):
-        """Counting the VIEW before the CTAS ran the whole mapping SQL twice."""
-        pipe = _bare_delta_pipeline("table")
+    def test_the_build_scans_the_gateway_view_once(self):
+        pipe = _bare_delta_pipeline()
 
         pipe.run()
 
-        reads = [sql for sql in pipe.source_client.calls if _reads(sql, _VIEW)]
+        reads = [
+            sql
+            for sql in pipe.source_client.calls
+            if _reads(sql, _VIEW) and "COUNT(*)" in sql
+        ]
         assert len(reads) == 1
 
-    def test_a_materialized_build_counts_the_table_it_just_built(self):
-        pipe = _bare_delta_pipeline("table")
-
-        pipe.run()
-
-        calls = pipe.source_client.calls
-        ctas = next(
-            i for i, sql in enumerate(calls)
-            if sql.startswith(f"CREATE OR REPLACE TABLE {_DATA} ")
-        )
-        counts = [
-            i for i, sql in enumerate(calls)
-            if "COUNT(*)" in sql and _reads(sql, _DATA)
-        ]
-        assert counts and min(counts) > ctas
-
-    def test_an_empty_materialized_build_warns_that_the_mapping_produced_nothing(self):
-        pipe = _bare_delta_pipeline("table", triple_count=0, real_reporting=True)
+    def test_an_empty_build_warns_that_the_mapping_produced_nothing(self):
+        pipe = _bare_delta_pipeline(triple_count=0, real_reporting=True)
 
         results, _ = _run_capturing_reports(pipe)
 

@@ -16,6 +16,18 @@ from back.objects.digitaltwin import DigitalTwin
 pytestmark = pytest.mark.unit
 
 
+@pytest.fixture(autouse=True)
+def _scan_the_source_in_place(monkeypatch):
+    """The Original ``…_data`` snapshot needs a warehouse; scan the source here."""
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _passthrough(_domain, _settings, source_table):
+        yield source_table
+
+    monkeypatch.setattr("back.core.graph_analysis.analytics_snapshot", _passthrough)
+
+
 # ---------------------------------------------------------------------------
 # Minimal stand-ins
 # ---------------------------------------------------------------------------

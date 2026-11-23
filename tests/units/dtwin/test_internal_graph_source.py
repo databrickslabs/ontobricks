@@ -1,4 +1,4 @@
-"""Internal graph reads follow the source picker: Original, Certified or default."""
+"""Internal graph reads follow the source picker; the Original Graph is the default."""
 
 from unittest.mock import MagicMock, patch
 
@@ -35,7 +35,16 @@ def test_a_variant_token_opens_that_variant_store(api_client, source):
     assert variants and set(variants) == {source}
 
 
-def test_the_live_token_keeps_the_default_store(api_client):
-    variants = _variants_opened(api_client, "live")
+@pytest.mark.parametrize("source", ["live", "live:inferred", ""])
+def test_the_internal_default_is_the_original_graph(api_client, source):
+    variants = _variants_opened(api_client, source)
 
-    assert variants and set(variants) == {None}
+    assert variants and set(variants) == {"original"}
+
+
+def test_explorer_source_keeps_sandboxes_and_variants():
+    from back.objects.digitaltwin.TwinGraphAccess import TwinGraphAccess
+
+    assert TwinGraphAccess.explorer_source("s0123abcd") == "s0123abcd"
+    assert TwinGraphAccess.explorer_source(" certified ") == "certified"
+    assert TwinGraphAccess.explorer_source(None) == "original"

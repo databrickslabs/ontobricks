@@ -99,28 +99,22 @@ def resolve_analytics_source(domain: Any, settings: Any) -> Tuple[str, str]:
 def analytics_snapshot(domain: Any, settings: Any, source_table: str) -> Iterator[str]:
     """Yield a table the analytics job can scan repeatedly, cleaning up after.
 
-    In the default materialization ``source_table`` is already a Delta table
-    and this yields it unchanged. Under view-only materialization it is a
-    pass-through view over the R2RML gateway, and the job's iterative BFS would
-    re-run that whole query on every scan — so a disposable snapshot is
-    materialized for the run and dropped on the way out, including when the run
-    raises.
+    ``source_table`` is the Original Graph ``…_data``, a pass-through view over
+    the R2RML gateway for every domain, and the job's iterative BFS would re-run
+    that whole query on every scan — so a disposable snapshot is materialized
+    for the run and dropped on the way out, including when the run raises.
 
     A failure to drop is logged rather than raised: the run's result matters
     more than the leftover, which Settings → Lakehouse lists for purging.
     """
     from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-    if GraphDBFactory.resolve_lakehouse_materialization(domain, settings) != "view":
-        yield source_table
-        return
-
     builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
     snapshot = builder.analytics_snapshot_fqn()
     if not snapshot or not builder.has_client():
         raise InfrastructureError(
-            "Graph analytics needs a temporary Delta snapshot for a view-only "
-            "context, and it could not be prepared",
+            "Graph analytics needs a temporary Delta snapshot of the Original "
+            "Graph, and it could not be prepared",
             detail=(
                 "No snapshot table name could be derived"
                 if not snapshot

@@ -1,4 +1,4 @@
-"""TwinGraphBuild / TwinLakehouseBuild session preparation, inferred-triple
+"""Certified load steps / TwinLakehouseBuild session preparation, inferred-triple
 materialisation (Delta + graph) and Knowledge Graph stats assembly."""
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import pytest
 
 from back.core.errors import NotFoundError, ValidationError
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
-from back.objects.digitaltwin.build.TwinGraphBuild import TwinGraphBuild
+from back.objects.digitaltwin.certify import CertifiedBuild
 from back.objects.digitaltwin.build.TwinInferredMaterialize import TwinInferredMaterialize
 from back.objects.digitaltwin.build.TwinLakehouseBuild import TwinLakehouseBuild
 from back.objects.digitaltwin.certify import CertifiedGraphWriter
@@ -45,7 +45,7 @@ def _domain(**over) -> SimpleNamespace:
 
 
 # ---------------------------------------------------------------------------
-# TwinGraphBuild
+# CertifiedBuild.load_steps
 # ---------------------------------------------------------------------------
 
 
@@ -55,7 +55,7 @@ class TestGraphPipelineSteps:
         with patch.object(GraphDBFactory, "_resolve_graph_engine", **kw), patch.object(
             GraphDBFactory, "_resolve_graph_engine_config", return_value=cfg or {}
         ):
-            return TwinGraphBuild.pipeline_steps(_domain(), MagicMock())
+            return CertifiedBuild.load_steps(_domain(), MagicMock())
 
     def test_managed_synced_lakebase_exposes_the_sync_steps(self):
         steps = self._steps("lakebase", {"lakebase": {"sync_mode": "managed_synced"}})
@@ -80,68 +80,6 @@ class TestGraphPipelineSteps:
         assert [s["name"] for s in steps] == ["graph"]
 
 
-def _prepare_graph(domain, *, view="c.s.v", creds=("https://h", "tok", "wh"), app=False):
-    with patch.object(
-        TwinGraphBuild, "pipeline_steps", return_value=[{"name": "graph"}]
-    ):
-        return TwinGraphBuild.prepare_session_sync(
-            domain,
-            MagicMock(),
-            view_table_fn=lambda d: view,
-            graph_name_fn=lambda d: "sales_graph",
-            get_credentials=lambda d, s: creds,
-            is_databricks_app_fn=lambda: app,
-        )
-
-
-class TestPrepareSessionSync:
-    def test_valid_domain_returns_plan_and_stamps_last_build(self):
-        dom = _domain()
-        plan = _prepare_graph(dom)
-
-        assert plan.view_table == "c.s.v"
-        assert plan.graph_name == "sales_graph"
-        assert plan.warehouse_id == "wh"
-        assert plan.base_uri == "http://ex.org/onto#"
-        assert plan.graph_steps == [{"name": "graph"}]
-        assert plan.delta_cfg == {"catalog": "c"}
-        assert dom.last_build
-        assert dom.triplestore == {"build_last_update": "2026-10-01T10:00:00"}
-        dom.save.assert_called_once()
-        dom.ensure_generated_content.assert_called_once()
-        assert "token" not in plan.domain_snap.databricks
-
-    def test_unqualified_view_is_rejected_before_any_mutation(self):
-        dom = _domain()
-        with pytest.raises(ValidationError, match="fully qualified"):
-            _prepare_graph(dom, view="schema.view")
-        dom.save.assert_not_called()
-
-    def test_missing_r2rml_is_rejected(self):
-        with pytest.raises(ValidationError, match="R2RML"):
-            _prepare_graph(_domain(get_r2rml=MagicMock(return_value="")))
-
-    @pytest.mark.parametrize("creds", [("", "tok", "wh"), ("https://h", "", "wh")])
-    def test_missing_host_or_token_outside_apps_is_rejected(self, creds):
-        with pytest.raises(ValidationError, match="Databricks not configured"):
-            _prepare_graph(_domain(), creds=creds)
-
-    def test_apps_mode_tolerates_missing_host_and_token(self):
-        plan = _prepare_graph(_domain(), creds=("", "", "wh"), app=True)
-        assert plan.warehouse_id == "wh"
-
-    def test_missing_warehouse_is_rejected(self):
-        dom = _domain()
-        with pytest.raises(ValidationError, match="warehouse"):
-            _prepare_graph(dom, creds=("https://h", "tok", ""), app=True)
-        dom.save.assert_not_called()
-
-    def test_without_last_update_no_build_stamp_is_written(self):
-        dom = _domain(last_update="")
-        _prepare_graph(dom)
-        assert "build_last_update" not in dom.triplestore
-
-
 # ---------------------------------------------------------------------------
 # TwinLakehouseBuild
 # ---------------------------------------------------------------------------
@@ -151,8 +89,6 @@ def _prepare_lakehouse(domain, *, backend="databricks", view="c.s.v",
                        data="c.s.v_data", creds=("https://h", "tok", "wh"), app=False):
     with patch.object(
         GraphDBFactory, "_resolve_triple_store_backend", return_value=backend
-    ), patch.object(
-        GraphDBFactory, "resolve_lakehouse_materialization", return_value="table"
     ):
         return TwinLakehouseBuild.prepare_session(
             domain,
@@ -171,15 +107,16 @@ class TestLakehousePrepareSession:
 
         assert plan.view_table == "c.s.v"
         assert plan.data_table == "c.s.v_data"
-        assert plan.materialization == "table"
         assert plan.warehouse_id == "wh"
         assert dom.last_build
         assert dom.triplestore == {"build_last_update": "2026-10-01T10:00:00"}
         dom.save.assert_called_once()
 
-    def test_non_databricks_backend_is_rejected(self):
-        with pytest.raises(ValidationError, match="triple_store_backend"):
-            _prepare_lakehouse(_domain(), backend="lakebase")
+    @pytest.mark.parametrize("backend", ["lakebase", "neo4j"])
+    def test_every_backend_builds_its_original_graph(self, backend):
+        plan = _prepare_lakehouse(_domain(), backend=backend)
+
+        assert plan.data_table == "c.s.v_data"
 
     def test_unqualified_view_is_rejected(self):
         with pytest.raises(ValidationError, match="View location"):

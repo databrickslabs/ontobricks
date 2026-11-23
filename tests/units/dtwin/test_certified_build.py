@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
-from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad, TwinGraphBuild
+from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad
 from back.objects.digitaltwin.certify import CertifiedBuild
 
 _BASE = "cat.sch.triplestore_dom_V2_cert_base"
@@ -253,7 +253,7 @@ class TestTaskSteps:
             patch.object(
                 GraphDBFactory, "_resolve_graph_backend", return_value="lakebase"
             ),
-            patch.object(TwinGraphBuild, "pipeline_steps", return_value=load_steps),
+            patch.object(CertifiedBuild, "load_steps", return_value=load_steps),
         ):
             steps = CertifiedBuild.task_steps(_domain(), SimpleNamespace())
 

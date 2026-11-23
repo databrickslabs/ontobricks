@@ -1,4 +1,4 @@
-"""Regression tests for the Databricks-only triple-store build pipeline."""
+"""Original Graph build pipeline: gateway VIEW → ``…_data`` VIEW, every backend."""
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -13,27 +13,14 @@ from back.core.task_manager.TaskManager import TaskManager
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    ("mode", "materialize_description"),
-    [
-        ("table", "Materializing Delta table in Unity Catalog"),
-        ("view", "Exposing pass-through data view"),
-    ],
-)
-def test_lakehouse_build_steps_name_materialization_mode(
-    mode: str, materialize_description: str
-) -> None:
-    steps = lakehouse_build_steps(mode)
-    assert [step["name"] for step in steps] == [
+def test_original_build_steps() -> None:
+    assert [step["name"] for step in lakehouse_build_steps()] == [
         "prepare",
         "view",
-        "materialize",
-        "inferred",
-        "graph_view",
-        "optimize",
+        "data",
+        "cleanup",
         "adjacency",
     ]
-    assert steps[2]["description"] == materialize_description
 
 
 @pytest.mark.unit
@@ -84,7 +71,7 @@ def test_prepare_translation_uses_configured_build_transport() -> None:
     )
 
 
-def _minimal_run_pipeline(*, materialization: str = "table"):
+def _minimal_run_pipeline():
     pipe = BuildPipeline.__new__(BuildPipeline)
     pipe.tm = MagicMock()
     pipe.task_id = "task-run"
@@ -100,7 +87,6 @@ def _minimal_run_pipeline(*, materialization: str = "table"):
     pipe.domain_name = "dom"
     pipe.view_table = "cat.sch.triplestore_dom_V3"
     pipe.data_table = "cat.sch.triplestore_dom_V3_data"
-    pipe.materialization = materialization
     pipe.host = "host"
     pipe.token = "token"
     pipe.warehouse_id = "wh"
@@ -120,10 +106,7 @@ def _minimal_run_pipeline(*, materialization: str = "table"):
 
     pipe._prepare_translation = MagicMock(return_value=True)
     pipe._create_view = MagicMock(return_value=True)
-    pipe._materialize_data_table = MagicMock(return_value=True)
-    pipe._ensure_inferred_companion = MagicMock()
-    pipe._truncate_inferred = MagicMock()
-    pipe._ensure_graph_view = MagicMock()
+    pipe._build_data_view = MagicMock(return_value=True)
     pipe._complete_task = MagicMock()
     pipe._is_cancelled = MagicMock(return_value=False)
     pipe._record_build_run = MagicMock()
@@ -131,34 +114,53 @@ def _minimal_run_pipeline(*, materialization: str = "table"):
     return pipe
 
 
+def _statements(client) -> list:
+    return [c.args[0] for c in client.execute_statement.call_args_list]
+
+
 @pytest.mark.unit
-def test_run_builds_adjacency_index_after_graph_view() -> None:
-    pipe = _minimal_run_pipeline(materialization="table")
+def test_run_builds_adjacency_on_the_data_view() -> None:
+    pipe = _minimal_run_pipeline()
 
-    order = []
-
-    def _mark_graph_view():
-        order.append("graph_view")
-
-    pipe._ensure_graph_view = MagicMock(side_effect=_mark_graph_view)
-
-    with patch(
-        "back.core.graphdb.delta.BuildPipeline.MaterializedStore"
-    ) as store_cls, patch("back.core.graphdb.delta.materialize.optimize_table"):
-        store = store_cls.return_value
-        store.rebuild_adjacency.side_effect = lambda _table: order.append("adjacency")
+    with patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore") as store_cls:
         pipe.run()
 
     store_cls.assert_called_once_with(
         pipe.source_client, domain=pipe.domain, settings=pipe.settings
     )
-    store.rebuild_adjacency.assert_called_once_with(pipe.graph_view)
-    assert order == ["graph_view", "adjacency"]
+    store_cls.return_value.rebuild_adjacency.assert_called_once_with(pipe.data_table)
+
+
+@pytest.mark.unit
+def test_run_drops_the_legacy_inferred_objects() -> None:
+    pipe = _minimal_run_pipeline()
+
+    with patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore"):
+        pipe.run()
+
+    statements = _statements(pipe.source_client)
+    assert f"DROP VIEW IF EXISTS {pipe.graph_view}" in statements
+    assert f"DROP TABLE IF EXISTS {pipe.inferred_table}" in statements
+    assert not any("CREATE" in s and "_inferred" in s for s in statements)
+
+
+@pytest.mark.unit
+def test_run_never_materializes_or_optimizes() -> None:
+    pipe = _minimal_run_pipeline()
+
+    with (
+        patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore"),
+        patch("back.core.graphdb.delta.materialize.optimize_table") as optimize,
+    ):
+        pipe.run()
+
+    optimize.assert_not_called()
+    assert not any("CREATE OR REPLACE TABLE" in s for s in _statements(pipe.source_client))
 
 
 @pytest.mark.unit
 def test_run_fails_when_adjacency_ctas_fails() -> None:
-    pipe = _minimal_run_pipeline(materialization="view")
+    pipe = _minimal_run_pipeline()
 
     with patch(
         "back.core.graphdb.delta.BuildPipeline.MaterializedStore"
@@ -174,98 +176,58 @@ def test_run_fails_when_adjacency_ctas_fails() -> None:
 
 
 @pytest.mark.unit
-def test_run_in_table_mode_optimizes_data_before_adjacency() -> None:
-    pipe = _minimal_run_pipeline(materialization="table")
+def test_data_view_is_built_after_counting_the_gateway_view() -> None:
+    pipe = _minimal_run_pipeline()
+    del pipe._build_data_view
     order = []
-
-    with patch(
-        "back.core.graphdb.delta.BuildPipeline.MaterializedStore"
-    ) as store_cls, patch(
-        "back.core.graphdb.delta.materialize.optimize_table",
-        side_effect=lambda *_args, **_kwargs: order.append("data_optimize"),
-    ):
-        store = store_cls.return_value
-        store.rebuild_adjacency.side_effect = lambda _table: order.append("adjacency")
-        pipe.run()
-
-    assert order == ["data_optimize", "adjacency"]
-
-
-@pytest.mark.unit
-def test_run_in_table_mode_advances_all_post_materialization_stages() -> None:
-    pipe = _minimal_run_pipeline(materialization="table")
-
     with (
-        patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore"),
-        patch("back.core.graphdb.delta.materialize.optimize_table"),
-    ):
-        pipe.run()
-
-    assert [call.args[1] for call in pipe.tm.advance_step.call_args_list] == [
-        "Preparing inferred-triples table...",
-        "Creating knowledge graph view...",
-        "Optimizing Delta table...",
-        "Building adjacency indexes...",
-    ]
-
-
-@pytest.mark.unit
-def test_view_build_skips_optimize_stage() -> None:
-    pipe = _minimal_run_pipeline(materialization="view")
-
-    with (
-        patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore"),
         patch(
-            "back.core.graphdb.delta.BuildPipeline."
-            "materialize.optimize_table"
-        ) as optimize,
+            "back.core.graphdb.delta.materialize.count_triples",
+            side_effect=lambda *_a: order.append("count") or 7,
+        ),
+        patch(
+            "back.core.graphdb.delta.materialize.apply_data_relation",
+            side_effect=lambda *_a, mode: order.append(("data", mode)),
+        ),
     ):
-        pipe.run()
+        assert pipe._build_data_view() is True
 
-    pipe.tm.skip_step.assert_called_once_with(
-        pipe.task_id, "Optimization not needed for pass-through view"
-    )
-    optimize.assert_not_called()
+    assert order == ["count", ("data", "view")]
+    assert pipe.triple_count == 7
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    ("materialization", "expected_statuses"),
-    [
-        (
-            "view",
-            {"graph_view": "completed", "optimize": "skipped", "adjacency": "completed"},
-        ),
-        ("table", {"optimize": "completed", "adjacency": "completed"}),
-    ],
-)
-def test_run_sets_terminal_step_statuses_with_real_task_manager(
-    materialization: str, expected_statuses: dict[str, str]
-) -> None:
+def test_an_empty_mapping_stops_before_the_data_view() -> None:
+    pipe = _minimal_run_pipeline()
+    del pipe._build_data_view
+    pipe._finish_without_triples = MagicMock()
+    with (
+        patch("back.core.graphdb.delta.materialize.count_triples", return_value=0),
+        patch("back.core.graphdb.delta.materialize.apply_data_relation") as apply,
+    ):
+        assert pipe._build_data_view() is False
+
+    apply.assert_not_called()
+    pipe._finish_without_triples.assert_called_once_with()
+
+
+@pytest.mark.unit
+def test_run_sets_terminal_step_statuses_with_real_task_manager() -> None:
     tm = TaskManager()
-    task = tm.create_task(
-        f"lakehouse-{materialization}",
-        "lakehouse_build",
-        steps=lakehouse_build_steps(materialization),
-    )
+    task = tm.create_task("original", "original_build", steps=lakehouse_build_steps())
     tm.start_task(task.id, "Preparing mappings...")
-    pipe = _minimal_run_pipeline(materialization=materialization)
+    pipe = _minimal_run_pipeline()
     pipe.tm = tm
     pipe.task_id = task.id
     pipe._create_view = lambda: tm.advance_step(  # noqa: E731
         pipe.task_id, f"Creating VIEW {pipe.view_table}..."
     )
 
-    def _materialize_data_table() -> bool:
-        step = (
-            f"Creating pass-through VIEW {pipe.data_table}..."
-            if materialization == "view"
-            else f"Materializing Delta table {pipe.data_table}..."
-        )
-        tm.advance_step(pipe.task_id, step)
+    def _build_data_view() -> bool:
+        tm.advance_step(pipe.task_id, f"Creating pass-through VIEW {pipe.data_table}...")
         return True
 
-    pipe._materialize_data_table = _materialize_data_table
+    pipe._build_data_view = _build_data_view
 
     def _complete_task() -> None:
         tm.complete_task(pipe.task_id, result={"ok": True}, message="done")
@@ -273,16 +235,17 @@ def test_run_sets_terminal_step_statuses_with_real_task_manager(
 
     pipe._complete_task = _complete_task
     try:
-        with (
-            patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore"),
-            patch("back.core.graphdb.delta.materialize.optimize_table"),
-        ):
+        with patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore"):
             pipe.run()
 
         task_after = tm.get_task(pipe.task_id)
-        assert task_after is not None
         step_statuses = {step.name: step.status for step in task_after.steps}
-        for step_name, expected_status in expected_statuses.items():
-            assert step_statuses[step_name] == expected_status
+        assert step_statuses == {
+            "prepare": "completed",
+            "view": "completed",
+            "data": "completed",
+            "cleanup": "completed",
+            "adjacency": "completed",
+        }
     finally:
         tm.delete_task(task.id)

@@ -401,7 +401,7 @@ class TestHelpDeployBundle:
             if line.strip() and not line.strip().startswith("#")
         }
         assert "build/" not in active, (
-            ".gitignore 'build/' is recursive and strips the TwinGraphBuild "
+            ".gitignore 'build/' is recursive and strips the digitaltwin build "
             "package from the Apps workspace; use '/build/' for dist artifacts"
         )
         pkg = "src/back/objects/digitaltwin/build/__init__.py"

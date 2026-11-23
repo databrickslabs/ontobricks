@@ -37,6 +37,18 @@ class TwinGraphAccess:
         return TwinGraphAccess.SOURCE_VARIANTS.get(raw.strip().lower())
 
     @staticmethod
+    def explorer_source(raw: Optional[str]) -> str:
+        """Source of an internal graph read: a sandbox, a variant, or the Original Graph.
+
+        An empty source and the legacy ``live`` / ``live:inferred`` tokens read
+        the Original Graph, the internal default.
+        """
+        text = (raw or "").strip() if isinstance(raw, str) else ""
+        if TwinGraphAccess.sandbox_id(text) or TwinGraphAccess.source_variant(text):
+            return text
+        return GRAPH_VARIANT_ORIGINAL
+
+    @staticmethod
     def variant_from_payload(data: Any) -> Optional[str]:
         """Graph variant named by the ``simulation_id`` source token of a payload."""
         payload = data if isinstance(data, dict) else {}

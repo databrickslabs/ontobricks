@@ -25,6 +25,7 @@ from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql
 from back.core.databricks import is_databricks_app
 from back.core.graphdb import get_graphdb
+from back.core.graphdb.constants import GRAPH_VARIANT_ORIGINAL
 from back.core.graph_analysis import (
     MODE_JOB,
     analytics_job_configured,
@@ -48,7 +49,6 @@ from back.objects.digitaltwin import (
     TwinBackgroundTasks,
     TwinDataQualityRun,
     TwinGraphAccess,
-    TwinGraphBuild,
     TwinGraphStats,
     TwinInferredMaterialize,
     TwinLakehouseBuild,
@@ -66,7 +66,6 @@ from back.core.helpers import (
     effective_graph_query_table,
     effective_view_table,
     get_databricks_client,
-    get_triplestore_sql_credentials,
     require_domain_llm,
     run_blocking,
 )
@@ -199,63 +198,14 @@ async def start_triplestore_sync(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Start async knowledge graph build: CREATE VIEW then populate the graph store.
+    """Start an Original Graph build (gateway VIEW → ``…_data`` VIEW), every backend.
 
-    Always performs a full rebuild. When the graph engine is ``lakebase`` in
-    ``managed_synced`` mode, the Lakeflow pipeline handles the data-plane
-    refresh automatically.
+    Nothing is loaded into Lakebase or Neo4j here: the certified build
+    (``/dtwin/certified-build/start``) builds the served graph.
     """
-    import threading
-    from back.core.task_manager import get_task_manager
-
     await request.json()  # consume body (drop_existing / build_mode kept for API compat)
-
-    domain = get_domain(session_mgr)
-
-    plan = TwinGraphBuild.prepare_session_sync(
-        domain,
-        settings,
-        view_table_fn=effective_view_table,
-        graph_name_fn=effective_graph_name,
-        get_credentials=get_triplestore_sql_credentials,
-        is_databricks_app_fn=is_databricks_app,
-    )
-
-    tm = get_task_manager()
-    task = tm.create_task(
-        name="Knowledge Graph Build",
-        task_type="triplestore_sync",
-        steps=[
-            {"name": "prepare", "description": "Preparing mappings and generating queries"},
-            {"name": "view", "description": "Creating the Knowledge Graph view"},
-            *plan.graph_steps,
-        ],
-    )
-
-    def run_sync():
-        DigitalTwin.run_build_task(
-            tm,
-            task.id,
-            domain,
-            settings,
-            plan.domain_snap,
-            plan.host,
-            plan.token,
-            plan.warehouse_id,
-            plan.view_table,
-            plan.graph_name,
-            plan.r2rml_content,
-            plan.base_uri,
-            plan.mapping_config,
-            plan.ontology_config,
-            plan.delta_cfg,
-            build_kind="session",
-        )
-
-    thread = threading.Thread(target=run_sync, daemon=True)
-    thread.start()
-
-    return {"success": True, "task_id": task.id, "message": "Sync started"}
+    task_id = await run_blocking(TwinLakehouseBuild.start, get_domain(session_mgr), settings)
+    return {"success": True, "task_id": task_id, "message": "Sync started"}
 
 
 @router.post(
@@ -336,7 +286,7 @@ async def load_triplestore(
         except Exception:
             body = {}
         include_inferred = body.get("include_inferred", True)
-        simulation_id = str(body.get("simulation_id") or "").strip()
+        simulation_id = TwinGraphAccess.explorer_source(body.get("simulation_id"))
 
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings, source=simulation_id)
@@ -1539,7 +1489,7 @@ async def filter_triplestore(
         data = await request.json()
         phase = data.get("phase", "preview")
         include_inferred = data.get("include_inferred", True)
-        simulation_id = str(data.get("simulation_id") or "").strip()
+        simulation_id = TwinGraphAccess.explorer_source(data.get("simulation_id"))
 
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings, source=simulation_id)
@@ -1817,55 +1767,10 @@ async def start_databricks_triplestore_build(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Materialize UC Delta triple store (VIEW → TABLE); no Lakebase sync."""
-    import threading
-    from back.core.task_manager import get_task_manager
-    from back.core.graphdb.GraphDBFactory import GraphDBFactory
-    from back.objects.digitaltwin.build._databricks_triplestore_build import (
-        run_databricks_triplestore_build,
-    )
-
+    """Start an Original Graph build (same build as ``/dtwin/sync/start``)."""
     await request.json()
-
-    domain = get_domain(session_mgr)
-    plan = TwinLakehouseBuild.prepare_session(
-        domain,
-        settings,
-        view_table_fn=effective_view_table,
-        data_table_fn=effective_databricks_table,
-        get_credentials=get_triplestore_sql_credentials,
-        is_databricks_app_fn=is_databricks_app,
-    )
-
-    builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
-    tm = get_task_manager()
-    task = tm.create_task(
-        name="Databricks Triple Store Build",
-        task_type="databricks_triplestore_build",
-        steps=builder.build_steps(plan.materialization),
-    )
-
-    def run_build():
-        run_databricks_triplestore_build(
-            tm,
-            task.id,
-            domain,
-            settings,
-            plan.domain_snap,
-            plan.host,
-            plan.token,
-            plan.warehouse_id,
-            plan.view_table,
-            plan.data_table,
-            plan.r2rml_content,
-            plan.mapping_config,
-            plan.ontology_config,
-            plan.base_uri,
-            build_kind="session",
-        )
-
-    threading.Thread(target=run_build, daemon=True).start()
-    return {"success": True, "task_id": task.id}
+    task_id = await run_blocking(TwinLakehouseBuild.start, get_domain(session_mgr), settings)
+    return {"success": True, "task_id": task_id}
 
 
 # ===========================================
@@ -1932,6 +1837,7 @@ async def triplestore_stats(
     simulation_id: Optional[str] = None,
 ):
     """Return content statistics about the triple store."""
+    simulation_id = TwinGraphAccess.explorer_source(simulation_id)
     try:
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings, source=simulation_id)
@@ -1947,7 +1853,7 @@ async def triplestore_stats(
         if not graph_name:
             raise ValidationError("Graph name is not configured")
 
-        if not refresh and not sid and include_inferred:
+        if not refresh and sid == GRAPH_VARIANT_ORIGINAL and include_inferred:
             cached = DigitalTwin(domain).get_ts_cache("stats")
             if TwinGraphStats.cache_is_fresh(cached):
                 logger.debug("Returning cached graph stats")
@@ -3370,9 +3276,8 @@ async def dtwin_graphql_execute(
         )
     schema, _metadata = result
 
-    store = _require_graph_store(
-        domain, settings, source=body.get("simulation_id")
-    )
+    source = TwinGraphAccess.explorer_source(body.get("simulation_id"))
+    store = _require_graph_store(domain, settings, source=source)
 
     context = {
         "triplestore": store,
@@ -3382,7 +3287,7 @@ async def dtwin_graphql_execute(
             store,
             include_inferred=include_inferred,
             simulation_id=simulation_id,
-            variant=TwinGraphAccess.variant_from_payload(body),
+            variant=TwinGraphAccess.source_variant(source),
         ),
         "base_uri": base_uri,
     }
@@ -3442,6 +3347,7 @@ async def dtwin_triples_find(
     offset = max(0, int(offset or 0))
 
     domain = get_domain(session_mgr)
+    simulation_id = TwinGraphAccess.explorer_source(simulation_id)
     store = _require_graph_store(domain, settings, source=simulation_id)
     from back.core.graphdb.search_cache import (
         apply_search_cache_to_store,
@@ -3532,21 +3438,20 @@ async def dtwin_neighbors(
     limit = max(1, min(int(limit or 2000), 20000))
 
     domain = get_domain(session_mgr)
+    simulation_id = TwinGraphAccess.explorer_source(simulation_id)
     store = _require_graph_store(domain, settings, source=simulation_id)
     from back.core.graphdb.search_cache import apply_search_cache_to_store
 
-    sid = (simulation_id or "").strip()
+    sid = TwinGraphAccess.sandbox_id(simulation_id) or ""
     if not sid:
         apply_search_cache_to_store(store, domain, None)
     table = _graph_query_table(
-        domain, settings, store, simulation_id=sid or None
+        domain, settings, store, simulation_id=simulation_id
     )
     if not table:
         raise ValidationError("Graph name not configured")
 
-    query_table = (
-        table if (sid or include_inferred) else store.synced_table_name(table)
-    )
+    query_table = table
 
     try:
         # The BFS expansion runs one blocking SQL query per hop plus a final

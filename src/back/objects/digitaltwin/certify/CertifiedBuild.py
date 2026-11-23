@@ -23,7 +23,7 @@ from back.core.errors import (
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.logging import get_logger
-from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad, TwinGraphBuild
+from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad
 from back.objects.digitaltwin.models import DomainSnapshot
 
 logger = get_logger(__name__)
@@ -118,8 +118,48 @@ class CertifiedBuild:
         if GraphDBFactory._resolve_graph_backend(domain) == "databricks":
             steps.append({"name": "serve", "description": "Publishing the certified view"})
         else:
-            steps.extend(TwinGraphBuild.pipeline_steps(domain, settings))
+            steps.extend(CertifiedBuild.load_steps(domain, settings))
         return steps
+
+    @staticmethod
+    def load_steps(domain, settings) -> List[Dict[str, str]]:
+        """Task steps of the backend load (the Lakeflow ones for Lakebase managed_synced)."""
+        try:
+            from back.core.graphdb.GraphDBFactory import GraphDBFactory
+            from back.core.graphdb.engine_config import lakebase_section
+
+            engine = (
+                GraphDBFactory._resolve_graph_engine(domain, settings, force=True) or ""
+            )
+            ecfg = lakebase_section(
+                GraphDBFactory._resolve_graph_engine_config(domain, settings, force=True)
+                or {}
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "Engine config resolution failed, defaulting to non-synced: %s", exc
+            )
+            engine = ""
+            ecfg = {}
+        if engine == "lakebase" and ecfg.get("sync_mode") == "managed_synced":
+            return [
+                {"name": "uc_schema", "description": "Ensuring Unity Catalog schema"},
+                {
+                    "name": "sync_register",
+                    "description": "Registering synced table in Unity Catalog",
+                },
+                {"name": "sync_companion", "description": "Creating companion table"},
+                {
+                    "name": "sync_data",
+                    "description": "Syncing data from Delta (Lakeflow)",
+                },
+                {
+                    "name": "union_view",
+                    "description": "Creating knowledge graph union view",
+                },
+                {"name": "finalize", "description": "Finalizing knowledge graph"},
+            ]
+        return [{"name": "graph", "description": "Updating the knowledge graph"}]
 
     def run(self) -> None:
         """Run the build; never raises (errors flow through ``tm.fail_task``)."""
