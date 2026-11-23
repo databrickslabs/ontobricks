@@ -294,9 +294,10 @@ class DigitalTwin:
         domain_snap: DomainSnapshot,
         *,
         backend: str,
+        source: str,
     ) -> None:
         return TwinBackgroundTasks.run_adjacency_refresh_task(
-            tm, task_id, settings, domain_snap, backend=backend
+            tm, task_id, settings, domain_snap, backend=backend, source=source
         )
 
     @staticmethod

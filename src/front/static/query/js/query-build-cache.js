@@ -1,19 +1,15 @@
 /**
- * Build page → Cache tab: Search-cache status, companion tables, Refresh cache.
+ * Cache tab of one graph: Search-cache status, companion tables, Refresh cache.
  *
- * Status badges are painted by query-sync.js (`renderBuildGraphCacheStatus`).
- * This module loads `/dtwin/sync/stats`, fills the companion table, and
- * reloads whenever the Cache tab is shown.
+ * The Original Graph page and the Certified Graph page each have one pane
+ * (``_graph_cache_pane.html``, element ids prefixed ``orig`` / ``cert``) fed by
+ * ``/dtwin/sync/stats`` for that graph. Status badges are painted by
+ * query-sync.js (`renderBuildGraphCacheStatus`); the pane reloads whenever its
+ * tab is shown.
  */
-const BuildCacheModule = (() => {
-    // Certified Graph page: the cache of the served (Certified) graph.
-    const ENDPOINT = '/dtwin/sync/stats?simulation_id=certified';
-    const STATE_IDS = [
-        'buildCacheLoading',
-        'buildCacheNotice',
-        'buildCacheError',
-        'buildCacheContent',
-    ];
+function GraphCachePane({ prefix, source, tabBtnId, feedsOverview }) {
+    const ENDPOINT = '/dtwin/sync/stats?simulation_id=' + encodeURIComponent(source);
+    const STATE_IDS = ['Loading', 'Notice', 'Error', 'Content'].map((s) => prefix + 'Cache' + s);
     const numberFormat = new Intl.NumberFormat();
 
     const el = (id) => document.getElementById(id);
@@ -26,7 +22,7 @@ const BuildCacheModule = (() => {
     }
 
     function setReloadBusy(busy) {
-        const btn = el('buildCacheReloadBtn');
+        const btn = el(prefix + 'CacheReloadBtn');
         if (!btn) return;
         btn.disabled = !!busy;
         const icon = btn.querySelector('i');
@@ -66,8 +62,8 @@ const BuildCacheModule = (() => {
     }
 
     function renderCompanions(cache) {
-        const body = el('buildCacheCompanionsBody');
-        const empty = el('buildCacheCompanionsEmpty');
+        const body = el(prefix + 'CacheCompanionsBody');
+        const empty = el(prefix + 'CacheCompanionsEmpty');
         if (!body) return;
         body.textContent = '';
         const rows = companionRows(cache.companions);
@@ -105,26 +101,26 @@ const BuildCacheModule = (() => {
     }
 
     function showUnsupported(message) {
-        const notice = el('buildCacheNoticeMessage');
+        const notice = el(prefix + 'CacheNoticeMessage');
         if (notice) {
             notice.textContent = message
                 || 'Search cache is only available for Lakehouse and Lakebase.';
         }
-        showOnly('buildCacheNotice');
+        showOnly(prefix + 'CacheNotice');
     }
 
     function showError(message) {
-        const node = el('buildCacheErrorMessage');
+        const node = el(prefix + 'CacheErrorMessage');
         if (node) node.textContent = message;
-        showOnly('buildCacheError');
+        showOnly(prefix + 'CacheError');
     }
 
     function render(data) {
         const cache = (data && data.graph_cache) || {};
         if (typeof renderBuildGraphCacheStatus === 'function') {
-            renderBuildGraphCacheStatus(cache);
+            renderBuildGraphCacheStatus(cache, prefix);
         }
-        const statusLine = el('buildCacheStatusLine');
+        const statusLine = el(prefix + 'CacheStatusLine');
         if (statusLine && typeof _insightCacheStateLabel === 'function') {
             statusLine.textContent = _insightCacheStateLabel(cache);
         }
@@ -133,12 +129,12 @@ const BuildCacheModule = (() => {
             return;
         }
         renderCompanions(cache);
-        showOnly('buildCacheContent');
+        showOnly(prefix + 'CacheContent');
     }
 
     async function load() {
         setReloadBusy(true);
-        showOnly('buildCacheLoading');
+        showOnly(prefix + 'CacheLoading');
         try {
             const response = await fetch(ENDPOINT, { method: 'GET', credentials: 'include' });
             const data = await response.json();
@@ -146,11 +142,11 @@ const BuildCacheModule = (() => {
                 throw new Error(data.message || 'Could not load graph cache status');
             }
             render(data);
-            if (typeof window._obInsights === 'object') {
+            if (feedsOverview && typeof window._obInsights === 'object') {
                 window._obInsights.loaded = true;
                 window._obInsights.data = data;
             }
-            if (typeof renderInsights === 'function') {
+            if (feedsOverview && typeof renderInsights === 'function') {
                 try { renderInsights(data); } catch (_) { /* Overview may be absent */ }
             }
         } catch (error) {
@@ -161,14 +157,23 @@ const BuildCacheModule = (() => {
     }
 
     function init() {
-        const tabBtn = el('certTabCacheBtn');
+        const tabBtn = el(tabBtnId);
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', load);
-        const reloadBtn = el('buildCacheReloadBtn');
+        const reloadBtn = el(prefix + 'CacheReloadBtn');
         if (reloadBtn) reloadBtn.addEventListener('click', load);
     }
 
     return { init, load, render };
-})();
+}
 
-window.BuildCacheModule = BuildCacheModule;
-document.addEventListener('DOMContentLoaded', () => BuildCacheModule.init());
+// The Overview figures are the Original Graph's, so only that pane feeds them.
+window.OriginalCachePane = GraphCachePane({
+    prefix: 'orig', source: 'original', tabBtnId: 'buildTabCacheBtn', feedsOverview: true,
+});
+window.CertifiedCachePane = GraphCachePane({
+    prefix: 'cert', source: 'certified', tabBtnId: 'certTabCacheBtn', feedsOverview: false,
+});
+document.addEventListener('DOMContentLoaded', () => {
+    window.OriginalCachePane.init();
+    window.CertifiedCachePane.init();
+});

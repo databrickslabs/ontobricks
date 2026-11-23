@@ -31,7 +31,7 @@ from back.core.errors import ValidationError, NotFoundError, InfrastructureError
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
 from back.core.graphdb import get_graphdb
-from back.objects.digitaltwin.certify import CertifiedBuild
+from back.objects.digitaltwin.certify import CertifiedBuild, GraphBuild
 from back.core.graphdb.search_cache import (
     apply_search_cache_to_store,
     parse_cache_param,
@@ -51,7 +51,6 @@ from back.objects.digitaltwin import (
     NodeContextService,
     NodeShaclResponse,
     NodeShaclService,
-    TwinLakehouseBuild,
 )
 from back.objects.digitaltwin.TwinGraphAccess import TwinGraphAccess
 
@@ -759,7 +758,7 @@ async def dt_build(
         domain_version,
     )
     task_id = await run_blocking(
-        TwinLakehouseBuild.start, domain, settings, build_kind="api"
+        GraphBuild.start, domain, settings, build_kind="api"
     )
     return BuildStartedResponse(success=True, task_id=task_id, message="Build started")
 

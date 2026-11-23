@@ -68,19 +68,23 @@ class TwinBackgroundTasks:
         domain_snap: DomainSnapshot,
         *,
         backend: str,
+        source: str,
     ) -> None:
-        """Rebuild only adjacency companions for the current graph relation."""
+        """Rebuild the search-cache companions of one graph (*source*: original | certified).
+
+        The Original Graph is a Lakehouse graph (``..._data``) whatever the domain
+        backend; the Certified Graph is ``..._certified`` (Lakehouse) or the
+        backend copy (Lakebase).
+        """
         from back.core.graphdb import get_graphdb
-        from back.core.helpers import effective_graph_name
+        from back.core.helpers.SQLHelpers import SQLHelpers
 
         try:
             tm.start_task(task_id, "Starting adjacency refresh...")
             tm.update_progress(task_id, 20, "Opening graph backend")
 
             store = get_graphdb(
-                domain_snap,
-                settings,
-                for_write=backend == "databricks",
+                domain_snap, settings, for_write=backend == "databricks", variant=source
             )
             if not store:
                 tm.fail_task(
@@ -109,7 +113,9 @@ class TwinBackgroundTasks:
                 tm.fail_task(task_id, CACHE_DISABLED_REFRESH_MESSAGE)
                 return
 
-            graph_name = effective_graph_name(domain_snap).strip()
+            graph_name = SQLHelpers.effective_graph_query_table(
+                domain_snap, settings, variant=source
+            ).strip()
             if not graph_name:
                 tm.fail_task(
                     task_id,
@@ -130,7 +136,7 @@ class TwinBackgroundTasks:
 
             tm.complete_task(
                 task_id,
-                result={"mode": "adjacency_only", "backend": backend},
+                result={"mode": "adjacency_only", "backend": backend, "source": source},
                 message="Adjacency refresh completed",
             )
         except Exception as exc:  # noqa: BLE001

@@ -229,12 +229,12 @@ function showAnalyticsRunDetails(idx) {
 
 window.showAnalyticsRunDetails = showAnalyticsRunDetails;
 
-// ---- Original Graph page tabs (Build | Runs) --------------------------------
+// ---- Original Graph page tabs (Build | Runs | Cache) ------------------------
 // Header actions (Refresh / Purge / Build) stay visible on every tab. The
-// Cache and Objects tabs live on the Certified Graph page.
+// Objects tab lives on the Certified Graph page.
 
 function _normalizeBuildPageTab(tab) {
-    return tab === 'runs' ? 'runs' : 'build';
+    return tab === 'runs' || tab === 'cache' ? tab : 'build';
 }
 
 function _syncBuildPageTab(tab) {
@@ -260,6 +260,7 @@ function _showBuildPageTab(name) {
     const tab = _normalizeBuildPageTab(name);
     const btnId = ({
         runs: 'buildTabRunsBtn',
+        cache: 'buildTabCacheBtn',
         build: 'buildTabBuildBtn',
     })[tab];
     const btn = document.getElementById(btnId);
@@ -276,6 +277,9 @@ function _initBuildPageTabs() {
     );
     document.getElementById('buildTabRunsBtn')?.addEventListener(
         'shown.bs.tab', () => _syncBuildPageTab('runs'),
+    );
+    document.getElementById('buildTabCacheBtn')?.addEventListener(
+        'shown.bs.tab', () => _syncBuildPageTab('cache'),
     );
 }
 

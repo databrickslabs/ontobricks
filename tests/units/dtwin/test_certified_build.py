@@ -111,6 +111,11 @@ class _Harness:
 
 
 class TestLakehouseVirtual:
+    def test_the_certified_graph_gets_its_own_search_cache(self):
+        h = _Harness(backend="databricks", materialization="view").run()
+
+        h.builder.rebuild_certified_companions.assert_called_once_with()
+
     def test_the_composition_is_the_served_graph_and_nothing_is_copied(self):
         h = _Harness(backend="databricks", materialization="view").run()
 
@@ -245,7 +250,7 @@ class TestTaskSteps:
         ):
             steps = CertifiedBuild.task_steps(_domain(), SimpleNamespace())
 
-        assert [s["name"] for s in steps] == ["compose", "serve"]
+        assert [s["name"] for s in steps] == ["compose", "serve", "cache"]
 
     def test_graph_engine_steps_compose_then_follow_the_load(self):
         load_steps = [{"name": "graph", "description": "Updating the knowledge graph"}]
@@ -258,48 +263,6 @@ class TestTaskSteps:
             steps = CertifiedBuild.task_steps(_domain(), SimpleNamespace())
 
         assert [s["name"] for s in steps] == ["compose", "graph"]
-
-
-class TestStart:
-    def test_starts_a_tracked_background_task_on_a_snapshot(self):
-        tm = MagicMock()
-        tm.run_background_task.return_value = SimpleNamespace(id="t-42")
-        domain = SimpleNamespace(
-            **vars(_domain()), databricks={}, delta={"catalog": "cat"}
-        )
-        with (
-            patch.object(CertifiedBuild, "ensure_editable") as ensure,
-            patch.object(CertifiedBuild, "task_steps", return_value=[{"name": "x"}]),
-            patch("back.core.task_manager.get_task_manager", return_value=tm),
-            patch(
-                "back.core.helpers.get_build_sql_credentials",
-                return_value=("https://host", "tok", "wh-1"),
-            ),
-        ):
-            task_id = CertifiedBuild.start(domain, SimpleNamespace())
-
-        assert task_id == "t-42"
-        ensure.assert_called_once()
-        kwargs = tm.run_background_task.call_args.kwargs
-        assert kwargs["steps"] == [{"name": "x"}]
-        snapshot = tm.run_background_task.call_args.args[4]
-        assert type(snapshot).__name__ == "DomainSnapshot"
-        assert snapshot.databricks["host"] == "https://host"
-
-    def test_a_read_only_version_starts_nothing(self):
-        from back.core.errors import ConflictError
-
-        tm = MagicMock()
-        with (
-            patch.object(
-                CertifiedBuild, "ensure_editable", side_effect=ConflictError("locked")
-            ),
-            patch("back.core.task_manager.get_task_manager", return_value=tm),
-        ):
-            with pytest.raises(ConflictError):
-                CertifiedBuild.start(_domain(), SimpleNamespace())
-
-        tm.run_background_task.assert_not_called()
 
 
 class TestHasSucceeded:
@@ -383,18 +346,18 @@ class TestStatus:
         assert out["target"] == "lakebase"
         assert out["served_relation"] == "Dom_V2"
 
-    def test_only_certified_runs_are_listed_and_the_latest_success_certifies(self):
+    def test_a_successful_certified_run_certifies_and_no_runs_are_returned(self):
         out = self._status(
             "neo4j",
             runs=[
-                {"build_kind": "certified", "status": "error", "started_at": "b"},
-                {"build_kind": "session", "status": "success", "started_at": "x"},
-                {"build_kind": "certified", "status": "success", "started_at": "a"},
+                {"build_kind": "certified", "status": "error"},
+                {"build_kind": "session", "status": "success"},
+                {"build_kind": "certified", "status": "success"},
             ],
         )
 
-        assert [r["started_at"] for r in out["runs"]] == ["b", "a"]
         assert out["certified"] is True
+        assert "runs" not in out
 
     @pytest.mark.parametrize("status,editable", [("DRAFT", True), ("PUBLISHED", False)])
     def test_the_version_lock_is_reported(self, status, editable):

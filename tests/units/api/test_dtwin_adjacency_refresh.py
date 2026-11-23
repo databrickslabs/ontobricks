@@ -66,7 +66,6 @@ class _ImmediateThread:
 def _patch_common(monkeypatch, backend: str):
     from api.routers.internal import dtwin
     import back.core.task_manager as task_manager
-    import back.core.helpers as helpers_pkg
 
     tm = _TaskManager()
     domain = _Domain(backend)
@@ -75,8 +74,12 @@ def _patch_common(monkeypatch, backend: str):
     monkeypatch.setattr(dtwin, "DomainSnapshot", lambda d: d)
     monkeypatch.setattr(task_manager, "get_task_manager", lambda: tm)
     monkeypatch.setattr(threading, "Thread", _ImmediateThread)
+    from back.core.helpers.SQLHelpers import SQLHelpers
+
     monkeypatch.setattr(
-        helpers_pkg, "effective_graph_name", lambda _d: "catalog.schema.graph"
+        SQLHelpers,
+        "effective_graph_query_table",
+        staticmethod(lambda *_a, **_k: "catalog.schema.graph"),
     )
     return dtwin, tm, domain
 
@@ -97,8 +100,8 @@ class TestAdjacencyRefreshAllowedBackends:
         store.purge_materialized_triples = MagicMock()
         store_calls = []
 
-        def _get_graphdb(snap, settings, *, for_write=False):
-            store_calls.append((snap, settings, for_write))
+        def _get_graphdb(snap, settings, *, for_write=False, variant=None):
+            store_calls.append((snap, settings, for_write, variant))
             return store
 
         monkeypatch.setattr(graphdb_pkg, "get_graphdb", _get_graphdb)
@@ -111,34 +114,66 @@ class TestAdjacencyRefreshAllowedBackends:
         assert resp["task_id"] == "task-1"
         assert tm.created[0]["task_type"] == "adjacency_refresh"
         assert store_calls[0][2] is (backend == "databricks")
+        assert store_calls[0][3] == "certified"
         store.rebuild_adjacency.assert_called_once_with("catalog.schema.graph")
         store.apply_data_relation.assert_not_called()
         store.materialize_data_relation.assert_not_called()
         store.purge_materialized_triples.assert_not_called()
         assert tm.failed == []
-        assert tm.completed[0][1] == {"mode": "adjacency_only", "backend": backend}
+        assert tm.completed[0][1] == {
+            "mode": "adjacency_only",
+            "backend": backend,
+            "source": "certified",
+        }
 
-    async def test_empty_post_does_not_require_json_body(self, monkeypatch):
+    async def test_an_empty_post_refreshes_the_certified_cache(self, monkeypatch):
         dtwin, tm, _domain = _patch_common(monkeypatch, "lakebase")
         import back.core.graphdb as graphdb_pkg
 
-        class _ExplodingRequest:
+        class _EmptyRequest:
             async def json(self):
-                raise AssertionError("route must not parse request body")
+                raise ValueError("Expecting value")
 
-        store = MagicMock()
-        store.supports_adjacency = True
-        store.rebuild_adjacency = MagicMock()
+        variants = []
+        store = MagicMock(supports_adjacency=True)
         monkeypatch.setattr(
-            graphdb_pkg, "get_graphdb", lambda snap, settings, **_kwargs: store
+            graphdb_pkg,
+            "get_graphdb",
+            lambda snap, settings, **kw: variants.append(kw.get("variant")) or store,
         )
 
         resp = await dtwin.refresh_adjacency_only(
-            request=_ExplodingRequest(), session_mgr=object(), settings=object()
+            request=_EmptyRequest(), session_mgr=object(), settings=object()
         )
 
         assert resp["success"] is True
+        assert variants == ["certified"]
         assert tm.failed == []
+
+    async def test_the_original_cache_is_a_lakehouse_refresh_on_any_backend(
+        self, monkeypatch
+    ):
+        dtwin, tm, _domain = _patch_common(monkeypatch, "neo4j")
+        import back.core.graphdb as graphdb_pkg
+
+        class _OriginalRequest:
+            async def json(self):
+                return {"source": "original"}
+
+        calls = []
+        store = MagicMock(supports_adjacency=True)
+        monkeypatch.setattr(
+            graphdb_pkg,
+            "get_graphdb",
+            lambda snap, settings, **kw: calls.append(kw) or store,
+        )
+
+        await dtwin.refresh_adjacency_only(
+            request=_OriginalRequest(), session_mgr=object(), settings=object()
+        )
+
+        assert calls == [{"for_write": True, "variant": "original"}]
+        assert tm.completed[0][1]["backend"] == "databricks"
 
 
 class TestAdjacencyRefreshRejectedBackends:

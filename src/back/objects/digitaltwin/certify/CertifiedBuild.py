@@ -24,7 +24,6 @@ from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad
-from back.objects.digitaltwin.models import DomainSnapshot
 
 logger = get_logger(__name__)
 
@@ -46,62 +45,19 @@ class CertifiedBuild:
         self.triple_count = 0
         self.start_time = 0.0
 
-    @classmethod
-    def start(cls, domain: Any, settings: Any) -> str:
-        """Run a certified build of the loaded version in the background.
-
-        Raises before any task is created when the version is read-only or
-        the Build warehouse is not configured. Returns the task id.
-        """
-        from back.core.helpers import get_build_sql_credentials
-        from back.core.task_manager import get_task_manager
-
-        cls.ensure_editable(domain, settings)
-        host, token, _warehouse_id = get_build_sql_credentials(domain, settings)
-        snapshot = DomainSnapshot(domain, host=host, token=token)
-        tm = get_task_manager()
-        task = tm.run_background_task(
-            "Certified Graph Build",
-            "certified_build",
-            cls._run_task,
-            tm,
-            snapshot,
-            settings,
-            steps=cls.task_steps(domain, settings),
-        )
-        return task.id
-
-    @classmethod
-    def _run_task(cls, task: Any, tm: Any, domain: Any, settings: Any) -> None:
-        cls(tm, task.id, domain, settings).run()
-
-    RUNS_SHOWN = 10
-
     @staticmethod
     def status(domain: Any, settings: Any) -> Dict[str, Any]:
-        """Certified Graph state of the version: target, served relation, lock, runs."""
-        from back.objects.registry.RegistryService import RegistryService
-        from back.objects.registry.version_lifecycle import is_editable
-
+        """Certified Graph state of the version: target, served relation, lock, built."""
         backend = GraphDBFactory._resolve_graph_backend(domain)
         target, served = CertifiedBuild._served(domain, settings, backend)
-        svc = RegistryService.from_context(domain, settings)
-        folder = CertifiedBuild._folder(domain)
-        version = str(getattr(domain, "current_version", "") or "")
-        version_status = svc.get_version_status(folder, version) or ""
-        runs = [
-            r
-            for r in svc.load_build_runs(folder, version=version) or []
-            if r.get("build_kind") == CertifiedBuild.BUILD_KIND
-        ][: CertifiedBuild.RUNS_SHOWN]
+        _version, version_status = CertifiedBuild._version_status(domain, settings)
         return {
             "backend": backend,
             "target": target,
             "served_relation": served,
             "version_status": version_status,
-            "editable": not version_status or is_editable(version_status),
-            "certified": any(r.get("status") == "success" for r in runs),
-            "runs": runs,
+            "editable": CertifiedBuild._editable(version_status),
+            "certified": CertifiedBuild.has_succeeded(domain, settings),
         }
 
     @staticmethod
@@ -122,20 +78,35 @@ class CertifiedBuild:
 
     @staticmethod
     def ensure_editable(domain: Any, settings: Any) -> None:
-        """Refuse a certified build on an IN-REVIEW or PUBLISHED version (read-only)."""
-        from back.objects.registry.RegistryService import RegistryService
-        from back.objects.registry.version_lifecycle import is_editable
-
-        folder = CertifiedBuild._folder(domain)
-        version = str(getattr(domain, "current_version", "") or "")
-        status = RegistryService.from_context(domain, settings).get_version_status(
-            folder, version
-        )
-        if status and not is_editable(status):
+        """Refuse a build or a write on an IN-REVIEW or PUBLISHED version (read-only)."""
+        version, status = CertifiedBuild._version_status(domain, settings)
+        if not CertifiedBuild._editable(status):
             raise ConflictError(
                 f"Version {version} is {status} (read-only). Reopen it to DRAFT "
-                "before building the certified graph."
+                "before building the graphs."
             )
+
+    @staticmethod
+    def is_version_editable(domain: Any, settings: Any) -> bool:
+        """True unless the loaded version is IN-REVIEW or PUBLISHED."""
+        return CertifiedBuild._editable(CertifiedBuild._version_status(domain, settings)[1])
+
+    @staticmethod
+    def _version_status(domain: Any, settings: Any) -> tuple:
+        """``(version, registry status)`` of the loaded version."""
+        from back.objects.registry.RegistryService import RegistryService
+
+        version = str(getattr(domain, "current_version", "") or "")
+        status = RegistryService.from_context(domain, settings).get_version_status(
+            CertifiedBuild._folder(domain), version
+        )
+        return version, status or ""
+
+    @staticmethod
+    def _editable(status: str) -> bool:
+        from back.objects.registry.version_lifecycle import is_editable
+
+        return not status or is_editable(status)
 
     @staticmethod
     def has_succeeded(domain: Any, settings: Any) -> bool:
@@ -158,10 +129,11 @@ class CertifiedBuild:
 
     @staticmethod
     def task_steps(domain: Any, settings: Any) -> List[Dict[str, str]]:
-        """Task steps: compose, then serve (Lakehouse) or the backend load steps."""
+        """Task steps: compose, then serve + cache (Lakehouse) or the backend load steps."""
         steps = [{"name": "compose", "description": "Composing the certified graph"}]
         if GraphDBFactory._resolve_graph_backend(domain) == "databricks":
             steps.append({"name": "serve", "description": "Publishing the certified view"})
+            steps.append({"name": "cache", "description": "Building the certified search cache"})
         else:
             steps.extend(CertifiedBuild.load_steps(domain, settings))
         return steps
@@ -222,6 +194,8 @@ class CertifiedBuild:
                     builder.materialize_certified_base()
                 self.graph_name = builder.certified_view_fqn()
                 self.triple_count = builder.count_triples(self.graph_name)
+                self.tm.advance_step(self.task_id, "Building the certified search cache...")
+                builder.rebuild_certified_companions()
             elif not self._load_backend(builder):
                 self._record("error")
                 return

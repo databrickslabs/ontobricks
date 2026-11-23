@@ -389,3 +389,24 @@ class TestGraphStats:
         )
         block = TwinGraphStats._graph_cache_block(domain, [])
         assert block["refreshed_at"] == "2026-11-20T09:30:00+00:00"
+
+
+class TestGraphCacheBackend:
+    """Each graph reports its own cache: the Original one is always a Lakehouse cache."""
+
+    def test_the_original_cache_is_supported_on_a_neo4j_domain(self):
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        with patch.object(GraphDBFactory, "_resolve_graph_backend", return_value="neo4j"):
+            block = TwinGraphStats._graph_cache_block(_domain(), [], backend="databricks")
+
+        assert block["supported"] is True
+        assert block["backend"] == "databricks"
+
+    def test_without_a_backend_the_domain_backend_decides(self):
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        with patch.object(GraphDBFactory, "_resolve_graph_backend", return_value="neo4j"):
+            block = TwinGraphStats._graph_cache_block(_domain(), [])
+
+        assert block["supported"] is False

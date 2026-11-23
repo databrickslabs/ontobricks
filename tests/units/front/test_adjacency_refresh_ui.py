@@ -8,6 +8,7 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BUILD_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_certified.html"
+PANE_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_graph_cache_pane.html"
 SYNC_JS = REPO_ROOT / "src/front/static/query/js/query-sync.js"
 DBX_JS = REPO_ROOT / "src/front/static/query/js/query-databricks-build.js"
 
@@ -17,38 +18,25 @@ def _read(path: Path) -> str:
 
 
 class TestAdjacencyButtonsExist:
-    def test_cache_tab_hosts_refresh_cache_buttons(self):
-        html = _read(BUILD_HTML)
-        pane = html.split('id="certPaneCache"', 1)[1]
-        header = html.split("section-header", 1)[1].split('id="certPageTabs"', 1)[0]
-        assert 'id="syncAdjacencyRefreshBtn"' in pane
-        assert 'id="dbxAdjacencyRefreshBtn"' in pane
-        assert 'id="syncAdjacencyRefreshBtn"' not in header
-        assert 'id="dbxAdjacencyRefreshBtn"' not in header
-        # Header kebab also offers Refresh cache (via shared partial).
-        assert '_build_more_actions.html' in header
-        # Role-gated: builder + locked variants for Lakebase and Lakehouse.
-        assert pane.count(">Refresh cache") == 4
-        assert ">Refresh adjacency" not in html
+    def test_each_cache_pane_hosts_the_refresh_of_its_graph(self):
+        pane = _read(PANE_HTML)
+        assert "'dbxAdjacencyRefreshBtn' if cache_refresh == 'dbx' else 'syncAdjacencyRefreshBtn'" in pane
+        # Role-gated: builder + locked variants.
+        assert pane.count(">Refresh cache") == 2
+        assert ">Refresh adjacency" not in pane
+
+    def test_the_header_kebab_still_offers_refresh_cache(self):
+        header = _read(BUILD_HTML).split("section-header", 1)[1].split('id="certPageTabs"', 1)[0]
+        assert "_build_more_actions.html" in header
+        assert "AdjacencyRefreshBtn" not in header
 
     def test_dbx_js_binds_header_kebab_refresh_cache(self):
         js = _read(DBX_JS)
         assert "js-dbx-adjacency-refresh" in js
         assert "startDatabricksAdjacencyRefresh" in js
 
-    def test_sync_panel_has_refresh_adjacency_action(self):
-        html = _read(BUILD_HTML)
-        assert 'id="syncAdjacencyRefreshBtn"' in html
-        assert 'data-sync-action="refresh-adjacency-only"' in html
-        assert "btn btn-sm btn-outline-secondary" in html
-
-    def test_databricks_panel_has_refresh_adjacency_action(self):
-        html = _read(BUILD_HTML)
-        assert 'id="dbxAdjacencyRefreshBtn"' in html
-        assert "btn btn-sm btn-outline-secondary" in html
-
     def test_both_buttons_are_role_gated_like_build(self):
-        html = _read(BUILD_HTML)
+        html = _read(PANE_HTML)
         assert "{% set _dr = get_user_domain_role() %}" in html
         assert "{% if _dr not in ('viewer', 'editor', 'none') %}" in html
         assert '<i class="bi bi-lock me-1"></i>' in html
@@ -68,9 +56,14 @@ class TestAdjacencyRefreshFlow:
         assert "dbxBuildRunning || dbxAdjacencyRefreshRunning" in js
         assert "dbxGraphHasData" in js
 
-    def test_sync_visibility_is_explicitly_lakebase_only(self):
+    def test_the_certified_refresh_covers_lakebase_and_lakehouse(self):
+        """The Certified Graph has its own cache on both (Lakebase companions, ``_cert_*``)."""
         sync_js = _read(SYNC_JS)
-        assert "return backend === 'lakebase';" in sync_js
+        assert "return backend === 'lakebase' || backend === 'databricks';" in sync_js
+        assert "JSON.stringify({ source: 'certified' })" in sync_js
+
+    def test_the_original_refresh_targets_the_original_cache(self):
+        assert "JSON.stringify({ source: 'original' })" in _read(DBX_JS)
 
     def test_lakehouse_resume_checks_task_status_before_polling(self):
         dbx_js = _read(DBX_JS)
@@ -88,11 +81,11 @@ class TestAdjacencyRefreshFlow:
         assert "async function pollOnce()" in refresh_polling
         assert "setTimeout(pollOnce, 1500);" in refresh_polling
 
-    def test_lakehouse_cache_button_follows_the_domain_backend(self):
-        """The Cache tab sits on the Certified Graph page: Lakehouse refresh on Lakehouse only."""
+    def test_lakehouse_button_shows_for_every_backend(self):
+        """The Original Graph (its Cache tab) is a Lakehouse graph for every domain."""
         dbx_js = _read(DBX_JS)
         fn = dbx_js.split("function _updateDbxAdjacencyButton()", 1)[1].split(
             "function _applyDbxStorageKind", 1
         )[0]
-        assert "_syncTripleStoreBackend() === 'databricks'" in fn
+        assert "const visible = true;" in fn
         assert "js-dbx-adjacency-refresh" in fn

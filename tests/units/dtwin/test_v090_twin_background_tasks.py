@@ -61,7 +61,8 @@ def _adjacency(store, *, allowed=True, graph_name="sales_graph", rebuild_exc=Non
     rebuild = MagicMock(side_effect=rebuild_exc)
     get_graphdb = MagicMock(return_value=store)
     with patch("back.core.graphdb.get_graphdb", get_graphdb), patch(
-        "back.core.helpers.effective_graph_name", return_value=graph_name
+        "back.core.helpers.SQLHelpers.SQLHelpers.effective_graph_query_table",
+        return_value=graph_name,
     ), patch(
         "back.core.graphdb.search_cache.graph_cache_rebuild_allowed",
         return_value=allowed,
@@ -82,15 +83,17 @@ class TestAdjacencyRefresh:
         snap = SimpleNamespace()
         with _adjacency(store) as (get_graphdb, rebuild):
             TwinBackgroundTasks.run_adjacency_refresh_task(
-                tm, "t1", "settings", snap, backend="databricks"
+                tm, "t1", "settings", snap, backend="databricks", source="certified"
             )
 
-        get_graphdb.assert_called_once_with(snap, "settings", for_write=True)
+        get_graphdb.assert_called_once_with(
+            snap, "settings", for_write=True, variant="certified"
+        )
         rebuild.assert_called_once_with(store, "sales_graph", snap)
         assert "Rebuilding graph indexes in parallel for sales_graph" in _progress_messages(tm)
         tm.complete_task.assert_called_once_with(
             "t1",
-            result={"mode": "adjacency_only", "backend": "databricks"},
+            result={"mode": "adjacency_only", "backend": "databricks", "source": "certified"},
             message="Adjacency refresh completed",
         )
         tm.fail_task.assert_not_called()
@@ -99,7 +102,7 @@ class TestAdjacencyRefresh:
         tm = MagicMock()
         with _adjacency(_adj_store()) as (get_graphdb, _rebuild):
             TwinBackgroundTasks.run_adjacency_refresh_task(
-                tm, "t1", "settings", SimpleNamespace(), backend="lakebase"
+                tm, "t1", "settings", SimpleNamespace(), backend="lakebase", source="certified"
             )
         assert get_graphdb.call_args.kwargs["for_write"] is False
         assert "Rebuilding graph indexes sequentially for sales_graph" in _progress_messages(tm)
@@ -109,7 +112,7 @@ class TestAdjacencyRefresh:
         tm = MagicMock()
         with _adjacency(None) as (_g, rebuild):
             TwinBackgroundTasks.run_adjacency_refresh_task(
-                tm, "t1", None, SimpleNamespace(), backend="databricks"
+                tm, "t1", None, SimpleNamespace(), backend="databricks", source="certified"
             )
         tm.fail_task.assert_called_once_with(
             "t1", "Adjacency refresh failed: graph backend is not configured."
@@ -121,7 +124,7 @@ class TestAdjacencyRefresh:
         tm = MagicMock()
         with _adjacency(_adj_store(supports=False)) as (_g, rebuild):
             TwinBackgroundTasks.run_adjacency_refresh_task(
-                tm, "t1", None, SimpleNamespace(), backend="neo4j"
+                tm, "t1", None, SimpleNamespace(), backend="neo4j", source="certified"
             )
         msg = tm.fail_task.call_args.args[1]
         assert "neo4j backend does not support adjacency rebuild" in msg
@@ -131,7 +134,7 @@ class TestAdjacencyRefresh:
         tm = MagicMock()
         with _adjacency(_adj_store(), allowed=False) as (_g, rebuild):
             TwinBackgroundTasks.run_adjacency_refresh_task(
-                tm, "t1", None, SimpleNamespace(), backend="databricks"
+                tm, "t1", None, SimpleNamespace(), backend="databricks", source="certified"
             )
         tm.fail_task.assert_called_once_with("t1", CACHE_DISABLED_REFRESH_MESSAGE)
         rebuild.assert_not_called()
@@ -140,7 +143,7 @@ class TestAdjacencyRefresh:
         tm = MagicMock()
         with _adjacency(_adj_store(), graph_name="   ") as (_g, rebuild):
             TwinBackgroundTasks.run_adjacency_refresh_task(
-                tm, "t1", None, SimpleNamespace(), backend="databricks"
+                tm, "t1", None, SimpleNamespace(), backend="databricks", source="certified"
             )
         tm.fail_task.assert_called_once_with(
             "t1", "Adjacency refresh failed: graph name is not configured."
@@ -151,7 +154,7 @@ class TestAdjacencyRefresh:
         tm = MagicMock()
         with _adjacency(_adj_store(), rebuild_exc=RuntimeError("CTAS failed")):
             TwinBackgroundTasks.run_adjacency_refresh_task(
-                tm, "t1", None, SimpleNamespace(), backend="databricks"
+                tm, "t1", None, SimpleNamespace(), backend="databricks", source="certified"
             )
         tm.fail_task.assert_called_once_with(
             "t1", "Adjacency refresh failed: CTAS failed"

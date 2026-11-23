@@ -43,14 +43,11 @@ def test_the_partial_follows_the_section_skeleton():
     assert html.index('class="content-section"') < html.index("section-header")
     header = html.split("section-header", 1)[1].split('class="card', 1)[0]
     assert "Certified Graph" in header
-    assert 'id="certBuildStartBtn"' in header
     assert 'id="certStateBadge"' in header
     body = html.split('class="card', 1)[1]
     assert "ob-tabs-wrap" in body and "nav nav-tabs ob-tabs" in body
-    for pane in ("certPaneBuild", "certPaneRuns"):
-        assert f'id="{pane}"' in body
-    for element in ("certReadOnlyNotice", "certProgressArea", "certRunsBody"):
-        assert f'id="{element}"' in body
+    assert 'id="certPaneGraph"' in body
+    assert 'id="certReadOnlyNotice"' in body
     for removed in ("certTarget", "certServedRelation", "certVersionStatus"):
         assert removed not in html
     assert "style=" not in html
@@ -58,14 +55,12 @@ def test_the_partial_follows_the_section_skeleton():
     assert "<script" not in html
 
 
-def test_the_script_drives_status_and_build():
+def test_the_script_shows_the_certified_status():
     js = JS.read_text(encoding="utf-8")
     assert "/dtwin/certified/status" in js
-    assert "/dtwin/certified-build/start" in js
-    assert "'/tasks/'" in js
     assert "section === 'certified'" in js
     assert "_setBackendBrandIcon" in js
-    assert "innerHTML = " not in js.split("function _renderRuns", 1)[0]
+    assert "innerHTML" not in js
 
 
 def test_the_backend_panel_moved_from_original_to_certified():
@@ -79,10 +74,16 @@ def test_the_backend_panel_moved_from_original_to_certified():
     assert 'id="sync-lakebase-actions"' in certified
 
 
-def test_a_graph_engine_target_builds_through_the_backend_panel():
+def test_the_certified_page_has_no_build_and_no_runs():
+    """The Build (both graphs) and its runs live on the Original Graph page."""
+    html = PARTIAL.read_text(encoding="utf-8")
     js = JS.read_text(encoding="utf-8")
+    sync_js = (FRONT / "static/query/js/query-sync.js").read_text(encoding="utf-8")
+    for gone in ("certBuildStartBtn", "certTabRunsBtn", "certPaneRuns", "certProgressArea"):
+        assert gone not in html
     assert "PANEL_TARGETS = ['lakebase', 'neo4j']" in js
-    assert "startCertifiedGraphBuild()" in js
+    assert "/dtwin/certified-build/start" not in js + sync_js
+    assert "'/tasks/'" not in js
 
 
 def test_the_backend_logo_is_sized_like_the_original_page():
@@ -91,12 +92,13 @@ def test_the_backend_logo_is_sized_like_the_original_page():
     assert "#certified-section .sync-content-section" in css
 
 
-def test_the_original_page_has_only_build_and_runs_tabs():
-    """Inferences live in the Certified Graph; Cache and Objects describe its backend."""
+def test_the_original_page_has_build_runs_and_cache_tabs():
+    """Inferences live in the Certified Graph; Objects describe its backend."""
     original = (FRONT / "templates/partials/dtwin/_query_build.html").read_text(encoding="utf-8")
     tabs = original.split('id="buildPageTabs"', 1)[1].split("</ul>", 1)[0]
-    assert tabs.count('class="nav-item"') == 2
-    for gone in ("buildPaneInferred", "buildPaneCache", "buildPaneObjects"):
+    assert tabs.count('class="nav-item"') == 3
+    assert 'id="buildTabCacheBtn"' in tabs
+    for gone in ("buildPaneInferred", "buildPaneObjects"):
         assert gone not in original
 
 
@@ -104,6 +106,15 @@ def test_the_certified_page_hosts_cache_and_objects_tabs():
     html = PARTIAL.read_text(encoding="utf-8")
     tabs = html.split('id="certPageTabs"', 1)[1].split("</ul>", 1)[0]
     order = [tabs.index(f'id="{t}"') for t in
-             ("certTabBuildBtn", "certTabRunsBtn", "certTabCacheBtn", "certTabObjectsBtn")]
+             ("certTabGraphBtn", "certTabCacheBtn", "certTabObjectsBtn")]
     assert order == sorted(order)
     assert "partials/dtwin/_build_objects.html" in html.split('id="certPaneObjects"', 1)[1]
+
+
+def test_the_original_build_is_disabled_on_a_read_only_version():
+    html = (FRONT / "templates/partials/dtwin/_query_databricks_build.html").read_text(encoding="utf-8")
+    js = (FRONT / "static/query/js/query-databricks-build.js").read_text(encoding="utf-8")
+    assert 'id="dbxBuildReadOnlyNotice"' in html
+    assert "dbxBuildEditable = data.editable !== false" in js
+    start = js.split("async function startDatabricksBuild", 1)[1][:700]
+    assert "!dbxBuildEditable" in start

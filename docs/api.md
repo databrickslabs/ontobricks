@@ -2536,55 +2536,40 @@ POST /dtwin/execute
 
 #### Build Knowledge Graph
 
-> **Status gate.** None: the Original Graph is never served externally, so it
-> can be rebuilt on any lifecycle status. Writes to the Certified Graph are
-> DRAFT-only (see "Build the Certified Graph").
+> **Status gate.** Refused with `409` when the loaded version is `IN-REVIEW` or
+> `PUBLISHED`: the Build rebuilds the Certified Graph, which a read-only
+> version never changes. Reopen the version to `DRAFT` to rebuild.
 
 ```http
 POST /dtwin/sync/start
-```
-
-Start an async Original Graph build, whatever the domain backend: the R2RML
-gateway VIEW, then `…_data` as a pass-through VIEW and its Delta companions.
-Nothing is loaded into Lakebase / Neo4j (the certified build does that), and the
-legacy `…_inferred` / `…_graph` objects are dropped. Returns a `task_id` for
-progress polling via `GET /tasks/{task_id}`.
-
-**Response:**
-```json
-{
-  "success": true,
-  "task_id": "abc123",
-  "message": "Sync started"
-}
-```
-
----
-
-#### Build the Certified Graph
-
-```http
+POST /dtwin/databricks-build/start
 POST /dtwin/certified-build/start
 ```
 
-Start an async certified build of the loaded version. The Certified Graph is
-composed in Delta from the Original Graph (`…_cert_base` view over `…_data`,
-`…_cert_enriched` table, `…_certified` union view), then served from the
-backend chosen in Context: the composition itself (Lakehouse virtual), a
-copy of its base (Lakehouse materialized, `…_cert_data`), or a load into
-Lakebase / Neo4j (`<name>_V<n>`). Builder role required. Returns a `task_id`
-for progress polling via `GET /tasks/{task_id}`.
+The three routes start the same **Build** of the loaded version, one task that
+builds both graphs:
 
-> **Status gate.** Refused with `409` when the loaded version is `IN-REVIEW`
-> or `PUBLISHED`: a Certified Graph is only built while its version is
-> `DRAFT`.
+1. **Original Graph**, whatever the domain backend: the R2RML gateway VIEW,
+   then `…_data` as a pass-through VIEW and its search cache. Nothing is
+   copied, and the legacy `…_inferred` / `…_graph` objects are dropped.
+2. **Certified Graph**, when the Original Graph has triples: composed in Delta
+   (`…_cert_base` view over `…_data`, `…_cert_enriched` table,
+   `…_certified` union view), then served from the backend chosen in
+   Context: the composition itself (Lakehouse virtual), a copy of its base
+   (Lakehouse materialized, `…_cert_data`), or a load into Lakebase / Neo4j
+   (`<name>_V<n>`).
+
+Builder role required. Each phase records its own build run (`build_kind`
+`session` / `api`, then `certified`). Returns a `task_id` for progress polling
+via `GET /tasks/{task_id}`; the final `result` carries the certified figures
+plus the Original ones under `original`.
 
 **Response:**
 ```json
 {
   "success": true,
   "task_id": "abc123",
-  "message": "Certified build started"
+  "message": "Build started"
 }
 ```
 

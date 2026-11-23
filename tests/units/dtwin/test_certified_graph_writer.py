@@ -288,3 +288,15 @@ class TestDropAttributeValues:
         )
 
         store.delete_subject_predicate.assert_not_called()
+
+
+class TestCacheRefresh:
+    def test_a_lakehouse_write_rebuilds_the_certified_cache(self):
+        _count, builder, store, _get = _write("databricks")
+
+        builder.rebuild_certified_companions.assert_called_once_with()
+
+    def test_a_graph_engine_write_rebuilds_the_backend_cache_only(self):
+        _count, builder, _store, _get = _write("lakebase")
+
+        builder.rebuild_certified_companions.assert_not_called()

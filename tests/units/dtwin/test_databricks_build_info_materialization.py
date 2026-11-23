@@ -73,3 +73,14 @@ def test_the_original_graph_data_is_always_a_view(
         api_client, _configure(domain_session, materialization, backend=backend)
     )
     assert payload["materialization"] == "view"
+
+
+@pytest.mark.parametrize("editable", [True, False])
+def test_info_tells_the_page_whether_the_version_can_be_built(api_client, domain_session, editable):
+    """The Build rebuilds both graphs, so the page disables it on a read-only version."""
+    from back.objects.digitaltwin.certify import CertifiedBuild
+
+    with patch.object(CertifiedBuild, "is_version_editable", return_value=editable):
+        data = _info(api_client, _configure(domain_session))
+
+    assert data["editable"] is editable

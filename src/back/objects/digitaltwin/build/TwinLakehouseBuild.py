@@ -1,8 +1,7 @@
 """Prepare a session Original Graph build (gateway VIEW → ``…_data`` VIEW).
 
-Extracted from ``api.routers.internal.dtwin.start_databricks_triplestore_build``.
 The Original Graph is virtual for every domain, whatever its Certified Graph
-backend.
+backend. :class:`GraphBuild` runs it, then the certified build, as one task.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ from shared.config.constants import DEFAULT_BASE_URI
 
 @dataclass
 class TwinLakehouseBuild:
-    """Validated inputs of an Original Graph build, and its background start."""
+    """Validated inputs of an Original Graph build, and its run inside a task."""
 
     view_table: str
     data_table: str
@@ -32,18 +31,16 @@ class TwinLakehouseBuild:
     domain_snap: DomainSnapshot
 
     @classmethod
-    def start(cls, domain, settings, *, build_kind: str = "session") -> str:
-        """Validate the domain and run the Original build as a tracked task."""
+    def prepare(cls, domain, settings) -> "TwinLakehouseBuild":
+        """Validate the domain and return the inputs of its Original build."""
         from back.core.databricks import is_databricks_app
-        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.helpers import (
             effective_databricks_table,
             effective_view_table,
             get_triplestore_sql_credentials,
         )
-        from back.core.task_manager import get_task_manager
 
-        plan = cls.prepare_session(
+        return cls.prepare_session(
             domain,
             settings,
             view_table_fn=effective_view_table,
@@ -51,18 +48,6 @@ class TwinLakehouseBuild:
             get_credentials=get_triplestore_sql_credentials,
             is_databricks_app_fn=is_databricks_app,
         )
-        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
-        tm = get_task_manager()
-        task = tm.run_background_task(
-            "Original Graph Build",
-            "original_build",
-            plan._run,
-            tm,
-            builder,
-            build_kind,
-            steps=builder.build_steps(),
-        )
-        return task.id
 
     def _run(self, task: Any, tm: Any, builder: Any, build_kind: str) -> None:
         builder.run_triplestore_build(

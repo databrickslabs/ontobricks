@@ -306,3 +306,44 @@ class TestOverrideShadowing:
         )
 
         self._assert_shadows(self._certified_view(_statements(client)), "c.s.v_cert_data")
+
+
+class TestCertifiedCacheCompanions:
+    """The Certified Graph has its own search cache (``_cert_*``), the Original keeps its own."""
+
+    def _store(self, domain=None):
+        from back.core.graphdb.delta.ReadStore import ReadStore
+
+        return ReadStore(MagicMock(), domain=domain, settings=None)
+
+    def test_a_certified_read_resolves_the_certified_companions(self):
+        domain = _domain()
+        view = _table_naming.view_fqn(domain)
+        store = self._store(domain)
+
+        adj_out, adj_in = store.adjacency_table_ids(view + "_certified")
+
+        assert adj_out == view + "_cert_adj_out"
+        assert adj_in == view + "_cert_adj_in"
+        assert store.props_table_id(view + "_certified") == view + "_cert_props"
+        assert store.entity_search_table_id(view + "_certified") == view + "_cert_entity_search"
+
+    def test_an_original_read_keeps_the_original_companions(self):
+        domain = _domain()
+        view = _table_naming.view_fqn(domain)
+
+        adj_out, _ = self._store(domain).adjacency_table_ids(view + "_data")
+
+        assert adj_out == view + "_adj_out"
+
+    def test_a_raw_store_derives_the_certified_names_from_the_relation(self):
+        adj_out, _ = self._store().adjacency_table_ids("c.s.v_certified")
+
+        assert adj_out == "c.s.v_cert_adj_out"
+
+    def test_the_certified_asserted_relation_is_its_base(self):
+        assert self._store().synced_table_name("c.s.v_certified") == "c.s.v_cert_base"
+
+    def test_certified_companions_strip_back_to_the_gateway_leaf(self):
+        for leaf in ("v_cert_adj_out", "v_cert_entity_search_asserted", "v_cert_props"):
+            assert _table_naming.strip_graph_leaf_suffix(leaf) == "v"

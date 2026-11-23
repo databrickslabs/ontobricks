@@ -59,7 +59,7 @@ class CertifiedGraphWriter:
         builder.insert_cert_enriched(rows, kind=kind, run_id=run_id)
         if self._graph_engine:
             self._backend_insert(rows)
-            self._refresh_backend_cache()
+        self._refresh_cache(builder)
         logger.info(
             "Certified Graph: wrote %d %s triple(s) (run %s)", len(rows), kind, run_id
         )
@@ -86,8 +86,7 @@ class CertifiedGraphWriter:
                         self._backend(), SQLHelpers.effective_graph_name(self.domain), rows
                     )
                 self._backend_insert(rows)
-        if self._graph_engine:
-            self._refresh_backend_cache()
+        self._refresh_cache(builder)
         logger.info(
             "Certified Graph: scope %s/%s replaced by %d triple(s)",
             kind,
@@ -122,15 +121,15 @@ class CertifiedGraphWriter:
                 kind=kind, provenance=provenance
             ):
                 self._backend_insert(batch)
-            self._refresh_backend_cache()
+        self._refresh_cache(builder)
         return builder.count_cert_enriched_scope(kind=kind, provenance=provenance)
 
     def remove_scope(self, *, kind: str, provenance: str) -> int:
         """Remove every row of one scope; return how many backend rows were dropped."""
         CertifiedBuild.ensure_editable(self.domain, self.settings)
-        removed = self._clear_scope(self._builder(), kind, provenance)
-        if self._graph_engine:
-            self._refresh_backend_cache()
+        builder = self._builder()
+        removed = self._clear_scope(builder, kind, provenance)
+        self._refresh_cache(builder)
         return removed
 
     # ------------------------------------------------------------------
@@ -186,8 +185,15 @@ class CertifiedGraphWriter:
             [{k: r[k] for k in _SPO} for r in rows],
         )
 
-    def _refresh_backend_cache(self) -> None:
-        """Rebuild the Postgres adjacency / search companions once per operation."""
+    def _refresh_cache(self, builder: Any) -> None:
+        """Rebuild the Certified Graph's search cache once per operation.
+
+        Lakehouse: its own Delta companions over ``..._certified``; Lakebase:
+        the Postgres companions of the copy.
+        """
+        if not self._graph_engine:
+            builder.rebuild_certified_companions()
+            return
         store = self._backend()
         if getattr(store, "supports_adjacency", False) is True:
             from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled

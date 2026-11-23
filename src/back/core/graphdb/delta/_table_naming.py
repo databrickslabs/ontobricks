@@ -22,11 +22,21 @@ _SUFFIX_CERT_ENRICHED = "_cert_enriched"
 _SUFFIX_CERTIFIED = "_certified"
 _SUFFIX_CERT_DATA = "_cert_data"
 _SUFFIX_CERT_SYNC = "_cert_sync"
+# Infix of the Certified Graph's own search-cache companions
+# (``<base>_cert_adj_out``, ...): the Original Graph keeps ``<base>_adj_out``.
+_INFIX_CERT_CACHE = "_cert"
+_CACHE_SUFFIXES = (
+    "_entity_search_asserted",
+    "_entity_search",
+    "_adj_out",
+    "_adj_in",
+    "_props",
+)
 
 
 def graph_leaf_suffixes() -> tuple[str, ...]:
     """Longest-first suffixes stripped when deriving the mapping-view stem."""
-    return (
+    return tuple(_INFIX_CERT_CACHE + c for c in _CACHE_SUFFIXES) + (
         _SUFFIX_CERT_ENRICHED,
         _SUFFIX_CERT_BASE,
         _SUFFIX_CERTIFIED,
@@ -143,49 +153,48 @@ def dq_snapshot_fqn(domain: Any, settings: Any = None, task_id: str = "") -> str
     return f"{cat}.{sch}.{base}{_SUFFIX_DQ}_{token}"
 
 
-def adj_out_fqn(domain: Any, settings: Any = None) -> str:
-    """Outgoing adjacency table FQN (``..._adj_out``)."""
+def is_certified_relation(table_name: str) -> bool:
+    """True when *table_name* is the Certified Graph read relation (``..._certified``)."""
+    return str(table_name or "").endswith(_SUFFIX_CERTIFIED)
+
+
+def cache_suffix(suffix: str, *, certified: bool = False) -> str:
+    """Companion suffix of the Original (``_adj_out``) or Certified (``_cert_adj_out``) cache."""
+    return (_INFIX_CERT_CACHE + suffix) if certified else suffix
+
+
+def _companion_fqn(domain: Any, settings: Any, suffix: str, certified: bool) -> str:
     view = view_fqn(domain, settings)
     if not view or view.count(".") != 2:
         return ""
-    cat, sch, base = view.split(".", 2)
-    return f"{cat}.{sch}.{base}{_SUFFIX_ADJ_OUT}"
+    return f"{view}{cache_suffix(suffix, certified=certified)}"
 
 
-def adj_in_fqn(domain: Any, settings: Any = None) -> str:
-    """Incoming adjacency table FQN (``..._adj_in``)."""
-    view = view_fqn(domain, settings)
-    if not view or view.count(".") != 2:
-        return ""
-    cat, sch, base = view.split(".", 2)
-    return f"{cat}.{sch}.{base}{_SUFFIX_ADJ_IN}"
+def adj_out_fqn(domain: Any, settings: Any = None, *, certified: bool = False) -> str:
+    """Outgoing adjacency table FQN (``..._adj_out`` / ``..._cert_adj_out``)."""
+    return _companion_fqn(domain, settings, _SUFFIX_ADJ_OUT, certified)
 
 
-def entity_search_fqn(domain: Any, settings: Any = None) -> str:
-    """Entity-search table FQN (``..._entity_search``)."""
-    view = view_fqn(domain, settings)
-    if not view or view.count(".") != 2:
-        return ""
-    cat, sch, base = view.split(".", 2)
-    return f"{cat}.{sch}.{base}{_SUFFIX_ENTITY_SEARCH}"
+def adj_in_fqn(domain: Any, settings: Any = None, *, certified: bool = False) -> str:
+    """Incoming adjacency table FQN (``..._adj_in`` / ``..._cert_adj_in``)."""
+    return _companion_fqn(domain, settings, _SUFFIX_ADJ_IN, certified)
 
 
-def entity_search_asserted_fqn(domain: Any, settings: Any = None) -> str:
+def entity_search_fqn(domain: Any, settings: Any = None, *, certified: bool = False) -> str:
+    """Entity-search table FQN (``..._entity_search`` / ``..._cert_entity_search``)."""
+    return _companion_fqn(domain, settings, _SUFFIX_ENTITY_SEARCH, certified)
+
+
+def entity_search_asserted_fqn(
+    domain: Any, settings: Any = None, *, certified: bool = False
+) -> str:
     """Asserted-only entity-search table FQN (``..._entity_search_asserted``)."""
-    view = view_fqn(domain, settings)
-    if not view or view.count(".") != 2:
-        return ""
-    cat, sch, base = view.split(".", 2)
-    return f"{cat}.{sch}.{base}{_SUFFIX_ENTITY_SEARCH_ASSERTED}"
+    return _companion_fqn(domain, settings, _SUFFIX_ENTITY_SEARCH_ASSERTED, certified)
 
 
-def props_fqn(domain: Any, settings: Any = None) -> str:
-    """Property-companion table FQN (``..._props``)."""
-    view = view_fqn(domain, settings)
-    if not view or view.count(".") != 2:
-        return ""
-    cat, sch, base = view.split(".", 2)
-    return f"{cat}.{sch}.{base}{_SUFFIX_PROPS}"
+def props_fqn(domain: Any, settings: Any = None, *, certified: bool = False) -> str:
+    """Property-companion table FQN (``..._props`` / ``..._cert_props``)."""
+    return _companion_fqn(domain, settings, _SUFFIX_PROPS, certified)
 
 
 def graph_suffix() -> str:

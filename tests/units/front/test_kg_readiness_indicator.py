@@ -57,12 +57,11 @@ def test_kg_gate_blocks_when_graph_is_definitely_empty():
     assert "Knowledge Graph not ready" in js
     assert "data-kg-gate" in js
     assert "kg-gate-blocked" in js
-    # Unknown / pending / building must not block with a rebuild CTA.
+    # Unknown / pending must not block with a rebuild CTA.
     body = js[js.index("function _kgShouldBlockPage()"):]
     body = body[: body.index("\n}")]
     assert "!tripleStoreStatusUnknown" in body
     assert "!tripleStoreStatusPending" in body
-    assert "!syncIsRunning" in body
 
 
 def test_kg_gate_keeps_modals_mounted():

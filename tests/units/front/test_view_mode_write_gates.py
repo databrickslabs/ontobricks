@@ -155,17 +155,13 @@ class TestJsGuards:
         assert "isActiveVersion" not in helper
 
     def test_build_refuses_when_cannot_refresh_graph(self):
-        js = SYNC_JS.read_text(encoding="utf-8")
-        start = js.split("async function startCertifiedGraphBuild")[1][:600]
+        """The single Build (Original Graph page) keeps the builder / unlocked guard."""
+        js = (REPO_ROOT / "src/front/static/query/js/query-databricks-build.js").read_text(
+            encoding="utf-8"
+        )
+        start = js.split("async function startDatabricksBuild")[1][:600]
         assert "canRefreshGraph" in start
         assert "Build is unavailable" in start
-
-    def test_certified_build_does_not_save_the_design(self):
-        """The certified build reads the Original Graph, not the saved design."""
-        js = SYNC_JS.read_text(encoding="utf-8")
-        start = js.split("async function startCertifiedGraphBuild")[1].split("\n}\n")[0]
-        assert "/dtwin/certified-build/start" in start
-        assert "doDomainSave" not in start
 
     def test_cohort_materialise_refuses_when_cannot_edit(self):
         js = COHORT_JS.read_text(encoding="utf-8")

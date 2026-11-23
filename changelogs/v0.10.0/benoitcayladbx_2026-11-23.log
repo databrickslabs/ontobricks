@@ -1668,3 +1668,274 @@ Objects; Cache shows a single (Lakebase) Refresh cache; Objects lists the
 backend inventory. In this environment no certified build ran yet, so
 `/dtwin/sync/stats?simulation_id=certified` answers 502 (relation
 "contactcenter_v1" does not exist), shown inline in the tab.
+
+================================================================================
+One Build: the Original Graph, then the Certified Graph, in a single task
+================================================================================
+
+Context:
+Both graphs are needed, so there is a single Build function: it rebuilds the
+Original Graph (gateway VIEW, `..._data` pass-through VIEW, search cache) and,
+when that produced triples, the Certified Graph (composition + backend load).
+Build on the Original and on the Certified page start the same task. The whole
+Build is refused on an IN-REVIEW / PUBLISHED version (D9), and both pages
+disable Build with a read-only notice.
+
+1. src/back/objects/digitaltwin/certify/GraphBuild.py (new) — `GraphBuild.start`
+   checks the version lock, prepares the Original inputs, and runs one tracked
+   task ("Graph Build") whose steps are the Original steps then the certified
+   steps; `_run` chains `TwinLakehouseBuild._run` and `CertifiedBuild.run`
+   through `_ChainedTaskManager` (one start, one completion; the Original
+   completion is kept and merged under `result.original`; an empty or failed
+   Original stops the Build).
+2. src/back/objects/digitaltwin/build/TwinLakehouseBuild.py — `start` replaced
+   by `prepare` (validated inputs only; the task is started by GraphBuild).
+3. src/back/objects/digitaltwin/certify/CertifiedBuild.py — removed `start` /
+   `_run_task` (now GraphBuild); `is_version_editable` + `_version_status` /
+   `_editable` shared by `ensure_editable` and `status`; the 409 message reads
+   "before building the graphs".
+4. src/back/objects/digitaltwin/certify/__init__.py — re-exports GraphBuild.
+5. src/api/routers/internal/dtwin.py — `/dtwin/sync/start`,
+   `/dtwin/databricks-build/start` and `/dtwin/certified-build/start` start
+   `GraphBuild`; `/dtwin/databricks-build/info` returns `editable`.
+6. src/api/routers/digitaltwin.py — REST v1 `POST /build` starts `GraphBuild`
+   (`build_kind="api"`).
+7. src/front/static/query/js/query-databricks-build.js,
+   src/front/templates/partials/dtwin/_query_databricks_build.html — the
+   Original page disables Build and shows a read-only notice when the version
+   is not editable.
+8. src/front/static/query/js/query-sync.js, query-certified.js — progress and
+   notifications speak of the Build (Original, then Certified).
+9. docs/api.md, docs/architecture.md, docs/user-guide.md,
+   src/front/templates/partials/layout/help_modal.html — one Build for both
+   graphs, refused on read-only versions.
+10. tests — `test_graph_build.py` (new: chaining, empty / failed Original,
+    single task with both step lists, read-only refusal, the three routes);
+    `test_original_build_start.py` covers `prepare` and the v1 route;
+    `test_certified_build_api.py` / `test_certified_build.py` drop the removed
+    `CertifiedBuild.start`; `editable` on the info route; Original page gating
+    contract in `test_certified_graph_page.py`.
+
+Modified files:
+- src/back/objects/digitaltwin/certify/GraphBuild.py (new)
+- src/back/objects/digitaltwin/build/TwinLakehouseBuild.py
+- src/back/objects/digitaltwin/certify/CertifiedBuild.py
+- src/back/objects/digitaltwin/certify/__init__.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/digitaltwin.py
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-certified.js
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/api.md
+- docs/architecture.md
+- docs/user-guide.md
+- tests/units/dtwin/test_graph_build.py (new)
+- tests/units/dtwin/test_original_build_start.py
+- tests/units/dtwin/test_certified_build.py
+- tests/units/dtwin/test_certified_build_api.py
+- tests/units/dtwin/test_databricks_build_info_materialization.py
+- tests/units/front/test_certified_graph_page.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11314 passed, 334 skipped, 8 deselected
+Browser check: Playwright on port 8011, contactcenter v1 (PUBLISHED), 1440 px
+and 390 px: the Original and the Certified page both show the read-only notice
+with Build disabled; `POST /dtwin/databricks-build/start` answers 409 "Version
+1 is PUBLISHED (read-only). Reopen it to DRAFT before building the graphs.";
+no other 4xx/5xx. A real run (DRAFT version) was not exercised here.
+
+================================================================================
+UI: a Cache tab per graph (Original Graph and Certified Graph pages)
+================================================================================
+
+Context:
+Each graph has its own search cache: the Original Graph build fills the
+Lakehouse companions from `..._data` (every domain), the certified build fills
+the backend's. The Original Graph page gets its Cache tab back, next to the
+Certified Graph page's, each reading the stats of its own graph.
+
+1. src/front/templates/partials/dtwin/_graph_cache_pane.html (new) — Cache tab
+   body shared by both pages; `cache_id` prefixes every element id
+   (`orig` / `cert`), `cache_refresh` picks the refresh button (`dbx`:
+   Lakehouse refresh of the Original companions, `sync`: Lakebase refresh).
+2. src/front/templates/partials/dtwin/_query_build.html — Cache tab after
+   Runs (`buildTabCacheBtn` / `buildPaneCache`, `orig`, Lakehouse refresh).
+3. src/front/templates/partials/dtwin/_query_certified.html — the Cache pane
+   uses the shared partial (`cert`, Lakebase refresh).
+4. src/front/static/query/js/query-build-cache.js — `GraphCachePane` factory;
+   `OriginalCachePane` reads `/dtwin/sync/stats?simulation_id=original` and
+   feeds the Overview, `CertifiedCachePane` reads `...=certified`.
+5. src/front/static/query/js/query-sync.js — `renderBuildGraphCacheStatus`
+   paints the pane of a given prefix; the Lakebase refresh reloads the
+   Certified pane.
+6. src/front/static/query/js/query-databricks-build.js — the Lakehouse
+   refresh is always offered (Original Cache tab) and reloads the Original
+   pane when done.
+7. src/front/static/domain/js/domain-runs.js — Original page tab routing
+   handles Build | Runs | Cache.
+8. src/back/objects/digitaltwin/TwinGraphStats.py — `assemble` /
+   `_graph_cache_block` take the graph's `cache_backend`, so the Original
+   Lakehouse cache is reported as supported on Lakebase / Neo4j domains too.
+9. src/api/routers/internal/dtwin.py — `/dtwin/sync/stats` passes
+   `cache_backend="databricks"` for the Original Graph, and caches only the
+   Original (with inferred) stats it serves from cache, so a Certified read
+   no longer overwrites them.
+10. docs/user-guide.md, help_modal.html — a Cache tab on each page.
+11. tests — `test_build_cache_tab_contract.py` rewritten for the two panes;
+    `test_adjacency_refresh_ui.py` follows the shared pane;
+    `TestGraphCacheBackend` in `test_v090_twin_build_prepare.py`; Original page
+    tab count in `test_certified_graph_page.py`.
+
+Modified files:
+- src/front/templates/partials/dtwin/_graph_cache_pane.html (new)
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/partials/dtwin/_query_certified.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/query/js/query-build-cache.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/domain/js/domain-runs.js
+- src/back/objects/digitaltwin/TwinGraphStats.py
+- src/api/routers/internal/dtwin.py
+- docs/user-guide.md
+- tests/units/front/test_build_cache_tab_contract.py
+- tests/units/front/test_adjacency_refresh_ui.py
+- tests/units/front/test_certified_graph_page.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11317 passed, 334 skipped, 8 deselected
+Browser check: Playwright on port 8011, contactcenter v1 (Lakebase), 1440 px
+and 390 px: Original tabs Build | Runs | Cache with the Lakehouse Refresh
+cache; Certified tabs Build | Runs | Cache | Objects with the Lakebase
+Refresh cache. Both stats calls answer 502 in this environment (no Original
+`..._data`, no Lakebase copy built yet), shown inline in each tab.
+
+================================================================================
+UI: the Build lives on the Original Graph page only; Certified page drops Build and Runs
+================================================================================
+
+Context:
+The single Build (Original then Certified Graph) and its runs are shown on the
+Original Graph page; repeating them on the Certified Graph page duplicated it.
+The Certified Graph page now shows the result only: state badge, the backend
+graph (Lakebase / Neo4j panel), Cache and Objects.
+
+1. src/front/templates/partials/dtwin/_query_certified.html — removed the
+   Build button, the Runs tab/pane and the progress area; the first tab is
+   now "Graph" (`certTabGraphBtn` / `certPaneGraph`); the read-only notice and
+   subtitle point at the Build of the Original Graph page.
+2. src/front/static/query/js/query-certified.js — status only (badge,
+   read-only notice, backend panel toggle, brand icon); the build start,
+   polling and runs rendering are gone.
+3. src/front/templates/partials/dtwin/_query_sync.html — removed the build
+   log and result cards.
+4. src/front/static/query/js/query-sync.js — removed the now unreachable
+   build flow (`startCertifiedGraphBuild`, `monitorSyncTask`,
+   `checkAndResumeSyncTask`, `SYNC_TASK_KEY`, the timed build log,
+   `showSyncResult`) and the `syncIsRunning` flag it alone set; the "not
+   built" hint points at the Original Graph page.
+5. src/front/static/query/js/query-databricks-build.js — the Build keeps the
+   builder / unlocked-context guard (`OB.canRefreshGraph`).
+6. src/back/objects/digitaltwin/certify/CertifiedBuild.py — `status` no
+   longer returns `runs` (`certified` comes from `has_succeeded`);
+   `RUNS_SHOWN` removed.
+7. docs/user-guide.md, help_modal.html — Build and its runs on the Original
+   Graph page; Certified page = Graph / Cache / Objects.
+8. tests — Certified page contracts (no Build, no Runs, Graph | Cache |
+   Objects), status without runs, the Build guard on the Original page, no
+   build log in the backend panel, KG gate without the running flag.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_certified.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/query/js/query-certified.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+- src/back/objects/digitaltwin/certify/CertifiedBuild.py
+- docs/user-guide.md
+- tests/units/front/test_certified_graph_page.py
+- tests/units/front/test_build_cache_tab_contract.py
+- tests/units/front/test_view_mode_write_gates.py
+- tests/units/front/test_timed_build_log_contract.py
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/dtwin/test_certified_build.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11315 passed, 334 skipped, 8 deselected
+Browser check: Playwright on port 8011, contactcenter v1 (Lakebase, PUBLISHED),
+1440 px and 390 px: Certified tabs Graph | Cache | Objects, no Build button,
+backend panel shown; Original tabs Build | Runs | Cache with its Build button;
+no page or console errors (besides the known stats 502 of this environment).
+
+================================================================================
+Certified Graph gets its own search cache (Lakehouse ``_cert_*`` companions)
+================================================================================
+
+Context:
+On a Lakehouse domain the Delta cache companions had one name per domain
+(`<base>_adj_out`, ...), filled by the Original build from `..._data`, so the
+Certified Graph page's Cache tab listed the Original Graph's tables. The
+Certified Graph now has its own companions (`<base>_cert_adj_out`,
+`_cert_adj_in`, `_cert_props`, `_cert_entity_search`,
+`_cert_entity_search_asserted`) built from `..._certified`; the cache refresh
+targets one graph explicitly. It also fixes the Original page's Refresh
+cache, which rebuilt the Lakebase cache on a Lakebase domain instead of the
+Original Delta one.
+
+1. src/back/core/graphdb/delta/_table_naming.py — `is_certified_relation`,
+   `cache_suffix`; the companion FQN helpers take `certified=`; the `_cert_*`
+   companion suffixes are stripped back to the gateway leaf.
+2. src/back/core/graphdb/delta/ReadStore.py — companion ids derive from the
+   relation read: `..._certified` resolves the `_cert_*` companions, anything
+   else the Original ones (domain-bound and raw stores); the certified
+   asserted-only relation is `..._cert_base`.
+3. src/back/core/graphdb/delta/Builder.py — `rebuild_certified_companions`.
+4. src/back/objects/digitaltwin/certify/CertifiedBuild.py — Lakehouse targets
+   build the certified cache after serving (new "cache" task step).
+5. src/back/objects/digitaltwin/certify/CertifiedGraphWriter.py — every write
+   refreshes the Certified Graph cache: its Delta companions on Lakehouse,
+   the Postgres ones on Lakebase (`_refresh_cache`).
+6. src/api/routers/internal/dtwin.py, TwinBackgroundTasks.py, DigitalTwin.py —
+   `POST /dtwin/adjacency/refresh` takes `source` (`original` | `certified`,
+   default certified): the Original refresh is a Lakehouse refresh on any
+   backend; the store and relation follow the variant.
+7. src/front/static/query/js/query-databricks-build.js — the Original Cache
+   tab refresh posts `source: original`.
+8. src/front/static/query/js/query-sync.js, query-certified.js — the
+   Certified Cache tab refresh posts `source: certified`, is offered on
+   Lakehouse too, and is enabled once the Certified Graph is built.
+9. docs/user-guide.md — the two caches and their companions.
+10. tests — certified companion naming / asserted relation / leaf stripping
+    (`TestCertifiedCacheCompanions`), certified cache built by the Lakehouse
+    certified build and refreshed by writes, the refresh route `source`
+    (empty body = certified; Original = Lakehouse on any backend), task steps.
+
+Modified files:
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/core/graphdb/delta/ReadStore.py
+- src/back/core/graphdb/delta/Builder.py
+- src/back/objects/digitaltwin/certify/CertifiedBuild.py
+- src/back/objects/digitaltwin/certify/CertifiedGraphWriter.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-certified.js
+- docs/user-guide.md
+- tests/units/graphdb/delta/test_certified_composition.py
+- tests/units/dtwin/test_certified_build.py
+- tests/units/dtwin/test_certified_graph_writer.py
+- tests/units/dtwin/test_v090_twin_background_tasks.py
+- tests/units/api/test_dtwin_adjacency_refresh.py
+- tests/units/front/test_adjacency_refresh_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11325 passed, 334 skipped, 8 deselected
+Browser check: not repeated — the only loaded context on port 8011 is a
+PUBLISHED Lakebase version with no built graph, so neither cache has tables
+to list; covered by the unit tests above.

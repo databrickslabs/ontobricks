@@ -44,6 +44,7 @@ class TwinGraphStats:
         job_blocked_reason: str,
         companions: Optional[List[Dict[str, Any]]] = None,
         communities: Optional[Dict[str, Any]] = None,
+        cache_backend: Optional[str] = None,
     ) -> Dict[str, Any]:
         total_count = agg["total"]
         label_count = agg["label_count"]
@@ -65,7 +66,7 @@ class TwinGraphStats:
             "analytics_job_available": job_available,
             "analytics_job_blocked_reason": job_blocked_reason,
             "graph_cache": TwinGraphStats._graph_cache_block(
-                domain, companions or []
+                domain, companions or [], backend=cache_backend
             ),
             "intelligence": TwinGraphStats._intelligence_block(
                 inferred_count, communities
@@ -116,8 +117,10 @@ class TwinGraphStats:
 
     @staticmethod
     def _graph_cache_block(
-        domain: Any, companions: List[Dict[str, Any]]
+        domain: Any, companions: List[Dict[str, Any]], *, backend: Optional[str] = None
     ) -> Dict[str, Any]:
+        """Search-cache block; *backend* is the graph's engine (``databricks`` for
+        the Original Graph), else the domain's Certified Graph backend."""
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.search_cache import (
             GRAPH_CACHE_STATE_DISABLED,
@@ -129,7 +132,7 @@ class TwinGraphStats:
 
         info = getattr(domain, "info", None)
         info = info if isinstance(info, dict) else {}
-        backend = GraphDBFactory._resolve_graph_backend(domain)
+        backend = backend or GraphDBFactory._resolve_graph_backend(domain)
         supported = backend in SEARCH_CACHE_SQL_BACKENDS
         enabled = bool(supported) and normalize_graph_cache_enabled(
             info.get("graph_cache_enabled")

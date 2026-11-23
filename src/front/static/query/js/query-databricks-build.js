@@ -9,6 +9,8 @@ const DBX_BUILD_FAST_POLL_MS = 300;
 const DBX_BUILD_FINAL_POLL_MS = 1000;
 
 let dbxBuildReady = false;
+// False on an IN-REVIEW / PUBLISHED version (the Build rebuilds both graphs).
+let dbxBuildEditable = true;
 let dbxBuildRunning = false;
 let dbxAdjacencyRefreshRunning = false;
 let dbxGraphHasData = false;
@@ -128,10 +130,8 @@ function applyTripleStoreBackendPanels() {
 }
 
 function _updateDbxAdjacencyButton() {
-    // The Cache tab (Certified Graph page) offers the Lakehouse refresh only
-    // on a Lakehouse domain; Lakebase / Neo4j use syncAdjacencyRefreshBtn.
-    const visible = typeof _syncTripleStoreBackend !== 'function'
-        || _syncTripleStoreBackend() === 'databricks';
+    // Original Graph Cache tab: the Original is a Lakehouse graph for every domain.
+    const visible = true;
     const disabled = !visible
         || !dbxBuildReady
         || !dbxGraphHasData
@@ -302,8 +302,15 @@ async function loadDatabricksBuildInfo() {
                     : '');
         }
 
+        // One Build rebuilds the Original and the Certified Graph: refused on a
+        // read-only (IN-REVIEW / PUBLISHED) version.
+        dbxBuildEditable = data.editable !== false;
+        document.getElementById('dbxBuildReadOnlyNotice')?.classList.toggle('d-none', dbxBuildEditable);
         const btn = document.getElementById('dbxBuildStartBtn');
-        if (btn) btn.disabled = !dbxBuildReady || dbxBuildRunning || dbxAdjacencyRefreshRunning;
+        if (btn) {
+            btn.disabled = !dbxBuildReady || !dbxBuildEditable
+                || dbxBuildRunning || dbxAdjacencyRefreshRunning;
+        }
         _updateDbxAdjacencyButton();
 
         const statusText = document.getElementById('dbxBuildStatusText');
@@ -332,7 +339,15 @@ function _apiErrorMessage(data, fallback) {
 }
 
 async function startDatabricksBuild() {
-    if (!dbxBuildReady || dbxBuildRunning || dbxAdjacencyRefreshRunning) return;
+    if (window.OB && typeof window.OB.canRefreshGraph === 'function'
+            && !window.OB.canRefreshGraph()) {
+        _dbxNotify(
+            'Build is unavailable — builder access and an unlocked context are required.',
+            'warning'
+        );
+        return;
+    }
+    if (!dbxBuildReady || !dbxBuildEditable || dbxBuildRunning || dbxAdjacencyRefreshRunning) return;
     const btn = document.getElementById('dbxBuildStartBtn');
     if (btn) btn.disabled = true;
     dbxBuildRunning = true;
@@ -354,7 +369,7 @@ async function startDatabricksBuild() {
         pollDatabricksBuildTask(data.task_id);
     } catch (e) {
         dbxBuildRunning = false;
-        if (btn) btn.disabled = !dbxBuildReady;
+        if (btn) btn.disabled = !dbxBuildReady || !dbxBuildEditable;
         _updateDbxAdjacencyButton();
         const msg = e.message || String(e);
         _showDbxBuildResult('error', '<strong>Build could not start.</strong> ' + _dbxEscape(msg));
@@ -381,7 +396,7 @@ async function startDatabricksAdjacencyRefresh() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: '{}',
+            body: JSON.stringify({ source: 'original' }),
         });
         const data = await resp.json();
         if (!resp.ok || !data.success || !data.task_id) {
@@ -433,6 +448,7 @@ function pollDatabricksAdjacencyTask(taskId) {
                         '<strong>Adjacency refresh succeeded.</strong><div class="mt-1">' + _dbxEscape(task.message || '') + '</div>'
                     );
                     _dbxNotify('Adjacency refreshed successfully', 'success');
+                    if (window.OriginalCachePane) window.OriginalCachePane.load();
                 } else if (task.status === 'failed') {
                     const err = task.error || task.message || 'Unknown error';
                     _showDbxBuildResult(
@@ -471,7 +487,7 @@ function _finishDbxBuild(task) {
     dbxBuildRunning = false;
     renderDbxBuildLog(task);
     const btn = document.getElementById('dbxBuildStartBtn');
-    if (btn) btn.disabled = !dbxBuildReady;
+    if (btn) btn.disabled = !dbxBuildReady || !dbxBuildEditable;
     _updateDbxAdjacencyButton();
     _finishDbxProgressBar(task.status);
 
@@ -543,7 +559,7 @@ function pollDatabricksBuildTask(taskId) {
             sessionStorage.removeItem(DBX_BUILD_TASK_KEY);
             dbxBuildRunning = false;
             const btn = document.getElementById('dbxBuildStartBtn');
-            if (btn) btn.disabled = !dbxBuildReady;
+            if (btn) btn.disabled = !dbxBuildReady || !dbxBuildEditable;
             _updateDbxAdjacencyButton();
             _finishDbxProgressBar('failed');
             const msg = e.message || String(e);

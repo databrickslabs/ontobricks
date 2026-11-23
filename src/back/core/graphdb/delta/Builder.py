@@ -255,6 +255,16 @@ class Builder(GraphBuilder):
         )
         rebuild_graph_cache_if_enabled(store, self.data_table_fqn(), self._domain)
 
+    def rebuild_certified_companions(self) -> None:
+        """Rebuild the Certified Graph's own companions (``..._cert_*``) of ``..._certified``."""
+        from back.core.graphdb.delta.MaterializedStore import MaterializedStore
+        from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
+
+        store = MaterializedStore(
+            self._get_client(), domain=self._domain, settings=self._settings
+        )
+        rebuild_graph_cache_if_enabled(store, self.certified_view_fqn(), self._domain)
+
     def drop_relation(self, fqn: str, *, kind: str = "table") -> None:
         from back.core.graphdb.delta import materialize
 

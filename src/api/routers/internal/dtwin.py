@@ -25,7 +25,7 @@ from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql
 from back.core.databricks import is_databricks_app
 from back.core.graphdb import get_graphdb
-from back.core.graphdb.constants import GRAPH_VARIANT_ORIGINAL
+from back.core.graphdb.constants import GRAPH_VARIANT_CERTIFIED, GRAPH_VARIANT_ORIGINAL
 from back.core.graph_analysis import (
     MODE_JOB,
     analytics_job_configured,
@@ -51,14 +51,13 @@ from back.objects.digitaltwin import (
     TwinGraphAccess,
     TwinGraphStats,
     TwinInferredMaterialize,
-    TwinLakehouseBuild,
     TwinNeighborTriples,
     TwinOntologyGroups,
     TwinSparqlTranslate,
     VirtualAttributeService,
 )
 from back.objects.domain import HomeService, Domain
-from back.objects.digitaltwin.certify import CertifiedBuild
+from back.objects.digitaltwin.certify import CertifiedBuild, GraphBuild
 from api.routers.digitaltwin import NodeContextResponse
 from back.core.helpers import (
     effective_databricks_table,
@@ -198,14 +197,10 @@ async def start_triplestore_sync(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Start an Original Graph build (gateway VIEW → ``…_data`` VIEW), every backend.
-
-    Nothing is loaded into Lakebase or Neo4j here: the certified build
-    (``/dtwin/certified-build/start``) builds the served graph.
-    """
+    """Start the Build of the loaded version: the Original Graph, then the Certified Graph."""
     await request.json()  # consume body (drop_existing / build_mode kept for API compat)
-    task_id = await run_blocking(TwinLakehouseBuild.start, get_domain(session_mgr), settings)
-    return {"success": True, "task_id": task_id, "message": "Sync started"}
+    task_id = await run_blocking(GraphBuild.start, get_domain(session_mgr), settings)
+    return {"success": True, "task_id": task_id, "message": "Build started"}
 
 
 @router.post(
@@ -216,10 +211,10 @@ async def start_certified_build(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Start the certified build of the loaded version (Original → Certified Graph)."""
+    """Start the Build of the loaded version (same build as ``/dtwin/sync/start``)."""
     domain = get_domain(session_mgr)
-    task_id = await run_blocking(CertifiedBuild.start, domain, settings)
-    return {"success": True, "task_id": task_id, "message": "Certified build started"}
+    task_id = await run_blocking(GraphBuild.start, domain, settings)
+    return {"success": True, "task_id": task_id, "message": "Build started"}
 
 
 @router.get("/certified/status")
@@ -243,14 +238,28 @@ async def refresh_adjacency_only(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Start an adjacency-only refresh task for Lakebase/Lakehouse graphs."""
+    """Start a search-cache refresh of one graph (body ``source``: original | certified).
+
+    The Original Graph cache is a Lakehouse cache for every domain; the
+    Certified Graph cache follows the domain backend (Lakehouse or Lakebase).
+    """
     import threading
 
     from back.core.graphdb.GraphDBFactory import GraphDBFactory
     from back.core.task_manager import get_task_manager
 
+    try:
+        payload = await request.json()
+    except ValueError:  # an empty body is a refresh of the Certified Graph cache
+        payload = {}
+    source = (payload or {}).get("source") or GRAPH_VARIANT_CERTIFIED
+    GraphDBFactory.check_variant(source)
     domain = get_domain(session_mgr)
-    backend = GraphDBFactory._resolve_graph_backend(domain)
+    backend = (
+        "databricks"
+        if source == GRAPH_VARIANT_ORIGINAL
+        else GraphDBFactory._resolve_graph_backend(domain)
+    )
     if backend in ("neo4j", "none"):
         raise ValidationError(
             "Adjacency refresh is only available for lakebase and databricks graph backends."
@@ -278,6 +287,7 @@ async def refresh_adjacency_only(
             settings,
             domain_snap,
             backend=backend,
+            source=source,
         )
 
     thread = threading.Thread(target=run_refresh, daemon=True)
@@ -1765,6 +1775,8 @@ async def databricks_build_info(
             "data_table": data_table,
             "inferred_table": builder.inferred_table_fqn(),
             "triplestore_status": data_status,
+            # One Build rebuilds both graphs; it is refused on a read-only version.
+            "editable": CertifiedBuild.is_version_editable(domain, settings),
         }
 
     # Blocking registry / Databricks I/O: run off the event loop.
@@ -1780,9 +1792,9 @@ async def start_databricks_triplestore_build(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Start an Original Graph build (same build as ``/dtwin/sync/start``)."""
+    """Start the Build of the loaded version (same build as ``/dtwin/sync/start``)."""
     await request.json()
-    task_id = await run_blocking(TwinLakehouseBuild.start, get_domain(session_mgr), settings)
+    task_id = await run_blocking(GraphBuild.start, get_domain(session_mgr), settings)
     return {"success": True, "task_id": task_id}
 
 
@@ -1914,8 +1926,12 @@ async def triplestore_stats(
             job_blocked_reason=job_blocked_reason,
             companions=companions,
             communities=communities,
+            # The Original Graph is a Lakehouse graph whatever the domain backend.
+            cache_backend="databricks" if sid == GRAPH_VARIANT_ORIGINAL else None,
         )
-        DigitalTwin(domain).set_ts_cache("stats", result)
+        # Only the default (Original, with inferred) read is served from cache.
+        if sid == GRAPH_VARIANT_ORIGINAL and include_inferred:
+            DigitalTwin(domain).set_ts_cache("stats", result)
         return result
     except (ValidationError, InfrastructureError, NotFoundError):
         raise

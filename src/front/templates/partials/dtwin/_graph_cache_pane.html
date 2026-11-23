@@ -1,0 +1,92 @@
+{# Cache tab body: the search cache (adjacency, properties, entity search) of one graph.
+   Caller sets cache_id ("orig" for the Original Graph, "cert" for the Certified
+   Graph; prefixes every element id) and cache_refresh ("dbx": Lakehouse refresh
+   of the Original companions, "sync": Lakebase refresh, "": no refresh). #}
+{% set _dr = get_user_domain_role() %}
+<div class="ob-filter-bar">
+    <span class="text-muted small">Graph search cache (adjacency, properties, entity search)</span>
+    <div class="d-flex align-items-center gap-2 ms-auto">
+        <a class="btn btn-sm btn-outline-primary"
+           id="{{ cache_id }}CacheSettingsLink"
+           href="/domain/?section=information#searchCacheSection"
+           title="Open Context Settings to enable or disable Search cache">
+            <i class="bi bi-sliders me-1"></i>Activate / deactivate
+        </a>
+        {% if cache_refresh %}
+        {% set _refresh_id = 'dbxAdjacencyRefreshBtn' if cache_refresh == 'dbx' else 'syncAdjacencyRefreshBtn' %}
+        {% if _dr not in ('viewer', 'editor', 'none') %}
+        <button type="button" class="btn btn-sm btn-outline-secondary d-none"
+                id="{{ _refresh_id }}"
+                {% if cache_refresh == 'sync' %}data-sync-action="refresh-adjacency-only"{% endif %}
+                title="Rebuild graph cache">
+            <i class="bi bi-arrow-repeat me-1"></i>Refresh cache
+        </button>
+        {% else %}
+        <button type="button" class="btn btn-sm btn-outline-secondary d-none" disabled
+                id="{{ _refresh_id }}"
+                title="Only builders and admins can refresh the graph cache">
+            <i class="bi bi-lock me-1"></i>Refresh cache
+        </button>
+        {% endif %}
+        {% endif %}
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                id="{{ cache_id }}CacheReloadBtn"
+                title="Reload cache status from the graph">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Reload
+        </button>
+    </div>
+</div>
+
+<div id="{{ cache_id }}CacheLoading" class="text-center py-5 d-none">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="text-muted mt-2 small">Loading graph cache status&hellip;</p>
+</div>
+
+<div id="{{ cache_id }}CacheNotice" class="alert alert-secondary m-3 d-none" role="status">
+    <i class="bi bi-info-circle me-1"></i>
+    <span id="{{ cache_id }}CacheNoticeMessage">Search cache is only available for Lakehouse and Lakebase.</span>
+</div>
+
+<div id="{{ cache_id }}CacheError" class="alert alert-warning m-3 d-none" role="alert">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    <span id="{{ cache_id }}CacheErrorMessage"></span>
+</div>
+
+<div id="{{ cache_id }}CacheContent" class="d-none">
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="small text-muted mb-1">Activated</div>
+            <div id="{{ cache_id }}CacheActivated" class="text-muted">&mdash;</div>
+        </div>
+        <div class="col-md-4">
+            <div class="small text-muted mb-1">State</div>
+            <div id="{{ cache_id }}CacheState" class="text-muted">&mdash;</div>
+        </div>
+        <div class="col-md-4">
+            <div class="small text-muted mb-1">Cache updated</div>
+            <div id="{{ cache_id }}CacheRefreshed" class="text-muted">&mdash;</div>
+        </div>
+    </div>
+    <p class="text-muted small mb-2" id="{{ cache_id }}CacheStatusLine"></p>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle ob-runs-table">
+            <thead>
+                <tr>
+                    <th>Companion</th>
+                    <th>Table</th>
+                    <th>Status</th>
+                    <th class="text-end">Rows</th>
+                </tr>
+            </thead>
+            <tbody id="{{ cache_id }}CacheCompanionsBody">
+                <!-- Populated by JS -->
+            </tbody>
+        </table>
+    </div>
+    <p id="{{ cache_id }}CacheCompanionsEmpty" class="text-muted small d-none mb-0">
+        No companion tables yet. Run <strong>Build</strong> or rebuild the graph cache.
+    </p>
+</div>

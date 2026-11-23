@@ -93,60 +93,64 @@ class ReadStore:
     def sql_flavor(self) -> str:
         return "spark"
 
-    def adjacency_table_ids(self, table_name: str) -> tuple[str, str]:
+    def _companion_id(self, table_name: str, bound: Any, suffix: str) -> str:
+        """Companion FQN for *table_name*: the Certified Graph has its own cache.
+
+        A domain-bound store names it from the domain gateway view; a raw store
+        from the leaf of *table_name*. Reading ``..._certified`` resolves the
+        ``_cert`` companions, anything else the Original Graph ones.
+        """
+        certified = _table_naming.is_certified_relation(table_name)
         if self._domain is not None:
-            adj_out = _table_naming.adj_out_fqn(self._domain, self._settings)
-            adj_in = _table_naming.adj_in_fqn(self._domain, self._settings)
-            if adj_out and adj_in:
-                return (adj_out, adj_in)
+            fqn = bound(self._domain, self._settings, certified=certified)
+            if fqn:
+                return fqn
         if "." not in table_name or table_name.count(".") != 2:
-            return ("", "")
+            return ""
         cat, sch, base = table_name.split(".", 2)
         base = _table_naming.strip_graph_leaf_suffix(base)
-        return (
-            f"{cat}.{sch}.{base}{_table_naming.adj_out_suffix()}",
-            f"{cat}.{sch}.{base}{_table_naming.adj_in_suffix()}",
+        return f"{cat}.{sch}.{base}{_table_naming.cache_suffix(suffix, certified=certified)}"
+
+    def adjacency_table_ids(self, table_name: str) -> tuple[str, str]:
+        adj_out = self._companion_id(
+            table_name, _table_naming.adj_out_fqn, _table_naming.adj_out_suffix()
         )
+        adj_in = self._companion_id(
+            table_name, _table_naming.adj_in_fqn, _table_naming.adj_in_suffix()
+        )
+        return (adj_out, adj_in) if adj_out and adj_in else ("", "")
 
     def entity_search_table_id(self, table_name: str) -> str:
-        if self._domain is not None:
-            search = _table_naming.entity_search_fqn(self._domain, self._settings)
-            if search:
-                return search
-        if "." not in table_name or table_name.count(".") != 2:
-            return ""
-        cat, sch, base = table_name.split(".", 2)
-        base = _table_naming.strip_graph_leaf_suffix(base)
-        return f"{cat}.{sch}.{base}{_table_naming.entity_search_suffix()}"
+        return self._companion_id(
+            table_name, _table_naming.entity_search_fqn, _table_naming.entity_search_suffix()
+        )
 
     def entity_search_asserted_table_id(self, table_name: str) -> str:
-        if self._domain is not None:
-            search = _table_naming.entity_search_asserted_fqn(
-                self._domain, self._settings
-            )
-            if search:
-                return search
-        if "." not in table_name or table_name.count(".") != 2:
-            return ""
-        cat, sch, base = table_name.split(".", 2)
-        base = _table_naming.strip_graph_leaf_suffix(base)
-        return f"{cat}.{sch}.{base}{_table_naming.entity_search_asserted_suffix()}"
+        return self._companion_id(
+            table_name,
+            _table_naming.entity_search_asserted_fqn,
+            _table_naming.entity_search_asserted_suffix(),
+        )
 
     def props_table_id(self, table_name: str) -> str:
-        if self._domain is not None:
-            props = _table_naming.props_fqn(self._domain, self._settings)
-            if props:
-                return props
-        if "." not in table_name or table_name.count(".") != 2:
-            return ""
-        cat, sch, base = table_name.split(".", 2)
-        base = _table_naming.strip_graph_leaf_suffix(base)
-        return f"{cat}.{sch}.{base}{_table_naming.props_suffix()}"
+        return self._companion_id(
+            table_name, _table_naming.props_fqn, _table_naming.props_suffix()
+        )
 
     def synced_table_name(self, table_name: str) -> str:
-        """Base data table without inferred companion rows."""
+        """Base data table without inferred companion rows.
+
+        The Certified Graph's asserted-only relation is its base (``..._cert_base``).
+        """
         if table_name.endswith(_table_naming.data_suffix()):
             return table_name
+        if _table_naming.is_certified_relation(table_name):
+            if self._domain is not None:
+                base = _table_naming.cert_base_fqn(self._domain, self._settings)
+                if base:
+                    return base
+            stem = table_name[: -len("_certified")]
+            return f"{stem}_cert_base"
         if self._domain is not None:
             data = _table_naming.data_table_fqn(self._domain, self._settings)
             if data:

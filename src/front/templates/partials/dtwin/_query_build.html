@@ -50,6 +50,13 @@
                         <i class="bi bi-list-check me-1"></i>Runs
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="buildTabCacheBtn" data-bs-toggle="tab"
+                            data-bs-target="#buildPaneCache" type="button" role="tab"
+                            aria-controls="buildPaneCache" aria-selected="false">
+                        <i class="bi bi-lightning-charge me-1"></i>Cache
+                    </button>
+                </li>
             </ul>
 
             <div class="tab-content p-3" id="buildPageTabContent">
@@ -63,6 +70,13 @@
                 <div class="tab-pane fade" id="buildPaneRuns" role="tabpanel"
                      aria-labelledby="buildTabRunsBtn">
                     {% include "partials/domain/_domain_build_runs.html" %}
+                </div>
+
+                <div class="tab-pane fade" id="buildPaneCache" role="tabpanel"
+                     aria-labelledby="buildTabCacheBtn">
+                    {% set cache_id = 'orig' %}
+                    {% set cache_refresh = 'dbx' %}
+                    {% include "partials/dtwin/_graph_cache_pane.html" %}
                 </div>
 
             </div>
