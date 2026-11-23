@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
-from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad
+from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad, TwinGraphBuild
 from back.objects.digitaltwin.certify import CertifiedBuild
 
 _BASE = "cat.sch.triplestore_dom_V2_cert_base"
@@ -209,3 +209,94 @@ class TestUnsupportedTargets:
 
         assert h.loads == []
         assert h.recorded["status"] == "error"
+
+
+class TestEnsureEditable:
+    """Lifecycle lock (D9): only a DRAFT version gets a certified build."""
+
+    def _check(self, status):
+        registry = MagicMock()
+        registry.get_version_status.return_value = status
+        with patch(
+            "back.objects.registry.RegistryService.RegistryService.from_context",
+            return_value=registry,
+        ):
+            CertifiedBuild.ensure_editable(_domain(), SimpleNamespace())
+        return registry
+
+    @pytest.mark.parametrize("status", ["PUBLISHED", "IN-REVIEW"])
+    def test_a_read_only_version_is_refused(self, status):
+        from back.core.errors import ConflictError
+
+        with pytest.raises(ConflictError, match=status):
+            self._check(status)
+
+    @pytest.mark.parametrize("status", ["DRAFT", None])
+    def test_a_draft_or_new_version_is_accepted(self, status):
+        registry = self._check(status)
+
+        registry.get_version_status.assert_called_once_with("dom", "2")
+
+
+class TestTaskSteps:
+    def test_lakehouse_steps_compose_then_serve(self):
+        with patch.object(
+            GraphDBFactory, "_resolve_graph_backend", return_value="databricks"
+        ):
+            steps = CertifiedBuild.task_steps(_domain(), SimpleNamespace())
+
+        assert [s["name"] for s in steps] == ["compose", "serve"]
+
+    def test_graph_engine_steps_compose_then_follow_the_load(self):
+        load_steps = [{"name": "graph", "description": "Updating the knowledge graph"}]
+        with (
+            patch.object(
+                GraphDBFactory, "_resolve_graph_backend", return_value="lakebase"
+            ),
+            patch.object(TwinGraphBuild, "pipeline_steps", return_value=load_steps),
+        ):
+            steps = CertifiedBuild.task_steps(_domain(), SimpleNamespace())
+
+        assert [s["name"] for s in steps] == ["compose", "graph"]
+
+
+class TestStart:
+    def test_starts_a_tracked_background_task_on_a_snapshot(self):
+        tm = MagicMock()
+        tm.run_background_task.return_value = SimpleNamespace(id="t-42")
+        domain = SimpleNamespace(
+            **vars(_domain()), databricks={}, delta={"catalog": "cat"}
+        )
+        with (
+            patch.object(CertifiedBuild, "ensure_editable") as ensure,
+            patch.object(CertifiedBuild, "task_steps", return_value=[{"name": "x"}]),
+            patch("back.core.task_manager.get_task_manager", return_value=tm),
+            patch(
+                "back.core.helpers.get_build_sql_credentials",
+                return_value=("https://host", "tok", "wh-1"),
+            ),
+        ):
+            task_id = CertifiedBuild.start(domain, SimpleNamespace())
+
+        assert task_id == "t-42"
+        ensure.assert_called_once()
+        kwargs = tm.run_background_task.call_args.kwargs
+        assert kwargs["steps"] == [{"name": "x"}]
+        snapshot = tm.run_background_task.call_args.args[4]
+        assert type(snapshot).__name__ == "DomainSnapshot"
+        assert snapshot.databricks["host"] == "https://host"
+
+    def test_a_read_only_version_starts_nothing(self):
+        from back.core.errors import ConflictError
+
+        tm = MagicMock()
+        with (
+            patch.object(
+                CertifiedBuild, "ensure_editable", side_effect=ConflictError("locked")
+            ),
+            patch("back.core.task_manager.get_task_manager", return_value=tm),
+        ):
+            with pytest.raises(ConflictError):
+                CertifiedBuild.start(_domain(), SimpleNamespace())
+
+        tm.run_background_task.assert_not_called()

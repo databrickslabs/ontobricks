@@ -12,13 +12,19 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Dict, List
 
-from back.core.errors import InfrastructureError, OntoBricksError, ValidationError
+from back.core.errors import (
+    ConflictError,
+    InfrastructureError,
+    OntoBricksError,
+    ValidationError,
+)
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.logging import get_logger
-from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad
+from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad, TwinGraphBuild
+from back.objects.digitaltwin.models import DomainSnapshot
 
 logger = get_logger(__name__)
 
@@ -40,6 +46,62 @@ class CertifiedBuild:
         self.triple_count = 0
         self.start_time = 0.0
 
+    @classmethod
+    def start(cls, domain: Any, settings: Any) -> str:
+        """Run a certified build of the loaded version in the background.
+
+        Raises before any task is created when the version is read-only or
+        the Build warehouse is not configured. Returns the task id.
+        """
+        from back.core.helpers import get_build_sql_credentials
+        from back.core.task_manager import get_task_manager
+
+        cls.ensure_editable(domain, settings)
+        host, token, _warehouse_id = get_build_sql_credentials(domain, settings)
+        snapshot = DomainSnapshot(domain, host=host, token=token)
+        tm = get_task_manager()
+        task = tm.run_background_task(
+            "Certified Graph Build",
+            "certified_build",
+            cls._run_task,
+            tm,
+            snapshot,
+            settings,
+            steps=cls.task_steps(domain, settings),
+        )
+        return task.id
+
+    @classmethod
+    def _run_task(cls, task: Any, tm: Any, domain: Any, settings: Any) -> None:
+        cls(tm, task.id, domain, settings).run()
+
+    @staticmethod
+    def ensure_editable(domain: Any, settings: Any) -> None:
+        """Refuse a certified build on an IN-REVIEW or PUBLISHED version (read-only)."""
+        from back.objects.registry.RegistryService import RegistryService
+        from back.objects.registry.version_lifecycle import is_editable
+
+        folder = CertifiedBuild._folder(domain)
+        version = str(getattr(domain, "current_version", "") or "")
+        status = RegistryService.from_context(domain, settings).get_version_status(
+            folder, version
+        )
+        if status and not is_editable(status):
+            raise ConflictError(
+                f"Version {version} is {status} (read-only). Reopen it to DRAFT "
+                "before building the certified graph."
+            )
+
+    @staticmethod
+    def task_steps(domain: Any, settings: Any) -> List[Dict[str, str]]:
+        """Task steps: compose, then serve (Lakehouse) or the backend load steps."""
+        steps = [{"name": "compose", "description": "Composing the certified graph"}]
+        if GraphDBFactory._resolve_graph_backend(domain) == "databricks":
+            steps.append({"name": "serve", "description": "Publishing the certified view"})
+        else:
+            steps.extend(TwinGraphBuild.pipeline_steps(domain, settings))
+        return steps
+
     def run(self) -> None:
         """Run the build; never raises (errors flow through ``tm.fail_task``)."""
         self.start_time = time.time()
@@ -50,6 +112,7 @@ class CertifiedBuild:
                 self.domain, self.settings, engine="delta"
             )
             builder.ensure_certified_composition()
+            self.tm.advance_step(self.task_id, "Loading the certified graph...")
             if target in (self.LAKEHOUSE_VIRTUAL, self.LAKEHOUSE_MATERIALIZED):
                 if target == self.LAKEHOUSE_MATERIALIZED:
                     builder.materialize_certified_base()
@@ -174,11 +237,8 @@ class CertifiedBuild:
         """Persist this run to the registry ``build_runs`` trace (best-effort)."""
         try:
             from back.objects.registry.RegistryService import RegistryService
-            from back.objects.session import sanitize_domain_folder
 
-            folder = getattr(self.domain, "uc_domain_folder", "") or (
-                sanitize_domain_folder((self.domain.info or {}).get("name", ""))
-            )
+            folder = self._folder(self.domain)
             started = datetime.fromtimestamp(self.start_time, tz=timezone.utc)
             entry = {
                 "version": str(getattr(self.domain, "current_version", "") or ""),
@@ -203,3 +263,12 @@ class CertifiedBuild:
                 self.task_id,
                 exc,
             )
+
+    @staticmethod
+    def _folder(domain: Any) -> str:
+        """Registry folder of *domain* (snapshots carry only its name)."""
+        from back.objects.session import sanitize_domain_folder
+
+        return getattr(domain, "uc_domain_folder", "") or sanitize_domain_folder(
+            (getattr(domain, "info", None) or {}).get("name", "")
+        )

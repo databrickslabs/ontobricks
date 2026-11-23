@@ -58,6 +58,7 @@ from back.objects.digitaltwin import (
     VirtualAttributeService,
 )
 from back.objects.domain import HomeService, Domain
+from back.objects.digitaltwin.certify import CertifiedBuild
 from api.routers.digitaltwin import NodeContextResponse
 from back.core.helpers import (
     effective_databricks_table,
@@ -253,6 +254,20 @@ async def start_triplestore_sync(
     thread.start()
 
     return {"success": True, "task_id": task.id, "message": "Sync started"}
+
+
+@router.post(
+    "/certified-build/start",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def start_certified_build(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Start the certified build of the loaded version (Original → Certified Graph)."""
+    domain = get_domain(session_mgr)
+    task_id = await run_blocking(CertifiedBuild.start, domain, settings)
+    return {"success": True, "task_id": task_id, "message": "Certified build started"}
 
 
 @router.post(

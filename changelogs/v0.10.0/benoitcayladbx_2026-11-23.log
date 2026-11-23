@@ -583,3 +583,49 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11264 passed, 334 skipped, 8 deselected
+
+================================================================================
+Certified build: background task, task steps, lifecycle lock and endpoint
+================================================================================
+
+Context:
+The certified build can now be started from the API. `POST
+/dtwin/certified-build/start` (builder) runs `CertifiedBuild` as a
+TaskManager background task on a thread-safe domain snapshot. A version
+that is IN-REVIEW or PUBLISHED is refused with 409: a Certified Graph is
+only built while its version is DRAFT (decision D9 of the certified-graph
+SPEC).
+
+Changes:
+1. src/back/objects/digitaltwin/certify/CertifiedBuild.py
+   - `start(domain, settings)`: lifecycle check, Build warehouse
+     credentials, `DomainSnapshot`, `TaskManager.run_background_task`
+     ("Certified Graph Build", `certified_build`); returns the task id.
+   - `ensure_editable`: `ConflictError` when the registry status is not
+     editable (`version_lifecycle.is_editable`).
+   - `task_steps`: `compose`, then `serve` (Lakehouse) or the backend load
+     steps (`TwinGraphBuild.pipeline_steps`, including the managed_synced
+     ones); `run()` advances from `compose` to the load step.
+   - `_folder`: registry folder of a domain or snapshot.
+2. src/api/routers/internal/dtwin.py
+   - `POST /dtwin/certified-build/start` (builder): `CertifiedBuild.start`
+     through `run_blocking`.
+3. docs/api.md
+   - "Build the Certified Graph" section (composition, served relation per
+     backend, status gate, response).
+4. tests/units/dtwin/test_certified_build.py
+   - Lifecycle lock (PUBLISHED / IN-REVIEW refused, DRAFT / new accepted),
+     task steps per backend, `start` (tracked task on a snapshot, nothing
+     started for a read-only version).
+5. tests/units/dtwin/test_certified_build_api.py (new)
+   - The endpoint returns the task id; a read-only version returns 409.
+
+Modified files:
+- src/back/objects/digitaltwin/certify/CertifiedBuild.py
+- src/api/routers/internal/dtwin.py
+- docs/api.md
+- tests/units/dtwin/test_certified_build.py
+- tests/units/dtwin/test_certified_build_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11274 passed, 334 skipped, 8 deselected

@@ -2532,6 +2532,35 @@ Always performs a full rebuild. Returns a `task_id` for progress polling via
 
 ---
 
+#### Build the Certified Graph
+
+```http
+POST /dtwin/certified-build/start
+```
+
+Start an async certified build of the loaded version. The Certified Graph is
+composed in Delta from the Original Graph (`…_cert_base` view over `…_data`,
+`…_cert_enriched` table, `…_certified` union view), then served from the
+backend chosen in Context: the composition itself (Lakehouse virtual), a
+copy of its base (Lakehouse materialized, `…_cert_data`), or a load into
+Lakebase / Neo4j (`<name>_V<n>`). Builder role required. Returns a `task_id`
+for progress polling via `GET /tasks/{task_id}`.
+
+> **Status gate.** Refused with `409` when the loaded version is `IN-REVIEW`
+> or `PUBLISHED`: a Certified Graph is only built while its version is
+> `DRAFT`.
+
+**Response:**
+```json
+{
+  "success": true,
+  "task_id": "abc123",
+  "message": "Certified build started"
+}
+```
+
+---
+
 #### Load Knowledge Graph Triples
 
 ```http
