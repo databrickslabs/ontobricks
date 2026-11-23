@@ -177,3 +177,48 @@ class TestBuilderCertifiedComposition:
         statements = _statements(client)
         assert any(f"{view}_cert_data" in s and "CREATE OR REPLACE TABLE" in s for s in statements)
         assert f"FROM {view}_cert_data" in statements[-1]
+
+
+class TestCertEnrichedWrites:
+    def test_insert_sql_carries_kind_provenance_and_run(self):
+        sql = materialize.build_insert_cert_enriched_sql(
+            "c.s.v_cert_enriched",
+            [{"subject": "s", "predicate": "p", "object": "o", "provenance": "owlrl"}],
+            kind="inference",
+            run_id="t-1",
+        )
+
+        assert sql.startswith("INSERT INTO c.s.v_cert_enriched")
+        assert "'s', 'p', 'o', 'inference', 'owlrl', 't-1'" in sql
+
+    def test_insert_sql_escapes_quotes(self):
+        sql = materialize.build_insert_cert_enriched_sql(
+            "c.s.v_cert_enriched",
+            [{"subject": "s", "predicate": "p", "object": "O'Brien"}],
+            kind="rule",
+            run_id="",
+        )
+
+        assert "'O''Brien'" in sql
+
+    def test_insert_runs_one_statement_per_batch(self):
+        client = MagicMock()
+        rows = [{"subject": f"s{i}", "predicate": "p", "object": "o"} for i in range(5)]
+
+        count = materialize.insert_cert_enriched(
+            client, "c.s.v_cert_enriched", rows, kind="inference", run_id="t", batch_size=2
+        )
+
+        assert count == 5
+        assert client.execute_statement.call_count == 3
+
+    def test_ensure_enriched_table_only_creates_the_table(self):
+        client = MagicMock()
+        domain = _domain()
+        builder = GraphDBFactory.get_builder(domain, None, engine="delta", client=client)
+
+        builder.ensure_cert_enriched_table()
+
+        (statement,) = _statements(client)
+        assert statement.startswith("CREATE TABLE IF NOT EXISTS")
+        assert "_cert_enriched" in statement

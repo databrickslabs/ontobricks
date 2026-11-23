@@ -463,13 +463,19 @@ class TestInferenceTaskBranches:
         assert (30, "IF-THEN 1/4: r1") in progress
         assert (67, "IF-THEN 4/4: r4") in progress
 
-    def test_append_without_graph_store_reports_error(self):
-        tm, _cls, svc, _g = _infer(
-            {"if_then": True, "append_graph": True},
-            graphdb_returns=[MagicMock(), None],
-        )
+    def test_append_failure_on_the_certified_graph_reports_error(self):
+        from back.objects.digitaltwin.certify import CertifiedGraphWriter
+
+        with patch.object(
+            CertifiedGraphWriter,
+            "add_enrichments",
+            side_effect=RuntimeError("Could not open the Certified Graph backend"),
+        ):
+            tm, _cls, svc, _g = _infer({"if_then": True, "append_graph": True})
         result = tm.complete_task.call_args.kwargs["result"]
-        assert result["append_graph_error"] == "Graph store not available"
+        assert result["append_graph_error"] == (
+            "Could not open the Certified Graph backend"
+        )
         svc.materialize_inferred.assert_not_called()
 
     def test_materialize_without_credentials_writes_nothing(self):

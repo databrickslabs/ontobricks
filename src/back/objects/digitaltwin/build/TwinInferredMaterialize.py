@@ -1,16 +1,18 @@
-"""Materialise inferred triples to Delta and/or the graph store.
+"""Materialise inferred triples to a Delta export table and/or the Certified Graph.
 
-Extracted from ``api.routers.internal.dtwin.materialize_inferred``.
+Extracted from ``api.routers.internal.dtwin.materialize_inferred``. The graph
+target is the Certified Graph, written through :class:`CertifiedGraphWriter`
+with each triple's provenance.
 """
 
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, List
 
-from back.core.errors import NotFoundError, ValidationError
+from back.core.errors import NotFoundError, OntoBricksError, ValidationError
 from back.core.helpers import is_uri
 from back.core.logging import get_logger
-from back.core.reasoning import InferredTriple, ReasoningResult, ReasoningService
+from back.core.reasoning import ReasoningService
 from back.objects.digitaltwin.models import DomainSnapshot
 
 logger = get_logger(__name__)
@@ -70,7 +72,6 @@ class TwinInferredMaterialize:
         do_graph: bool,
         mat_table: str,
         get_task,
-        get_store: Callable,
         get_client: Callable,
     ) -> Dict[str, Any]:
         if not task_id:
@@ -108,27 +109,20 @@ class TwinInferredMaterialize:
                 result["materialize_table"] = mat_table
 
         if do_graph and uri_triples:
+            from back.objects.digitaltwin.certify import CertifiedGraphWriter
+
             try:
-                store = get_store(domain_snap, settings, for_write=True)
-                if store is None:
-                    result["materialize_graph_error"] = "Graph store not available"
-                else:
-                    svc = ReasoningService(domain_snap, store)
-                    inferred = [
-                        InferredTriple(
-                            subject=t.get("subject", ""),
-                            predicate=t.get("predicate", ""),
-                            object=t.get("object", ""),
-                            provenance=t.get("provenance", ""),
-                        )
-                        for t in uri_triples
-                    ]
-                    count = svc.materialize_inferred(
-                        ReasoningResult(inferred_triples=inferred)
-                    )
-                    result["materialize_graph_count"] = count
+                result["materialize_graph_count"] = CertifiedGraphWriter(
+                    domain_snap, settings
+                ).add_enrichments(
+                    uri_triples,
+                    kind=CertifiedGraphWriter.KIND_INFERENCE,
+                    run_id=task_id,
+                )
+            except OntoBricksError:
+                raise
             except Exception as exc:
-                logger.exception("Materialise to graph failed: %s", exc)
+                logger.exception("Materialise to the Certified Graph failed: %s", exc)
                 result["materialize_graph_error"] = "Materialise to graph failed"
 
         result["success"] = True

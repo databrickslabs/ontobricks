@@ -15,7 +15,7 @@ triples have no source to be derived from.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Dict, List, Literal
 
 from back.core.errors import InfrastructureError, OntoBricksError
 from back.core.graphdb.adjacency import typed_in_select, typed_out_select
@@ -166,6 +166,53 @@ def build_ensure_cert_enriched_sql(table_fqn: str) -> str:
         "provenance STRING, run_id STRING, created_at TIMESTAMP) USING DELTA "
         "CLUSTER BY (predicate, subject)"
     )
+
+
+def build_insert_cert_enriched_sql(
+    table_fqn: str, rows: List[Dict[str, str]], *, kind: str, run_id: str
+) -> str:
+    """``INSERT … VALUES`` of enrichment rows (each row may carry its provenance)."""
+    from back.core.helpers.SQLHelpers import SQLHelpers
+
+    validate_table_name(table_fqn)
+    lit = SQLHelpers.sql_literal
+    values = ",\n".join(
+        "({}, {}, {}, {}, {}, {}, current_timestamp())".format(
+            lit(r.get("subject", "")),
+            lit(r.get("predicate", "")),
+            lit(r.get("object", "")),
+            lit(kind),
+            lit(r.get("provenance", "")),
+            lit(run_id),
+        )
+        for r in rows
+    )
+    return (
+        f"INSERT INTO {table_fqn} "
+        "(subject, predicate, object, kind, provenance, run_id, created_at) "
+        f"VALUES\n{values}"
+    )
+
+
+def insert_cert_enriched(
+    client: Any,
+    table_fqn: str,
+    rows: List[Dict[str, str]],
+    *,
+    kind: str,
+    run_id: str,
+    batch_size: int = 1000,
+) -> int:
+    """Append enrichment rows to the Certified Graph enrichments TABLE."""
+    for i in range(0, len(rows), batch_size):
+        run_sql(
+            client,
+            build_insert_cert_enriched_sql(
+                table_fqn, rows[i : i + batch_size], kind=kind, run_id=run_id
+            ),
+        )
+    logger.info("Inserted %d %s row(s) into %s", len(rows), kind, table_fqn)
+    return len(rows)
 
 
 def build_truncate_sql(table_fqn: str) -> str:

@@ -874,3 +874,73 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11332 passed, 334 skipped, 8 deselected
+
+================================================================================
+CertifiedGraphWriter: inference write-backs go to the Certified Graph
+================================================================================
+
+Context:
+Step (b) of the switch to the two-phase graph. New `CertifiedGraphWriter`,
+the single write path into the Certified Graph: it appends enrichment rows
+(with `kind`, per-triple `provenance` and `run_id`) to the Delta
+`…_cert_enriched` table, which `…_certified` unions in, and also inserts the
+triples into the served backend when it is a copy (Lakebase, Neo4j). A
+read-only (IN-REVIEW / PUBLISHED) version is refused (D9). The two inference
+write-backs now use it: the UI "materialise to graph" and the inference
+task's `append_graph` option. Provenance (`owlrl`, `if_then:<rule>`, …) is
+no longer dropped. Per-entity business rules, cohorts and communities come
+next. Until the Original build switch, a Lakehouse domain's legacy
+`…_graph` view (internal "live" source) no longer shows newly materialised
+inferences; the `certified` source does.
+
+Changes:
+1. src/back/core/graphdb/delta/materialize.py
+   - `build_insert_cert_enriched_sql` (escaped VALUES with kind, provenance,
+     run_id, `current_timestamp()`), `insert_cert_enriched` (batched).
+2. src/back/core/graphdb/delta/Builder.py
+   - `ensure_cert_enriched_table` (CREATE TABLE IF NOT EXISTS only, so a
+     write never re-points the composition views) and
+     `insert_cert_enriched`.
+3. src/back/objects/digitaltwin/certify/CertifiedGraphWriter.py (new)
+   - `add_enrichments(triples, kind, run_id)`: lifecycle lock, writable
+     rows (no `(batch)` markers, no empty subject), composition insert,
+     backend insert (certified store, `<name>_V<n>`) for Lakebase / Neo4j.
+     Kind constants: inference, rule, cohort, community.
+4. src/back/objects/digitaltwin/certify/__init__.py
+   - Re-exports `CertifiedGraphWriter`.
+5. src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+   - The graph target writes through the writer (kind inference, run id =
+     task id); Remove Parameter `get_store`; a read-only version raises.
+6. src/api/routers/internal/dtwin.py
+   - `/dtwin/reasoning/materialize` no longer passes `get_store`.
+7. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   - Extract Method `_append_to_certified`: the inference task's
+     `append_graph` step writes through the writer and reports errors in
+     the task result.
+8. Tests
+   - tests/units/graphdb/delta/test_certified_composition.py: insert SQL,
+     escaping, batching, enriched-table-only DDL.
+   - tests/units/dtwin/test_certified_graph_writer.py (new): Lakehouse
+     composition-only write, Lakebase / Neo4j backend write, views never
+     recreated, read-only refusal, nothing to write.
+   - tests/units/dtwin/test_run_inference_task.py,
+     tests/units/dtwin/test_v090_twin_background_tasks.py,
+     tests/units/dtwin/test_v090_twin_build_prepare.py: ported to the
+     writer (provenance, kind, run id, error reporting, read-only refusal).
+
+Modified files:
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/Builder.py
+- src/back/objects/digitaltwin/certify/CertifiedGraphWriter.py
+- src/back/objects/digitaltwin/certify/__init__.py
+- src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- tests/units/graphdb/delta/test_certified_composition.py
+- tests/units/dtwin/test_certified_graph_writer.py
+- tests/units/dtwin/test_run_inference_task.py
+- tests/units/dtwin/test_v090_twin_background_tasks.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11342 passed, 334 skipped, 8 deselected

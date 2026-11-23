@@ -533,6 +533,33 @@ class TwinBackgroundTasks:
             tm.fail_task(task_id, _error_text(exc))
 
     @staticmethod
+    def _append_to_certified(domain_snap, settings, result, task_id, label) -> dict:
+        """Write an inference run to the Certified Graph; report, never raise."""
+        from back.objects.digitaltwin.certify import CertifiedGraphWriter
+
+        try:
+            count = CertifiedGraphWriter(domain_snap, settings).add_enrichments(
+                [
+                    {
+                        "subject": t.subject,
+                        "predicate": t.predicate,
+                        "object": t.object,
+                        "provenance": getattr(t, "provenance", "") or "",
+                    }
+                    for t in result.inferred_triples
+                ],
+                kind=CertifiedGraphWriter.KIND_INFERENCE,
+                run_id=task_id,
+            )
+        except Exception as exc:  # noqa: BLE001 — reported in the task result
+            logger.exception("%s %s: append to graph failed: %s", label, task_id, exc)
+            return {"append_graph_error": str(exc)}
+        logger.info(
+            "%s %s: appended %d triples to the certified graph", label, task_id, count
+        )
+        return {"append_graph_count": count}
+
+    @staticmethod
     def run_inference_task(
         tm,
         task_id: str,
@@ -547,7 +574,6 @@ class TwinBackgroundTasks:
 
         from back.core.helpers import get_databricks_client, is_uri
         from back.core.reasoning import ReasoningService
-        from back.core.reasoning.results.ReasoningResult import ReasoningResult as _RR
         from back.core.graphdb import get_graphdb
 
         is_api = build_kind == "api"
@@ -617,35 +643,13 @@ class TwinBackgroundTasks:
 
             if options.get("append_graph") and result.inferred_triples:
                 tm.update_progress(
-                    task_id, 92, "Appending inferred triples to graph..."
+                    task_id, 92, "Appending inferred triples to the certified graph..."
                 )
-                try:
-                    graph_store = get_graphdb(domain_snap, settings, for_write=True)
-                    if graph_store is None:
-                        logger.warning(
-                            "%s %s: cannot append to graph — store unavailable",
-                            label,
-                            task_id,
-                        )
-                        result_dict["append_graph_error"] = "Graph store not available"
-                    else:
-                        append_count = ReasoningService(
-                            domain_snap, graph_store
-                        ).materialize_inferred(
-                            _RR(inferred_triples=result.inferred_triples)
-                        )
-                        result_dict["append_graph_count"] = append_count
-                        logger.info(
-                            "%s %s: appended %d triples to graph",
-                            label,
-                            task_id,
-                            append_count,
-                        )
-                except Exception as ag_err:
-                    logger.exception(
-                        "%s %s: append to graph failed: %s", label, task_id, ag_err
+                result_dict.update(
+                    TwinBackgroundTasks._append_to_certified(
+                        domain_snap, settings, result, task_id, label
                     )
-                    result_dict["append_graph_error"] = str(ag_err)
+                )
 
             mat_table = (options.get("materialize_table") or "").strip()
             if (

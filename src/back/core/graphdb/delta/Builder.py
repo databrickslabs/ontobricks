@@ -147,6 +147,29 @@ class Builder(GraphBuilder):
             certified_fqn=self.certified_view_fqn(),
         )
 
+    def ensure_cert_enriched_table(self) -> None:
+        """Create the Certified Graph enrichments TABLE if missing (views untouched)."""
+        from back.core.graphdb.delta import materialize
+
+        materialize.run_sql(
+            self._get_client(),
+            materialize.build_ensure_cert_enriched_sql(self.cert_enriched_fqn()),
+        )
+
+    def insert_cert_enriched(
+        self, rows: List[Dict[str, str]], *, kind: str, run_id: str = ""
+    ) -> int:
+        """Append enrichment rows (with provenance) to ``…_cert_enriched``."""
+        from back.core.graphdb.delta import materialize
+
+        return materialize.insert_cert_enriched(
+            self._get_client(),
+            self.cert_enriched_fqn(),
+            rows,
+            kind=kind,
+            run_id=run_id,
+        )
+
     def create_view(self, view_fqn: str, select_sql: str) -> None:
         from back.core.graphdb.delta import materialize
 

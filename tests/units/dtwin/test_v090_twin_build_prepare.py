@@ -11,11 +11,12 @@ import pytest
 
 from back.core.errors import NotFoundError, ValidationError
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
-from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 from back.objects.digitaltwin.build.TwinGraphBuild import TwinGraphBuild
-from back.objects.digitaltwin.TwinGraphStats import TwinGraphStats
 from back.objects.digitaltwin.build.TwinInferredMaterialize import TwinInferredMaterialize
 from back.objects.digitaltwin.build.TwinLakehouseBuild import TwinLakehouseBuild
+from back.objects.digitaltwin.certify import CertifiedGraphWriter
+from back.objects.digitaltwin.DigitalTwin import DigitalTwin
+from back.objects.digitaltwin.TwinGraphStats import TwinGraphStats
 
 pytestmark = pytest.mark.unit
 
@@ -222,18 +223,16 @@ def _task(triples):
 
 
 def _materialize(*, do_delta=True, do_graph=True, mat_table="c.s.inferred",
-                 triples=(_GOOD, _LITERAL), store="default", client="default",
-                 svc=None, delta_count=1):
+                 triples=(_GOOD, _LITERAL), client="default", delta_count=1,
+                 writer_effect=None):
     reasoning_cls = MagicMock()
-    svc = svc or MagicMock()
-    svc.materialize_inferred.return_value = 1
-    reasoning_cls.return_value = svc
     reasoning_cls.materialize_to_delta.return_value = delta_count
-    store_obj = MagicMock() if store == "default" else store
     client_obj = MagicMock() if client == "default" else client
-    get_store = MagicMock(return_value=store_obj)
     get_client = MagicMock(return_value=client_obj)
-    with patch.object(_MAT_MODULE, "ReasoningService", reasoning_cls):
+    writer_add = MagicMock(return_value=1, side_effect=writer_effect)
+    with patch.object(_MAT_MODULE, "ReasoningService", reasoning_cls), patch.object(
+        CertifiedGraphWriter, "add_enrichments", writer_add,
+    ):
         result = TwinInferredMaterialize.run(
             _domain(),
             MagicMock(),
@@ -242,10 +241,9 @@ def _materialize(*, do_delta=True, do_graph=True, mat_table="c.s.inferred",
             do_graph=do_graph,
             mat_table=mat_table,
             get_task=lambda tid: _task(list(triples)),
-            get_store=get_store,
             get_client=get_client,
         )
-    return result, reasoning_cls, svc, get_store, get_client, store_obj, client_obj
+    return result, reasoning_cls, writer_add, get_client, client_obj
 
 
 class TestInferredMaterialize:
@@ -260,8 +258,7 @@ class TestInferredMaterialize:
         with pytest.raises(ValidationError):
             TwinInferredMaterialize.run(
                 _domain(), None, task_id="", do_delta=True, do_graph=False,
-                mat_table="", get_task=MagicMock(), get_store=MagicMock(),
-                get_client=MagicMock(),
+                mat_table="", get_task=MagicMock(), get_client=MagicMock(),
             )
 
     def test_no_target_is_rejected(self):
@@ -272,30 +269,22 @@ class TestInferredMaterialize:
         with pytest.raises(NotFoundError):
             TwinInferredMaterialize.run(
                 _domain(), None, task_id="t", do_delta=True, do_graph=True,
-                mat_table="", get_task=lambda tid: None, get_store=MagicMock(),
-                get_client=MagicMock(),
+                mat_table="", get_task=lambda tid: None, get_client=MagicMock(),
             )
 
     def test_task_without_triples_is_rejected(self):
         with pytest.raises(ValidationError, match="no inferred triples"):
             _materialize(triples=())
 
-    def test_graph_write_receives_only_uri_triples_with_provenance(self):
-        result, cls, svc, get_store, _gc, store, _c = _materialize(do_delta=False)
+    def test_graph_write_goes_to_the_certified_graph_with_provenance(self):
+        result, _cls, writer_add, *_ = _materialize(do_delta=False)
 
         assert result == {"success": True, "materialize_graph_count": 1}
-        assert cls.call_args.args[1] is store
-        rr = svc.materialize_inferred.call_args.args[0]
-        assert [(t.subject, t.predicate, t.object, t.provenance) for t in rr.inferred_triples] == [
-            ("http://ex.org/s1", "http://ex.org/p", "http://ex.org/o1", "if_then:rule1")
-        ]
-
-    def test_graph_write_opens_the_store_on_the_build_warehouse(self):
-        _r, _cls, _svc, get_store, *_ = _materialize(do_delta=False)
-        assert get_store.call_args.kwargs == {"for_write": True}
+        assert writer_add.call_args.args[0] == [_GOOD]
+        assert writer_add.call_args.kwargs == {"kind": "inference", "run_id": "t1"}
 
     def test_delta_write_goes_to_the_named_table_with_uri_triples(self):
-        result, cls, _svc, _gs, _gc, _s, client = _materialize(do_graph=False, delta_count=1)
+        result, cls, _w, _gc, client = _materialize(do_graph=False, delta_count=1)
 
         cls.materialize_to_delta.assert_called_once_with(client, "c.s.inferred", [_GOOD])
         assert result["materialize_count"] == 1
@@ -323,31 +312,27 @@ class TestInferredMaterialize:
             result = TwinInferredMaterialize.run(
                 _domain(), None, task_id="t", do_delta=True, do_graph=False,
                 mat_table="c.s.t", get_task=lambda tid: _task([_GOOD]),
-                get_store=MagicMock(), get_client=MagicMock(),
+                get_client=MagicMock(),
             )
         assert result["materialize_error"] == "Materialise to Delta failed"
         assert result["materialize_table"] == "c.s.t"
         assert result["success"] is True
 
-    def test_missing_graph_store_is_reported(self):
-        result, *_ = _materialize(do_delta=False, store=None)
-        assert result["materialize_graph_error"] == "Graph store not available"
-
     def test_graph_failure_is_reported_not_raised(self):
-        svc = MagicMock()
-        svc.materialize_inferred.side_effect = AttributeError("execute_statement")
-        reasoning_cls = MagicMock(return_value=svc)
-        with patch.object(_MAT_MODULE, "ReasoningService", reasoning_cls):
-            result = TwinInferredMaterialize.run(
-                _domain(), None, task_id="t", do_delta=False, do_graph=True,
-                mat_table="", get_task=lambda tid: _task([_GOOD]),
-                get_store=MagicMock(), get_client=MagicMock(),
-            )
+        result, *_ = _materialize(
+            do_delta=False, writer_effect=AttributeError("execute_statement")
+        )
         assert result["materialize_graph_error"] == "Materialise to graph failed"
 
+    def test_a_read_only_version_is_refused(self):
+        from back.core.errors import ConflictError
+
+        with pytest.raises(ConflictError):
+            _materialize(do_delta=False, writer_effect=ConflictError("read-only"))
+
     def test_only_literal_triples_writes_nothing(self):
-        result, cls, svc, get_store, get_client, *_ = _materialize(triples=(_LITERAL,))
-        get_store.assert_not_called()
+        result, _cls, writer_add, get_client, _c = _materialize(triples=(_LITERAL,))
+        writer_add.assert_not_called()
         get_client.assert_not_called()
         assert result == {"success": True}
 

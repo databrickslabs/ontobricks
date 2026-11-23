@@ -1,5 +1,7 @@
 """Materialisation follows the options, not the caller's identity.
 
+The graph append writes to the Certified Graph (``CertifiedGraphWriter``).
+
 ``run_inference_task`` used to gate both write-back branches on
 ``build_kind == "api"``, so a scheduled run computed its inferences and
 then dropped them on the floor. The gate now reads the options, which is
@@ -16,6 +18,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.objects.digitaltwin import DigitalTwin
+from back.objects.digitaltwin.certify import CertifiedGraphWriter
 
 pytestmark = pytest.mark.unit
 
@@ -42,14 +45,18 @@ def _run(options, *, build_kind, inferred=2):
     tm = MagicMock()
     svc = MagicMock()
     svc.run_full_reasoning.return_value = _Result(inferred)
-    svc.materialize_inferred.return_value = inferred
+    writer_add = MagicMock(return_value=inferred)
+    svc.writer_add = writer_add
 
-    with patch(
-        "back.core.reasoning.ReasoningService", return_value=svc
-    ) as svc_cls, patch(
-        "back.core.graphdb.get_graphdb", return_value=MagicMock()
-    ), patch(
-        "back.core.helpers.get_databricks_client", return_value=MagicMock()
+    with (
+        patch.object(
+            CertifiedGraphWriter,
+            "add_enrichments",
+            writer_add,
+        ),
+        patch("back.core.reasoning.ReasoningService", return_value=svc) as svc_cls,
+        patch("back.core.graphdb.get_graphdb", return_value=MagicMock()),
+        patch("back.core.helpers.get_databricks_client", return_value=MagicMock()),
     ):
         svc_cls.materialize_to_delta = MagicMock(return_value=inferred)
         DigitalTwin.run_inference_task(
@@ -65,34 +72,57 @@ def _run(options, *, build_kind, inferred=2):
 
 class TestAppendToGraph:
     def test_a_scheduled_run_appends_when_asked(self):
-        tm, svc, _delta = _run({"if_then": True, "append_graph": True}, build_kind="scheduled")
+        tm, svc, _delta = _run(
+            {"if_then": True, "append_graph": True}, build_kind="scheduled"
+        )
 
-        svc.materialize_inferred.assert_called_once()
+        svc.writer_add.assert_called_once()
         result = tm.complete_task.call_args[1]["result"]
         assert result["append_graph_count"] == 2
 
     def test_an_api_run_still_appends(self):
-        _tm, svc, _delta = _run({"if_then": True, "append_graph": True}, build_kind="api")
-        svc.materialize_inferred.assert_called_once()
+        _tm, svc, _delta = _run(
+            {"if_then": True, "append_graph": True}, build_kind="api"
+        )
+        svc.writer_add.assert_called_once()
 
     def test_the_interactive_ui_does_not(self):
         _tm, svc, _delta = _run({"if_then": True}, build_kind="session")
-        svc.materialize_inferred.assert_not_called()
+        svc.writer_add.assert_not_called()
 
     def test_nothing_inferred_means_nothing_to_append(self):
         _tm, svc, _delta = _run(
             {"if_then": True, "append_graph": True}, build_kind="scheduled", inferred=0
         )
-        svc.materialize_inferred.assert_not_called()
+        svc.writer_add.assert_not_called()
+
+    def test_the_append_targets_the_certified_graph_with_provenance(self):
+        _tm, svc, _delta = _run(
+            {"if_then": True, "append_graph": True}, build_kind="api"
+        )
+
+        triples = svc.writer_add.call_args.args[0]
+        assert triples[0]["subject"] == "http://ex.org/s0"
+        assert "provenance" in triples[0]
+        assert svc.writer_add.call_args.kwargs == {
+            "kind": "inference",
+            "run_id": "task-1",
+        }
 
     def test_a_failed_append_is_reported_not_raised(self):
         tm = MagicMock()
         svc = MagicMock()
         svc.run_full_reasoning.return_value = _Result()
-        svc.materialize_inferred.side_effect = RuntimeError("graph read-only")
+        writer_add = MagicMock(side_effect=RuntimeError("graph read-only"))
 
-        with patch("back.core.reasoning.ReasoningService", return_value=svc), patch(
-            "back.core.graphdb.get_graphdb", return_value=MagicMock()
+        with (
+            patch("back.core.reasoning.ReasoningService", return_value=svc),
+            patch("back.core.graphdb.get_graphdb", return_value=MagicMock()),
+            patch.object(
+                CertifiedGraphWriter,
+                "add_enrichments",
+                writer_add,
+            ),
         ):
             DigitalTwin.run_inference_task(
                 tm,
@@ -166,8 +196,9 @@ class TestCompletionMessage:
         svc = MagicMock()
         svc.run_full_reasoning.side_effect = RuntimeError("IF-THEN parser blew up")
 
-        with patch("back.core.reasoning.ReasoningService", return_value=svc), patch(
-            "back.core.graphdb.get_graphdb", return_value=MagicMock()
+        with (
+            patch("back.core.reasoning.ReasoningService", return_value=svc),
+            patch("back.core.graphdb.get_graphdb", return_value=MagicMock()),
         ):
             DigitalTwin.run_inference_task(
                 tm,
@@ -185,8 +216,9 @@ class TestCompletionMessage:
         svc = MagicMock()
         svc.run_full_reasoning.side_effect = RuntimeError("IF-THEN parser blew up")
 
-        with patch("back.core.reasoning.ReasoningService", return_value=svc), patch(
-            "back.core.graphdb.get_graphdb", return_value=MagicMock()
+        with (
+            patch("back.core.reasoning.ReasoningService", return_value=svc),
+            patch("back.core.graphdb.get_graphdb", return_value=MagicMock()),
         ):
             DigitalTwin.run_inference_task(
                 tm,

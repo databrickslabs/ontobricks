@@ -2159,7 +2159,7 @@ async def materialize_inferred(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Materialise previously inferred triples to Delta and/or the active graph store."""
+    """Materialise previously inferred triples to Delta and/or the Certified Graph."""
     from back.core.task_manager import get_task_manager
 
     data = await request.json()
@@ -2173,7 +2173,6 @@ async def materialize_inferred(
         do_graph=data.get("materialize_graph", False),
         mat_table=(data.get("materialize_table") or "").strip(),
         get_task=tm.get_task,
-        get_store=get_graphdb,
         get_client=get_databricks_client,
     )
 
