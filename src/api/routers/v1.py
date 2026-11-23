@@ -357,15 +357,17 @@ async def execute_query(
     ),
 ):
     """
-    Execute a SPARQL query against a domain's mapped data.
+    Execute a SPARQL query against the R2RML mapping document of a domain file.
 
-    The query is translated to SQL using R2RML mappings and executed against
-    Databricks.
+    The domain JSON at ``domain_path`` is read from a Unity Catalog volume
+    with the caller's credentials, and the query runs with RDFLib over its
+    R2RML mapping (Turtle). It reads no Knowledge Graph data: to query the
+    served (Certified) graph, use ``/api/v1/digitaltwin/*`` or GraphQL.
 
     Execution engines:
 
-    - **local** — RDFLib for local SPARQL processing (default).
-    - **spark** — Spark SQL on Databricks.
+    - **local** — RDFLib over the mapping document (default).
+    - **spark** — not available on this endpoint (refused).
 
     Response fields include **results** (rows), **columns**, **count**, and
     **engine**.

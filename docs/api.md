@@ -347,7 +347,11 @@ Get the R2RML mapping content from a domain.
 
 #### `POST /api/v1/query`
 
-Execute a SPARQL query against a domain's ontology.
+Execute a SPARQL query with RDFLib against the **R2RML mapping document** of
+a domain JSON file read from a Unity Catalog volume with the caller's
+credentials. It reads no Knowledge Graph data (and is therefore not subject
+to the PUBLISHED / Certified Graph rule): to query the served graph, use the
+Knowledge Graph endpoints or GraphQL.
 
 **Request:**
 ```json
@@ -364,7 +368,7 @@ Execute a SPARQL query against a domain's ontology.
 - `project_path` (required): Path to the domain JSON file in [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/)
 - `query` (required): SPARQL query string
 - `limit` (optional): Maximum number of results (default: 100). For `CONSTRUCT`/`DESCRIBE` with `output_format=json-ld`, this truncates triples (not complete subgraphs).
-- `engine` (optional): Query engine - `local` (RDFLib) or `spark` (default: `local`)
+- `engine` (optional): `local` (RDFLib, default); `spark` is refused on this endpoint
 - `output_format` (optional): `rows` (default tabular bindings) or `json-ld` (`CONSTRUCT`/`DESCRIBE` only; rejected for `SELECT`/`ASK`)
 
 **Response (rows):**

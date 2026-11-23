@@ -805,3 +805,31 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11316 passed, 334 skipped, 8 deselected
+
+================================================================================
+SPARQL /api/v1/query: description matches what the endpoint does
+================================================================================
+
+Context:
+While applying "external reads serve the Certified Graph", `/api/v1/query`
+was checked: it reads a domain JSON file from a Unity Catalog volume with
+the caller's credentials and runs the SPARQL query with RDFLib over the
+R2RML mapping document (`r2rml_output`); the `spark` engine is refused. It
+reads no Knowledge Graph data, so the PUBLISHED / Certified Graph rule does
+not apply and the endpoint is unchanged. Its description claimed SQL
+execution over the mapped data; it now says what it does.
+
+Changes:
+1. src/api/routers/v1.py
+   - `execute_query` docstring (OpenAPI): SPARQL over the R2RML mapping
+     document, no graph data, `spark` refused; points to the Knowledge Graph
+     endpoints / GraphQL for the served graph.
+2. docs/api.md
+   - `POST /api/v1/query` section and `engine` parameter aligned.
+
+Modified files:
+- src/api/routers/v1.py
+- docs/api.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11316 passed, 334 skipped, 8 deselected
