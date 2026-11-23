@@ -492,3 +492,42 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11244 passed, 334 skipped, 8 deselected
+
+================================================================================
+Certified build: compose in Delta, load Lakebase / Neo4j from the composition
+================================================================================
+
+Context:
+Fourth step toward the two-phase graph. New sub-package
+`back/objects/digitaltwin/certify/` with `CertifiedBuild`, which builds the
+Certified Graph of a domain version from its Original Graph: it creates the
+Delta composition, then either serves it as is (Lakehouse virtual) or loads
+the domain's graph engine from `…_cert_base` with `GraphLoad` (Lakebase
+app_managed, Neo4j). The run is recorded in `build_runs` with
+`build_kind = certified`. Not wired to a route yet. Lakehouse materialized
+and Lakebase managed_synced are refused with a clear message for now (they
+need `…_cert_data` and an `object_hash` source view respectively).
+
+Changes:
+1. src/back/objects/digitaltwin/certify/__init__.py (new)
+   - Package; re-exports `CertifiedBuild`.
+2. src/back/objects/digitaltwin/certify/CertifiedBuild.py (new)
+   - `run()`: resolve the target from the domain backend, compose
+     (`ensure_certified_composition` on the Delta builder), then serve the
+     composition (Lakehouse virtual: triple count of `…_certified`) or load
+     the graph engine from `…_cert_base` into `<name>_V<n>`; complete the
+     task and record the run. An empty Original Graph fails the build.
+     Never raises; failures go through `tm.fail_task` and are recorded.
+3. tests/units/dtwin/test_certified_build.py (new)
+   - Lakehouse virtual (no copy, no store opened, recorded as certified),
+     Lakebase and Neo4j (load from `…_cert_base` into `Dom_V2`, success,
+     empty Original, failed load), unsupported targets (no backend,
+     materialized Lakehouse, managed_synced, unreachable backend).
+
+Modified files:
+- src/back/objects/digitaltwin/certify/__init__.py
+- src/back/objects/digitaltwin/certify/CertifiedBuild.py
+- tests/units/dtwin/test_certified_build.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11258 passed, 334 skipped, 8 deselected
