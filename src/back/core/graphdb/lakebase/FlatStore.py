@@ -758,7 +758,7 @@ class FlatStore(InferredBreakdownMixin, Base):
             # In managed_synced mode the *_sync table is provisioned by Lakebase/
             # Lakeflow via SyncedTableManager. The companion and union view are
             # created by ensure_synced_companion / ensure_synced_union_view at
-            # the appropriate points in _apply_via_synced_pipeline.
+            # the appropriate points in SyncedGraphLoad.run.
             logger.debug(
                 "create_table %s is a no-op in managed_synced mode "
                 "(provisioning deferred to SyncedTableManager)",

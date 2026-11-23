@@ -117,7 +117,7 @@ def _apply_synced_pipeline(
 ) -> None:
     """Trigger the Lakeflow synced-table refresh for *graph_name*.
 
-    Mirrors :meth:`_BuildPipeline._apply_via_synced_pipeline` so scheduled
+    Mirrors :meth:`SyncedGraphLoad.run` so scheduled
     builds also keep bulk data movement on the data plane.
     """
     from back.core.graphdb.GraphDBFactory import GraphDBFactory

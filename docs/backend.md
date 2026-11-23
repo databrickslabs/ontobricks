@@ -1568,7 +1568,7 @@ delegate to the bulk iterator paths once the payload crosses
 
 #### Pipeline gating
 
-`_BuildPipeline._stream_triples_into_store` and
+`GraphLoad.stream_triples_into_store` and
 `_stream_triples_out_of_store` call `bulk_insert_iter` /
 `bulk_delete_iter` when the store exposes them (Lakebase) and fall back to
 materializing the iterator into a list for backends without a streaming
@@ -1638,7 +1638,7 @@ schema segment once the store is constructed (see build log
 
 #### Build pipeline branch
 
-`_BuildPipeline._apply_via_synced_pipeline(full=...)` replaces the row-level
+`SyncedGraphLoad.run()` replaces the row-level
 ingest in synced mode:
 
 1. Resolve the synced UC FQN as `<catalog>.<schema>.<base>_sync` where

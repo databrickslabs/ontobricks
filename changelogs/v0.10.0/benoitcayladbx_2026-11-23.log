@@ -380,3 +380,72 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11230 passed, 334 skipped, 8 deselected
+
+================================================================================
+Build pipeline: backend load extracted into GraphLoad / SyncedGraphLoad
+================================================================================
+
+Context:
+Second refactoring step toward the two-phase graph. The build pipeline mixed
+the R2RML translation (gateway VIEW, `_data`) with the load of the graph
+backend. The load is now its own class, fed by `source_relation`, so a
+certified build can reuse it without inheriting the translation. Smells:
+Large Class (`_BuildPipeline`, 1419 LOC), Long Method
+(`_apply_full_rebuild` 133 LOC, `_apply_via_synced_pipeline` 337 LOC).
+Refactorings: Extract Class, Extract Method, Move Method, Replace
+Conditional with Polymorphism (streamed vs Lakeflow load).
+
+Changes:
+1. src/back/objects/digitaltwin/build/GraphLoad.py (new)
+   - `GraphLoad`: full rebuild of a store from a source relation, streamed
+     in batches (count, drop/create, Lakebase `_sync` bulk load or generic
+     bulk insert, optimize, adjacency). `run()` returns LOADED / EMPTY /
+     FAILED.
+2. src/back/objects/digitaltwin/build/SyncedGraphLoad.py (new)
+   - `SyncedGraphLoad(GraphLoad)`: the Lakebase managed-synced path (UC
+     schema, synced table on the source relation, companion, Lakeflow
+     trigger, union view, companion truncate, adjacency, post-sync count),
+     one method per step.
+3. src/back/objects/digitaltwin/build/_build_pipeline.py
+   - `_apply_full_rebuild` builds the matching load, runs it and copies its
+     triple count and phase times; `_complete_empty_build` finishes a build
+     whose source is empty. Removed: `_count_source_triples`,
+     `_rebuild_adjacency_if_supported`, `_stream_triples_into_store`,
+     `_apply_via_synced_pipeline`, `_raise_if_cancelled`,
+     `_report_post_sync_triple_count` (moved to the load classes).
+   - The Lakeflow source VIEW refresh (object_hash columns) now runs just
+     before the synced load instead of between its schema and registration
+     steps; same statement, same failure message.
+4. src/back/objects/digitaltwin/build/__init__.py
+   - Re-exports `GraphLoad` and `SyncedGraphLoad`.
+5. src/back/core/graphdb/lakebase/FlatStore.py,
+   src/back/objects/registry/schedule/build.py, docs/backend.md
+   - References to the moved methods updated.
+6. tests/units/dtwin/test_graph_load.py (new)
+   - Streaming, full load (progress denominator, source relation, recreate,
+     empty source, adjacency) and synced load (Lakeflow calls, source
+     relation, fallback registration name, adjacency, post-sync count).
+7. tests/units/dtwin/test_build_pipeline_streaming.py
+   - Load tests moved to test_graph_load.py; new `TestApplyFullRebuild`
+     (streamed vs synced load selection, empty source completes the build).
+8. tests/units/objects/test_build_pipeline_materialize.py
+   - Bare pipeline sets `delta_cfg`.
+9. tests/units/architecture/baseline.json
+   - Ratchet: `_BuildPipeline` 1419 -> 919 LOC; the two long-method entries
+     are gone.
+
+Modified files:
+- src/back/objects/digitaltwin/build/GraphLoad.py
+- src/back/objects/digitaltwin/build/SyncedGraphLoad.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/core/graphdb/lakebase/FlatStore.py
+- src/back/objects/registry/schedule/build.py
+- docs/backend.md
+- tests/units/dtwin/test_graph_load.py
+- tests/units/dtwin/test_build_pipeline_streaming.py
+- tests/units/objects/test_build_pipeline_materialize.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11235 passed, 334 skipped, 8 deselected

@@ -1,7 +1,8 @@
 """Streaming + Lakebase-aware behaviour for the Digital Twin build pipeline.
 
 These tests exercise the helpers in :class:`_BuildPipeline` without spinning
-up the whole pipeline. Each test builds a minimal instance via
+up the whole pipeline (the backend load itself is covered in
+``test_graph_load.py``). Each test builds a minimal instance via
 ``object.__new__`` and only sets the attributes the helper needs, which keeps
 the test scope tight and fast.
 """
@@ -11,7 +12,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from back.core.errors import InfrastructureError
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.objects.digitaltwin.build._build_pipeline import (
     _BuildPipeline,
@@ -45,273 +45,56 @@ def _bare_pipeline(**overrides):
     return pipe
 
 
-class TestStreamTriplesIntoStore:
-    def test_uses_bulk_insert_iter_when_available(self):
-        pipe = _bare_pipeline()
-        rows = [
-            {"subject": "s1", "predicate": "p", "object": "o1"},
-            {"subject": "s2", "predicate": "p", "object": "o2"},
-        ]
-        pipe.source_client.iter_rows.return_value = iter(rows)
-        pipe.store.bulk_insert_iter = MagicMock(return_value=2)
+class TestApplyFullRebuild:
+    """The apply phase hands ``source_relation`` to the matching backend load."""
 
-        n = pipe._stream_triples_into_store(
-            "SELECT subject, predicate, object FROM v",
-            insert_batch_size=2000,
-        )
+    def test_streamed_load_reads_the_source_relation(self):
+        pipe = _bare_pipeline(source_relation="cat.sch.composed_relation")
+        pipe._is_cancelled = MagicMock(return_value=False)
 
-        assert n == 2
-        pipe.source_client.iter_rows.assert_called_once_with(
-            "SELECT subject, predicate, object FROM v", batch_size=2000
-        )
-        pipe.store.bulk_insert_iter.assert_called_once()
-        kwargs = pipe.store.bulk_insert_iter.call_args.kwargs
-        assert kwargs["batch_size"] == 2000
-        assert pipe.store.bulk_insert_iter.call_args.args[0] == "G_V1"
-        pipe.store.insert_triples.assert_not_called()
+        with patch(
+            "back.objects.digitaltwin.build.GraphLoad.GraphLoad.run",
+            autospec=True,
+            return_value="loaded",
+        ) as run:
+            assert pipe._apply_full_rebuild() is True
 
-    def test_falls_back_to_insert_triples_when_no_bulk_iter(self):
-        pipe = _bare_pipeline()
-        store = SimpleNamespace(insert_triples=MagicMock(return_value=2))
-        pipe.store = store
-        rows = [
-            {"subject": "s1", "predicate": "p", "object": "o1"},
-            {"subject": "s2", "predicate": "p", "object": "o2"},
-        ]
-        pipe.source_client.iter_rows.return_value = iter(rows)
+        load = run.call_args.args[0]
+        assert type(load).__name__ == "GraphLoad"
+        assert load.source_relation == "cat.sch.composed_relation"
 
-        n = pipe._stream_triples_into_store(
-            "SELECT subject, predicate, object FROM v",
-            insert_batch_size=5000,
-        )
-        assert n == 2
-        called_args, called_kwargs = store.insert_triples.call_args
-        assert called_args[0] == "G_V1"
-        assert called_args[1] == rows
-
-
-class TestFullRebuildProgressMessage:
-    """Regression for the 'Written x/x' UI bug.
-
-    ``bulk_insert_iter`` does not know the upfront target and passes the
-    running written count as ``total``; the pipeline must anchor the
-    denominator on the warehouse-side COUNT(*) total so the UI reads
-    ``Written x/y`` (true total), not ``Written x/x``.
-    """
-
-    def _full_pipe(self, view_total: int):
-        pipe = _bare_pipeline(is_api=False)
-        pipe.start_time = 0.0
-        # Mock the server-side count.
-        pipe._count_source_triples = MagicMock(return_value=view_total)
-        pipe._captured: list = []
-        pipe.tm.update_progress = MagicMock(
-            side_effect=lambda tid, pct, msg: pipe._captured.append((pct, msg))
-        )
-        captured_cb: dict = {}
-
-        # _apply_full_rebuild now routes through bulk_load_into_sync (Lakebase
-        # store exposes it via MagicMock auto-creation). Capture the callback
-        # from the new code path instead of the legacy _stream_triples_into_store.
-        def _capture_bulk_load(table_name, triple_iter, batch_size=5000, on_progress=None):
-            captured_cb["fn"] = on_progress
-            return 1  # pretend 1 row written
-
-        pipe.store.bulk_load_into_sync = _capture_bulk_load
-        pipe.source_client.iter_rows = MagicMock(return_value=iter([]))
-        pipe._captured_cb = captured_cb
-        return pipe
-
-    def test_full_progress_message_uses_true_total_as_denominator(self):
-        pipe = self._full_pipe(view_total=15000)
-
-        ok = pipe._apply_full_rebuild()
-
-        assert ok is True
-        cb = pipe._captured_cb["fn"]
-        assert callable(cb)
-        cb(4500, 4500)
-        cb(15000, 15000)
-
-        msgs = [m for _pct, m in pipe._captured]
-        assert any("Written 4500/15000 triples" in m for m in msgs), msgs
-        assert any("Written 15000/15000 triples" in m for m in msgs), msgs
-        assert not any("Written 4500/4500" in m for m in msgs), msgs
-
-    def test_full_rebuild_reads_triples_from_source_relation(self):
-        pipe = self._full_pipe(view_total=10)
-        pipe.source_relation = "cat.sch.composed_relation"
-
-        pipe._apply_full_rebuild()
-
-        select_sql = pipe.source_client.iter_rows.call_args.args[0]
-        assert select_sql.endswith("FROM cat.sch.composed_relation")
-
-    def test_full_rebuild_rebuilds_adjacency_for_postgres_store(self):
-        pipe = self._full_pipe(view_total=10)
-        pipe.store.supports_adjacency = True
-        pipe.store.sql_flavor.return_value = "postgres"
-        pipe.store.rebuild_adjacency = MagicMock()
-        pipe.store.optimize_table = MagicMock()
-
-        ok = pipe._apply_full_rebuild()
-
-        assert ok is True
-        pipe.store.optimize_table.assert_called_once_with(pipe.graph_name)
-        pipe.store.rebuild_adjacency.assert_called_once_with(pipe.graph_name)
-
-    def test_full_rebuild_skips_adjacency_for_non_postgres_flavor(self):
-        pipe = self._full_pipe(view_total=10)
-        pipe.store.supports_adjacency = True
-        pipe.store.sql_flavor.return_value = "spark"
-        pipe.store.rebuild_adjacency = MagicMock()
-        pipe.store.optimize_table = MagicMock()
-
-        ok = pipe._apply_full_rebuild()
-
-        assert ok is True
-        pipe.store.optimize_table.assert_called_once_with(pipe.graph_name)
-        pipe.store.rebuild_adjacency.assert_not_called()
-
-
-# ---------------------------------------------------------------
-# Lakebase managed-synced apply path
-# ---------------------------------------------------------------
-
-
-class TestApplyViaSyncedPipeline:
-    """In synced mode, the app must trigger Lakeflow and never iterate triples."""
-
-    _SYNCED_UC = "cat.ontobricks_graph.g_v1_sync"
-
-    def _synced_pipe(self) -> _BuildPipeline:
+    def test_synced_store_uses_the_lakeflow_load(self):
         pipe = _bare_pipeline(_is_lakebase_synced=True)
         pipe.store.is_synced = True
-        pipe.store.sync_table_mode = "snapshot"
-        pipe.store.sync_timeout_s = 600
-        pipe.store.sync_uc_catalog = ""
-        pipe.store.graph_schema = "ontobricks_graph"
-        pipe.store.synced_uc_name.return_value = self._SYNCED_UC
-        mgr = MagicMock()
-        # ensure() must return an object whose .name matches synced_uc so the
-        # build pipeline doesn't treat it as a ghost-state fallback.
-        _ensure_ret = MagicMock()
-        _ensure_ret.name = self._SYNCED_UC
-        mgr.ensure.return_value = _ensure_ret
-        pipe.store.synced_manager.return_value = mgr
-        pipe.store.ensure_synced_companion = MagicMock()
-        pipe.store.ensure_synced_union_view = MagicMock()
-        pipe.store.truncate_companion = MagicMock()
-        pipe._count_source_triples = MagicMock(return_value=1234)
-        pipe.spark_sql = "SELECT 's' AS subject, 'p' AS predicate, 'o' AS object"
-        pipe.source_client.create_or_replace_view.return_value = (True, "ok")
-        pipe._mgr = mgr
-        # _raise_if_cancelled calls tm.is_cancelled(); return False so cancel
-        # checks don't abort the pipeline in unit tests.
-        pipe.tm.is_cancelled.return_value = False
-        return pipe
+        pipe._is_cancelled = MagicMock(return_value=False)
+        pipe._ensure_lakeflow_source_view = MagicMock(return_value=True)
 
-    def test_a_failed_post_sync_count_does_not_fail_the_sync(self):
-        """The count after a successful sync only feeds the progress message."""
-        pipe = self._synced_pipe()
-        pipe._count_source_triples = MagicMock(
-            side_effect=InfrastructureError(
-                "Could not count the triples in cat.sch.v_g: "
-                "Error during request to server"
-            )
-        )
+        with patch(
+            "back.objects.digitaltwin.build.SyncedGraphLoad.SyncedGraphLoad.run",
+            autospec=True,
+            return_value="loaded",
+        ) as run:
+            assert pipe._apply_full_rebuild() is True
 
-        ok = pipe._apply_via_synced_pipeline()
-
-        assert ok is True
-        assert any(
-            "count unavailable" in str(call)
-            for call in pipe.tm.update_progress.call_args_list
-        )
-
-    def test_synced_calls_ensure_trigger_and_truncate_companion(self):
-        pipe = self._synced_pipe()
-
-        ok = pipe._apply_via_synced_pipeline()
-
-        assert ok is True
-        pipe._mgr.ensure.assert_called_once()
-        ensure_kwargs = pipe._mgr.ensure.call_args.kwargs
-        assert ensure_kwargs["source_table_full_name"] == pipe.view_table
-        assert ensure_kwargs["primary_key_columns"] == [
-            "subject",
-            "predicate",
-            "object_hash",
-        ]
-        assert ensure_kwargs["sync_mode"] == "snapshot"
-        pipe.store.ensure_synced_companion.assert_called_once_with(pipe.graph_name)
-        # synced_phy_override=None because actual name == requested name (no fallback).
-        pipe.store.ensure_synced_union_view.assert_called_once_with(
-            pipe.graph_name, synced_phy_override=None
-        )
-        pipe._mgr.trigger_and_wait.assert_called_once()
-        pipe.store.truncate_companion.assert_called_once_with(pipe.graph_name)
-        # CRITICAL: app never iterates triples in synced mode.
-        pipe.store.bulk_insert_iter.assert_not_called()
-        pipe.store.bulk_delete_iter.assert_not_called()
-        pipe.source_client.iter_rows.assert_not_called()
-        assert pipe.triple_count == 1234
-
-    def test_synced_table_is_registered_on_source_relation(self):
-        pipe = self._synced_pipe()
-        pipe.source_relation = "cat.sch.composed_relation"
-
-        pipe._apply_via_synced_pipeline()
-
-        mgr = pipe.store.synced_manager.return_value
-        ensure_kwargs = mgr.ensure.call_args.kwargs
-        assert ensure_kwargs["source_table_full_name"] == "cat.sch.composed_relation"
-
-    def test_apply_full_rebuild_branches_to_synced_path(self):
-        pipe = self._synced_pipe()
-
-        with patch.object(pipe, "_apply_via_synced_pipeline", return_value=True) as m:
-            ok = pipe._apply_full_rebuild()
-
-        assert ok is True
-        m.assert_called_once_with()
+        pipe._ensure_lakeflow_source_view.assert_called_once_with()
+        assert type(run.call_args.args[0]).__name__ == "SyncedGraphLoad"
         pipe.source_client.iter_rows.assert_not_called()
 
-    def test_synced_pipeline_rebuilds_adjacency_for_postgres_store(self):
-        pipe = self._synced_pipe()
-        pipe.store.supports_adjacency = True
-        pipe.store.sql_flavor.return_value = "postgres"
-        pipe.store.rebuild_adjacency = MagicMock()
+    def test_empty_source_completes_the_build_as_a_success(self):
+        pipe = _bare_pipeline(start_time=0.0)
+        pipe._is_cancelled = MagicMock(return_value=False)
+        pipe._record_build_run = MagicMock()
 
-        ok = pipe._apply_via_synced_pipeline()
+        with patch(
+            "back.objects.digitaltwin.build.GraphLoad.GraphLoad.run",
+            autospec=True,
+            return_value="empty",
+        ):
+            assert pipe._apply_full_rebuild() is False
 
-        assert ok is True
-        pipe.store.rebuild_adjacency.assert_called_once_with(pipe.graph_name)
-
-    def test_synced_pipeline_fails_when_adjacency_rebuild_fails(self):
-        pipe = self._synced_pipe()
-        pipe.store.supports_adjacency = True
-        pipe.store.sql_flavor.return_value = "postgres"
-        pipe.store.rebuild_adjacency.side_effect = RuntimeError("adj stale")
-
-        ok = pipe._apply_via_synced_pipeline()
-
-        assert ok is False
-        pipe.store.truncate_companion.assert_called_once_with(pipe.graph_name)
-        pipe.tm.fail_task.assert_called_once()
-        assert "adjacency" in pipe.tm.fail_task.call_args.args[1].lower()
-
-    def test_synced_pipeline_attempts_adjacency_even_when_truncate_fails(self):
-        pipe = self._synced_pipe()
-        pipe.store.supports_adjacency = True
-        pipe.store.sql_flavor.return_value = "postgres"
-        pipe.store.truncate_companion.side_effect = RuntimeError("truncate failed")
-        pipe.store.rebuild_adjacency = MagicMock()
-
-        ok = pipe._apply_via_synced_pipeline()
-
-        assert ok is True
-        pipe.store.rebuild_adjacency.assert_called_once_with(pipe.graph_name)
+        assert pipe.tm.complete_task.call_args.kwargs["result"]["triple_count"] == 0
+        pipe._record_build_run.assert_called_once()
+        assert pipe._record_build_run.call_args.args[0] == "success"
 
 
 class TestResolveLakebaseMode:
