@@ -1712,7 +1712,8 @@ body:is(.read-only-version, .role-viewer) #domainVersionSelect {
 
 /* Workspace home (Context / Ontology / Graph / Intelligence landing).
    Tiles follow the Databricks MCP server cards: icon chip + semibold title on
-   one row, secondary description below, light border, soft hover shadow. The
+   one row, secondary description below, light border; on hover the border
+   turns primary with a faint ring (same as .ob-rule-card list cards). The
    cards sit directly on the white page panel (no enclosing card frame). */
 .ob-workspace-home {
     --ob-home-card-radius: 0.5rem;
@@ -1766,8 +1767,8 @@ body:is(.read-only-version, .role-viewer) #domainVersionSelect {
 }
 
 .ob-workspace-home-tile:hover {
-    border-color: var(--db-border);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: var(--db-primary, var(--bs-primary));
+    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), 0.1);
     color: var(--db-text);
 }
 
@@ -1860,11 +1861,12 @@ body:is(.read-only-version, .role-viewer) #domainVersionSelect {
     background: var(--db-surface-warm);
     border: 1px solid var(--db-border);
     border-radius: var(--ob-home-card-radius);
-    transition: box-shadow var(--db-transition);
+    transition: border-color var(--db-transition), box-shadow var(--db-transition);
 }
 
 .ob-workspace-home-resource:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: var(--db-primary, var(--bs-primary));
+    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), 0.1);
 }
 
 .ob-workspace-home-resource > i {

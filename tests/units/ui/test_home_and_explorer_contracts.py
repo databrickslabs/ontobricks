@@ -92,7 +92,9 @@ def test_home_launch_tiles_use_databricks_jobs_card_pattern():
     assert 'id="homeCountTasks"' in html
 
     css = (_FRONT / "static" / "home" / "css" / "home.css").read_text(encoding="utf-8")
-    assert "0 2px 8px rgba(0, 0, 0, 0.08)" in css
+    # Hover = primary border + faint ring (like .ob-rule-card), no drop shadow.
+    assert "0 2px 8px" not in css
+    assert "border-color: var(--db-primary, var(--bs-primary))" in css
     assert "translateY" not in css
     assert "--home-tile-radius" in css
 

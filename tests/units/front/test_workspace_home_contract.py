@@ -129,7 +129,7 @@ def test_workspace_home_styles_and_navigation_hooks():
 
 
 def test_workspace_home_tiles_use_databricks_mcp_card_style():
-    """Icon chip + title header row, description below, soft hover shadow,
+    """Icon chip + title header row, description below, primary-border hover,
     and no enclosing card frame around the Home body."""
     html = _read(HOME_PARTIAL)
     head = html.index("ob-workspace-home-tile-head")
@@ -144,7 +144,10 @@ def test_workspace_home_tiles_use_databricks_mcp_card_style():
     assert "border: 1px solid var(--db-border)" in tile
     assert "border-radius: var(--ob-home-card-radius)" in tile
     hover = re.search(r"\.ob-workspace-home-tile:hover\s*\{([^}]*)\}", css).group(1)
-    assert "box-shadow" in hover
+    # Same hover as .ob-rule-card (Scenarios list): primary border, faint
+    # ring, no drop shadow.
+    assert "border-color: var(--db-primary, var(--bs-primary))" in hover
+    assert "0 2px 8px" not in hover
     icon = re.search(r"\.ob-workspace-home-tile-icon\s*\{([^}]*)\}", css).group(1)
     assert "border: 1px solid var(--db-border)" in icon
     assert "background: var(--db-canvas-warm)" in icon

@@ -225,3 +225,38 @@ Live check: dev server serves the updated script; /dtwin/sync/stats
 (Not browser-tested: the chrome-devtools MCP is not connected.)
 Note: `tab=design` in the reported URL belongs to the Cohorts section and is
 dropped by sidebar-nav on Analytics; it plays no part in the delay.
+
+================================================================================
+Home pages: border-color hover instead of drop shadow on tiles and cards
+================================================================================
+
+Context:
+Workspace homes (Context / Ontology / Graph / Intelligence ?section=home) and
+the app Home lifted their tiles with a drop shadow on hover. They now use the
+same hover as the list cards of Intelligence → Scenarios (.ob-rule-card):
+the border turns primary with a faint primary ring, no drop shadow.
+
+Changes:
+1. src/front/static/global/css/main.css
+   - .ob-workspace-home-tile:hover and .ob-workspace-home-resource:hover:
+     primary border + 0.15rem ring at 10% opacity (was 0 2px 8px shadow).
+     The resource card transition now includes border-color. Header comment
+     updated.
+2. src/front/static/home/css/home.css
+   - .home-nav-tile:hover and a/button.home-resource-card:hover: same hover;
+     resource card transition includes border-color.
+3. tests/units/front/test_workspace_home_contract.py,
+   tests/units/ui/test_home_and_explorer_contracts.py
+   - Contracts assert the primary-border hover and the absence of the drop
+     shadow.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/static/home/css/home.css
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/ui/test_home_and_explorer_contracts.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11219 passed, 334 skipped, 8 deselected
+(Not browser-tested: the chrome-devtools MCP is not connected; served CSS
+checked on the dev server.)

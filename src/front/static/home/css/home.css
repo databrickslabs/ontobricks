@@ -41,8 +41,8 @@
 }
 
 .home-nav-tile:hover {
-    border-color: var(--db-border);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: var(--db-primary, var(--bs-primary));
+    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), 0.1);
 }
 
 .home-nav-tile:focus-visible {
@@ -170,12 +170,13 @@
     border-radius: var(--home-tile-radius);
     box-shadow: none;
     cursor: pointer;
-    transition: box-shadow var(--db-transition);
+    transition: border-color var(--db-transition), box-shadow var(--db-transition);
 }
 
 a.home-resource-card:hover,
 button.home-resource-card:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: var(--db-primary, var(--bs-primary));
+    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), 0.1);
     color: var(--db-text);
     text-decoration: none;
 }
