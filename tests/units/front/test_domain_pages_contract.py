@@ -140,6 +140,17 @@ def test_pages_domain_column_uses_resolved_domain_label():
     assert "this.domainLabels[p.domain] || p.domain" not in js
 
 
+def test_pages_hydrate_lazily_when_section_is_shown():
+    """Domains lookup is slow on large workspaces: never run it on every Context load."""
+    js = _read(PAGES_JS)
+    assert "sidebarSectionChanged" in js
+    assert "activate()" in js
+    init_body = js.split("init() {", 1)[1].split("\n    activate() {", 1)[0]
+    assert "ensureDomains()" not in init_body
+    # Concurrent callers (activate + search) share one in-flight fetch.
+    assert "_domainsPromise" in js
+
+
 def test_pages_css_exists():
     css = _read(PAGES_CSS)
     assert ".pages-search-results" in css

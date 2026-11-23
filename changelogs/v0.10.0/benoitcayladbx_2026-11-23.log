@@ -1,0 +1,183 @@
+================================================================================
+Context load: stop the Genie Pages Domains lookup from freezing the server
+================================================================================
+
+Context:
+Opening a Context kept the loading overlay up for ~18-20 s. The load itself
+(POST /domain/load-from-uc) takes ~2 s; the overlay waits for /navbar/state
+on the next page. Logs showed /navbar/state, /domain/documents/list,
+/domain/pages/list, /domain/version-status and /settings/registry all
+finishing at the same millisecond after ~18.3 s: the event loop was blocked.
+Root cause: PagesManager.init() ran on every /domain/ page load and called
+GET /domain/pages/list?include_domains=true. KnowledgePageService.list_domains()
+pages through the Databricks Domains API (999 domains = ~10 sequential calls,
+measured 15.4 s vs 1.1 s without include_domains) with synchronous `requests`
+inside an async route, stalling every concurrent request.
+
+Changes:
+1. src/front/static/domain/js/domain-pages.js
+   - Pages hydrate lazily: init() only binds events; the new activate()
+     (Domains labels, then saved selection) runs on the first
+     `sidebarSectionChanged` to "pages", or immediately when the page opens
+     on ?section=pages / with the Pages section active.
+   - ensureDomains() deduplicates concurrent callers through one in-flight
+     promise (_domainsPromise); the fetch moved to _fetchDomains().
+2. src/back/core/databricks/KnowledgePageService.py
+   - list_domains() memoises results per (host, identity fingerprint) for
+     10 minutes (_DOMAINS_CACHE_TTL_S). The fingerprint is a truncated
+     SHA-256 of the Authorization header (the token is never stored).
+     Only successful fetches are cached; callers get a deep copy.
+   - Pagination moved to _fetch_domains(); clear_domains_cache() added.
+3. src/api/routers/internal/domain.py
+   - GET /domain/pages/list runs its blocking REST calls through
+     run_blocking (_knowledge_pages_payload) so it can no longer stall the
+     event loop.
+4. tests/units/core/test_knowledge_pages.py
+   - TestListDomainsCache: cache hit, copy isolation, per-identity keys,
+     failures not cached, TTL expiry. Autouse fixture clears the cache.
+5. tests/units/api/test_knowledge_pages_route.py (new)
+   - Route payload with/without domains, domains failure envelope, and the
+     blocking body running through run_blocking.
+6. tests/units/front/test_domain_pages_contract.py
+   - Contract: Pages hydrate on section change, init() does not fetch
+     Domains, in-flight promise dedup.
+
+Modified files:
+- src/front/static/domain/js/domain-pages.js
+- src/back/core/databricks/KnowledgePageService.py
+- src/api/routers/internal/domain.py
+- tests/units/core/test_knowledge_pages.py
+- tests/units/api/test_knowledge_pages_route.py
+- tests/units/front/test_domain_pages_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11204 passed, 334 skipped, 8 deselected
+Live check (local dev server): /domain/pages/list?include_domains=true
+15.4 s cold -> 0.69 s cached; /health and /navbar/state answer in 3-6 ms
+while a cold Domains fetch is in flight (previously blocked for its full
+duration).
+(Not browser-tested: overlay timing on Context open not re-measured in the UI.)
+
+================================================================================
+Event loop: offload blocking route handlers + keep OBO identity in run_blocking
+================================================================================
+
+Context:
+Request logs (5 rotated files) showed 306 event-loop stalls: 3+ requests
+finishing at the same instant with identical durations. The culprits are
+`async def` handlers with no `await` that perform synchronous Lakebase /
+Databricks REST I/O on the loop (e.g. /settings/registry/bridges p50 14.1 s,
+/domain/documents/list, /domain/version-status, /review/my-tasks), freezing
+every concurrent request including /navbar/state.
+While preparing the change, run_blocking was found to drop ContextVars: it
+used loop.run_in_executor() without copying the context, so in Databricks App
+mode any code reached through it saw an empty RequestIdentity
+(get_data_plane_client() would raise AuthorizationError; Delta reads in
+graphdb/delta/Base.py silently fell back to the service principal).
+
+Changes:
+1. src/back/core/helpers/DatabricksHelpers.py
+   - run_blocking executes the call inside contextvars.copy_context() (same
+     semantics as asyncio.to_thread), so the on-behalf-of identity and other
+     request-scoped ContextVars are visible in the worker thread.
+2. src/api/routers/internal/domain.py
+   - Offloaded via run_blocking: list_domains (/domain/list-projects),
+     get_version_status, list_version_details, get_edit_lock,
+     release_edit_lock, renew_edit_lock, list_documents.
+3. src/api/routers/internal/settings.py
+   - Offloaded: get_current_config, list_registry_domains,
+     list_registry_bridges, get_default_emoji, get_analytics_job_enabled,
+     teams_matrix, get_delta_warehouse, get_graph_engine_config,
+     list_schedules.
+4. src/api/routers/internal/review.py
+   - Offloaded: my_tasks, review_detail (run_blocking import added).
+5. src/api/routers/internal/dtwin.py
+   - Offloaded: get_graph_metrics_summary, databricks_build_info.
+   Handlers stay `async def` (coding rules §5); single-call bodies become
+   `await run_blocking(fn, ...)`, multi-statement bodies move into a local
+   `_work()` closure. Logic and error mapping are unchanged.
+6. tests/units/core/test_run_blocking_context.py (new)
+   - RequestIdentity visible inside run_blocking; worker-side ContextVar
+     changes do not leak back to the caller.
+
+Modified files:
+- src/back/core/helpers/DatabricksHelpers.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/settings.py
+- src/api/routers/internal/review.py
+- src/api/routers/internal/dtwin.py
+- tests/units/core/test_run_blocking_context.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11206 passed, 334 skipped, 8 deselected
+Live check (local dev server): while /settings/registry/bridges (14.8 s) and
+/settings/registry/domains (3.3 s) run, /health and /navbar/state answer in
+6-7 ms. Ruff: only UP006/UP045 annotation-style notices, matching the
+existing Dict/Optional style of these files.
+Not covered (follow-ups): handlers that already await but still do sync I/O
+inside an async helper (/validate/detailed, /navbar/state internals,
+/settings/warehouses, /dtwin/sync/stats); the intrinsic cost of
+/settings/registry/bridges (reads every domain version).
+
+================================================================================
+Lakebase registry store: share registry id + lazy-heal flags process-wide
+================================================================================
+
+Context:
+LakebaseRegistryStore is rebuilt on every request (RegistryService.from_context,
+EditLockService._store, ...), but its resolved registry id and its lazy-heal
+guards ("does column/table X exist?") lived on the instance. Every request
+therefore re-ran the registries lookup plus up to three information_schema
+probes before the real query (~150 ms per round-trip from a dev laptop):
+e.g. POST /domain/edit-lock/renew p50 458 ms for a single UPDATE.
+Controlled read-only A/B on the dev Lakebase (fresh store, list_versions +
+read_version, the core of load-from-uc): p50 997 ms -> 310 ms.
+
+Changes:
+1. src/back/objects/registry/store/lakebase/store.py
+   - New _SharedStoreState descriptor + _SHARED_STATE map keyed by
+     (database override, schema). _registry_id and the 16 lazy-heal flags
+     (_status_column_ready, _edit_locks_ready, ...) are now class-level
+     descriptors backed by that shared dict; __init__ binds
+     self._shared_state instead of resetting each attribute.
+   - Instances built via __new__ (no __init__) fall back to plain
+     per-instance attributes.
+   - LakebaseRegistryStore.reset_shared_state(database=None, schema=None)
+     clears state in place (live instances keep their dict reference).
+2. src/back/objects/registry/store/lakebase/Bootstrap.py
+   - initialize() clears the shared state first so the registry id and
+     column/table guards are re-probed after (re)provisioning.
+3. src/back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py
+   - After an admin DROP SCHEMA/TABLE/VIEW, reset the shared store state
+     (the dropped object may back the registry). Nested `with` merged so
+     the class does not grow (architecture size budget).
+4. src/api/routers/internal/domain.py
+   - POST /domain/load-from-uc: edit-lock orchestration
+     (release_prev_on_switch, on_domain_loaded, reacquire) now runs through
+     run_blocking, like the load itself.
+5. tests/conftest.py
+   - Autouse fixture resets the shared store state around every test.
+6. tests/units/registry/test_lakebase_store_shared_state.py (new)
+   - Sharing across instances, isolation per schema/database, single
+     registry lookup for many instances, in-place reset, targeted reset,
+     initialize() forgets cached state, __new__ fallback.
+7. tests/units/registry/test_mcp_policy_column.py
+   - Memoisation contract now checks the shared descriptor declaration.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/Bootstrap.py
+- src/back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py
+- src/api/routers/internal/domain.py
+- tests/conftest.py
+- tests/units/registry/test_lakebase_store_shared_state.py
+- tests/units/registry/test_mcp_policy_column.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11216 passed, 334 skipped, 8 deselected
+Live check (local dev server, warm): /settings/registry/domains ~160 ms
+(log p50 1070 ms), /review/my-tasks ~310 ms (log p50 1832 ms); log figures
+also include former event-loop stalls, so the controlled A/B above is the
+reference number.
+Caveat: a registry schema dropped or re-seeded outside the app (psql) keeps
+stale cached ids in running processes until Initialize or a restart.

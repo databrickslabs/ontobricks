@@ -6,8 +6,12 @@ the rest of the Databricks client surface. Used by Context → Pages.
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import re
-from typing import Any, Dict, List, Optional
+import threading
+import time
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 from back.core.errors import InfrastructureError
@@ -27,6 +31,11 @@ from .knowledge_pages import normalize_knowledge_pages
 logger = get_logger(__name__)
 
 _PAGE_ID_RE = re.compile(r"^[0-9a-fA-F-]{8,}$")
+# Databricks Domains rarely change but a large workspace needs ~10 sequential
+# paginated calls (~14 s for ~1000 domains). Cache per (host, identity).
+_DOMAINS_CACHE_TTL_S = 600
+_domains_cache: Dict[Tuple[str, str], Tuple[float, List[Dict[str, str]]]] = {}
+_domains_cache_lock = threading.Lock()
 _REMOTE_MESSAGE_MAX = 200
 _LIST_HTTP_HINTS = {
     401: (
@@ -168,14 +177,44 @@ class KnowledgePageService:
 
         Each item: ``name`` (``domains/{id}``), ``domain_id``, ``subtitle`` /
         ``tag_key`` as a short label.
-        """
-        import requests
 
+        Results are memoised per ``(host, identity)`` for
+        ``_DOMAINS_CACHE_TTL_S`` seconds; only successful fetches are cached.
+        """
         if not self._auth.host or not self._auth.has_valid_auth():
             return []
 
         host = self._auth.host.rstrip("/")
         headers = self._auth.get_auth_headers()
+        key = (host, self._identity_fingerprint(headers))
+        now = time.monotonic()
+        with _domains_cache_lock:
+            cached = _domains_cache.get(key)
+        if cached and (now - cached[0]) < _DOMAINS_CACHE_TTL_S:
+            return copy.deepcopy(cached[1])
+
+        results = self._fetch_domains(host, headers)
+        with _domains_cache_lock:
+            _domains_cache[key] = (time.monotonic(), results)
+        return copy.deepcopy(results)
+
+    @staticmethod
+    def clear_domains_cache() -> None:
+        """Drop every memoised Databricks Domains list."""
+        with _domains_cache_lock:
+            _domains_cache.clear()
+
+    @staticmethod
+    def _identity_fingerprint(headers: Dict[str, str]) -> str:
+        """Short, non-reversible cache key for the caller's credentials."""
+        auth = str(headers.get("Authorization") or "")
+        return hashlib.sha256(auth.encode("utf-8")).hexdigest()[:16]
+
+    @staticmethod
+    def _fetch_domains(host: str, headers: Dict[str, str]) -> List[Dict[str, str]]:
+        """Page through the Databricks Domains API (uncached)."""
+        import requests
+
         results: List[Dict[str, str]] = []
         page_token: Optional[str] = None
         pages = 0

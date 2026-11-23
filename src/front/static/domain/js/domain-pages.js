@@ -15,6 +15,9 @@ const PagesManager = {
     dirty: false,
     loading: false,
     domainsLoaded: false,
+    /** Promise of the in-flight Databricks Domains fetch (deduplicates calls). */
+    _domainsPromise: null,
+    activated: false,
 
     init() {
         if (!document.getElementById('pagesSelectedList')) return;
@@ -68,6 +71,23 @@ const PagesManager = {
             }
         });
 
+        // Hydrate only when the Pages section is shown: the Databricks
+        // Domains lookup is slow on large workspaces and must not run on
+        // every Context page load (it held the context-loading overlay).
+        document.addEventListener('sidebarSectionChanged', (e) => {
+            if (e.detail && e.detail.section === 'pages') this.activate();
+        });
+        const section = new URLSearchParams(window.location.search).get('section');
+        const pagesSection = document.getElementById('pages-section');
+        if (section === 'pages' || (pagesSection && pagesSection.classList.contains('active'))) {
+            this.activate();
+        }
+    },
+
+    /** First display of the Pages section: resolve Domain labels, then the selection. */
+    activate() {
+        if (this.activated) return;
+        this.activated = true;
         // Resolve Databricks Domain labels first so tables never flash
         // raw ``domains/{uuid}`` resource names.
         this.ensureDomains().finally(() => this.loadSelection());
@@ -113,8 +133,17 @@ const PagesManager = {
             '</tr>';
     },
 
-    async ensureDomains() {
-        if (this.domainsLoaded) return;
+    ensureDomains() {
+        if (this.domainsLoaded) return Promise.resolve();
+        if (!this._domainsPromise) {
+            this._domainsPromise = this._fetchDomains().finally(() => {
+                this._domainsPromise = null;
+            });
+        }
+        return this._domainsPromise;
+    },
+
+    async _fetchDomains() {
         try {
             const params = new URLSearchParams({
                 page_size: '1',

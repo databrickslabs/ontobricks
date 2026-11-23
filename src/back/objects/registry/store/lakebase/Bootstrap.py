@@ -328,6 +328,11 @@ class Bootstrap:
         still pinned. A DML failure still fails Initialize.
         """
         del client  # not used: Lakebase instance is provisioned out of band
+        # Initialize may (re)create tables/columns and the registry row:
+        # drop the process-wide cached id and lazy-heal flags first.
+        shared = self.__dict__.get("_shared_state")
+        if shared is not None:
+            shared.clear()
         try:
             try:
                 self._apply_ddl()

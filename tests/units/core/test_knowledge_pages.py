@@ -13,6 +13,13 @@ from back.core.errors import InfrastructureError
 from back.core.databricks.knowledge_pages import normalize_knowledge_pages
 
 
+@pytest.fixture(autouse=True)
+def _reset_domains_cache():
+    KnowledgePageService.clear_domains_cache()
+    yield
+    KnowledgePageService.clear_domains_cache()
+
+
 @pytest.fixture
 def clean_databricks_env(monkeypatch):
     for key in (
@@ -170,3 +177,63 @@ class TestKnowledgePageService:
         # Prefer governed tag_key (domain name) over subtitle description.
         assert domains[0]["label"] == "Logistics"
         assert domains[0]["name"].startswith("domains/")
+
+
+def _domains_response(tag_key="Logistics"):
+    m = MagicMock()
+    m.raise_for_status = MagicMock()
+    m.json.return_value = {
+        "domains": [
+            {
+                "domain_id": "3ec7f320-1464-4630-a606-409e07d2e778",
+                "name": "domains/3ec7f320-1464-4630-a606-409e07d2e778",
+                "tag_key": tag_key,
+            }
+        ]
+    }
+    return m
+
+
+class TestListDomainsCache:
+    @patch("requests.get")
+    def test_second_call_is_served_from_cache(self, mock_get, clean_databricks_env):
+        mock_get.return_value = _domains_response()
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+        KnowledgePageService(auth).list_domains()
+        KnowledgePageService(auth).list_domains()
+        assert mock_get.call_count == 1
+
+    @patch("requests.get")
+    def test_cached_result_is_isolated_from_caller_mutation(self, mock_get, clean_databricks_env):
+        mock_get.return_value = _domains_response()
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+        KnowledgePageService(auth).list_domains()[0]["label"] = "mutated"
+        assert KnowledgePageService(auth).list_domains()[0]["label"] == "Logistics"
+
+    @patch("requests.get")
+    def test_other_identity_does_not_share_cache(self, mock_get, clean_databricks_env):
+        mock_get.return_value = _domains_response()
+        KnowledgePageService(DatabricksAuth(host="https://h.com", token="a")).list_domains()
+        KnowledgePageService(DatabricksAuth(host="https://h.com", token="b")).list_domains()
+        assert mock_get.call_count == 2
+
+    @patch("requests.get")
+    def test_failed_fetch_is_not_cached(self, mock_get, clean_databricks_env):
+        mock_get.side_effect = [requests.ConnectionError("down"), _domains_response()]
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+        with pytest.raises(requests.ConnectionError):
+            KnowledgePageService(auth).list_domains()
+        assert len(KnowledgePageService(auth).list_domains()) == 1
+
+    @patch("requests.get")
+    def test_expired_entry_is_refetched(self, mock_get, clean_databricks_env, monkeypatch):
+        import sys
+
+        kps = sys.modules[KnowledgePageService.__module__]
+
+        mock_get.return_value = _domains_response()
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+        KnowledgePageService(auth).list_domains()
+        monkeypatch.setattr(kps, "_DOMAINS_CACHE_TTL_S", 0)
+        KnowledgePageService(auth).list_domains()
+        assert mock_get.call_count == 2

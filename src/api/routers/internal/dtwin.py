@@ -1149,25 +1149,29 @@ async def get_graph_metrics_summary(
     opening the Domain Validation page no longer blocks on a full NetworkX
     run. ``{success, has_result: false}`` when no analysis has been run.
     """
-    try:
-        domain = get_domain(session_mgr)
-        stored = _load_stored_metrics(domain, settings)
-        if not stored:
-            return {"success": True, "has_result": False}
+    def _work():
+        try:
+            domain = get_domain(session_mgr)
+            stored = _load_stored_metrics(domain, settings)
+            if not stored:
+                return {"success": True, "has_result": False}
 
-        return {
-            "success": True,
-            "has_result": True,
-            "stats": stored.get("stats") or {},
-            "top_pagerank": stored.get("top_pagerank") or [],
-            "computed_at": stored.get("computed_at", ""),
-        }
+            return {
+                "success": True,
+                "has_result": True,
+                "stats": stored.get("stats") or {},
+                "top_pagerank": stored.get("top_pagerank") or [],
+                "computed_at": stored.get("computed_at", ""),
+            }
 
-    except (ValidationError, InfrastructureError, NotFoundError):
-        raise
-    except Exception as e:
-        logger.exception("Graph metrics summary failed: %s", e)
-        raise InfrastructureError("Graph metrics summary failed", detail=str(e))
+        except (ValidationError, InfrastructureError, NotFoundError):
+            raise
+        except Exception as e:
+            logger.exception("Graph metrics summary failed: %s", e)
+            raise InfrastructureError("Graph metrics summary failed", detail=str(e))
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.post("/metrics/interpret")
@@ -1747,28 +1751,32 @@ async def databricks_build_info(
     ``materialization`` tells the page whether that relation is a Delta table
     or a pass-through view, so it can label it and explain the triple count.
     """
-    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+    def _work():
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-    domain = get_domain(session_mgr)
-    backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
-    readiness = HomeService.validate_status(domain)
-    view_table = effective_view_table(domain)
-    data_table = effective_databricks_table(domain, settings)
-    builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
-    probe = GraphDBFactory.get_health_probe(domain, settings, engine="delta")
-    data_status = probe.probe_status(data_table) if data_table else {}
-    return {
-        "success": True,
-        "triple_store_backend": backend,
-        "materialization": GraphDBFactory.resolve_lakehouse_materialization(
-            domain, settings
-        ),
-        "readiness": readiness,
-        "view_table": view_table,
-        "data_table": data_table,
-        "inferred_table": builder.inferred_table_fqn(),
-        "triplestore_status": data_status,
-    }
+        domain = get_domain(session_mgr)
+        backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
+        readiness = HomeService.validate_status(domain)
+        view_table = effective_view_table(domain)
+        data_table = effective_databricks_table(domain, settings)
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        probe = GraphDBFactory.get_health_probe(domain, settings, engine="delta")
+        data_status = probe.probe_status(data_table) if data_table else {}
+        return {
+            "success": True,
+            "triple_store_backend": backend,
+            "materialization": GraphDBFactory.resolve_lakehouse_materialization(
+                domain, settings
+            ),
+            "readiness": readiness,
+            "view_table": view_table,
+            "data_table": data_table,
+            "inferred_table": builder.inferred_table_fqn(),
+            "triplestore_status": data_status,
+        }
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.post(

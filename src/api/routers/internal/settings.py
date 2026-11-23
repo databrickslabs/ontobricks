@@ -55,7 +55,8 @@ async def get_current_config(
     settings: Settings = Depends(get_settings),
 ):
     """Get current Databricks configuration."""
-    return config_service.build_current_config(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.build_current_config, session_mgr, settings)
 
 
 @router.post("/save")
@@ -370,15 +371,19 @@ async def list_registry_domains(
 
     Non-admin users only see domains they have a role on; admins see all.
     """
-    result = config_service.list_registry_domains_result(
-        session_mgr,
-        settings,
-        user_role=getattr(request.state, "user_role", "") or "",
-    )
-    result["domains"] = filter_visible_domains(
-        request, session_mgr, settings, result.get("domains", [])
-    )
-    return result
+    def _work():
+        result = config_service.list_registry_domains_result(
+            session_mgr,
+            settings,
+            user_role=getattr(request.state, "user_role", "") or "",
+        )
+        result["domains"] = filter_visible_domains(
+            request, session_mgr, settings, result.get("domains", [])
+        )
+        return result
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.get("/registry/bridges")
@@ -387,7 +392,8 @@ async def list_registry_bridges(
     settings: Settings = Depends(get_settings),
 ):
     """List all bridges across every domain in the registry."""
-    return config_service.list_registry_bridges_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.list_registry_bridges_result, session_mgr, settings)
 
 
 @router.delete("/registry/domains/{domain_name}")
@@ -648,8 +654,12 @@ async def get_default_emoji(
     settings: Settings = Depends(get_settings),
 ):
     """Get default emoji setting (instance-global)."""
-    domain = get_domain(session_mgr)
-    return {"success": True, "emoji": resolve_default_emoji(domain, settings)}
+    def _work():
+        domain = get_domain(session_mgr)
+        return {"success": True, "emoji": resolve_default_emoji(domain, settings)}
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.post("/set-default-emoji")
@@ -938,7 +948,8 @@ async def get_analytics_job_enabled(
     settings: Settings = Depends(get_settings),
 ):
     """Get whether oversized graphs may use the serverless analytics job."""
-    return config_service.get_analytics_job_enabled_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.get_analytics_job_enabled_result, session_mgr, settings)
 
 
 @router.post("/save-analytics-job-enabled")
@@ -1142,7 +1153,8 @@ async def teams_matrix(
     settings: Settings = Depends(get_settings),
 ):
     """Return the Teams matrix payload: domains, principals, and assignments."""
-    return config_service.build_teams_matrix_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.build_teams_matrix_result, session_mgr, settings)
 
 
 @router.post(
@@ -1176,7 +1188,8 @@ async def get_delta_warehouse(
     settings: Settings = Depends(get_settings),
 ):
     """Return the Delta SQL-warehouse selection + registry location."""
-    return config_service.get_delta_warehouse_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.get_delta_warehouse_result, session_mgr, settings)
 
 
 @router.get("/triple-store/databricks-health")
@@ -1209,7 +1222,8 @@ async def get_graph_engine_config(
     settings: Settings = Depends(get_settings),
 ):
     """Return the engine-specific JSON configuration."""
-    return config_service.get_graph_engine_config_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.get_graph_engine_config_result, session_mgr, settings)
 
 
 @router.get("/graph-engine/lakebase-health")
@@ -1599,7 +1613,8 @@ async def list_schedules(
     settings: Settings = Depends(get_settings),
 ):
     """Return every schedule, of every task type, plus the type catalogue."""
-    return config_service.list_schedules_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.list_schedules_result, session_mgr, settings)
 
 
 @router.post("/schedules")

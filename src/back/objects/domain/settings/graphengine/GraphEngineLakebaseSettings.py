@@ -15,6 +15,7 @@ from shared.config.settings import Settings
 from back.core.logging import get_logger
 from back.objects.session import SessionManager
 from back.objects.domain.settings.SettingsService import SettingsService
+from back.objects.registry.store.lakebase import LakebaseRegistryStore
 
 # Package ``__init__`` binds ``SettingsService`` as the class, which shadows
 # the submodule. Tests patch that module's globals.
@@ -953,9 +954,9 @@ class GraphEngineLakebaseSettings:
             if effective_db:
                 kwargs["dbname"] = effective_db
 
-            with psycopg.connect(**kwargs) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(ddl)
+            with psycopg.connect(**kwargs) as conn, conn.cursor() as cur:
+                cur.execute(ddl)
+            LakebaseRegistryStore.reset_shared_state()  # may have backed the registry
             return {"success": True, "message": f"Dropped {kind}: {ddl}"}
         except OntoBricksError:
             raise

@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import os
 import re
 import threading
@@ -121,7 +122,11 @@ class DatabricksHelpers:
             if _inflight_blocking > _peak_inflight_blocking:
                 _peak_inflight_blocking = _inflight_blocking
         try:
-            return await loop.run_in_executor(_BLOCKING_POOL, call)
+            # Run inside a copy of the caller's context (like asyncio.to_thread)
+            # so request-scoped ContextVars — notably the on-behalf-of
+            # RequestIdentity — stay visible in the worker thread.
+            ctx = contextvars.copy_context()
+            return await loop.run_in_executor(_BLOCKING_POOL, ctx.run, call)
         finally:
             with _inflight_lock:
                 _inflight_blocking -= 1

@@ -54,6 +54,16 @@ def setup_test_env(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def reset_lakebase_store_shared_state():
+    """Isolate the process-wide Lakebase store state (registry id, lazy-heal flags)."""
+    from back.objects.registry.store.lakebase.store import _reset_shared_state
+
+    _reset_shared_state()
+    yield
+    _reset_shared_state()
+
+
+@pytest.fixture(autouse=True)
 def isolate_databricks_cli_auth(request):
     """Prevent accidental ``~/.databrickscfg`` resolution in unit tests."""
     if request.node.get_closest_marker("allow_cli_resolve"):

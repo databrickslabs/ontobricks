@@ -16,6 +16,7 @@ from fastapi import APIRouter, Request, Depends
 
 from shared.config.settings import get_settings, Settings
 from back.core.errors import ValidationError
+from back.core.helpers import run_blocking
 from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_session_manager
 from back.objects.registry.collab.ReviewService import ReviewService
@@ -36,7 +37,8 @@ async def my_tasks(
     settings: Settings = Depends(get_settings),
 ):
     """Cross-domain worklist of versions with a pending action for the caller."""
-    return ReviewService.my_tasks(request, session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(ReviewService.my_tasks, request, session_mgr, settings)
 
 
 @router.get("/{folder}/{version}")
@@ -48,16 +50,20 @@ async def review_detail(
     settings: Settings = Depends(get_settings),
 ):
     """Review state, audit trail and allowed actions for a single version."""
-    user_role, domain_role = _roles(request, folder, settings)
-    return ReviewService.review_detail(
-        request,
-        session_mgr,
-        settings,
-        folder,
-        version,
-        user_role=user_role,
-        user_domain_role=domain_role,
-    )
+    def _work():
+        user_role, domain_role = _roles(request, folder, settings)
+        return ReviewService.review_detail(
+            request,
+            session_mgr,
+            settings,
+            folder,
+            version,
+            user_role=user_role,
+            user_domain_role=domain_role,
+        )
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.get("/{folder}/{version}/team")
