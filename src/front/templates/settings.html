@@ -1021,20 +1021,22 @@
                     <div class="section-header d-flex justify-content-between align-items-center mb-4">
                         <div>
                             <h4 class="mb-1"><i class="bi bi-palette me-2"></i>UI</h4>
-                            <p class="text-muted mb-0 small">Branding and theme settings for the application interface</p>
+                            <p class="text-muted mb-0 small">Name, logo and colours of the application. Changes preview live on this page and apply to every user once saved.</p>
                         </div>
                         <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="uiBrandingDiscardBtn" disabled>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="uiBrandingDiscardBtn" disabled
+                                    title="Drop unsaved title, logo and colour edits">
                                 <i class="bi bi-arrow-counterclockwise me-1"></i> Discard changes
                             </button>
                             <button type="button"
                                     class="btn btn-sm btn-outline-warning"
                                     id="uiBrandingResetDefaultsBtn"
-                                    title="Restore factory UI defaults"
+                                    title="Preview the factory title, logo and colours (Save to apply). The default entity icon is restored immediately."
                                     aria-label="Restore factory UI defaults">
                                 <i class="bi bi-arrow-repeat me-1"></i> Default
                             </button>
-                            <button type="button" class="btn btn-sm btn-primary" id="uiBrandingSaveBtn" disabled>
+                            <button type="button" class="btn btn-sm btn-primary" id="uiBrandingSaveBtn" disabled
+                                    title="Apply the title, logo and colours to all users">
                                 <i class="bi bi-check-circle me-1"></i> Save
                             </button>
                         </div>
@@ -1042,218 +1044,221 @@
 
                     <div id="uiBrandingStatus" class="alert d-none py-2 px-3 mb-3 small" role="status" aria-live="polite"></div>
 
-                    <div class="card mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title mb-3">Branding</h5>
-
-                            <div class="mb-3">
-                                <label for="uiBrandingTitle" class="form-label fw-semibold">
-                                    Application title
-                                    <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
-                                        <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
-                                    </span>
-                                </label>
-                                <input type="text"
-                                       class="form-control form-control-sm"
-                                       id="uiBrandingTitle"
-                                       maxlength="60"
-                                       aria-describedby="uiBrandingTitleHelp uiBrandingTitleError"
-                                       autocomplete="off"
-                                       placeholder="OntoBricks">
-                                <div id="uiBrandingTitleHelp" class="form-text">Displayed in the navbar and browser page titles. 1&ndash;60 characters.</div>
-                                <div id="uiBrandingTitleError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">
-                                    Application Logo
-                                    <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
-                                        <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
-                                    </span>
-                                </label>
-                                <div class="d-flex align-items-center gap-3 mb-2">
-                                    <div class="d-flex align-items-center justify-content-center border rounded bg-dark settings-logo-preview-box">
-                                        <img id="navbarLogoPreview"
-                                             data-brand-icon
-                                             src="{{ ui_branding_for().logo_url }}"
-                                             alt="{{ ui_branding_for().app_title }}"
-                                             width="32"
-                                             height="32">
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <label for="uiBrandingLogoFile" class="form-label small fw-semibold">Logo file</label>
-                                        <input type="file"
-                                               class="form-control form-control-sm"
-                                               id="uiBrandingLogoFile"
-                                               aria-describedby="uiBrandingLogoHelp"
-                                               accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif">
-                                        <div id="uiBrandingLogoHelp" class="form-text">
-                                            Recommended: <strong>64&times;64&nbsp;px</strong> square.
-                                            SVG, PNG, JPEG, WEBP or GIF, max&nbsp;1&nbsp;MB.
-                                        </div>
-                                        <div class="d-flex gap-2 mt-2">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="uiBrandingResetIconBtn">
-                                                <i class="bi bi-image me-1"></i> Reset icon
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="mb-0">
-                                <label class="form-label fw-semibold">
-                                    Default Entity Icon
-                                    <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
-                                        <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
-                                    </span>
-                                </label>
-                                <div class="d-flex align-items-center gap-2 mb-1">
-                                    <span id="currentDefaultEmoji" class="fs-3">📦</span>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="changeDefaultEmoji">
-                                        <i class="bi bi-pencil me-1"></i> Change
-                                    </button>
-                                </div>
-                                <small class="text-muted d-block">Default icon used for new entities in the ontology. Stored globally for all users.</small>
-                                <div id="defaultEmojiPickerMount"></div>
-                            </div>
-                        </div>
-                    </div>
-
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title mb-3">Theme</h5>
-
-                            <div class="row g-3 align-items-end mb-3">
-                                <div class="col-12 col-lg-4">
-                                    <label for="uiBrandingPrimaryColor" class="form-label fw-semibold">Primary color</label>
-                                    <input type="color"
-                                           class="form-control form-control-color"
-                                           id="uiBrandingPrimaryColor"
-                                           aria-describedby="uiBrandingColorHelp uiBrandingColorError"
-                                           value="#737373">
+                            <div class="alert alert-light border small d-flex align-items-start gap-2 mb-4" role="note">
+                                <i class="bi bi-shield-lock mt-1" aria-hidden="true"></i>
+                                <div>
+                                    <strong>Admin only &ndash; applies to all users.</strong>
+                                    Title, logo and colours are a draft until you click <strong>Save</strong>;
+                                    <strong>Discard changes</strong> reverts the draft and <strong>Default</strong> previews the factory look.
+                                    The default entity icon is saved as soon as you pick it.
                                 </div>
-                                <div class="col-12 col-lg-8">
-                                    <label for="uiBrandingPrimaryHex" class="form-label fw-semibold">Hex value</label>
+                            </div>
+
+                            <!-- Branding: identity shown in the chrome -->
+                            <h5 class="card-title mb-1">Branding</h5>
+                            <p class="text-muted small mb-3">How the application identifies itself in the navigation bar, browser tabs and ontology.</p>
+
+                            <div class="row g-4 mb-4">
+                                <div class="col-12 col-lg-6">
+                                    <label for="uiBrandingTitle" class="form-label fw-semibold">Application title</label>
                                     <input type="text"
-                                           class="form-control form-control-sm font-monospace text-uppercase"
-                                           id="uiBrandingPrimaryHex"
-                                           aria-describedby="uiBrandingColorHelp uiBrandingColorError"
-                                           maxlength="7"
+                                           class="form-control form-control-sm"
+                                           id="uiBrandingTitle"
+                                           maxlength="60"
+                                           aria-describedby="uiBrandingTitleHelp uiBrandingTitleError"
                                            autocomplete="off"
-                                           value="#737373"
-                                           placeholder="#737373">
+                                           placeholder="OntoBricks">
+                                    <div id="uiBrandingTitleHelp" class="form-text">Shown in the top navigation bar and in browser tab titles. 1&ndash;60 characters.</div>
+                                    <div id="uiBrandingTitleError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
                                 </div>
+
+                                <div class="col-12 col-lg-6">
+                                    <span class="form-label fw-semibold d-block">Default Entity Icon</span>
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span id="currentDefaultEmoji" class="fs-3">📦</span>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="changeDefaultEmoji">
+                                            <i class="bi bi-pencil me-1"></i> Change
+                                        </button>
+                                    </div>
+                                    <small class="text-muted d-block">Emoji given to new ontology classes that have no icon of their own. Saved immediately when you pick one.</small>
+                                    <div id="defaultEmojiPickerMount"></div>
+                                </div>
+
                                 <div class="col-12">
-                                    <div id="uiBrandingColorHelp" class="form-text">Use a valid uppercase hex color in the format #RRGGBB.</div>
-                                    <div id="uiBrandingColorError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
+                                    <span class="form-label fw-semibold d-block">Application Logo</span>
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="d-flex align-items-center justify-content-center border rounded bg-dark settings-logo-preview-box">
+                                            <img id="navbarLogoPreview"
+                                                 data-brand-icon
+                                                 src="{{ ui_branding_for().logo_url }}"
+                                                 alt="{{ ui_branding_for().app_title }}"
+                                                 width="32"
+                                                 height="32">
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <label for="uiBrandingLogoFile" class="form-label small fw-semibold">Logo file</label>
+                                            <div class="d-flex flex-column flex-sm-row gap-2">
+                                                <input type="file"
+                                                       class="form-control form-control-sm"
+                                                       id="uiBrandingLogoFile"
+                                                       aria-describedby="uiBrandingLogoHelp"
+                                                       accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="uiBrandingResetIconBtn"
+                                                        title="Go back to the bundled OntoBricks logo">
+                                                    <i class="bi bi-image me-1"></i> Reset icon
+                                                </button>
+                                            </div>
+                                            <div id="uiBrandingLogoHelp" class="form-text">
+                                                Used in the navigation bar, the browser tab icon, Help and KG Chat.
+                                                Square <strong>64&times;64&nbsp;px</strong> recommended &ndash;
+                                                SVG, PNG, JPEG, WEBP or GIF, max&nbsp;1&nbsp;MB.
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="row g-3 align-items-end mb-3">
-                                <div class="col-12 col-lg-4">
-                                    <label for="uiBrandingAuroraColor" class="form-label fw-semibold">Aurora color</label>
-                                    <input type="color"
-                                           class="form-control form-control-color"
-                                           id="uiBrandingAuroraColor"
-                                           aria-describedby="uiBrandingAuroraHelp uiBrandingAuroraError"
-                                           value="#6B6B6B">
-                                </div>
-                                <div class="col-12 col-lg-8">
-                                    <label for="uiBrandingAuroraHex" class="form-label fw-semibold">Hex value</label>
-                                    <input type="text"
-                                           class="form-control form-control-sm font-monospace text-uppercase"
-                                           id="uiBrandingAuroraHex"
-                                           aria-describedby="uiBrandingAuroraHelp uiBrandingAuroraError"
-                                           maxlength="7"
-                                           autocomplete="off"
-                                           value="#6B6B6B"
-                                           placeholder="#6B6B6B">
-                                </div>
-                                <div class="col-12">
-                                    <div id="uiBrandingAuroraHelp" class="form-text">Accent used for gradients and highlights. Leave unchanged to auto-derive from Primary.</div>
-                                    <div id="uiBrandingAuroraError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
-                                </div>
-                            </div>
+                            <hr class="my-4">
 
-                            <div class="row g-3 align-items-end mb-3">
-                                <div class="col-12 col-lg-4">
-                                    <label for="uiBrandingButtonPrimaryColor" class="form-label fw-semibold">Create button color</label>
-                                    <input type="color"
-                                           class="form-control form-control-color"
-                                           id="uiBrandingButtonPrimaryColor"
-                                           aria-describedby="uiBrandingButtonPrimaryHelp uiBrandingButtonPrimaryError"
-                                           value="#2272B4">
-                                </div>
-                                <div class="col-12 col-lg-8">
-                                    <label for="uiBrandingButtonPrimaryHex" class="form-label fw-semibold">Hex value</label>
-                                    <input type="text"
-                                           class="form-control form-control-sm font-monospace text-uppercase"
-                                           id="uiBrandingButtonPrimaryHex"
-                                           aria-describedby="uiBrandingButtonPrimaryHelp uiBrandingButtonPrimaryError"
-                                           maxlength="7"
-                                           autocomplete="off"
-                                           value="#2272B4"
-                                           placeholder="#2272B4">
-                                </div>
-                                <div class="col-12">
-                                    <div id="uiBrandingButtonPrimaryHelp" class="form-text">Filled button used for Create and Save (Databricks default #2272B4). Hover and text colors are derived automatically.</div>
-                                    <div id="uiBrandingButtonPrimaryError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
-                                </div>
-                            </div>
+                            <!-- Theme: four inputs, everything else is derived -->
+                            <h5 class="card-title mb-1">Theme</h5>
+                            <p class="text-muted small mb-3">Four colours drive the whole interface; every other shade (hover, selection, focus, text on colour) is derived automatically and kept readable.</p>
 
-                            <div class="row g-3 align-items-end mb-3">
-                                <div class="col-12 col-lg-4">
-                                    <label for="uiBrandingButtonSecondaryColor" class="form-label fw-semibold">Share button color</label>
-                                    <input type="color"
-                                           class="form-control form-control-color"
-                                           id="uiBrandingButtonSecondaryColor"
-                                           aria-describedby="uiBrandingButtonSecondaryHelp uiBrandingButtonSecondaryError"
-                                           value="#11171C">
-                                </div>
-                                <div class="col-12 col-lg-8">
-                                    <label for="uiBrandingButtonSecondaryHex" class="form-label fw-semibold">Hex value</label>
-                                    <input type="text"
-                                           class="form-control form-control-sm font-monospace text-uppercase"
-                                           id="uiBrandingButtonSecondaryHex"
-                                           aria-describedby="uiBrandingButtonSecondaryHelp uiBrandingButtonSecondaryError"
-                                           maxlength="7"
-                                           autocomplete="off"
-                                           value="#11171C"
-                                           placeholder="#11171C">
-                                </div>
-                                <div class="col-12">
-                                    <div id="uiBrandingButtonSecondaryHelp" class="form-text">Outlined button used for Share and Close (Databricks default #11171C). Border and hover tint are derived automatically.</div>
-                                    <div id="uiBrandingButtonSecondaryError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
-                                </div>
-                            </div>
+                            <div class="row g-4">
+                                <div class="col-12 col-xl-7">
+                                    <div class="ui-branding-color-field">
+                                        <label for="uiBrandingPrimaryColor" class="form-label fw-semibold mb-1">Primary color</label>
+                                        <div class="ui-branding-color-inputs">
+                                            <input type="color"
+                                                   class="form-control form-control-color"
+                                                   id="uiBrandingPrimaryColor"
+                                                   aria-describedby="uiBrandingColorHelp uiBrandingColorError"
+                                                   value="#737373">
+                                            <input type="text"
+                                                   class="form-control form-control-sm font-monospace text-uppercase ui-branding-hex"
+                                                   id="uiBrandingPrimaryHex"
+                                                   aria-label="Primary color hex value"
+                                                   aria-describedby="uiBrandingColorHelp uiBrandingColorError"
+                                                   maxlength="7"
+                                                   autocomplete="off"
+                                                   value="#737373"
+                                                   placeholder="#737373">
+                                        </div>
+                                        <div id="uiBrandingColorHelp" class="form-text">Main accent: active navigation and tabs, selected rows, links, badges and keyboard focus rings. Pick a colour or type a #RRGGBB hex value.</div>
+                                        <div id="uiBrandingColorError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
+                                    </div>
 
-                            <div class="row g-2 mb-3 ui-branding-swatches">
-                                <div class="col-6 col-lg-4">
-                                    <div class="ui-branding-swatch ui-branding-swatch-primary" id="uiSwatchPrimary" role="img" aria-label="Primary color #737373" title="Primary color #737373">Primary</div>
-                                </div>
-                                <div class="col-6 col-lg-4">
-                                    <div class="ui-branding-swatch ui-branding-swatch-hover" id="uiSwatchHover" role="img" aria-label="Hover color rgba(115, 115, 115, 0.06)" title="Hover color rgba(115, 115, 115, 0.06)">Hover</div>
-                                </div>
-                                <div class="col-6 col-lg-4">
-                                    <div class="ui-branding-swatch ui-branding-swatch-light" id="uiSwatchLight" role="img" aria-label="Selected color rgba(115, 115, 115, 0.10)" title="Selected color rgba(115, 115, 115, 0.10)">Selected</div>
-                                </div>
-                                <div class="col-6 col-lg-4">
-                                    <div class="ui-branding-swatch ui-branding-swatch-focus" id="uiSwatchFocus" role="img" aria-label="Focus Ring color rgba(115, 115, 115, 0.18)" title="Focus Ring color rgba(115, 115, 115, 0.18)">Focus Ring</div>
-                                </div>
-                                <div class="col-6 col-lg-4">
-                                    <div class="ui-branding-swatch ui-branding-swatch-on-primary" id="uiSwatchOnPrimary" role="img" aria-label="On Primary color #FFFFFF" title="On Primary color #FFFFFF">On Primary</div>
-                                </div>
-                                <div class="col-6 col-lg-4">
-                                    <div class="ui-branding-swatch ui-branding-swatch-aurora" id="uiSwatchAurora" role="img" aria-label="Aurora color #6B6B6B" title="Aurora color #6B6B6B">Aurora</div>
-                                </div>
-                            </div>
+                                    <div class="ui-branding-color-field">
+                                        <label for="uiBrandingAuroraColor" class="form-label fw-semibold mb-1">Aurora color</label>
+                                        <div class="ui-branding-color-inputs">
+                                            <input type="color"
+                                                   class="form-control form-control-color"
+                                                   id="uiBrandingAuroraColor"
+                                                   aria-describedby="uiBrandingAuroraHelp uiBrandingAuroraError"
+                                                   value="#6B6B6B">
+                                            <input type="text"
+                                                   class="form-control form-control-sm font-monospace text-uppercase ui-branding-hex"
+                                                   id="uiBrandingAuroraHex"
+                                                   aria-label="Aurora color hex value"
+                                                   aria-describedby="uiBrandingAuroraHelp uiBrandingAuroraError"
+                                                   maxlength="7"
+                                                   autocomplete="off"
+                                                   value="#6B6B6B"
+                                                   placeholder="#6B6B6B">
+                                        </div>
+                                        <div id="uiBrandingAuroraHelp" class="form-text">Secondary accent, derived from Primary unless you set it. It is the end colour of the Primary&nbsp;&rarr;&nbsp;Aurora gradient on the sidebar&rsquo;s active-item bar.</div>
+                                        <div id="uiBrandingAuroraError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
+                                    </div>
 
-                            <div class="ui-branding-preview" id="uiBrandingPreview" aria-hidden="true">
-                                <button type="button" class="btn btn-sm btn-primary ui-branding-preview-btn">Primary button</button>
-                                <button type="button" class="btn btn-sm btn-secondary ui-branding-preview-btn">Secondary button</button>
-                                <div class="ui-branding-preview-active">Active navigation item</div>
-                                <div class="ui-branding-preview-hover">Hover well</div>
-                                <input type="text" class="form-control form-control-sm ui-branding-preview-focus" value="Focused control" readonly>
+                                    <div class="ui-branding-color-field">
+                                        <label for="uiBrandingButtonPrimaryColor" class="form-label fw-semibold mb-1">Create button color</label>
+                                        <div class="ui-branding-color-inputs">
+                                            <input type="color"
+                                                   class="form-control form-control-color"
+                                                   id="uiBrandingButtonPrimaryColor"
+                                                   aria-describedby="uiBrandingButtonPrimaryHelp uiBrandingButtonPrimaryError"
+                                                   value="#2272B4">
+                                            <input type="text"
+                                                   class="form-control form-control-sm font-monospace text-uppercase ui-branding-hex"
+                                                   id="uiBrandingButtonPrimaryHex"
+                                                   aria-label="Create button color hex value"
+                                                   aria-describedby="uiBrandingButtonPrimaryHelp uiBrandingButtonPrimaryError"
+                                                   maxlength="7"
+                                                   autocomplete="off"
+                                                   value="#2272B4"
+                                                   placeholder="#2272B4">
+                                        </div>
+                                        <div id="uiBrandingButtonPrimaryHelp" class="form-text">Filled button for the main action of a page (Create, Save, Run). Databricks default #2272B4; its hover shade and label colour are derived.</div>
+                                        <div id="uiBrandingButtonPrimaryError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
+                                    </div>
+
+                                    <div class="ui-branding-color-field">
+                                        <label for="uiBrandingButtonSecondaryColor" class="form-label fw-semibold mb-1">Share button color</label>
+                                        <div class="ui-branding-color-inputs">
+                                            <input type="color"
+                                                   class="form-control form-control-color"
+                                                   id="uiBrandingButtonSecondaryColor"
+                                                   aria-describedby="uiBrandingButtonSecondaryHelp uiBrandingButtonSecondaryError"
+                                                   value="#11171C">
+                                            <input type="text"
+                                                   class="form-control form-control-sm font-monospace text-uppercase ui-branding-hex"
+                                                   id="uiBrandingButtonSecondaryHex"
+                                                   aria-label="Share button color hex value"
+                                                   aria-describedby="uiBrandingButtonSecondaryHelp uiBrandingButtonSecondaryError"
+                                                   maxlength="7"
+                                                   autocomplete="off"
+                                                   value="#11171C"
+                                                   placeholder="#11171C">
+                                        </div>
+                                        <div id="uiBrandingButtonSecondaryHelp" class="form-text">Label colour of the outlined buttons used for every other action (Share, Close, Cancel&hellip;). Databricks default #11171C; border and hover tint are derived.</div>
+                                        <div id="uiBrandingButtonSecondaryError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-xl-5">
+                                    <div class="ui-branding-preview-panel">
+                                        <div class="small fw-semibold mb-2">Live preview</div>
+                                        <div class="ui-branding-preview" id="uiBrandingPreview" aria-hidden="true">
+                                            <div class="ui-branding-preview-active">Active navigation item</div>
+                                            <div class="ui-branding-preview-hover">Hovered row</div>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <button type="button" class="btn btn-sm btn-primary ui-branding-preview-btn">Create</button>
+                                                <button type="button" class="btn btn-sm btn-secondary ui-branding-preview-btn">Share</button>
+                                            </div>
+                                            <input type="text" class="form-control form-control-sm ui-branding-preview-focus" value="Focused field" readonly>
+                                        </div>
+
+                                        <div class="small fw-semibold mt-3 mb-2">Derived palette</div>
+                                        <div class="row g-2 ui-branding-swatches">
+                                            <div class="col-6">
+                                                <div class="ui-branding-swatch ui-branding-swatch-primary" id="uiSwatchPrimary" role="img" aria-label="Primary color #737373" title="Primary color #737373">Primary</div>
+                                                <div class="ui-branding-swatch-caption">Accent, links, badges</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="ui-branding-swatch ui-branding-swatch-hover" id="uiSwatchHover" role="img" aria-label="Hover color rgba(115, 115, 115, 0.06)" title="Hover color rgba(115, 115, 115, 0.06)">Hover</div>
+                                                <div class="ui-branding-swatch-caption">Background under the pointer</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="ui-branding-swatch ui-branding-swatch-light" id="uiSwatchLight" role="img" aria-label="Selected color rgba(115, 115, 115, 0.10)" title="Selected color rgba(115, 115, 115, 0.10)">Selected</div>
+                                                <div class="ui-branding-swatch-caption">Active item, selected row</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="ui-branding-swatch ui-branding-swatch-focus" id="uiSwatchFocus" role="img" aria-label="Focus Ring color rgba(115, 115, 115, 0.18)" title="Focus Ring color rgba(115, 115, 115, 0.18)">Focus Ring</div>
+                                                <div class="ui-branding-swatch-caption">Keyboard focus outline</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="ui-branding-swatch ui-branding-swatch-on-primary" id="uiSwatchOnPrimary" role="img" aria-label="On Primary color #FFFFFF" title="On Primary color #FFFFFF">On Primary</div>
+                                                <div class="ui-branding-swatch-caption">Text drawn on the accent</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="ui-branding-swatch ui-branding-swatch-aurora" id="uiSwatchAurora" role="img" aria-label="Aurora color #6B6B6B" title="Aurora color #6B6B6B">Aurora</div>
+                                                <div class="ui-branding-swatch-caption">End of the sidebar active bar</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

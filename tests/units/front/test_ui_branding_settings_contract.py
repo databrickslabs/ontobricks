@@ -85,7 +85,7 @@ def test_theme_card_exposes_an_aurora_color_picker_mirroring_primary():
     assert 'role="img"' in html
 
     # Aurora field must sit in the same Theme card as Primary, after it.
-    theme_card = html[html.index('<h5 class="card-title mb-3">Theme</h5>') :]
+    theme_card = html[re.search(r'<h5 class="card-title[^"]*">Theme</h5>', html).start() :]
     assert theme_card.index("uiBrandingPrimaryHex") < theme_card.index("uiBrandingAuroraColor")
 
 
@@ -333,3 +333,51 @@ def test_sidebar_nav_keeps_callbacks_on_later_no_options_init():
     assert "Object.prototype.hasOwnProperty.call(options, 'onBeforeSectionChange')" in js
     assert "SidebarNav._onSectionChange = options.onSectionChange || null;" not in js
     assert "SidebarNav._onBeforeSectionChange = options.onBeforeSectionChange || null;" not in js
+
+
+def _ui_section(html: str) -> str:
+    start = html.index('<div id="ui-section" class="sidebar-section">')
+    return html[start : html.index("{% if user_role == 'admin' %}", start)]
+
+
+def test_ui_body_sits_in_a_single_card():
+    """Section Body Surface rule: one card under the header, not stacked cards."""
+    section = _ui_section(_read(SETTINGS_TEMPLATE))
+    assert len(re.findall(r'<div class="card(?:[ "])', section)) == 1
+
+
+def test_admin_scope_is_stated_once_for_the_whole_section():
+    section = _ui_section(_read(SETTINGS_TEMPLATE))
+    assert section.count("Admin only") == 1
+    assert "settings-badge-admin-note" not in section
+
+
+def test_each_color_explains_what_it_drives():
+    section = _ui_section(_read(SETTINGS_TEMPLATE))
+    for help_id, phrase in (
+        ("uiBrandingColorHelp", "active navigation"),
+        ("uiBrandingAuroraHelp", "sidebar"),
+        ("uiBrandingButtonPrimaryHelp", "main action"),
+        ("uiBrandingButtonSecondaryHelp", "every other action"),
+    ):
+        block = section[section.index(f'id="{help_id}"') :]
+        assert phrase in block[: block.index("</div>")]
+
+
+def test_hex_inputs_have_accessible_names():
+    section = _ui_section(_read(SETTINGS_TEMPLATE))
+    for name in ("Primary", "Aurora", "Create button", "Share button"):
+        assert f'aria-label="{name} color hex value"' in section
+
+
+def test_derived_swatches_carry_usage_captions():
+    section = _ui_section(_read(SETTINGS_TEMPLATE))
+    assert section.count('class="ui-branding-swatch-caption"') == 6
+
+
+def test_preview_buttons_keep_the_real_create_and_share_paint():
+    """The preview used to repaint both buttons with Primary."""
+    css = (REPO_ROOT / "src/front/static/global/css/config.css").read_text(encoding="utf-8")
+    assert ".ui-branding-preview .ui-branding-preview-btn {" not in css
+    assert ".ui-branding-preview-active::before" in css
+

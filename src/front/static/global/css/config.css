@@ -191,6 +191,36 @@
     --ui-preview-selected-text: var(--db-primary-selected-text, var(--db-primary-dark));
 }
 
+.ui-branding-color-field + .ui-branding-color-field {
+    margin-top: 1.25rem;
+}
+
+.ui-branding-color-inputs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ui-branding-color-inputs .ui-branding-hex {
+    max-width: 8rem;
+}
+
+.ui-branding-preview-panel {
+    position: sticky;
+    top: 1rem;
+    padding: 0.75rem;
+    border: 1px solid var(--db-border-light);
+    border-radius: var(--db-radius-control);
+    background: var(--db-surface-warm);
+}
+
+.ui-branding-swatch-caption {
+    margin-top: 0.25rem;
+    font-size: 0.7rem;
+    line-height: 1rem;
+    color: var(--db-text-secondary);
+}
+
 .ui-branding-swatches .ui-branding-swatch {
     border: 1px solid var(--db-border-light);
     border-radius: var(--db-radius-control);
@@ -242,27 +272,31 @@
     gap: 0.5rem;
 }
 
-.ui-branding-preview .ui-branding-preview-btn {
-    background-color: var(--ui-preview-primary);
-    border-color: var(--ui-preview-primary);
-    color: var(--ui-preview-on-primary);
-}
-
-.ui-branding-preview .ui-branding-preview-btn:hover,
-.ui-branding-preview .ui-branding-preview-btn:focus-visible {
-    background-color: var(--ui-preview-primary-dark, var(--db-primary-dark));
-    border-color: var(--ui-preview-primary-dark, var(--db-primary-dark));
-}
+/* Preview buttons keep the real .btn-primary (Create) / .btn-secondary
+   (Share) paint: settings.js previews --db-btn-* live, so no override here. */
 
 .ui-branding-preview-active {
+    position: relative;
     display: inline-flex;
     width: fit-content;
-    padding: 0.2rem 0.45rem;
+    padding: 0.2rem 0.45rem 0.2rem 0.75rem;
     border-radius: var(--db-radius-control);
     background: var(--ui-preview-light);
     color: var(--ui-preview-selected-text);
     font-size: 0.8rem;
     font-weight: 600;
+}
+
+/* Mirrors the sidebar active-row bar (Primary -> Aurora gradient). */
+.ui-branding-preview-active::before {
+    content: "";
+    position: absolute;
+    left: 0.2rem;
+    top: 0.2rem;
+    bottom: 0.2rem;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: linear-gradient(180deg, var(--ui-preview-primary), var(--ui-preview-aurora, var(--db-aurora)));
 }
 
 .ui-branding-preview-hover {

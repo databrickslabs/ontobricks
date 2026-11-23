@@ -260,3 +260,83 @@ Modified files:
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11219 passed, 334 skipped, 8 deselected
 (Not browser-tested: the chrome-devtools MCP is not connected; served CSS
 checked on the dev server.)
+
+================================================================================
+Certified graph: two-stage design (SPEC + PLAN, no code change)
+================================================================================
+
+Context:
+Design study for splitting the knowledge graph into a no-copy live graph
+(Delta, used to navigate, enrich, curate and certify) and a certified graph
+built by a second build into Lakebase, Lakehouse (materialized Delta) or
+Neo4j, which is the only graph served to MCP and the external API, and only
+for PUBLISHED versions. Decisions recorded: non-certified patterns are
+forbidden (whitelist), inferences are re-derived on the cleaned base, a
+successful certified build is required to publish, and MCP serves only
+PUBLISHED versions.
+
+Changes:
+1. .planning/certified-graph/SPEC.md
+   - Purpose, decisions D1-D4, live graph (live build, _enriched with
+     provenance, curation ledger, pattern whitelist), certified build
+     phases (base, whitelist, re-derivation, stage, gates, load through the
+     existing pipelines), naming, atomicity, lifecycle, serving, migration,
+     success criteria, risks.
+2. .planning/certified-graph/PLAN.md
+   - Code smells and Fowler refactorings, phases P1 (two stages,
+     behaviour-equivalent) to P4 (operations), open points, verification.
+
+Modified files:
+- .planning/certified-graph/SPEC.md
+- .planning/certified-graph/PLAN.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: not run (documentation only, no code changed).
+
+================================================================================
+Settings → UI: reorganised and explained branding / theme page
+================================================================================
+
+Context:
+The UI settings page stacked two cards, repeated the "Admin only" badge three
+times, split every colour into separate "picker" and "Hex value" columns and
+gave little explanation of what each colour drives (Aurora in particular).
+The live preview was also misleading: `.ui-branding-preview-btn` repainted
+both preview buttons with Primary, while real Create / Share buttons use
+their own colours.
+
+Changes:
+1. src/front/templates/settings.html (#ui-section)
+   - One card under the section header (Section Body Surface rule), with a
+     single admin note explaining Save / Discard changes / Default and that
+     the default entity icon is saved immediately.
+   - Branding block: title and default entity icon side by side, logo row
+     with the Reset icon button next to the file input (stacked on small
+     screens); help texts say where each item appears.
+   - Theme block: the four colours (Primary, Aurora, Create button, Share
+     button) each show picker + hex on one line and a help text describing
+     what they drive; a sticky "Live preview" panel (active item with the
+     Primary → Aurora bar, hovered row, Create / Share buttons, focused
+     field) and the derived palette with a usage caption per swatch.
+   - Hex inputs get accessible names; every existing id, aria-describedby
+     association and JS hook is unchanged.
+2. src/front/static/global/css/config.css
+   - Removed the .ui-branding-preview-btn override so the preview shows the
+     real (live-previewed) Create / Share paint.
+   - Active preview item mirrors the sidebar active-row gradient bar.
+   - New layout helpers: .ui-branding-color-field, .ui-branding-color-inputs,
+     .ui-branding-hex, .ui-branding-preview-panel, .ui-branding-swatch-caption.
+3. tests/units/front/test_ui_branding_settings_contract.py
+   - Theme heading lookup tolerates the spacing class; new contracts: single
+     card, admin scope stated once, colour help texts, hex accessible names,
+     swatch captions, preview buttons not overridden.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/global/css/config.css
+- tests/units/front/test_ui_branding_settings_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11225 passed, 334 skipped, 8 deselected
+Browser check: Playwright (headless Chromium) screenshots of
+/settings?section=ui at 1440 px and 390 px, no console errors.
