@@ -18,8 +18,9 @@ applies the user-authored :class:`CohortRule` in pure Python:
      into a content-hash URI.
 
 Materialisation:
-  * ``materialize_to_graph`` — delete old cohort triples for the rule
-    (URI-prefix-based), then ``insert_triples`` the new payload.
+  * ``cohort_triples`` — the RDF payload of a run (cohort entities and
+    rule-scoped membership triples); the caller writes it to the Certified
+    Graph.
   * ``materialize_to_uc`` — ``CREATE TABLE IF NOT EXISTS``, ``DELETE`` the
     rule's partition, then chunked ``INSERT``.
 """
@@ -614,54 +615,6 @@ class CohortBuilder:
 
     # ---- materialisation --------------------------------------------
 
-    def materialize_to_graph(self, rule: CohortRule, result: CohortResult) -> int:
-        """Delete prior cohort triples for *rule*, insert fresh ones.
-
-        Returns the number of triples inserted.
-        """
-        if self._store is None:
-            return 0
-        prefix = CohortVocabulary.cohort_prefix(self._base_uri, rule.id)
-        in_cohort = CohortVocabulary.in_cohort(self._base_uri, rule.id)
-
-        # Delete by URI prefix — wipes both cohort entity triples (subject
-        # under prefix) and membership triples (predicate=inCohort<RuleId>,
-        # object under prefix).  Implementation lives on the backend.
-        deleted = 0
-        delete_fn = getattr(self._store, "delete_cohort_triples", None)
-        if callable(delete_fn):
-            try:
-                deleted = int(delete_fn(self._graph_name, prefix, in_cohort) or 0)
-            except Exception as exc:
-                logger.warning(
-                    "CohortBuilder: delete_cohort_triples failed for %s: %s",
-                    rule.id,
-                    exc,
-                )
-
-        triples = self._build_cohort_triples(rule, result)
-        inserted = 0
-        if not triples:
-            inserted = 0
-        else:
-            inserted = int(self._store.insert_triples(self._graph_name, triples))
-        if (
-            (deleted != 0 or inserted > 0)
-            and getattr(self._store, "supports_adjacency", False) is True
-        ):
-            from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
-
-            logger.info(
-                "CohortBuilder: rebuilding adjacency index after cohort materialization "
-                "(deleted=%d, inserted=%d)",
-                deleted,
-                inserted,
-            )
-            rebuild_graph_cache_if_enabled(
-                self._store, self._graph_name, getattr(self, "_domain", None)
-            )
-        return inserted
-
     def materialize_to_uc(
         self,
         rule: CohortRule,
@@ -1170,9 +1123,10 @@ class CohortBuilder:
     # Triple / row builders
     # ------------------------------------------------------------------
 
-    def _build_cohort_triples(
+    def cohort_triples(
         self, rule: CohortRule, result: CohortResult
     ) -> List[Dict[str, str]]:
+        """Cohort entity triples plus one ``inCohort<rule>`` triple per member."""
         if not result.cohorts:
             return []
         klass = CohortVocabulary.cohort_class(self._base_uri)

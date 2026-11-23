@@ -71,6 +71,7 @@ def run(ctx: TaskContext) -> RunOutcome:
         member_label_resolver=_label_resolver,
         output_graph=bool(ctx.config.get("output_graph", True)),
         output_uc=bool(ctx.config.get("output_uc", True)),
+        settings=ctx.settings,
     )
 
     materialized_triples = int(result.get("materialized_triples") or 0)

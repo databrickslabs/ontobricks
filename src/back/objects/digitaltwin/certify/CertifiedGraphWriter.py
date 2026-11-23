@@ -3,13 +3,15 @@
 Every modification is written to the Delta composition (``…_cert_enriched``,
 which ``…_certified`` unions in), then to the served backend when it is a
 copy (Lakebase, Neo4j). A Lakehouse Certified Graph reads the composition, so
-the first write is enough. Writes are refused on a read-only (IN-REVIEW or
+the first write is enough. Rows are grouped in *scopes* (``kind`` +
+``provenance``, e.g. ``cohort`` / ``cohort:<rule>``) so a re-run replaces
+exactly its own rows. Writes are refused on a read-only (IN-REVIEW or
 PUBLISHED) version.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Sequence
 
 from back.core.errors import InfrastructureError
 from back.core.graphdb.constants import GRAPH_VARIANT_CERTIFIED
@@ -19,6 +21,8 @@ from back.core.logging import get_logger
 from back.objects.digitaltwin.certify.CertifiedBuild import CertifiedBuild
 
 logger = get_logger(__name__)
+
+_SPO = ("subject", "predicate", "object")
 
 
 class CertifiedGraphWriter:
@@ -32,6 +36,13 @@ class CertifiedGraphWriter:
     def __init__(self, domain: Any, settings: Any) -> None:
         self.domain = domain
         self.settings = settings
+        self._graph_engine = (
+            GraphDBFactory._resolve_graph_backend(domain) != "databricks"
+        )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def add_enrichments(
         self, triples: Iterable[Dict[str, str]], *, kind: str, run_id: str = ""
@@ -41,17 +52,104 @@ class CertifiedGraphWriter:
         rows = self._rows(triples)
         if not rows:
             return 0
-        builder = GraphDBFactory.get_builder(
-            self.domain, self.settings, engine="delta"
-        )
-        builder.ensure_cert_enriched_table()
+        builder = self._builder()
         builder.insert_cert_enriched(rows, kind=kind, run_id=run_id)
-        if GraphDBFactory._resolve_graph_backend(self.domain) != "databricks":
-            self._insert_into_backend(rows)
+        if self._graph_engine:
+            self._backend_insert(rows)
+            self._refresh_backend_cache()
         logger.info(
             "Certified Graph: wrote %d %s triple(s) (run %s)", len(rows), kind, run_id
         )
         return len(rows)
+
+    def replace_scope(
+        self,
+        triples: Iterable[Dict[str, str]],
+        *,
+        kind: str,
+        provenance: str,
+        run_id: str = "",
+    ) -> int:
+        """Replace every row of one scope with *triples*; return how many were written."""
+        CertifiedBuild.ensure_editable(self.domain, self.settings)
+        rows = [{**r, "provenance": provenance} for r in self._rows(triples)]
+        builder = self._builder()
+        self._clear_scope(builder, kind, provenance)
+        if rows:
+            builder.insert_cert_enriched(rows, kind=kind, run_id=run_id)
+            if self._graph_engine:
+                self._backend_insert(rows)
+        if self._graph_engine:
+            self._refresh_backend_cache()
+        logger.info(
+            "Certified Graph: scope %s/%s replaced by %d triple(s)",
+            kind,
+            provenance,
+            len(rows),
+        )
+        return len(rows)
+
+    def replace_scope_from_select(
+        self,
+        select_sqls: Sequence[str],
+        *,
+        kind: str,
+        provenance: str,
+        run_id: str = "",
+    ) -> int:
+        """Replace one scope with rows computed on the warehouse; return its size.
+
+        Each SQL must project ``subject, predicate, object``. No row transits
+        the app for a Lakehouse Certified Graph; a Lakebase / Neo4j backend is
+        fed the new scope in batches.
+        """
+        CertifiedBuild.ensure_editable(self.domain, self.settings)
+        builder = self._builder()
+        self._clear_scope(builder, kind, provenance)
+        for sql in select_sqls:
+            builder.insert_cert_enriched_from_select(
+                sql, kind=kind, provenance=provenance, run_id=run_id
+            )
+        if self._graph_engine:
+            for batch in builder.iter_cert_enriched_scope(
+                kind=kind, provenance=provenance
+            ):
+                self._backend_insert(batch)
+            self._refresh_backend_cache()
+        return builder.count_cert_enriched_scope(kind=kind, provenance=provenance)
+
+    def remove_scope(self, *, kind: str, provenance: str) -> int:
+        """Remove every row of one scope; return how many backend rows were dropped."""
+        CertifiedBuild.ensure_editable(self.domain, self.settings)
+        removed = self._clear_scope(self._builder(), kind, provenance)
+        if self._graph_engine:
+            self._refresh_backend_cache()
+        return removed
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    def _builder(self) -> Any:
+        """Delta builder with the composition guaranteed to exist."""
+        builder = GraphDBFactory.get_builder(
+            self.domain, self.settings, engine="delta"
+        )
+        builder.ensure_certified_objects()
+        return builder
+
+    def _clear_scope(self, builder: Any, kind: str, provenance: str) -> int:
+        """Drop a scope from the backend copy (if any), then from the composition."""
+        removed = 0
+        if self._graph_engine:
+            store = self._backend()
+            for batch in builder.iter_cert_enriched_scope(
+                kind=kind, provenance=provenance
+            ):
+                store.delete_triples(SQLHelpers.effective_graph_name(self.domain), batch)
+                removed += len(batch)
+        builder.delete_cert_enriched_scope(kind=kind, provenance=provenance)
+        return removed
 
     @staticmethod
     def _rows(triples: Iterable[Dict[str, str]]) -> List[Dict[str, str]]:
@@ -67,13 +165,26 @@ class CertifiedGraphWriter:
             if t.get("subject") and t.get("subject") != "(batch)"
         ]
 
-    def _insert_into_backend(self, rows: List[Dict[str, str]]) -> None:
+    def _backend(self) -> Any:
         store = GraphDBFactory.get_graphdb(
             self.domain, self.settings, for_write=True, variant=GRAPH_VARIANT_CERTIFIED
         )
         if store is None:
             raise InfrastructureError("Could not open the Certified Graph backend")
-        store.insert_triples(
+        return store
+
+    def _backend_insert(self, rows: List[Dict[str, str]]) -> None:
+        self._backend().insert_triples(
             SQLHelpers.effective_graph_name(self.domain),
-            [{k: r[k] for k in ("subject", "predicate", "object")} for r in rows],
+            [{k: r[k] for k in _SPO} for r in rows],
         )
+
+    def _refresh_backend_cache(self) -> None:
+        """Rebuild the Postgres adjacency / search companions once per operation."""
+        store = self._backend()
+        if getattr(store, "supports_adjacency", False) is True:
+            from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
+
+            rebuild_graph_cache_if_enabled(
+                store, SQLHelpers.effective_graph_name(self.domain), self.domain
+            )

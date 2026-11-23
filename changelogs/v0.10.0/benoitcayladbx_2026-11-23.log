@@ -944,3 +944,76 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11342 passed, 334 skipped, 8 deselected
+
+================================================================================
+Certified Graph writes by scope; cohorts write to the Certified Graph
+================================================================================
+
+Context:
+Step (b), cohorts. `CertifiedGraphWriter` now writes by *scope*
+(`kind` + `provenance`): a re-run replaces exactly its own rows in
+`…_cert_enriched` and, for Lakebase / Neo4j, in the backend copy (old rows
+read back from the composition and deleted, new ones inserted). Writes also
+create any missing composition object with `IF NOT EXISTS` (never replacing
+an existing view), so a domain without a certified build still gets a
+readable `…_certified`. Cohort materialisation writes the rule's scope
+(`cohort` / `cohort:<rule id>`) instead of deleting and inserting by URI
+prefix on the graph store.
+
+Changes:
+1. src/back/core/graphdb/delta/materialize.py
+   - `ensure_certified_objects` (CREATE VIEW / TABLE IF NOT EXISTS),
+     `build_delete_cert_enriched_scope_sql`,
+     `build_select_cert_enriched_scope_sql`,
+     `insert_cert_enriched_from_select` (INSERT … SELECT tagged with the
+     scope).
+2. src/back/core/graphdb/delta/Builder.py
+   - `ensure_certified_objects` (replaces `ensure_cert_enriched_table`),
+     `delete_cert_enriched_scope`, `iter_cert_enriched_scope` (batched),
+     `count_cert_enriched_scope`, `insert_cert_enriched_from_select`.
+3. src/back/objects/digitaltwin/certify/CertifiedGraphWriter.py
+   - `replace_scope`, `replace_scope_from_select`, `remove_scope`; backend
+     adjacency / search companions rebuilt once per operation (not per
+     batch).
+4. src/back/core/graph_analysis/cohort/CohortBuilder.py
+   - `cohort_triples` (public, was `_build_cohort_triples`); removed
+     `materialize_to_graph` (the caller writes through the writer).
+5. src/back/objects/digitaltwin/cohort/CohortService.py
+   - `materialize(..., settings=None)`: graph output through
+     `replace_scope`; Extract Method `_write_graph_output`; a read-only
+     version raises.
+6. src/back/objects/digitaltwin/DigitalTwin.py,
+   src/api/routers/internal/dtwin.py, src/api/routers/digitaltwin.py,
+   src/back/objects/registry/schedule/cohort.py
+   - Pass `settings` to the cohort materialisation.
+7. Tests
+   - tests/units/graphdb/delta/test_certified_composition.py: IF NOT
+     EXISTS objects, scope delete / select SQL, INSERT … SELECT tagging.
+   - tests/units/dtwin/test_certified_graph_writer.py: replace scope
+     (Lakehouse / graph engine), from-select, remove, read-only refusal,
+     one cache rebuild per operation.
+   - tests/units/dtwin/test_cohort_builder.py: `cohort_triples` payload.
+   - tests/units/dtwin/test_dtwin_cohort.py: rule scope written, re-run
+     replaces the same scope, read-only refusal.
+   - tests/units/architecture/baseline.json: ratchet (`CohortBuilder` 1192
+     -> 1145, `run_inference_task` 175 -> 152, `CohortService.materialize`
+     104 -> 103).
+
+Modified files:
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/Builder.py
+- src/back/objects/digitaltwin/certify/CertifiedGraphWriter.py
+- src/back/core/graph_analysis/cohort/CohortBuilder.py
+- src/back/objects/digitaltwin/cohort/CohortService.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/digitaltwin.py
+- src/back/objects/registry/schedule/cohort.py
+- tests/units/graphdb/delta/test_certified_composition.py
+- tests/units/dtwin/test_certified_graph_writer.py
+- tests/units/dtwin/test_cohort_builder.py
+- tests/units/dtwin/test_dtwin_cohort.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11349 passed, 334 skipped, 8 deselected

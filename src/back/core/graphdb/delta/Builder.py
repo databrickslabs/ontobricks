@@ -13,7 +13,7 @@ use.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterator, List
 
 from back.core.graphdb.interfaces.GraphBuilder import GraphBuilder
 from back.core.logging import get_logger
@@ -147,13 +147,71 @@ class Builder(GraphBuilder):
             certified_fqn=self.certified_view_fqn(),
         )
 
-    def ensure_cert_enriched_table(self) -> None:
-        """Create the Certified Graph enrichments TABLE if missing (views untouched)."""
+    def ensure_certified_objects(self) -> None:
+        """Create missing composition objects; existing views are never replaced."""
+        from back.core.graphdb.delta import materialize
+
+        materialize.ensure_certified_objects(
+            self._get_client(),
+            data_fqn=self.data_table_fqn(),
+            base_fqn=self.cert_base_fqn(),
+            enriched_fqn=self.cert_enriched_fqn(),
+            certified_fqn=self.certified_view_fqn(),
+        )
+
+    def delete_cert_enriched_scope(self, *, kind: str, provenance: str) -> None:
         from back.core.graphdb.delta import materialize
 
         materialize.run_sql(
             self._get_client(),
-            materialize.build_ensure_cert_enriched_sql(self.cert_enriched_fqn()),
+            materialize.build_delete_cert_enriched_scope_sql(
+                self.cert_enriched_fqn(), kind=kind, provenance=provenance
+            ),
+        )
+
+    def iter_cert_enriched_scope(
+        self, *, kind: str, provenance: str, batch_size: int = 5000
+    ) -> Iterator[List[Dict[str, str]]]:
+        """Yield the triples of one enrichment scope in batches."""
+        from back.core.graphdb.delta import materialize
+
+        sql = materialize.build_select_cert_enriched_scope_sql(
+            self.cert_enriched_fqn(), kind=kind, provenance=provenance
+        )
+        batch: List[Dict[str, str]] = []
+        for row in self._get_client().iter_rows(sql, batch_size=batch_size):
+            batch.append(
+                {k: row.get(k, "") for k in ("subject", "predicate", "object")}
+            )
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
+
+    def count_cert_enriched_scope(self, *, kind: str, provenance: str) -> int:
+        from back.core.graphdb.delta import materialize
+
+        sql = materialize.build_select_cert_enriched_scope_sql(
+            self.cert_enriched_fqn(), kind=kind, provenance=provenance
+        )
+        rows = self._get_client().execute_query(
+            f"SELECT COUNT(*) AS cnt FROM ({sql}) AS _scope"
+        )
+        return int((rows[0].get("cnt") if rows else 0) or 0)
+
+    def insert_cert_enriched_from_select(
+        self, select_sql: str, *, kind: str, provenance: str, run_id: str = ""
+    ) -> None:
+        from back.core.graphdb.delta import materialize
+
+        materialize.insert_cert_enriched_from_select(
+            self._get_client(),
+            self.cert_enriched_fqn(),
+            select_sql,
+            kind=kind,
+            provenance=provenance,
+            run_id=run_id,
         )
 
     def insert_cert_enriched(

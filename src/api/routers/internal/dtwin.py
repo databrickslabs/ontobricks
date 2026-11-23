@@ -1373,6 +1373,7 @@ async def cohort_materialize(
             client,
             domain_version,
             _label_resolver,
+            settings=ctx.settings,
         )
     except NotFoundError:
         raise

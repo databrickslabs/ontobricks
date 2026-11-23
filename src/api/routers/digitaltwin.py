@@ -1810,6 +1810,7 @@ async def dt_cohort_materialize(
             _label_resolver,
             body.output_graph,
             body.output_uc,
+            settings=settings,
         )
     except NotFoundError:
         raise

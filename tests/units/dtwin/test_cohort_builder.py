@@ -1292,11 +1292,8 @@ class TestExplain:
 
 
 class TestMaterialisation:
-    def test_materialize_to_graph_inserts_expected_triples(self):
+    def test_cohort_triples_describe_cohorts_and_rule_scoped_membership(self):
         triples = _build_test_graph()
-        store = _store_with(triples)
-        store.insert_triples = MagicMock(return_value=10)
-
         rule = CohortRule(
             id="exempt-pool",
             label="Exempt pool",
@@ -1306,157 +1303,27 @@ class TestMaterialisation:
                 CohortCompat(type="value_equals", property=STATUS, value="Exempt")
             ],
         )
-        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
+        b = CohortBuilder(_store_with(triples), "graph", base_uri=BASE_URI)
         result = b.build(rule)
-        b.materialize_to_graph(rule, result)
 
-        # First call: delete_cohort_triples on the store.
-        # Second call: insert_triples.
-        assert store.insert_triples.called
-        inserted = store.insert_triples.call_args.args[1]
+        payload = b.cohort_triples(rule, result)
+
         # 4 cohort-entity triples per cohort + 1 :inCohort<RuleId> per member.
-        cohort_count = result.stats.cohort_count
         member_count = sum(c.size for c in result.cohorts)
-        assert len(inserted) == 4 * cohort_count + member_count
-
-        # Membership predicate is rule-scoped (`<base>/inCohort<rule.id>`)
-        # so the same graph can host multiple cohort rules without
-        # collisions on the predicate column.
+        assert len(payload) == 4 * result.stats.cohort_count + member_count
+        # Membership predicate is rule-scoped (`<base>/inCohort<rule.id>`) so
+        # the same graph can host several cohort rules without collisions.
         expected_pred = f"{BASE_URI}inCohort{rule.id}"
-        membership = [t for t in inserted if t["predicate"] == expected_pred]
+        membership = [t for t in payload if t["predicate"] == expected_pred]
         assert len(membership) == member_count
-        # And the historic single-predicate form should NOT appear in the
-        # output anymore -- guards against accidental regressions.
         legacy_pred = f"{BASE_URI}inCohort"
-        assert all(t["predicate"] != legacy_pred for t in inserted)
+        assert all(t["predicate"] != legacy_pred for t in payload)
 
-        # The delete pass uses the same rule-scoped predicate so a
-        # re-materialise only wipes this rule's membership triples.
-        delete_args = store.delete_cohort_triples.call_args
-        assert delete_args is not None
-        assert delete_args.args[2] == expected_pred
+    def test_no_cohort_means_no_triple(self):
+        b = CohortBuilder(_store_with([]), "graph", base_uri=BASE_URI)
+        rule = CohortRule(id="r", label="R", class_uri=PERSON)
 
-    def test_materialize_to_graph_rebuilds_adjacency_when_supported(self):
-        triples = _build_test_graph()
-        store = _store_with(triples)
-        store.delete_cohort_triples = MagicMock(return_value=0)
-        store.insert_triples = MagicMock(return_value=10)
-        store.supports_adjacency = True
-        store.rebuild_adjacency = MagicMock()
-
-        rule = CohortRule(
-            id="exempt-pool",
-            label="Exempt pool",
-            class_uri=PERSON,
-            links=[CohortLink(shared_class=PROJECT, via=ASSIGNED_TO)],
-            compatibility=[
-                CohortCompat(type="value_equals", property=STATUS, value="Exempt")
-            ],
-        )
-        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
-        result = b.build(rule)
-        b.materialize_to_graph(rule, result)
-
-        store.rebuild_adjacency.assert_called_once_with("graph")
-
-    def test_materialize_to_graph_skips_rebuild_when_inserted_zero(self):
-        triples = _build_test_graph()
-        store = _store_with(triples)
-        store.delete_cohort_triples = MagicMock(return_value=0)
-        store.insert_triples = MagicMock(return_value=0)
-        store.supports_adjacency = True
-        store.rebuild_adjacency = MagicMock()
-
-        rule = CohortRule(
-            id="exempt-pool",
-            label="Exempt pool",
-            class_uri=PERSON,
-            links=[CohortLink(shared_class=PROJECT, via=ASSIGNED_TO)],
-            compatibility=[
-                CohortCompat(type="value_equals", property=STATUS, value="Exempt")
-            ],
-        )
-        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
-        result = b.build(rule)
-        b.materialize_to_graph(rule, result)
-
-        store.rebuild_adjacency.assert_not_called()
-
-    def test_materialize_to_graph_rebuilds_adjacency_when_only_delete_changed(self):
-        triples = _build_test_graph()
-        store = _store_with(triples)
-        store.delete_cohort_triples = MagicMock(return_value=2)
-        store.insert_triples = MagicMock(return_value=0)
-        store.supports_adjacency = True
-        store.rebuild_adjacency = MagicMock()
-
-        # No new cohort triples generated => insert path is skipped,
-        # but delete removed stale cohort rows and must invalidate adjacency.
-        rule = CohortRule(
-            id="exempt-pool",
-            label="Exempt pool",
-            class_uri=PERSON,
-            links=[CohortLink(shared_class=PROJECT, via=ASSIGNED_TO)],
-            compatibility=[
-                CohortCompat(type="value_equals", property=STATUS, value="Exempt")
-            ],
-            min_size=999,
-        )
-        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
-        result = b.build(rule)
-        assert result.cohorts == []
-
-        inserted = b.materialize_to_graph(rule, result)
-
-        assert inserted == 0
-        store.insert_triples.assert_not_called()
-        store.rebuild_adjacency.assert_called_once_with("graph")
-
-    def test_materialize_to_graph_skips_rebuild_when_not_supported(self):
-        triples = _build_test_graph()
-        store = _store_with(triples)
-        store.insert_triples = MagicMock(return_value=10)
-        store.supports_adjacency = False
-        store.rebuild_adjacency = MagicMock()
-
-        rule = CohortRule(
-            id="exempt-pool",
-            label="Exempt pool",
-            class_uri=PERSON,
-            links=[CohortLink(shared_class=PROJECT, via=ASSIGNED_TO)],
-            compatibility=[
-                CohortCompat(type="value_equals", property=STATUS, value="Exempt")
-            ],
-        )
-        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
-        result = b.build(rule)
-        b.materialize_to_graph(rule, result)
-
-        store.rebuild_adjacency.assert_not_called()
-
-    def test_materialize_to_graph_surfaces_rebuild_failure(self):
-        triples = _build_test_graph()
-        store = _store_with(triples)
-        store.insert_triples = MagicMock(return_value=10)
-        store.supports_adjacency = True
-        store.rebuild_adjacency = MagicMock(
-            side_effect=RuntimeError("adjacency rebuild failed")
-        )
-
-        rule = CohortRule(
-            id="exempt-pool",
-            label="Exempt pool",
-            class_uri=PERSON,
-            links=[CohortLink(shared_class=PROJECT, via=ASSIGNED_TO)],
-            compatibility=[
-                CohortCompat(type="value_equals", property=STATUS, value="Exempt")
-            ],
-        )
-        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
-        result = b.build(rule)
-
-        with pytest.raises(RuntimeError, match="adjacency rebuild failed"):
-            b.materialize_to_graph(rule, result)
+        assert b.cohort_triples(rule, b.build(rule)) == []
 
     def test_materialize_to_uc_chunks_inserts_and_deletes_partition(self):
         triples = _build_test_graph()

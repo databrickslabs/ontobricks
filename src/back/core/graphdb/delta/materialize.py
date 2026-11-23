@@ -215,6 +215,83 @@ def insert_cert_enriched(
     return len(rows)
 
 
+def _scope_where(kind: str, provenance: str) -> str:
+    from back.core.helpers.SQLHelpers import SQLHelpers
+
+    lit = SQLHelpers.sql_literal
+    return f"WHERE kind = {lit(kind)} AND provenance = {lit(provenance)}"
+
+
+def build_delete_cert_enriched_scope_sql(
+    table_fqn: str, *, kind: str, provenance: str
+) -> str:
+    validate_table_name(table_fqn)
+    return f"DELETE FROM {table_fqn} {_scope_where(kind, provenance)}"
+
+
+def build_select_cert_enriched_scope_sql(
+    table_fqn: str, *, kind: str, provenance: str
+) -> str:
+    validate_table_name(table_fqn)
+    return (
+        f"SELECT subject, predicate, object FROM {table_fqn} "
+        f"{_scope_where(kind, provenance)}"
+    )
+
+
+def insert_cert_enriched_from_select(
+    client: Any,
+    table_fqn: str,
+    select_sql: str,
+    *,
+    kind: str,
+    provenance: str,
+    run_id: str,
+) -> None:
+    """``INSERT … SELECT`` rows projecting ``subject, predicate, object`` into a scope."""
+    from back.core.helpers.SQLHelpers import SQLHelpers
+
+    validate_table_name(table_fqn)
+    lit = SQLHelpers.sql_literal
+    run_sql(
+        client,
+        f"INSERT INTO {table_fqn} "
+        "(subject, predicate, object, kind, provenance, run_id, created_at) "
+        f"SELECT subject, predicate, object, {lit(kind)}, {lit(provenance)}, "
+        f"{lit(run_id)}, current_timestamp() FROM ({select_sql}) AS _scope_rows",
+    )
+
+
+def ensure_certified_objects(
+    client: Any,
+    *,
+    data_fqn: str,
+    base_fqn: str,
+    enriched_fqn: str,
+    certified_fqn: str,
+) -> None:
+    """Create the composition objects that are missing; never replace one.
+
+    Writes call this so a domain without a certified build still gets a
+    readable ``…_certified``, while an existing composition (possibly
+    pointing at a materialized ``…_cert_data``) is left untouched.
+    """
+    for fqn in (data_fqn, base_fqn, certified_fqn):
+        validate_table_name(fqn)
+    run_sql(
+        client,
+        f"CREATE VIEW IF NOT EXISTS {base_fqn} AS "
+        f"SELECT subject, predicate, object FROM {data_fqn}",
+    )
+    run_sql(client, build_ensure_cert_enriched_sql(enriched_fqn))
+    run_sql(
+        client,
+        f"CREATE VIEW IF NOT EXISTS {certified_fqn} AS "
+        f"SELECT subject, predicate, object FROM {base_fqn} UNION ALL "
+        f"SELECT subject, predicate, object FROM {enriched_fqn}",
+    )
+
+
 def build_truncate_sql(table_fqn: str) -> str:
     validate_table_name(table_fqn)
     return f"TRUNCATE TABLE {table_fqn}"

@@ -1,7 +1,7 @@
 """Tests for DigitalTwin cohort discovery domain methods (CRUD + UC helpers)."""
 
 from typing import Dict, List
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -208,27 +208,55 @@ class TestDryRunAndMaterialize:
         with pytest.raises(NotFoundError):
             dt.materialize_cohort("missing", store, "graph")
 
-    def test_materialize_writes_triples(self, domain, good_rule_dict):
-        dt = DigitalTwin(domain)
-        dt.save_cohort_rule(good_rule_dict)
-        store = _store()
-        out = dt.materialize_cohort("exempt-pool", store, "graph")
-        assert out["cohort_count"] == 2
-        # delete_cohort_triples called once (idempotent re-run path).
-        assert store.delete_cohort_triples.called
-        # insert_triples called once with the cohort + membership triples.
-        assert store.insert_triples.called
+    def test_materialize_writes_the_rule_scope_of_the_certified_graph(
+        self, domain, good_rule_dict
+    ):
+        from back.objects.digitaltwin.certify import CertifiedGraphWriter
 
-    def test_materialize_re_run_is_idempotent(self, domain, good_rule_dict):
         dt = DigitalTwin(domain)
         dt.save_cohort_rule(good_rule_dict)
         store = _store()
-        first = dt.materialize_cohort("exempt-pool", store, "graph")
-        second = dt.materialize_cohort("exempt-pool", store, "graph")
-        # Same number of cohorts, same size, same URIs.
+        with patch.object(
+            CertifiedGraphWriter, "replace_scope", return_value=9
+        ) as replace:
+            out = dt.materialize_cohort("exempt-pool", store, "graph")
+        assert out["cohort_count"] == 2
+        assert out["materialized_triples"] == 9
+        assert replace.call_args.kwargs == {
+            "kind": "cohort",
+            "provenance": "cohort:exempt-pool",
+        }
+        assert replace.call_args.args[0]  # the cohort + membership triples
+        store.insert_triples.assert_not_called()
+
+    def test_materialize_re_run_replaces_the_same_scope(self, domain, good_rule_dict):
+        from back.objects.digitaltwin.certify import CertifiedGraphWriter
+
+        dt = DigitalTwin(domain)
+        dt.save_cohort_rule(good_rule_dict)
+        store = _store()
+        with patch.object(
+            CertifiedGraphWriter, "replace_scope", return_value=9
+        ) as replace:
+            first = dt.materialize_cohort("exempt-pool", store, "graph")
+            second = dt.materialize_cohort("exempt-pool", store, "graph")
         assert first["cohort_count"] == second["cohort_count"]
-        # delete_cohort_triples is called every time → idempotent.
-        assert store.delete_cohort_triples.call_count == 2
+        scopes = {c.kwargs["provenance"] for c in replace.call_args_list}
+        assert scopes == {"cohort:exempt-pool"}
+
+    def test_a_read_only_version_refuses_the_graph_output(
+        self, domain, good_rule_dict
+    ):
+        from back.core.errors import ConflictError
+        from back.objects.digitaltwin.certify import CertifiedGraphWriter
+
+        dt = DigitalTwin(domain)
+        dt.save_cohort_rule(good_rule_dict)
+        with patch.object(
+            CertifiedGraphWriter, "replace_scope", side_effect=ConflictError("ro")
+        ):
+            with pytest.raises(ConflictError):
+                dt.materialize_cohort("exempt-pool", _store(), "graph")
 
     def test_materialize_with_uc_target_calls_client(self, domain, good_rule_dict):
         good_rule_dict["output"] = {

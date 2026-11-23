@@ -651,6 +651,8 @@ class DigitalTwin:
         client: Any = None,
         domain_version: str = "",
         member_label_resolver: Optional[Any] = None,
+        *,
+        settings: Any = None,
     ) -> Dict[str, Any]:
         """Re-run the engine for a saved rule and write outputs as configured."""
         return self._cohort_service().materialize(
@@ -660,6 +662,7 @@ class DigitalTwin:
             client=client,
             domain_version=domain_version,
             member_label_resolver=member_label_resolver,
+            settings=settings,
         )
 
     def cohort_class_stats(

@@ -212,13 +212,53 @@ class TestCertEnrichedWrites:
         assert count == 5
         assert client.execute_statement.call_count == 3
 
-    def test_ensure_enriched_table_only_creates_the_table(self):
+    def test_ensure_objects_never_replaces_an_existing_view(self):
         client = MagicMock()
         domain = _domain()
         builder = GraphDBFactory.get_builder(domain, None, engine="delta", client=client)
+        view = _table_naming.view_fqn(domain)
 
-        builder.ensure_cert_enriched_table()
+        builder.ensure_certified_objects()
 
-        (statement,) = _statements(client)
-        assert statement.startswith("CREATE TABLE IF NOT EXISTS")
-        assert "_cert_enriched" in statement
+        base, enriched, union = _statements(client)
+        assert base.startswith(f"CREATE VIEW IF NOT EXISTS {view}_cert_base")
+        assert enriched.startswith("CREATE TABLE IF NOT EXISTS")
+        assert union.startswith(f"CREATE VIEW IF NOT EXISTS {view}_certified")
+        assert "REPLACE" not in " ".join(_statements(client)).upper()
+
+    def test_delete_scope_targets_kind_and_provenance(self):
+        sql = materialize.build_delete_cert_enriched_scope_sql(
+            "c.s.v_cert_enriched", kind="cohort", provenance="cohort:r'1"
+        )
+
+        assert sql == (
+            "DELETE FROM c.s.v_cert_enriched "
+            "WHERE kind = 'cohort' AND provenance = 'cohort:r''1'"
+        )
+
+    def test_scope_select_reads_the_triples_of_one_scope(self):
+        sql = materialize.build_select_cert_enriched_scope_sql(
+            "c.s.v_cert_enriched", kind="community", provenance="community"
+        )
+
+        assert sql == (
+            "SELECT subject, predicate, object FROM c.s.v_cert_enriched "
+            "WHERE kind = 'community' AND provenance = 'community'"
+        )
+
+    def test_insert_from_select_tags_the_scope(self):
+        client = MagicMock()
+
+        materialize.insert_cert_enriched_from_select(
+            client,
+            "c.s.v_cert_enriched",
+            "SELECT 's' AS subject, 'p' AS predicate, 'o' AS object",
+            kind="community",
+            provenance="community",
+            run_id="t-9",
+        )
+
+        (sql,) = _statements(client)
+        assert sql.startswith("INSERT INTO c.s.v_cert_enriched")
+        assert "'community', 'community', 't-9', current_timestamp()" in sql
+        assert "FROM (SELECT 's' AS subject" in sql

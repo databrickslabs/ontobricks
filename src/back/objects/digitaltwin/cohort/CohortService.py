@@ -21,7 +21,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from back.core.databricks.uc.identifiers import quote_uc_identifier
-from back.core.errors import NotFoundError, ValidationError
+from back.core.errors import NotFoundError, OntoBricksError, ValidationError
 from back.core.helpers import extract_local_name
 from back.core.logging import get_logger
 
@@ -186,6 +186,27 @@ class CohortService:
         self._enrich_members(payload, store, graph_name)
         return payload
 
+    def _write_graph_output(
+        self, rule: Any, builder: Any, result: Any, settings: Any
+    ) -> Dict[str, Any]:
+        """Replace the rule's scope of the Certified Graph; report non-lock failures."""
+        from back.objects.digitaltwin.certify import CertifiedGraphWriter
+
+        try:
+            count = CertifiedGraphWriter(self._domain, settings).replace_scope(
+                builder.cohort_triples(rule, result),
+                kind=CertifiedGraphWriter.KIND_COHORT,
+                provenance=f"cohort:{rule.id}",
+            )
+        except OntoBricksError:
+            raise
+        except Exception as exc:
+            logger.exception(
+                "Cohort materialise to graph failed for %s: %s", rule.id, exc
+            )
+            return {"materialize_graph_error": str(exc)}
+        return {"materialized_triples": count}
+
     def materialize(
         self,
         rule_id: str,
@@ -196,8 +217,14 @@ class CohortService:
         member_label_resolver: Optional[Any] = None,
         output_graph: Optional[bool] = None,
         output_uc: Optional[bool] = None,
+        *,
+        settings: Any = None,
     ) -> Dict[str, Any]:
         """Re-run the engine for a saved rule and write outputs as configured.
+
+        The graph output goes to the Certified Graph, scope ``cohort`` /
+        ``cohort:<rule id>`` (a re-run replaces exactly this rule's triples);
+        a read-only version raises :class:`ConflictError`.
 
         ``client`` is required when the rule's ``output.uc_table`` is set.
         ``member_label_resolver`` is an optional callable
@@ -234,14 +261,7 @@ class CohortService:
         write_uc = True if output_uc is None else bool(output_uc)
 
         if write_graph:
-            try:
-                triple_count = builder.materialize_to_graph(rule, result)
-                out["materialized_triples"] = max(int(triple_count or 0), 0)
-            except Exception as exc:
-                logger.exception(
-                    "Cohort materialise to graph failed for %s: %s", rule.id, exc
-                )
-                out["materialize_graph_error"] = str(exc)
+            out.update(self._write_graph_output(rule, builder, result, settings))
 
         target = rule.output.uc_table
         if write_uc and target and target.table_name:
