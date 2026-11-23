@@ -20,6 +20,8 @@ _SUFFIX_PROPS = "_props"
 _SUFFIX_CERT_BASE = "_cert_base"
 _SUFFIX_CERT_ENRICHED = "_cert_enriched"
 _SUFFIX_CERTIFIED = "_certified"
+_SUFFIX_CERT_DATA = "_cert_data"
+_SUFFIX_CERT_SYNC = "_cert_sync"
 
 
 def graph_leaf_suffixes() -> tuple[str, ...]:
@@ -28,6 +30,8 @@ def graph_leaf_suffixes() -> tuple[str, ...]:
         _SUFFIX_CERT_ENRICHED,
         _SUFFIX_CERT_BASE,
         _SUFFIX_CERTIFIED,
+        _SUFFIX_CERT_DATA,
+        _SUFFIX_CERT_SYNC,
         _SUFFIX_ENTITY_SEARCH_ASSERTED,
         _SUFFIX_ENTITY_SEARCH,
         _SUFFIX_ADJ_OUT,
@@ -87,6 +91,16 @@ def cert_enriched_fqn(domain: Any, settings: Any = None) -> str:
 def certified_view_fqn(domain: Any, settings: Any = None) -> str:
     """Certified Graph union VIEW (base ∪ enrichments)."""
     return _suffixed_fqn(domain, settings, _SUFFIX_CERTIFIED)
+
+
+def cert_data_fqn(domain: Any, settings: Any = None) -> str:
+    """Copy of the certified base for a materialized Lakehouse Certified Graph."""
+    return _suffixed_fqn(domain, settings, _SUFFIX_CERT_DATA)
+
+
+def cert_sync_source_fqn(domain: Any, settings: Any = None) -> str:
+    """Certified base with ``object_hash``: the Lakeflow source of a synced load."""
+    return _suffixed_fqn(domain, settings, _SUFFIX_CERT_SYNC)
 
 
 def analytics_snapshot_fqn(domain: Any, settings: Any = None) -> str:

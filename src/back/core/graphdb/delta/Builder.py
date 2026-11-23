@@ -77,6 +77,16 @@ class Builder(GraphBuilder):
 
         return _table_naming.certified_view_fqn(self._domain, self._settings)
 
+    def cert_data_fqn(self) -> str:
+        from back.core.graphdb.delta import _table_naming
+
+        return _table_naming.cert_data_fqn(self._domain, self._settings)
+
+    def cert_sync_source_fqn(self) -> str:
+        from back.core.graphdb.delta import _table_naming
+
+        return _table_naming.cert_sync_source_fqn(self._domain, self._settings)
+
     def dq_snapshot_fqn(self, task_id: str = "") -> str:
         from back.core.graphdb.delta import _table_naming
 
@@ -124,6 +134,23 @@ class Builder(GraphBuilder):
             enriched_fqn=self.cert_enriched_fqn(),
             certified_fqn=self.certified_view_fqn(),
         )
+
+    def materialize_certified_base(self) -> None:
+        """Copy the certified base into ``…_cert_data``; serve the union over it."""
+        from back.core.graphdb.delta import materialize
+
+        materialize.materialize_certified_base(
+            self._get_client(),
+            base_fqn=self.cert_base_fqn(),
+            cert_data_fqn=self.cert_data_fqn(),
+            enriched_fqn=self.cert_enriched_fqn(),
+            certified_fqn=self.certified_view_fqn(),
+        )
+
+    def create_view(self, view_fqn: str, select_sql: str) -> None:
+        from back.core.graphdb.delta import materialize
+
+        materialize.create_view(self._get_client(), view_fqn, select_sql)
 
     def drop_relation(self, fqn: str, *, kind: str = "table") -> None:
         from back.core.graphdb.delta import materialize

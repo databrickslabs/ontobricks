@@ -9,11 +9,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
-from back.objects.digitaltwin.build import GraphLoad
+from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad
 from back.objects.digitaltwin.certify import CertifiedBuild
 
 _BASE = "cat.sch.triplestore_dom_V2_cert_base"
 _CERTIFIED = "cat.sch.triplestore_dom_V2_certified"
+_SYNC_SOURCE = "cat.sch.triplestore_dom_V2_cert_sync"
 
 
 def _domain():
@@ -26,6 +27,7 @@ def _builder(certified_count: int = 42):
     builder = MagicMock()
     builder.cert_base_fqn.return_value = _BASE
     builder.certified_view_fqn.return_value = _CERTIFIED
+    builder.cert_sync_source_fqn.return_value = _SYNC_SOURCE
     builder.count_triples.return_value = certified_count
     return builder
 
@@ -63,8 +65,15 @@ class _Harness:
                     return_value=self.materialization,
                 )
             )
+            real_get_builder = GraphDBFactory.get_builder
+
+            def _get_builder(domain, settings=None, *, engine=None, client=None):
+                if engine == "delta":
+                    return self.builder
+                return real_get_builder(domain, settings, engine=engine, client=client)
+
             stack.enter_context(
-                patch.object(GraphDBFactory, "get_builder", return_value=self.builder)
+                patch.object(GraphDBFactory, "get_builder", side_effect=_get_builder)
             )
             stack.enter_context(
                 patch.object(GraphDBFactory, "get_graphdb", self.get_graphdb)
@@ -84,6 +93,11 @@ class _Harness:
             )
             stack.enter_context(
                 patch.object(GraphLoad, "run", autospec=True, side_effect=_fake_run)
+            )
+            stack.enter_context(
+                patch.object(
+                    SyncedGraphLoad, "run", autospec=True, side_effect=_fake_run
+                )
             )
             CertifiedBuild(self.tm, "t-cert", _domain(), SimpleNamespace()).run()
         self.loads = loads
@@ -146,6 +160,40 @@ class TestGraphEngines:
         assert h.recorded["status"] == "error"
 
 
+class TestLakehouseMaterialized:
+    def test_the_base_is_copied_and_the_certified_view_is_served(self):
+        h = _Harness(backend="databricks", materialization="table").run()
+
+        h.builder.ensure_certified_composition.assert_called_once_with()
+        h.builder.materialize_certified_base.assert_called_once_with()
+        h.get_graphdb.assert_not_called()
+        assert h.loads == []
+        assert h.recorded["graph_name"] == _CERTIFIED
+        assert h.tm.complete_task.call_args.kwargs["result"]["triple_count"] == 42
+
+
+class TestLakebaseManagedSynced:
+    def _synced(self):
+        return _Harness(backend="lakebase", store=MagicMock(is_synced=True))
+
+    def test_lakeflow_syncs_a_source_view_with_object_hash_over_the_base(self):
+        h = self._synced().run()
+
+        (load,) = h.loads
+        assert type(load).__name__ == "SyncedGraphLoad"
+        assert load.source_relation == _SYNC_SOURCE
+        view_sql = h.builder.create_view.call_args.args[1]
+        assert h.builder.create_view.call_args.args[0] == _SYNC_SOURCE
+        assert "object_hash" in view_sql
+        assert f"FROM {_BASE}" in view_sql
+
+    def test_a_synced_load_completes_and_records_success(self):
+        h = self._synced().run(load_triples=9)
+
+        assert h.recorded["status"] == "success"
+        assert h.recorded["triple_count"] == 9
+
+
 class TestUnsupportedTargets:
     def test_no_graph_backend_fails_before_composing(self):
         h = _Harness(backend="none").run()
@@ -153,18 +201,6 @@ class TestUnsupportedTargets:
         h.builder.ensure_certified_composition.assert_not_called()
         assert h.tm.fail_task.called
         assert h.recorded["status"] == "error"
-
-    def test_materialized_lakehouse_is_not_supported_yet(self):
-        h = _Harness(backend="databricks", materialization="table").run()
-
-        h.builder.ensure_certified_composition.assert_not_called()
-        assert "materialized" in h.tm.fail_task.call_args.args[1].lower()
-
-    def test_lakebase_managed_synced_is_not_supported_yet(self):
-        h = _Harness(backend="lakebase", store=MagicMock(is_synced=True)).run()
-
-        assert h.loads == []
-        assert "managed_synced" in h.tm.fail_task.call_args.args[1]
 
     def test_an_unreachable_backend_fails_the_build(self):
         h = _Harness(backend="lakebase")

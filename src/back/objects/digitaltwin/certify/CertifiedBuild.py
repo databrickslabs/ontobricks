@@ -2,8 +2,10 @@
 
 The composition (``…_cert_base`` over the Original ``…_data``,
 ``…_cert_enriched``, ``…_certified``) is built for every backend. A Lakehouse
-virtual domain serves the composition itself; Lakebase and Neo4j domains get
-it loaded through :class:`GraphLoad`, the same load the Original build uses.
+domain serves ``…_certified`` (over the base view when virtual, over a copy of
+it when materialized); Lakebase and Neo4j domains get the base loaded through
+the same backend load the Original build uses (:class:`GraphLoad`, or
+:class:`SyncedGraphLoad` for Lakebase managed_synced).
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from back.core.errors import InfrastructureError, OntoBricksError, ValidationErr
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.logging import get_logger
-from back.objects.digitaltwin.build import GraphLoad
+from back.objects.digitaltwin.build import GraphLoad, SyncedGraphLoad
 
 logger = get_logger(__name__)
 
@@ -26,6 +28,7 @@ class CertifiedBuild:
 
     BUILD_KIND = "certified"
     LAKEHOUSE_VIRTUAL = "lakehouse_virtual"
+    LAKEHOUSE_MATERIALIZED = "lakehouse_materialized"
 
     def __init__(self, tm: Any, task_id: str, domain: Any, settings: Any) -> None:
         self.tm = tm
@@ -47,10 +50,12 @@ class CertifiedBuild:
                 self.domain, self.settings, engine="delta"
             )
             builder.ensure_certified_composition()
-            if target == self.LAKEHOUSE_VIRTUAL:
+            if target in (self.LAKEHOUSE_VIRTUAL, self.LAKEHOUSE_MATERIALIZED):
+                if target == self.LAKEHOUSE_MATERIALIZED:
+                    builder.materialize_certified_base()
                 self.graph_name = builder.certified_view_fqn()
                 self.triple_count = builder.count_triples(self.graph_name)
-            elif not self._load_backend(builder.cert_base_fqn()):
+            elif not self._load_backend(builder):
                 self._record("error")
                 return
         except OntoBricksError as exc:
@@ -85,25 +90,22 @@ class CertifiedBuild:
         mode = GraphDBFactory.resolve_lakehouse_materialization(
             self.domain, self.settings
         )
-        if mode != "view":
-            raise ValidationError(
-                "The certified build does not support the materialized "
-                "Lakehouse backend yet; use the virtual Lakehouse backend"
-            )
-        return self.LAKEHOUSE_VIRTUAL
+        if mode == "view":
+            return self.LAKEHOUSE_VIRTUAL
+        return self.LAKEHOUSE_MATERIALIZED
 
-    def _load_backend(self, source_relation: str) -> bool:
-        """Load *source_relation* into the domain's graph engine (Lakebase, Neo4j)."""
+    def _load_backend(self, builder: Any) -> bool:
+        """Load the certified base into the domain's graph engine (Lakebase, Neo4j)."""
         store = GraphDBFactory.get_graphdb(self.domain, self.settings)
         if store is None:
             raise InfrastructureError("Could not initialize the graph backend")
-        if getattr(store, "is_synced", False) is True:
-            raise ValidationError(
-                "The certified build does not support Lakebase managed_synced "
-                "mode yet; use app_managed"
-            )
         self.graph_name = SQLHelpers.effective_graph_name(self.domain)
-        load = GraphLoad(
+        load_cls = GraphLoad
+        source_relation = builder.cert_base_fqn()
+        if getattr(store, "is_synced", False) is True:
+            load_cls = SyncedGraphLoad
+            source_relation = self._lakeflow_source(builder, source_relation)
+        load = load_cls(
             tm=self.tm,
             task_id=self.task_id,
             is_api=False,
@@ -113,6 +115,7 @@ class CertifiedBuild:
             source_client=self._source_client(),
             graph_name=self.graph_name,
             source_relation=source_relation,
+            delta_cfg=getattr(self.domain, "delta", None) or {},
             cancel_check=self._is_cancelled,
         )
         outcome = load.run()
@@ -123,6 +126,20 @@ class CertifiedBuild:
             )
             return False
         return outcome == GraphLoad.LOADED
+
+    def _lakeflow_source(self, builder: Any, base_fqn: str) -> str:
+        """Expose the base with ``object_hash``, the Lakeflow synced-table key."""
+        lakebase = GraphDBFactory.get_builder(
+            self.domain, self.settings, engine="lakebase"
+        )
+        source_fqn = builder.cert_sync_source_fqn()
+        builder.create_view(
+            source_fqn,
+            lakebase.wrap_view_sql_for_lakeflow(
+                f"SELECT subject, predicate, object FROM {base_fqn}"
+            ),
+        )
+        return source_fqn
 
     def _source_client(self) -> Any:
         """Build-warehouse client the load reads the composition from."""

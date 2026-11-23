@@ -531,3 +531,55 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11258 passed, 334 skipped, 8 deselected
+
+================================================================================
+Certified build: materialized Lakehouse and Lakebase managed_synced targets
+================================================================================
+
+Context:
+The certified build now covers the four backends of the Context. A
+materialized Lakehouse domain copies the certified base into
+`…_cert_data` and serves `…_certified` over that copy (Lakehouse readers
+always read `…_certified`, whatever the mode). A Lakebase managed_synced
+domain syncs a `…_cert_sync` view: the certified base plus `object_hash`,
+built with the existing Lakeflow wrapper so the hash keeps one definition;
+`…_cert_base` keeps its three columns.
+
+Changes:
+1. src/back/core/graphdb/delta/_table_naming.py
+   - `cert_data_fqn` (`…_cert_data`) and `cert_sync_source_fqn`
+     (`…_cert_sync`); both suffixes are stripped by
+     `strip_graph_leaf_suffix`.
+2. src/back/core/graphdb/delta/materialize.py
+   - `materialize_certified_base`: CTAS `…_cert_data` from the base, then the
+     union VIEW over the copy and the enrichments (never cleared).
+   - `create_view`: `CREATE OR REPLACE VIEW` over a SELECT.
+3. src/back/core/graphdb/delta/Builder.py
+   - `cert_data_fqn`, `cert_sync_source_fqn`, `materialize_certified_base`,
+     `create_view`.
+4. src/back/objects/digitaltwin/certify/CertifiedBuild.py
+   - Target `lakehouse_materialized` (no longer refused): materialize the
+     base, serve `…_certified`.
+   - Lakebase managed_synced (no longer refused): create `…_cert_sync` with
+     the Lakebase builder's `wrap_view_sql_for_lakeflow`, load it with
+     `SyncedGraphLoad`; the domain `delta` config feeds the fallback UC
+     catalog.
+5. tests/units/graphdb/delta/test_certified_composition.py
+   - Naming of `…_cert_data` / `…_cert_sync`; `materialize_certified_base`
+     statement order and no clearing of the enrichments; builder entry point.
+6. tests/units/dtwin/test_certified_build.py
+   - Materialized Lakehouse (copy then serve, no store opened); managed_synced
+     (SyncedGraphLoad on `…_cert_sync`, whose SQL carries `object_hash` over
+     `…_cert_base`; success recorded). The harness keeps the real Lakebase
+     builder so the wrapper SQL is the production one.
+
+Modified files:
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/Builder.py
+- src/back/objects/digitaltwin/certify/CertifiedBuild.py
+- tests/units/graphdb/delta/test_certified_composition.py
+- tests/units/dtwin/test_certified_build.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11264 passed, 334 skipped, 8 deselected

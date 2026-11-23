@@ -266,6 +266,26 @@ def ensure_certified_composition(
     run_sql(client, build_union_view_sql(certified_fqn, base_fqn, enriched_fqn))
 
 
+def materialize_certified_base(
+    client: Any,
+    *,
+    base_fqn: str,
+    cert_data_fqn: str,
+    enriched_fqn: str,
+    certified_fqn: str,
+) -> None:
+    """Copy the certified base into a TABLE and serve the union over the copy."""
+    materialize_from_view(client, base_fqn, cert_data_fqn)
+    run_sql(client, build_union_view_sql(certified_fqn, cert_data_fqn, enriched_fqn))
+
+
+def create_view(client: Any, view_fqn: str, select_sql: str) -> None:
+    """Create or replace *view_fqn* over *select_sql*."""
+    validate_table_name(view_fqn)
+    logger.info("Creating Delta view: %s", view_fqn)
+    run_sql(client, f"CREATE OR REPLACE VIEW {view_fqn} AS {select_sql}")
+
+
 def truncate_table(client: Any, table_fqn: str) -> None:
     """Clear all rows from *table_fqn* (best-effort)."""
     try:

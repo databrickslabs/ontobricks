@@ -34,8 +34,25 @@ class TestCertifiedNaming:
         view = _table_naming.view_fqn(domain)
         assert _table_naming.certified_view_fqn(domain) == view + "_certified"
 
+    def test_cert_data_is_named_off_the_gateway_view(self):
+        domain = _domain()
+        view = _table_naming.view_fqn(domain)
+        assert _table_naming.cert_data_fqn(domain) == view + "_cert_data"
+
+    def test_cert_sync_source_is_named_off_the_gateway_view(self):
+        domain = _domain()
+        view = _table_naming.view_fqn(domain)
+        assert _table_naming.cert_sync_source_fqn(domain) == view + "_cert_sync"
+
     def test_certified_suffixes_strip_back_to_the_gateway_leaf(self):
-        for suffix in ("_cert_base", "_cert_enriched", "_certified"):
+        suffixes = (
+            "_cert_base",
+            "_cert_enriched",
+            "_certified",
+            "_cert_data",
+            "_cert_sync",
+        )
+        for suffix in suffixes:
             assert _table_naming.strip_graph_leaf_suffix("g_V1" + suffix) == "g_V1"
 
 
@@ -83,6 +100,45 @@ class TestCertifiedCompositionSql:
         assert "DROP" not in joined
 
 
+class TestMaterializedCertifiedBase:
+    def test_copies_the_base_then_points_the_union_at_the_copy(self):
+        client = MagicMock()
+
+        materialize.materialize_certified_base(
+            client,
+            base_fqn="c.s.v_cert_base",
+            cert_data_fqn="c.s.v_cert_data",
+            enriched_fqn="c.s.v_cert_enriched",
+            certified_fqn="c.s.v_certified",
+        )
+
+        statements = _statements(client)
+        ctas = next(s for s in statements if "CREATE OR REPLACE TABLE" in s)
+        assert "c.s.v_cert_data" in ctas
+        assert "FROM c.s.v_cert_base" in ctas
+        union = statements[-1]
+        assert "CREATE OR REPLACE VIEW c.s.v_certified" in union
+        assert "FROM c.s.v_cert_data" in union
+        assert "FROM c.s.v_cert_enriched" in union
+
+    def test_never_clears_the_enriched_table(self):
+        client = MagicMock()
+
+        materialize.materialize_certified_base(
+            client,
+            base_fqn="c.s.v_cert_base",
+            cert_data_fqn="c.s.v_cert_data",
+            enriched_fqn="c.s.v_cert_enriched",
+            certified_fqn="c.s.v_certified",
+        )
+
+        for statement in _statements(client):
+            if "c.s.v_cert_enriched" in statement:
+                upper = statement.upper()
+                assert "TRUNCATE" not in upper and "DELETE" not in upper
+                assert "DROP" not in upper
+
+
 class TestBuilderCertifiedComposition:
     def test_builder_composes_from_the_domain_data_relation(self):
         client = MagicMock()
@@ -107,3 +163,17 @@ class TestBuilderCertifiedComposition:
         assert builder.cert_base_fqn() == view + "_cert_base"
         assert builder.cert_enriched_fqn() == view + "_cert_enriched"
         assert builder.certified_view_fqn() == view + "_certified"
+        assert builder.cert_data_fqn() == view + "_cert_data"
+        assert builder.cert_sync_source_fqn() == view + "_cert_sync"
+
+    def test_builder_materializes_the_domain_certified_base(self):
+        client = MagicMock()
+        domain = _domain()
+        builder = GraphDBFactory.get_builder(domain, None, engine="delta", client=client)
+        view = _table_naming.view_fqn(domain)
+
+        builder.materialize_certified_base()
+
+        statements = _statements(client)
+        assert any(f"{view}_cert_data" in s and "CREATE OR REPLACE TABLE" in s for s in statements)
+        assert f"FROM {view}_cert_data" in statements[-1]
