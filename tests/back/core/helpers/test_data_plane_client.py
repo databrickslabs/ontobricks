@@ -11,11 +11,14 @@ from back.core.helpers import get_data_plane_client
 
 
 class _FakeClient:
-    def __init__(self, host="", token="", warehouse_id="", use_cloud_fetch=False):
+    def __init__(
+        self, host="", token="", warehouse_id="", use_cloud_fetch=False, on_behalf_of=False
+    ):
         self.host = host
         self.token = token
         self.warehouse_id = warehouse_id
         self.use_cloud_fetch = use_cloud_fetch
+        self.on_behalf_of = on_behalf_of
 
 
 def _patch(monkeypatch, app_mode: bool):
@@ -44,6 +47,7 @@ def test_app_mode_uses_user_token(monkeypatch):
         )
         assert client.token == "USER_TOK"
         assert client.warehouse_id == "wh1"
+        assert client.on_behalf_of is True
     finally:
         reset_request_identity(tok)
 

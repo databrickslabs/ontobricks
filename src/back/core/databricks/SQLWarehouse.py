@@ -173,7 +173,7 @@ class SQLWarehouse:
         """
         reconnect = {**params, "use_kernel": True}
         reconnect.pop("credentials_provider", None)
-        if self._auth.is_app_mode and self._auth.client_id and self._auth.client_secret:
+        if self._auth.uses_app_credentials:
             reconnect["oauth_client_id"] = self._auth.client_id
             reconnect["oauth_client_secret"] = self._auth.client_secret
         return reconnect

@@ -38,12 +38,14 @@ class DatabricksClient:
         warehouse_id: Optional[str] = None,
         use_cloud_fetch: Optional[bool] = None,
         use_sea: Optional[bool] = None,
+        on_behalf_of: bool = False,
     ) -> None:
         self.auth = DatabricksAuth(
             host=host,
             token=token,
             warehouse_id=warehouse_id,
             use_cloud_fetch=use_cloud_fetch,
+            on_behalf_of=on_behalf_of,
             use_sea=use_sea,
         )
         if self.auth.is_app_mode and self.auth.use_kernel:

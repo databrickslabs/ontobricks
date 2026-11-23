@@ -1,0 +1,27 @@
+## Make on-behalf-of data-plane clients use the caller's token
+
+Context: In Databricks Apps mode `DatabricksAuth` preferred the app's
+service-principal credentials over an explicit token. So
+`get_data_plane_client(token=<forwarded user token>)` authenticated as the
+app, and Unity Catalog grants were checked for the app, not the user. Query
+history on a deployed app showed every "user" read executed by the app SP.
+Reported as found-but-not-fixed in #235.
+
+Changes:
+1. src/back/core/databricks/DatabricksAuth.py
+   `on_behalf_of=True` makes the explicit token win; new `uses_app_credentials` replaces four inline checks.
+2. src/back/core/databricks/DatabricksClient.py, SQLWarehouse.py
+   Pass the flag through; kernel reconnect uses `uses_app_credentials`.
+3. src/back/core/helpers/DatabricksHelpers.py
+   `get_data_plane_client` sets `on_behalf_of=True`.
+
+Modified files:
+- src/back/core/databricks/DatabricksAuth.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/core/databricks/SQLWarehouse.py
+- src/back/core/helpers/DatabricksHelpers.py
+- tests/units/core/test_databricks_auth_on_behalf_of.py
+- tests/units/api/test_mapping_obo.py
+- tests/back/core/helpers/test_data_plane_client.py
+
+Tests: uv run --frozen pytest -q tests/units/core tests/back/core tests/units/api tests/units/auth tests/units/architecture → 2772 passed
