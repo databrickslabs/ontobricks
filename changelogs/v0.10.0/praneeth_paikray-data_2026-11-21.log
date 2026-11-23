@@ -294,3 +294,29 @@ Live results (local app services, Lakebase PG17 registry):
 
 Files: tests/fixtures/evolution/tpch/{seed_tpch,tpch_domain}.py,
 tests/eval/evolution_live.py (live driver).
+
+## Fix: on-behalf-of data-plane reads ran as the app service principal
+
+Found while verifying Ontology Evolve on a deployed app (query history showed
+every "caller" probe executed by the app SP). In Apps mode DatabricksAuth
+preferred the app's client credentials over an explicit token, so
+get_data_plane_client(token=<forwarded user token>) silently authenticated
+as the service principal, contrary to its contract ("we never fall back to
+the app service principal"). Affects the 9 get_data_plane_client callers
+(mapping preview/diagnostics, node datasets/context, virtual attributes,
+twin mapping, Evolve).
+
+1. back/core/databricks/{DatabricksAuth,DatabricksClient,SQLWarehouse}.py
+   `on_behalf_of=True` makes an explicit token win (REST headers, SQL
+   connect, cloud-fetch probe, kernel reconnect); every other caller keeps
+   today's precedence. `uses_app_credentials` replaces the four inline checks.
+2. back/core/helpers/DatabricksHelpers.get_data_plane_client passes it.
+3. api/routers/internal/evolution.py: the Evolve source probe uses
+   get_data_plane_client, so coverage, gold lookups and the access checks
+   before evaluate/accept run as the caller; arm builds and arm graph reads
+   stay on the app.
+
+Verified on the deployed app (query history): coverage/gold/version reads
+by the user; builds (Starter) and arm graph reads (RT) by the app SP.
+Behaviour change for the other 8 callers: they now actually run as the
+user, which is what they document — needs maintainer review upstream.

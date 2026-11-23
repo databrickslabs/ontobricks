@@ -14,7 +14,8 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from api.routers.internal._guards import require
 from back.core.errors import ConflictError, ValidationError
-from back.core.helpers import get_databricks_client, run_blocking
+from back.core.helpers import run_blocking
+from back.core.helpers.DatabricksHelpers import DatabricksHelpers
 from back.core.logging import get_logger
 from back.objects.ontology.evolution import (
     CandidateBuilder,
@@ -78,8 +79,16 @@ PROBE_STATEMENT_TIMEOUT_S = 60
 
 
 def _probe(session_mgr: SessionManager, settings: Settings) -> WarehouseSourceProbe:
-    """Source probe on the query warehouse, created in the request (runs as the caller)."""
-    client = get_databricks_client(get_domain(session_mgr), settings)
+    """Source probe bound to the caller, created in the request.
+
+    In a Databricks App this uses the forwarded user token (on-behalf-of) and
+    fails rather than fall back to the app service principal, so coverage,
+    gold lookups and the access checks before evaluate and accept are
+    governed by the caller's Unity Catalog grants. The client keeps that
+    token, so the evaluation worker's source-version reads run as the
+    caller too; only the arm builds and arm graph reads use the app.
+    """
+    client = DatabricksHelpers.get_data_plane_client(get_domain(session_mgr), settings)
     if client is None:
         raise ValidationError("A SQL warehouse is required to inspect sources")
     return WarehouseSourceProbe(

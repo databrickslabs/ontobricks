@@ -210,3 +210,26 @@ def test_worker_heartbeat_ticks_until_the_work_ends(monkeypatch):
     (beat,) = started
     beat()  # the stop event is already set once the work finished
     assert beats == []
+
+
+def test_probe_runs_as_the_caller(monkeypatch):
+    """The probe client comes from the on-behalf-of helper, never the app client."""
+    from back.core.helpers.DatabricksHelpers import DatabricksHelpers
+
+    seen = {}
+
+    class Client:
+        class sql:
+            @staticmethod
+            def execute_query(sql, statement_timeout_s=None):
+                return [{"column_name": "a", "data_type": "string"}]
+
+    def data_plane(domain, settings):
+        seen["called"] = True
+        return Client()
+
+    monkeypatch.setattr(DatabricksHelpers, "get_data_plane_client", staticmethod(data_plane))
+    monkeypatch.setattr(router_module, "get_domain", lambda m: object())
+    probe = router_module._probe(object(), _settings())
+    assert seen["called"] is True
+    assert probe.columns("c.s.t") == {"a": "string"}
