@@ -142,7 +142,7 @@ function _showToast(message, cssClass, iconClass, closeWhite, duration) {
     var toast = document.createElement('div');
     toast.className = cssClass + ' fade show d-flex align-items-start';
     toast.innerHTML =
-        '<i class="bi ' + iconClass + ' me-2 mt-1"></i>' +
+        '<i class="bi ' + iconClass + ' me-2"></i>' +
         '<div class="flex-grow-1">' + escapeHtml(message) + '</div>' +
         '<button type="button" class="btn-close' + (closeWhite ? ' btn-close-white' : '') + ' ms-2" aria-label="Close"></button>';
     toast.querySelector('.btn-close').addEventListener('click', function() {

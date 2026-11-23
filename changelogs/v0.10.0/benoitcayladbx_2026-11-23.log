@@ -262,38 +262,6 @@ Tests: uv run --frozen pytest -q -m "not scenario" -> 11219 passed, 334 skipped,
 checked on the dev server.)
 
 ================================================================================
-Certified graph: two-stage design (SPEC + PLAN, no code change)
-================================================================================
-
-Context:
-Design study for splitting the knowledge graph into a no-copy live graph
-(Delta, used to navigate, enrich, curate and certify) and a certified graph
-built by a second build into Lakebase, Lakehouse (materialized Delta) or
-Neo4j, which is the only graph served to MCP and the external API, and only
-for PUBLISHED versions. Decisions recorded: non-certified patterns are
-forbidden (whitelist), inferences are re-derived on the cleaned base, a
-successful certified build is required to publish, and MCP serves only
-PUBLISHED versions.
-
-Changes:
-1. .planning/certified-graph/SPEC.md
-   - Purpose, decisions D1-D4, live graph (live build, _enriched with
-     provenance, curation ledger, pattern whitelist), certified build
-     phases (base, whitelist, re-derivation, stage, gates, load through the
-     existing pipelines), naming, atomicity, lifecycle, serving, migration,
-     success criteria, risks.
-2. .planning/certified-graph/PLAN.md
-   - Code smells and Fowler refactorings, phases P1 (two stages,
-     behaviour-equivalent) to P4 (operations), open points, verification.
-
-Modified files:
-- .planning/certified-graph/SPEC.md
-- .planning/certified-graph/PLAN.md
-- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
-
-Tests: not run (documentation only, no code changed).
-
-================================================================================
 Settings → UI: reorganised and explained branding / theme page
 ================================================================================
 
@@ -340,3 +308,35 @@ Modified files:
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11225 passed, 334 skipped, 8 deselected
 Browser check: Playwright (headless Chromium) screenshots of
 /settings?section=ui at 1440 px and 390 px, no console errors.
+
+================================================================================
+Toasts: align icon, message and close button on one line
+================================================================================
+
+Context:
+Bottom-right toasts (e.g. "Context saved") showed the status icon, the text
+and the close X at three different heights. Measured with Playwright on the
+first text line (centre 753.5 px): icon 4 px lower (`mt-1`), close X 7 px
+higher and only 7 px tall. Root cause of the X: the global `.btn-close` rule
+set `height: auto`; the button has no content, so it collapsed to its
+padding — the same bug flattened modal-header close buttons (16x30 px) and
+reduced the tag-chip close (`.oc-tag-chip`, padding 0) to 0 px height.
+
+Changes:
+1. src/front/static/global/css/components.css
+   - `.btn-close` keeps Bootstrap's `height: 1em` (was `height: auto`).
+2. src/front/static/global/js/utils.js
+   - _showToast: removed `mt-1` from the status icon.
+3. tests/units/front/test_toast_alignment_contract.py (new)
+   - Icon not nudged, row aligned to the first line, `.btn-close` 1em box.
+
+Modified files:
+- src/front/static/global/css/components.css
+- src/front/static/global/js/utils.js
+- tests/units/front/test_toast_alignment_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11228 passed, 334 skipped, 8 deselected
+Browser check (Playwright, headless Chromium): one- and two-line toasts now
+have icon, first text line and X centred on the same y (757.5 / 683.5 px);
+modal-header close is 30x30 px, centred on the title.

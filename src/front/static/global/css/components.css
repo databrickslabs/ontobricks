@@ -654,9 +654,12 @@
     color: inherit;
 }
 
-/* Button close - keep default Bootstrap styling (not a Du Bois action). */
+/* Button close - keep default Bootstrap styling (not a Du Bois action).
+   Keep Bootstrap's 1em box: the button has no content, so `height: auto`
+   collapsed it to its padding (7px), shrinking the X and pinning it to the
+   top of its row (toasts, modal headers). */
 .btn-close {
-    height: auto;
+    height: 1em;
     min-height: 0;
     padding: 0.25em;
     background-color: transparent;
