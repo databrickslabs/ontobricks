@@ -12,7 +12,6 @@ DTWIN_HTML = REPO_ROOT / "src/front/templates/dtwin.html"
 MODAL = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_diagnostics_modal.html"
 PAGE = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_diagnostics.html"
 DIAG_JS = REPO_ROOT / "src/front/static/mapping/js/mapping-diagnostics.js"
-SYNC_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_sync.html"
 DBX_JS = REPO_ROOT / "src/front/static/query/js/query-databricks-build.js"
 
 
@@ -50,11 +49,8 @@ def test_diagnostics_modal_structure():
 
 
 def test_build_opens_diagnostics_modal_when_not_ready():
-    sync = SYNC_HTML.read_text(encoding="utf-8")
     dbx = DBX_JS.read_text(encoding="utf-8")
-    assert "MappingDiagnostics.open" in sync
     assert "MappingDiagnostics.open" in dbx
-    assert 'href="/mapping/?section=diagnostics"' not in sync
     assert 'href="/mapping/?section=diagnostics"' not in dbx
 
 

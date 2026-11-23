@@ -11,10 +11,15 @@
             </div>
         </div>
         <div class="d-flex align-items-center gap-2">
+            <span id="syncStatusText" class="text-muted small"></span>
             <span id="certStateBadge" class="badge text-bg-secondary">Not built</span>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="certRefreshBtn">
                 <i class="bi bi-arrow-clockwise me-1"></i>Refresh
             </button>
+            <div id="sync-lakebase-actions" class="d-none">
+                {% set build_more_backend = 'lakebase' %}
+                {% include "partials/dtwin/_build_more_actions.html" %}
+            </div>
             {% set _dr = get_user_domain_role() %}
             {% if _dr not in ('viewer', 'editor', 'none') %}
             <button type="button" class="btn btn-sm btn-primary" id="certBuildStartBtn" disabled>
@@ -45,6 +50,20 @@
                         <i class="bi bi-list-check me-1"></i>Runs
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="certTabCacheBtn" data-bs-toggle="tab"
+                            data-bs-target="#certPaneCache" type="button" role="tab"
+                            aria-controls="certPaneCache" aria-selected="false">
+                        <i class="bi bi-lightning-charge me-1"></i>Cache
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="certTabObjectsBtn" data-bs-toggle="tab"
+                            data-bs-target="#certPaneObjects" type="button" role="tab"
+                            aria-controls="certPaneObjects" aria-selected="false">
+                        <i class="bi bi-table me-1"></i>Objects
+                    </button>
+                </li>
             </ul>
 
             <div class="tab-content p-3">
@@ -58,20 +77,17 @@
                         <i class="bi bi-exclamation-triangle me-1"></i><span id="certLoadErrorMessage"></span>
                     </div>
 
-                    <dl class="row mb-3">
-                        <dt class="col-sm-3">Target</dt>
-                        <dd class="col-sm-9" id="certTarget">&mdash;</dd>
-                        <dt class="col-sm-3">Served relation</dt>
-                        <dd class="col-sm-9"><code class="text-break" id="certServedRelation">&mdash;</code></dd>
-                        <dt class="col-sm-3">Version status</dt>
-                        <dd class="col-sm-9" id="certVersionStatus">&mdash;</dd>
-                    </dl>
 
                     <div id="certProgressArea" class="d-none">
                         <div class="progress mb-2 ob-progress-md">
                             <div class="progress-bar progress-bar-striped progress-bar-animated" id="certProgressBar" role="progressbar">0%</div>
                         </div>
                         <small class="text-muted" id="certProgressStep"></small>
+                    </div>
+
+                    <!-- Lakebase / Neo4j backend: readiness, architecture, build log -->
+                    <div id="sync-lakebase-panel" class="d-none">
+                        {% include "partials/dtwin/_query_sync.html" %}
                     </div>
                 </div>
 
@@ -97,6 +113,107 @@
                             <tbody id="certRunsBody"></tbody>
                         </table>
                     </div>
+                </div>
+
+                <div class="tab-pane fade" id="certPaneCache" role="tabpanel"
+                     aria-labelledby="certTabCacheBtn">
+                    <div class="ob-filter-bar">
+                        <span class="text-muted small">Graph search cache (adjacency, properties, entity search)</span>
+                        <div class="d-flex align-items-center gap-2 ms-auto">
+                            <a class="btn btn-sm btn-outline-primary"
+                               id="buildCacheSettingsLink"
+                               href="/domain/?section=information#searchCacheSection"
+                               title="Open Context Settings to enable or disable Search cache">
+                                <i class="bi bi-sliders me-1"></i>Activate / deactivate
+                            </a>
+                            {% set _dr = get_user_domain_role() %}
+                            {% if _dr not in ('viewer', 'editor', 'none') %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary d-none"
+                                    id="syncAdjacencyRefreshBtn" data-sync-action="refresh-adjacency-only"
+                                    title="Rebuild graph cache">
+                                <i class="bi bi-arrow-repeat me-1"></i>Refresh cache
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary d-none"
+                                    id="dbxAdjacencyRefreshBtn" title="Rebuild graph cache">
+                                <i class="bi bi-arrow-repeat me-1"></i>Refresh cache
+                            </button>
+                            {% else %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary d-none" disabled
+                                    id="syncAdjacencyRefreshBtn"
+                                    title="Only builders and admins can refresh the graph cache">
+                                <i class="bi bi-lock me-1"></i>Refresh cache
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary d-none" disabled
+                                    id="dbxAdjacencyRefreshBtn"
+                                    title="Only builders and admins can refresh the graph cache">
+                                <i class="bi bi-lock me-1"></i>Refresh cache
+                            </button>
+                            {% endif %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    id="buildCacheReloadBtn"
+                                    title="Reload cache status from the triple store">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Reload
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="buildCacheLoading" class="text-center py-5 d-none">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-muted mt-2 small">Loading graph cache status&hellip;</p>
+                    </div>
+
+                    <div id="buildCacheNotice" class="alert alert-secondary m-3 d-none" role="status">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <span id="buildCacheNoticeMessage">Search cache is only available for Lakehouse and Lakebase.</span>
+                    </div>
+
+                    <div id="buildCacheError" class="alert alert-warning m-3 d-none" role="alert">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <span id="buildCacheErrorMessage"></span>
+                    </div>
+
+                    <div id="buildCacheContent" class="d-none">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <div class="small text-muted mb-1">Activated</div>
+                                <div id="dtGraphCacheActivated" class="text-muted">&mdash;</div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="small text-muted mb-1">State</div>
+                                <div id="dtGraphCacheState" class="text-muted">&mdash;</div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="small text-muted mb-1">Cache updated</div>
+                                <div id="dtGraphCacheRefreshed" class="text-muted">&mdash;</div>
+                            </div>
+                        </div>
+                        <p class="text-muted small mb-2" id="buildCacheStatusLine"></p>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle ob-runs-table">
+                                <thead>
+                                    <tr>
+                                        <th>Companion</th>
+                                        <th>Table</th>
+                                        <th>Status</th>
+                                        <th class="text-end">Rows</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="buildCacheCompanionsBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <p id="buildCacheCompanionsEmpty" class="text-muted small d-none mb-0">
+                            No companion tables yet. Run <strong>Build</strong> or rebuild the graph cache.
+                        </p>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="certPaneObjects" role="tabpanel"
+                     aria-labelledby="certTabObjectsBtn">
+                    {% include "partials/dtwin/_build_objects.html" %}
                 </div>
             </div>
         </div>

@@ -11,24 +11,6 @@
             </div>
         </div>
         <div class="d-flex align-items-center gap-2" id="buildHeaderActions">
-            <!-- Lakebase actions -->
-            <div id="sync-lakebase-actions" class="d-flex align-items-center gap-2">
-                <span id="syncStatusText" class="text-muted small"></span>
-                {% set build_more_backend = 'lakebase' %}
-                {% include "partials/dtwin/_build_more_actions.html" %}
-                {% set _dr = get_user_domain_role() %}
-                {% if _dr not in ('viewer', 'editor', 'none') %}
-                <button type="button" class="btn btn-sm btn-primary" id="syncStartBtn" data-sync-action="start-triple-store-sync" disabled>
-                    <i class="bi bi-hammer me-1"></i>Build
-                </button>
-                {% else %}
-                <button type="button" class="btn btn-sm btn-outline-secondary" disabled
-                        title="Only builders and admins can build a graph viewer">
-                    <i class="bi bi-lock me-1"></i> Build
-                </button>
-                {% endif %}
-            </div>
-
             <!-- Databricks actions -->
             <div id="sync-databricks-actions" class="d-none align-items-center gap-2">
                 <span id="dbxBuildStatusText" class="text-muted small"></span>
@@ -68,35 +50,11 @@
                         <i class="bi bi-list-check me-1"></i>Runs
                     </button>
                 </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="buildTabInferredBtn" data-bs-toggle="tab"
-                            data-bs-target="#buildPaneInferred" type="button" role="tab"
-                            aria-controls="buildPaneInferred" aria-selected="false">
-                        <i class="bi bi-diagram-3 me-1"></i>Inferred
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="buildTabCacheBtn" data-bs-toggle="tab"
-                            data-bs-target="#buildPaneCache" type="button" role="tab"
-                            aria-controls="buildPaneCache" aria-selected="false">
-                        <i class="bi bi-lightning-charge me-1"></i>Cache
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="buildTabObjectsBtn" data-bs-toggle="tab"
-                            data-bs-target="#buildPaneObjects" type="button" role="tab"
-                            aria-controls="buildPaneObjects" aria-selected="false">
-                        <i class="bi bi-table me-1"></i>Objects
-                    </button>
-                </li>
             </ul>
 
             <div class="tab-content p-3" id="buildPageTabContent">
                 <div class="tab-pane fade show active" id="buildPaneBuild" role="tabpanel"
                      aria-labelledby="buildTabBuildBtn">
-                    <div id="sync-lakebase-panel">
-                        {% include "partials/dtwin/_query_sync.html" %}
-                    </div>
                     <div id="sync-databricks-panel" class="d-none">
                         {% include "partials/dtwin/_query_databricks_build.html" %}
                     </div>
@@ -107,167 +65,6 @@
                     {% include "partials/domain/_domain_build_runs.html" %}
                 </div>
 
-                <div class="tab-pane fade" id="buildPaneInferred" role="tabpanel"
-                     aria-labelledby="buildTabInferredBtn">
-                    <div class="ob-filter-bar">
-                        <div class="ob-filter-search">
-                            <i class="bi bi-search" aria-hidden="true"></i>
-                            <input type="search" class="form-control form-control-sm" id="buildInferredFilter"
-                                   placeholder="Filter categories" aria-label="Filter inferred breakdown">
-                        </div>
-                        <span class="ob-runs-count" id="buildInferredCount" aria-live="polite"></span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
-                                id="buildInferredRefreshBtn"
-                                title="Reload the breakdown from the triple store">
-                            <i class="bi bi-arrow-counterclockwise me-1"></i>Refresh
-                        </button>
-                    </div>
-
-                    <div id="buildInferredLoading" class="text-center py-5 d-none">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                        <p class="text-muted mt-2 small">Loading inferred breakdown&hellip;</p>
-                    </div>
-
-                    <div id="buildInferredEmpty" class="text-center py-5 d-none">
-                        <i class="bi bi-diagram-3 text-muted fs-1"></i>
-                        <p class="text-muted mt-2 mb-1">No materialized inferred triples yet</p>
-                        <p class="text-muted small">Run reasoning, cohorts or communities, then Build.</p>
-                    </div>
-
-                    <div id="buildInferredNotice" class="alert alert-secondary m-3 d-none" role="status">
-                        <i class="bi bi-info-circle me-1"></i>
-                        The inferred breakdown is not available for this graph backend yet.
-                    </div>
-
-                    <div id="buildInferredError" class="alert alert-warning m-3 d-none" role="alert">
-                        <i class="bi bi-exclamation-triangle me-1"></i>
-                        <span id="buildInferredErrorMessage"></span>
-                    </div>
-
-                    <div id="buildInferredTableWrapper" class="d-none">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle ob-runs-table">
-                                <thead>
-                                    <tr>
-                                        <th>Category</th>
-                                        <th class="text-end">Triples</th>
-                                        <th class="text-end">Entities</th>
-                                        <th class="text-end">Groups</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="buildInferredBody">
-                                    <!-- Populated by JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                        <p class="text-end text-muted small mt-2 mb-0">
-                            Total: <strong id="buildInferredTotal"></strong> inferred triples
-                        </p>
-                    </div>
-                </div>
-
-                <div class="tab-pane fade" id="buildPaneCache" role="tabpanel"
-                     aria-labelledby="buildTabCacheBtn">
-                    <div class="ob-filter-bar">
-                        <span class="text-muted small">Graph search cache (adjacency, properties, entity search)</span>
-                        <div class="d-flex align-items-center gap-2 ms-auto">
-                            <a class="btn btn-sm btn-outline-primary"
-                               id="buildCacheSettingsLink"
-                               href="/domain/?section=information#searchCacheSection"
-                               title="Open Context Settings to enable or disable Search cache">
-                                <i class="bi bi-sliders me-1"></i>Activate / deactivate
-                            </a>
-                            {% set _dr = get_user_domain_role() %}
-                            {% if _dr not in ('viewer', 'editor', 'none') %}
-                            <button type="button" class="btn btn-sm btn-outline-secondary d-none"
-                                    id="syncAdjacencyRefreshBtn" data-sync-action="refresh-adjacency-only"
-                                    title="Rebuild graph cache">
-                                <i class="bi bi-arrow-repeat me-1"></i>Refresh cache
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary d-none"
-                                    id="dbxAdjacencyRefreshBtn" title="Rebuild graph cache">
-                                <i class="bi bi-arrow-repeat me-1"></i>Refresh cache
-                            </button>
-                            {% else %}
-                            <button type="button" class="btn btn-sm btn-outline-secondary d-none" disabled
-                                    id="syncAdjacencyRefreshBtn"
-                                    title="Only builders and admins can refresh the graph cache">
-                                <i class="bi bi-lock me-1"></i>Refresh cache
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary d-none" disabled
-                                    id="dbxAdjacencyRefreshBtn"
-                                    title="Only builders and admins can refresh the graph cache">
-                                <i class="bi bi-lock me-1"></i>Refresh cache
-                            </button>
-                            {% endif %}
-                            <button type="button" class="btn btn-sm btn-outline-secondary"
-                                    id="buildCacheReloadBtn"
-                                    title="Reload cache status from the triple store">
-                                <i class="bi bi-arrow-counterclockwise me-1"></i>Reload
-                            </button>
-                        </div>
-                    </div>
-
-                    <div id="buildCacheLoading" class="text-center py-5 d-none">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                        <p class="text-muted mt-2 small">Loading graph cache status&hellip;</p>
-                    </div>
-
-                    <div id="buildCacheNotice" class="alert alert-secondary m-3 d-none" role="status">
-                        <i class="bi bi-info-circle me-1"></i>
-                        <span id="buildCacheNoticeMessage">Search cache is only available for Lakehouse and Lakebase.</span>
-                    </div>
-
-                    <div id="buildCacheError" class="alert alert-warning m-3 d-none" role="alert">
-                        <i class="bi bi-exclamation-triangle me-1"></i>
-                        <span id="buildCacheErrorMessage"></span>
-                    </div>
-
-                    <div id="buildCacheContent" class="d-none">
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-4">
-                                <div class="small text-muted mb-1">Activated</div>
-                                <div id="dtGraphCacheActivated" class="text-muted">&mdash;</div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="small text-muted mb-1">State</div>
-                                <div id="dtGraphCacheState" class="text-muted">&mdash;</div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="small text-muted mb-1">Cache updated</div>
-                                <div id="dtGraphCacheRefreshed" class="text-muted">&mdash;</div>
-                            </div>
-                        </div>
-                        <p class="text-muted small mb-2" id="buildCacheStatusLine"></p>
-
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle ob-runs-table">
-                                <thead>
-                                    <tr>
-                                        <th>Companion</th>
-                                        <th>Table</th>
-                                        <th>Status</th>
-                                        <th class="text-end">Rows</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="buildCacheCompanionsBody">
-                                    <!-- Populated by JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                        <p id="buildCacheCompanionsEmpty" class="text-muted small d-none mb-0">
-                            No companion tables yet. Run <strong>Build</strong> or rebuild the graph cache.
-                        </p>
-                    </div>
-                </div>
-                <div class="tab-pane fade" id="buildPaneObjects" role="tabpanel"
-                     aria-labelledby="buildTabObjectsBtn">
-                    {% include "partials/dtwin/_build_objects.html" %}
-                </div>
             </div>
         </div>
     </div>

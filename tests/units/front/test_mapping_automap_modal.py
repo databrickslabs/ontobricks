@@ -14,7 +14,6 @@ PAGE = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_autoassign.htm
 DESIGN = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_design.html"
 MANUAL = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_manual.html"
 AUTO_JS = REPO_ROOT / "src/front/static/mapping/js/mapping-autoassign.js"
-SYNC_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_sync.html"
 DBX_JS = REPO_ROOT / "src/front/static/query/js/query-databricks-build.js"
 HELP = REPO_ROOT / "src/front/templates/partials/layout/help_modal.html"
 
@@ -89,10 +88,7 @@ def test_autoassign_js_blocks_when_uc_metadata_missing():
 
 
 def test_build_ctas_open_automap_modal():
-    sync = SYNC_HTML.read_text(encoding="utf-8")
     dbx = DBX_JS.read_text(encoding="utf-8")
-    assert "AutoAssignModule.open" in sync
-    assert 'href="/mapping/?section=autoassign"' not in sync
     assert "AutoAssignModule.open" in dbx
     assert 'href="/mapping/?section=autoassign"' not in dbx
 

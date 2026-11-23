@@ -1,4 +1,4 @@
-"""Build readiness proposes Auto-Map when Mapping is not ready."""
+"""Original Graph readiness proposes Auto-Map when Mapping is not ready."""
 
 from pathlib import Path
 
@@ -16,32 +16,11 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_lakebase_readiness_has_automap_button_next_to_mapping():
+def test_the_certified_backend_panel_carries_no_mapping_readiness():
+    """Mapping readiness gates the Original build; it lives on the Original page only."""
     html = _read(SYNC_HTML)
-    row = html[html.index("syncMappingReadyBadge") : html.index("syncNotReadyAlert")]
-    assert 'id="syncAutoMapBtn"' in row
-    assert "AutoAssignModule.open" in row
-    assert "bi-lightning-charge" in row
-    assert ">Auto-Map<" in row or "Auto-Map\n" in row
-
-
-def test_lakebase_not_ready_alert_lists_automap_then_build():
-    html = _read(SYNC_HTML)
-    alert = html[html.index("syncNotReadyAlert") : html.index("<!-- Knowledge Graph Target -->")]
-    assert "<ol" in alert
-    assert "Auto-Map" in alert
-    assert 'href="/dtwin/?section=design">Mapping</a>' in alert
-    assert alert.index("Auto-Map") < alert.index("Build")
-    assert "materialize the graph" in alert
-
-
-def test_apply_readiness_shows_automap_only_when_mapping_not_ready():
-    js = _read(SYNC_JS)
-    body = js[js.index("function _applyReadiness(") :]
-    body = body[: body.index("\nfunction ")]
-    assert "syncAutoMapBtn" in body
-    assert "canEditOntology" in body
-    assert "assignmentReady || !canOfferAutoMap" in body
+    for marker in ("syncReadinessCard", "syncMappingReadyBadge", "syncAutoMapBtn", "syncNotReadyAlert"):
+        assert marker not in html
 
 
 def test_databricks_readiness_offers_automap_when_not_ready():

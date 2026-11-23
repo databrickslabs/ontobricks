@@ -1,13 +1,16 @@
 /**
  * OntoBricks — query-sync.css
- * Triple store / Knowledge Graph build (sync) section — extracted from _query_sync.html
+ * Original Graph (sync) and Certified Graph (certified) build sections — the
+ * backend panel (_query_sync.html) lives on the Certified Graph page
  */
 
-#sync-section .sync-content-section {
+#sync-section .sync-content-section,
+#certified-section .sync-content-section {
     position: relative;
 }
 
-#sync-section .build-backend-logo {
+#sync-section .build-backend-logo,
+#certified-section .build-backend-logo {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -16,7 +19,8 @@
     flex-shrink: 0;
 }
 
-#sync-section .build-backend-logo .ob-brand-icon {
+#sync-section .build-backend-logo .ob-brand-icon,
+#certified-section .build-backend-logo .ob-brand-icon {
     width: 3.25rem;
     height: 3.25rem;
 }
@@ -105,11 +109,13 @@
     width: 0%;
 }
 
-#sync-section .ob-code-tiny {
+#sync-section .ob-code-tiny,
+#certified-section .ob-code-tiny {
     font-size: 0.75em;
 }
 
-#sync-section .ob-btn-compact {
+#sync-section .ob-btn-compact,
+#certified-section .ob-btn-compact {
     font-size: 0.7rem;
 }
 
@@ -274,6 +280,17 @@
     align-items: stretch;
     flex: 2;
     gap: 0;
+}
+/* Phones: stack the flow (view → synced table → graph DB) instead of
+   overflowing the card with 160px-wide nodes side by side. */
+@media (max-width: 575.98px) {
+    .dt-arch-diagram,
+    .dt-arch-lakebase-section:not(.d-none) {
+        flex-direction: column;
+        flex-basis: 100%;
+    }
+    .dt-arch-node { min-width: 0; }
+    .dt-arch-connector { transform: rotate(90deg); padding: 0.25rem 0; }
 }
 /* Storage-kind badge on the Lakehouse Build page: whether ..._data is a
    materialized Delta table or a pass-through view over the gateway. */

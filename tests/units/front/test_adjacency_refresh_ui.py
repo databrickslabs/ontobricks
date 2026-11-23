@@ -7,7 +7,7 @@ import pytest
 pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-BUILD_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_build.html"
+BUILD_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_certified.html"
 SYNC_JS = REPO_ROOT / "src/front/static/query/js/query-sync.js"
 DBX_JS = REPO_ROOT / "src/front/static/query/js/query-databricks-build.js"
 
@@ -19,8 +19,8 @@ def _read(path: Path) -> str:
 class TestAdjacencyButtonsExist:
     def test_cache_tab_hosts_refresh_cache_buttons(self):
         html = _read(BUILD_HTML)
-        pane = html.split('id="buildPaneCache"', 1)[1]
-        header = html.split('id="buildHeaderActions"', 1)[1].split('id="buildPageTabs"', 1)[0]
+        pane = html.split('id="certPaneCache"', 1)[1]
+        header = html.split("section-header", 1)[1].split('id="certPageTabs"', 1)[0]
         assert 'id="syncAdjacencyRefreshBtn"' in pane
         assert 'id="dbxAdjacencyRefreshBtn"' in pane
         assert 'id="syncAdjacencyRefreshBtn"' not in header
@@ -88,12 +88,11 @@ class TestAdjacencyRefreshFlow:
         assert "async function pollOnce()" in refresh_polling
         assert "setTimeout(pollOnce, 1500);" in refresh_polling
 
-    def test_lakehouse_button_shows_for_every_backend(self):
-        """The Original Graph is a Lakehouse virtual graph for every domain."""
+    def test_lakehouse_cache_button_follows_the_domain_backend(self):
+        """The Cache tab sits on the Certified Graph page: Lakehouse refresh on Lakehouse only."""
         dbx_js = _read(DBX_JS)
         fn = dbx_js.split("function _updateDbxAdjacencyButton()", 1)[1].split(
             "function _applyDbxStorageKind", 1
         )[0]
-        assert "backend === 'databricks'" not in fn
-        assert "const visible = true;" in fn
+        assert "_syncTripleStoreBackend() === 'databricks'" in fn
         assert "js-dbx-adjacency-refresh" in fn

@@ -6,7 +6,8 @@
  * reloads whenever the Cache tab is shown.
  */
 const BuildCacheModule = (() => {
-    const ENDPOINT = '/dtwin/sync/stats';
+    // Certified Graph page: the cache of the served (Certified) graph.
+    const ENDPOINT = '/dtwin/sync/stats?simulation_id=certified';
     const STATE_IDS = [
         'buildCacheLoading',
         'buildCacheNotice',
@@ -160,7 +161,7 @@ const BuildCacheModule = (() => {
     }
 
     function init() {
-        const tabBtn = el('buildTabCacheBtn');
+        const tabBtn = el('certTabCacheBtn');
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', load);
         const reloadBtn = el('buildCacheReloadBtn');
         if (reloadBtn) reloadBtn.addEventListener('click', load);

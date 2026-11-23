@@ -23,15 +23,12 @@ def test_shared_purge_button_is_in_reasoning_and_cohorts():
         assert include in _read(path)
 
 
-def test_build_purge_lives_in_header_kebab_not_inferred_tab():
+def test_build_purge_lives_in_header_kebab():
     build = _read("src/front/templates/partials/dtwin/_query_build.html")
     more = _read("src/front/templates/partials/dtwin/_build_more_actions.html")
     header = build.split('id="buildHeaderActions"', 1)[1].split('id="buildPageTabs"', 1)[0]
-    inferred = build.split('id="buildPaneInferred"', 1)[1].split('id="buildPaneCache"', 1)[0]
     assert '_build_more_actions.html' in header
     assert 'js-purge-inferences-btn' in more
-    assert '_purge_inferences_button.html' not in inferred
-    assert 'js-purge-inferences-btn' not in inferred
 
 
 def test_build_more_actions_offers_purge_and_refresh_cache():

@@ -191,12 +191,11 @@ class TestRunsScript:
     def test_tab_chrome_wires_build_and_analytics_pages(self):
         src = _js()
         assert "buildTabRunsBtn" in src
-        assert "buildTabInferredBtn" in src
         assert "analyticsPageTabRunsBtn" in src
         assert "_showBuildPageTab" in src
         assert "_showAnalyticsPageTab" in src
 
-    def test_build_header_actions_stay_visible_on_runs_and_inferred(self):
+    def test_build_header_actions_stay_visible_on_runs(self):
         src = _js()
         sync_fn = src.split("function _syncBuildPageTab", 1)[1].split("function _showBuildPageTab", 1)[0]
         assert "buildHeaderActions" in sync_fn

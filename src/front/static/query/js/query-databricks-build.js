@@ -118,24 +118,20 @@ function applyTripleStoreBackendPanels() {
     if (typeof _setBackendBrandIcon === 'function') {
         _setBackendBrandIcon(document.getElementById('buildBackendIcon'), 'databricks');
     }
-    const lakePanel = document.getElementById('sync-lakebase-panel');
     const dbxPanel = document.getElementById('sync-databricks-panel');
-    const isDbx = true;
-
-    if (lakePanel) lakePanel.classList.toggle('d-none', isDbx);
-    if (dbxPanel) dbxPanel.classList.toggle('d-none', !isDbx);
-
-    const lakeActions = document.getElementById('sync-lakebase-actions');
+    if (dbxPanel) dbxPanel.classList.remove('d-none');
     const dbxActions = document.getElementById('sync-databricks-actions');
-    if (lakeActions) lakeActions.classList.toggle('d-none', isDbx);
     if (dbxActions) {
-        dbxActions.classList.toggle('d-none', !isDbx);
-        dbxActions.classList.toggle('d-flex', isDbx);
+        dbxActions.classList.remove('d-none');
+        dbxActions.classList.add('d-flex');
     }
 }
 
 function _updateDbxAdjacencyButton() {
-    const visible = true;
+    // The Cache tab (Certified Graph page) offers the Lakehouse refresh only
+    // on a Lakehouse domain; Lakebase / Neo4j use syncAdjacencyRefreshBtn.
+    const visible = typeof _syncTripleStoreBackend !== 'function'
+        || _syncTripleStoreBackend() === 'databricks';
     const disabled = !visible
         || !dbxBuildReady
         || !dbxGraphHasData

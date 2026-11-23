@@ -156,22 +156,16 @@ class TestJsGuards:
 
     def test_build_refuses_when_cannot_refresh_graph(self):
         js = SYNC_JS.read_text(encoding="utf-8")
-        start = js.split("async function startTripleStoreSync")[1][:600]
+        start = js.split("async function startCertifiedGraphBuild")[1][:600]
         assert "canRefreshGraph" in start
         assert "Build is unavailable" in start
 
-    def test_build_readiness_uses_graph_refresh_permission(self):
+    def test_certified_build_does_not_save_the_design(self):
+        """The certified build reads the Original Graph, not the saved design."""
         js = SYNC_JS.read_text(encoding="utf-8")
-        assert "canBuild" in js
-        assert "canRefreshGraph" in js
-
-    def test_published_build_skips_domain_save(self):
-        js = SYNC_JS.read_text(encoding="utf-8")
-        start = js.split("async function startTripleStoreSync")[1][:1800]
-        assert "canEditOntology" in start
-        assert "if (canEdit)" in start
-        assert "_showSaveBeforeBuildDialog" in start
-        assert "doDomainSave" in start
+        start = js.split("async function startCertifiedGraphBuild")[1].split("\n}\n")[0]
+        assert "/dtwin/certified-build/start" in start
+        assert "doDomainSave" not in start
 
     def test_cohort_materialise_refuses_when_cannot_edit(self):
         js = COHORT_JS.read_text(encoding="utf-8")

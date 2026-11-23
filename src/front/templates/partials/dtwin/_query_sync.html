@@ -31,17 +31,6 @@
         </div>
     </div>
 
-    <!-- Rebuild warning (shown when ontology or assignments changed since last build) -->
-    <div id="syncRebuildWarning" class="alert alert-warning d-none align-items-start gap-2 mb-3">
-        <i class="bi bi-exclamation-triangle-fill fs-5 mt-1 flex-shrink-0"></i>
-        <div>
-            <strong>Ontology or assignments have changed</strong> since the last Knowledge Graph build.
-            <span class="d-block small text-muted mt-1">
-                The triple store may be out of date. Click <strong>Build</strong> to regenerate it with the latest configuration.
-            </span>
-        </div>
-    </div>
-
     <!-- Progress -->
     <div id="syncProgressArea" class="mt-2 mb-2 d-none">
             <div class="progress mb-2 ob-progress-md">
@@ -53,66 +42,6 @@
 
     <!-- Status Content -->
     <div id="syncStatusContent">
-
-            <!-- Readiness tiles -->
-            <div id="syncReadinessCard" class="mb-3">
-                <h6 class="mb-2 fw-semibold"><i class="bi bi-clipboard-check me-1"></i> Readiness Status</h6>
-                <div id="syncReadinessStaleIndicators" class="d-flex flex-wrap align-items-center gap-2 mb-2 d-none">
-                    <span class="text-muted small">Out of sync with last build:</span>
-                    <span id="syncBadgeOntologyChanged" class="badge bg-warning bg-opacity-10 text-warning border border-warning d-none"
-                          title="Ontology was modified in this session; run Build to refresh the triple store.">
-                        <i class="bi bi-journal-bookmark me-1"></i>Ontology
-                    </span>
-                    <span id="syncBadgeAssignmentChanged" class="badge bg-info bg-opacity-10 text-info border border-info d-none"
-                          title="Mapping assignments were modified in this session; run Build to refresh the triple store.">
-                        <i class="bi bi-diagram-2 me-1"></i>Mapping
-                    </span>
-                </div>
-                <div id="syncReadinessContent" class="d-none">
-                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <span class="text-muted small"><i class="bi bi-diagram-2 me-1"></i>Mapping</span>
-                        <span id="syncMappingReadyBadge"></span>
-                        {% if _dr not in ('viewer', 'none') %}
-                        <button type="button"
-                           class="btn btn-sm btn-outline-primary py-0 px-2 d-none"
-                           id="syncAutoMapBtn"
-                           data-requires-llm
-                           onclick="if (typeof AutoAssignModule !== 'undefined') AutoAssignModule.open();"
-                           title="Open Batch Auto-Map to generate SQL mappings">
-                            <i class="bi bi-lightning-charge me-1"></i>Auto-Map
-                        </button>
-                        {% endif %}
-                        <button type="button"
-                           class="btn btn-sm btn-outline-secondary py-0 px-2 d-none"
-                           id="syncMappingDiagBtn"
-                           onclick="if (typeof MappingDiagnostics !== 'undefined') MappingDiagnostics.open();"
-                           title="Open Mapping Diagnostics">
-                            <i class="bi bi-shield-check me-1"></i>Diagnostics
-                        </button>
-                    </div>
-                    <div class="alert alert-warning small mb-0 mt-2 d-none" id="syncNotReadyAlert">
-                        <div class="d-flex align-items-start gap-2">
-                            <i class="bi bi-exclamation-triangle mt-1 flex-shrink-0"></i>
-                            <div>
-                                <strong>Mapping must be ready before you can build.</strong>
-                                <ol class="mb-0 ps-3 mt-1">
-                                    <li>
-                                        Run <button type="button" class="btn btn-link btn-sm p-0 align-baseline text-decoration-none fw-semibold" onclick="if (typeof AutoAssignModule !== 'undefined') AutoAssignModule.open();">Auto-Map</button>
-                                        (or map manually in
-                                        <a href="/dtwin/?section=design">Mapping</a>)
-                                        so Mapping shows Ready.
-                                    </li>
-                                    <li>
-                                        View <button type="button" class="btn btn-link btn-sm p-0 align-baseline text-decoration-none fw-semibold" onclick="if (typeof MappingDiagnostics !== 'undefined') MappingDiagnostics.open();">Diagnostics</button>
-                                        to inspect mapping issues or schema drift.
-                                    </li>
-                                    <li>Click <strong>Build</strong> to materialize the graph.</li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <!-- Knowledge Graph Target -->
             <div class="card mb-3">

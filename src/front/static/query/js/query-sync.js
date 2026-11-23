@@ -50,12 +50,6 @@ let tripleStoreStatusUnknown = false;
  */
 let tripleStoreStatusPending = false;
 
-/** Whether the current caller may refresh graph data for the loaded version. */
-function _canStartBuild() {
-    const permitted = !(window.OB && typeof window.OB.canRefreshGraph === 'function'
-        && !window.OB.canRefreshGraph());
-    return syncIsReady && permitted && !adjacencyRefreshRunning;
-}
 
 /**
  * Fetch all Knowledge Graph Overview data in a single round-trip and distribute
@@ -117,9 +111,6 @@ async function loadSyncInfo() {
             }
         }
 
-        // --- Rebuild warning (timestamps and/or session change flags from readiness) ---
-        _updateSyncRebuildWarningFromPayload(payload);
-
         updateDataMenus();
         updateInsightsTab();
         return payload;
@@ -130,85 +121,10 @@ async function loadSyncInfo() {
 }
 
 /**
- * Show the top rebuild banner when timestamps indicate drift or when the
- * session reports ontology / mapping edits since load (readiness flags).
- */
-function _updateSyncRebuildWarningFromPayload(payload) {
-    var warning = document.getElementById('syncRebuildWarning');
-    if (!warning) return;
-    var ch = (payload && payload.changes) || {};
-    var r = (payload && payload.readiness) || {};
-    var show = !!(ch.needs_rebuild || r.ontology_changed || r.assignment_changed);
-    if (show) {
-        warning.classList.remove('d-none');
-        warning.classList.add('d-flex');
-    } else {
-        warning.classList.remove('d-flex');
-        warning.classList.add('d-none');
-    }
-}
-
-/**
  * Apply readiness data obtained from the consolidated endpoint.
  */
 function _applyReadiness(data) {
-    var assignmentReady = !!data.mapping_valid;
-    var ontologyChanged = !!data.ontology_changed;
-    var assignmentChanged = !!data.assignment_changed;
-
-    syncIsReady = assignmentReady;
-
-    var badgeEl = document.getElementById('syncMappingReadyBadge');
-    if (badgeEl) {
-        badgeEl.innerHTML = assignmentReady
-            ? '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle"><i class="bi bi-check-circle-fill text-success me-1"></i>Ready</span>'
-            : '<span class="badge bg-danger text-white border border-danger"><i class="bi bi-x-circle-fill me-1"></i>Not ready</span>';
-    }
-
-    var autoMapBtn = document.getElementById('syncAutoMapBtn');
-    if (autoMapBtn) {
-        var canOfferAutoMap = !(window.OB && typeof window.OB.canEditOntology === 'function'
-            && !window.OB.canEditOntology());
-        if (assignmentReady || !canOfferAutoMap) autoMapBtn.classList.add('d-none');
-        else autoMapBtn.classList.remove('d-none');
-    }
-
-    var mappingDiagBtn = document.getElementById('syncMappingDiagBtn');
-    if (mappingDiagBtn) {
-        if (assignmentReady) mappingDiagBtn.classList.add('d-none');
-        else mappingDiagBtn.classList.remove('d-none');
-    }
-
-    var alertEl = document.getElementById('syncNotReadyAlert');
-    if (alertEl) {
-        if (syncIsReady) alertEl.classList.add('d-none');
-        else alertEl.classList.remove('d-none');
-    }
-
-    var syncBtn = document.getElementById('syncStartBtn');
-    var loadBtn = document.getElementById('syncLoadBtn');
-    var canBuild = _canStartBuild();
-    if (syncBtn) syncBtn.disabled = !canBuild;
-    if (loadBtn) loadBtn.disabled = !syncIsReady;
-
-    var contentEl = document.getElementById('syncReadinessContent');
-    if (contentEl) contentEl.classList.remove('d-none');
-
-    var staleRow = document.getElementById('syncReadinessStaleIndicators');
-    var ontBadge = document.getElementById('syncBadgeOntologyChanged');
-    var mapBadge = document.getElementById('syncBadgeAssignmentChanged');
-    if (ontBadge) {
-        if (ontologyChanged) ontBadge.classList.remove('d-none');
-        else ontBadge.classList.add('d-none');
-    }
-    if (mapBadge) {
-        if (assignmentChanged) mapBadge.classList.remove('d-none');
-        else mapBadge.classList.add('d-none');
-    }
-    if (staleRow) {
-        if (ontologyChanged || assignmentChanged) staleRow.classList.remove('d-none');
-        else staleRow.classList.add('d-none');
-    }
+    syncIsReady = !!data.mapping_valid;
 }
 
 /** Compact badge spinner used while Build-page artefact probes are in flight. */
@@ -1104,12 +1020,10 @@ async function checkAndResumeSyncTask() {
         if (task.status === 'completed') {
             sessionStorage.removeItem(SYNC_TASK_KEY);
             showSyncResult(task.result);
-            // Sync just finished — mark data as available and hide rebuild warning
+            // Sync just finished — mark data as available
             tripleStoreHasData = true;
             syncIsRunning = false;
             updateDataMenus();
-            var rebuildWarning = document.getElementById('syncRebuildWarning');
-            if (rebuildWarning) { rebuildWarning.classList.remove('d-flex'); rebuildWarning.classList.add('d-none'); }
         } else if (task.status === 'running' || task.status === 'pending') {
             // Resume monitoring — menus stay disabled
             syncIsRunning = true;
@@ -1241,73 +1155,11 @@ async function monitorAdjacencyRefreshTask(taskId) {
 }
 
 /**
- * Show a confirmation modal before building an editable Knowledge Graph.
- * Frozen versions skip this step because their design cannot be saved.
- * Resolves to 'save' (user confirms) or 'cancel'.
+ * Start a certified build and follow it in the backend panel (progress, live
+ * log, result). The certified build reads the Original Graph, not the saved
+ * design, so nothing is saved first.
  */
-function _showSaveBeforeBuildDialog() {
-    return new Promise(resolve => {
-        const modalId = 'saveBeforeBuildModal';
-        const existing = document.getElementById(modalId);
-        if (existing) existing.remove();
-
-        const html = `
-            <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title">
-                                <i class="bi bi-cloud-upload me-2"></i>Save &amp; Build
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p>The domain will be saved to the registry before building the Knowledge Graph.</p>
-                            <p class="mb-0 text-muted">
-                                This ensures the triple store, GraphQL API, and other services
-                                use the latest ontology and mapping configuration.
-                            </p>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"
-                                    id="${modalId}_cancel">Cancel</button>
-                            <button type="button" class="btn btn-primary"
-                                    id="${modalId}_save">
-                                <i class="bi bi-cloud-upload me-1"></i>Save &amp; Build
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-
-        document.body.insertAdjacentHTML('beforeend', html);
-        const modalEl = document.getElementById(modalId);
-        const modal = new bootstrap.Modal(modalEl);
-
-        let resolved = false;
-        function done(result) {
-            if (resolved) return;
-            resolved = true;
-            modal.hide();
-            resolve(result);
-        }
-
-        document.getElementById(modalId + '_cancel').addEventListener('click', () => done('cancel'));
-        document.getElementById(modalId + '_save').addEventListener('click', () => done('save'));
-        modalEl.addEventListener('hidden.bs.modal', () => {
-            done('cancel');
-            modalEl.remove();
-        });
-
-        modal.show();
-    });
-}
-
-/**
- * Start the synchronization process. Editable versions are saved first;
- * frozen versions build directly from their persisted design.
- */
-async function startTripleStoreSync() {
+async function startCertifiedGraphBuild() {
     if (window.OB && typeof window.OB.canRefreshGraph === 'function'
             && !window.OB.canRefreshGraph()) {
         showNotification(
@@ -1320,78 +1172,28 @@ async function startTripleStoreSync() {
         showNotification('Adjacency refresh is running. Wait for it to finish first.', 'warning');
         return;
     }
-
-    const tableEl = document.getElementById('syncTriplestoreTable');
-    const triplestoreTable = tableEl ? tableEl.value.trim() : '';
-
-    if (!triplestoreTable) {
-        showNotification('Triple store table not configured. Please set it in Context Settings.', 'warning');
-        return;
-    }
-
-    const canEdit = !(window.OB && typeof window.OB.canEditOntology === 'function'
-        && !window.OB.canEditOntology());
-    if (canEdit) {
-        const choice = await _showSaveBeforeBuildDialog();
-        if (choice === 'cancel') return;
-
-        try {
-            if (typeof saveDomainInfoBeforeSave === 'function') {
-                await saveDomainInfoBeforeSave();
-            }
-            await doDomainSave();
-        } catch (err) {
-            showNotification('Save failed: ' + err.message, 'error');
-            return;
-        }
-    }
-
-    // Disable button and menus
-    const btn = document.getElementById('syncStartBtn');
-    if (btn) btn.disabled = true;
     var resultCard = document.getElementById('syncResultCard');
     if (resultCard) resultCard.classList.add('d-none');
-
-    // Mark sync as running — disable data menus
     syncIsRunning = true;
     updateDataMenus();
-
     showSyncProgress();
-    updateSyncProgress(0, 'Starting synchronization...');
+    updateSyncProgress(0, 'Starting the certified build...');
     showBuildLog();
-
     try {
-        const response = await fetch('/dtwin/sync/start', {
+        const data = await apiRequest('/dtwin/certified-build/start', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
-            credentials: 'same-origin'
         });
-
-        const data = await response.json();
-
-        if (!data.success) {
-            hideSyncProgress();
-            syncIsRunning = false;
-            updateDataMenus();
-            if (btn) btn.disabled = !_canStartBuild();
-            showNotification('Error: ' + (data.message || 'Failed to start sync'), 'error');
-            return;
-        }
-
-        // Store task ID and start monitoring
         sessionStorage.setItem(SYNC_TASK_KEY, data.task_id);
-        _loadDtExistence();
-        monitorSyncTask(data.task_id);
-
+        await monitorSyncTask(data.task_id);
     } catch (error) {
         hideSyncProgress();
         syncIsRunning = false;
         updateDataMenus();
-        if (btn) btn.disabled = !_canStartBuild();
         showNotification('Error: ' + error.message, 'error');
     }
 }
+window.startCertifiedGraphBuild = startCertifiedGraphBuild;
 
 /**
  * Monitor the sync task until completion.
@@ -1418,11 +1220,7 @@ async function monitorSyncTask(taskId) {
                 sessionStorage.removeItem(SYNC_TASK_KEY);
                 hideSyncProgress();
                 showSyncResult(task.result);
-                showNotification('Triple store synchronized successfully!', 'success');
-
-                // Build completed — hide the rebuild warning
-                var rebuildWarning = document.getElementById('syncRebuildWarning');
-                if (rebuildWarning) { rebuildWarning.classList.remove('d-flex'); rebuildWarning.classList.add('d-none'); }
+                showNotification('Certified Graph built', 'success');
 
                 // Sync finished — data is now available, re-enable menus
                 syncIsRunning = false;
@@ -1447,7 +1245,7 @@ async function monitorSyncTask(taskId) {
             } else if (task.status === 'failed') {
                 sessionStorage.removeItem(SYNC_TASK_KEY);
                 hideSyncProgress();
-                showNotification('Sync failed: ' + (task.error || 'Unknown error'), 'error');
+                showNotification('Certified build failed: ' + (task.error || 'Unknown error'), 'error');
 
                 // Sync failed — re-enable menus based on data state
                 syncIsRunning = false;
@@ -1456,7 +1254,7 @@ async function monitorSyncTask(taskId) {
             } else if (task.status === 'cancelled') {
                 sessionStorage.removeItem(SYNC_TASK_KEY);
                 hideSyncProgress();
-                showNotification('Sync was cancelled', 'warning');
+                showNotification('Certified build was cancelled', 'warning');
 
                 syncIsRunning = false;
                 updateDataMenus();
@@ -1488,11 +1286,7 @@ async function monitorSyncTask(taskId) {
         }
     }
 
-    const btn = document.getElementById('syncStartBtn');
-    if (btn) {
-        var canBuild = _canStartBuild();
-        btn.disabled = !canBuild;
-    }
+    if (typeof loadCertifiedStatus === 'function') loadCertifiedStatus();
 }
 
 /**
@@ -2075,14 +1869,17 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
-    const syncRoot = document.getElementById('sync-section');
-    if (syncRoot) {
-        syncRoot.addEventListener('click', function (e) {
+    // The backend panel lives in the Certified Graph section (dtwin) or the
+    // legacy Build section (domain page).
+    const syncSection = document.getElementById('certified-section')
+        || document.getElementById('sync-section');
+    if (syncSection) {
+        syncSection.addEventListener('click', function (e) {
             var btn = e.target.closest('[data-sync-action]');
-            if (!btn || !syncRoot.contains(btn)) return;
-            var act = btn.getAttribute('data-sync-action');
-            if (act === 'start-triple-store-sync') startTripleStoreSync();
-            else if (act === 'refresh-adjacency-only') startSyncAdjacencyRefresh();
+            if (!btn || !syncSection.contains(btn)) return;
+            if (btn.getAttribute('data-sync-action') === 'refresh-adjacency-only') {
+                startSyncAdjacencyRefresh();
+            }
         });
     }
 
@@ -2096,33 +1893,14 @@ document.addEventListener('DOMContentLoaded', async function() {
         exportLogBtn.addEventListener('click', exportBuildLog);
     }
 
-    // Re-load when the sync section becomes visible after navigating away and back
-    const syncSection = document.getElementById('sync-section');
+    // Re-load when the section becomes visible after navigating away and back
     if (syncSection) {
         const observer = new MutationObserver(() => {
-            if (syncSection.classList.contains('active')) {
-                if (_syncTripleStoreBackend() === 'databricks') {
-                    if (typeof loadDatabricksBuildInfo === 'function') {
-                        loadDatabricksBuildInfo();
-                    }
-                } else {
-                    initSyncSection();
-                }
-            } else {
-                _syncSectionLoaded = false;
-            }
+            if (syncSection.classList.contains('active')) initSyncSection();
+            else _syncSectionLoaded = false;
         });
         observer.observe(syncSection, { attributes: true, attributeFilter: ['class'] });
-
-        if (syncSection.classList.contains('active')) {
-            if (_syncTripleStoreBackend() === 'databricks') {
-                if (typeof loadDatabricksBuildInfo === 'function') {
-                    loadDatabricksBuildInfo();
-                }
-            } else {
-                initSyncSection();
-            }
-        }
+        if (syncSection.classList.contains('active')) initSyncSection();
     } else if (document.querySelector('[data-kg-status]')) {
         // Intelligence (and any other page with the Graph-ready badge) has no
         // Build section, so probe status and fill the indicators directly.

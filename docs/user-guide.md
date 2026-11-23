@@ -970,19 +970,14 @@ Click **Build** in the sidebar to manage your triple store:
 
 In both modes `…_inferred` stays a Delta table, so reasoning and cohort writes are unaffected.
 
-**Cache tab.** The Build page has a **Cache** tab (after Inferred) for Search cache. It shows whether the cache is **On** or **Off**, the state (**Ready** or **Refresh required**), **Cache updated** (last companion rebuild, or the Build that first created them), and one row per companion table (adjacency out/in, properties, entity search). Use **Activate / deactivate** to open Context Settings → Search cache, and **Refresh cache** (also in the Build page ⋮ menu) to rebuild the companions. Neo4j domains show a notice instead.
+**Cache tab.** The Certified Graph page has a **Cache** tab (after Runs) for Search cache. It shows whether the cache is **On** or **Off**, the state (**Ready** or **Refresh required**), **Cache updated** (last companion rebuild, or the Build that first created them), and one row per companion table (adjacency out/in, properties, entity search). Use **Activate / deactivate** to open Context Settings → Search cache, and **Refresh cache** (also in the page ⋮ menu) to rebuild the companions. Neo4j domains show a notice instead.
 
-**Objects tab.** The Build page has an **Objects** tab (after Cache) listing the physical objects the current context version built in its graph backend: Postgres tables and views plus Unity Catalog sync registrations for Lakebase, Unity Catalog views and tables for the Lakehouse (Delta), the graph and its node/edge counts for Neo4j, and the analytics job output for the version. Everyone with access to the context can read the list. Only app **admins** see the **Drop** buttons and **Delete all** (the drop endpoints are admin-only on the server too). The list is grouped **by usage** by default (Graph data, Inferred, Search cache, Simulations, Analytics, with the same names as the Cache tab) or **by source** with the toggle at the top right. Within a group, views come before tables and Lakeflow registrations before their source. The workspace-wide lists stay available in Settings → Lakebase / Lakehouse / Neo4j → Objects.
+**Objects tab.** The Certified Graph page has an **Objects** tab (after Cache) listing the physical objects the current context version built in its graph backend: Postgres tables and views plus Unity Catalog sync registrations for Lakebase, Unity Catalog views and tables for the Lakehouse (Delta), the graph and its node/edge counts for Neo4j, and the analytics job output for the version. Everyone with access to the context can read the list. Only app **admins** see the **Drop** buttons and **Delete all** (the drop endpoints are admin-only on the server too). The list is grouped **by usage** by default (Graph data, Inferred, Search cache, Simulations, Analytics, with the same names as the Cache tab) or **by source** with the toggle at the top right. Within a group, views come before tables and Lakeflow registrations before their source. The workspace-wide lists stay available in Settings → Lakebase / Lakehouse / Neo4j → Objects.
 
-**Inferred tab.** The Build page has an **Inferred** tab next to Build and Runs. It breaks down the materialized inferred triples by origin:
-
-| Category | What it counts |
-|----------|----------------|
-| Reasoning | Facts produced by reasoning rules |
-| Cohorts | Cohort membership and cohort metadata written by cohort runs |
-| Communities | Community membership and cluster metadata written by community runs |
-
-Each row shows **Triples**, **Entities** (distinct subjects) and **Groups** (distinct cohorts or communities; not applicable to Reasoning). The total equals the Overview "Inferred triples" figure. The tab reloads each time it is opened; **Refresh** reloads it on demand. Neo4j domains show a notice instead, because the breakdown is not implemented for that backend yet.
+**No Inferred tab on the Original Graph.** The Original Graph is the raw
+output of the mapping: inferences, business rules, cohorts and communities are
+written to the Certified Graph (`…_cert_enriched`, by kind and provenance), so
+the Original Graph page only has the **Build** and **Runs** tabs.
 
 **Explorer index snapshot.** Build materialises `_adj_out` / `_adj_in` for
 entity expansion, `_entity_search` (union) and `_entity_search_asserted` for

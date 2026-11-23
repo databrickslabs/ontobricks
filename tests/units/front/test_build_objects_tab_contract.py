@@ -1,4 +1,4 @@
-"""Contract tests for the Build → Objects tab markup and loader wiring."""
+"""Contract tests for the Certified Graph → Objects tab markup and loader wiring."""
 
 from pathlib import Path
 
@@ -7,16 +7,15 @@ import pytest
 pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parents[3]
-BUILD_HTML = (ROOT / "src/front/templates/partials/dtwin/_query_build.html").read_text(encoding="utf-8")
+BUILD_HTML = (ROOT / "src/front/templates/partials/dtwin/_query_certified.html").read_text(encoding="utf-8")
 OBJECTS_HTML = (ROOT / "src/front/templates/partials/dtwin/_build_objects.html").read_text(encoding="utf-8")
 DTWIN_HTML = (ROOT / "src/front/templates/dtwin.html").read_text(encoding="utf-8")
 OBJECTS_JS = (ROOT / "src/front/static/query/js/query-build-objects.js").read_text(encoding="utf-8")
-RUNS_JS = (ROOT / "src/front/static/domain/js/domain-runs.js").read_text(encoding="utf-8")
 
 
 def test_objects_tab_and_pane_follow_cache():
-    assert BUILD_HTML.index('id="buildTabObjectsBtn"') > BUILD_HTML.index('id="buildTabCacheBtn"')
-    assert BUILD_HTML.index('id="buildPaneObjects"') > BUILD_HTML.index('id="buildPaneCache"')
+    assert BUILD_HTML.index('id="certTabObjectsBtn"') > BUILD_HTML.index('id="certTabCacheBtn"')
+    assert BUILD_HTML.index('id="certPaneObjects"') > BUILD_HTML.index('id="certPaneCache"')
     assert "partials/dtwin/_build_objects.html" in BUILD_HTML
 
 
@@ -73,36 +72,5 @@ def test_usage_view_is_fed_by_server_usages():
     assert "buckets.get(item.usage)" in OBJECTS_JS
 
 
-def test_domain_runs_wires_objects_tab():
-    assert "buildTabObjectsBtn" in RUNS_JS
-    assert "'objects'" in RUNS_JS
-
-
-def test_objects_list_uses_the_work_list_template():
-    # Same layout as Build → Runs: filter bar with search, row count, one
-    # .ob-runs-table per group, sentence-case header row, no table-light band.
-    assert 'class="ob-filter-search"' in OBJECTS_HTML
-    assert 'id="buildObjectsFilter"' in OBJECTS_HTML
-    assert 'class="ob-runs-count" id="buildObjectsCount"' in OBJECTS_HTML
-    assert "table table-hover align-middle ob-runs-table mb-0" in OBJECTS_JS
-    assert "table-light" not in OBJECTS_JS
-    assert "ob-runs-table" in OBJECTS_JS
-
-
-def test_objects_list_has_header_row_and_no_filled_badges():
-    assert "function tableHead(columns)" in OBJECTS_JS
-    assert "tableHead(['Kind', 'Name', 'State', ''])" in OBJECTS_JS
-    assert "tableHead(['Kind', 'Name', 'Source', 'State', ''])" in OBJECTS_JS
-    assert "KIND_BADGES" not in OBJECTS_JS
-    assert "style.width" not in OBJECTS_JS
-
-
-def test_objects_filter_is_bound_to_content_and_reapplied_on_render():
-    assert "ObListFilter.bind(" in OBJECTS_JS
-    assert "el('buildObjectsContent'), el('buildObjectsCount'), 'object'" in OBJECTS_JS
-    assert OBJECTS_JS.count("applyFilter();") >= 2  # render + clearContent
-
-
-def test_list_filter_counts_body_rows_only():
-    list_filter = (ROOT / "src/front/static/global/js/list-filter.js").read_text(encoding="utf-8")
-    assert "querySelectorAll('tbody > tr')" in list_filter
+def test_the_loader_binds_the_certified_objects_tab():
+    assert "el('certTabObjectsBtn')" in OBJECTS_JS

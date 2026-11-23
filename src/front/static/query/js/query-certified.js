@@ -1,21 +1,17 @@
 /**
  * Graph → Management → Certified Graph.
  *
- * Shows where the Certified Graph of the loaded version is served, whether the
- * version is locked (IN-REVIEW / PUBLISHED), and its certified build runs; the
- * Build button starts a certified build and polls its task.
+ * Shows whether the version is locked (IN-REVIEW / PUBLISHED), the backend
+ * panel (Lakebase / Neo4j) and the certified build runs; the Build button
+ * starts a certified build and follows its task.
  */
 (function () {
     'use strict';
 
-    const TARGET_LABELS = {
-        lakehouse_virtual: 'Lakehouse (virtual view)',
-        lakehouse_materialized: 'Lakehouse (materialized)',
-        lakebase: 'Lakebase',
-        neo4j: 'Neo4j',
-        none: 'No graph backend',
-    };
     const POLL_MS = 1500;
+    // Targets with a backend copy: the Lakebase / Neo4j panel shows the
+    // architecture and the live build log, and runs the build.
+    const PANEL_TARGETS = ['lakebase', 'neo4j'];
 
     let _status = null;
     let _runs = [];
@@ -60,13 +56,22 @@
         if (typeof _setBackendBrandIcon === 'function') {
             _setBackendBrandIcon(_el('certBackendIcon'), status.backend);
         }
-        _el('certTarget').textContent = TARGET_LABELS[status.target] || status.target || '—';
-        _el('certServedRelation').textContent = status.served_relation || '—';
-        _el('certVersionStatus').textContent = status.version_status || 'DRAFT';
         _el('certReadOnlyNotice').classList.toggle('d-none', status.editable !== false);
         _renderBadge(status);
         _renderRuns(status.runs);
+        _showBackendPanel(_usesPanel());
         _syncButton();
+    }
+
+    function _usesPanel() {
+        return !!_status && PANEL_TARGETS.indexOf(_status.target) !== -1;
+    }
+
+    function _showBackendPanel(show) {
+        _el('sync-lakebase-panel').classList.toggle('d-none', !show);
+        const actions = _el('sync-lakebase-actions');
+        actions.classList.toggle('d-none', !show);
+        actions.classList.toggle('d-flex', show);
     }
 
     function _syncButton() {
@@ -127,6 +132,15 @@
         _running = true;
         _syncButton();
         if (_status) _renderBadge(_status);
+        if (_usesPanel() && typeof startCertifiedGraphBuild === 'function') {
+            try {
+                await startCertifiedGraphBuild();
+            } finally {
+                _running = false;
+                await loadCertifiedStatus();
+            }
+            return;
+        }
         _showProgress(0, 'Starting the certified build...');
         try {
             const data = await apiRequest('/dtwin/certified-build/start', { method: 'POST', body: '{}' });
@@ -140,6 +154,8 @@
             await loadCertifiedStatus();
         }
     }
+
+    window.loadCertifiedStatus = loadCertifiedStatus;
 
     window.showCertifiedRunDetails = function (idx) {
         if (typeof showRunDetailsObj === 'function') showRunDetailsObj(_runs[idx]);

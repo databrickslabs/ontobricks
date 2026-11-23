@@ -229,14 +229,12 @@ function showAnalyticsRunDetails(idx) {
 
 window.showAnalyticsRunDetails = showAnalyticsRunDetails;
 
-// ---- Build page tabs (Build | Runs | Inferred | Cache | Objects) -----------------
-// Header actions (Refresh / Purge / Build) stay visible on every tab.
-// Refresh cache lives inside the Cache tab.
+// ---- Original Graph page tabs (Build | Runs) --------------------------------
+// Header actions (Refresh / Purge / Build) stay visible on every tab. The
+// Cache and Objects tabs live on the Certified Graph page.
 
 function _normalizeBuildPageTab(tab) {
-    if (tab === 'runs' || tab === 'inferred' || tab === 'cache'
-        || tab === 'objects') return tab;
-    return 'build';
+    return tab === 'runs' ? 'runs' : 'build';
 }
 
 function _syncBuildPageTab(tab) {
@@ -262,9 +260,6 @@ function _showBuildPageTab(name) {
     const tab = _normalizeBuildPageTab(name);
     const btnId = ({
         runs: 'buildTabRunsBtn',
-        inferred: 'buildTabInferredBtn',
-        cache: 'buildTabCacheBtn',
-        objects: 'buildTabObjectsBtn',
         build: 'buildTabBuildBtn',
     })[tab];
     const btn = document.getElementById(btnId);
@@ -281,15 +276,6 @@ function _initBuildPageTabs() {
     );
     document.getElementById('buildTabRunsBtn')?.addEventListener(
         'shown.bs.tab', () => _syncBuildPageTab('runs'),
-    );
-    document.getElementById('buildTabInferredBtn')?.addEventListener(
-        'shown.bs.tab', () => _syncBuildPageTab('inferred'),
-    );
-    document.getElementById('buildTabCacheBtn')?.addEventListener(
-        'shown.bs.tab', () => _syncBuildPageTab('cache'),
-    );
-    document.getElementById('buildTabObjectsBtn')?.addEventListener(
-        'shown.bs.tab', () => _syncBuildPageTab('objects'),
     );
 }
 

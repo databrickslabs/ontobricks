@@ -1479,3 +1479,192 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11333 passed, 334 skipped, 8 deselected
+
+================================================================================
+UI: Lakebase / Neo4j backend panel (Readiness Status) moves to the Certified Graph page
+================================================================================
+
+Context:
+Since the Original Graph page always shows the Lakehouse build, the Lakebase /
+Neo4j panel (Readiness Status, architecture view → synced table → Graph DB,
+graph status, live build log, result card, More menu) was permanently hidden.
+The Certified Graph is what lives in that backend, so the panel now sits on the
+Certified Graph page and its build flow starts the certified build.
+
+1. src/front/templates/partials/dtwin/_query_build.html — removed the hidden
+   Lakebase actions and the `_query_sync.html` panel from the Original page.
+2. src/front/templates/partials/dtwin/_query_certified.html — header gets the
+   build status text and the Lakebase "More" menu (`sync-lakebase-actions`);
+   the Build pane includes `_query_sync.html` (`sync-lakebase-panel`).
+3. src/front/static/query/js/query-sync.js — `startCertifiedGraphBuild()`
+   replaces `startTripleStoreSync()` + the save-before-build dialog (the
+   certified build reads the Original Graph, not the saved design; the
+   builder / unlocked guard is kept); POSTs `/dtwin/certified-build/start`,
+   then follows the task with the existing progress / log / result UI and
+   refreshes the Certified status; the section observer and action
+   delegation follow `certified-section` (legacy `sync-section` on the domain
+   page); notifications read "Certified Graph built / build failed".
+4. src/front/static/query/js/query-certified.js — Lakebase / Neo4j targets
+   show the backend panel and build through it; Lakehouse targets keep the
+   compact progress; `loadCertifiedStatus` exposed for the panel.
+5. src/front/static/query/js/query-databricks-build.js —
+   `applyTripleStoreBackendPanels` only shows the Lakehouse panel/actions.
+6. src/front/static/query/css/query-sync.css — the architecture flow stacks
+   vertically below 576px instead of overflowing the card.
+7. tests — panel-move and panel-build contracts in
+   `test_certified_graph_page.py`; `test_view_mode_write_gates.py` follows
+   `startCertifiedGraphBuild` (guard kept, no design save).
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/partials/dtwin/_query_certified.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-certified.js
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/query/css/query-sync.css
+- tests/units/front/test_certified_graph_page.py
+- tests/units/front/test_view_mode_write_gates.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11335 passed, 334 skipped, 8 deselected
+Browser check: Playwright on port 8011, PUBLISHED contactcenter v1 (Lakebase):
+/dtwin/?section=certified at 1440 px and 390 px shows the backend panel
+(Readiness Status "Mapping Ready", Graph DB (Lakebase)
+ontobricks_dev_db.ontobricks_dev_sc.contactcenter_v1, More menu); the Original
+page still shows the Lakehouse panel and its readiness card; no 4xx/5xx; the
+section no longer overflows at 390 px (the remaining page overflow comes from
+the top navbar app switcher, on every page, unchanged).
+
+================================================================================
+UI: Certified Graph page drops mapping readiness and the target / relation / status rows
+================================================================================
+
+Context:
+Mapping readiness gates the Original build, not the certified build, and the
+Original page already shows it (with Auto-Map and Diagnostics). The Certified
+page also dropped the Target, Served relation and Version status rows (the
+backend panel and the read-only notice carry that information).
+
+1. src/front/templates/partials/dtwin/_query_sync.html — removed the
+   Readiness Status card (Mapping Ready badge, Auto-Map / Diagnostics, not-ready
+   alert, stale Ontology / Mapping badges) and the "Ontology or assignments have
+   changed" rebuild warning.
+2. src/front/static/query/js/query-sync.js — `_applyReadiness` only sets
+   `syncIsReady` (still gating data menus and cache refresh); removed
+   `_updateSyncRebuildWarningFromPayload`, the rebuild-warning toggles and the
+   now unused `_canStartBuild`.
+3. src/front/templates/partials/dtwin/_query_certified.html,
+   src/front/static/query/js/query-certified.js — removed the Target, Served
+   relation and Version status rows and their target labels.
+4. tests — `test_build_automap_cta.py` asserts the backend panel carries no
+   mapping readiness (Original readiness test kept);
+   `test_mapping_automap_modal.py` / `test_mapping_diagnostics_modal.py` check
+   the Original page only; `test_view_mode_write_gates.py` drops the readiness
+   gate test; `test_certified_graph_page.py` asserts the rows are gone.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-sync.js
+- src/front/templates/partials/dtwin/_query_certified.html
+- src/front/static/query/js/query-certified.js
+- tests/units/front/test_build_automap_cta.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_mapping_diagnostics_modal.py
+- tests/units/front/test_view_mode_write_gates.py
+- tests/units/front/test_certified_graph_page.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11332 passed, 334 skipped, 8 deselected
+Browser check: Playwright on port 8011, contactcenter v1 (Lakebase, PUBLISHED),
+1440 px and 390 px: no Mapping / Readiness / Target / Served relation /
+Version status text in the Certified section; read-only notice and backend
+panel shown; no 4xx/5xx.
+
+================================================================================
+UI: Certified Graph backend logo sized like the Original Graph one
+================================================================================
+
+Context:
+The build-section rules in query-sync.css were scoped to `#sync-section`, so on
+the Certified Graph page the backend logo rendered at its default 16px (and the
+moved backend panel missed its loading-overlay positioning and compact styles).
+
+1. src/front/static/query/css/query-sync.css — the `.build-backend-logo`,
+   `.sync-content-section`, `.ob-code-tiny` and `.ob-btn-compact` rules also
+   apply under `#certified-section`.
+2. tests/units/front/test_certified_graph_page.py — asserts the logo and panel
+   rules cover the Certified section.
+
+Modified files:
+- src/front/static/query/css/query-sync.css
+- tests/units/front/test_certified_graph_page.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11333 passed, 334 skipped, 8 deselected
+Browser check: Playwright on port 8011 at 1440 px — backend logo 52x52 px and
+title icon 18x22 px on both the Original and the Certified Graph pages.
+
+================================================================================
+UI: Cache and Objects tabs move to the Certified Graph page; Original drops Inferred
+================================================================================
+
+Context:
+Inferences, business rules, cohorts and communities are written to the
+Certified Graph (`…_cert_enriched`), so the Original Graph — the raw mapping
+output — has no inferred triples to break down. The search cache and the
+physical objects describe the served backend, so they belong to the Certified
+Graph page. The Original Graph page keeps Build | Runs.
+
+1. src/front/templates/partials/dtwin/_query_build.html — removed the
+   Inferred, Cache and Objects tabs and panes.
+2. src/front/templates/partials/dtwin/_query_certified.html — Cache and
+   Objects tabs after Runs (`certTabCacheBtn` / `certPaneCache`,
+   `certTabObjectsBtn` / `certPaneObjects`), same content as before.
+3. src/front/static/query/js/query-build-cache.js — binds `certTabCacheBtn`
+   and reads `/dtwin/sync/stats?simulation_id=certified` (the Certified Graph;
+   the bare route now defaults to the Original Graph).
+4. src/front/static/query/js/query-build-objects.js — binds `certTabObjectsBtn`.
+5. src/front/static/query/js/query-build-inferred.js — deleted (Inferred tab
+   removed); its script tag removed from src/front/templates/dtwin.html.
+6. src/front/static/domain/js/domain-runs.js — Original page tab routing
+   handles Build | Runs only.
+7. src/front/static/query/js/query-databricks-build.js — the Lakehouse
+   "Refresh cache" button in the Cache tab shows on Lakehouse domains only
+   (Lakebase / Neo4j use the Lakebase one).
+8. docs/user-guide.md, src/front/templates/partials/layout/help_modal.html,
+   src/front/templates/partials/dtwin/_build_objects.html — Cache / Objects on
+   the Certified Graph page; no Inferred tab on the Original Graph.
+9. tests — cache / objects / adjacency / purge / runs-page contracts follow
+   the Certified page; `test_build_inferred_tab_contract.py` deleted (its
+   cache-helper checks moved to `test_build_cache_tab_contract.py`); new
+   contracts in `test_certified_graph_page.py` (Original = Build | Runs;
+   Certified = Build | Runs | Cache | Objects).
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/partials/dtwin/_query_certified.html
+- src/front/templates/partials/dtwin/_build_objects.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-build-cache.js
+- src/front/static/query/js/query-build-objects.js
+- src/front/static/query/js/query-build-inferred.js (deleted)
+- src/front/static/domain/js/domain-runs.js
+- src/front/static/query/js/query-databricks-build.js
+- docs/user-guide.md
+- tests/units/front/test_build_cache_tab_contract.py
+- tests/units/front/test_build_objects_tab_contract.py
+- tests/units/front/test_adjacency_refresh_ui.py
+- tests/units/front/test_purge_inferences_ui.py
+- tests/units/front/test_runs_page.py
+- tests/units/front/test_build_inferred_tab_contract.py (deleted)
+- tests/units/front/test_certified_graph_page.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11306 passed, 334 skipped, 8 deselected
+Browser check: Playwright on port 8011, contactcenter v1 (Lakebase), 1440 px and
+390 px: Original tabs = Build | Runs; Certified tabs = Build | Runs | Cache |
+Objects; Cache shows a single (Lakebase) Refresh cache; Objects lists the
+backend inventory. In this environment no certified build ran yet, so
+`/dtwin/sync/stats?simulation_id=certified` answers 502 (relation
+"contactcenter_v1" does not exist), shown inline in the tab.
