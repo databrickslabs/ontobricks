@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from back.core.errors import InfrastructureError, ValidationError
+from back.core.graphdb.constants import GRAPH_VARIANT_CERTIFIED, GRAPH_VARIANT_ORIGINAL
 from back.core.graphdb import get_graphdb
 from back.core.helpers import effective_graph_query_table, effective_view_table
 from back.core.logging import get_logger
@@ -21,7 +22,25 @@ class TwinGraphAccess:
 
     # Explorer source-picker tokens. They are not simulation registry ids
     # (those are ``s`` + hex) and must never be looked up as sandboxes.
-    LIVE_GRAPH_SENTINELS = frozenset({"live", "live:inferred"})
+    # ``original`` / ``certified`` select a graph variant (store and relation).
+    SOURCE_VARIANTS = {
+        GRAPH_VARIANT_ORIGINAL: GRAPH_VARIANT_ORIGINAL,
+        GRAPH_VARIANT_CERTIFIED: GRAPH_VARIANT_CERTIFIED,
+    }
+    LIVE_GRAPH_SENTINELS = frozenset({"live", "live:inferred", *SOURCE_VARIANTS})
+
+    @staticmethod
+    def source_variant(raw: Optional[str]) -> Optional[str]:
+        """Graph variant named by a source-picker token, or ``None``."""
+        if not isinstance(raw, str):
+            return None
+        return TwinGraphAccess.SOURCE_VARIANTS.get(raw.strip().lower())
+
+    @staticmethod
+    def variant_from_payload(data: Any) -> Optional[str]:
+        """Graph variant named by the ``simulation_id`` source token of a payload."""
+        payload = data if isinstance(data, dict) else {}
+        return TwinGraphAccess.source_variant(payload.get("simulation_id"))
 
     @staticmethod
     def sandbox_id(raw: Optional[str]) -> Optional[str]:
@@ -62,7 +81,7 @@ class TwinGraphAccess:
             settings,
             include_inferred=include_inferred,
             store=store,
-            variant=variant,
+            variant=variant or TwinGraphAccess.source_variant(simulation_id),
         )
 
     @staticmethod
@@ -135,10 +154,17 @@ class TwinGraphAccess:
         return table
 
     @staticmethod
-    def require_graph_store(domain, settings, *, get_store=None) -> Any:
-        """Return the graph-backend triple store or raise InfrastructureError."""
+    def require_graph_store(
+        domain, settings, *, get_store=None, source: Optional[str] = None
+    ) -> Any:
+        """Return the graph store (of the *source* token's variant) or raise."""
         lookup = get_store or get_graphdb
-        store = lookup(domain, settings)
+        variant = TwinGraphAccess.source_variant(source)
+        store = (
+            lookup(domain, settings, variant=variant)
+            if variant
+            else lookup(domain, settings)
+        )
         if not store:
             raise InfrastructureError("Graph backend is not configured")
         return store

@@ -160,3 +160,65 @@ class TestServedQueryTable:
             )
 
         assert table == "sim_union"
+
+
+class TestSourceTokens:
+    """The graph-source picker selects the Original or the Certified Graph."""
+
+    @pytest.mark.parametrize(
+        "raw,variant",
+        [
+            ("original", GRAPH_VARIANT_ORIGINAL),
+            (" Certified ", GRAPH_VARIANT_CERTIFIED),
+            ("live", None),
+            ("live:inferred", None),
+            ("s0123abcd", None),
+            (None, None),
+        ],
+    )
+    def test_source_variant(self, raw, variant):
+        assert TwinGraphAccess.source_variant(raw) == variant
+
+    @pytest.mark.parametrize("raw", ["original", "certified"])
+    def test_variant_tokens_are_not_sandboxes(self, raw):
+        assert TwinGraphAccess.sandbox_id(raw) is None
+
+    def test_an_original_token_reads_the_data_relation(self):
+        table = TwinGraphAccess.graph_query_table(
+            _domain("lakebase"), None, MagicMock(), simulation_id="original"
+        )
+
+        assert table == _VIEW + "_data"
+
+    def test_a_certified_token_reads_the_certified_relation(self):
+        table = TwinGraphAccess.graph_query_table(
+            _domain("databricks"), None, MagicMock(), simulation_id="certified"
+        )
+
+        assert table == _VIEW + "_certified"
+
+    def test_the_store_follows_the_source_token(self):
+        get_store = MagicMock(return_value="delta-store")
+
+        store = TwinGraphAccess.require_graph_store(
+            _domain("lakebase"), None, get_store=get_store, source="original"
+        )
+
+        assert store == "delta-store"
+        assert get_store.call_args.kwargs == {"variant": GRAPH_VARIANT_ORIGINAL}
+
+    def test_no_token_keeps_the_default_store(self):
+        get_store = MagicMock(return_value="store")
+
+        TwinGraphAccess.require_graph_store(
+            _domain("lakebase"), None, get_store=get_store, source="live"
+        )
+
+        assert get_store.call_args.kwargs == {}
+
+    def test_variant_from_payload_reads_the_raw_source(self):
+        assert (
+            TwinGraphAccess.variant_from_payload({"simulation_id": "certified"})
+            == GRAPH_VARIANT_CERTIFIED
+        )
+        assert TwinGraphAccess.variant_from_payload({"simulation_id": "s1"}) is None

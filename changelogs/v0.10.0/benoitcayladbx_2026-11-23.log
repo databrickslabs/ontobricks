@@ -833,3 +833,44 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11316 passed, 334 skipped, 8 deselected
+
+================================================================================
+Internal graph reads: "original" / "certified" source tokens
+================================================================================
+
+Context:
+Step (a) of the switch to the two-phase graph. The internal graph routes
+take their source from the graph-source picker, which already travels as
+`simulation_id` ("live", "live:inferred" or a sandbox id). Two new tokens
+select a graph variant for both the store and the read relation:
+`original` (Delta store, `…_data`) and `certified` (Context backend,
+`…_certified` / `<name>_V<n>`). "live" / "live:inferred" keep today's
+behaviour until the Original build switch, which will make the Original
+Graph the internal default.
+
+Changes:
+1. src/back/objects/digitaltwin/TwinGraphAccess.py
+   - `SOURCE_VARIANTS`, `source_variant`, `variant_from_payload`; the two
+     tokens are source sentinels (never looked up as sandboxes).
+   - `graph_query_table` derives the variant from a source token;
+     `require_graph_store(..., source=None)` opens the token's variant store.
+2. src/api/routers/internal/dtwin.py
+   - `_require_graph_store(..., source=None)` and
+     `_graph_query_table(..., variant=None)` forward the source / variant.
+   - `/sync/load`, `/sync/filter`, `/sync/stats`, `/graphql/execute`,
+     `/triples/find`, `/neighbors` open the store of the picked source.
+3. tests/units/graphdb/test_graph_variants.py
+   - Token parsing, tokens are not sandboxes, relation and store per token,
+     payload variant.
+4. tests/units/dtwin/test_internal_graph_source.py (new)
+   - `/dtwin/sync/stats` opens the Original / Certified store for the token
+     and the default store for "live".
+
+Modified files:
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/api/routers/internal/dtwin.py
+- tests/units/graphdb/test_graph_variants.py
+- tests/units/dtwin/test_internal_graph_source.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11332 passed, 334 skipped, 8 deselected

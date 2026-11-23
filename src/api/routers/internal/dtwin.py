@@ -83,6 +83,7 @@ def _graph_query_table(
     *,
     include_inferred: bool = True,
     simulation_id: Optional[str] = None,
+    variant: Optional[str] = None,
 ) -> str:
     return TwinGraphAccess.graph_query_table(
         domain,
@@ -90,6 +91,7 @@ def _graph_query_table(
         store,
         include_inferred=include_inferred,
         simulation_id=simulation_id,
+        variant=variant,
     )
 
 
@@ -337,7 +339,7 @@ async def load_triplestore(
         simulation_id = str(body.get("simulation_id") or "").strip()
 
         domain = get_domain(session_mgr)
-        store = _require_graph_store(domain, settings)
+        store = _require_graph_store(domain, settings, source=simulation_id)
         query_table = _graph_query_table(
             domain,
             settings,
@@ -1277,9 +1279,10 @@ async def cohort_json_body(request: Request) -> dict:
     return data
 
 
-def _require_graph_store(domain, settings):
+def _require_graph_store(domain, settings, source: Optional[str] = None):
+    """Graph store; an ``original`` / ``certified`` *source* token picks the variant."""
     return TwinGraphAccess.require_graph_store(
-        domain, settings, get_store=get_graphdb
+        domain, settings, get_store=get_graphdb, source=source
     )
 
 
@@ -1530,7 +1533,7 @@ async def filter_triplestore(
         simulation_id = str(data.get("simulation_id") or "").strip()
 
         domain = get_domain(session_mgr)
-        store = _require_graph_store(domain, settings)
+        store = _require_graph_store(domain, settings, source=simulation_id)
         from back.core.graphdb.search_cache import (
             apply_search_cache_to_store,
             parse_cache_param,
@@ -1922,7 +1925,7 @@ async def triplestore_stats(
     """Return content statistics about the triple store."""
     try:
         domain = get_domain(session_mgr)
-        store = _require_graph_store(domain, settings)
+        store = _require_graph_store(domain, settings, source=simulation_id)
         sid = (simulation_id or "").strip() or None
         graph_name = _graph_query_table(
             domain,
@@ -1943,7 +1946,7 @@ async def triplestore_stats(
             if cached:
                 logger.debug("Stale stats cache; refreshing")
 
-        store = _require_graph_store(domain, settings)
+        store = _require_graph_store(domain, settings, source=simulation_id)
 
         # These are four independent blocking SQL round-trips to the graph
         # warehouse. Run them concurrently in the sized thread pool (rather than
@@ -3359,7 +3362,9 @@ async def dtwin_graphql_execute(
         )
     schema, _metadata = result
 
-    store = _require_graph_store(domain, settings)
+    store = _require_graph_store(
+        domain, settings, source=body.get("simulation_id")
+    )
 
     context = {
         "triplestore": store,
@@ -3369,6 +3374,7 @@ async def dtwin_graphql_execute(
             store,
             include_inferred=include_inferred,
             simulation_id=simulation_id,
+            variant=TwinGraphAccess.variant_from_payload(body),
         ),
         "base_uri": base_uri,
     }
@@ -3428,7 +3434,7 @@ async def dtwin_triples_find(
     offset = max(0, int(offset or 0))
 
     domain = get_domain(session_mgr)
-    store = _require_graph_store(domain, settings)
+    store = _require_graph_store(domain, settings, source=simulation_id)
     from back.core.graphdb.search_cache import (
         apply_search_cache_to_store,
         parse_cache_param,
@@ -3518,7 +3524,7 @@ async def dtwin_neighbors(
     limit = max(1, min(int(limit or 2000), 20000))
 
     domain = get_domain(session_mgr)
-    store = _require_graph_store(domain, settings)
+    store = _require_graph_store(domain, settings, source=simulation_id)
     from back.core.graphdb.search_cache import apply_search_cache_to_store
 
     sid = (simulation_id or "").strip()
