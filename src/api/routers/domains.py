@@ -500,7 +500,7 @@ async def get_domain_classes(
     ),
     domain_version: Optional[str] = Query(
         None,
-        description="Context version to load (uses latest version if omitted)",
+        description="PUBLISHED context version to load (latest PUBLISHED version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
     registry_schema: Optional[str] = Query(None, description="Override registry schema"),
@@ -516,6 +516,7 @@ async def get_domain_classes(
         registry_schema,
         registry_volume,
         domain_version,
+        published_only=True,
     )
     _raw_dname = domain.domain_folder or (domain.info or {}).get("name", "")
     dname = _raw_dname if isinstance(_raw_dname, str) else ""
@@ -630,7 +631,7 @@ async def get_domain_ontology(
     ),
     domain_version: Optional[str] = Query(
         None,
-        description="Context version to load (uses latest version if omitted)",
+        description="PUBLISHED context version to load (latest PUBLISHED version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -663,6 +664,7 @@ async def get_domain_ontology(
         registry_schema,
         registry_volume,
         domain_version,
+        published_only=True,
     )
 
     classes = domain.get_classes()

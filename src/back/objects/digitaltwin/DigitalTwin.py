@@ -458,6 +458,7 @@ class DigitalTwin:
         domain_version=None,
         *,
         read_only=False,
+        published_only=False,
     ):
         return TwinResolve.resolve_domain(
             domain_name,
@@ -468,6 +469,7 @@ class DigitalTwin:
             registry_volume,
             domain_version,
             read_only=read_only,
+            published_only=published_only,
         )
 
     @staticmethod

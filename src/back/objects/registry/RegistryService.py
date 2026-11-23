@@ -406,12 +406,11 @@ class RegistryService:
     def list_mcp_domains(
         self, require_ontology: bool = False
     ) -> Tuple[bool, List[Dict[str, Any]], str]:
-        """List domains that have at least one registry version.
+        """List domains with a PUBLISHED version (the only ones served externally).
 
-        Returns ``(ok, domains, message)`` where each domain includes its name,
-        description, MCP policy, configured graph backend, and graph
-        availability. When *require_ontology* is ``True`` only domains whose
-        numeric-latest version has a non-empty ``classes`` list are included.
+        Returns ``(ok, domains, message)``: name, description, MCP policy,
+        graph backend and graph availability of the numeric-latest PUBLISHED
+        version. *require_ontology* keeps only versions with classes.
         """
         # Fast path: the cached two-query metadata listing already carries
         # per-version ``status`` + description, so membership can be decided
@@ -423,13 +422,14 @@ class RegistryService:
         result: List[Dict[str, Any]] = []
         for d in details:
             name = d.get("name", "")
-            versions = list(d.get("versions") or [])
-            if not versions:
+            published = [
+                v
+                for v in (d.get("versions") or [])
+                if str(v.get("status") or "").upper() == "PUBLISHED"
+            ]
+            if not published:
                 continue
-            # ``has_graph`` reflects the numeric-latest version (any
-            # lifecycle status) — the one the external API/MCP serves
-            # when ``domain_version`` is omitted.
-            latest = max(versions, key=RegistryService._version_sort_key)
+            latest = max(published, key=RegistryService._version_sort_key)
             from back.core.graphdb.GraphDBFactory import normalize_graph_backend
 
             graph_backend = normalize_graph_backend(
@@ -438,9 +438,8 @@ class RegistryService:
             has_graph = bool(latest.get("last_build"))
             if require_ontology:
                 try:
-                    ok_latest, mcp_data, mcp_ver, _err = self.load_latest_domain_data(
-                        name
-                    )
+                    loaded = self.load_published_domain_data_cached(name)
+                    ok_latest, mcp_data, mcp_ver, _err = loaded
                     if not ok_latest:
                         continue
                     ver_data = mcp_data.get("versions", {}).get(mcp_ver, {})

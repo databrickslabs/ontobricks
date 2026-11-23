@@ -11,7 +11,11 @@ All endpoints accept an optional domain query parameter (``domain_name``,
 with legacy alias ``project_name``). When supplied the API loads the named
 domain from the registry instead of relying on the current browser session.
 An optional version parameter (``domain_version``, legacy ``project_version``)
-targets a specific version; when omitted, the latest version is used.
+targets a specific version. Read endpoints serve **PUBLISHED versions only**:
+the latest PUBLISHED version when omitted, and an explicit version only when
+it is PUBLISHED (404 otherwise). Build, data-quality / inference starts,
+cohort dry-run / materialize and entity business rules still target the
+latest version.
 
 Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versions.
 """
@@ -470,7 +474,7 @@ async def dt_status(
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Context version to load (uses latest version if omitted)",
+        description="PUBLISHED context version to load (latest PUBLISHED version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -484,7 +488,8 @@ async def dt_status(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = DigitalTwin.resolve_domain(
+    domain = _resolve_served_domain(
+        request,
         domain_name,
         session_mgr,
         settings,
@@ -492,9 +497,7 @@ async def dt_status(
         registry_schema,
         registry_volume,
         domain_version,
-        read_only=True,
     )
-    assert_public_graph_read(request, domain, settings)
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
 
@@ -533,6 +536,32 @@ async def dt_status(
         raise InfrastructureError(
             "Knowledge Graph status check failed", detail=str(e)
         ) from e
+
+
+def _resolve_served_domain(
+    request,
+    domain_name,
+    session_mgr,
+    settings,
+    registry_catalog,
+    registry_schema,
+    registry_volume,
+    domain_version,
+):
+    """Load the served (PUBLISHED) version of a context and check graph access."""
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+        read_only=True,
+        published_only=True,
+    )
+    assert_public_graph_read(request, domain, settings)
+    return domain
 
 
 def _graph_read_table(
@@ -577,7 +606,7 @@ async def dt_stats(
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Context version to load (uses latest version if omitted)",
+        description="PUBLISHED context version to load (latest PUBLISHED version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -593,7 +622,8 @@ async def dt_stats(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = DigitalTwin.resolve_domain(
+    domain = _resolve_served_domain(
+        request,
         domain_name,
         session_mgr,
         settings,
@@ -601,9 +631,7 @@ async def dt_stats(
         registry_schema,
         registry_volume,
         domain_version,
-        read_only=True,
     )
-    assert_public_graph_read(request, domain, settings)
     graph_name = effective_graph_name(domain)
 
     if not graph_name:
@@ -831,7 +859,7 @@ async def dt_triples_find(
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Context version to load (uses latest version if omitted)",
+        description="PUBLISHED context version to load (latest PUBLISHED version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -853,7 +881,8 @@ async def dt_triples_find(
     limit = max(1, min(limit, 10000))
     offset = max(0, offset)
 
-    domain = DigitalTwin.resolve_domain(
+    domain = _resolve_served_domain(
+        request,
         domain_name,
         session_mgr,
         settings,
@@ -861,9 +890,7 @@ async def dt_triples_find(
         registry_schema,
         registry_volume,
         domain_version,
-        read_only=True,
     )
-    assert_public_graph_read(request, domain, settings)
     store = get_graphdb(domain, settings)
     if not store:
         raise ValidationError("Graph backend not configured")
@@ -975,7 +1002,7 @@ async def dt_triples(
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Context version to load (uses latest version if omitted)",
+        description="PUBLISHED context version to load (latest PUBLISHED version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -991,7 +1018,8 @@ async def dt_triples(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = DigitalTwin.resolve_domain(
+    domain = _resolve_served_domain(
+        request,
         domain_name,
         session_mgr,
         settings,
@@ -1000,7 +1028,6 @@ async def dt_triples(
         registry_volume,
         domain_version,
     )
-    assert_public_graph_read(request, domain, settings)
     engine = None if (backend or "graph") == "graph" else backend
     store = get_graphdb(domain, settings, engine=engine)
     if not store:
@@ -1298,7 +1325,7 @@ async def dt_inference_results(
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Context version to load (uses latest version if omitted)",
+        description="PUBLISHED context version to load (latest PUBLISHED version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1320,6 +1347,7 @@ async def dt_inference_results(
         registry_schema,
         registry_volume,
         domain_version,
+        published_only=True,
     )
     return InferenceResultResponse(
         success=True,
@@ -1541,7 +1569,7 @@ async def dt_cohort_list_rules(
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Context version to load (uses latest version if omitted)",
+        description="PUBLISHED context version to load (latest PUBLISHED version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1563,6 +1591,7 @@ async def dt_cohort_list_rules(
         registry_schema,
         registry_volume,
         domain_version,
+        published_only=True,
     )
     rules = CohortService(domain).list_rules()
     summaries = [
@@ -1601,7 +1630,7 @@ async def dt_cohort_get_rule(
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Context version to load (uses latest version if omitted)",
+        description="PUBLISHED context version to load (latest PUBLISHED version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1623,6 +1652,7 @@ async def dt_cohort_get_rule(
         registry_schema,
         registry_volume,
         domain_version,
+        published_only=True,
     )
     rules = CohortService(domain).list_rules()
     match = next((r for r in rules if r.get("id") == rule_id), None)
@@ -1827,12 +1857,10 @@ async def dt_nodes_context(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = DigitalTwin.resolve_domain(
-        domain_name, session_mgr, settings,
-        registry_catalog, registry_schema, registry_volume,
-        domain_version, read_only=True,
+    domain = _resolve_served_domain(
+        request, domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume, domain_version,
     )
-    assert_public_graph_read(request, domain, settings)
     payload = await NodeContextService.resolve_context(
         domain,
         settings,
@@ -1872,12 +1900,11 @@ async def dt_nodes_action(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = DigitalTwin.resolve_domain(
-        payload.domain_name, session_mgr, settings,
+    domain = _resolve_served_domain(
+        request, payload.domain_name, session_mgr, settings,
         payload.registry_catalog, payload.registry_schema, payload.registry_volume,
-        payload.domain_version, read_only=True,
+        payload.domain_version,
     )
-    assert_public_graph_read(request, domain, settings)
     result = await NodeContextService.invoke_action(
         domain,
         settings,
@@ -1956,12 +1983,10 @@ async def dt_nodes_shacl(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = DigitalTwin.resolve_domain(
-        domain_name, session_mgr, settings,
-        registry_catalog, registry_schema, registry_volume,
-        domain_version, read_only=True,
+    domain = _resolve_served_domain(
+        request, domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume, domain_version,
     )
-    assert_public_graph_read(request, domain, settings)
     payload = await NodeShaclService.evaluate(domain, settings, entity_uri=entity_uri)
     return NodeShaclResponse(**payload)
 
@@ -2010,12 +2035,10 @@ async def dt_nodes_virtual_attributes(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = DigitalTwin.resolve_domain(
-        domain_name, session_mgr, settings,
-        registry_catalog, registry_schema, registry_volume,
-        domain_version, read_only=True,
+    domain = _resolve_served_domain(
+        request, domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume, domain_version,
     )
-    assert_public_graph_read(request, domain, settings)
     payload = await NodeContextService.compute_virtual_attributes(
         domain,
         settings,

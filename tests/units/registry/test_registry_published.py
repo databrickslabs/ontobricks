@@ -103,19 +103,54 @@ def test_load_published_domain_data_cached_serves_from_cache():
     invalidate_registry_cache()
 
 
-def test_list_mcp_domains_includes_draft_only_domains():
+def test_list_mcp_domains_excludes_domains_without_a_published_version():
     from back.objects.registry.registry_cache import invalidate_registry_cache
 
     invalidate_registry_cache()
     svc = _svc()
     _write(svc, "pub", "1", "PUBLISHED")
     _write(svc, "draft_only", "1", "DRAFT")
+    _write(svc, "in_review", "1", "IN-REVIEW")
 
     ok, items, _ = svc.list_mcp_domains()
     assert ok
     names = {d["name"] for d in items}
-    assert names == {"pub", "draft_only"}
+    assert names == {"pub"}
     invalidate_registry_cache()
+
+
+def test_list_mcp_domains_reads_the_latest_published_not_a_newer_draft():
+    svc = _svc()
+    svc.list_domain_details_cached = lambda: (
+        True,
+        [
+            {
+                "name": "dom",
+                "description": "",
+                "versions": [
+                    {
+                        "version": "3",
+                        "status": "DRAFT",
+                        "graph_backend": "neo4j",
+                        "last_build": "",
+                    },
+                    {
+                        "version": "2",
+                        "status": "PUBLISHED",
+                        "graph_backend": "lakebase",
+                        "last_build": "2026-08-01T00:00:00Z",
+                    },
+                ],
+            }
+        ],
+        "",
+    )
+
+    ok, items, _ = svc.list_mcp_domains()
+
+    assert ok
+    assert items[0]["graph_backend"] == "lakebase"
+    assert items[0]["has_graph"] is True
 
 
 def test_list_mcp_domains_reports_latest_published_graph_backend():

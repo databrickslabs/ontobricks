@@ -120,8 +120,8 @@ def _load_domain_from_registry(
     """Load a domain by name from the registry and return a DomainSession.
 
     When *external* is ``True`` (the public ``/api/v1/graphql`` mount) the
-    session-folder shortcut is skipped and the requested version (or the
-    numeric-latest version of any lifecycle status) is served. Internal UI
+    session-folder shortcut is skipped and only PUBLISHED versions are served:
+    the requested version when it is PUBLISHED, else the latest PUBLISHED one. Internal UI
     GraphiQL (*external* ``False``) keeps the session shortcut and falls
     back to the latest version when nothing is open.
     """
@@ -140,6 +140,7 @@ def _load_domain_from_registry(
             settings,
             domain_version=domain_version,
             read_only=True,
+            published_only=external,
         )
 
     # If the user already has this registry folder open at a chosen version,

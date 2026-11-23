@@ -710,11 +710,11 @@ class TestDigitalTwinAPIRoutes:
         response = client.get("/api/v1/domains")
         assert response.status_code in (200, 400, 502)
 
-    def test_status_without_domain(self, client):
+    def test_status_without_domain_requires_a_domain_name(self, client):
+        """External reads serve PUBLISHED versions only: a context is required."""
         response = client.get("/api/v1/digitaltwin/status")
-        assert response.status_code == 200
-        data = response.json()
-        assert "success" in data
+        assert response.status_code == 400
+        assert "domain_name" in response.json()["message"]
 
     def test_stats_without_domain(self, client):
         response = client.get("/api/v1/digitaltwin/stats")

@@ -783,9 +783,12 @@ class TestDigitalTwinInference:
 class TestDigitalTwinInferenceResults:
     """Tests for GET /api/v1/digitaltwin/inference/results (stub endpoint)."""
 
-    def test_inference_results_stub(self, client):
+    @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain", return_value=MagicMock())
+    def test_inference_results_stub(self, _resolve, client):
         """The stub returns a message telling the user to poll the task."""
-        response = client.get("/api/v1/digitaltwin/inference/results")
+        response = client.get(
+            "/api/v1/digitaltwin/inference/results?domain_name=demo"
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True

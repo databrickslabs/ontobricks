@@ -72,7 +72,7 @@
     "back/objects/domain/settings/graphengine/GraphEngineSettings.py::GraphEngineSettings": 928,
     "back/objects/mapping/Mapping.py::Mapping": 2673,
     "back/objects/registry/PermissionService.py::PermissionService": 895,
-    "back/objects/registry/RegistryService.py::RegistryService": 1011,
+    "back/objects/registry/RegistryService.py::RegistryService": 1010,
     "back/objects/session/DomainSession.py::DomainSession": 1278
   },
   "oversized_functions": {
@@ -106,7 +106,7 @@
     "agents/tools/planner.py::tool_column_value_overlap": 101,
     "agents/tools/planner.py::tool_normalized_value_overlap": 104,
     "api/routers/digitaltwin.py::dt_triples": 102,
-    "api/routers/digitaltwin.py::dt_triples_find": 129,
+    "api/routers/digitaltwin.py::dt_triples_find": 128,
     "api/routers/domains.py::get_domain_design_status": 170,
     "api/routers/internal/domain.py::upload_documents": 102,
     "api/routers/internal/dtwin.py::dtwin_assistant_chat": 125,

@@ -657,18 +657,23 @@ The MCP server reads this field to decide which tools to publish for the
 session; it is informational for other clients, since the disabling itself is
 also enforced server-side on the endpoints below.
 
-`graph_backend` is the backend configured on the numeric-latest version
-(any lifecycle status): `none`, `lakebase`, `databricks`, or `neo4j`. `has_graph` reports
+`graph_backend` is the backend configured on the numeric-latest PUBLISHED
+version: `none`, `lakebase`, `databricks`, or `neo4j`. `has_graph` reports
 runtime availability, not configuration: it is `true` only after that version
 has a successful graph build. Clients can therefore distinguish an
 ontology-only domain (`graph_backend: "none"`) from a graph-backed domain that
 has not been built yet.
 
 > **Lifecycle & API access.** Each domain version has a lifecycle status —
-> `DRAFT` → `IN-REVIEW` → `PUBLISHED`. The external API, GraphQL, and MCP
-> serve **every** version. Pass `domain_version` to target one; when omitted
-> the **numeric-latest** version is used regardless of status. Lifecycle
-> still locks **design edits** on non-DRAFT versions.
+> `DRAFT` → `IN-REVIEW` → `PUBLISHED`. External **reads** (the Knowledge
+> Graph and domain read endpoints, external GraphQL, MCP) serve **PUBLISHED
+> versions only**: the numeric-latest PUBLISHED version when `domain_version`
+> is omitted, and an explicit `domain_version` only when it is PUBLISHED
+> (`404` otherwise). A domain without a PUBLISHED version is not listed, and
+> a read without `domain_name` needs a context open in the session (`400`
+> otherwise). The external build, data-quality / inference starts, cohort
+> dry-run / materialize and entity business rules still target the latest
+> version. Lifecycle still locks **design edits** on non-DRAFT versions.
 
 ---
 
@@ -685,7 +690,7 @@ attributes are declarations only — their values come from
 
 **Parameters:**
 - `domain_name` (query, optional): Domain name in the registry (session domain if omitted)
-- `domain_version` (query, optional): Version to load (latest if omitted)
+- `domain_version` (query, optional): PUBLISHED version to load (latest PUBLISHED if omitted)
 - `registry_catalog` / `registry_schema` / `registry_volume` (query, optional): Registry overrides
 
 **Response:**
@@ -2901,9 +2906,8 @@ Returns the domain registry location (catalog, schema, volume).
 GET /api/v1/domains
 ```
 
-List all domains that have at least one version in the registry. The
-API/MCP serves the numeric-latest version of any status (see the lifecycle note
-above). Each entry carries the domain's `mcp_policy`, configured
+List the domains that have at least one PUBLISHED version. The API/MCP
+serves the numeric-latest PUBLISHED version (see the lifecycle note above). Each entry carries the domain's `mcp_policy`, configured
 `graph_backend` (`none`, `lakebase`, `databricks`, or `neo4j`), and `has_graph`
 availability flag.
 

@@ -89,6 +89,7 @@ class TwinResolve:
         domain_version=None,
         *,
         read_only=False,
+        published_only=False,
     ):
         """Return the session to operate on; optionally load from registry by name/version.
 
@@ -106,10 +107,22 @@ class TwinResolve:
         design-status) must keep the default ``read_only=False``.
         An explicit ``domain_version`` is loaded regardless of DRAFT /
         IN-REVIEW / PUBLISHED.
+
+        ``published_only`` (external surfaces: REST v1, external GraphQL, MCP)
+        serves PUBLISHED versions only: the numeric-latest PUBLISHED version by
+        default, an explicit ``domain_version`` only when it is PUBLISHED
+        (:class:`NotFoundError` otherwise). Without ``domain_name`` the session
+        context is resolved by its registry folder.
         """
         from back.objects.registry import RegistryCfg, RegistryService
 
         domain = _dt_mod().get_domain(session_mgr)
+        if not domain_name and published_only:
+            domain_name = (getattr(domain, "domain_folder", "") or "").strip()
+            if not domain_name:
+                raise ValidationError(
+                    "domain_name is required: only PUBLISHED versions are served"
+                )
         if not domain_name:
             return domain
 
@@ -123,17 +136,9 @@ class TwinResolve:
                 "Registry not configured — cannot resolve domain_name"
             )
         svc = RegistryService(cfg, _dt().uc_from_domain(domain, settings))
-        if domain_version:
-            ok, data, msg = svc.read_version(domain_name, domain_version)
-            if not ok:
-                if "not found" in msg.lower():
-                    raise NotFoundError(msg)
-                raise InfrastructureError(msg)
-            version = domain_version
-        else:
-            ok, data, version, err = svc.load_latest_domain_data(domain_name)
-            if not ok:
-                raise NotFoundError(err)
+        data, version = TwinResolve._read_version_data(
+            svc, domain_name, domain_version, published_only=published_only
+        )
         t_registry = time.perf_counter()
 
         domain.clear_generated_content()
@@ -161,6 +166,32 @@ class TwinResolve:
             (t_end - t0) * 1000,
         )
         return domain
+
+    @staticmethod
+    def _read_version_data(svc, domain_name, domain_version, *, published_only):
+        """Return ``(data, version)`` of the version a resolve must load."""
+        if domain_version:
+            ok, data, msg = svc.read_version(domain_name, domain_version)
+            if not ok:
+                if "not found" in msg.lower():
+                    raise NotFoundError(msg)
+                raise InfrastructureError(msg)
+            status = (data.get("info") or {}).get("status")
+            if published_only and status != "PUBLISHED":
+                raise NotFoundError(
+                    f'Version {domain_version} of context "{domain_name}" '
+                    "is not published"
+                )
+            return data, domain_version
+        if published_only:
+            ok, data, version, err = svc.load_published_domain_data_cached(
+                domain_name
+            )
+        else:
+            ok, data, version, err = svc.load_latest_domain_data(domain_name)
+        if not ok:
+            raise NotFoundError(err)
+        return data, version
 
     @staticmethod
     def uc_from_domain(domain, settings):
