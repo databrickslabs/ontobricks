@@ -1042,7 +1042,8 @@ async def get_latest_graph_metrics(
     """
     try:
         domain = get_domain(session_mgr)
-        stored = _load_stored_metrics(domain, settings)
+        # Blocking registry (Lakebase) read: run off the event loop.
+        stored = await run_blocking(_load_stored_metrics, domain, settings)
         if not stored:
             return {"success": True, "has_result": False}
 
@@ -1075,7 +1076,8 @@ async def get_graph_metric_series(
     """Return one exhaustive score series from the latest analytics run."""
     try:
         domain = get_domain(session_mgr)
-        stored = _load_stored_metrics(domain, settings)
+        # Blocking registry (Lakebase) read: run off the event loop.
+        stored = await run_blocking(_load_stored_metrics, domain, settings)
         if not stored:
             return {"success": True, "has_result": False}
 

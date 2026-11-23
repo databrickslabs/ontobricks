@@ -454,19 +454,44 @@
         _analyticsLastSections = null;
     }
 
+    // Show the spinner with the "loading the last analysis" message. The
+    // default (compute) message is kept on the element so it can be restored.
+    function _showLoadingLatestSpinner() {
+        var spinner = document.getElementById('analyticsSpinner');
+        if (!spinner) return;
+        var msg = spinner.querySelector('p');
+        if (msg && spinner.dataset.defaultMsg === undefined) {
+            spinner.dataset.defaultMsg = msg.textContent;
+        }
+        if (msg) msg.textContent = 'Loading the last analysis…';
+        spinner.classList.remove('d-none');
+    }
+
+    function _hideLoadingLatestSpinner() {
+        var spinner = document.getElementById('analyticsSpinner');
+        if (!spinner) return;
+        var msg = spinner.querySelector('p');
+        if (msg && spinner.dataset.defaultMsg !== undefined) {
+            msg.textContent = spinner.dataset.defaultMsg;
+        }
+        spinner.classList.add('d-none');
+    }
+
+    function _fetchLatestMetrics() {
+        return fetch('/dtwin/metrics/latest', { credentials: 'same-origin' })
+            .then(function (resp) { return resp.json(); });
+    }
+
     // Load and render the LAST persisted analytics result for this domain.
     // Returns true when a stored result was rendered. Shows the spinner while
     // the stored result is being fetched/rendered (e.g. on section open).
-    window.analyticsLoadLatest = async function () {
-        var spinner = document.getElementById('analyticsSpinner');
-        var spinnerMsg = spinner ? spinner.querySelector('p') : null;
-        var prevMsg = spinnerMsg ? spinnerMsg.textContent : '';
-        if (spinnerMsg) spinnerMsg.textContent = 'Loading the last analysis…';
-        if (spinner) spinner.classList.remove('d-none');
+    // ``prefetched`` (optional) is an in-flight _fetchLatestMetrics() promise
+    // started earlier so the request overlaps the graph probe.
+    window.analyticsLoadLatest = async function (prefetched) {
+        _showLoadingLatestSpinner();
         try {
-            var resp = await fetch('/dtwin/metrics/latest', { credentials: 'same-origin' });
-            var data = await resp.json();
-            if (!data.success || !data.has_result) return false;
+            var data = await (prefetched || _fetchLatestMetrics());
+            if (!data || !data.success || !data.has_result) return false;
             _renderAnalyticsData(data, {
                 computed_at: data.computed_at,
                 class_filter: data.class_filter
@@ -475,8 +500,7 @@
         } catch (e) {
             return false;
         } finally {
-            if (spinner) spinner.classList.add('d-none');
-            if (spinnerMsg) spinnerMsg.textContent = prevMsg;
+            _hideLoadingLatestSpinner();
         }
     };
 
@@ -529,15 +553,16 @@
     // any in-flight task. Then, if a computation is still running in the
     // background, re-show the spinner and resume waiting (the last result stays
     // visible underneath until the new one lands).
-    window.analyticsResume = async function () {
+    window.analyticsResume = async function (prefetched) {
         // The stored result lives in the registry and outlives the graph it
         // describes. Rendering it next to the "not built yet" banner told the
         // user two contradictory things; the live probe wins.
         if (_graphMissing) {
             _clearAnalyticsResults();
+            _hideLoadingLatestSpinner();
             return;
         }
-        await window.analyticsLoadLatest();
+        await window.analyticsLoadLatest(prefetched);
         var running = await _findRunningAnalyticsTask();
         if (running) {
             await _waitAndLoad(running.id);
@@ -1319,10 +1344,16 @@
     // Populate the entity-type dropdown and hydrate the LAST stored result
     // (or resume a still-running background job) on section activation.
     window.analyticsLoadTypes = function () {
+        // Immediate feedback on section open: the graph probe below
+        // (/dtwin/sync/stats) can take seconds before anything renders.
+        _showLoadingLatestSpinner();
+        // Overlap the stored-result read with the probe; it is only rendered
+        // after analyticsResume has checked _graphMissing.
+        var latest = _fetchLatestMetrics().catch(function () { return null; });
         _loadEntityTypes().then(function () {
-            window.analyticsResume();
+            window.analyticsResume(latest);
         }).catch(function () {
-            window.analyticsResume();
+            window.analyticsResume(latest);
         });
     };
 

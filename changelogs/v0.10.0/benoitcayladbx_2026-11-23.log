@@ -181,3 +181,47 @@ also include former event-loop stalls, so the controlled A/B above is the
 reference number.
 Caveat: a registry schema dropped or re-seeded outside the app (psql) keeps
 stale cached ids in running processes until Initialize or a restart.
+
+================================================================================
+Intelligence → Analytics: show the loading spinner immediately on section open
+================================================================================
+
+Context:
+Opening /intelligence/?section=analytics left the Analytics pane empty for
+seconds before the spinner appeared. analyticsLoadTypes() first awaited the
+graph probe (/dtwin/sync/stats: 2.3-3.3 s on the dev server, p90 7.1 s in the
+logs) and only then called analyticsLoadLatest(), which is where the spinner
+was shown. /dtwin/metrics/latest and /dtwin/metrics/series also read the
+registry synchronously on the event loop.
+
+Changes:
+1. src/front/static/query/js/query-analytics.js
+   - analyticsLoadTypes() shows the "Loading the last analysis…" spinner
+     right away and starts the /dtwin/metrics/latest fetch in parallel with
+     the graph probe.
+   - analyticsResume(prefetched) / analyticsLoadLatest(prefetched) reuse
+     that in-flight promise; the stored result is still rendered only after
+     the _graphMissing gate (stale-result contract unchanged). The missing
+     graph path now hides the spinner.
+   - New helpers _showLoadingLatestSpinner / _hideLoadingLatestSpinner
+     (default compute message kept in data-default-msg and restored) and
+     _fetchLatestMetrics.
+2. src/api/routers/internal/dtwin.py
+   - GET /dtwin/metrics/latest and /dtwin/metrics/series read the stored
+     metrics through run_blocking.
+3. tests/units/front/test_analytics_stale_result_gate.py
+   - Spinner shown before the probe, latest prefetched during the probe,
+     missing-graph path hides the spinner.
+
+Modified files:
+- src/front/static/query/js/query-analytics.js
+- src/api/routers/internal/dtwin.py
+- tests/units/front/test_analytics_stale_result_gate.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11219 passed, 334 skipped, 8 deselected
+Live check: dev server serves the updated script; /dtwin/sync/stats
+2.3-3.3 s (the former blank delay), /dtwin/metrics/latest 0.16-0.32 s.
+(Not browser-tested: the chrome-devtools MCP is not connected.)
+Note: `tab=design` in the reported URL belongs to the Cohorts section and is
+dropped by sidebar-nav on Analytics; it plays no part in the delay.

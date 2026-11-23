@@ -104,3 +104,20 @@ class TestTheBannerExplainsTheDisappearance:
     def test_it_points_at_the_retained_history(self):
         body = _block(_source(), "function _showNoGraphBanner(", 1400)
         assert "Runs" in body
+
+
+class TestSpinnerOnSectionOpen:
+    """The graph probe can take seconds: feedback must not wait for it."""
+
+    def test_spinner_is_shown_before_the_graph_probe(self):
+        body = _block(_source(), "window.analyticsLoadTypes = function", 900)
+        assert body.index("_showLoadingLatestSpinner()") < body.index("_loadEntityTypes()")
+
+    def test_latest_result_is_prefetched_during_the_probe(self):
+        body = _block(_source(), "window.analyticsLoadTypes = function", 900)
+        assert body.index("_fetchLatestMetrics()") < body.index("_loadEntityTypes()")
+        assert "analyticsResume(latest)" in body
+
+    def test_missing_graph_path_hides_the_spinner(self):
+        body = _block(_source(), "window.analyticsResume = async function", 700)
+        assert "_hideLoadingLatestSpinner()" in body
