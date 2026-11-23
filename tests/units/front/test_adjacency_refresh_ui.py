@@ -7,7 +7,7 @@ import pytest
 pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-BUILD_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_certified.html"
+BUILD_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_build.html"
 PANE_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_graph_cache_pane.html"
 SYNC_JS = REPO_ROOT / "src/front/static/query/js/query-sync.js"
 DBX_JS = REPO_ROOT / "src/front/static/query/js/query-databricks-build.js"
@@ -26,7 +26,7 @@ class TestAdjacencyButtonsExist:
         assert ">Refresh adjacency" not in pane
 
     def test_the_header_kebab_still_offers_refresh_cache(self):
-        header = _read(BUILD_HTML).split("section-header", 1)[1].split('id="certPageTabs"', 1)[0]
+        header = _read(BUILD_HTML).split("section-header", 1)[1].split('id="buildFlow"', 1)[0]
         assert "_build_more_actions.html" in header
         assert "AdjacencyRefreshBtn" not in header
 

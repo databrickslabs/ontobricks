@@ -88,9 +88,10 @@ class TestGraphPages:
         html = _read(self.BUILD_HTML)
         assert 'id="buildBackendIcon"' in html
         assert "ob-brand-icon" in html
-        # The Original Graph page is a Lakehouse virtual graph for every backend.
-        assert "ob-icon-lakehouse" in html
-        assert "build-backend-logo" in html
+        # The Original Graph node of the Build page summary is always Lakehouse.
+        assert "ob-icon-lakehouse" in html.split('id="buildFlowOriginal"', 1)[1].split(
+            'id="buildFlowCertified"', 1
+        )[0]
         info = _read(self.INFO_HTML)
         assert "ob-icon-postgresql" in info
         assert "ob-icon-lakehouse" in info

@@ -1,16 +1,14 @@
 /**
  * OntoBricks — query-sync.css
- * Original Graph (sync) and Certified Graph (certified) build sections — the
- * backend panel (_query_sync.html) lives on the Certified Graph page
+ * Build section (sync): Original + Certified Graph, including the Lakebase /
+ * Neo4j backend panel (_query_sync.html)
  */
 
-#sync-section .sync-content-section,
-#certified-section .sync-content-section {
+#sync-section .sync-content-section {
     position: relative;
 }
 
-#sync-section .build-backend-logo,
-#certified-section .build-backend-logo {
+#sync-section .build-backend-logo {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -19,8 +17,7 @@
     flex-shrink: 0;
 }
 
-#sync-section .build-backend-logo .ob-brand-icon,
-#certified-section .build-backend-logo .ob-brand-icon {
+#sync-section .build-backend-logo .ob-brand-icon {
     width: 3.25rem;
     height: 3.25rem;
 }
@@ -109,13 +106,11 @@
     width: 0%;
 }
 
-#sync-section .ob-code-tiny,
-#certified-section .ob-code-tiny {
+#sync-section .ob-code-tiny {
     font-size: 0.75em;
 }
 
-#sync-section .ob-btn-compact,
-#certified-section .ob-btn-compact {
+#sync-section .ob-btn-compact {
     font-size: 0.7rem;
 }
 

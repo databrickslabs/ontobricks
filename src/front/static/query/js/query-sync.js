@@ -178,7 +178,6 @@ function _setBackendBrandIcon(element, backend) {
 function _applyBuildGraphEngineUi(dtExist) {
     var dt = dtExist || {};
     var cfg = window.__TRIPLESTORE_CONFIG || {};
-    // The Original Graph page logo is always Lakehouse (applyTripleStoreBackendPanels).
     var eng = dt.graph_engine || cfg.graph_engine || 'lakebase';
     var pending = dt.pending === true;
     cfg.graph_engine = eng;
@@ -708,11 +707,11 @@ function renderTripleStoreStatus(data) {
         const reason = data.reason || '';
         let msg;
         if (reason.toLowerCase().includes('does not exist')) {
-            msg = 'Certified Graph not built yet. Run <strong>Build</strong> from the <a href="/dtwin/?section=sync">Original Graph</a> page.';
+            msg = 'Certified Graph not built yet. Click <strong>Build</strong> (it builds the Original, then the Certified Graph).';
         } else if (reason.toLowerCase().includes('not configured')) {
             msg = 'Knowledge Graph is not configured. Set it in <a href="/domain/#information">Context Settings</a>.';
         } else {
-            msg = 'Certified Graph is empty. Run <strong>Build</strong> from the <a href="/dtwin/?section=sync">Original Graph</a> page.';
+            msg = 'Certified Graph is empty. Click <strong>Build</strong> to rebuild it from the Original Graph.';
         }
         area.innerHTML =
             '<div class="alert alert-warning small mb-0 py-1 px-2">' +
@@ -742,14 +741,6 @@ function _updateSyncAdjacencyActionState() {
         btn.classList.toggle('d-none', !visible);
         btn.disabled = disabled;
     }
-    // Header kebab item (Lakebase): keep enabled/disabled in sync; never hide —
-    // the parent action group is already backend-gated.
-    document.querySelectorAll(
-        '#sync-lakebase-actions .js-build-menu-refresh-cache'
-    ).forEach(function (item) {
-        item.disabled = disabled;
-        item.classList.toggle('disabled', disabled);
-    });
 }
 
 /**
@@ -1132,13 +1123,11 @@ function hideSyncProgress() {
 function updateSyncProgress(percent, stepText) {
     const bar = document.getElementById('syncProgressBar');
     const step = document.getElementById('syncProgressStep');
-    const status = document.getElementById('syncStatusText');
     if (bar) {
         bar.style.width = percent + '%';
         bar.textContent = percent + '%';
     }
     if (step) step.textContent = stepText;
-    if (status) status.textContent = stepText;
 }
 
 /**
@@ -1627,10 +1616,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
-    // The backend panel lives in the Certified Graph section (dtwin) or the
-    // legacy Build section (domain page).
-    const syncSection = document.getElementById('certified-section')
-        || document.getElementById('sync-section');
+    // The Lakebase / Neo4j backend panel lives in the Build section.
+    const syncSection = document.getElementById('sync-section');
     if (syncSection) {
         syncSection.addEventListener('click', function (e) {
             var btn = e.target.closest('[data-sync-action]');

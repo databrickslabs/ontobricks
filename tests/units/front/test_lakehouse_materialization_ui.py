@@ -216,7 +216,9 @@ class TestTheBuildPageNamesTheStorageKind:
         shell = _read(BUILD_SHELL)
         assert 'id="dbxBuildStorageBadge"' in html
         assert 'id="dbxBuildStorageNote"' in html
-        assert 'id="dbxBuildSubtitle"' in shell
+        # The Build page subtitle describes both graphs; the script leaves it alone.
+        assert "Original Graph" in shell.split("section-header", 1)[1].split("</p>", 1)[0]
+        assert "dbxBuildSubtitle" not in _read(BUILD_JS)
 
     def test_the_badge_names_both_kinds_explicitly(self):
         body = _function_body(
@@ -231,13 +233,6 @@ class TestTheBuildPageNamesTheStorageKind:
         js = _read(BUILD_JS)
         assert "_applyDbxStorageKind(isViewMode)" in js
         assert "const isViewMode = data.materialization === 'view';" in js
-
-    def test_the_subtitle_stops_promising_a_copy_in_view_mode(self):
-        body = _function_body(
-            _read(BUILD_JS), "function _applyDbxStorageKind(", span=2600
-        )
-        assert "Expose mapped triples through a governed Unity Catalog view" in body
-        assert "Materialize mapped triples into a governed Delta table" in body
 
     def test_the_note_explains_what_a_build_actually_does(self):
         body = _function_body(

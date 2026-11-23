@@ -56,14 +56,9 @@
                 {% include "partials/mapping/_mapping_design.html" %}
             </div>
 
-            <!-- Original Graph Section (Build | Runs tabs; the Lakehouse virtual build) -->
+            <!-- Build Section (Original + Certified Graph: Build | Runs | Cache | Objects) -->
             <div id="sync-section" class="sidebar-section">
                 {% include "partials/dtwin/_query_build.html" %}
-            </div>
-
-            <!-- Certified Graph Section (Build | Runs tabs; the served graph) -->
-            <div id="certified-section" class="sidebar-section">
-                {% include "partials/dtwin/_query_certified.html" %}
             </div>
 
             <!-- Overview Section (Management, under Build) -->

@@ -1,9 +1,9 @@
 /**
- * Cache tab of one graph: Search-cache status, companion tables, Refresh cache.
+ * Build page → Cache tab: one section per graph (Original, Certified) with its
+ * Search-cache status, companion tables and Refresh cache.
  *
- * The Original Graph page and the Certified Graph page each have one pane
- * (``_graph_cache_pane.html``, element ids prefixed ``orig`` / ``cert``) fed by
- * ``/dtwin/sync/stats`` for that graph. Status badges are painted by
+ * Each section is a ``_graph_cache_pane.html`` (element ids prefixed ``orig`` /
+ * ``cert``) fed by ``/dtwin/sync/stats`` for that graph. Status badges are painted by
  * query-sync.js (`renderBuildGraphCacheStatus`); the pane reloads whenever its
  * tab is shown.
  */
@@ -191,7 +191,7 @@ window.OriginalCachePane = GraphCachePane({
     prefix: 'orig', source: 'original', tabBtnId: 'buildTabCacheBtn', feedsOverview: true,
 });
 window.CertifiedCachePane = GraphCachePane({
-    prefix: 'cert', source: 'certified', tabBtnId: 'certTabCacheBtn', feedsOverview: false,
+    prefix: 'cert', source: 'certified', tabBtnId: 'buildTabCacheBtn', feedsOverview: false,
 });
 document.addEventListener('DOMContentLoaded', () => {
     window.OriginalCachePane.init();

@@ -114,7 +114,7 @@ function _dbxBuildPollDelay(task) {
 
 /**
  * The Original Graph is a Lakehouse virtual graph for every domain, so the
- * Original Graph page always shows the Lakehouse build panel and actions.
+ * Build page always shows the Lakehouse build panel and actions.
  */
 function applyTripleStoreBackendPanels() {
     if (typeof _setBackendBrandIcon === 'function') {
@@ -197,13 +197,6 @@ function _applyDbxStorageKind(isViewMode) {
             : 'Materialized — Build copies the gateway output into this Delta '
               + 'table, so it is a point-in-time snapshot of the source.';
         note.classList.remove('d-none');
-    }
-
-    const subtitle = document.getElementById('dbxBuildSubtitle');
-    if (subtitle) {
-        subtitle.textContent = isViewMode
-            ? 'Expose mapped triples through a governed Unity Catalog view — no data copy'
-            : 'Materialize mapped triples into a governed Delta table in Unity Catalog';
     }
 }
 
@@ -490,6 +483,8 @@ function _finishDbxBuild(task) {
     if (btn) btn.disabled = !dbxBuildReady || !dbxBuildEditable;
     _updateDbxAdjacencyButton();
     _finishDbxProgressBar(task.status);
+    // The Build also (re)builds the Certified Graph: refresh its state.
+    if (typeof window.loadCertifiedStatus === 'function') window.loadCertifiedStatus();
 
     if (task.status === 'failed') {
         const err = task.error || task.message || 'Unknown error';
@@ -497,7 +492,7 @@ function _finishDbxBuild(task) {
             'error',
             '<strong>Build failed.</strong><div class="mt-1">' + _dbxEscape(err) + '</div>'
         );
-        _dbxNotify('Delta build failed: ' + err, 'error');
+        _dbxNotify('Build failed: ' + err, 'error');
         return;
     }
 

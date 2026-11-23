@@ -1980,3 +1980,77 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11331 passed, 334 skipped, 8 deselected
 Browser check: not repeated on port 8011 (no built graph in that environment).
+
+================================================================================
+UI: one Build page for the Original and the Certified Graph
+================================================================================
+
+Context:
+The Original Graph and Certified Graph pages are merged into a single
+Graph → Management → Build page (section `sync`). A summary diagram above the
+tabs shows Original Graph → Certified Graph with the state of each; the tabs
+are Build | Runs | Cache | Objects, and the Build and Cache tabs have one
+section per graph.
+
+1. src/front/templates/partials/dtwin/_query_build.html — merged page: header
+   (title Build, Refresh, ⋮, Build), summary diagram (`buildFlow`: Original
+   node with the Lakehouse icon and triple status, Certified node with the
+   backend icon, target and Certified / Not built badge), tabs Build (Original
+   section: Lakehouse build panel; Certified section: served relation or the
+   Lakebase / Neo4j panel), Runs, Cache (Original + Certified sections),
+   Objects.
+2. src/front/templates/partials/dtwin/_query_certified.html — deleted.
+3. src/front/templates/dtwin.html, src/front/config/menu_config.json — the
+   `certified` section and menu entry are gone; `sync` is labelled "Build"
+   (`bi-hammer`).
+4. src/front/static/query/js/query-certified.js — fills the Certified node of
+   the diagram and the Certified section of the Build tab; loads on the
+   `sync` section and on Refresh.
+5. src/front/static/query/js/query-databricks-build.js — a finished Build
+   refreshes the Certified state; the script no longer rewrites the page
+   subtitle.
+6. src/front/static/query/js/query-sync.js — the backend panel and its
+   actions live in `sync-section`; dropped the unused header status text and
+   Lakebase kebab sync; "not built" hints point at Build.
+7. src/front/static/query/js/query-build-cache.js, query-build-objects.js,
+   src/front/static/domain/js/domain-runs.js — both cache sections load on
+   the Cache tab; Objects binds `buildTabObjectsBtn`; tab routing handles
+   Build | Runs | Cache | Objects.
+8. src/front/static/query/css/query-sync.css — `#certified-section` scope
+   removed.
+9. src/front/templates/partials/layout/help_modal.html, docs/user-guide.md —
+   one Build page, summary diagram, per-graph sections.
+10. tests — `test_build_page.py` (renamed from `test_certified_graph_page.py`,
+    rewritten for the merged page); cache / objects / adjacency / help menu /
+    section inventory / search-cache / materialization contracts follow it.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/partials/dtwin/_query_certified.html (deleted)
+- src/front/templates/dtwin.html
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/query/js/query-certified.js
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-build-cache.js
+- src/front/static/query/js/query-build-objects.js
+- src/front/static/domain/js/domain-runs.js
+- src/front/static/query/css/query-sync.css
+- docs/user-guide.md
+- tests/units/front/test_build_page.py (renamed from test_certified_graph_page.py)
+- tests/units/front/test_build_cache_tab_contract.py
+- tests/units/front/test_build_objects_tab_contract.py
+- tests/units/front/test_adjacency_refresh_ui.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_search_cache_ui.py
+- tests/units/front/test_lakehouse_materialization_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11330 passed, 334 skipped, 8 deselected
+Browser check: Playwright on port 8011, contactcenter v1 (Lakebase, PUBLISHED),
+1440 px and 390 px: menu shows a single Build entry; diagram Original Graph
+(No data yet) → Certified Graph (Lakebase, Not built), stacked on mobile; tabs
+Build | Runs | Cache | Objects; Build tab with the Original and Certified
+sections; Cache tab with the two sections; no page errors.

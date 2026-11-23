@@ -1,4 +1,4 @@
-"""Contract tests for the Certified Graph → Objects tab markup and loader wiring."""
+"""Contract tests for the Build page → Objects tab markup and loader wiring."""
 
 from pathlib import Path
 
@@ -7,15 +7,15 @@ import pytest
 pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parents[3]
-BUILD_HTML = (ROOT / "src/front/templates/partials/dtwin/_query_certified.html").read_text(encoding="utf-8")
+BUILD_HTML = (ROOT / "src/front/templates/partials/dtwin/_query_build.html").read_text(encoding="utf-8")
 OBJECTS_HTML = (ROOT / "src/front/templates/partials/dtwin/_build_objects.html").read_text(encoding="utf-8")
 DTWIN_HTML = (ROOT / "src/front/templates/dtwin.html").read_text(encoding="utf-8")
 OBJECTS_JS = (ROOT / "src/front/static/query/js/query-build-objects.js").read_text(encoding="utf-8")
 
 
 def test_objects_tab_and_pane_follow_cache():
-    assert BUILD_HTML.index('id="certTabObjectsBtn"') > BUILD_HTML.index('id="certTabCacheBtn"')
-    assert BUILD_HTML.index('id="certPaneObjects"') > BUILD_HTML.index('id="certPaneCache"')
+    assert BUILD_HTML.index('id="buildTabObjectsBtn"') > BUILD_HTML.index('id="buildTabCacheBtn"')
+    assert BUILD_HTML.index('id="buildPaneObjects"') > BUILD_HTML.index('id="buildPaneCache"')
     assert "partials/dtwin/_build_objects.html" in BUILD_HTML
 
 
@@ -73,4 +73,4 @@ def test_usage_view_is_fed_by_server_usages():
 
 
 def test_the_loader_binds_the_certified_objects_tab():
-    assert "el('certTabObjectsBtn')" in OBJECTS_JS
+    assert "el('buildTabObjectsBtn')" in OBJECTS_JS

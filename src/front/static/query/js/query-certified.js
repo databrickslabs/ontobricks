@@ -1,15 +1,23 @@
 /**
- * Graph → Management → Certified Graph.
+ * Graph → Management → Build: the Certified Graph part of the page.
  *
- * Shows whether the Certified Graph is built, whether the version is locked
- * (IN-REVIEW / PUBLISHED) and, for a Lakebase / Neo4j backend, the backend
- * panel. The Build runs from the Original Graph page (it builds both graphs).
+ * Fills the Certified Graph node of the summary diagram (backend icon,
+ * target, Certified / Not built badge) and the Certified Graph section of the
+ * Build tab (served relation, Lakebase / Neo4j backend panel). The Build
+ * itself (both graphs) is driven by query-databricks-build.js.
  */
 (function () {
     'use strict';
 
     // Targets with a backend copy, described by the Lakebase / Neo4j panel.
     const PANEL_TARGETS = ['lakebase', 'neo4j'];
+    const TARGET_LABELS = {
+        lakehouse_virtual: 'Lakehouse (virtual)',
+        lakehouse_materialized: 'Lakehouse (materialized)',
+        lakebase: 'Lakebase',
+        neo4j: 'Neo4j',
+        none: 'No graph backend',
+    };
 
     function _el(id) {
         return document.getElementById(id);
@@ -17,25 +25,29 @@
 
     function _renderBadge(status) {
         const badge = _el('certStateBadge');
-        if (!badge) return;
-        badge.className = 'badge ' + (status.certified ? 'text-bg-success' : 'text-bg-secondary');
+        badge.className = 'badge dt-arch-badge ' + (status.certified ? 'text-bg-success' : 'text-bg-secondary');
         badge.textContent = status.certified ? 'Certified' : 'Not built';
     }
 
-    function _showBackendPanel(show) {
-        _el('sync-lakebase-panel').classList.toggle('d-none', !show);
-        const actions = _el('sync-lakebase-actions');
-        actions.classList.toggle('d-none', !show);
-        actions.classList.toggle('d-flex', show);
+    function _renderServedLine(status, usesPanel) {
+        const line = _el('certServedLine');
+        line.replaceChildren();
+        line.classList.toggle('d-none', usesPanel || !status.served_relation);
+        if (usesPanel || !status.served_relation) return;
+        const code = document.createElement('code');
+        code.textContent = status.served_relation;
+        line.append('Served from ', code, ' (' + (TARGET_LABELS[status.target] || status.target) + ').');
     }
 
     function _render(status) {
+        const usesPanel = PANEL_TARGETS.indexOf(status.target) !== -1;
         if (typeof _setBackendBrandIcon === 'function') {
             _setBackendBrandIcon(_el('certBackendIcon'), status.backend);
         }
-        _el('certReadOnlyNotice').classList.toggle('d-none', status.editable !== false);
+        _el('certFlowTarget').textContent = TARGET_LABELS[status.target] || 'Context backend';
         _renderBadge(status);
-        _showBackendPanel(PANEL_TARGETS.indexOf(status.target) !== -1);
+        _renderServedLine(status, usesPanel);
+        _el('sync-lakebase-panel').classList.toggle('d-none', !usesPanel);
         // The Cache tab refresh needs a built Certified Graph (query-sync.js).
         window.__certifiedBuilt = !!status.certified;
         if (typeof _updateSyncAdjacencyActionState === 'function') _updateSyncAdjacencyActionState();
@@ -59,14 +71,15 @@
     window.loadCertifiedStatus = loadCertifiedStatus;
 
     document.addEventListener('DOMContentLoaded', function () {
-        if (!_el('certified-section')) return;
-        _el('certRefreshBtn').addEventListener('click', loadCertifiedStatus);
-        if (new URLSearchParams(window.location.search).get('section') === 'certified') {
+        if (!_el('buildFlowCertified')) return;
+        const refresh = _el('dbxBuildRefreshBtn');
+        if (refresh) refresh.addEventListener('click', loadCertifiedStatus);
+        if (new URLSearchParams(window.location.search).get('section') === 'sync') {
             loadCertifiedStatus();
         }
     });
 
     document.addEventListener('sidebarSectionChanged', function (e) {
-        if (e.detail && e.detail.section === 'certified') loadCertifiedStatus();
+        if (e.detail && e.detail.section === 'sync') loadCertifiedStatus();
     });
 })();

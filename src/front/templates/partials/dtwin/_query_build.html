@@ -1,19 +1,12 @@
-<!-- Graph → Management → Original Graph: build panel + build-run history tabs. -->
+<!-- Graph → Management → Build: one Build for the Original Graph and the Certified Graph. -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
-        <div class="d-flex align-items-center gap-3">
-            <span class="build-backend-logo" id="buildBackendLogo" aria-hidden="true">
-                <span id="buildBackendIcon" class="ob-brand-icon ob-icon-lakehouse"></span>
-            </span>
-            <div>
-                <h4 class="mb-1"><i class="bi bi-database me-2"></i>Original Graph</h4>
-                <p class="text-muted mb-0 small" id="dbxBuildSubtitle">Virtual graph built from the mapping, read with your Unity Catalog rights. Never served to MCP or the API.</p>
-            </div>
+        <div>
+            <h4 class="mb-1"><i class="bi bi-hammer me-2"></i>Build</h4>
+            <p class="text-muted mb-0 small">Builds the Original Graph from the mapping, then the Certified Graph from it, in one go.</p>
         </div>
         <div class="d-flex align-items-center gap-2" id="buildHeaderActions">
-            <!-- Databricks actions -->
             <div id="sync-databricks-actions" class="d-none align-items-center gap-2">
-                <span id="dbxBuildStatusText" class="text-muted small"></span>
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="dbxBuildRefreshBtn">
                     <i class="bi bi-arrow-clockwise me-1"></i>Refresh
                 </button>
@@ -35,6 +28,29 @@
 
     <div class="card h-100">
         <div class="card-body p-0 ob-tabs-wrap">
+            <!-- Summary: what the Build produces, and the state of each graph. -->
+            <div class="build-flow border-bottom p-3" id="buildFlow">
+                <div class="dt-arch-diagram">
+                    <div class="dt-arch-node" id="buildFlowOriginal">
+                        <div class="dt-arch-header">
+                            <span class="ob-brand-icon ob-icon-lakehouse dt-arch-icon-lakebase-img" id="buildBackendIcon" aria-hidden="true"></span>
+                            <span class="dt-arch-title">Original Graph</span>
+                            <span class="dt-arch-badge text-muted small" id="dbxBuildStatusText"></span>
+                        </div>
+                        <div class="small text-muted">Lakehouse view over the mapped data, read with your Unity Catalog rights. Never served externally.</div>
+                    </div>
+                    <div class="dt-arch-connector" aria-hidden="true"><i class="bi bi-arrow-right"></i></div>
+                    <div class="dt-arch-node" id="buildFlowCertified">
+                        <div class="dt-arch-header">
+                            <span class="ob-brand-icon ob-icon-lakehouse dt-arch-icon-lakebase-img" id="certBackendIcon" aria-hidden="true"></span>
+                            <span class="dt-arch-title">Certified Graph</span>
+                            <span id="certStateBadge" class="badge text-bg-secondary dt-arch-badge">Not built</span>
+                        </div>
+                        <div class="small text-muted"><span id="certFlowTarget">Context backend</span>: Original Graph plus every enrichment and decision. The only graph MCP and the API serve.</div>
+                    </div>
+                </div>
+            </div>
+
             <ul class="nav nav-tabs ob-tabs nav-fill" id="buildPageTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="buildTabBuildBtn" data-bs-toggle="tab"
@@ -57,14 +73,36 @@
                         <i class="bi bi-lightning-charge me-1"></i>Cache
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="buildTabObjectsBtn" data-bs-toggle="tab"
+                            data-bs-target="#buildPaneObjects" type="button" role="tab"
+                            aria-controls="buildPaneObjects" aria-selected="false">
+                        <i class="bi bi-table me-1"></i>Objects
+                    </button>
+                </li>
             </ul>
 
             <div class="tab-content p-3" id="buildPageTabContent">
                 <div class="tab-pane fade show active" id="buildPaneBuild" role="tabpanel"
                      aria-labelledby="buildTabBuildBtn">
-                    <div id="sync-databricks-panel" class="d-none">
-                        {% include "partials/dtwin/_query_databricks_build.html" %}
-                    </div>
+                    <section aria-labelledby="buildOriginalHeading">
+                        <h6 class="fw-semibold mb-3" id="buildOriginalHeading"><i class="bi bi-database me-1"></i>Original Graph</h6>
+                        <div id="sync-databricks-panel" class="d-none">
+                            {% include "partials/dtwin/_query_databricks_build.html" %}
+                        </div>
+                    </section>
+
+                    <section class="border-top pt-3 mt-4" aria-labelledby="buildCertifiedHeading">
+                        <h6 class="fw-semibold mb-3" id="buildCertifiedHeading"><i class="bi bi-patch-check me-1"></i>Certified Graph</h6>
+                        <div id="certLoadError" class="alert alert-warning d-none" role="alert">
+                            <i class="bi bi-exclamation-triangle me-1"></i><span id="certLoadErrorMessage"></span>
+                        </div>
+                        <p class="small text-muted mb-0" id="certServedLine"></p>
+                        <!-- Lakebase / Neo4j backend: architecture and graph status -->
+                        <div id="sync-lakebase-panel" class="d-none">
+                            {% include "partials/dtwin/_query_sync.html" %}
+                        </div>
+                    </section>
                 </div>
 
                 <div class="tab-pane fade" id="buildPaneRuns" role="tabpanel"
@@ -74,11 +112,24 @@
 
                 <div class="tab-pane fade" id="buildPaneCache" role="tabpanel"
                      aria-labelledby="buildTabCacheBtn">
-                    {% set cache_id = 'orig' %}
-                    {% set cache_refresh = 'dbx' %}
-                    {% include "partials/dtwin/_graph_cache_pane.html" %}
+                    <section aria-labelledby="buildCacheOriginalHeading">
+                        <h6 class="fw-semibold mb-2" id="buildCacheOriginalHeading"><i class="bi bi-database me-1"></i>Original Graph</h6>
+                        {% set cache_id = 'orig' %}
+                        {% set cache_refresh = 'dbx' %}
+                        {% include "partials/dtwin/_graph_cache_pane.html" %}
+                    </section>
+                    <section class="border-top pt-3 mt-4" aria-labelledby="buildCacheCertifiedHeading">
+                        <h6 class="fw-semibold mb-2" id="buildCacheCertifiedHeading"><i class="bi bi-patch-check me-1"></i>Certified Graph</h6>
+                        {% set cache_id = 'cert' %}
+                        {% set cache_refresh = 'sync' %}
+                        {% include "partials/dtwin/_graph_cache_pane.html" %}
+                    </section>
                 </div>
 
+                <div class="tab-pane fade" id="buildPaneObjects" role="tabpanel"
+                     aria-labelledby="buildTabObjectsBtn">
+                    {% include "partials/dtwin/_build_objects.html" %}
+                </div>
             </div>
         </div>
     </div>

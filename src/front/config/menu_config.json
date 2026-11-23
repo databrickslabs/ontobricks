@@ -583,21 +583,11 @@
                     "items": [
                         {
                             "id": "sync",
-                            "label": "Original Graph",
-                            "icon": "bi-database",
+                            "label": "Build",
+                            "icon": "bi-hammer",
                             "default": false,
                             "requires": null,
-                            "description": "Virtual graph built from the current mapping, to navigate, enrich and certify.",
-                            "help_jump": "docs",
-                            "help_doc": "user-guide"
-                        },
-                        {
-                            "id": "certified",
-                            "label": "Certified Graph",
-                            "icon": "bi-patch-check",
-                            "default": false,
-                            "requires": null,
-                            "description": "Graph built into the Context backend, holding every enrichment and decision; the only graph MCP and the API serve.",
+                            "description": "Builds the Original Graph from the mapping, then the Certified Graph served to MCP and the API.",
                             "help_jump": "docs",
                             "help_doc": "user-guide"
                         },

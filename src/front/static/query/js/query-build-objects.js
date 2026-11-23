@@ -307,7 +307,7 @@ const BuildObjectsModule = (() => {
         listFilter = window.ObListFilter.bind(
             el('buildObjectsFilter'), el('buildObjectsContent'), el('buildObjectsCount'), 'object'
         );
-        const tabBtn = el('certTabObjectsBtn');
+        const tabBtn = el('buildTabObjectsBtn');
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', load);
         const reloadBtn = el('buildObjectsReloadBtn');
         if (reloadBtn) reloadBtn.addEventListener('click', load);

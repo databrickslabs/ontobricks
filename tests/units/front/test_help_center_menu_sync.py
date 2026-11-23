@@ -115,8 +115,7 @@ def test_graph_management_order_is_build_overview_runs():
         group for group in digitaltwin["groups"] if group["id"] == "digitaltwin-management"
     )
     assert [(i["id"], i["label"]) for i in management["items"]] == [
-        ("sync", "Original Graph"),
-        ("certified", "Certified Graph"),
+        ("sync", "Build"),
         ("design", "Mapping"),
         ("insight", "Overview"),
     ]
@@ -127,16 +126,16 @@ def test_graph_management_order_is_build_overview_runs():
     assert discovery["items"][0]["id"] == "analytics"
 
 
-def test_original_graph_page_and_build_action_icons():
+def test_build_page_and_build_action_icons():
     digitaltwin = _menus()["digitaltwin"]
     management = next(
         group for group in digitaltwin["groups"] if group["id"] == "digitaltwin-management"
     )
-    original = next(item for item in management["items"] if item["id"] == "sync")
+    build = next(item for item in management["items"] if item["id"] == "sync")
 
-    assert original["icon"] == "bi-database"
+    assert build["icon"] == "bi-hammer"
     template = _BUILD_SHELL.read_text(encoding="utf-8")
-    assert '<i class="bi bi-database me-2"></i>Original Graph' in template
+    assert '<i class="bi bi-hammer me-2"></i>Build' in template
     # The build action keeps the hammer.
     assert '<i class="bi bi-hammer me-1"></i>Build' in template
     assert '<i class="bi bi-hammer me-1"></i>Go to Build' in _SYNC_JS.read_text(
