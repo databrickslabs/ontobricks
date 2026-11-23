@@ -629,3 +629,48 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11274 passed, 334 skipped, 8 deselected
+
+================================================================================
+Graph reads: Original / Certified variant on the store and the read relation
+================================================================================
+
+Context:
+Reads can now name the graph they target. `variant="original"` reads the
+Original Graph: the Delta store and the `…_data` relation, whatever the
+domain backend. `variant="certified"` reads the Certified Graph: the Context
+backend, `…_certified` on the Lakehouse, `<name>_V<n>` on Lakebase / Neo4j.
+Without a variant nothing changes; no caller passes one yet (the external
+routes switch with the PUBLISHED serving step).
+
+Changes:
+1. src/back/core/graphdb/constants.py
+   - `GRAPH_VARIANT_ORIGINAL`, `GRAPH_VARIANT_CERTIFIED`, `GRAPH_VARIANTS`.
+2. src/back/core/graphdb/GraphDBFactory.py
+   - `create(..., variant=None)` and `get_graphdb(..., variant=None)`:
+     `original` opens the Delta store; `certified` keeps the backend
+     resolution. `check_variant` raises `ValidationError` on an unknown
+     variant.
+3. src/back/core/helpers/SQLHelpers.py
+   - `effective_graph_query_table(..., variant=None)` and
+     `_variant_query_table`: `…_data` (original), `…_certified` (certified
+     Lakehouse), versioned graph name (certified Lakebase / Neo4j).
+4. src/back/objects/digitaltwin/TwinGraphAccess.py
+   - `graph_query_table(..., variant=None)` forwards the variant; a
+     simulation id still takes precedence.
+5. tests/units/graphdb/test_graph_variants.py (new)
+   - Factory store per variant, read relation per variant and backend,
+     unknown variant refused, TwinGraphAccess forwarding and simulation
+     precedence.
+6. tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+   - The forwarding test also checks the variant.
+
+Modified files:
+- src/back/core/graphdb/constants.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- tests/units/graphdb/test_graph_variants.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11287 passed, 334 skipped, 8 deselected

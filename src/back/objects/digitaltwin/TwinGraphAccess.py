@@ -41,6 +41,7 @@ class TwinGraphAccess:
         *,
         include_inferred: bool = True,
         simulation_id: Optional[str] = None,
+        variant: Optional[str] = None,
     ) -> str:
         """Resolve the physical graph table for read queries (Lakebase or Delta).
 
@@ -61,6 +62,7 @@ class TwinGraphAccess:
             settings,
             include_inferred=include_inferred,
             store=store,
+            variant=variant,
         )
 
     @staticmethod

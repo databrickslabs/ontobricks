@@ -20,6 +20,7 @@ The *engine_config* JSON is engine-specific (admin: Settings → Graph DB).
 
 from typing import Any, Dict, Optional, Tuple
 
+from back.core.graphdb.constants import GRAPH_VARIANT_ORIGINAL, GRAPH_VARIANTS
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -78,6 +79,7 @@ class GraphDBFactory:
         engine_config: Optional[Dict[str, Any]] = None,
         *,
         for_write: bool = False,
+        variant: Optional[str] = None,
     ) -> Optional[Any]:
         """Create a graph DB backend.
 
@@ -89,10 +91,18 @@ class GraphDBFactory:
             engine_config: Engine-specific JSON configuration set by the
                            admin in Settings > Graph DB.
             for_write: Use the build SQL warehouse for Delta DDL and writes.
+            variant: ``"original"`` opens the Delta store of the Original
+                     Graph whatever the domain backend; ``"certified"`` (or
+                     ``None``) resolves the store from the domain backend.
 
         Returns:
             GraphBackend instance or *None* if configuration is incomplete.
         """
+        if variant is not None:
+            self.check_variant(variant)
+            if variant == GRAPH_VARIANT_ORIGINAL:
+                return self._create_delta(domain, settings, for_write=for_write)
+
         if engine is None:
             return self._create_auto(domain, settings, for_write=for_write)
 
@@ -561,6 +571,17 @@ class GraphDBFactory:
             return None
 
     @staticmethod
+    def check_variant(variant: str) -> None:
+        """Raise :class:`ValidationError` unless *variant* is a known graph variant."""
+        if variant not in GRAPH_VARIANTS:
+            from back.core.errors import ValidationError
+
+            raise ValidationError(
+                f"Unknown graph variant {variant!r}; expected one of "
+                f"{', '.join(GRAPH_VARIANTS)}"
+            )
+
+    @staticmethod
     def _build_synced_manager(auth: Any, database_override: str) -> Optional[Any]:
         """Build a SyncedTableManager with Autoscaling project + branch targeting.
 
@@ -744,6 +765,7 @@ class GraphDBFactory:
         engine_config: Optional[Dict[str, Any]] = None,
         *,
         for_write: bool = False,
+        variant: Optional[str] = None,
     ) -> Optional[Any]:
         """Convenience wrapper using the package singleton factory instance."""
         return _get_factory_singleton().create(
@@ -752,6 +774,7 @@ class GraphDBFactory:
             engine=engine,
             engine_config=engine_config,
             for_write=for_write,
+            variant=variant,
         )
 
 

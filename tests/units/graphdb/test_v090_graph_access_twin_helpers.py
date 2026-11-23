@@ -26,14 +26,28 @@ class TestTwinGraphAccess:
     def test_graph_query_table_forwards_store_and_inferred_flag(self, monkeypatch):
         seen = {}
 
-        def fake(domain, settings, *, include_inferred, store):
-            seen.update(domain=domain, settings=settings, inf=include_inferred, store=store)
+        def fake(domain, settings, *, include_inferred, store, variant):
+            seen.update(
+                domain=domain,
+                settings=settings,
+                inf=include_inferred,
+                store=store,
+                variant=variant,
+            )
             return "cat.sch.g_data"
 
         monkeypatch.setattr(sys.modules[TwinGraphAccess.__module__], "effective_graph_query_table", fake)
-        out = TwinGraphAccess.graph_query_table("d", "s", "st", include_inferred=False)
+        out = TwinGraphAccess.graph_query_table(
+            "d", "s", "st", include_inferred=False, variant="certified"
+        )
         assert out == "cat.sch.g_data"
-        assert seen == {"domain": "d", "settings": "s", "inf": False, "store": "st"}
+        assert seen == {
+            "domain": "d",
+            "settings": "s",
+            "inf": False,
+            "store": "st",
+            "variant": "certified",
+        }
 
     def test_source_from_payload_coerces_flags(self):
         assert TwinGraphAccess.source_from_payload(None) == (True, None)

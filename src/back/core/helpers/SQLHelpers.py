@@ -210,8 +210,14 @@ class SQLHelpers:
         *,
         include_inferred: bool = True,
         store=None,
+        variant=None,
     ) -> str:
         """Physical table/view for graph read queries (Explorer, filter, stats, …).
+
+        With a *variant* (see ``graphdb.constants``): ``"original"`` reads the
+        Original Graph ``…_data`` relation whatever the backend; ``"certified"``
+        reads ``…_certified`` on the Lakehouse and the versioned graph
+        (``Domain_V<n>``) on Lakebase / Neo4j. Without one, the rules below apply.
 
         * **databricks** — union VIEW ``…_graph`` (``_data`` ∪ ``_inferred``) when
           *include_inferred* is true; otherwise the materialized ``…_data`` TABLE.
@@ -222,6 +228,8 @@ class SQLHelpers:
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
+        if variant is not None:
+            return SQLHelpers._variant_query_table(domain, settings, backend, variant)
         if backend == "databricks":
             if include_inferred:
                 from back.core.graphdb.GraphDBFactory import GraphDBFactory
@@ -239,3 +247,23 @@ class SQLHelpers:
         if include_inferred or store is None:
             return graph_name
         return store.synced_table_name(graph_name)
+
+    @staticmethod
+    def _variant_query_table(domain, settings, backend: str, variant: str) -> str:
+        """Read relation of the Original or the Certified Graph."""
+        from back.core.errors import ValidationError
+        from back.core.graphdb.constants import GRAPH_VARIANT_ORIGINAL
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        GraphDBFactory.check_variant(variant)
+        if variant != GRAPH_VARIANT_ORIGINAL and backend != "databricks":
+            return SQLHelpers.effective_graph_name(domain)
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        table = (
+            builder.data_table_fqn()
+            if variant == GRAPH_VARIANT_ORIGINAL
+            else builder.certified_view_fqn()
+        )
+        if not table:
+            raise ValidationError("Delta triple-store table FQN could not be resolved")
+        return table
