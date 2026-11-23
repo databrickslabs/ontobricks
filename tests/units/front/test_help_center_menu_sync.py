@@ -116,6 +116,7 @@ def test_graph_management_order_is_build_overview_runs():
     )
     assert [(i["id"], i["label"]) for i in management["items"]] == [
         ("sync", "Original Graph"),
+        ("certified", "Certified Graph"),
         ("design", "Mapping"),
         ("insight", "Overview"),
     ]

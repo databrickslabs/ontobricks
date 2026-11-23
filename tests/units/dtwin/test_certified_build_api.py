@@ -43,3 +43,15 @@ def test_a_read_only_version_returns_409(api_client):
         response = api_client.post("/dtwin/certified-build/start")
 
     assert response.status_code == 409
+
+
+def test_status_returns_the_certified_graph_state(api_client):
+    payload = {"target": "lakebase", "certified": False, "runs": []}
+    with (
+        patch(f"{MODULE}.get_domain", return_value=MagicMock()),
+        patch(f"{MODULE}.CertifiedBuild.status", return_value=payload),
+    ):
+        response = api_client.get("/dtwin/certified/status")
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True, **payload}

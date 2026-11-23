@@ -75,6 +75,51 @@ class CertifiedBuild:
     def _run_task(cls, task: Any, tm: Any, domain: Any, settings: Any) -> None:
         cls(tm, task.id, domain, settings).run()
 
+    RUNS_SHOWN = 10
+
+    @staticmethod
+    def status(domain: Any, settings: Any) -> Dict[str, Any]:
+        """Certified Graph state of the version: target, served relation, lock, runs."""
+        from back.objects.registry.RegistryService import RegistryService
+        from back.objects.registry.version_lifecycle import is_editable
+
+        backend = GraphDBFactory._resolve_graph_backend(domain)
+        target, served = CertifiedBuild._served(domain, settings, backend)
+        svc = RegistryService.from_context(domain, settings)
+        folder = CertifiedBuild._folder(domain)
+        version = str(getattr(domain, "current_version", "") or "")
+        version_status = svc.get_version_status(folder, version) or ""
+        runs = [
+            r
+            for r in svc.load_build_runs(folder, version=version) or []
+            if r.get("build_kind") == CertifiedBuild.BUILD_KIND
+        ][: CertifiedBuild.RUNS_SHOWN]
+        return {
+            "backend": backend,
+            "target": target,
+            "served_relation": served,
+            "version_status": version_status,
+            "editable": not version_status or is_editable(version_status),
+            "certified": any(r.get("status") == "success" for r in runs),
+            "runs": runs,
+        }
+
+    @staticmethod
+    def _served(domain: Any, settings: Any, backend: str) -> tuple:
+        """``(target, served relation)`` of the Certified Graph for *backend*."""
+        if backend == "none":
+            return "none", ""
+        if backend != "databricks":
+            return backend, SQLHelpers.effective_graph_name(domain)
+        mode = GraphDBFactory.resolve_lakehouse_materialization(domain, settings)
+        target = (
+            CertifiedBuild.LAKEHOUSE_VIRTUAL
+            if mode == "view"
+            else CertifiedBuild.LAKEHOUSE_MATERIALIZED
+        )
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        return target, builder.certified_view_fqn()
+
     @staticmethod
     def ensure_editable(domain: Any, settings: Any) -> None:
         """Refuse a certified build on an IN-REVIEW or PUBLISHED version (read-only)."""
@@ -207,14 +252,8 @@ class CertifiedBuild:
             raise ValidationError(
                 "This domain has no graph backend: there is no certified graph to build"
             )
-        if self.backend != "databricks":
-            return self.backend
-        mode = GraphDBFactory.resolve_lakehouse_materialization(
-            self.domain, self.settings
-        )
-        if mode == "view":
-            return self.LAKEHOUSE_VIRTUAL
-        return self.LAKEHOUSE_MATERIALIZED
+        target, _served = CertifiedBuild._served(self.domain, self.settings, self.backend)
+        return target
 
     def _load_backend(self, builder: Any) -> bool:
         """Load the certified base into the domain's graph engine (Lakebase, Neo4j)."""

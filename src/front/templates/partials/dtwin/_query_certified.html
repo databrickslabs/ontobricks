@@ -1,0 +1,104 @@
+<!-- Graph → Management → Certified Graph: the served graph, built into the Context backend. -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex align-items-center gap-3">
+            <span class="build-backend-logo" aria-hidden="true">
+                <span id="certBackendIcon" class="ob-brand-icon ob-icon-lakehouse"></span>
+            </span>
+            <div>
+                <h4 class="mb-1"><i class="bi bi-patch-check me-2"></i>Certified Graph</h4>
+                <p class="text-muted mb-0 small">Original Graph plus every enrichment and decision, built into the Context backend. The only graph MCP and the API serve.</p>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span id="certStateBadge" class="badge text-bg-secondary">Not built</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="certRefreshBtn">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+            {% set _dr = get_user_domain_role() %}
+            {% if _dr not in ('viewer', 'editor', 'none') %}
+            <button type="button" class="btn btn-sm btn-primary" id="certBuildStartBtn" disabled>
+                <i class="bi bi-hammer me-1"></i>Build
+            </button>
+            {% else %}
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Builders only">
+                <i class="bi bi-lock me-1"></i>Build
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card h-100">
+        <div class="card-body p-0 ob-tabs-wrap">
+            <ul class="nav nav-tabs ob-tabs nav-fill" id="certPageTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="certTabBuildBtn" data-bs-toggle="tab"
+                            data-bs-target="#certPaneBuild" type="button" role="tab"
+                            aria-controls="certPaneBuild" aria-selected="true">
+                        <i class="bi bi-hammer me-1"></i>Build
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="certTabRunsBtn" data-bs-toggle="tab"
+                            data-bs-target="#certPaneRuns" type="button" role="tab"
+                            aria-controls="certPaneRuns" aria-selected="false">
+                        <i class="bi bi-list-check me-1"></i>Runs
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content p-3">
+                <div class="tab-pane fade show active" id="certPaneBuild" role="tabpanel"
+                     aria-labelledby="certTabBuildBtn">
+                    <div id="certReadOnlyNotice" class="alert alert-secondary d-none" role="status">
+                        <i class="bi bi-lock me-1"></i>This version is read-only. Reopen it to DRAFT to rebuild the Certified Graph.
+                    </div>
+
+                    <div id="certLoadError" class="alert alert-warning d-none" role="alert">
+                        <i class="bi bi-exclamation-triangle me-1"></i><span id="certLoadErrorMessage"></span>
+                    </div>
+
+                    <dl class="row mb-3">
+                        <dt class="col-sm-3">Target</dt>
+                        <dd class="col-sm-9" id="certTarget">&mdash;</dd>
+                        <dt class="col-sm-3">Served relation</dt>
+                        <dd class="col-sm-9"><code class="text-break" id="certServedRelation">&mdash;</code></dd>
+                        <dt class="col-sm-3">Version status</dt>
+                        <dd class="col-sm-9" id="certVersionStatus">&mdash;</dd>
+                    </dl>
+
+                    <div id="certProgressArea" class="d-none">
+                        <div class="progress mb-2 ob-progress-md">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" id="certProgressBar" role="progressbar">0%</div>
+                        </div>
+                        <small class="text-muted" id="certProgressStep"></small>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="certPaneRuns" role="tabpanel"
+                     aria-labelledby="certTabRunsBtn">
+                    <div id="certRunsEmpty" class="text-center py-5">
+                        <i class="bi bi-patch-check text-muted fs-1"></i>
+                        <p class="text-muted mt-2 mb-0">No certified build yet for this version</p>
+                    </div>
+                    <div id="certRunsWrapper" class="table-responsive d-none">
+                        <table class="table table-hover align-middle ob-runs-table">
+                            <thead>
+                                <tr>
+                                    <th>Start time</th>
+                                    <th>Run ID</th>
+                                    <th>Version</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Triples</th>
+                                    <th class="text-end"><span class="visually-hidden">Details</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="certRunsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

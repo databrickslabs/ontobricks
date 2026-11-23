@@ -1348,3 +1348,61 @@ PUBLISHED version loaded (read-only, no edit lock): /dtwin/?section=sync at
 390 px (source options "Original graph" / "Certified graph"); no 5xx and no
 console errors on a single navigation (the "Failed to fetch" entries came from
 requests cut by back-to-back navigations in the script).
+
+================================================================================
+UI: Certified Graph page (Graph → Management → Certified Graph)
+================================================================================
+
+Context:
+certified-graph P1 step (d3). The Certified Graph gets its own page
+next to the Original Graph: where it is served (Context backend, relation),
+whether the version is locked (D9: IN-REVIEW / PUBLISHED), its certified build
+runs, and a Build button that starts a certified build and follows its task.
+
+1. src/back/objects/digitaltwin/certify/CertifiedBuild.py — new `status()`
+   (backend, target, served relation, version status, editable, certified,
+   last 10 certified runs) and `_served()` (target + served relation per
+   backend), now shared by `_target()`.
+2. src/api/routers/internal/dtwin.py — new `GET /dtwin/certified/status`
+   (graph-read check) returning `CertifiedBuild.status`.
+3. src/front/config/menu_config.json — "Certified Graph" item (`certified`,
+   `bi-patch-check`) right after "Original Graph".
+4. src/front/templates/dtwin.html — `certified-section` sidebar section and
+   the `query-certified.js` script (after `query-sync.js`).
+5. src/front/templates/partials/dtwin/_query_certified.html (new) — section
+   header (backend logo, state badge, Refresh, builder-only Build), one card
+   with Build / Runs tabs: target, served relation, version status,
+   read-only notice, progress bar; runs table shared with the build runs.
+6. src/front/static/query/js/query-certified.js (new) — loads the status on
+   open / section change, renders it (brand icon via `_setBackendBrandIcon`),
+   starts the build, polls `/tasks/<id>`, renders runs via
+   `RunsRender.buildRunCells` with the shared run-details modal.
+7. src/front/templates/partials/layout/help_modal.html — Certified Graph entry
+   in the Knowledge Graph workflow; Mapping now follows Certified Graph.
+8. tests — `test_certified_graph_page.py` (new contract), `TestStatus` in
+   `test_certified_build.py`, status route test in
+   `test_certified_build_api.py`; menu order and section inventory updated in
+   `test_help_center_menu_sync.py` and `test_sidebar_content_stretch_contract.py`.
+
+Modified files:
+- src/back/objects/digitaltwin/certify/CertifiedBuild.py
+- src/api/routers/internal/dtwin.py
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/front/templates/partials/dtwin/_query_certified.html
+- src/front/static/query/js/query-certified.js
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/dtwin/test_certified_build.py
+- tests/units/dtwin/test_certified_build_api.py
+- tests/units/front/test_certified_graph_page.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11322 passed, 334 skipped, 8 deselected
+Browser check: Playwright (headless Chromium), worktree app on port 8011 with
+the PUBLISHED contactcenter v1 loaded: /dtwin/?section=certified at 1440 px
+and 390 px shows target Lakebase, served relation ContactCenter_V1, status
+PUBLISHED, the read-only notice and a disabled Build; Runs tab shows the empty
+state; no horizontal overflow; no 4xx/5xx (remaining "Failed to fetch" console
+entries come from requests cut by the script's back-to-back navigations).

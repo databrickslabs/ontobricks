@@ -222,6 +222,18 @@ async def start_certified_build(
     return {"success": True, "task_id": task_id, "message": "Certified build started"}
 
 
+@router.get("/certified/status")
+async def certified_status(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Certified Graph state of the loaded version (target, lock, certified runs)."""
+    assert_domain_graph_read(request)
+    payload = await run_blocking(CertifiedBuild.status, get_domain(session_mgr), settings)
+    return {"success": True, **payload}
+
+
 @router.post(
     "/adjacency/refresh",
     dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],

@@ -342,3 +342,69 @@ class TestHasSucceeded:
             return_value=registry,
         ):
             assert CertifiedBuild.has_succeeded(_domain(), SimpleNamespace()) is False
+
+
+class TestStatus:
+    def _status(self, backend, *, materialization="view", status="DRAFT", runs=()):
+        registry = MagicMock()
+        registry.get_version_status.return_value = status
+        registry.load_build_runs.return_value = list(runs)
+        with (
+            patch.object(GraphDBFactory, "_resolve_graph_backend", return_value=backend),
+            patch.object(
+                GraphDBFactory,
+                "resolve_lakehouse_materialization",
+                return_value=materialization,
+            ),
+            patch(
+                "back.objects.registry.RegistryService.RegistryService.from_context",
+                return_value=registry,
+            ),
+        ):
+            return CertifiedBuild.status(
+                SimpleNamespace(
+                    info={"name": "Dom"},
+                    current_version="2",
+                    uc_domain_folder="dom",
+                    delta={"catalog": "cat", "schema": "sch"},
+                ),
+                SimpleNamespace(),
+            )
+
+    def test_a_lakehouse_target_serves_the_certified_view(self):
+        out = self._status("databricks")
+
+        assert out["target"] == "lakehouse_virtual"
+        assert out["served_relation"] == "cat.sch.triplestore_dom_V2_certified"
+
+    def test_a_graph_engine_target_serves_the_versioned_graph(self):
+        out = self._status("lakebase")
+
+        assert out["target"] == "lakebase"
+        assert out["served_relation"] == "Dom_V2"
+
+    def test_only_certified_runs_are_listed_and_the_latest_success_certifies(self):
+        out = self._status(
+            "neo4j",
+            runs=[
+                {"build_kind": "certified", "status": "error", "started_at": "b"},
+                {"build_kind": "session", "status": "success", "started_at": "x"},
+                {"build_kind": "certified", "status": "success", "started_at": "a"},
+            ],
+        )
+
+        assert [r["started_at"] for r in out["runs"]] == ["b", "a"]
+        assert out["certified"] is True
+
+    @pytest.mark.parametrize("status,editable", [("DRAFT", True), ("PUBLISHED", False)])
+    def test_the_version_lock_is_reported(self, status, editable):
+        out = self._status("lakebase", status=status)
+
+        assert out["version_status"] == status
+        assert out["editable"] is editable
+
+    def test_no_backend_has_no_certified_graph(self):
+        out = self._status("none")
+
+        assert out["target"] == "none"
+        assert out["served_relation"] == ""

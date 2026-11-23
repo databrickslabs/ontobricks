@@ -55,6 +55,7 @@ SECTION_INVENTORY = {
         "home",
         "design",
         "sync",
+        "certified",
         "insight",
         "dataquality",
         "reasoning",

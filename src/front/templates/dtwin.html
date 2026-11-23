@@ -61,6 +61,11 @@
                 {% include "partials/dtwin/_query_build.html" %}
             </div>
 
+            <!-- Certified Graph Section (Build | Runs tabs; the served graph) -->
+            <div id="certified-section" class="sidebar-section">
+                {% include "partials/dtwin/_query_certified.html" %}
+            </div>
+
             <!-- Overview Section (Management, under Build) -->
             <div id="insight-section" class="sidebar-section">
                 {% include "partials/dtwin/_query_insights.html" %}
@@ -142,6 +147,7 @@
 <script defer src="{{ url_for('static', filename='query/js/timed-task-log.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-databricks-build.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-sync.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-certified.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='global/js/runs-render.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='global/js/list-filter.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='domain/js/domain-runs.js') }}?v={{ asset_version }}"></script>

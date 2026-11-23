@@ -592,6 +592,16 @@
                             "help_doc": "user-guide"
                         },
                         {
+                            "id": "certified",
+                            "label": "Certified Graph",
+                            "icon": "bi-patch-check",
+                            "default": false,
+                            "requires": null,
+                            "description": "Graph built into the Context backend, holding every enrichment and decision; the only graph MCP and the API serve.",
+                            "help_jump": "docs",
+                            "help_doc": "user-guide"
+                        },
+                        {
                             "id": "design",
                             "label": "Mapping",
                             "icon": "bi-pencil",
