@@ -252,35 +252,3 @@ class WriteOps:
         )
         logger.info("Deleted %d triples from Neo4j graph %s", deleted, label)
         return deleted
-
-    def delete_cohort_triples(
-        self,
-        table_name: str,
-        cohort_uri_prefix: str,
-        in_cohort_predicate: str,
-    ) -> int:
-        """Remove a cohort's nodes + membership edges (idempotent).
-
-        Cohort-entity nodes have a ``uri`` starting with *cohort_uri_prefix*;
-        membership edges are relationships whose type derives from
-        *in_cohort_predicate* pointing at such nodes. DETACH-deleting the cohort
-        nodes removes both in one step.
-        """
-        if not cohort_uri_prefix:
-            return 0
-        label = sanitise_label(table_name)
-        try:
-            rows = self._conn.run(
-                f"MATCH (n:`{label}`) WHERE n.uri STARTS WITH $prefix "
-                f"WITH n LIMIT 100000 DETACH DELETE n RETURN count(n) AS deleted",
-                prefix=cohort_uri_prefix,
-            )
-            return int(rows[0].get("deleted", 0)) if rows else 0
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "delete_cohort_triples failed on %s (%s): %s",
-                table_name,
-                cohort_uri_prefix,
-                exc,
-            )
-            return 0

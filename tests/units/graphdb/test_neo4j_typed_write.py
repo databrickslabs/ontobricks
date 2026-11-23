@@ -173,11 +173,3 @@ class TestDeleteTriples:
         w.delete_triples("G", [{"subject": c, "predicate": f"{NS}city", "object": "Paris"}])
         cy = " ".join(_all_cypher(conn))
         assert "REMOVE n.`city`" in cy
-
-
-class TestCohortDelete:
-    def test_detach_deletes_by_uri_prefix(self):
-        w, conn = _writeops()
-        w.delete_cohort_triples("G", f"{NS}cohort/", f"{NS}inCohort")
-        cy = " ".join(_all_cypher(conn))
-        assert "n.uri STARTS WITH $prefix" in cy and "DETACH DELETE n" in cy

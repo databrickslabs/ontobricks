@@ -106,19 +106,41 @@ class TestMaterializeClusters:
         communities.summary.return_value = None
         with patch.object(TwinAnalytics, "build_job_communities", return_value=communities):
             with pytest.raises(ValidationError, match="Run Detect first"):
-                TwinAnalytics(_domain()).materialize_clusters("store", "g")
+                TwinAnalytics(_domain()).materialize_clusters("g")
 
-    def test_writes_the_last_run(self):
+    def test_writes_the_last_run_into_the_certified_graph(self):
+        from back.objects.digitaltwin.certify import CertifiedGraphWriter
+
         communities = MagicMock()
         communities.summary.return_value = {"cluster_count": 2}
-        mat = MagicMock()
-        mat.materialize.return_value = 13
+        communities.output_table = "c.s.graph_communities_x"
         with patch.object(
             TwinAnalytics, "build_job_communities", return_value=communities
-        ), patch("back.core.graph_analysis.CommunityMaterializer", return_value=mat):
-            out = TwinAnalytics(_domain()).materialize_clusters("store", "g")
+        ), patch.object(
+            CertifiedGraphWriter, "replace_scope_from_select", return_value=13
+        ) as replace:
+            out = TwinAnalytics(_domain()).materialize_clusters("g")
         assert out == {"inserted": 13, "cluster_count": 2}
-        assert mat.materialize.call_args.args == (communities, {"cluster_count": 2})
+        membership, metadata = replace.call_args.args[0]
+        assert "FROM c.s.graph_communities_x" in membership
+        assert "FROM c.s.graph_communities_x_sizes" in metadata
+        assert replace.call_args.kwargs == {
+            "kind": "community",
+            "provenance": "community",
+        }
+
+    def test_clear_removes_the_community_scope(self):
+        from back.objects.digitaltwin.certify import CertifiedGraphWriter
+
+        with patch.object(
+            CertifiedGraphWriter, "remove_scope", return_value=5
+        ) as remove:
+            out = TwinAnalytics(_domain()).clear_clusters("settings")
+        assert out == {"deleted": 5}
+        assert remove.call_args.kwargs == {
+            "kind": "community",
+            "provenance": "community",
+        }
 
 
 class TestComputeGraphMetrics:

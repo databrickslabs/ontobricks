@@ -1017,3 +1017,66 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11349 passed, 334 skipped, 8 deselected
+
+================================================================================
+Communities write to and read from the Certified Graph
+================================================================================
+
+Context:
+Step (b), communities. Materialising a community run now replaces the
+`community` scope of the Certified Graph with `INSERT … SELECT` statements
+computed on the warehouse from the job's Delta tables (no row transits the
+app for a Lakehouse Certified Graph; Lakebase / Neo4j get the new scope in
+batches). Clearing removes that scope. Reads of the materialized partition
+(current clusters, members, assignments) target the Certified Graph store
+and relation. The partition SQL is always Spark (it runs on Delta),
+whatever the serving backend. The store-level prefix deletes used by the
+old cohort / community write paths had no caller left and are removed.
+
+Changes:
+1. src/back/core/graph_analysis/community/CommunityMaterializer.py
+   - Keeps the partition SQL (`membership_select_sql`,
+     `metadata_select_sql`, Spark-escaped through `_esc_spark`) and the
+     bounded reads. Removed: `materialize`, `_materialize_with_sql`,
+     `_materialize_in_batches`, `clear`, `_rebuild_adjacency`.
+2. src/back/objects/digitaltwin/TwinAnalytics.py
+   - `materialize_clusters(graph_name, settings, on_progress)` writes the
+     `community` scope through `replace_scope_from_select`;
+     `clear_clusters(settings)` removes it (`COMMUNITY_SCOPE`).
+3. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   - `run_community_materialize_task`: Remove Parameter `store`.
+4. src/api/routers/internal/dtwin.py
+   - `_certified_graph`: Certified Graph store + relation; used by the
+     current-clusters, materialized members and assignments reads. The
+     "latest" members source keeps the job graph name. Materialize / clear
+     routes call the new signatures.
+5. src/back/core/graphdb/interfaces/TraversalMixin.py,
+   src/back/core/graphdb/neo4j/Store.py, src/back/core/graphdb/neo4j/WriteOps.py
+   - Removed `delete_cohort_triples` / `delete_community_triples` (dead).
+6. Tests
+   - tests/units/core/test_community_materializer.py: reads on a seeded
+     partition, partition SQL over the job tables, Spark escaping whatever
+     the store, bounded reads.
+   - tests/units/dtwin/test_v090_twin_analytics.py: materialize writes the
+     community scope from the job SQL; clear removes it.
+   - tests/units/api/test_dtwin_clusters.py: materialized reads use the
+     Certified Graph; the task gets the graph name.
+   - tests/units/graphdb/test_neo4j_typed_write.py,
+     tests/units/dtwin/test_dtwin_cohort.py: dead delete removed.
+
+Modified files:
+- src/back/core/graph_analysis/community/CommunityMaterializer.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/api/routers/internal/dtwin.py
+- src/back/core/graphdb/interfaces/TraversalMixin.py
+- src/back/core/graphdb/neo4j/Store.py
+- src/back/core/graphdb/neo4j/WriteOps.py
+- tests/units/core/test_community_materializer.py
+- tests/units/dtwin/test_v090_twin_analytics.py
+- tests/units/api/test_dtwin_clusters.py
+- tests/units/graphdb/test_neo4j_typed_write.py
+- tests/units/dtwin/test_dtwin_cohort.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11349 passed, 334 skipped, 8 deselected

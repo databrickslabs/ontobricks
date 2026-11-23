@@ -1,4 +1,4 @@
-"""CommunityMaterializer: set-based writes, bounded reads, both store kinds."""
+"""CommunityMaterializer: partition SQL (Spark) and bounded reads on both store kinds."""
 
 from __future__ import annotations
 
@@ -62,24 +62,9 @@ class _SqlStore:
         )
         return len(triples)
 
-    def delete_community_triples(self, name: str, prefix: str, predicate: str) -> int:
-        cur = self.conn.execute(
-            f"DELETE FROM {name} WHERE subject LIKE ? OR (predicate = ? AND object LIKE ?)",
-            (prefix + "%", predicate, prefix + "%"),
-        )
-        return cur.rowcount
 
     def all(self) -> List[Dict[str, str]]:
         return [dict(r) for r in self.conn.execute("SELECT * FROM g").fetchall()]
-
-
-class _DeltaStore(_SqlStore):
-    def __init__(self) -> None:
-        super().__init__()
-        self.selects: List[str] = []
-
-    def insert_triples_from_select(self, name: str, select_sql: str) -> None:
-        self.selects.append(select_sql)
 
 
 class _ScanStore:
@@ -96,13 +81,6 @@ class _ScanStore:
         self.rows.extend(triples)
         return len(triples)
 
-    def delete_community_triples(self, _name, prefix, predicate):
-        before = len(self.rows)
-        self.rows = [
-            t for t in self.rows
-            if not (t["subject"].startswith(prefix) or t["predicate"] == predicate)
-        ]
-        return before - len(self.rows)
 
 
 @pytest.fixture(params=["sql", "scan"])
@@ -110,10 +88,35 @@ def store(request):
     return _SqlStore() if request.param == "sql" else _ScanStore()
 
 
-def test_batched_materialize_then_load(store):
+def _seed(store) -> None:
+    """Write the partition of ``_Communities`` + ``STATS`` the way it is materialized."""
+    triples = []
+    for batch in _Communities().iter_memberships(0):
+        for uri, cid in batch:
+            triples.append(
+                {
+                    "subject": uri,
+                    "predicate": CommunityVocabulary.in_cluster(BASE),
+                    "object": CommunityVocabulary.cluster(BASE, cid),
+                }
+            )
+    for batch in _Communities().iter_sizes(0):
+        for cid, size in batch:
+            uri = CommunityVocabulary.cluster(BASE, cid)
+            for pred, obj in (
+                (RDF_TYPE, CommunityVocabulary.cluster_class(BASE)),
+                (RDFS_LABEL, f"Cluster #{cid}"),
+                (CommunityVocabulary.from_algorithm(BASE), STATS["algorithm"]),
+                (CommunityVocabulary.cluster_size(BASE), str(size)),
+                (CommunityVocabulary.modularity(BASE), str(STATS["modularity"])),
+            ):
+                triples.append({"subject": uri, "predicate": pred, "object": obj})
+    store.insert_triples("g", triples)
+
+
+def test_load_current_reads_the_materialized_partition(store):
+    _seed(store)
     mat = CommunityMaterializer(store, "g", BASE)
-    inserted = mat.materialize(_Communities(), STATS)
-    assert inserted == 3 + 2 * 5
     current = mat.load_current()
     assert [c["id"] for c in current["clusters"]] == [0, 1]
     assert [c["size"] for c in current["clusters"]] == [2, 1]
@@ -125,8 +128,8 @@ def test_batched_materialize_then_load(store):
 
 
 def test_assignments_and_members(store):
+    _seed(store)
     mat = CommunityMaterializer(store, "g", BASE)
-    mat.materialize(_Communities(), STATS)
     assert mat.assignments(["http://ex/a", "http://ex/c", "http://ex/zzz"]) == {
         "http://ex/a": 0,
         "http://ex/c": 1,
@@ -139,48 +142,38 @@ def test_assignments_and_members(store):
     assert page2["has_more"] is False
 
 
-def test_rematerialize_replaces_and_clear_empties(store):
-    mat = CommunityMaterializer(store, "g", BASE)
-    mat.materialize(_Communities(), STATS)
-    mat.materialize(_Communities(), STATS)
-    assert mat.load_current()["stats"]["node_count"] == 3
-    mat.clear()
-    assert mat.load_current() == {"clusters": [], "stats": None}
+def test_an_empty_graph_has_no_partition(store):
+    assert CommunityMaterializer(store, "g", BASE).load_current() == {
+        "clusters": [],
+        "stats": None,
+    }
 
 
-def test_failed_materialize_leaves_no_partition():
-    class _Boom(_Communities):
-        def iter_sizes(self, _batch):
-            raise RuntimeError("warehouse went away")
-            yield  # pragma: no cover
-
-    store = _SqlStore()
-    mat = CommunityMaterializer(store, "g", BASE)
-    with pytest.raises(RuntimeError):
-        mat.materialize(_Boom(), STATS)
-    assert store.all() == []
-
-
-def test_delta_store_writes_with_insert_select():
-    store = _DeltaStore()
-    mat = CommunityMaterializer(store, "g", BASE)
-    inserted = mat.materialize(_Communities(), STATS)
-    assert inserted == 3 + 2 * 5
-    membership, metadata = store.selects
+def test_partition_sql_reads_the_job_tables():
+    mat = CommunityMaterializer(None, "g", BASE)
     out = _Communities.output_table
+    membership = mat.membership_select_sql(out)
+    metadata = mat.metadata_select_sql(out, "label_propagation", "0.42")
     assert f"FROM {out}" in membership
     assert CommunityVocabulary.in_cluster(BASE) in membership
     assert CommunityVocabulary.cluster_prefix(BASE) + "c-" in membership
     assert metadata.count(f"FROM {out}_sizes") == 5
     for pred in (RDF_TYPE, RDFS_LABEL, CommunityVocabulary.cluster_size(BASE)):
         assert pred in metadata
-    assert store.all() == []
+
+
+def test_partition_sql_is_spark_escaped_whatever_the_store():
+    mat = CommunityMaterializer(_SqlStore(), "g", "http://ex/o\\'x")
+    sql = mat.membership_select_sql("c.s.t")
+    # Spark doubles the backslash before doubling the quote; the Postgres
+    # store's own dialect would not.
+    assert "o\\\\''x" in sql
 
 
 def test_sql_reads_are_bounded():
     store = _SqlStore()
+    _seed(store)
     mat = CommunityMaterializer(store, "g", BASE)
-    mat.materialize(_Communities(), STATS)
     store.queries.clear()
     mat.load_current(limit=10_000)
     assert any("LIMIT 200" in q for q in store.queries)

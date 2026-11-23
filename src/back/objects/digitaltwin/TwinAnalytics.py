@@ -144,22 +144,39 @@ class TwinAnalytics:
 
         return CommunityMaterializer(store, graph_name, self._base_uri())
 
+    COMMUNITY_SCOPE = "community"
+
     def materialize_clusters(
         self,
-        store: Any,
         graph_name: str,
         settings: Any = None,
         on_progress: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        """Replace the graph partition with the last detection run."""
+        """Replace the Certified Graph partition with the last detection run.
+
+        The membership and metadata triples are computed on the warehouse
+        from the job's Delta tables into the ``community`` scope.
+        """
         from back.core.errors import ValidationError
+        from back.objects.digitaltwin.certify import CertifiedGraphWriter
 
         communities = self.build_job_communities(self._domain, settings, graph_name)
         stats = communities.summary()
         if not stats:
             raise ValidationError("No community detection run to materialize. Run Detect first.")
-        inserted = self._materializer(store, graph_name).materialize(
-            communities, stats, on_progress=on_progress
+        materializer = self._materializer(None, graph_name)
+        out = communities.output_table
+        algorithm = str(stats.get("algorithm") or "label_propagation")
+        modularity = str(stats.get("modularity", 0.0))
+        if on_progress:
+            on_progress(30, "Writing the partition into the certified graph")
+        inserted = CertifiedGraphWriter(self._domain, settings).replace_scope_from_select(
+            [
+                materializer.membership_select_sql(out),
+                materializer.metadata_select_sql(out, algorithm, modularity),
+            ],
+            kind=CertifiedGraphWriter.KIND_COMMUNITY,
+            provenance=self.COMMUNITY_SCOPE,
         )
         return {"inserted": inserted, "cluster_count": stats["cluster_count"]}
 
@@ -181,9 +198,13 @@ class TwinAnalytics:
         """Materialized cluster id for each of *uris* that has one."""
         return self._materializer(store, graph_name).assignments(uris)
 
-    def clear_clusters(self, store: Any, graph_name: str) -> Dict[str, Any]:
-        """Drop the materialized partition."""
-        deleted = self._materializer(store, graph_name).clear()
+    def clear_clusters(self, settings: Any = None) -> Dict[str, Any]:
+        """Drop the partition from the Certified Graph."""
+        from back.objects.digitaltwin.certify import CertifiedGraphWriter
+
+        deleted = CertifiedGraphWriter(self._domain, settings).remove_scope(
+            kind=CertifiedGraphWriter.KIND_COMMUNITY, provenance=self.COMMUNITY_SCOPE
+        )
         return {"deleted": deleted}
 
     # ------------------------------------------------------------------

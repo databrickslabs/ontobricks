@@ -42,7 +42,6 @@ def _store():
     s = MagicMock()
     s.query_triples.return_value = _graph()
     s.insert_triples.return_value = 7
-    s.delete_cohort_triples.return_value = -1
     s.get_entity_metadata.return_value = []
     return s
 

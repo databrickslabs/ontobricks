@@ -41,6 +41,7 @@ def wired(monkeypatch):
     monkeypatch.setattr(dtwin, "assert_domain_graph_read", lambda r: None)
     monkeypatch.setattr(dtwin, "get_domain", lambda sm: "domain")
     monkeypatch.setattr(dtwin, "_cluster_graph", lambda d, s: ("store", "g"))
+    monkeypatch.setattr(dtwin, "_certified_graph", lambda d, s: ("cert-store", "cert"))
     monkeypatch.setattr(dtwin, "community_job_status", lambda d, s: (True, ""))
     monkeypatch.setattr(dtwin, "TwinAnalytics", MagicMock(return_value=dt))
     tasks = MagicMock()
@@ -93,14 +94,16 @@ async def test_members_reads_the_requested_source(wired):
     wired.dt.cluster_members.assert_called_once_with("g", 3, 100, 50, "settings")
     out = await dtwin.cluster_members(_Request(), 3, 0, 50, "materialized", "sm", "settings")
     assert out["members"] == ["m"]
-    wired.dt.materialized_members.assert_called_once_with("store", "g", 3, 0, 50)
+    wired.dt.materialized_members.assert_called_once_with("cert-store", "cert", 3, 0, 50)
 
 
 async def test_assignments_for_drawn_uris(wired):
     wired.dt.cluster_assignments.return_value = {"u": 1}
     out = await dtwin.cluster_assignments(_Request({"uris": ["u", "v"]}), "sm", "settings")
     assert out["assignments"] == {"u": 1}
-    wired.dt.cluster_assignments.assert_called_once_with("store", "g", ["u", "v"])
+    wired.dt.cluster_assignments.assert_called_once_with(
+        "cert-store", "cert", ["u", "v"]
+    )
 
 
 async def test_materialize_needs_a_run(wired):
@@ -116,4 +119,7 @@ async def test_materialize_starts_a_task(wired):
     assert out["task_id"] == "t-1"
     assert wired.tm.create_task.call_args.kwargs["task_type"] == "community_materialize"
     wired.started[0]()
-    assert wired.tasks.run_community_materialize_task.call_args.args[-2:] == ("store", "g")
+    assert wired.tasks.run_community_materialize_task.call_args.args[-2:] == (
+        "settings",
+        "g",
+    )

@@ -306,26 +306,6 @@ class Store(MaterializedGraphBackend):
     def optimize_table(self, table_name: str) -> None:
         return self._writes.optimize_table(table_name)
 
-    def delete_cohort_triples(
-        self,
-        table_name: str,
-        cohort_uri_prefix: str,
-        in_cohort_predicate: str,
-    ) -> int:
-        return self._writes.delete_cohort_triples(
-            table_name, cohort_uri_prefix, in_cohort_predicate
-        )
-
-    def delete_community_triples(
-        self,
-        table_name: str,
-        cluster_uri_prefix: str,
-        in_cluster_predicate: str,
-    ) -> int:
-        return self.delete_cohort_triples(
-            table_name, cluster_uri_prefix, in_cluster_predicate
-        )
-
     def execute_query(self, query: str) -> List[Dict[str, Any]]:
         # Deliberate: no raw Cypher entry point. All writes go through
         # the build pipeline after ontology validation (C2 safeguard).

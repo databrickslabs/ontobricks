@@ -507,15 +507,13 @@ class TwinBackgroundTasks:
         task_id: str,
         domain,
         settings,
-        store,
         graph_name: str,
     ) -> None:
-        """Write the last detection run into the graph in a worker thread."""
+        """Write the last detection run into the Certified Graph in a worker thread."""
         try:
             tm.start_task(task_id, "Materializing communities...")
             tm.update_progress(task_id, 10, "Clearing the previous partition")
             result = _analytics()(domain).materialize_clusters(
-                store,
                 graph_name,
                 settings=settings,
                 on_progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),

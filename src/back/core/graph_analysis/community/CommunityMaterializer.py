@@ -1,22 +1,22 @@
-"""Write and read the active community partition as RDF triples.
+"""SQL and reads of the active community partition (RDF triples).
 
 The partition comes from the community job's output tables
 (:class:`~back.core.graph_analysis.community.JobCommunities.JobCommunities`), never from
 a payload posted by the browser: a partition of a large graph has one
 membership triple per entity, far beyond any request body.
 
-Writes are set-based. A store that can run ``INSERT … SELECT`` against the
-job's Delta tables (the Lakehouse engine, ``insert_triples_from_select``) does
-the whole write on the warehouse; every other store is fed keyset-paginated
-batches, so app memory stays bounded whatever the partition size.
+Writes go to the Certified Graph through ``CertifiedGraphWriter``, which runs
+the membership / metadata ``SELECT`` statements built here on the warehouse
+(``INSERT … SELECT``), so no row transits the app. Those statements read the
+job's Delta tables and are always Spark SQL.
 
-Reads are bounded too: the cluster list is top-N by size, members are paged,
-and the Explorer asks for assignments of the nodes it draws only.
+Reads are bounded: the cluster list is top-N by size, members are paged, and
+the Explorer asks for assignments of the nodes it draws only.
 """
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List
 
 from back.core.graph_analysis.community.CommunityVocabulary import CommunityVocabulary
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
@@ -31,7 +31,6 @@ DEFAULT_CURRENT_TOP = 50
 ASSIGNMENTS_MAX = 5_000
 MEMBERS_PAGE_MAX = 500
 
-_BATCH_SIZE = 50_000
 
 
 def _local_label(uri: str) -> str:
@@ -40,7 +39,7 @@ def _local_label(uri: str) -> str:
 
 
 class CommunityMaterializer:
-    """Replace, clear and read the active cluster partition on a graph store."""
+    """Build the partition SQL and read the materialized partition of a graph store."""
 
     def __init__(self, store: Any, graph_name: str, base_uri: str) -> None:
         self._store = store
@@ -55,131 +54,39 @@ class CommunityMaterializer:
         self._mod_pred = vocab.modularity(self._base_uri)
 
     # ------------------------------------------------------------------
-    # Write
+    # Partition SQL (Spark, over the community job's Delta tables)
     # ------------------------------------------------------------------
 
-    def materialize(
-        self,
-        communities: Any,
-        stats: Dict[str, Any],
-        on_progress: Optional[Callable[[int, str], None]] = None,
-    ) -> int:
-        """Replace the partition with the job output read through *communities*.
-
-        Returns the number of triples written. A failure part-way through
-        clears the partition again, so no half-written partition stays visible.
-        """
-        self.clear()
-        algorithm = str(stats.get("algorithm") or "label_propagation")
-        modularity = str(stats.get("modularity", 0.0))
-        try:
-            if callable(getattr(self._store, "insert_triples_from_select", None)):
-                inserted = self._materialize_with_sql(
-                    communities.output_table, algorithm, modularity, stats
-                )
-            else:
-                inserted = self._materialize_in_batches(
-                    communities, algorithm, modularity, stats, on_progress
-                )
-        except Exception:
-            logger.exception("CommunityMaterializer: materialize failed, clearing")
-            self.clear()
-            raise
-        self._rebuild_adjacency(deleted=True, inserted=inserted)
-        return inserted
+    @staticmethod
+    def _esc_spark(value: str) -> str:
+        return sql_escape(value, SQL_DIALECT_SPARK)
 
     def _cluster_uri_sql(self) -> str:
-        return f"concat('{self._esc(self._prefix)}c-', CAST(community_rank AS STRING))"
+        return (
+            f"concat('{self._esc_spark(self._prefix)}c-', "
+            "CAST(community_rank AS STRING))"
+        )
 
     def membership_select_sql(self, out: str) -> str:
         return (
-            f"SELECT node_uri AS subject, '{self._esc(self._in_cluster)}' AS predicate, "
+            f"SELECT node_uri AS subject, '{self._esc_spark(self._in_cluster)}' AS predicate, "
             f"{self._cluster_uri_sql()} AS object FROM {out}"
         )
 
     def metadata_select_sql(self, out: str, algorithm: str, modularity: str) -> str:
         uri = self._cluster_uri_sql()
         rows = [
-            (RDF_TYPE, f"'{self._esc(self._klass)}'"),
+            (RDF_TYPE, f"'{self._esc_spark(self._klass)}'"),
             (RDFS_LABEL, "concat('Cluster #', CAST(community_rank AS STRING))"),
-            (self._algo_pred, f"'{self._esc(algorithm)}'"),
+            (self._algo_pred, f"'{self._esc_spark(algorithm)}'"),
             (self._size_pred, "CAST(size AS STRING)"),
-            (self._mod_pred, f"'{self._esc(modularity)}'"),
+            (self._mod_pred, f"'{self._esc_spark(modularity)}'"),
         ]
         return "\nUNION ALL\n".join(
-            f"SELECT {uri} AS subject, '{self._esc(pred)}' AS predicate, {obj} AS object "
+            f"SELECT {uri} AS subject, '{self._esc_spark(pred)}' AS predicate, {obj} AS object "
             f"FROM {out}_sizes"
             for pred, obj in rows
         )
-
-    def _materialize_with_sql(
-        self, out: str, algorithm: str, modularity: str, stats: Dict[str, Any]
-    ) -> int:
-        insert = self._store.insert_triples_from_select
-        insert(self._graph_name, self.membership_select_sql(out))
-        insert(self._graph_name, self.metadata_select_sql(out, algorithm, modularity))
-        return int(stats.get("node_count", 0) or 0) + 5 * int(
-            stats.get("cluster_count", 0) or 0
-        )
-
-    def _materialize_in_batches(
-        self,
-        communities: Any,
-        algorithm: str,
-        modularity: str,
-        stats: Dict[str, Any],
-        on_progress: Optional[Callable[[int, str], None]],
-    ) -> int:
-        total = max(1, int(stats.get("node_count", 0) or 0))
-        inserted = 0
-        written = 0
-        for batch in communities.iter_memberships(_BATCH_SIZE):
-            triples = [
-                {
-                    "subject": uri,
-                    "predicate": self._in_cluster,
-                    "object": CommunityVocabulary.cluster(self._base_uri, cid),
-                }
-                for uri, cid in batch
-                if uri
-            ]
-            inserted += int(self._store.insert_triples(self._graph_name, triples) or 0)
-            written += len(batch)
-            if on_progress:
-                pct = 20 + int(70 * min(1.0, written / total))
-                on_progress(pct, f"Writing memberships ({written:,} / {total:,})")
-        for batch in communities.iter_sizes(_BATCH_SIZE):
-            triples: List[Dict[str, str]] = []
-            for cid, size in batch:
-                uri = CommunityVocabulary.cluster(self._base_uri, cid)
-                triples.extend(
-                    [
-                        {"subject": uri, "predicate": RDF_TYPE, "object": self._klass},
-                        {"subject": uri, "predicate": RDFS_LABEL, "object": f"Cluster #{cid}"},
-                        {"subject": uri, "predicate": self._algo_pred, "object": algorithm},
-                        {"subject": uri, "predicate": self._size_pred, "object": str(size)},
-                        {"subject": uri, "predicate": self._mod_pred, "object": modularity},
-                    ]
-                )
-            inserted += int(self._store.insert_triples(self._graph_name, triples) or 0)
-        return inserted
-
-    def clear(self) -> int:
-        """Remove every community triple for this domain. Returns rows deleted."""
-        if self._store is None:
-            return 0
-        delete_fn = getattr(self._store, "delete_community_triples", None)
-        if not callable(delete_fn):
-            delete_fn = getattr(self._store, "delete_cohort_triples", None)
-        deleted = 0
-        if callable(delete_fn):
-            try:
-                deleted = int(delete_fn(self._graph_name, self._prefix, self._in_cluster) or 0)
-            except Exception as exc:
-                logger.warning("CommunityMaterializer: delete failed: %s", exc)
-        if deleted != 0:
-            self._rebuild_adjacency(deleted=True, inserted=0)
-        return deleted
 
     # ------------------------------------------------------------------
     # Read
@@ -355,16 +262,6 @@ class CommunityMaterializer:
             key = "type" if r.get("predicate") == RDF_TYPE else "label"
             cell.setdefault(key, str(r.get("object") or ""))
         return meta
-
-    def _rebuild_adjacency(self, *, deleted: bool, inserted: int) -> None:
-        if not deleted and inserted <= 0:
-            return
-        if getattr(self._store, "supports_adjacency", False) is not True:
-            return
-        from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
-
-        rebuild_graph_cache_if_enabled(self._store, self._graph_name, None)
-
 
 def _as_float(value: Any, default: float) -> float:
     if value is None or value == "":

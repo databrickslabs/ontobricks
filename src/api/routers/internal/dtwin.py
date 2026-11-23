@@ -386,6 +386,16 @@ async def load_triplestore(
 # ===========================================
 
 
+def _certified_graph(domain, settings):
+    """Certified Graph store and read relation (the materialized partition lives there)."""
+    from back.core.graphdb.constants import GRAPH_VARIANT_CERTIFIED
+
+    store = _require_graph_store(domain, settings, source=GRAPH_VARIANT_CERTIFIED)
+    return store, _graph_query_table(
+        domain, settings, store, variant=GRAPH_VARIANT_CERTIFIED
+    )
+
+
 def _cluster_graph(domain, settings):
     """Graph store and graph name for the clusters routes."""
     store = _require_graph_store(domain, settings)
@@ -499,7 +509,7 @@ async def current_clusters(
     """Top materialized clusters and totals (no members), or empty clusters."""
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
-    store, graph_name = _cluster_graph(domain, settings)
+    store, graph_name = _certified_graph(domain, settings)
     result = await run_blocking(
         TwinAnalytics(domain).load_current_clusters, store, graph_name, top
     )
@@ -519,13 +529,14 @@ async def cluster_members(
     """One page of a cluster, from the last run or the materialized graph."""
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
-    store, graph_name = _cluster_graph(domain, settings)
     analytics = TwinAnalytics(domain)
     if source == "materialized":
+        store, table = _certified_graph(domain, settings)
         result = await run_blocking(
-            analytics.materialized_members, store, graph_name, cluster_id, offset, limit
+            analytics.materialized_members, store, table, cluster_id, offset, limit
         )
     else:
+        _, graph_name = _cluster_graph(domain, settings)
         result = await run_blocking(
             analytics.cluster_members, graph_name, cluster_id, offset, limit, settings
         )
@@ -545,7 +556,7 @@ async def cluster_assignments(
         raise ValidationError("Body must be a JSON object")
     uris = _string_list(data.get("uris"), "uris") or []
     domain = get_domain(session_mgr)
-    store, graph_name = _cluster_graph(domain, settings)
+    store, graph_name = _certified_graph(domain, settings)
     assignments = await run_blocking(
         TwinAnalytics(domain).cluster_assignments, store, graph_name, uris
     )
@@ -568,7 +579,7 @@ async def materialize_clusters(
 
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
-    store, graph_name = _cluster_graph(domain, settings)
+    _store, graph_name = _cluster_graph(domain, settings)
     if not await run_blocking(TwinAnalytics(domain).detection_summary, graph_name, settings):
         raise ValidationError("No community detection run to materialize. Run Detect first.")
     tm = get_task_manager()
@@ -580,7 +591,7 @@ async def materialize_clusters(
 
     def run():
         TwinBackgroundTasks.run_community_materialize_task(
-            tm, task.id, domain, settings, store, graph_name
+            tm, task.id, domain, settings, graph_name
         )
 
     threading.Thread(target=run, daemon=True).start()
@@ -599,10 +610,7 @@ async def delete_current_clusters(
     """Drop the materialized community partition."""
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
-    store, graph_name = _cluster_graph(domain, settings)
-    result = await run_blocking(
-        TwinAnalytics(domain).clear_clusters, store, graph_name
-    )
+    result = await run_blocking(TwinAnalytics(domain).clear_clusters, settings)
     return {"success": True, **result}
 
 
