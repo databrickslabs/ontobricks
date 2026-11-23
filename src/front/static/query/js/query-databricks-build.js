@@ -40,15 +40,6 @@ function exportDbxBuildLog() {
     _dbxTimedBuildLog.export();
 }
 
-function _tsxBackend() {
-    try {
-        const el = document.getElementById('triplestore-config');
-        if (!el) return 'lakebase';
-        return JSON.parse(el.textContent || '{}').triple_store_backend || 'lakebase';
-    } catch (_) {
-        return 'lakebase';
-    }
-}
 
 function _dbxEscape(text) {
     const d = document.createElement('div');
@@ -119,14 +110,17 @@ function _dbxBuildPollDelay(task) {
         : DBX_BUILD_FAST_POLL_MS;
 }
 
+/**
+ * The Original Graph is a Lakehouse virtual graph for every domain, so the
+ * Original Graph page always shows the Lakehouse build panel and actions.
+ */
 function applyTripleStoreBackendPanels() {
-    const backend = _tsxBackend();
     if (typeof _setBackendBrandIcon === 'function') {
-        _setBackendBrandIcon(document.getElementById('buildBackendIcon'), backend);
+        _setBackendBrandIcon(document.getElementById('buildBackendIcon'), 'databricks');
     }
     const lakePanel = document.getElementById('sync-lakebase-panel');
     const dbxPanel = document.getElementById('sync-databricks-panel');
-    const isDbx = backend === 'databricks';
+    const isDbx = true;
 
     if (lakePanel) lakePanel.classList.toggle('d-none', isDbx);
     if (dbxPanel) dbxPanel.classList.toggle('d-none', !isDbx);
@@ -141,8 +135,7 @@ function applyTripleStoreBackendPanels() {
 }
 
 function _updateDbxAdjacencyButton() {
-    const backend = String(_tsxBackend() || 'lakebase').toLowerCase();
-    const visible = backend === 'databricks';
+    const visible = true;
     const disabled = !visible
         || !dbxBuildReady
         || !dbxGraphHasData
@@ -203,7 +196,8 @@ function _applyDbxStorageKind(isViewMode) {
     if (note) {
         note.textContent = isViewMode
             ? 'Virtual Graph (no copy) — Build refreshes the gateway definition; no triples '
-              + 'are copied. Inferred triples keep their own Delta table.'
+              + 'are copied. Enrichments (inferences, cohorts, communities) live in the '
+              + 'Certified Graph.'
             : 'Materialized — Build copies the gateway output into this Delta '
               + 'table, so it is a point-in-time snapshot of the source.';
         note.classList.remove('d-none');
@@ -611,7 +605,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('dbxBuildLogExport')?.addEventListener('click', exportDbxBuildLog);
 
     document.addEventListener('sidebarSectionChanged', function (e) {
-        if (e.detail?.section === 'sync' && _tsxBackend() === 'databricks') {
+        if (e.detail?.section === 'sync') {
             loadDatabricksBuildInfo();
         }
     });
@@ -636,7 +630,5 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     );
 
-    if (_tsxBackend() === 'databricks') {
-        loadDatabricksBuildInfo();
-    }
+    loadDatabricksBuildInfo();
 });

@@ -1258,3 +1258,93 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11309 passed, 334 skipped, 8 deselected
+
+================================================================================
+UI: Original Graph page, Original / Certified graph source, Certified backend
+================================================================================
+
+Context:
+Step (d), first part. The Graph → Management "Build" page is now the
+"Original Graph" page: it always shows the Lakehouse virtual build (logo,
+panel and actions) since the Original Graph is virtual for every backend.
+The graph-source picker of Explorer, Query, Chat and API offers
+"Original graph" / "Certified graph" plus ready sandboxes; the choice travels
+as the `simulation_id` token the backend maps to a graph variant, and stored
+legacy "live" values read the Original Graph. Context → Configuration names
+the selector "Certified Graph backend" and explains that the Original Graph
+is always virtual. The Certified Graph page itself comes next.
+
+Changes:
+1. src/front/config/menu_config.json
+   - `sync`: label "Original Graph", icon `bi-database`, description.
+2. src/front/templates/partials/dtwin/_query_build.html, src/front/templates/dtwin.html
+   - Title "Original Graph", subtitle, Lakehouse logo by default.
+3. src/front/static/query/js/query-databricks-build.js
+   - The Lakehouse panel, actions and adjacency button show for every
+     backend (removed the backend check and `_tsxBackend`); storage note
+     says enrichments live in the Certified Graph.
+4. src/front/static/query/js/query-sync.js
+   - No longer overrides the Original page logo with the Context backend.
+5. src/api/routers/internal/dtwin.py
+   - `/dtwin/databricks-build/info` reports `materialization: "view"`
+     (the Original `…_data` is a view for every domain).
+6. src/front/static/query/js/query-graph-source.js
+   - `ORIGINAL` / `CERTIFIED` values (replacing `LIVE_INFERRED` /
+     `LIVE_ASSERTED`), legacy "live" values normalised to Original,
+     `sandboxId` set for real sandboxes only, Original as the default.
+7. src/front/static/query/js/query-sigmagraph.js
+   - Removed the local copy of the source picker (Duplicated Code): the
+     Explorer delegates to `KgGraphSource`; the sandbox banner shows for
+     sandboxes only.
+8. src/front/static/query/js/query-business-rules.js
+   - Entity rules scope to `KgGraphSource.current().sandboxId` only.
+9. src/front/templates/partials/dtwin/_kg_graph_source.html
+   - Options "Original graph" / "Certified graph"; tooltip.
+10. src/front/templates/partials/domain/_domain_information.html
+    - "Certified Graph backend" legend and help; access-type help scoped to
+      the Certified Graph; enrichments wording.
+11. src/front/templates/partials/layout/help_modal.html
+    - Starter guide names the Original Graph page.
+12. Tests
+    - tests/units/front/test_certified_backend_label.py (new).
+    - tests/units/front/test_kg_graph_source.py,
+      tests/units/front/test_explorer_simulation_select.py,
+      tests/units/front/test_entity_business_rules_ui.py,
+      tests/units/front/test_adjacency_refresh_ui.py,
+      tests/units/front/test_help_center_menu_sync.py,
+      tests/units/front/test_lakehouse_materialization_ui.py,
+      tests/units/front/test_search_cache_ui.py,
+      tests/units/dtwin/test_databricks_build_info_materialization.py:
+      contracts updated to the new labels, tokens and Lakehouse-only page.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/query/js/query-sync.js
+- src/api/routers/internal/dtwin.py
+- src/front/static/query/js/query-graph-source.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-business-rules.js
+- src/front/templates/partials/dtwin/_kg_graph_source.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_certified_backend_label.py
+- tests/units/front/test_kg_graph_source.py
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/front/test_entity_business_rules_ui.py
+- tests/units/front/test_adjacency_refresh_ui.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_lakehouse_materialization_ui.py
+- tests/units/front/test_search_cache_ui.py
+- tests/units/dtwin/test_databricks_build_info_materialization.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11311 passed, 334 skipped, 8 deselected
+Browser check: Playwright (headless Chromium), worktree app on port 8011 with a
+PUBLISHED version loaded (read-only, no edit lock): /dtwin/?section=sync at
+1440 px (Original Graph title, Lakehouse logo, view panel) and the Explorer at
+390 px (source options "Original graph" / "Certified graph"); no 5xx and no
+console errors on a single navigation (the "Failed to fetch" entries came from
+requests cut by back-to-back navigations in the script).

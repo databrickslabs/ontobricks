@@ -1,4 +1,4 @@
-"""``GET /dtwin/databricks-build/info`` has to say how ``…_data`` is built.
+"""``GET /dtwin/databricks-build/info`` says how the Original ``…_data`` is built.
 
 The Build page labels the target object and explains its triple count from
 this field. Without it the page calls a pass-through view a "Target Delta
@@ -55,32 +55,21 @@ def _info(api_client, domain):
     return resp.json()
 
 
-def test_a_view_only_domain_is_reported_as_such(api_client, domain_session):
-    payload = _info(api_client, _configure(domain_session, "view"))
-    assert payload["materialization"] == "view"
-
-
-def test_a_materialized_domain_is_reported_as_such(api_client, domain_session):
-    payload = _info(api_client, _configure(domain_session, "table"))
-    assert payload["materialization"] == "table"
-
-
-def test_the_field_defaults_to_table_when_missing(api_client, domain_session):
-    """A domain saved before the option existed must not look view-only."""
-    session = _configure(domain_session)
-    session.info.pop("lakehouse_materialization", None)
-    assert _info(api_client, session)["materialization"] == "table"
-
-
-def test_a_new_domain_defaults_to_view(api_client, domain_session):
-    """The Access type picker default is Virtual Graph (no copy)."""
-    assert _info(api_client, _configure(domain_session))["materialization"] == "view"
-
-
-def test_a_non_lakehouse_domain_is_never_view_only(api_client, domain_session):
-    """Its ..._data is still materialized, whatever lingers in ``info``."""
+@pytest.mark.parametrize(
+    "materialization,backend",
+    [
+        ("view", "databricks"),
+        ("table", "databricks"),
+        (None, "databricks"),
+        ("table", "lakebase"),
+        ("view", "neo4j"),
+    ],
+)
+def test_the_original_graph_data_is_always_a_view(
+    api_client, domain_session, materialization, backend
+):
+    """``lakehouse_materialization`` qualifies the Certified Graph only."""
     payload = _info(
-        api_client, _configure(domain_session, "view", backend="lakebase")
+        api_client, _configure(domain_session, materialization, backend=backend)
     )
-    assert payload["triple_store_backend"] == "lakebase"
-    assert payload["materialization"] == "table"
+    assert payload["materialization"] == "view"

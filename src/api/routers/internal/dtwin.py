@@ -1744,9 +1744,10 @@ async def databricks_build_info(
         return {
             "success": True,
             "triple_store_backend": backend,
-            "materialization": GraphDBFactory.resolve_lakehouse_materialization(
-                domain, settings
-            ),
+            # The Original Graph ``…_data`` is a pass-through view for every
+            # domain; the Lakehouse materialization setting is the Certified
+            # Graph's.
+            "materialization": "view",
             "readiness": readiness,
             "view_table": view_table,
             "data_table": data_table,

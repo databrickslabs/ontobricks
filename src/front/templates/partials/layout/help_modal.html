@@ -272,7 +272,7 @@
                                     </h2>
                                     <div id="hw4" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
-                                            <p class="mb-2"><strong>Mapping</strong> (Management sidebar group, right after Build) — connect ontology to Databricks tables:</p>
+                                            <p class="mb-2"><strong>Mapping</strong> (Management sidebar group, right after Original Graph) — connect ontology to Databricks tables:</p>
                                             <ul>
                                                 <li><em>Informations</em> &mdash; mapping status overview and completion gauges</li>
                                                 <li><em>Visual</em> &mdash; force-directed canvas; <em>List</em> &mdash; tree by mapping status. Click an item to open the mapping panel (Wizard / SQL / Mapping tabs).</li>
@@ -284,7 +284,7 @@
                                             <div class="alert alert-warning small mb-3"><i class="bi bi-exclamation-triangle me-1"></i> Mappings store the query <em>without</em> a <code>LIMIT</code> &mdash; the preview limit only affects the UI.</div>
                                             <p class="mb-2"><strong>Management / Navigation / Compute</strong>:</p>
                                             <ul>
-                                                <li><strong>Build</strong> (Build / Runs tabs) &mdash; trigger a synchronization and browse build-run history</li>
+                                                <li><strong>Original Graph</strong> (Build / Runs tabs) &mdash; build the virtual graph from the mapping (no copy, read with your Unity Catalog rights) and browse build-run history</li>
                                                 <li><strong>Overview</strong> &mdash; entity &amp; relationship counts, last sync timestamp, quality status</li>
                                                 <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, pick live asserted, live inferred, or one ready sandbox per scenario from Graph, open canvas labels and quality rings from View, collapse or expand all ontology groups from the toolbar (same toggle as Ontology → Studio), colour-by-cluster and collapse super-nodes from a partition materialized in Intelligence → Discovery → Communities</li>
                                                 <li><strong>Query</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>

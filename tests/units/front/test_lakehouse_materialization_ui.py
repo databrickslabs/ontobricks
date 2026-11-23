@@ -114,11 +114,12 @@ class TestThePicker:
         assert 'data-saved-value="view"' in _render_picker(graph_backend="databricks")
 
     def test_the_help_text_names_what_stays_a_table(self):
-        """Users need to know inferred triples and Analytics are unaffected."""
+        """Users need to know enrichments and Analytics are unaffected."""
         html = _read(INFO_HTML)
         block_start = html.index(f'id="{SECTION_ID}"')
         block = html[block_start : block_start + 2500]
-        assert "Inferred triples" in block
+        assert "Certified Graph" in block
+        assert "Enrichments" in block
         assert "Graph Analytics" in block
 
 
@@ -243,7 +244,7 @@ class TestTheBuildPageNamesTheStorageKind:
             _read(BUILD_JS), "function _applyDbxStorageKind(", span=2600
         )
         assert "Build refreshes the gateway definition" in body
-        assert "Inferred triples keep their own Delta table" in body
+        assert "Enrichments (inferences, cohorts, communities) live in the" in body
         assert "point-in-time snapshot" in body
 
     def test_the_badge_uses_a_stylesheet_class_not_an_inline_size(self):

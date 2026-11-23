@@ -161,11 +161,15 @@
                     <!-- ======== Triple Store Tab ======== -->
                     <div class="tab-pane fade" id="panel-triplestore" role="tabpanel" aria-labelledby="tab-triplestore">
 
-                        <!-- Graph Backend selection (mandatory, per-domain) -->
+                        <!-- Certified Graph backend selection (mandatory, per-domain) -->
                         <fieldset class="mb-4" id="domainGraphBackendCards">
                             <legend class="form-label fw-semibold">
-                                <i class="bi bi-hdd-network me-1"></i> Graph Backend <span class="text-danger">*</span>
+                                <i class="bi bi-hdd-network me-1"></i> Certified Graph backend <span class="text-danger">*</span>
                             </legend>
+                            <p class="text-muted small mb-2" id="domainGraphBackendHelp">
+                                Where the <strong>Certified Graph</strong> is built and served to MCP and the API.
+                                The <strong>Original Graph</strong> is always a Lakehouse virtual graph (no copy).
+                            </p>
                             <select class="form-select domain-editable d-none" id="domainGraphBackend"
                                     aria-hidden="true" tabindex="-1"
                                     data-saved-value="{{ domain.graph_backend or 'lakebase' }}">
@@ -240,7 +244,7 @@
                             <div class="alert alert-warning border small mt-2 py-2 mb-0 {% if domain.graph_backend == 'none' %}d-none{% endif %}"
                                  id="graphBackendMigrationNotice">
                                 <i class="bi bi-exclamation-triangle me-1"></i>
-                                Changing the backend requires rebuilding the Knowledge Graph — existing graph
+                                Changing the backend requires rebuilding the Certified Graph — existing graph
                                 artifacts in the previous backend are not migrated.
                             </div>
                             <!-- Shown only when backend = No Backend (JS toggles d-none) -->
@@ -275,7 +279,7 @@
                             </div>
                         </div>
 
-                        <!-- Access type (shown only when backend = Lakehouse) -->
+                        <!-- Certified Graph access type (shown only when backend = Lakehouse) -->
                         <div class="mb-4 {% if domain.graph_backend != 'databricks' %}d-none{% endif %}" id="lakehouseMaterializationSection">
                             <label for="domainLakehouseMaterialization" class="form-label fw-semibold">
                                 <i class="bi bi-layers me-1"></i> Access type
@@ -286,18 +290,19 @@
                                 <option value="table" {% if domain.lakehouse_materialization == 'table' %}selected{% endif %}>Materialized Graph</option>
                             </select>
                             <small class="text-muted">
-                                <i class="bi bi-info-circle me-1"></i>How the mapped triples
-                                (<code>&hellip;_data</code>) are stored. <strong>Materialized Graph</strong> copies them
-                                into a clustered Delta table at build time. <strong>Virtual Graph (no copy)</strong> creates a
-                                pass-through view over the Triple-Store Gateway instead &mdash; nothing is
-                                duplicated and queries always read live source data.
+                                <i class="bi bi-info-circle me-1"></i>How the <strong>Certified Graph</strong>
+                                is served on the Lakehouse. <strong>Materialized Graph</strong> copies its triples
+                                into a clustered Delta table (<code>&hellip;_cert_data</code>) at certified-build time.
+                                <strong>Virtual Graph (no copy)</strong> serves a view over the Original Graph instead
+                                &mdash; nothing is duplicated and queries always read live source data. The
+                                Original Graph itself is always virtual.
                             </small>
                             <div class="alert alert-light border small mt-2 py-2 mb-0">
                                 <i class="bi bi-lightbulb me-1"></i>
                                 In <strong>Virtual Graph (no copy)</strong> mode, builds are near-instant and no storage is
                                 consumed, but every graph query re-runs the mapping SQL against your source
-                                tables. Inferred triples (reasoning, cohorts) always keep their own Delta table,
-                                and Graph Analytics materializes a temporary snapshot for the duration of a run.
+                                tables. Enrichments (reasoning, cohorts, communities) always keep their own Delta
+                                table, and Graph Analytics materializes a temporary snapshot for the duration of a run.
                             </div>
                         </div>
 

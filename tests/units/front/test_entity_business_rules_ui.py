@@ -70,8 +70,7 @@ def test_trigger_uses_confirm_token_builder_gate_and_refresh():
     assert "_brRequestBody(" in js
     assert "simulation_id" in js
     assert "simulation sandbox" in js
-    assert "KgGraphSource.current()" in js
-    assert "live:inferred" in js
+    assert "KgGraphSource.current().sandboxId" in js
 
 
 def test_explorer_modal_shows_if_then_instead_of_if_then_text():

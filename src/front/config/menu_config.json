@@ -583,11 +583,11 @@
                     "items": [
                         {
                             "id": "sync",
-                            "label": "Build",
-                            "icon": "bi-hammer",
+                            "label": "Original Graph",
+                            "icon": "bi-database",
                             "default": false,
                             "requires": null,
-                            "description": "Materialize the graph from the current mapping.",
+                            "description": "Virtual graph built from the current mapping, to navigate, enrich and certify.",
                             "help_jump": "docs",
                             "help_doc": "user-guide"
                         },

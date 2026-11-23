@@ -3,9 +3,9 @@
     <select class="form-select form-select-sm py-0 sg-compact-select sg-sim-select kg-graph-source"
             id="{{ select_id }}"
             aria-label="Graph source"
-            title="Live knowledge graph, inferred graph, or a ready simulation sandbox"
+            title="Original graph (built from the mapping), Certified graph (served to MCP and the API), or a ready simulation sandbox"
             {% if change_attr %}data-sg-change="{{ change_attr }}"{% endif %}>
-        <option value="live:inferred">Live graph (inferred)</option>
-        <option value="live">Live graph</option>
+        <option value="original">Original graph</option>
+        <option value="certified">Certified graph</option>
     </select>
 </div>

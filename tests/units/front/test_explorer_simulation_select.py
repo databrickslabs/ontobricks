@@ -19,8 +19,8 @@ def test_explorer_header_has_simulation_select() -> None:
     assert 'select_id="sgSimulationSelect"' in header
     assert "_kg_graph_source.html" in header
     assert 'id="{{ select_id }}"' in shared
-    assert "Live graph" in shared
-    assert "Live graph (inferred)" in shared
+    assert "Original graph" in shared
+    assert "Certified graph" in shared
     assert 'id="sgShowInferred"' not in html
     assert "onSimulationChange:" in (
         REPO_ROOT / "src/front/static/query/js/query-sigmagraph.js"
@@ -50,10 +50,14 @@ def test_filter_and_neighbors_pass_simulation_id() -> None:
     assert "simulation_id: simulationId" in sync
     assert "includeInferred" in sync
     assert "_graphSourceFromSelect" in js
-    assert "live:inferred" in js
     assert "function _includeInferred()" in js
     assert "(asserted)</option>" not in js
-    assert "_sandboxGraphOptions" in js
+    # The Explorer delegates the source to the shared module (no local copy).
+    assert "return KgGraphSource.current();" in js
+    assert "KgGraphSource.populate(" in js
+    assert "live:inferred" not in js
+    # The sandbox banner shows for sandboxes only, not the graph variants.
+    assert "!source.sandboxId" in js
 
 
 def test_simulation_select_uses_public_api_from_dom_ready() -> None:
@@ -66,10 +70,12 @@ def test_simulation_select_uses_public_api_from_dom_ready() -> None:
 
 def test_simulation_select_keeps_user_choice_across_reloads() -> None:
     js = SIGMA_JS.read_text(encoding="utf-8")
-    assert "var _chosenSimulationId = 'live:inferred'" in js
-    assert "_rememberSimulationChoice(sel ? sel.value" in js
-    # Legacy fallback: keep the chosen sandbox unless opening forces the default.
-    assert "opts.forceDefault ? LIVE_INFERRED : (_urlSimulationId() || _chosenSimulationId)" in js
+    shared = (REPO_ROOT / "src/front/static/query/js/query-graph-source.js").read_text(
+        encoding="utf-8"
+    )
+    # The shared module keeps the stored choice unless opening forces the default.
+    assert "forceDefault: opts.forceDefault" in js
+    assert "if (forceDefault) return ORIGINAL;" in shared
     # Programmatic section switches (SPARQL overlay, load-triples) keep the canvas.
     assert "alreadyInitialized && !focusUri && !forceLiveOnOpen" in js
 

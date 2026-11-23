@@ -1,4 +1,4 @@
-"""Query and Chat reuse Explorer's live / inferred / sandbox graph picker."""
+"""Query and Chat reuse Explorer's Original / Certified / sandbox graph picker."""
 
 from pathlib import Path
 
@@ -22,8 +22,9 @@ def test_query_and_chat_headers_include_graph_source() -> None:
     assert 'select_id="chatGraphSource"' in chat_header
     assert 'class="form-select' in shared
     assert "kg-graph-source" in shared
-    assert "Live graph (inferred)" in shared
-    assert "Live graph" in shared
+    assert 'value="original">Original graph</option>' in shared
+    assert 'value="certified">Certified graph</option>' in shared
+    assert "Live graph" not in shared
     assert "onclick=" not in query_header
     assert "onclick=" not in chat_header.split("onto-discuss-btn", 1)[0]
 
@@ -49,7 +50,10 @@ def test_graph_source_module_persists_and_applies_payload() -> None:
     assert "function applyToBody(" in js
     assert "simulation_id" in js
     assert "include_inferred" in js
-    assert "live:inferred" in js
+    assert "var ORIGINAL = 'original'" in js
+    assert "var CERTIFIED = 'certified'" in js
+    # Legacy stored "live" values read the Original Graph.
+    assert "LEGACY_LIVE" in js
     assert "/simulation/list" in js
     wanted = js.split("function wanted(explicit, forceDefault)", 1)[1].split(
         "function selects", 1
@@ -84,3 +88,15 @@ def test_explorer_select_uses_shared_partial() -> None:
     )[0]
     assert 'select_id="sgSimulationSelect"' in header
     assert "_kg_graph_source.html" in header
+
+
+def test_graph_source_sends_the_variant_and_separates_sandboxes() -> None:
+    js = (STATIC_JS / "query-graph-source.js").read_text(encoding="utf-8")
+    parse = js.split("function parse(raw)", 1)[1].split("function readStored", 1)[0]
+    assert "sandboxId" in parse
+    # The Original / Certified tokens travel as ``simulation_id`` (the backend
+    # maps them to a graph variant); only real sandboxes set ``sandboxId``.
+    assert "simulationId: ORIGINAL" in parse
+    assert "simulationId: CERTIFIED" in parse
+    options = js.split("function liveOptionsHtml()", 1)[1].split("function sandboxOptionHtml", 1)[0]
+    assert "Original graph" in options and "Certified graph" in options

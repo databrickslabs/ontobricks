@@ -228,13 +228,9 @@ function _brIfThenHtml(antecedent, consequent, esc) {
 }
 
 function _brSimulationId() {
-    if (typeof KgGraphSource !== 'undefined') {
-        return KgGraphSource.current().simulationId || '';
-    }
-    const sel = document.getElementById('sgSimulationSelect');
-    const raw = (sel && sel.value) ? String(sel.value) : '';
-    if (!raw || raw === 'live' || raw === 'live:inferred') return '';
-    return raw.replace(/:asserted$/, '');
+    // Only a real sandbox scopes the rule; Original / Certified are graph
+    // variants, not simulations.
+    return KgGraphSource.current().sandboxId || '';
 }
 
 function _brRequestBody(entityUri, ruleName) {

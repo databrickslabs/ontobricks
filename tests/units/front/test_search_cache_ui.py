@@ -88,15 +88,20 @@ class TestGraphPages:
         html = _read(self.BUILD_HTML)
         assert 'id="buildBackendIcon"' in html
         assert "ob-brand-icon" in html
-        assert "ob-icon-postgresql" in html
+        # The Original Graph page is a Lakehouse virtual graph for every backend.
+        assert "ob-icon-lakehouse" in html
         assert "build-backend-logo" in html
         info = _read(self.INFO_HTML)
         assert "ob-icon-postgresql" in info
         assert "ob-icon-lakehouse" in info
         assert "ob-icon-neo4j" in info
         js = _read(self.SYNC_JS)
-        assert "buildBackendIcon" in js
         assert "_setBackendBrandIcon" in js
+        dbx_js = _read(REPO_ROOT / "src/front/static/query/js/query-databricks-build.js")
+        assert (
+            "_setBackendBrandIcon(document.getElementById('buildBackendIcon'), 'databricks')"
+            in dbx_js
+        )
         css = _read(self.SYNC_CSS)
         assert ".build-backend-logo" in css
 

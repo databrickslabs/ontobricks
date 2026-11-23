@@ -1,15 +1,19 @@
 /**
- * Shared Knowledge Graph source picker (live inferred, live asserted, sandbox).
+ * Shared Knowledge Graph source picker (Original Graph, Certified Graph, sandbox).
  *
  * Used by Explorer, Query, and Chat so SPARQL/GraphQL/chat tools hit the
- * same overlay table as the canvas.
+ * same relation as the canvas. The Original / Certified choice travels as the
+ * ``simulation_id`` token the backend maps to a graph variant; only a real
+ * sandbox sets ``sandboxId``.
  */
 const KgGraphSource = (function () {
     'use strict';
 
     var STORAGE_KEY = 'ontobricks_kg_graph_source';
-    var LIVE_INFERRED = 'live:inferred';
-    var LIVE_ASSERTED = 'live';
+    var ORIGINAL = 'original';
+    var CERTIFIED = 'certified';
+    // Values stored before the two-phase graph; they read the Original Graph.
+    var LEGACY_LIVE = ['live', 'live:inferred'];
     var CHANGE_EVENT = 'kg-graph-source-change';
     var SELECTOR = '.kg-graph-source';
     var _loading = false;
@@ -22,16 +26,25 @@ const KgGraphSource = (function () {
             .replace(/"/g, '&quot;');
     }
 
+    function _normalize(raw) {
+        var value = (raw == null) ? '' : String(raw);
+        if (!value || LEGACY_LIVE.indexOf(value) !== -1) return ORIGINAL;
+        return value.replace(/:asserted$/, '');
+    }
+
+    function _isVariant(value) {
+        return value === ORIGINAL || value === CERTIFIED;
+    }
+
     function parse(raw) {
-        var value = (raw == null || raw === '') ? LIVE_INFERRED : String(raw);
-        if (value === LIVE_INFERRED) {
-            return { value: LIVE_INFERRED, simulationId: '', includeInferred: true };
+        var value = _normalize(raw);
+        if (value === ORIGINAL) {
+            return { value: ORIGINAL, simulationId: ORIGINAL, sandboxId: '', includeInferred: true };
         }
-        if (value === LIVE_ASSERTED) {
-            return { value: LIVE_ASSERTED, simulationId: '', includeInferred: false };
+        if (value === CERTIFIED) {
+            return { value: CERTIFIED, simulationId: CERTIFIED, sandboxId: '', includeInferred: true };
         }
-        var sid = value.replace(/:asserted$/, '');
-        return { value: sid, simulationId: sid, includeInferred: true };
+        return { value: value, simulationId: value, sandboxId: value, includeInferred: true };
     }
 
     function readStored() {
@@ -58,12 +71,12 @@ const KgGraphSource = (function () {
 
     function wanted(explicit, forceDefault) {
         if (explicit) return explicit;
-        // Explorer open: live inferred, not the leftover ``?simulation=`` or
-        // the last stored Query/Chat source. Inbound links pass ``simulationId``.
-        if (forceDefault) return LIVE_INFERRED;
+        // Explorer open: the Original Graph, not the leftover ``?simulation=``
+        // or the last stored Query/Chat source. Inbound links pass ``simulationId``.
+        if (forceDefault) return ORIGINAL;
         var fromUrl = wantedFromUrl();
         if (fromUrl) return fromUrl;
-        return readStored() || LIVE_INFERRED;
+        return readStored() || ORIGINAL;
     }
 
     function selects() {
@@ -71,8 +84,8 @@ const KgGraphSource = (function () {
     }
 
     function liveOptionsHtml() {
-        return '<option value="' + LIVE_INFERRED + '">Live graph (inferred)</option>'
-            + '<option value="' + LIVE_ASSERTED + '">Live graph</option>';
+        return '<option value="' + ORIGINAL + '">Original graph</option>'
+            + '<option value="' + CERTIFIED + '">Certified graph</option>';
     }
 
     function sandboxOptionHtml(sim) {
@@ -82,26 +95,19 @@ const KgGraphSource = (function () {
     function resolveChoice(wantedValue, previous, ready) {
         var ids = {};
         (ready || []).forEach(function (row) { ids[row.id] = true; });
-        function normalize(value) {
-            if (!value) return '';
-            if (value === LIVE_INFERRED || value === LIVE_ASSERTED) return value;
-            return String(value).replace(/:asserted$/, '');
-        }
         function available(value) {
-            if (!value) return false;
-            if (value === LIVE_INFERRED || value === LIVE_ASSERTED) return true;
-            return !!ids[value];
+            return _isVariant(value) || !!ids[value];
         }
-        wantedValue = normalize(wantedValue);
-        previous = normalize(previous);
+        wantedValue = _normalize(wantedValue);
+        previous = _normalize(previous);
         if (available(wantedValue)) return wantedValue;
         if (available(previous)) return previous;
-        return LIVE_INFERRED;
+        return ORIGINAL;
     }
 
     function current() {
         var sel = selects()[0];
-        var raw = (sel && sel.value) ? sel.value : (readStored() || LIVE_INFERRED);
+        var raw = (sel && sel.value) ? sel.value : (readStored() || ORIGINAL);
         return parse(raw);
     }
 
@@ -187,8 +193,8 @@ const KgGraphSource = (function () {
     document.addEventListener('change', onSelectChange);
 
     return {
-        LIVE_INFERRED: LIVE_INFERRED,
-        LIVE_ASSERTED: LIVE_ASSERTED,
+        ORIGINAL: ORIGINAL,
+        CERTIFIED: CERTIFIED,
         CHANGE_EVENT: CHANGE_EVENT,
         parse: parse,
         current: current,

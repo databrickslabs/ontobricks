@@ -88,11 +88,12 @@ class TestAdjacencyRefreshFlow:
         assert "async function pollOnce()" in refresh_polling
         assert "setTimeout(pollOnce, 1500);" in refresh_polling
 
-    def test_databricks_button_stays_hidden_outside_lakehouse_backend(self):
+    def test_lakehouse_button_shows_for_every_backend(self):
+        """The Original Graph is a Lakehouse virtual graph for every domain."""
         dbx_js = _read(DBX_JS)
         fn = dbx_js.split("function _updateDbxAdjacencyButton()", 1)[1].split(
             "function _applyDbxStorageKind", 1
         )[0]
-        assert "backend === 'databricks'" in fn
-        assert "classList.add('d-none')" in fn
+        assert "backend === 'databricks'" not in fn
+        assert "const visible = true;" in fn
         assert "js-dbx-adjacency-refresh" in fn

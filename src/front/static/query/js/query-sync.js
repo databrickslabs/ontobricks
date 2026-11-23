@@ -265,7 +265,7 @@ function _setBackendBrandIcon(element, backend) {
 function _applyBuildGraphEngineUi(dtExist) {
     var dt = dtExist || {};
     var cfg = window.__TRIPLESTORE_CONFIG || {};
-    _setBackendBrandIcon(document.getElementById('buildBackendIcon'), _kgBackendKey());
+    // The Original Graph page logo is always Lakehouse (applyTripleStoreBackendPanels).
     var eng = dt.graph_engine || cfg.graph_engine || 'lakebase';
     var pending = dt.pending === true;
     cfg.graph_engine = eng;

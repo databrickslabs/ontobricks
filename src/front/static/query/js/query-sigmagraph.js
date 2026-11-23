@@ -167,35 +167,15 @@ var SigmaGraph = (function () {
     }
 
     var _simulationSelectLoading = false;
-    var _chosenSimulationId = 'live:inferred';
-    var LIVE_INFERRED = 'live:inferred';
-    var LIVE_ASSERTED = 'live';
 
-    function _urlSimulationId() {
-        try {
-            return new URLSearchParams(window.location.search || '').get('simulation') || '';
-        } catch (_) {
-            return '';
-        }
-    }
-
+    // The graph source (Original / Certified / sandbox) is owned by the shared
+    // KgGraphSource module, loaded before this script on the Graph page.
     function _graphSourceFromSelect() {
-        if (typeof KgGraphSource !== 'undefined') return KgGraphSource.current();
-        var sel = document.getElementById('sgSimulationSelect');
-        var raw = (sel && sel.value) ? String(sel.value) : LIVE_INFERRED;
-        if (raw === LIVE_INFERRED) return { value: LIVE_INFERRED, simulationId: '', includeInferred: true };
-        if (raw === LIVE_ASSERTED || raw === '') {
-            return { value: LIVE_ASSERTED, simulationId: '', includeInferred: false };
-        }
-        var sid = raw.replace(/:asserted$/, '');
-        return { value: sid, simulationId: sid, includeInferred: true };
+        return KgGraphSource.current();
     }
 
     function _graphSourceKey() {
-        var source = _graphSourceFromSelect();
-        return source.value || (source.simulationId
-            ? source.simulationId
-            : (source.includeInferred ? LIVE_INFERRED : LIVE_ASSERTED));
+        return _graphSourceFromSelect().value;
     }
 
     function _selectedSimulationId() {
@@ -206,15 +186,8 @@ var SigmaGraph = (function () {
         return _graphSourceFromSelect().includeInferred;
     }
 
-    function _rememberSimulationChoice(id) {
-        _chosenSimulationId = id || LIVE_INFERRED;
-    }
-
     function _withGraphSource(body) {
-        var source = _graphSourceFromSelect();
-        body.include_inferred = source.includeInferred;
-        if (source.simulationId) body.simulation_id = source.simulationId;
-        return body;
+        return KgGraphSource.applyToBody(body);
     }
 
     function _applySimulationChrome() {
@@ -222,74 +195,18 @@ var SigmaGraph = (function () {
         var sel = document.getElementById('sgSimulationSelect');
         var banner = document.getElementById('sgSimulationBanner');
         var label = document.getElementById('sgSimulationBannerLabel');
-        if (banner) banner.classList.toggle('d-none', !source.simulationId);
+        if (banner) banner.classList.toggle('d-none', !source.sandboxId);
         if (label && sel) {
             var opt = sel.options[sel.selectedIndex];
             label.textContent = opt ? opt.textContent : '';
         }
     }
 
-    function _liveGraphOptions() {
-        return '<option value="' + LIVE_INFERRED + '">Live graph (inferred)</option>'
-            + '<option value="' + LIVE_ASSERTED + '">Live graph</option>';
-    }
-
-    function _sandboxGraphOptions(sim) {
-        return '<option value="' + _esc(sim.id) + '">' + _esc(sim.label || sim.id) + '</option>';
-    }
-
-    function _resolveGraphChoice(wanted, previous, ready) {
-        var ids = {};
-        ready.forEach(function (s) { ids[s.id] = true; });
-        function normalize(value) {
-            if (!value) return '';
-            if (value === LIVE_INFERRED || value === LIVE_ASSERTED) return value;
-            return value.replace(/:asserted$/, '');
-        }
-        function available(value) {
-            if (!value) return false;
-            if (value === LIVE_INFERRED || value === LIVE_ASSERTED) return true;
-            return !!ids[value];
-        }
-        wanted = normalize(wanted);
-        previous = normalize(previous);
-        if (available(wanted)) return wanted;
-        if (available(previous)) return previous;
-        return LIVE_INFERRED;
-    }
-
     async function _loadSimulationSelect(opts) {
         opts = opts || {};
-        if (typeof KgGraphSource !== 'undefined') {
-            _simulationSelectLoading = true;
-            try {
-                await KgGraphSource.populate({ simulationId: opts.simulationId, forceDefault: opts.forceDefault });
-                var src = KgGraphSource.current();
-                _rememberSimulationChoice(src.value || LIVE_INFERRED);
-            } catch (err) {
-                console.warn('[SigmaGraph] could not load simulations', err);
-            } finally {
-                _simulationSelectLoading = false;
-                _applySimulationChrome();
-            }
-            return;
-        }
-        var sel = document.getElementById('sgSimulationSelect');
-        if (!sel) return;
-        var previous = sel.value || _chosenSimulationId;
-        var wanted = opts.simulationId
-            || (opts.forceDefault ? LIVE_INFERRED : (_urlSimulationId() || _chosenSimulationId));
+        _simulationSelectLoading = true;
         try {
-            var resp = await fetch('/simulation/list', { credentials: 'same-origin' });
-            var data = await resp.json();
-            var rows = (data && data.simulations) || [];
-            var ready = rows.filter(function (s) { return s && s.status === 'ready' && s.id; });
-            var html = _liveGraphOptions();
-            ready.forEach(function (s) { html += _sandboxGraphOptions(s); });
-            _simulationSelectLoading = true;
-            sel.innerHTML = html;
-            sel.value = _resolveGraphChoice(wanted, previous, ready);
-            _rememberSimulationChoice(sel.value);
+            await KgGraphSource.populate({ simulationId: opts.simulationId, forceDefault: opts.forceDefault });
         } catch (err) {
             console.warn('[SigmaGraph] could not load simulations', err);
         } finally {
@@ -318,13 +235,7 @@ var SigmaGraph = (function () {
     }
 
     async function _onSimulationChange() {
-        if (_simulationSelectLoading) return;
-        if (typeof KgGraphSource !== 'undefined' && KgGraphSource.isLoading()) return;
-        var sel = document.getElementById('sgSimulationSelect');
-        _rememberSimulationChoice(sel ? sel.value : LIVE_INFERRED);
-        if (typeof KgGraphSource !== 'undefined') {
-            _rememberSimulationChoice(KgGraphSource.current().value || LIVE_INFERRED);
-        }
+        if (_simulationSelectLoading || KgGraphSource.isLoading()) return;
         _applySimulationChrome();
         await _retargetCurrentView();
     }
