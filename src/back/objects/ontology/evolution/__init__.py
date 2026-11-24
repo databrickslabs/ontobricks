@@ -3,15 +3,18 @@
 from back.objects.ontology.evolution.ArmSqlQuery import ArmSqlQuery
 from back.objects.ontology.evolution.CandidateBuilder import CandidateBuilder
 from back.objects.ontology.evolution.CandidateFactory import CandidateFactory
+from back.objects.ontology.evolution.ContextPages import ContextPages
 from back.objects.ontology.evolution.CoverageService import CoverageService
 from back.objects.ontology.evolution.CoverageState import CoverageState
 from back.objects.ontology.evolution.Decision import Decision
 from back.objects.ontology.evolution.EvaluationService import EvaluationService
+from back.objects.ontology.evolution.EvolutionAssistant import EvolutionAssistant
 from back.objects.ontology.evolution.EvolutionPipeline import EvolutionPipeline
 from back.objects.ontology.evolution.EvolutionReviewLink import EvolutionReviewLink
 from back.objects.ontology.evolution.EvolutionService import EvolutionService
 from back.objects.ontology.evolution.Intent import Intent
 from back.objects.ontology.evolution.IntentFilter import IntentFilter
+from back.objects.ontology.evolution.IntentValidator import IntentValidator
 from back.objects.ontology.evolution.JoinCandidateFinder import JoinCandidateFinder
 from back.objects.ontology.evolution.OntologyIndex import OntologyIndex
 from back.objects.ontology.evolution.PathQueryBuilder import PathQueryBuilder
@@ -32,15 +35,18 @@ __all__ = [
     "ArmSqlQuery",
     "CandidateBuilder",
     "CandidateFactory",
+    "ContextPages",
     "CoverageService",
     "CoverageState",
     "Decision",
     "EvaluationService",
+    "EvolutionAssistant",
     "EvolutionPipeline",
     "EvolutionReviewLink",
     "EvolutionService",
     "Intent",
     "IntentFilter",
+    "IntentValidator",
     "JoinCandidateFinder",
     "OntologyIndex",
     "PathQueryBuilder",

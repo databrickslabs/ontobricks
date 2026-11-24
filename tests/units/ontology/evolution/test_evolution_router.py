@@ -228,8 +228,114 @@ def test_probe_runs_as_the_caller(monkeypatch):
         seen["called"] = True
         return Client()
 
-    monkeypatch.setattr(DatabricksHelpers, "get_data_plane_client", staticmethod(data_plane))
+    monkeypatch.setattr(
+        DatabricksHelpers, "get_data_plane_client", staticmethod(data_plane)
+    )
     monkeypatch.setattr(router_module, "get_domain", lambda m: object())
     probe = router_module._probe(object(), _settings())
     assert seen["called"] is True
     assert probe.columns("c.s.t") == {"a": "string"}
+
+
+class TestAssistantRoutes:
+    def test_suggest_route_requires_builder(self):
+        guarded = {
+            (route.path, tuple(sorted(route.methods)))
+            for route in router_module.router.routes
+            if route.dependencies
+        }
+        assert ("/evolution/intent/suggest", ("POST",)) in guarded
+
+    def test_assistant_reads_pages_as_the_caller(self, monkeypatch, loaded):
+        from back.core.helpers.DatabricksHelpers import DatabricksHelpers
+
+        pages = SimpleNamespace(get_page=lambda name: {"body": ""})
+        seen = []
+        monkeypatch.setattr(
+            router_module, "require_domain_llm", lambda d, s: ("h", "t", "e", "")
+        )
+        monkeypatch.setattr(
+            DatabricksHelpers,
+            "get_data_plane_client",
+            staticmethod(
+                lambda d, s: seen.append(d) or SimpleNamespace(knowledge_pages=pages)
+            ),
+        )
+        assistant = router_module._assistant(object(), _settings(), object())
+        assert seen == [loaded] and assistant._fetch_page == pages.get_page
+        monkeypatch.setattr(
+            DatabricksHelpers, "get_data_plane_client", staticmethod(lambda d, s: None)
+        )
+        with pytest.raises(ValidationError):
+            router_module._assistant(object(), _settings(), object())
+
+    async def test_suggest_and_agent_proposal_dispatch(self, wired, monkeypatch):
+        calls = []
+        fake = SimpleNamespace(
+            suggest_intent=lambda v, q: calls.append(("intent", v, q))
+            or {"intent": {}},
+            propose=lambda pipe, rid, rev: calls.append(("propose", rid, rev))
+            or {"id": rid},
+        )
+        monkeypatch.setattr(router_module, "_assistant", lambda m, s, svc: fake)
+        out = await router_module.suggest_intent(
+            _Request(
+                {"domain": "EvoSupplyChain", "parent_version": "1", "question": "q"}
+            ),
+            session_mgr=object(),
+            settings=_settings(),
+        )
+        assert out == {"suggestion": {"intent": {}}}
+        with pytest.raises(ValidationError):
+            await router_module.suggest_intent(
+                _Request({"domain": "EvoSupplyChain", "question": "q"}),
+                session_mgr=object(),
+                settings=_settings(),
+            )
+        out = await router_module.propose(
+            wired.run["id"],
+            _Request({"domain": "EvoSupplyChain", "revision": 3, "source": "agent"}),
+            session_mgr=object(),
+            settings=_settings(),
+        )
+        assert calls[-1] == ("propose", wired.run["id"], 3)
+
+    async def test_select_switches_alternative(self, wired):
+        run = wired.svc.get_run(wired.run["id"])
+        out = await router_module.propose(
+            run["id"],
+            _Request(
+                {"domain": "EvoSupplyChain", "revision": run["revision"], "selected": 0}
+            ),
+            session_mgr=object(),
+            settings=_settings(),
+        )
+        assert out["run"]["proposal"]["selected"] == 0
+
+    async def test_create_run_keeps_the_suggestion_source(self, wired):
+        run = wired.svc.get_run(wired.run["id"])
+        out = await router_module.create_run(
+            _Request(
+                {
+                    "domain": "EvoSupplyChain",
+                    "parent_version": "1",
+                    "intent": run["intent"],
+                    "idempotency_key": "with-suggestion",
+                    "suggestion": {"intent": run["intent"]},
+                }
+            ),
+            session_mgr=object(),
+            settings=_settings(),
+        )
+        assert out["run"]["manifest"]["intent_source"]["kind"] == "agent"
+
+    async def test_capabilities_report_the_assistant(self, loaded):
+        out = await router_module.capabilities(
+            session_mgr=object(), settings=_settings()
+        )
+        assert out["assistant"] is False
+        loaded.info["llm_endpoint"] = "databricks-claude-sonnet-5-5"
+        out = await router_module.capabilities(
+            session_mgr=object(), settings=_settings()
+        )
+        assert out["assistant"] is True

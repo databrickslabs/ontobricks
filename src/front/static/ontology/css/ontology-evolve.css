@@ -33,3 +33,13 @@
 #evolve-section .evo-answers td {
     font-size: 0.8125rem;
 }
+
+#evolve-section .evo-quote {
+    border-left: 3px solid var(--db-border);
+    padding: 0.125rem 0.5rem;
+    font-size: 0.8125rem;
+}
+
+#evolve-section .evo-quote footer {
+    font-size: 0.75rem;
+}

@@ -68,8 +68,13 @@ class EvolutionService:
         question: str,
         owner: str,
         idempotency_key: str,
+        suggestion: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Create a run, or return the one an earlier identical request created."""
+        """Create a run, or return the one an earlier identical request created.
+
+        *suggestion* is the assistant output the intent started from, if any;
+        the manifest records whether the builder kept it as suggested.
+        """
         if not idempotency_key or len(idempotency_key) > 200:
             raise ValidationError("An idempotency key (1-200 characters) is required")
         parsed = Intent.from_dict(intent)
@@ -77,6 +82,7 @@ class EvolutionService:
             "schema_version": SCHEMA_VERSION,
             "question": str(question or "")[:2000],
             "parent_content_hash": self.parent_hash(parent_version),
+            "intent_source": intent_source(suggestion, parsed),
         }
         run = {
             "id": uuid.uuid4().hex[:12],
@@ -177,3 +183,36 @@ class EvolutionService:
                 "The parent version changed since this run started — start a new run",
                 detail=run["id"],
             )
+
+
+def intent_source(suggestion: Any, intent: Intent) -> Dict[str, Any]:
+    """``manual``, ``agent`` or ``agent_edited``, with the pages the suggestion cited."""
+    if not isinstance(suggestion, dict) or not isinstance(
+        suggestion.get("intent"), dict
+    ):
+        return {"kind": "manual"}
+    try:
+        suggested = Intent.from_dict(suggestion["intent"]).to_dict()
+    except ValidationError:
+        return {"kind": "manual"}
+    citations = [
+        {k: str(c.get(k) or "")[:400] for k in ("page", "title", "quote")}
+        for c in (suggestion.get("citations") or [])[:10]
+        if isinstance(c, dict)
+    ]
+    agent = suggestion.get("agent") if isinstance(suggestion.get("agent"), dict) else {}
+    pages = ((agent.get("context_pages") or {}).get("pages") or [])[:15]
+    return {
+        "kind": "agent" if suggested == intent.to_dict() else "agent_edited",
+        "suggested_intent": suggested,
+        "citations": citations,
+        "model": str(agent.get("model") or "")[:200],
+        "context_pages": [
+            {
+                k: str(p.get(k) or "")[:200]
+                for k in ("name", "title", "update_time", "body_sha256")
+            }
+            for p in pages
+            if isinstance(p, dict)
+        ],
+    }

@@ -16,8 +16,15 @@
         <div class="card-header fw-semibold">1. Question</div>
         <div class="card-body">
             <label class="form-label small" for="evoQuestion">Business question</label>
-            <input type="text" class="form-control form-control-sm mb-2" id="evoQuestion"
-                   placeholder="Which orders contain products supplied by Acme?">
+            <div class="input-group input-group-sm mb-2">
+                <input type="text" class="form-control" id="evoQuestion"
+                       placeholder="Which orders contain products supplied by Acme?">
+                <button type="button" class="btn btn-outline-primary d-none" id="evoSuggestBtn"
+                        title="Let the assistant read the ontology and the Genie Pages selected for this version">
+                    <i class="bi bi-stars me-1"></i>Suggest intent
+                </button>
+            </div>
+            <div id="evoSuggestInfo" class="mb-2"></div>
             <label class="form-label small" for="evoIntent">Interpreted intent (edit before checking)</label>
             <textarea class="form-control form-control-sm font-monospace evo-intent" id="evoIntent" rows="8" spellcheck="false"></textarea>
             <div class="form-text">Output class, filters as <code>{"class", "attribute", "op": "eq", "value"}</code>. Aggregates and other filter operators are reported as unsupported.</div>
@@ -43,9 +50,15 @@
                 <tbody id="evoObligations"></tbody>
             </table>
             <div id="evoJoins"></div>
-            <button type="button" class="btn btn-outline-primary btn-sm d-none" id="evoProposeBtn">
-                <i class="bi bi-lightbulb me-1"></i>Propose a fix
-            </button>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm d-none" id="evoProposeBtn">
+                    <i class="bi bi-lightbulb me-1"></i>Propose a fix
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm d-none" id="evoProposeAgentBtn"
+                        title="The assistant picks and names up to three fixes from the joins above, using the Genie Pages">
+                    <i class="bi bi-stars me-1"></i>Ask the assistant
+                </button>
+            </div>
         </div>
     </div>
 
@@ -53,7 +66,9 @@
         <div class="card-header fw-semibold">3. Proposed change</div>
         <div class="card-body">
             <div class="evo-facts mb-3" id="evoFacts"></div>
+            <div id="evoAlternatives"></div>
             <div id="evoOps"></div>
+            <div id="evoCitations"></div>
             <h6 class="mt-3 small fw-semibold">Validation</h6>
             <ul class="list-unstyled small mb-0" id="evoChecks"></ul>
         </div>

@@ -6,14 +6,17 @@ Modes:
 * ``--deterministic``: runs the coverage check offline on the fixture domain
   variants with the manual intent from each row, and scores readiness,
   states, gap and decision. No warehouse or LLM.
-* ``--live``: end-to-end against a configured workspace (wired in a later
-  stage); exits with an explicit error until then rather than reporting a
-  fake score.
+* ``--live``: the agent against a real LLM endpoint, the TPC-H glossary
+  Genie Page and the TPC-H S tables (see ``evolution_agent_live.py``), dev
+  rows only unless ``--split`` says otherwise, ``--repeats`` times.
+  ``--results-table`` stores each repeat's summary and records in UC.
 
 ::
 
     uv run --frozen python tests/eval/run_agent_ontology_evolution.py
     uv run --frozen python tests/eval/run_agent_ontology_evolution.py --deterministic
+    uv run --frozen python tests/eval/run_agent_ontology_evolution.py --live \
+        --endpoint databricks-claude-sonnet-5-5 --repeats 3
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ from judges.ontology_evolution import (  # noqa: E402
     judge_decision,
     judge_false_ready,
     judge_gap,
+    judge_intent,
     judge_ops,
     judge_ready,
     judge_states,
@@ -128,22 +132,52 @@ def deterministic(rows: list[dict]) -> int:
     return 0 if gates and not failures else 1
 
 
+def live(endpoint: str, split: str, repeats: int, table: str) -> int:
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from tests.eval.evolution_agent_live import run, store
+
+    report = run(endpoint, "dev" if split == "all" else split, repeats, judge_intent)
+    if table:
+        store(report, table)
+    means = {
+        k: sum(r["summary"][k] for r in report["repeats"]) / len(report["repeats"])
+        for k in (
+            "intent_accuracy_baseline",
+            "intent_accuracy_pages_with",
+            "proposal_valid",
+        )
+    }
+    print(
+        "ontology_evolution live " + " ".join(f"{k}={v:.3f}" for k, v in means.items())
+    )
+    gates = (
+        means["intent_accuracy_pages_with"] >= _threshold("intent_accuracy")
+        and means["intent_accuracy_baseline"] >= _threshold("intent_accuracy")
+        and means["proposal_valid"] >= _threshold("proposal_valid")
+    )
+    return 0 if gates else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--deterministic", action="store_true")
     mode.add_argument("--live", action="store_true")
     parser.add_argument("--split", choices=("dev", "holdout", "all"), default="all")
+    parser.add_argument("--endpoint", default="databricks-claude-sonnet-5-5")
+    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--results-table", default="")
     args = parser.parse_args()
 
+    if args.live:
+        return live(args.endpoint, args.split, args.repeats, args.results_table)
     rows = load_rows()
     if len(rows) < MIN_ROWS:
         raise SystemExit(f"{DATASET} has {len(rows)} rows; need >= {MIN_ROWS}")
     if args.split != "all":
         rows = [r for r in rows if args.split in r["tags"]]
 
-    if args.live:
-        parser.error("Live evaluation is not wired yet.")
     if args.deterministic:
         return deterministic(rows)
     return dry_run(rows)

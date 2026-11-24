@@ -320,3 +320,39 @@ Verified on the deployed app (query history): coverage/gold/version reads
 by the user; builds (Starter) and arm graph reads (RT) by the app SP.
 Behaviour change for the other 8 callers: they now actually run as the
 user, which is what they document — needs maintainer review upstream.
+
+## Ontology Evolve — Stage 4: assistant for intents and repairs, with Genie Pages
+
+The assistant suggests; the deterministic pipeline still decides. Nothing it
+returns skips coverage, the proposal validator or the paired evaluation.
+
+1. agents/agent_ontology_evolution (new): two read-only tool loops on the
+   design-fixer pattern, each ending in one validated submit with one repair.
+   - suggest_intent: question → typed intent (output class, filters, aggregate,
+     path hint), checked by IntentValidator (unknown attribute, relationship or
+     operator = error; a class the ontology lacks = note, so coverage reports
+     the missing concept). A path hint without a verified page quote is
+     dropped: it would make coverage keep that path and skip the shorter-link
+     check.
+   - suggest_proposal: picks up to three of coverage's profiled join
+     candidates by index and names the relationship. It cannot write SQL;
+     ProposalBuilder.from_suggestion builds the ops from the candidate's
+     checked columns and rejects unknown/failed candidates, bad or taken names.
+2. ContextPages (new): only the Genie Pages selected on the parent version
+   (info.knowledge_pages, the Generate allowlist), read as the caller
+   (get_data_plane_client), 15 pages / 20k chars each. Search and paged read
+   tools for the model; a citation is kept only if its quote is in the page
+   (case, spacing and markdown emphasis ignored). Page text is treated as data:
+   it can name a concept or settle a reading, never prove a join or an answer.
+3. EvolutionPipeline.propose(suggestion=…) and select(index); run manifest
+   records intent_source (manual / agent / agent_edited, citations, page
+   hashes); proposal records the model, usage and pages it could read.
+4. Routes: POST /evolution/intent/suggest; POST /runs/{id}/proposal with
+   source=agent or selected=i; capabilities.assistant. UI: Suggest intent,
+   Ask the assistant, alternative picker, page quotes under the proposal.
+5. Eval: judge_intent; datasets/agent_ontology_evolution/pages.jsonl (TPC-H
+   glossary jargon, market≠segment trap, injection page); run_agent_ontology_
+   evolution.py --live (with/without pages on the same rows, repeats, results
+   to a UC table); evolution_live.py --agent (agent intent + proposal through
+   real arm builds). tests/fixtures/evolution/tpch/create_glossary_page.py
+   creates the glossary as a DRAFT page in the general domain (owner-only).

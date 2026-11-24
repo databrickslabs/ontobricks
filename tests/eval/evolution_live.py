@@ -25,9 +25,11 @@ for extra in (ROOT / "src", ROOT):
 
 from back.core.errors import OntoBricksError  # noqa: E402
 from back.core.helpers import get_databricks_client  # noqa: E402
+from back.core.helpers.DatabricksHelpers import DatabricksHelpers  # noqa: E402
 from back.objects.ontology.evolution import (  # noqa: E402
     CandidateBuilder,
     EvaluationService,
+    EvolutionAssistant,
     EvolutionPipeline,
     EvolutionService,
     WarehouseSourceProbe,
@@ -43,6 +45,12 @@ from tests.fixtures.evolution.tpch.tpch_domain import (  # noqa: E402
 )  # noqa: E402
 
 CATALOG = "serverless_lakebase_praneeth_catalog"
+GLOSSARY_PAGE = "pages/a96e1fe2-40d7-4ec6-8df7-d85b71151b7e"
+# Glossary wording for the target questions, used by --agent.
+AGENT_QUESTIONS = {
+    "orders_by_supplier": "Which books contain shipment lines fulfilled by VOR {v}?",
+    "orders_by_part": "Which books contain the SKU {v}?",
+}
 
 
 class Counter:
@@ -82,6 +90,10 @@ def scenario(args) -> dict:
     schema = f"ontobricks_evo_tpch_{args.tier.lower()}"
     doc = tpch_document(CATALOG, schema, args.variant)
     doc["info"]["name"] = f"EvoTpch{args.tier}{args.variant.title()}"
+    if args.agent:
+        doc["info"]["name"] += "Agent"
+        doc["info"]["llm_endpoint"] = args.agent
+        doc["info"]["knowledge_pages"] = [{"name": GLOSSARY_PAGE}]
     folder = sanitize_domain_folder(doc["info"]["name"])
     ok, msg = registry.store.write_version(folder, "1", doc)
     assert ok, msg
@@ -93,13 +105,43 @@ def scenario(args) -> dict:
         "folder": folder,
         "target": args.target,
     }
+    assistant, suggestion, question = None, None, args.target
+    if args.agent:
+        host, token = DatabricksHelpers.get_databricks_host_and_token(sess, settings)
+        assistant = EvolutionAssistant(
+            svc,
+            (host, token, args.agent, ""),
+            get_databricks_client(sess, settings).knowledge_pages.get_page,
+        )
+        question = AGENT_QUESTIONS[args.target].format(
+            v=params(probe, schema)[args.target]
+        )
+        t0 = time.time()
+        suggestion = assistant.suggest_intent("1", question)
+        out["agent_intent"] = {
+            "seconds": round(time.time() - t0, 1),
+            "question": question,
+            "matches_hand_intent": suggestion["intent"]["output_class"]
+            == qs[args.target]["output_class"]
+            and [
+                (f["class"], f["attribute"], f["value"])
+                for f in suggestion["intent"]["filters"]
+            ]
+            == [
+                (f["class"], f["attribute"], f["value"])
+                for f in qs[args.target]["filters"]
+            ],
+            "citations": suggestion["citations"],
+        }
     run = svc.create_run(
         "1",
-        qs[args.target],
-        question=args.target,
+        suggestion["intent"] if suggestion else qs[args.target],
+        question=question,
         owner="live",
         idempotency_key=uuid.uuid4().hex,
+        suggestion=suggestion,
     )
+    out["intent_source"] = run["manifest"]["intent_source"]["kind"]
     pipe = EvolutionPipeline(svc, probe)
     t0, q0 = time.time(), probe_exec.n
     run = pipe.assess(run["id"], run["revision"])
@@ -121,7 +163,10 @@ def scenario(args) -> dict:
         return out
     t0, q0 = time.time(), probe_exec.n
     try:
-        run = pipe.propose(run["id"], run["revision"])
+        if assistant:
+            run = assistant.propose(pipe, run["id"], run["revision"])
+        else:
+            run = pipe.propose(run["id"], run["revision"])
     except OntoBricksError as exc:
         out["proposal"] = {"error": exc.message}
         return out
@@ -132,6 +177,12 @@ def scenario(args) -> dict:
         "queries": probe_exec.n - q0,
         "passed": val["passed"],
         "failures": val["failures"],
+        "source": run["proposal"]["source"],
+        "relationship": ops[0]["target"]["name"],
+        "description": ops[0]["params"].get("description"),
+        "citations": run["proposal"]["alternatives"][run["proposal"]["selected"]].get(
+            "citations"
+        ),
         "mapping_sql": next(
             (
                 o["params"].get("sql_query")
@@ -196,6 +247,11 @@ def main() -> int:
     ap.add_argument("--registry-schema", default="ontobricks_evo_registry")
     ap.add_argument("--no-evaluate", action="store_true")
     ap.add_argument("--keep-tables", action="store_true")
+    ap.add_argument(
+        "--agent",
+        default="",
+        help="LLM endpoint: the agent writes the intent (glossary wording) and the proposal",
+    )
     args = ap.parse_args()
     print(json.dumps(scenario(args), indent=1, default=str))
     return 0

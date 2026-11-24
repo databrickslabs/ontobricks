@@ -68,21 +68,20 @@ class EvolutionPipeline:
         run_id: str,
         revision: int,
         operations: Optional[List[Dict[str, Any]]] = None,
+        suggestion: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Build (or, with *operations*, replace) the proposal and validate it."""
+        """Build the proposal and validate it.
+
+        Rule-based by default; with *operations*, a builder's edit; with
+        *suggestion*, the agent's alternatives mapped onto coverage's join
+        candidates (see :meth:`ProposalBuilder.from_suggestion`).
+        """
         run = self._svc.get_run(run_id)
         coverage = run.get("coverage") or {}
         if not coverage:
             raise ValidationError("Run the coverage check first")
         document, index = self._parent(run)
-        if operations is None:
-            proposal = ProposalBuilder(index).build(coverage)
-            if proposal is None:
-                raise ValidationError(
-                    "Nothing to propose for this question",
-                    detail=str(coverage.get("decision_hint")),
-                )
-        else:
+        if operations is not None:
             proposal = {
                 "schema_version": ProposalBuilder.SCHEMA_VERSION,
                 "source": "manual",
@@ -95,22 +94,63 @@ class EvolutionPipeline:
                     }
                 ],
             }
+        elif suggestion is not None:
+            proposal = ProposalBuilder(index).from_suggestion(coverage, suggestion)
+            if proposal is None:
+                raise ValidationError(
+                    "Nothing to propose for this question",
+                    detail=str(coverage.get("decision_hint")),
+                )
+            if not proposal["alternatives"]:
+                raise ValidationError(
+                    "None of the agent's alternatives could be used",
+                    detail=", ".join(r["reason"] for r in proposal["rejected"])
+                    or "no alternatives",
+                )
+            proposal["agent"] = dict(suggestion.get("meta") or {})
+        else:
+            proposal = ProposalBuilder(index).build(coverage)
+            if proposal is None:
+                raise ValidationError(
+                    "Nothing to propose for this question",
+                    detail=str(coverage.get("decision_hint")),
+                )
+        return self._validate_and_store(run, revision, document, coverage, proposal)
+
+    def select(self, run_id: str, revision: int, selected: int) -> Dict[str, Any]:
+        """Switch to another alternative of the current proposal and re-validate it."""
+        run = self._svc.get_run(run_id)
+        proposal = dict(run.get("proposal") or {})
+        alternatives = proposal.get("alternatives") or []
+        if not 0 <= int(selected) < len(alternatives):
+            raise ValidationError("No such alternative")
+        document, _index = self._parent(run)
+        proposal["selected"] = int(selected)
+        return self._validate_and_store(
+            run, revision, document, run.get("coverage") or {}, proposal
+        )
+
+    def _join_for(self, coverage, proposal) -> Optional[Dict[str, Any]]:
+        join = coverage.get("join") or {}
+        if proposal["source"] == "rule":
+            return join.get("chosen")
+        if proposal["source"] == "agent":
+            alt = proposal["alternatives"][proposal["selected"]]
+            return (join.get("candidates") or [])[alt["candidate"]]
+        return None
+
+    def _validate_and_store(self, run, revision, document, coverage, proposal):
         ops = proposal["alternatives"][proposal["selected"]]["operations"]
         candidate, apply_error = None, ""
         try:
             candidate = CandidateFactory.build(document, run["parent_version"], ops)
         except ValidationError as exc:
             apply_error = str(exc.detail or exc.message)
-        join = (
-            (coverage.get("join") or {}).get("chosen")
-            if proposal["source"] == "rule"
-            else None
-        )
         proposal["validation"] = ProposalValidator(self._probe).validate(
-            ops, candidate, apply_error, join
+            ops, candidate, apply_error, self._join_for(coverage, proposal)
         )
         return self._svc.update(
-            run_id,
+            run["id"],
             revision,
             {
                 "proposal": proposal,

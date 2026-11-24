@@ -6,6 +6,8 @@
 window.EvolveModule = {
     _ctx: null,
     _run: null,
+    _caps: null,
+    _suggestion: null,
     _bound: false,
 
     STATE_CLASSES: {
@@ -39,6 +41,7 @@ window.EvolveModule = {
         no_join_evidence: 'No join in the data supports a link.',
         shared_reference_path: 'These entities are connected only because both point at the same third entity (for example the same country). That is rarely what the question means; confirm the path with path_hint.',
         computed_entity_id: 'The entity id is computed in its mapping SQL. Evolve needs a key column on the table.',
+        path_hint_dropped_without_citation: 'The assistant named a path without a page to back it; the path was removed so coverage chooses it.',
         unmodelled_direct_link: 'A path exists, but the catalog declares a shorter link the ontology does not model. The existing path may not mean what the question asks; keep it with path_hint.',
     },
 
@@ -51,7 +54,12 @@ window.EvolveModule = {
     async init() {
         if (!this._bound) {
             document.getElementById('evoCheckBtn').addEventListener('click', () => this.check());
-            document.getElementById('evoProposeBtn').addEventListener('click', () => this.propose());
+            document.getElementById('evoProposeBtn').addEventListener('click', () => this.propose('rule'));
+            document.getElementById('evoProposeAgentBtn').addEventListener('click', () => this.propose('agent'));
+            document.getElementById('evoSuggestBtn').addEventListener('click', () => this.suggest());
+            document.getElementById('evoAlternatives').addEventListener('change', (e) => {
+                if (e.target && e.target.name === 'evoAlt') this.select(Number(e.target.value));
+            });
             document.getElementById('evoEvaluateBtn').addEventListener('click', () => this.evaluate());
             document.getElementById('evoAcceptBtn').addEventListener('click', () => this.accept());
             this._bound = true;
@@ -59,6 +67,7 @@ window.EvolveModule = {
         const intentBox = document.getElementById('evoIntent');
         if (!intentBox.value) intentBox.value = JSON.stringify(this.DEFAULT_INTENT, null, 2);
         const caps = await this._get('/evolution/capabilities');
+        this._caps = caps;
         const disabled = document.getElementById('evoDisabled');
         if (!caps || !caps.enabled) {
             disabled.textContent = 'Evolve is turned off for this deployment (ONTOBRICKS_EVOLUTION_ENABLED).';
@@ -70,7 +79,68 @@ window.EvolveModule = {
             disabled.textContent = 'Coverage works on this graph backend, but candidate evaluation needs the Lakehouse (Delta) backend.';
             disabled.classList.remove('d-none');
         }
+        document.getElementById('evoSuggestBtn').classList.toggle('d-none', !caps.assistant);
         this._ctx = await this._get('/domain/version-status');
+    },
+
+    async suggest() {
+        const question = document.getElementById('evoQuestion').value.trim();
+        if (!question) {
+            showNotification('Type the question first', 'warning');
+            return;
+        }
+        if (!this._folder()) {
+            showNotification('Save the context to the registry before using Evolve', 'warning');
+            return;
+        }
+        const btn = document.getElementById('evoSuggestBtn');
+        btn.disabled = true;
+        try {
+            const out = await this._post('/evolution/intent/suggest', {
+                parent_version: String(this._ctx.version || ''),
+                question: question,
+            });
+            this._suggestion = out.suggestion;
+            document.getElementById('evoIntent').value = JSON.stringify(out.suggestion.intent, null, 2);
+            this._renderSuggestion(out.suggestion);
+        } catch (err) {
+            showNotification('The assistant could not suggest an intent: ' + err.message, 'danger');
+        } finally {
+            btn.disabled = false;
+        }
+    },
+
+    _citationsHtml(citations) {
+        if (!citations || !citations.length) return '';
+        return '<div class="small fw-semibold mt-1">From the Genie Pages</div>' + citations.map((c) =>
+            '<blockquote class="evo-quote mb-1">' + escapeHtml(this._plainQuote(c.quote)) +
+            '<footer class="text-muted">' + escapeHtml(c.title || c.page) + '</footer></blockquote>').join('');
+    },
+
+    _plainQuote(text) {
+        // Page bodies are markdown; show the quoted words, not the table and emphasis marks.
+        return String(text || '').replace(/\*\*|`/g, '').replace(/^\s*\|\s*|\s*\|\s*$/g, '')
+            .replace(/\s*\|\s*/g, ': ');
+    },
+
+    _renderSuggestion(s) {
+        const agent = s.agent || {};
+        const pages = ((agent.context_pages || {}).pages || []).length;
+        const skipped = ((agent.context_pages || {}).skipped || []).length;
+        const dropped = agent.dropped_citations || 0;
+        const lines = [
+            'Suggested by ' + escapeHtml(agent.model || 'the assistant') + ' from the ontology' +
+                (pages ? ' and ' + pages + ' Genie Page' + (pages > 1 ? 's' : '') : ' (no Genie Pages selected)') +
+                '. Check it before running coverage.',
+        ];
+        if (skipped) lines.push(skipped + ' selected page(s) could not be read with your access.');
+        if (dropped) lines.push(dropped + ' quote(s) were not found in the pages and were dropped.');
+        (s.ambiguities || []).forEach((a) => lines.push('Unclear: ' + escapeHtml(a)));
+        (s.notes || []).forEach((n) => lines.push(escapeHtml(this.REASONS[n.split(':')[0]] || n) +
+            ' (' + escapeHtml(n.split(':').slice(1).join(':')) + ')'));
+        document.getElementById('evoSuggestInfo').innerHTML =
+            '<div class="alert alert-light border small mb-0">' + lines.join('<br>') +
+            this._citationsHtml(s.citations) + '</div>';
     },
 
     async _get(url) {
@@ -120,6 +190,7 @@ window.EvolveModule = {
                 parent_version: String(this._ctx.version || ''),
                 question: document.getElementById('evoQuestion').value,
                 intent: intent,
+                suggestion: this._suggestion,
                 idempotency_key: (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()),
             });
             const run = created.run;
@@ -136,13 +207,25 @@ window.EvolveModule = {
         }
     },
 
-    async propose() {
+    async select(index) {
         if (!this._run) return;
-        const btn = document.getElementById('evoProposeBtn');
+        try {
+            const out = await this._post('/evolution/runs/' + encodeURIComponent(this._run.id) + '/proposal',
+                { revision: this._run.revision, selected: index });
+            this._run = out.run;
+            this._renderProposal(this._run.proposal);
+        } catch (err) {
+            showNotification('Could not switch to that fix: ' + err.message, 'danger');
+        }
+    },
+
+    async propose(source) {
+        if (!this._run) return;
+        const btn = document.getElementById(source === 'agent' ? 'evoProposeAgentBtn' : 'evoProposeBtn');
         btn.disabled = true;
         try {
             const out = await this._post('/evolution/runs/' + encodeURIComponent(this._run.id) + '/proposal',
-                { revision: this._run.revision });
+                { revision: this._run.revision, source: source });
             this._run = out.run;
             this._renderProposal(this._run.proposal);
         } catch (err) {
@@ -185,6 +268,8 @@ window.EvolveModule = {
                 '</li>').join('') + '</ul>';
 
         document.getElementById('evoProposeBtn').classList.toggle('d-none', cov.decision_hint !== 'PROPOSE');
+        document.getElementById('evoProposeAgentBtn').classList.toggle('d-none',
+            cov.decision_hint !== 'PROPOSE' || !(this._caps && this._caps.assistant));
     },
 
     _gapText(gap) {
@@ -201,7 +286,16 @@ window.EvolveModule = {
         const fact = (label, ok, pending) => '<span class="badge ' +
             (pending ? 'bg-light text-dark border' : (ok ? 'bg-success' : 'bg-danger')) + ' me-1">' +
             escapeHtml(label) + '</span>';
+        const alts = proposal.alternatives || [];
+        document.getElementById('evoAlternatives').innerHTML = alts.length < 2 ? '' :
+            '<div class="small fw-semibold mb-1">Fixes the assistant suggests</div>' + alts.map((a, i) =>
+                '<div class="form-check small"><input class="form-check-input" type="radio" name="evoAlt" id="evoAlt' + i +
+                '" value="' + i + '"' + (i === (proposal.selected || 0) ? ' checked' : '') + '><label class="form-check-label" for="evoAlt' + i +
+                '"><code>' + escapeHtml((a.operations[0].target || {}).name || '') + '</code> on <code>' +
+                escapeHtml(a.join || '') + '</code></label></div>').join('');
+        document.getElementById('evoCitations').innerHTML = this._citationsHtml(alt.citations);
         document.getElementById('evoFacts').innerHTML =
+            (proposal.source === 'agent' ? fact('Suggested by the assistant', false, true) : '') +
             fact('Join found in the data', true) +
             fact(val.passed ? 'Mapping validated on current data' : 'Mapping failed validation', val.passed) +
             fact('Business meaning: needs review', false, true) +

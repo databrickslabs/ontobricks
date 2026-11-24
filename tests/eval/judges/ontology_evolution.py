@@ -111,3 +111,37 @@ def judge_gold(
         if sorted(observed.get("candidate_ids") or []) == sorted(expected_ids)
         else 0.0
     )
+
+
+def _filter_key(flt: Dict[str, Any], known_classes) -> tuple:
+    cls = str(flt.get("class") or "")
+    # A concept the ontology lacks has no attribute vocabulary to match.
+    attr = str(flt.get("attribute") or "") if cls in known_classes else "*"
+    return (
+        cls,
+        attr,
+        str(flt.get("op") or "eq").lower(),
+        str(flt.get("value") or "").strip(),
+    )
+
+
+def judge_intent(
+    expected: Dict[str, Any], observed: Dict[str, Any], known_classes=()
+) -> float:
+    """1.0 when output class, filters, aggregate function and path hint all match.
+
+    Mentions and ``max_edges`` are ignored: they do not change what is asked.
+    Filter values must match exactly, so a rewritten or escaped value fails.
+    """
+    if not isinstance(observed, dict):
+        return 0.0
+    known = set(known_classes)
+    same = (
+        (expected.get("output_class") or None) == (observed.get("output_class") or None)
+        and sorted(_filter_key(f, known) for f in expected.get("filters") or [])
+        == sorted(_filter_key(f, known) for f in observed.get("filters") or [])
+        and str((expected.get("aggregate") or {}).get("fn") or "").lower()
+        == str((observed.get("aggregate") or {}).get("fn") or "").lower()
+        and set(expected.get("path_hint") or []) == set(observed.get("path_hint") or [])
+    )
+    return 1.0 if same else 0.0

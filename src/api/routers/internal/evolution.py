@@ -14,12 +14,13 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from api.routers.internal._guards import require
 from back.core.errors import ConflictError, ValidationError
-from back.core.helpers import run_blocking
+from back.core.helpers import require_domain_llm, run_blocking
 from back.core.helpers.DatabricksHelpers import DatabricksHelpers
 from back.core.logging import get_logger
 from back.objects.ontology.evolution import (
     CandidateBuilder,
     EvaluationService,
+    EvolutionAssistant,
     EvolutionPipeline,
     EvolutionService,
     VersionAllocator,
@@ -105,6 +106,18 @@ def _pipeline(
     return EvolutionPipeline(svc, _probe(session_mgr, settings))
 
 
+def _assistant(
+    session_mgr: SessionManager, settings: Settings, svc: EvolutionService
+) -> EvolutionAssistant:
+    """Agent with the domain's LLM; Genie Pages are read as the caller."""
+    domain = get_domain(session_mgr)
+    llm = require_domain_llm(domain, settings)
+    client = DatabricksHelpers.get_data_plane_client(domain, settings)
+    if client is None or getattr(client, "knowledge_pages", None) is None:
+        raise ValidationError("Databricks access is required to read Genie Pages")
+    return EvolutionAssistant(svc, llm, client.knowledge_pages.get_page)
+
+
 def _candidate_builder(session_mgr: SessionManager, settings: Settings):
     return CandidateBuilder(settings, get_domain(session_mgr).settings)
 
@@ -117,7 +130,9 @@ def _spawn(target: Callable[[], None]) -> None:
     threading.Thread(target=target, daemon=True).start()
 
 
-def _evaluation_worker(evaluator: EvaluationService, svc: EvolutionService, run_id: str):
+def _evaluation_worker(
+    evaluator: EvaluationService, svc: EvolutionService, run_id: str
+):
     """Worker body: heart-beat while the evaluation runs, never leave it RUNNING."""
     stop = threading.Event()
 
@@ -153,6 +168,9 @@ async def capabilities(
         "operations": ["add_relationship", "set_relationship_mapping"],
         "filter_ops": ["eq"],
         "max_edges": 3,
+        "assistant": bool(
+            str((getattr(domain, "info", None) or {}).get("llm_endpoint") or "").strip()
+        ),
     }
 
 
@@ -186,9 +204,35 @@ async def create_run(
             question=str(body.get("question") or ""),
             owner=_actor(request),
             idempotency_key=str(body.get("idempotency_key") or ""),
+            suggestion=body.get("suggestion"),
         )
     )
     return {"run": run}
+
+
+@router.post("/intent/suggest", dependencies=_builder_only)
+async def suggest_intent(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Suggest a typed intent for a question; nothing is stored.
+
+    Body: ``domain``, ``parent_version``, ``question``. The builder edits
+    the suggestion and passes it back as ``suggestion`` when creating the
+    run, so the run records whether the intent was kept as suggested.
+    """
+    body = await _json_object(request)
+    svc = _service(session_mgr, settings, str(body.get("domain") or ""))
+    parent_version = str(body.get("parent_version") or "")
+    if not parent_version:
+        raise ValidationError("parent_version is required")
+    assistant = _assistant(session_mgr, settings, svc)
+    return {
+        "suggestion": await run_blocking(
+            assistant.suggest_intent, parent_version, str(body.get("question") or "")
+        )
+    }
 
 
 @router.get("/runs/{run_id}")
@@ -275,15 +319,29 @@ async def propose(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Build the rule-based proposal, or validate builder-edited ``operations``."""
+    """Build a proposal and validate it.
+
+    Body ``source``: ``rule`` (default) or ``agent`` (the assistant picks
+    and names up to three alternatives); ``operations`` validates a
+    builder's edit; ``selected`` switches to another alternative of the
+    current proposal.
+    """
     body = await _json_object(request)
-    pipe = _pipeline(session_mgr, settings, str(body.get("domain") or ""))
+    folder = str(body.get("domain") or "")
+    pipe = _pipeline(session_mgr, settings, folder)
+    revision = int(body.get("revision") or 0)
     operations = body.get("operations")
     if operations is not None and not isinstance(operations, list):
         raise ValidationError("operations must be a list")
-    run = await run_blocking(
-        pipe.propose, run_id, int(body.get("revision") or 0), operations
-    )
+    if body.get("selected") is not None:
+        run = await run_blocking(pipe.select, run_id, revision, int(body["selected"]))
+    elif body.get("source") == "agent":
+        assistant = _assistant(
+            session_mgr, settings, _service(session_mgr, settings, folder)
+        )
+        run = await run_blocking(assistant.propose, pipe, run_id, revision)
+    else:
+        run = await run_blocking(pipe.propose, run_id, revision, operations)
     return {"run": run}
 
 
