@@ -66,6 +66,13 @@
         <p class="text-muted small mt-2">Computing metrics — this may take a moment for large graphs…</p>
     </div>
 
+    <!-- Empty state: no analysis stored yet (same as the Runs tab) -->
+    <div id="analyticsEmpty" class="text-center py-5 d-none">
+        <i class="bi bi-graph-up-arrow text-muted fs-1"></i>
+        <p class="text-muted mt-2 mb-1">No analytics runs found</p>
+        <p class="text-muted small">Click <strong>Run</strong> to compute centrality and structural metrics for this graph.</p>
+    </div>
+
     <!-- Error placeholder (only shown on failure) -->
     <div id="analyticsNoData" class="d-none"></div>
 

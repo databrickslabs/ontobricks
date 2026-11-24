@@ -383,6 +383,7 @@
     // for the stored-result path (computed_at, class_filter).
     function _renderAnalyticsData(data, meta) {
         meta = meta || {};
+        _showAnalyticsEmpty(false);
         _analyticsData = data;
         var generation = meta.computed_at || '';
         if (generation !== _analyticsGeneration) {
@@ -454,6 +455,16 @@
         _analyticsLastSections = null;
     }
 
+    // Whether the last /dtwin/metrics/latest read found no stored analysis
+    // (as opposed to a failed request).
+    var _noStoredResult = false;
+
+    // Toggle the "No analytics runs found" empty state (mirrors the Runs tab).
+    function _showAnalyticsEmpty(show) {
+        var empty = document.getElementById('analyticsEmpty');
+        if (empty) empty.classList.toggle('d-none', !show);
+    }
+
     // Show the spinner with the "loading the last analysis" message. The
     // default (compute) message is kept on the element so it can be restored.
     function _showLoadingLatestSpinner() {
@@ -489,8 +500,10 @@
     // started earlier so the request overlaps the graph probe.
     window.analyticsLoadLatest = async function (prefetched) {
         _showLoadingLatestSpinner();
+        _noStoredResult = false;
         try {
             var data = await (prefetched || _fetchLatestMetrics());
+            if (data && data.success && !data.has_result) _noStoredResult = true;
             if (!data || !data.success || !data.has_result) return false;
             _renderAnalyticsData(data, {
                 computed_at: data.computed_at,
@@ -508,6 +521,7 @@
     function _setAnalysisBusy(busy) {
         var btn     = document.getElementById('analyticsComputeBtn');
         var spinner = document.getElementById('analyticsSpinner');
+        if (busy) _showAnalyticsEmpty(false);
         if (btn) btn.disabled = !!busy;
         if (spinner) spinner.classList.toggle('d-none', !busy);
     }
@@ -560,10 +574,14 @@
         if (_graphMissing) {
             _clearAnalyticsResults();
             _hideLoadingLatestSpinner();
+            _showAnalyticsEmpty(false);
             return;
         }
         await window.analyticsLoadLatest(prefetched);
         var running = await _findRunningAnalyticsTask();
+        // Empty state only once we know nothing is stored AND nothing is
+        // computing, so it never flashes before a resumed run's spinner.
+        _showAnalyticsEmpty(_noStoredResult && !running);
         if (running) {
             await _waitAndLoad(running.id);
         }
@@ -1327,6 +1345,7 @@
     }
 
     function _showAnalyticsError(msg) {
+        _showAnalyticsEmpty(false);
         var noData = document.getElementById('analyticsNoData');
         if (noData) {
             noData.innerHTML = '<div class="alert alert-danger small mb-3"><i class="bi bi-exclamation-triangle me-1"></i>' + msg + '</div>';
