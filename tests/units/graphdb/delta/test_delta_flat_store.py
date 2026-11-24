@@ -39,7 +39,7 @@ def _executed_statements(client):
 
 
 class TestDeltaMaterializedStoreInferredRouting:
-    def test_insert_triples_targets_inferred_companion(self):
+    def test_insert_triples_targets_overrides_companion(self):
         client = MagicMock()
         domain = _domain()
         store = MaterializedStore(client, domain=domain)
@@ -54,24 +54,38 @@ class TestDeltaMaterializedStoreInferredRouting:
             store, "_execute_insert_triples", return_value=1
         ) as mock_insert:
             with patch(
-                "back.core.graphdb.delta.materialize.ensure_inferred_table"
-            ) as mock_ensure_inf:
+                "back.core.graphdb.delta.materialize.ensure_overrides_table",
+                return_value=False,
+            ) as mock_ensure_ovr:
                 with patch(
                     "back.core.graphdb.delta.materialize.ensure_graph_view"
                 ) as mock_ensure_view:
-                    count = store.insert_triples("MyDomain_V1", triples)
+                    with patch(
+                        "back.core.graphdb.delta.materialize.ensure_asserted_view"
+                    ) as mock_ensure_asserted:
+                        count = store.insert_triples("MyDomain_V1", triples)
         assert count == 1
-        mock_ensure_inf.assert_called_once_with(
-            client, "cat.sch.triplestore_mydomain_V1_inferred"
+        mock_ensure_ovr.assert_called_once_with(
+            client, "cat.sch.triplestore_mydomain_V1_overrides"
         )
         mock_ensure_view.assert_called_once_with(
             client,
             "cat.sch.triplestore_mydomain_V1_graph",
             "cat.sch.triplestore_mydomain_V1_data",
-            "cat.sch.triplestore_mydomain_V1_inferred",
+            "cat.sch.triplestore_mydomain_V1_overrides",
+        )
+        mock_ensure_asserted.assert_called_once_with(
+            client,
+            "cat.sch.triplestore_mydomain_V1_asserted",
+            "cat.sch.triplestore_mydomain_V1_data",
+            "cat.sch.triplestore_mydomain_V1_overrides",
         )
         mock_insert.assert_called_once_with(
-            "cat.sch.triplestore_mydomain_V1_inferred", triples, 2000, None
+            "cat.sch.triplestore_mydomain_V1_overrides",
+            triples,
+            2000,
+            None,
+            "reasoning",
         )
 
     def test_synced_table_name_strips_graph_suffix(self):
@@ -100,14 +114,14 @@ class TestDeltaMaterializedStoreInferredRouting:
         fqn = "cat.sch.triplestore_mydomain_V1_data"
         assert store.sql_table_reference(fqn) == fqn
 
-    def test_optimize_inferred_companion_targets_inferred_fqn(self):
+    def test_optimize_inferred_companion_targets_overrides_fqn(self):
         client = MagicMock()
         domain = _domain()
         store = MaterializedStore(client, domain=domain)
         with patch("back.core.graphdb.delta.materialize.optimize_table") as mock_opt:
             store.optimize_inferred_companion("MyDomain_V1")
         mock_opt.assert_called_once_with(
-            client, "cat.sch.triplestore_mydomain_V1_inferred"
+            client, "cat.sch.triplestore_mydomain_V1_overrides"
         )
 
     def test_rebuild_adjacency_builds_all_graph_index_companions(self):
@@ -151,7 +165,7 @@ class TestDeltaMaterializedStoreInferredRouting:
             for sql in statements
         )
         assert any(
-            "FROM cat.sch.triplestore_mydomain_V1_data" in sql
+            "FROM cat.sch.triplestore_mydomain_V1_asserted" in sql
             and "_entity_search_asserted" in sql
             for sql in statements
         )

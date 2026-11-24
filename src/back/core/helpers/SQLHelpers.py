@@ -213,10 +213,13 @@ class SQLHelpers:
     ) -> str:
         """Physical table/view for graph read queries (Explorer, filter, stats, …).
 
-        * **databricks** — union VIEW ``…_graph`` (``_data`` ∪ ``_inferred``) when
-          *include_inferred* is true; otherwise the materialized ``…_data`` TABLE.
+        * **databricks** — the effective-graph VIEW ``…_graph`` (``_data`` plus the
+          ``_overrides`` rows, minus the hidden ones) when *include_inferred* is
+          true; otherwise the asserted relation (mapped triples plus user
+          overrides, no derived triples) via *store.synced_table_name*, falling
+          back to the ``…_data`` relation without a store.
         * **lakebase** — union view (``Domain_V<n>``) when *include_inferred* is true,
-          otherwise the synced bulk table via *store.synced_table_name*.
+          otherwise the asserted relation via *store.synced_table_name*.
         """
         from back.core.errors import ValidationError
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
@@ -231,6 +234,8 @@ class SQLHelpers:
                 ).graph_view_fqn()
             else:
                 table = SQLHelpers.effective_databricks_table(domain, settings)
+                if table and store is not None:
+                    table = store.synced_table_name(table)
             if not table:
                 raise ValidationError("Delta triple-store table FQN could not be resolved")
             return table

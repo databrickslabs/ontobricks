@@ -31,6 +31,7 @@ _PG_TABLE_SUFFIXES: Tuple[str, ...] = (
     "_props",
     "_adj_out",
     "_adj_in",
+    "__overrides",
     "__app",
     "_sync",
 )
@@ -45,7 +46,12 @@ USAGES: Tuple[Tuple[str, str], ...] = (
     ("simulation", "Simulations"),
     ("analytics", "Analytics"),
 )
-_INFERRED_SUFFIXES: Tuple[str, ...] = ("__app", "_inferred")
+_INFERRED_SUFFIXES: Tuple[str, ...] = (
+    "__overrides",
+    "_overrides",
+    "__app",
+    "_inferred",
+)
 _CACHE_SUFFIXES: Tuple[str, ...] = (
     "_adj_out",
     "_adj_in",

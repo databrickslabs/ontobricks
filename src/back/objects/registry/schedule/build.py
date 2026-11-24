@@ -83,6 +83,10 @@ def _stream_into_store(
 ) -> int:
     """Stream warehouse rows into ``store.bulk_insert_iter`` (or list fallback)."""
     rows = src.iter_rows(select_sql, batch_size=batch)
+    if hasattr(store, "bulk_load_into_sync"):
+        # Lakebase: mapped data belongs in ``_sync``; the overrides table is for
+        # derived rows and user edits only.
+        return store.bulk_load_into_sync(graph_name, rows, batch_size=batch)
     if hasattr(store, "bulk_insert_iter"):
         return store.bulk_insert_iter(graph_name, rows, batch_size=batch)
     return store.insert_triples(graph_name, list(rows), batch_size=min(batch, 500))
@@ -232,14 +236,14 @@ def _write_graph_triples(
     )
 
     if triple_count > 0:
-        store.drop_table(graph_name)
-        store.create_table(graph_name)
+        store.reset_for_rebuild(graph_name)
         _stream_into_store(
             store,
             src,
             graph_name,
             f"SELECT subject, predicate, object FROM {view_table}",
         )
+        store.replay_overrides(graph_name)
         store.optimize_table(graph_name)
         logger.info(
             "Scheduled build [%s]: graph '%s' populated with %d triples",

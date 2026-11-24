@@ -126,7 +126,9 @@ def test_a_materialized_domain_is_scanned_in_place():
 def test_a_view_only_domain_gets_a_disposable_snapshot(monkeypatch):
     """The job scans its source repeatedly, which a view would re-derive each time."""
     statements: List[str] = []
-    client = SimpleNamespace(execute_statement=statements.append)
+    client = SimpleNamespace(
+        execute_statement=statements.append, execute_query=lambda sql: []
+    )
     builder_calls = []
     monkeypatch.setattr(
         "back.core.graphdb.delta.Base.create_databricks_client",
@@ -147,10 +149,68 @@ def test_a_view_only_domain_gets_a_disposable_snapshot(monkeypatch):
     )
 
 
+def _overridden_client(statements: List[str], queries: List[str]):
+    """A warehouse whose ``…_overrides`` table holds a user row."""
+
+    def execute_query(sql: str):
+        queries.append(sql)
+        return [{"ok": 1}]
+
+    return SimpleNamespace(
+        execute_statement=statements.append, execute_query=execute_query
+    )
+
+
+def test_user_overrides_make_the_job_score_the_asserted_graph(monkeypatch):
+    """A materialized ``…_data`` table ignores edits, so the asserted VIEW is snapshotted."""
+    statements: List[str] = []
+    queries: List[str] = []
+    client = _overridden_client(statements, queries)
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.Base.create_databricks_client",
+        lambda domain, settings=None, *, for_write=False: client,
+    )
+    domain = SimpleNamespace(
+        info={"name": "Dom", "graph_backend": "databricks"},
+        current_version=3,
+        delta={"catalog": "cat", "schema": "sch"},
+    )
+
+    with analytics_snapshot(domain, None, "cat.sch.t_data") as table:
+        assert table == "cat.sch.triplestore_dom_V3_analytics"
+        assert "FROM cat.sch.triplestore_dom_V3_asserted" in statements[0]
+
+    assert "origin = 'user'" in queries[0]
+    assert statements[-1].startswith("DROP TABLE IF EXISTS")
+
+
+def test_a_materialized_domain_without_user_overrides_is_scanned_in_place(monkeypatch):
+    statements: List[str] = []
+    client = SimpleNamespace(
+        execute_statement=statements.append, execute_query=lambda sql: []
+    )
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.Base.create_databricks_client",
+        lambda domain, settings=None, *, for_write=False: client,
+    )
+    domain = SimpleNamespace(
+        info={"name": "Dom", "graph_backend": "databricks"},
+        current_version=3,
+        delta={"catalog": "cat", "schema": "sch"},
+    )
+
+    with analytics_snapshot(domain, None, "cat.sch.t_data") as table:
+        assert table == "cat.sch.t_data"
+
+    assert statements == []
+
+
 def test_the_snapshot_is_dropped_even_when_the_run_fails(monkeypatch):
     """A failed run must not leave storage behind for the next one to pay for."""
     statements: List[str] = []
-    client = SimpleNamespace(execute_statement=statements.append)
+    client = SimpleNamespace(
+        execute_statement=statements.append, execute_query=lambda sql: []
+    )
     monkeypatch.setattr(
         "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings=None, *, for_write=False: client,

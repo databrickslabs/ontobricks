@@ -104,7 +104,7 @@ This release is additive on v0.9.x for data and external contracts. Several UI s
 
 ## Graph, Build, and Explorer
 
-- **Build page.** New **Runs**, **Inferred**, and **Cache** tabs. **Inferred** shows a breakdown of materialized inferred triples with **Purge**; **Cache** shows status, companions, and an Activate link. A header **⋮** menu holds **Purge inferences** and **Refresh cache**; the header Refresh button is removed.
+- **Build page.** New **Runs**, **Overrides**, and **Cache** tabs. **Overrides** shows a breakdown of materialized inferred triples with **Purge**; **Cache** shows status, companions, and an Activate link. A header **⋮** menu holds **Purge inferences** and **Refresh cache**; the header Refresh button is removed.
 - **Graph DB cloisonnement.** The god-class `GraphDBBackend` is replaced by a read root (`GraphBackend`), a `MaterializedGraphBackend` hat, and capability interfaces per family, with a guardrail test and updated architecture docs. `DeltaFlatStore` is split into materialized and virtual stores.
 - **Explorer.** Entity behaviour is grouped into one section, a groups toggle is added, canvas toggles move under **View** and **Graph**, and neighbourhoods stay connected when the entity cap hits.
 - **Search and chat.** Viewers can search the graph and use Graph Chat; Graph Chat shows the full, collapsible thinking process.

@@ -339,8 +339,8 @@ def _bare_delta_pipeline(
 
     pipe._prepare_translation = MagicMock(return_value=True)
     pipe._create_view = MagicMock(return_value=True)
-    pipe._ensure_inferred_companion = MagicMock()
-    pipe._truncate_inferred = MagicMock()
+    pipe._ensure_overrides_companion = MagicMock()
+    pipe._clear_derived_overrides = MagicMock()
     pipe._ensure_graph_view = MagicMock()
     pipe._rebuild_adjacency_index = MagicMock()
     pipe._log_phase = MagicMock()

@@ -87,7 +87,7 @@ For the developer guide on *adding a new engine*, see `docs/graphdb-integration.
 │  │  schema: ontobricks_graph               │   │
 │  │    g_<domain>_v<n>           (app_managed)  │
 │  │    g_<domain>_v<n>_sync      (synced table) │
-│  │    g_<domain>_v<n>__app      (companion)    │
+│  │    g_<domain>_v<n>__overrides (companion)│
 │  │    g_<domain>_v<n>           (UNION VIEW)   │
 │  └─────────────────────────────────────────┘   │
 │              │                                  │
@@ -332,7 +332,7 @@ These drive the DAB deployment (edit before `make deploy`):
 The FastAPI process streams R2RML rows from the SQL Warehouse and writes them
 directly into the `*_sync` table via `COPY FROM STDIN`. The same 3-object
 layout used by `managed_synced` is created: a `*_sync` bulk-data table, a
-`*__app` companion for reasoning/cohort writes, and a union view for readers.
+`*__overrides` companion for user edits and reasoning/cohort writes, and a union view for readers.
 
 ```
 R2RML view (SQL Warehouse)
@@ -341,12 +341,12 @@ R2RML view (SQL Warehouse)
 FlatStore.bulk_load_into_sync
     │  COPY FROM STDIN → g_<domain>_v<n>_sync  (app-owned)
     ▼
-g_<domain>_v<n>  (UNION VIEW over _sync + __app)
+g_<domain>_v<n>  (VIEW: _sync + __overrides, anti-joined)
 ```
 
 - Simple setup — no Lakeflow pipelines required.
 - App process is on the hot path for large graphs.
-- Reasoning / cohort writes always go to `*__app` (consistent with `managed_synced`).
+- User edits and reasoning / cohort writes always go to `*__overrides` (consistent with `managed_synced`); Build keeps the `origin='user'` rows.
 - Suitable for most use cases.
 
 #### 5.2 — `managed_synced` (Lakeflow; Settings proposal)
@@ -362,10 +362,10 @@ R2RML view (Unity Catalog)
 g_<domain>_v<n>_sync  (Postgres, Lakeflow-owned, read-only)
 
 App writes (reasoning, cohort):
-g_<domain>_v<n>__app  (Postgres, app-owned, writable)
+g_<domain>_v<n>__overrides  (Postgres, app-owned, writable)
 
 Readers:
-g_<domain>_v<n>  (UNION VIEW over _sync + __app)
+g_<domain>_v<n>  (VIEW: _sync + __overrides, anti-joined)
 ```
 
 Enable it with:
@@ -410,8 +410,8 @@ per domain version, plus **four Explorer graph-index tables** rebuilt by
 | Object | Owner | Naming | Description |
 |--------|-------|--------|-------------|
 | Sync table | App (`app_managed`) / Lakeflow (`managed_synced`) | `g_<domain>_v<n>_sync` | Bulk warehouse data; `(subject, predicate, object, datatype, lang)`. App writes via `COPY FROM STDIN`; Lakeflow writes via snapshot pipeline. |
-| Companion table | App (read/write) | `g_<domain>_v<n>__app` | Reasoning / cohort / materialise triples; `(subject, predicate, object, datatype, lang)` |
-| UNION view | App DDL | `g_<domain>_v<n>` | `SELECT … FROM _sync UNION ALL SELECT … FROM __app`; exposes the back-compat 5-column shape |
+| Companion table | App (read/write) | `g_<domain>_v<n>__overrides` | User edits and reasoning / cohort / community triples; `(subject, predicate, object_hash, op, origin, change_id, author, created_at, datatype, lang)` |
+| UNION view | App DDL | `g_<domain>_v<n>` | `_sync` ∪ `add` rows minus `del` rows (anti-join on text `object`); exposes the back-compat 5-column shape |
 | Adjacency out | App | `g_<domain>_v<n>_adj_out` | Typed entity–entity outgoing edges; btree on `(src, predicate)` |
 | Adjacency in | App | `g_<domain>_v<n>_adj_in` | Typed incoming edges; btree on `(dst, predicate)` |
 | Entity search | App | `g_<domain>_v<n>_entity_search` | Preview with Inferred on; prefix + optional `pg_trgm` GIN |
@@ -428,7 +428,7 @@ together.
 
 `FlatStore.drop_table(name)` removes all three objects in order:
 1. `DROP VIEW IF EXISTS g_<domain>_v<n>` (UNION view)
-2. `DROP TABLE IF EXISTS g_<domain>_v<n>__app` (companion)
+2. `DROP TABLE IF EXISTS g_<domain>_v<n>__overrides` (companion)
 3. `app_managed`: `DROP TABLE IF EXISTS g_<domain>_v<n>_sync` (sync table)
    `managed_synced`: `SyncedTableManager.delete(uc_name, purge_data=True)` — removes the UC synced-table registration and the underlying Postgres `_sync` table
 
@@ -458,7 +458,7 @@ The extension is **per database** — the graph database is often a different
 Lakebase project/database from the registry (`graph_engine_config.database`),
 so fixing one does not fix the other.
 
-- **`app_managed`**: `*_sync` and `*__app` tables are created with
+- **`app_managed`**: `*_sync` and `*__overrides` tables are created with
   `PRIMARY KEY (subject, predicate, object_hash)`.
 - **`managed_synced`**: the Delta warehouse VIEW exposes `object_hash`
   (`sha2(object, 256)`) and Lakeflow uses
@@ -607,7 +607,7 @@ This section describes what the Lakebase engine does during a **Build** for the
 | 1 | Resolve the synced UC FQN: `<catalog>.<schema>.<domain>_vN_sync` | Wrong catalog resolved — check `sync_uc_catalog` / `ONTOBRICKS_SYNC_UC_CATALOG` |
 | 2 | `CREATE SCHEMA IF NOT EXISTS` in Unity Catalog (SQL Warehouse DDL) | SP missing `CREATE SCHEMA` on UC — grant via SQL |
 | 3 | `SyncedTableManager.ensure(...)` — idempotent `create_synced_database_table` call | `Database instance is not found` — project created via wrong API; `Not authorized` — SP missing `CAN_USE` on instance |
-| 4 | Create companion table `g_<domain>_vN__app` in Postgres | SP missing `CREATE` on graph schema |
+| 4 | Create companion table `g_<domain>_vN__overrides` in Postgres | SP missing `CREATE` on graph schema |
 | 5 | `SyncedTableManager.trigger_and_wait(...)` — fires Lakeflow snapshot, waits for completion | Timeout — increase `sync_timeout_s`; pipeline stuck — check Lakeflow pipeline status in Databricks UI |
 | 6 | `FlatStore.ensure_synced_union_view(name)` — creates the UNION view | `"<view>" is not a view` — an old table with the same name exists (auto-dropped since v0.4.1); `_sync table not found` — Lakeflow didn't materialise the table yet |
 | 7 | `TRUNCATE` companion (full rebuild only) | |
@@ -1031,7 +1031,10 @@ get_graphdb(domain, settings)          # engine=None → auto-resolve
 | `src/back/core/graphdb/delta/ReadStore.py` | Shared Delta read mixin (named queries, subgraph expansion) for both the materialized and view stores. |
 | `src/back/core/graphdb/delta/MaterializedStore.py` | Unity Catalog Delta engine (`table` materialization — copy-owning). |
 | `src/back/core/graphdb/delta/ViewStore.py` | Read-only, no-copy Delta `view` store (health probes, quality SQL). |
-| `src/back/core/graphdb/delta/_table_naming.py` | FQN helpers for the R2RML VIEW, `_data`, `_inferred`, `_graph`. |
+| `src/back/core/graphdb/overrides.py` | Backend-neutral overrides contract: `op` / `origin` vocabularies, validators, `change_id`, triple de-duplication. |
+| `src/back/core/graphdb/neo4j/OverrideJournal.py` | Neo4j journal of user edits (`:__Override` nodes), replayed after Build. |
+| `src/back/core/graphdb/lakebase/OverrideOpsMixin.py` | Lakebase add / delete / modify on the `__overrides` companion (one Postgres transaction). |
+| `src/back/core/graphdb/delta/_table_naming.py` | FQN helpers for the R2RML VIEW, `_data`, `_overrides`, `_graph`, `_asserted`. |
 | `src/back/core/graphdb/delta/materialize.py` | CTAS / companion / union-VIEW SQL and the triple count (`count_triples`, which raises instead of returning 0 on error) used by Build. |
 | `src/back/core/graphdb/__init__.py` | Package exports (`get_graphdb`, `GRAPHDB_AVAILABLE`). |
 | `src/back/objects/session/GlobalConfigService.py` | Persists the engine *connection* config (`graph_engine_config`) in `.global_config.json`. The backend *selection* lives per-domain in `DomainSession.info['graph_backend']`. |
@@ -1044,8 +1047,9 @@ Regardless of which Graph DB engine the domain uses, **Knowledge Graph → Build
 |---------------|------|------------|-------------|
 | *(no suffix)* `triplestore_<domain>_V<n>` | VIEW | Build — `CREATE OR REPLACE VIEW` from the R2RML SQL | Source for `_data`; governance / lineage of the mapping |
 | `_data` | Delta TABLE *or* VIEW | **table** mode: `CREATE OR REPLACE TABLE … AS SELECT … FROM <view>`, `CLUSTER BY (predicate, subject)`. **view** mode: pass-through `CREATE OR REPLACE VIEW` (no row copy). Lakebase and Neo4j domains always get the TABLE. | Graph Analytics (Lakeflow job); bulk half of `_graph`; Lakehouse engine reads |
-| `_inferred` | Delta TABLE | Build — `CREATE TABLE IF NOT EXISTS` (same SPO shape); truncated on full rebuild | Reasoning / cohort / app writes |
-| `_graph` | VIEW | Build — `_data UNION ALL _inferred` | Explorer, filters, stats, GraphQL when inferred triples are included |
+| `_overrides` | Delta TABLE | Build — `CREATE TABLE IF NOT EXISTS` (`subject, predicate, object, op, origin, change_id, author, created_at`); a full rebuild clears only `origin <> 'user'` | User edits (add / modify / delete), reasoning, cohort, community |
+| `_graph` | VIEW | Build — (`_data` ∪ `add` rows) minus `del` rows | Explorer, filters, stats, GraphQL when derived triples are included |
+| `_asserted` | VIEW | Build — same as `_graph`, user rows only | Asserted reads; Graph Analytics when user overrides exist |
 
 Which objects are copies vs views, and how Lakebase / Neo4j add a second
 store, is tabulated in
@@ -1058,10 +1062,10 @@ source tables
          ↘
            _graph VIEW    (interactive graph reads)
          ↗
-      _inferred TABLE     (app-written triples)
+      _overrides TABLE    (user edits + derived triples)
 ```
 
-The mapped snapshot (`_data`) is what makes KPIs identical across backends: Lakebase and Neo4j mirror those triples into their own stores, but analytics always scores `_data`, never the engine-local copy and never `_inferred`. If `_data` is missing (typical for domains last built before the materialise step was unconditional), analytics refuses the run and tells the user to rebuild — it must not be reported as a warehouse connectivity failure.
+The mapped snapshot (`_data`) is what makes KPIs identical across backends: Lakebase and Neo4j mirror those triples into their own stores, but analytics scores `_data` (or `_asserted` once a user override exists, so corrections count), never the engine-local copy and never derived triples. If `_data` is missing (typical for domains last built before the materialise step was unconditional), analytics refuses the run and tells the user to rebuild — it must not be reported as a warehouse connectivity failure.
 
 ##### Adjacency index objects
 
@@ -1084,7 +1088,7 @@ four-object triple-store family above:
 index stores normalized URI and label columns alongside type metadata;
 `_props` has a btree index on `subject`. Both `app_managed` and
 `managed_synced` modes use the same Postgres graph layout per version
-(`_sync` bulk-data table, `__app` writable companion, and the reader-facing
+(`_sync` bulk-data table, `__overrides` writable companion, and the reader-facing
 union view `g_<dom>_v<n>`).  `rebuild_adjacency` reads hops/`_props` from the
 union view and asserted Preview from `_sync`.
 
@@ -1124,7 +1128,7 @@ The semantics differ by mode:
 > **Important:** On a Lakehouse domain in `table` materialization mode, the
 > Explorer's entity expansion (which uses adjacency tables) and a raw SPARQL
 > scan of `_graph` can disagree between builds.  Expansion reflects the
-> adjacency snapshot; SPARQL scans `_graph` which always includes `_inferred`.
+> adjacency snapshot; SPARQL scans `_graph` which always includes `_overrides`.
 > A full **Build** is required to ingest source-table changes into `_data` and
 > therefore into the adjacency snapshot.
 
@@ -1598,7 +1602,7 @@ offered: the source is a view and has no Change Data Feed.
 | Object | Owner | Purpose |
 |--------|-------|---------|
 | `g_<dom>_v<n>_sync` | Lakeflow (read-only) | Mirrors the source view via snapshot. |
-| `g_<dom>_v<n>__app`  | App (read/write)     | Reasoning + cohort triples (datatype/lang aware). |
+| `g_<dom>_v<n>__overrides` | App (read/write) | User edits + derived triples (datatype/lang aware). |
 | `g_<dom>_v<n>`       | App DDL (`CREATE OR REPLACE VIEW`) | UNION view readers query (back-compat name). |
 
 The synced side is restricted to `(subject, predicate, object)` — the union
@@ -1786,8 +1790,8 @@ AS SELECT subject, predicate, object FROM <mapping_view>
 ```
 
 The layout co-locates common predicate/subject filters. `OPTIMIZE` compacts
-files and applies [Liquid Clustering](https://docs.databricks.com/aws/en/delta/clustering) after builds. App-written inferred triples
-remain in `_inferred`; the `_graph` view combines `_data` and `_inferred`.
+files and applies [Liquid Clustering](https://docs.databricks.com/aws/en/delta/clustering) after builds. App-written triples and
+user corrections remain in `_overrides`; the `_graph` view applies them over `_data`.
 
 In `view` materialization mode, `_data` remains a pass-through view. This avoids
 copying source data but makes raw SPO queries re-run mapping SQL. The

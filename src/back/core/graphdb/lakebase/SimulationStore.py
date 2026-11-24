@@ -31,6 +31,7 @@ class SimulationStore(FlatStore):
     supports_adjacency = False
     supports_entity_search = False
     supports_props = False
+    supports_overrides = False
 
     @classmethod
     def from_store(cls, store: FlatStore) -> "SimulationStore":

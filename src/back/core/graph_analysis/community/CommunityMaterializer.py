@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
+from back.core.graphdb.overrides import ORIGIN_COMMUNITY
 from back.core.graph_analysis.community.CommunityVocabulary import CommunityVocabulary
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.helpers import SQL_DIALECT_SPARK, sql_escape
@@ -116,8 +117,14 @@ class CommunityMaterializer:
         self, out: str, algorithm: str, modularity: str, stats: Dict[str, Any]
     ) -> int:
         insert = self._store.insert_triples_from_select
-        insert(self._graph_name, self.membership_select_sql(out))
-        insert(self._graph_name, self.metadata_select_sql(out, algorithm, modularity))
+        insert(
+            self._graph_name, self.membership_select_sql(out), origin=ORIGIN_COMMUNITY
+        )
+        insert(
+            self._graph_name,
+            self.metadata_select_sql(out, algorithm, modularity),
+            origin=ORIGIN_COMMUNITY,
+        )
         return int(stats.get("node_count", 0) or 0) + 5 * int(
             stats.get("cluster_count", 0) or 0
         )
@@ -143,7 +150,12 @@ class CommunityMaterializer:
                 for uri, cid in batch
                 if uri
             ]
-            inserted += int(self._store.insert_triples(self._graph_name, triples) or 0)
+            inserted += int(
+                self._store.insert_triples(
+                    self._graph_name, triples, origin=ORIGIN_COMMUNITY
+                )
+                or 0
+            )
             written += len(batch)
             if on_progress:
                 pct = 20 + int(70 * min(1.0, written / total))
@@ -161,7 +173,12 @@ class CommunityMaterializer:
                         {"subject": uri, "predicate": self._mod_pred, "object": modularity},
                     ]
                 )
-            inserted += int(self._store.insert_triples(self._graph_name, triples) or 0)
+            inserted += int(
+                self._store.insert_triples(
+                    self._graph_name, triples, origin=ORIGIN_COMMUNITY
+                )
+                or 0
+            )
         return inserted
 
     def clear(self) -> int:

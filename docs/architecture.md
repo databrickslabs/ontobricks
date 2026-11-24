@@ -1047,7 +1047,7 @@ surface exposes ontology information only.
 
 | Layer | Key | Storage | Query Language | Source of truth |
 |-------|-----|---------|----------------|-----------------|
-| **Delta Triple Store** | `view` / `_data` / `_inferred` / `_graph` | Unity Catalog R2RML VIEW + Delta tables, or Virtual Graph (no copy) ([SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)) | Spark SQL | Yes (mapped triples = `_data`) |
+| **Delta Triple Store** | `view` / `_data` / `_overrides` / `_graph` / `_asserted` | Unity Catalog R2RML VIEW + Delta tables, or Virtual Graph (no copy) ([SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)) | Spark SQL | Yes (mapped triples = `_data`) |
 | **[Lakebase](https://docs.databricks.com/aws/en/oltp/) Graph DB** | `graph` (engine `lakebase`) | Postgres flat `(subject, predicate, object)` table on the App-bound Lakebase instance | Postgres SQL | Mirror of the mapped snapshot |
 | **Databricks Graph DB** | `graph` (engine `databricks`) | Same Delta objects as the triple store (no second copy) | Spark SQL | The mapped snapshot itself |
 | **Neo4j Graph DB** | `graph` (engine `neo4j`) | Bolt-connected Neo4j (Aura / self-hosted); flat-triple nodes per store | Cypher | Mirror of the mapped snapshot |
@@ -1063,11 +1063,11 @@ rows; **no copy** means a VIEW that re-reads the source on each query.
 |------------|--------------------------|-----------------------------------------|--------------------------|-----------------------------|-------|
 | Chosen where | Context → Knowledge Graph, backend `databricks`, materialization `table` | Same backend, materialization `view` | Domain backend `lakebase`; Settings → Lakebase `sync_mode` | Same backend, `sync_mode=managed_synced` | Domain backend `neo4j` |
 | Mapped triples | `_data` **TABLE** — CTAS from the R2RML VIEW, then `OPTIMIZE` / [Liquid Clustering](https://docs.databricks.com/aws/en/delta/clustering) | `_data` **VIEW** — pass-through over the R2RML VIEW; no row copy | UC `_data` is always a **TABLE** (analytics needs a Delta scan). Postgres `_sync` is a second copy loaded by the app (`COPY FROM STDIN`) | UC `_data` **TABLE**. Postgres `_sync` is a second copy kept by Lakeflow | UC `_data` **TABLE**. Neo4j nodes are a second copy (`MERGE`) |
-| Inferred / app writes | `_inferred` **TABLE** (truncated on full Build, then refilled) | Same `_inferred` **TABLE** — inferred rows have no source table | Postgres `__app` companion; UC `_inferred` still exists for the UC family | Same `__app` companion; Lakeflow never writes it | Stored as Neo4j triples in the same store label; no `_adj_*` |
-| Interactive read façade | `_graph` VIEW = `_data UNION ALL _inferred` | Same `_graph` VIEW (each read re-runs mapping SQL through `_data`) | Postgres union view `g_<dom>_v<n>` = `_sync UNION ALL __app` | Same union view | Bolt / Cypher against the store |
+| Overrides (user edits + derived triples) | `_overrides` **TABLE** (`op` add/del, `origin`) — survives a Build for `origin='user'` | Same `_overrides` **TABLE** | Postgres `__overrides` companion | Same `__overrides` companion; Lakeflow never writes it | Applied to the graph at once and journaled as `:__Override` nodes, replayed after Build; no `_adj_*` |
+| Interactive read façade | `_graph` VIEW = (`_data` ∪ `add` rows) minus `del` rows | Same `_graph` VIEW (each read re-runs mapping SQL through `_data`) | Postgres union view `g_<dom>_v<n>` = (`_sync` ∪ `add` rows) minus `del` rows | Same union view | Bolt / Cypher against the store |
 | Explorer hop + Preview indexes | `_adj_out`, `_adj_in`, `_entity_search`, `_props` **TABLES** (always copies of a projection) | Same four **TABLES** — views-only does **not** leave indexes as views | Same four **TABLES** in the Postgres graph schema | Same four Postgres tables | None — native traversal / search |
-| Who creates objects | Build SQL Warehouse DDL | Same warehouse (DDL only for `_data`; indexes still CTAS) | Build warehouse for UC; FastAPI/psycopg for Postgres | Build warehouse for UC schema; Lakeflow for `_sync`; app for `__app`, union view, indexes | Build warehouse for UC; Bolt for Neo4j |
-| Full **Build** | Recreates gateway VIEW, replaces `_data`, truncates `_inferred`, refreshes `_graph`, rebuilds indexes | Recreates gateway + `_data` VIEW, truncates `_inferred`, rebuilds indexes from live `_graph` | Recreates UC family as tables, reloads `_sync`, truncates `__app`, rebuilds indexes | Recreates UC family, triggers Lakeflow full refresh into `_sync`, truncates `__app`, rebuilds indexes | Recreates UC family, `MERGE`s mapped triples into Neo4j |
+| Who creates objects | Build SQL Warehouse DDL | Same warehouse (DDL only for `_data`; indexes still CTAS) | Build warehouse for UC; FastAPI/psycopg for Postgres | Build warehouse for UC schema; Lakeflow for `_sync`; app for `__overrides`, union view, indexes | Build warehouse for UC; Bolt for Neo4j |
+| Full **Build** | Recreates gateway VIEW, replaces `_data`, clears derived `_overrides` rows (user rows kept), refreshes `_graph`, rebuilds indexes | Recreates gateway + `_data` VIEW, clears derived `_overrides` rows (user rows kept), rebuilds indexes from live `_graph` | Recreates UC family as tables, reloads `_sync`, clears derived `__overrides` rows (user rows kept), rebuilds indexes | Recreates UC family, triggers Lakeflow full refresh into `_sync`, clears derived `__overrides` rows (user rows kept), rebuilds indexes | Recreates UC family, `MERGE`s mapped triples into Neo4j, then replays the user journal |
 | **Refresh cache** | Rebuilds the four indexes from the existing `_graph` snapshot; does **not** recopy `_data`. Runs on the **Build SQL Warehouse**, never Lakehouse/RT | Rebuilds indexes from live `_graph` (source changes are visible in the next index snapshot) | Rebuilds indexes from the current Postgres union view | Same | Not available |
 | When new source rows appear in Explorer hops | Next full **Build** | Next **Refresh cache** or Build (indexes stay a snapshot) | Next Refresh cache or Build | Next Refresh cache or Build (after Lakeflow has updated `_sync`) | Immediately after Build `MERGE` |
 | Analytics | Scans `_data` TABLE | Temporary `…_analytics` TABLE for the run, then drop | Always scans UC `_data` TABLE, not Postgres | Same | Same UC `_data` TABLE |
@@ -1079,8 +1079,9 @@ rows; **no copy** means a VIEW that re-reads the source on each query.
 1. **Mapped triples** — only Lakehouse `view` avoids duplicating source-mapped
    rows. Lakehouse `table`, Lakebase, and Neo4j all freeze mapped triples
    (Lakebase and Neo4j freeze them twice: UC `_data` plus the engine store).
-2. **Inferred triples** — always stored (Delta `_inferred` or Lakebase
-   `__app`). There is no live source to view over.
+2. **Overrides** — always stored (Delta `_overrides`, Lakebase
+   `__overrides`, Neo4j journal). User edits and derived triples have no live
+   source to view over.
 3. **Graph indexes** — always stored tables when the backend supports them,
    even in Lakehouse views-only. Traversal and Preview never re-walk the
    mapping SQL per hop.
@@ -1096,8 +1097,9 @@ Every successful **Knowledge Graph → Build** creates (or refreshes) four relat
 |--------|------|------|
 | `triplestore_<domain>_V<n>` | **VIEW** | Live R2RML mapping: SQL that projects source Unity Catalog tables into `(subject, predicate, object)`. Refreshed on Build. Not a durable store — it recomputes from sources when queried. |
 | `…_data` | **Delta TABLE** or **VIEW** | The mapped triples. By default a materialised snapshot of the VIEW (`CREATE OR REPLACE TABLE … AS SELECT subject, predicate, object FROM <view>`) clustered by `(predicate, subject)`; under view-only materialization, a pass-through `CREATE OR REPLACE VIEW` over the same VIEW. Either way it is what **Graph Analytics** reads and the bulk half of the graph. Domains built before this step existed need one rebuild. |
-| `…_inferred` | **Delta TABLE** | Writable companion with the same schema. Holds app-written / reasoning / cohort triples that are *not* in the mapped sources. Truncated on a full rebuild, then refilled as those features write. A table in both materialization modes — inferred triples have no source to be derived from. |
-| `…_graph` | **VIEW** | Read façade: `_data UNION ALL _inferred`. Explorer, filters, stats, GraphQL, and most interactive reads use this when inferred triples are included. |
+| `…_overrides` | **Delta TABLE** | The single writable companion. One row per change: `(subject, predicate, object, op, origin, change_id, author, created_at)`. `op` is `add` or `del`; `origin` is `user`, `reasoning`, `cohort` or `community`. A table in both materialization modes — these rows have no source to be derived from. A full Build clears only the derived rows (`origin <> 'user'`). Legacy `…_inferred` rows are migrated once as `add` rows. |
+| `…_graph` | **VIEW** | Effective graph: (`_data` ∪ `add` rows) minus `del` rows (LEFT ANTI JOIN on the triple). Explorer, filters, stats, GraphQL, and most interactive reads use it when derived triples are included. |
+| `…_asserted` | **VIEW** | Same as `_graph` but only the `add` rows with `origin='user'`: mapped data plus the user's corrections, no derived triples. Read when derived triples are excluded and by Graph Analytics when user overrides exist. |
 
 ```text
 source tables
@@ -1106,10 +1108,12 @@ source tables
          ↘
            _graph VIEW    (what the UI usually reads)
          ↗
-      _inferred TABLE     (extra triples written by the app)
+      _overrides TABLE    (user edits + derived triples; add / del)
 ```
 
-**Why both a VIEW and `_data`?** The R2RML view is the definition of “what the mapping says.” Analytics and heavy jobs need a fixed Delta table they can scan reliably (and identically across Lakehouse, Lakebase, and Neo4j backends). `_data` is that freeze. `_graph` then layers inferred rows on top for interactive reads without copying them into the mapped snapshot.
+**Editing the graph.** Add, modify and delete of entities, relations and attributes all reduce to triples: *add* inserts an `add` row, *delete* inserts a `del` row (hiding a mapped triple) or removes the user's own `add` row, and *modify* is an `add` of the new triple plus a `del` of the old one sharing one `change_id`. A user triple is never both added and hidden. The same contract holds on every backend (`back/core/graphdb/overrides.py`); Lakebase applies it in one Postgres transaction, Neo4j applies edits at once and journals them for replay after a Build, and Delta orders its statements so an interruption leaves the old value visible.
+
+**Why both a VIEW and `_data`?** The R2RML view is the definition of “what the mapping says.” Analytics and heavy jobs need a fixed Delta table they can scan reliably (and identically across Lakehouse, Lakebase, and Neo4j backends). `_data` is that freeze. `_graph` then layers the overrides on top for interactive reads without copying them into the mapped snapshot.
 
 **Materialization modes** are a per-domain Lakehouse setting (`info['lakehouse_materialization']`, resolved by `GraphDBFactory.resolve_lakehouse_materialization`, applied by `materialize.apply_data_relation`):
 
@@ -1167,7 +1171,7 @@ rejects the `CREATE OR REPLACE TABLE` DDL used by graph-index refreshes.
 >
 > On a `table`-mode Lakehouse domain, Explorer expansion (adjacency-driven) and
 > a raw SPARQL scan of `_graph` can diverge between builds: expansion sees the
-> adjacency snapshot while SPARQL sees `_graph` including `_inferred`.  A full
+> adjacency snapshot while SPARQL sees `_graph` including `_overrides`.  A full
 > **Build** reconciles both.
 
 Full detail: [`docs/graphdb-integration.md` § Adjacency index objects](backend.md#adjacency-index-objects).
@@ -1186,11 +1190,11 @@ The single `GraphDBFactory` returns the per-domain engine — Delta (`databricks
 
 Lakebase Postgres is one of three shipped Graph DB engines (alongside the Delta/`databricks` store and Neo4j). The implementation lives in `src/back/core/graphdb/lakebase/` (`FlatStore`, `Base`, `SyncedTableManager`).
 
-**Storage model** — per graph version, a three-object layout inside a configurable Postgres schema (default `ontobricks_graph`) on the App-bound Lakebase database: bulk `_sync`, writable `__app`, reader-facing union view `g_<dom>_v<n>`. Connection comes from the same OAuth/M2M credential the registry hybrid backend uses. See [Backend capability and object lifecycle](#backend-capability-and-object-lifecycle).
+**Storage model** — per graph version, a three-object layout inside a configurable Postgres schema (default `ontobricks_graph`) on the App-bound Lakebase database: bulk `_sync`, writable `__overrides`, reader-facing union view `g_<dom>_v<n>`. Connection comes from the same OAuth/M2M credential the registry hybrid backend uses. See [Backend capability and object lifecycle](#backend-capability-and-object-lifecycle).
 
 **Two write modes** (Lakebase only), configured under **Settings → Back end → Lakebase**:
 
-- `managed_synced` (what **Settings → Lakebase** proposes when `sync_mode` is unset) — Databricks Lakeflow keeps a Postgres synced table (`g_<dom>_v<n>_sync`) in lock-step with the R2RML view via a **Snapshot** pipeline (the view has no Change Data Feed, so Triggered / Continuous cannot run). The app only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`); a writable companion table (`g_<dom>_v<n>__app`) absorbs reasoning / cohort writes; readers see both via a UNION view (`g_<dom>_v<n>`). See `docs/graphdb-integration.md §9` for the full architecture.
+- `managed_synced` (what **Settings → Lakebase** proposes when `sync_mode` is unset) — Databricks Lakeflow keeps a Postgres synced table (`g_<dom>_v<n>_sync`) in lock-step with the R2RML view via a **Snapshot** pipeline (the view has no Change Data Feed, so Triggered / Continuous cannot run). The app only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`); a writable companion table (`g_<dom>_v<n>__overrides`) absorbs user edits and reasoning / cohort writes; readers see the effective graph through a view (`g_<dom>_v<n>`). See `docs/graphdb-integration.md §9` for the full architecture.
 - `app_managed` (runtime fallback when the key is omitted, so existing workspaces that never saved Settings keep COPY ingest) — the FastAPI app streams warehouse rows in `fetchmany` batches and ingests them via `COPY FROM STDIN` into a per-batch temp table followed by `INSERT … ON CONFLICT DO NOTHING`.
 
 ### Neo4j Graph DB Architecture
@@ -1394,7 +1398,7 @@ over the mapped `…_data` snapshot. Graphless domains redirect to Context.
 ### Isolation guarantees
 
 `SimulationStore` (a `FlatStore` subclass) resolves every
-table name to the sandbox itself — no `_sync` / `__app` / union-view trio — and
+table name to the sandbox itself — no `_sync` / `__overrides` / union-view trio — and
 raises `ValidationError` for any name without the `__sim_` marker, on reads,
 writes, DDL and generated SQL (`_sql_relation`). Purge, synced bulk load and
 adjacency rebuilds are refused. The live store is only used for the scope read

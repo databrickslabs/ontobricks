@@ -968,13 +968,13 @@ Click **Build** in the sidebar to manage your triple store:
 | Triple count shown | Stored row count, as of the last build | A live query against your source tables |
 | Freshness | Point-in-time snapshot — rebuild to refresh | Always reflects current source data |
 
-In both modes `…_inferred` stays a Delta table, so reasoning and cohort writes are unaffected.
+In both modes `…_overrides` stays a Delta table, so edits, reasoning and cohort writes are unaffected.
 
-**Cache tab.** The Build page has a **Cache** tab (after Inferred) for Search cache. It shows whether the cache is **On** or **Off**, the state (**Ready** or **Refresh required**), **Cache updated** (last companion rebuild, or the Build that first created them), and one row per companion table (adjacency out/in, properties, entity search). Use **Activate / deactivate** to open Context Settings → Search cache, and **Refresh cache** (also in the Build page ⋮ menu) to rebuild the companions. Neo4j domains show a notice instead.
+**Cache tab.** The Build page has a **Cache** tab (after Overrides) for Search cache. It shows whether the cache is **On** or **Off**, the state (**Ready** or **Refresh required**), **Cache updated** (last companion rebuild, or the Build that first created them), and one row per companion table (adjacency out/in, properties, entity search). Use **Activate / deactivate** to open Context Settings → Search cache, and **Refresh cache** (also in the Build page ⋮ menu) to rebuild the companions. Neo4j domains show a notice instead.
 
 **Objects tab.** The Build page has an **Objects** tab (after Cache) listing the physical objects the current context version built in its graph backend: Postgres tables and views plus Unity Catalog sync registrations for Lakebase, Unity Catalog views and tables for the Lakehouse (Delta), the graph and its node/edge counts for Neo4j, and the analytics job output for the version. Everyone with access to the context can read the list. Only app **admins** see the **Drop** buttons and **Delete all** (the drop endpoints are admin-only on the server too). The list is grouped **by usage** by default (Graph data, Inferred, Search cache, Simulations, Analytics, with the same names as the Cache tab) or **by source** with the toggle at the top right (Lakebase (Postgres), Unity Catalog or Neo4j; the analytics output tables are Unity Catalog tables, so they are listed in the Unity Catalog group, last). Within a group, views come before tables and Lakeflow registrations before their source. The workspace-wide lists stay available in Settings → Lakebase / Lakehouse / Neo4j → Objects.
 
-**Inferred tab.** The Build page has an **Inferred** tab next to Build and Runs. It breaks down the materialized inferred triples by origin:
+**Overrides tab.** The Build page has an **Overrides** tab next to Build and Runs. It breaks down the derived override rows (materialized inferred triples) by origin:
 
 | Category | What it counts |
 |----------|----------------|
@@ -982,7 +982,7 @@ In both modes `…_inferred` stays a Delta table, so reasoning and cohort writes
 | Cohorts | Cohort membership and cohort metadata written by cohort runs |
 | Communities | Community membership and cluster metadata written by community runs |
 
-Each row shows **Triples**, **Entities** (distinct subjects) and **Groups** (distinct cohorts or communities; not applicable to Reasoning). The total equals the Overview "Inferred triples" figure. The tab reloads each time it is opened; **Refresh** reloads it on demand. Neo4j domains show a notice instead, because the breakdown is not implemented for that backend yet.
+Each row shows **Triples**, **Entities** (distinct subjects) and **Groups** (distinct cohorts or communities; not applicable to Reasoning). The total equals the Overview "Inferred triples" figure. The tab reloads each time it is opened; **Refresh** reloads it on demand. Until the first Build (or the first edit) creates the overrides table, the tab shows the empty state instead of an error. Neo4j domains show a notice instead, because the breakdown is not implemented for that backend yet.
 
 **Explorer index snapshot.** Build materialises `_adj_out` / `_adj_in` for
 entity expansion, `_entity_search` (union) and `_entity_search_asserted` for
@@ -1008,7 +1008,7 @@ depends on backend and mode:
 >
 > **Note (Lakehouse `table` mode):** between two full Builds, Explorer expansion
 > (adjacency-driven) and a raw SPARQL scan of `_graph` can show different
-> results.  Expansion sees the adjacency snapshot; SPARQL includes `_inferred`
+> results.  Expansion sees the adjacency snapshot; SPARQL includes `_overrides`
 > rows not yet reflected in the adjacency tables.  A full **Build** reconciles
 > both.  The **Refresh cache** button on the Build panel lets builders
 > update hop indexes without waiting for a full rebuild — useful after reasoning
@@ -1611,8 +1611,9 @@ When you **commit** the domain name (blur the field or trigger `change`) or chan
 |--------|------|----------------|
 | `triplestore_<domain>_V<n>` | VIEW | Live R2RML mapping over your source tables |
 | `…_data` | Delta TABLE *or* VIEW | Mapped triples — what **Analytics** reads; also the bulk half of the graph. A pass-through view by default (`Virtual Graph (no copy)`); a Delta table under `Materialized Graph` access type |
-| `…_inferred` | Delta TABLE | Reasoning / cohort / app-written triples |
-| `…_graph` | VIEW | `_data ∪ _inferred` — what Explorer and most graph reads use |
+| `…_overrides` | Delta TABLE | Your edits (added, modified or deleted triples) plus reasoning / cohort triples. A Build keeps your edits |
+| `…_graph` | VIEW | `_data` with your overrides applied — what Explorer and most graph reads use |
+| `…_asserted` | VIEW | `_data` with only your edits applied (no derived triples) |
 
 Full detail: [Architecture → Lakehouse Unity Catalog objects](architecture.md#lakehouse-unity-catalog-objects).
 
@@ -1633,8 +1634,8 @@ Short version:
 |----------------|-------------------------|----------------------|--------------------------------------|
 | Lakehouse · **Materialized** | Yes — `_data` TABLE | Build CTAS + `OPTIMIZE` on the Build SQL Warehouse | Physical Delta tables rebuilt at end of Build and by **Refresh cache** |
 | Lakehouse · **Virtual Graph (no copy)** | No — `_data` is a pass-through VIEW | Build only refreshes VIEW DDL | Still physical Delta tables (a snapshot of hops/search). Refresh cache recaptures live sources |
-| Lakebase · **app_managed** | Yes, twice: UC `_data` TABLE + Postgres `_sync` | App streams warehouse rows into `_sync`; `__app` holds inferred rows; readers use the union view | Postgres tables rebuilt from that union view |
-| Lakebase · **managed_synced** | Yes, twice: UC `_data` TABLE + Lakeflow `_sync` | Lakeflow owns `_sync`; the app owns `__app` and the union view | Same Postgres index rebuild |
+| Lakebase · **app_managed** | Yes, twice: UC `_data` TABLE + Postgres `_sync` | App streams warehouse rows into `_sync`; `__overrides` holds edits and derived rows; readers use the union view | Postgres tables rebuilt from that union view |
+| Lakebase · **managed_synced** | Yes, twice: UC `_data` TABLE + Lakeflow `_sync` | Lakeflow owns `_sync`; the app owns `__overrides` and the union view | Same Postgres index rebuild |
 | Neo4j | Yes, twice: UC `_data` TABLE + Neo4j nodes | Build `MERGE` | None — native Bolt traversal |
 
 **Performance:**
@@ -1657,9 +1658,10 @@ either way, and a change takes effect on the next Build.
 
 Two things are unaffected by the choice:
 
-- **Inferred triples** keep their own `…_inferred` Delta table. Reasoning and
-  cohort output has no source table to be derived from, so it always lands in
-  real storage.
+- **Edits and inferred triples** keep their own `…_overrides` Delta table.
+  They have no source table to be derived from, so they always land in real
+  storage. Deleting or modifying a mapped value adds an override row; the
+  mapped value is hidden, not erased, so it is stable across Builds.
 - **Graph Analytics** always scans a Delta table. For a view-only domain the
   job materializes a temporary `…_analytics` snapshot for the duration of one
   run and drops it at the end — its iterative BFS would otherwise re-run the
@@ -2170,7 +2172,7 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 ### Lakebase domain objects
 
 **Settings → [Lakebase](https://docs.databricks.com/aws/en/oltp/) → Objects** groups each domain/version's reader view,
-`_sync` bulk table, `__app` writable companion, `_adj_in`, `_adj_out`,
+`_sync` bulk table, `__overrides` writable companion, `_adj_in`, `_adj_out`,
 `_entity_search`, `_entity_search_asserted`, and `_props` tables into one collapsible card. Simulation
 sandbox tables (`__sim_<id>`), Explorer overlay views (`__smu_<id>`),
 overlay-key companions (`__smp_<id>`), before-picture companions (`__smb_<id>`),

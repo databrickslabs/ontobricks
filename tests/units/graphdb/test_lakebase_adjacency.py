@@ -66,7 +66,9 @@ def test_lakebase_rebuild_adjacency_runs_ddl_and_rebuild_sql(auth):
 
     with patch.object(
         store, "_cursor", side_effect=[_cursor_ctx(setup_cur)(), _cursor_ctx(analyze_cur)()]
-    ), patch.object(store, "_txn_cursor", _tx_cm):
+    ), patch.object(store, "_txn_cursor", _tx_cm), patch.object(
+        store, "synced_table_name", return_value="g_v1_sync"
+    ):
         store.rebuild_adjacency("G_V1")
 
     assert known_missing_props(props) is False
@@ -130,7 +132,9 @@ def test_lakebase_rebuild_adjacency_is_atomic_on_insert_failure(auth):
 
     with patch.object(
         store, "_cursor", side_effect=[_cursor_ctx(setup_cur)(), _cursor_ctx(analyze_cur)()]
-    ), patch.object(store, "_txn_cursor", _tx_cm):
+    ), patch.object(store, "_txn_cursor", _tx_cm), patch.object(
+        store, "synced_table_name", return_value="g_v1_sync"
+    ):
         with pytest.raises(RuntimeError, match="boom on second insert"):
             store.rebuild_adjacency("G_V1")
 

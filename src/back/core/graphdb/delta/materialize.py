@@ -19,9 +19,14 @@ from typing import Any, Literal
 
 from back.core.errors import InfrastructureError, OntoBricksError
 from back.core.graphdb.adjacency import typed_in_select, typed_out_select
-from back.core.graphdb.entity_search import entity_search_select
+from back.core.graphdb.entity_search import (
+    entity_search_select,
+    is_missing_relation_error,
+    is_view_not_table_error,
+)
+from back.core.graphdb.overrides import OP_ADD, OP_DEL, ORIGIN_USER
 from back.core.graphdb.props import props_select
-from back.core.helpers import validate_table_name
+from back.core.helpers import sql_escape, validate_table_name
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -134,26 +139,215 @@ def build_props_ctas_sql(spo_fqn: str, props_fqn: str) -> str:
     )
 
 
-def build_ensure_inferred_sql(table_fqn: str) -> str:
-    """Empty companion TABLE for reasoning / cohort writes (same shape as ``_data``)."""
+OVERRIDE_COLUMNS = (
+    "subject, predicate, object, op, origin, change_id, author, created_at"
+)
+
+
+def build_ensure_overrides_sql(table_fqn: str) -> str:
+    """Empty ``…_overrides`` TABLE: add / del rows applied over ``…_data``."""
     validate_table_name(table_fqn)
     return (
         f"CREATE TABLE IF NOT EXISTS {table_fqn} "
-        "(subject STRING, predicate STRING, object STRING) USING DELTA "
+        "(subject STRING, predicate STRING, object STRING, "
+        "op STRING, origin STRING, change_id STRING, author STRING, "
+        "created_at TIMESTAMP) USING DELTA "
         "CLUSTER BY (predicate, subject)"
     )
 
 
-def build_union_view_sql(graph_fqn: str, data_fqn: str, inferred_fqn: str) -> str:
-    """VIEW that merges bulk materialized triples with app-written inferred rows."""
+def _row_key_match(left: str, right: str) -> str:
+    return (
+        f"{left}.subject = {right}.subject "
+        f"AND {left}.predicate = {right}.predicate "
+        f"AND {left}.object = {right}.object"
+    )
+
+
+def _overrides_rows(overrides_fqn: str, where: str) -> str:
+    return (
+        f"SELECT subject, predicate, object FROM {overrides_fqn} WHERE {where}"
+    )
+
+
+def build_union_view_sql(graph_fqn: str, data_fqn: str, overrides_fqn: str) -> str:
+    """Effective graph: mapped triples plus ``add`` rows, minus ``del`` rows."""
     validate_table_name(graph_fqn)
     validate_table_name(data_fqn)
-    validate_table_name(inferred_fqn)
+    validate_table_name(overrides_fqn)
     return (
         f"CREATE OR REPLACE VIEW {graph_fqn} AS "
+        "SELECT u.subject, u.predicate, u.object FROM ("
         f"SELECT subject, predicate, object FROM {data_fqn} "
-        f"UNION ALL "
-        f"SELECT subject, predicate, object FROM {inferred_fqn}"
+        "UNION ALL "
+        f"{_overrides_rows(overrides_fqn, f'op = {_lit(OP_ADD)}')}"
+        ") u "
+        "LEFT ANTI JOIN ("
+        f"{_overrides_rows(overrides_fqn, f'op = {_lit(OP_DEL)}')}"
+        ") d ON "
+        f"{_row_key_match('u', 'd')}"
+    )
+
+
+def build_asserted_view_sql(
+    asserted_fqn: str, data_fqn: str, overrides_fqn: str
+) -> str:
+    """Asserted graph: mapped triples plus *user* ``add`` rows, minus ``del`` rows.
+
+    Derived triples (reasoning, cohorts, communities) are left out, which is the
+    scope Graph Analytics and Data Quality score.
+    """
+    validate_table_name(asserted_fqn)
+    validate_table_name(data_fqn)
+    validate_table_name(overrides_fqn)
+    user_adds = _overrides_rows(
+        overrides_fqn, f"op = {_lit(OP_ADD)} AND origin = {_lit(ORIGIN_USER)}"
+    )
+    return (
+        f"CREATE OR REPLACE VIEW {asserted_fqn} AS "
+        "SELECT u.subject, u.predicate, u.object FROM ("
+        f"SELECT subject, predicate, object FROM {data_fqn} "
+        "UNION ALL "
+        f"{user_adds}"
+        ") u "
+        "LEFT ANTI JOIN ("
+        f"{_overrides_rows(overrides_fqn, f'op = {_lit(OP_DEL)}')}"
+        ") d ON "
+        f"{_row_key_match('u', 'd')}"
+    )
+
+
+def _lit(value: str) -> str:
+    """Single-quoted SQL string literal."""
+    return f"'{sql_escape(value)}'"
+
+
+def _nullable_lit(value: str) -> str:
+    return _lit(value) if value else "NULL"
+
+
+def build_values_sql(batch: list[dict[str, str]]) -> str:
+    """``VALUES`` rows for *batch* (subject, predicate, object)."""
+    return ", ".join(
+        f"({_lit(t.get('subject', '') or '')}, "
+        f"{_lit(t.get('predicate', '') or '')}, "
+        f"{_lit(t.get('object', '') or '')})"
+        for t in batch
+    )
+
+
+def _values_source(batch: list[dict[str, str]]) -> str:
+    return f"(VALUES {build_values_sql(batch)}) AS v(subject, predicate, object)"
+
+
+def build_clear_derived_sql(overrides_fqn: str) -> str:
+    """Delete every row a Build or purge may rewrite (anything not ``user``)."""
+    validate_table_name(overrides_fqn)
+    return (
+        f"DELETE FROM {overrides_fqn} "
+        f"WHERE COALESCE(origin, '') <> {_lit(ORIGIN_USER)}"
+    )
+
+
+def build_clear_origin_sql(
+    overrides_fqn: str, origin: str, subject_prefix: str, member_predicate: str
+) -> str:
+    """Delete the rows of one cohort / community partition (subject-prefix shape)."""
+    validate_table_name(overrides_fqn)
+    prefix = sql_escape(subject_prefix)
+    return (
+        f"DELETE FROM {overrides_fqn} "
+        f"WHERE origin = {_lit(origin)} "
+        f"AND (subject LIKE '{prefix}%' "
+        f"OR (predicate = {_lit(member_predicate)} AND object LIKE '{prefix}%'))"
+    )
+
+
+def build_restore_sql(overrides_fqn: str, batch: list[dict[str, str]]) -> str:
+    """Delete the ``del`` rows of *batch*: the hidden triples become visible again."""
+    validate_table_name(overrides_fqn)
+    return (
+        f"MERGE INTO {overrides_fqn} t USING {_values_source(batch)} "
+        f"ON {_row_key_match('t', 'v')} AND t.op = {_lit(OP_DEL)} "
+        "WHEN MATCHED THEN DELETE"
+    )
+
+
+def build_drop_user_adds_sql(overrides_fqn: str, batch: list[dict[str, str]]) -> str:
+    """Delete the user ``add`` rows of *batch*."""
+    validate_table_name(overrides_fqn)
+    return (
+        f"MERGE INTO {overrides_fqn} t USING {_values_source(batch)} "
+        f"ON {_row_key_match('t', 'v')} AND t.op = {_lit(OP_ADD)} "
+        f"AND t.origin = {_lit(ORIGIN_USER)} "
+        "WHEN MATCHED THEN DELETE"
+    )
+
+
+def build_add_user_sql(
+    overrides_fqn: str,
+    graph_fqn: str,
+    batch: list[dict[str, str]],
+    *,
+    author: str = "",
+    change_id: str = "",
+) -> str:
+    """Insert user ``add`` rows for the triples of *batch* absent from the graph."""
+    validate_table_name(overrides_fqn)
+    validate_table_name(graph_fqn)
+    return (
+        f"INSERT INTO {overrides_fqn} ({OVERRIDE_COLUMNS}) "
+        f"SELECT v.subject, v.predicate, v.object, {_lit(OP_ADD)}, "
+        f"{_lit(ORIGIN_USER)}, {_nullable_lit(change_id)}, "
+        f"{_nullable_lit(author)}, current_timestamp() "
+        f"FROM {_values_source(batch)} "
+        f"WHERE NOT EXISTS (SELECT 1 FROM {graph_fqn} g "
+        f"WHERE {_row_key_match('g', 'v')})"
+    )
+
+
+def build_hide_sql(
+    overrides_fqn: str,
+    data_fqn: str,
+    batch: list[dict[str, str]],
+    *,
+    author: str = "",
+    change_id: str = "",
+) -> str:
+    """Insert ``del`` rows for the triples of *batch* still visible without user adds.
+
+    A triple only needs a ``del`` row when it comes from the mapped data or from a
+    derived ``add`` row. A triple that exists solely as a user ``add`` row is
+    removed by :func:`build_drop_user_adds_sql` and leaves no ``del`` behind.
+    """
+    validate_table_name(overrides_fqn)
+    validate_table_name(data_fqn)
+    return (
+        f"INSERT INTO {overrides_fqn} ({OVERRIDE_COLUMNS}) "
+        f"SELECT v.subject, v.predicate, v.object, {_lit(OP_DEL)}, "
+        f"{_lit(ORIGIN_USER)}, {_nullable_lit(change_id)}, "
+        f"{_nullable_lit(author)}, current_timestamp() "
+        f"FROM {_values_source(batch)} "
+        f"WHERE (EXISTS (SELECT 1 FROM {data_fqn} d WHERE {_row_key_match('d', 'v')}) "
+        f"OR EXISTS (SELECT 1 FROM {overrides_fqn} a WHERE a.op = {_lit(OP_ADD)} "
+        f"AND COALESCE(a.origin, '') <> {_lit(ORIGIN_USER)} "
+        f"AND {_row_key_match('a', 'v')})) "
+        f"AND NOT EXISTS (SELECT 1 FROM {overrides_fqn} x WHERE x.op = {_lit(OP_DEL)} "
+        f"AND {_row_key_match('x', 'v')})"
+    )
+
+
+def build_migrate_inferred_sql(
+    overrides_fqn: str, inferred_fqn: str, origin_expr: str
+) -> str:
+    """Copy the legacy ``…_inferred`` rows into ``…_overrides`` as derived ``add`` rows."""
+    validate_table_name(overrides_fqn)
+    validate_table_name(inferred_fqn)
+    return (
+        f"INSERT INTO {overrides_fqn} ({OVERRIDE_COLUMNS}) "
+        f"SELECT subject, predicate, object, {_lit(OP_ADD)}, {origin_expr}, "
+        "NULL, NULL, current_timestamp() "
+        f"FROM {inferred_fqn}"
     )
 
 
@@ -209,25 +403,83 @@ def apply_data_relation(
     materialize_from_view(client, view_fqn, data_fqn)
 
 
-def ensure_inferred_table(client: Any, table_fqn: str) -> None:
-    """Create the writable companion TABLE if it does not exist yet."""
-    sql = build_ensure_inferred_sql(table_fqn)
-    logger.info("Ensuring Delta inferred companion table: %s", table_fqn)
-    run_sql(client, sql)
+def relation_exists(client: Any, fqn: str) -> bool:
+    """``True`` when *fqn* resolves in Unity Catalog (table or view)."""
+    validate_table_name(fqn)
+    try:
+        client.execute_query(f"DESCRIBE DETAIL {fqn}")
+    except Exception as exc:  # noqa: BLE001
+        if is_view_not_table_error(exc):
+            return True  # a view has no Delta detail, but it exists
+        if is_missing_relation_error(exc):
+            return False
+        raise
+    return True
+
+
+def ensure_overrides_table(client: Any, table_fqn: str) -> bool:
+    """Create the overrides TABLE if missing. Returns ``True`` when it was created."""
+    existed = relation_exists(client, table_fqn)
+    logger.info("Ensuring Delta overrides table: %s", table_fqn)
+    run_sql(client, build_ensure_overrides_sql(table_fqn))
+    return not existed
 
 
 def ensure_graph_view(
-    client: Any, graph_fqn: str, data_fqn: str, inferred_fqn: str
+    client: Any, graph_fqn: str, data_fqn: str, overrides_fqn: str
 ) -> None:
-    """Create or refresh the union VIEW used for graph read queries."""
-    sql = build_union_view_sql(graph_fqn, data_fqn, inferred_fqn)
+    """Create or refresh the effective-graph VIEW used for graph read queries."""
+    sql = build_union_view_sql(graph_fqn, data_fqn, overrides_fqn)
     logger.info(
-        "Ensuring Delta graph union view: %s (data=%s, inferred=%s)",
+        "Ensuring Delta effective graph view: %s (data=%s, overrides=%s)",
         graph_fqn,
         data_fqn,
-        inferred_fqn,
+        overrides_fqn,
     )
     run_sql(client, sql)
+
+
+def ensure_asserted_view(
+    client: Any, asserted_fqn: str, data_fqn: str, overrides_fqn: str
+) -> None:
+    """Create or refresh the asserted VIEW (mapped + user overrides, no derived)."""
+    sql = build_asserted_view_sql(asserted_fqn, data_fqn, overrides_fqn)
+    logger.info(
+        "Ensuring Delta asserted view: %s (data=%s, overrides=%s)",
+        asserted_fqn,
+        data_fqn,
+        overrides_fqn,
+    )
+    run_sql(client, sql)
+
+
+def migrate_inferred(
+    client: Any, overrides_fqn: str, inferred_fqn: str, origin_expr: str
+) -> bool:
+    """Copy the legacy ``…_inferred`` rows into the freshly created overrides table.
+
+    Returns ``True`` when a legacy table was found and copied. The legacy table
+    is left untouched so a rollback to the previous version still finds its data.
+    """
+    if not inferred_fqn or not relation_exists(client, inferred_fqn):
+        return False
+    logger.info("Migrating legacy inferred rows: %s -> %s", inferred_fqn, overrides_fqn)
+    run_sql(client, build_migrate_inferred_sql(overrides_fqn, inferred_fqn, origin_expr))
+    return True
+
+
+def clear_derived(client: Any, overrides_fqn: str) -> None:
+    """Delete the derived rows of *overrides_fqn*, keeping every ``user`` row.
+
+    Best-effort like :func:`truncate_table`: the table may not exist on a first
+    build, which is not an error.
+    """
+    try:
+        run_sql(client, build_clear_derived_sql(overrides_fqn))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(
+            "clear_derived %s failed (may not exist yet): %s", overrides_fqn, exc
+        )
 
 
 def truncate_table(client: Any, table_fqn: str) -> None:

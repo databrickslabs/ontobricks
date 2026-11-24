@@ -62,8 +62,10 @@ from back.core.graphdb.neo4j.Connection import (
     is_neo4j_password_from_secret,
     resolve_neo4j_database,
 )
+from back.core.graphdb.neo4j.OverrideJournal import OverrideJournal
 from back.core.graphdb.neo4j.ReadOps import ReadOps
 from back.core.graphdb.neo4j.WriteOps import WriteOps, sanitise_label
+from back.core.graphdb.overrides import OP_ADD, OP_DEL, unique_triples
 from back.core.logging import get_logger
 from shared.config.constants import DEFAULT_GRAPH_NAME
 
@@ -127,6 +129,8 @@ class Store(MaterializedGraphBackend):
             Bolt-level encryption flag (ignored when URI is ``neo4j+s://``).
     """
 
+    supports_overrides = True
+
     def __init__(
         self,
         db_name: str = DEFAULT_GRAPH_NAME,
@@ -166,6 +170,7 @@ class Store(MaterializedGraphBackend):
             encrypted=encrypted,
         )
         self._writes = WriteOps(self._connection)
+        self._journal = OverrideJournal(self._connection)
         self._reads = ReadOps(self._connection)
 
     # ======================================================================
@@ -283,7 +288,13 @@ class Store(MaterializedGraphBackend):
         return self._writes.create_table(table_name)
 
     def drop_table(self, table_name: str) -> None:
-        return self._writes.drop_table(table_name)
+        self._writes.drop_table(table_name)
+        self._journal.drop(sanitise_label(table_name))
+
+    def reset_for_rebuild(self, table_name: str) -> None:
+        """Recreate the graph for a full Build; the override journal is kept."""
+        self._writes.drop_table(table_name)
+        self._writes.create_table(table_name)
 
     def insert_triples(
         self,
@@ -291,8 +302,43 @@ class Store(MaterializedGraphBackend):
         triples: List[Dict[str, str]],
         batch_size: int = 2000,
         on_progress: Optional[Callable[[int, int], None]] = None,
+        origin: str = "reasoning",
     ) -> int:
+        # *origin* is ignored: Neo4j keeps no per-triple provenance, only the
+        # journal of user edits (see ``OverrideJournal``).
         return self._writes.insert_triples(table_name, triples, batch_size, on_progress)
+
+    # -- User overrides: applied at once, journaled to survive a Build ----
+
+    @staticmethod
+    def _is_live_graph(table_name: str) -> bool:
+        """Simulation sandboxes share the store but never journal their edits."""
+        return "__sim_" not in table_name
+
+    def add_triples(
+        self,
+        table_name: str,
+        triples: List[Dict[str, str]],
+        batch_size: int = 2000,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+        *,
+        author: str = "",
+        change_id: str = "",
+    ) -> int:
+        """Add triples as user overrides: journal first, then apply to the graph.
+
+        The journal is written first so an interrupted call is repaired by the next
+        replay. The two writes are separate Bolt calls, not one transaction.
+        """
+        unique = unique_triples(triples)
+        self._journal.record(
+            sanitise_label(table_name),
+            unique,
+            OP_ADD,
+            author=author,
+            change_id=change_id,
+        )
+        return self._writes.insert_triples(table_name, unique, batch_size, on_progress)
 
     def delete_triples(
         self,
@@ -300,8 +346,48 @@ class Store(MaterializedGraphBackend):
         triples: List[Dict[str, str]],
         batch_size: int = 2000,
         on_progress: Optional[Callable[[int, int], None]] = None,
+        *,
+        author: str = "",
+        change_id: str = "",
     ) -> int:
+        """Remove triples from the graph; on a live graph the deletion is journaled."""
+        if self._is_live_graph(table_name):
+            self._journal.record(
+                sanitise_label(table_name),
+                unique_triples(triples),
+                OP_DEL,
+                author=author,
+                change_id=change_id,
+            )
         return self._writes.delete_triples(table_name, triples, batch_size, on_progress)
+
+    def replay_overrides(self, table_name: str) -> int:
+        """Re-apply the journaled user edits after a Build; returns how many."""
+        entries = self._journal.entries(sanitise_label(table_name))
+        adds = [e for e in entries if e.get("op") == OP_ADD]
+        dels = [e for e in entries if e.get("op") == OP_DEL]
+        if adds:
+            self._writes.insert_triples(table_name, adds)
+        if dels:
+            self._writes.delete_triples(table_name, dels)
+        if entries:
+            logger.info(
+                "Replayed %d journaled overrides on %s (%d add, %d del)",
+                len(entries),
+                table_name,
+                len(adds),
+                len(dels),
+            )
+        return len(entries)
+
+    def get_override_stats(self, table_name: str) -> Dict[str, int]:
+        """Journaled user edits: ``user_adds``, ``user_dels`` (no dormant tracking)."""
+        counts = self._journal.counts(sanitise_label(table_name))
+        return {
+            "user_adds": counts[OP_ADD],
+            "user_dels": counts[OP_DEL],
+            "dormant_dels": 0,
+        }
 
     def optimize_table(self, table_name: str) -> None:
         return self._writes.optimize_table(table_name)

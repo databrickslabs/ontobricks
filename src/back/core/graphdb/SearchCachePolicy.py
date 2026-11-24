@@ -194,8 +194,14 @@ class SearchCachePolicy:
                 logger.debug("Could not persist graph_cache_state=ready: %s", exc)
 
     @staticmethod
-    def mark_graph_cache_pending(domain: Any) -> None:
-        """Record a failed rebuild while cache is enabled."""
+    def mark_graph_cache_pending(domain: Any, *, persist: bool = False) -> None:
+        """Record that the companions no longer match the graph (cache enabled only).
+
+        Used after a failed rebuild, and after a write that changes the effective
+        graph (user overrides). While the state is pending, reads bypass the
+        companions and see the live graph, so the change is visible at once.
+        *persist* saves the state so other sessions see it too.
+        """
         info = SearchCachePolicy._domain_info(domain)
         if not info:
             return
@@ -203,7 +209,16 @@ class SearchCachePolicy:
             info.get("graph_cache_enabled")
         ):
             return
+        if info.get("graph_cache_state") == GRAPH_CACHE_STATE_PENDING:
+            return
         info["graph_cache_state"] = GRAPH_CACHE_STATE_PENDING
+        if persist:
+            save = getattr(domain, "save", None)
+            if callable(save):
+                try:
+                    save()
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("Could not persist graph_cache_state=pending: %s", exc)
 
     @staticmethod
     def rebuild_graph_cache_if_enabled(

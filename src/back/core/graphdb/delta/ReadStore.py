@@ -144,21 +144,42 @@ class ReadStore:
         return f"{cat}.{sch}.{base}{_table_naming.props_suffix()}"
 
     def synced_table_name(self, table_name: str) -> str:
-        """Base data table without inferred companion rows."""
-        if table_name.endswith(_table_naming.data_suffix()):
+        """Asserted relation: mapped triples plus user overrides, no derived triples.
+
+        With a bound domain this is the ``…_asserted`` VIEW once it exists, and the
+        plain ``…_data`` relation until the first Build or write creates it (a
+        domain that predates overrides has none). Without a domain only the name
+        can be derived, so it falls back to ``…_data``.
+        """
+        if table_name.endswith(
+            (_table_naming.data_suffix(), _table_naming.asserted_suffix())
+        ):
             return table_name
         if self._domain is not None:
             data = _table_naming.data_table_fqn(self._domain, self._settings)
+            asserted = _table_naming.asserted_view_fqn(self._domain, self._settings)
+            if asserted and self._asserted_view_ready(asserted):
+                return asserted
             if data:
                 return data
         if "." in table_name and table_name.count(".") == 2:
             cat, sch, base = table_name.split(".", 2)
-            if base.endswith(_table_naming.inferred_suffix()):
-                base = base[: -len(_table_naming.inferred_suffix())]
-            elif base.endswith(_table_naming.graph_suffix()):
-                base = base[: -len(_table_naming.graph_suffix())]
+            for suffix in (
+                _table_naming.inferred_suffix(),
+                _table_naming.overrides_suffix(),
+                _table_naming.graph_suffix(),
+            ):
+                if base.endswith(suffix):
+                    base = base[: -len(suffix)]
+                    break
             return f"{cat}.{sch}.{base}{_table_naming.data_suffix()}"
         return table_name
+
+    def _asserted_view_ready(self, asserted_fqn: str) -> bool:
+        try:
+            return self.table_exists(asserted_fqn)
+        except Exception:  # noqa: BLE001
+            return False
 
     def query_triples(self, table_name: str) -> List[Dict[str, str]]:
         """SELECT all triples."""

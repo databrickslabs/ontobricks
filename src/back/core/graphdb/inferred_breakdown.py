@@ -45,22 +45,18 @@ def _join(base: str, fragment: str) -> str:
     return base + "/" + fragment
 
 
-def build_breakdown_sql(
-    relation: str,
+def _vocabulary_case(
     base_uri: str,
     escape: Callable[[str], str],
+    *,
+    cohort: str,
+    community: str,
+    other: str,
 ) -> str:
-    """Return one ``GROUP BY category`` statement over *relation*.
+    """``CASE`` classifying a row by the cohort / community vocabulary.
 
-    *relation* is an already-resolved table identifier. *escape* is the
-    backend's string-literal escaper (``GraphBackend._sql_escape``).
-
-    Result columns: ``category, triples, entities, groups``.
-
-    * ``triples``  - rows in the category
-    * ``entities`` - distinct subjects in the category
-    * ``groups``   - distinct cohort / cluster objects of membership rows
-                     (NULL for reasoning rows, so they never count)
+    The three outcomes are passed as SQL literals so the same rules can produce
+    breakdown categories (``cohorts``) or override origins (``cohort``).
     """
 
     def lit(value: str) -> str:
@@ -77,18 +73,90 @@ def build_breakdown_sql(
     in_cluster = _join(base_uri, _IN_CLUSTER)
     cohort_meta = [_join(base_uri, _FROM_RULE), _join(base_uri, _COHORT_SIZE)]
     cluster_meta = [_join(base_uri, frag) for frag in _CLUSTER_META]
-
-    category_expr = (
+    return (
         "CASE"
-        f" WHEN {starts_with('subject', cohort_subject)} THEN 'cohorts'"
-        f" WHEN {starts_with('predicate', in_cohort)} THEN 'cohorts'"
-        f" WHEN predicate IN ({', '.join(lit(p) for p in cohort_meta)}) THEN 'cohorts'"
-        f" WHEN {starts_with('subject', cluster_subject)} THEN 'communities'"
+        f" WHEN {starts_with('subject', cohort_subject)} THEN {cohort}"
+        f" WHEN {starts_with('predicate', in_cohort)} THEN {cohort}"
+        f" WHEN predicate IN ({', '.join(lit(p) for p in cohort_meta)}) THEN {cohort}"
+        f" WHEN {starts_with('subject', cluster_subject)} THEN {community}"
         f" WHEN predicate IN ({', '.join(lit(p) for p in [in_cluster, *cluster_meta])})"
-        " THEN 'communities'"
-        " ELSE 'reasoning'"
+        f" THEN {community}"
+        f" ELSE {other}"
         " END"
     )
+
+
+def legacy_origin_expr(base_uri: str, escape: Callable[[str], str]) -> str:
+    """SQL ``CASE`` giving the override ``origin`` of a row from its vocabulary.
+
+    Used once, to migrate the legacy ``_inferred`` / ``__app`` rows (which carry
+    no provenance column) into ``_overrides``, and as the fallback for rows
+    whose ``origin`` is still NULL.
+    """
+    return _vocabulary_case(
+        base_uri,
+        escape,
+        cohort="'cohort'",
+        community="'community'",
+        other="'reasoning'",
+    )
+
+
+def build_breakdown_sql(
+    relation: str,
+    base_uri: str,
+    escape: Callable[[str], str],
+    *,
+    has_origin: bool = False,
+) -> str:
+    """Return one ``GROUP BY category`` statement over *relation*.
+
+    *relation* is an already-resolved table identifier. *escape* is the
+    backend's string-literal escaper (``GraphBackend._sql_escape``).
+
+    With ``has_origin=False`` the category is derived from the vocabulary (a
+    legacy companion with no provenance column). With ``has_origin=True`` the
+    relation is an ``_overrides`` table: only derived ``add`` rows are counted
+    and the ``origin`` column decides the category, the vocabulary remaining the
+    fallback for a NULL ``origin``.
+
+    Result columns: ``category, triples, entities, groups``.
+
+    * ``triples``  - rows in the category
+    * ``entities`` - distinct subjects in the category
+    * ``groups``   - distinct cohort / cluster objects of membership rows
+                     (NULL for reasoning rows, so they never count)
+    """
+
+    def lit(value: str) -> str:
+        return f"'{escape(value)}'"
+
+    def starts_with(column: str, prefix: str) -> str:
+        return f"substr({column}, 1, {len(prefix)}) = {lit(prefix)}"
+
+    in_cohort = _join(base_uri, _IN_COHORT)
+    in_cluster = _join(base_uri, _IN_CLUSTER)
+
+    vocabulary = _vocabulary_case(
+        base_uri,
+        escape,
+        cohort="'cohorts'",
+        community="'communities'",
+        other="'reasoning'",
+    )
+    if has_origin:
+        category_expr = (
+            "CASE"
+            " WHEN origin = 'cohort' THEN 'cohorts'"
+            " WHEN origin = 'community' THEN 'communities'"
+            " WHEN origin = 'reasoning' THEN 'reasoning'"
+            f" ELSE {vocabulary}"
+            " END"
+        )
+        where = " WHERE op = 'add' AND COALESCE(origin, '') <> 'user'"
+    else:
+        category_expr = vocabulary
+        where = ""
     membership_expr = (
         f"CASE WHEN {starts_with('predicate', in_cohort)}"
         f" OR predicate = {lit(in_cluster)} THEN object END"
@@ -100,7 +168,7 @@ def build_breakdown_sql(
         " COUNT(DISTINCT grp) AS groups"
         " FROM ("
         f" SELECT subject, {category_expr} AS category, {membership_expr} AS grp"
-        f" FROM {relation}"
+        f" FROM {relation}{where}"
         ") AS classified"
         " GROUP BY category"
     )

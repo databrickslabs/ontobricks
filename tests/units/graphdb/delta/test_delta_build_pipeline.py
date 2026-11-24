@@ -115,14 +115,15 @@ def _minimal_run_pipeline(*, materialization: str = "table"):
     pipe.spark_sql = "SELECT 1"
     pipe.triple_count = 5
     pipe.source_client = MagicMock()
-    pipe.inferred_table = "cat.sch.triplestore_dom_V3_inferred"
+    pipe.overrides_table = "cat.sch.triplestore_dom_V3_overrides"
+    pipe.asserted_view = "cat.sch.triplestore_dom_V3_asserted"
     pipe.graph_view = "cat.sch.triplestore_dom_V3_graph"
 
     pipe._prepare_translation = MagicMock(return_value=True)
     pipe._create_view = MagicMock(return_value=True)
     pipe._materialize_data_table = MagicMock(return_value=True)
-    pipe._ensure_inferred_companion = MagicMock()
-    pipe._truncate_inferred = MagicMock()
+    pipe._ensure_overrides_companion = MagicMock()
+    pipe._clear_derived_overrides = MagicMock()
     pipe._ensure_graph_view = MagicMock()
     pipe._complete_task = MagicMock()
     pipe._is_cancelled = MagicMock(return_value=False)

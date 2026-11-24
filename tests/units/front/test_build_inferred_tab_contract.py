@@ -20,6 +20,14 @@ def _pane_html() -> str:
     return BUILD_HTML[start:end]
 
 
+def test_inferred_tab_is_labelled_overrides():
+    start = BUILD_HTML.index('id="buildTabInferredBtn"')
+    end = BUILD_HTML.index("</button>", start)
+    label = BUILD_HTML[start:end]
+    assert label.rstrip().endswith("Overrides")
+    assert ">Inferred<" not in label
+
+
 def test_inferred_tab_follows_runs_tab():
     assert BUILD_HTML.index('id="buildTabInferredBtn"') > BUILD_HTML.index('id="buildTabRunsBtn"')
 

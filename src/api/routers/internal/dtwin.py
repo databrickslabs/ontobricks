@@ -1773,7 +1773,8 @@ async def databricks_build_info(
             "readiness": readiness,
             "view_table": view_table,
             "data_table": data_table,
-            "inferred_table": builder.inferred_table_fqn(),
+            "overrides_table": builder.overrides_fqn(),
+            "inferred_table": builder.overrides_fqn(),  # legacy key, same table
             "triplestore_status": data_status,
         }
 

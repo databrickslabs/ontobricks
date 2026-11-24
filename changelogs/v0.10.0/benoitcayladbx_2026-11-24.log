@@ -31,3 +31,227 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-24.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 11236 passed, 334 skipped, 8 deselected
+
+================================================================================
+Overrides table: a single `_overrides` layer replaces `_inferred` (add / modify / delete)
+================================================================================
+
+Context:
+The Triple-Store Gateway exposed the R2RML mapping (`_data`) plus a write-only
+`_inferred` / `__app` companion, so the app could add triples but never delete or
+modify a mapped value (entity, relation, attribute), in either Delta mode. Spec:
+docs/superpowers/specs/2026-11-24-overrides-table-design.md. One `*_overrides`
+table now holds every change as `(subject, predicate, object, op, origin,
+change_id, author, created_at)` with op = add | del and origin = user | reasoning
+| cohort | community. The effective graph is (mapped U add rows) minus del rows.
+A modification is an add of the new triple plus a del of the old one sharing one
+change_id. The contract is the same on every backend; the mechanism is native.
+Not run live: the SQL (Spark, Postgres) and Cypher are covered by unit tests on
+the emitted statements, not by a warehouse / Lakebase / Neo4j round trip.
+
+Changes:
+1. src/back/core/graphdb/overrides.py (new)
+   - Backend-neutral contract: op / origin vocabularies, validators,
+     new_change_id, triple_key, unique_triples.
+2. Delta: src/back/core/graphdb/delta/_table_naming.py, materialize.py,
+   Builder.py, ReadStore.py, MaterializedStore.py, BuildPipeline.py
+   - `_overrides` table, `_graph` view as an anti-join, new `_asserted` view
+     (mapped + user adds - dels), one-time migration of legacy `_inferred` rows.
+   - add / delete / modify on MaterializedStore with statement ordering that
+     leaves the old value visible if interrupted (Delta has no multi-statement
+     transaction). Build and purge only touch origin <> 'user'.
+   - Builder.has_user_overrides(); ReadStore.synced_table_name returns `_asserted`.
+3. Lakebase: src/back/core/graphdb/lakebase/_companion_ddl.py, FlatStore.py,
+   OverrideOpsMixin.py (new), SimulationStore.py, InferredBreakdownMixin.py,
+   _adjacency_ddl.py
+   - `__overrides` companion (PK subject, predicate, object_hash, op), union view
+     and `_asserted` view with anti-join, edits in one Postgres transaction via a
+     COPY staging table, migration of legacy `__app` rows, reset_for_rebuild keeps
+     the user rows. Sandboxes keep raw 3-column writes.
+4. Neo4j: src/back/core/graphdb/neo4j/OverrideJournal.py (new), Store.py
+   - Edits are applied at once and journaled as :__Override nodes (journal first,
+     then graph; two Bolt calls, not one transaction). Build keeps the journal and
+     replay_overrides re-applies it. Simulation graphs are never journaled.
+5. src/back/core/graphdb/interfaces/MaterializedGraphBackend.py
+   - supports_overrides, add_triples, modify_triple, reset_for_rebuild,
+     replay_overrides (no-op default), insert_triples(origin=...).
+6. src/back/objects/digitaltwin/build/_build_pipeline.py,
+   src/back/objects/registry/schedule/build.py
+   - Full rebuild uses reset_for_rebuild (was drop + create, which destroyed user
+     edits), then replay_overrides. Scheduled Lakebase builds load the bulk table.
+7. src/back/core/graphdb/inferred_breakdown.py, src/back/core/helpers/SQLHelpers.py,
+   src/back/core/graphdb/SearchCachePolicy.py, src/front/routes/dtwin.py,
+   src/api/routers/internal/dtwin.py,
+   src/back/objects/digitaltwin/build/BuildObjects.py
+   - Inferred breakdown groups by origin (vocabulary heuristic for legacy rows);
+     reads without derived triples use `_asserted`; edits mark the search cache
+     pending so they show up at once.
+8. src/back/core/graph_analysis/metrics/JobMetrics.py,
+   cohort/CohortBuilder.py, community/CommunityMaterializer.py
+   - Analytics snapshots `_asserted` only when a user override exists; cohort and
+     community writers pass their origin and delete by origin (the previous
+     DELETE FROM a view relation silently failed).
+9. Tests: new tests/units/graphdb/delta/test_delta_overrides.py,
+   tests/units/graphdb/test_lakebase_overrides.py,
+   tests/units/graphdb/test_neo4j_overrides.py; updated the existing
+   Delta / Lakebase / build-pipeline / analytics / community tests.
+10. Docs: docs/architecture.md, backend.md, user-guide.md, deployment.md,
+    getting-started.md describe `_overrides`, `_graph`, `_asserted`.
+
+Known limits:
+   - Data Quality still snapshots the gateway VIEW (mapping only), by design.
+   - Replace-style business-rule saves now leave user `del` rows for the removed
+     triples (hidden, not erased).
+   - SPARQL over the new views is a separate sub-project.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-24.log
+- docs/architecture.md, docs/backend.md, docs/deployment.md,
+  docs/getting-started.md, docs/user-guide.md
+- src/api/routers/internal/dtwin.py, src/front/routes/dtwin.py
+- src/back/core/graph_analysis/{cohort/CohortBuilder.py,
+  community/CommunityMaterializer.py, metrics/JobMetrics.py}
+- src/back/core/graphdb/{SearchCachePolicy.py, inferred_breakdown.py,
+  overrides.py (new)}
+- src/back/core/graphdb/delta/{BuildPipeline.py, Builder.py,
+  MaterializedStore.py, ReadStore.py, _table_naming.py, materialize.py}
+- src/back/core/graphdb/interfaces/MaterializedGraphBackend.py
+- src/back/core/graphdb/lakebase/{FlatStore.py, InferredBreakdownMixin.py,
+  OverrideOpsMixin.py (new), SimulationStore.py, _adjacency_ddl.py,
+  _companion_ddl.py}
+- src/back/core/graphdb/neo4j/{OverrideJournal.py (new), Store.py}
+- src/back/core/helpers/SQLHelpers.py
+- src/back/objects/digitaltwin/build/{BuildObjects.py, _build_pipeline.py}
+- src/back/objects/registry/schedule/build.py
+- tests/units/graphdb/delta/{test_delta_overrides.py (new),
+  test_delta_build_pipeline.py, test_delta_flat_store.py, test_delta_package.py}
+- tests/units/graphdb/{test_lakebase_overrides.py (new),
+  test_neo4j_overrides.py (new), test_inferred_breakdown_stores.py,
+  test_lakebase_adjacency.py, test_materialized_inference_purge.py}
+- tests/units/core/{test_community_materializer.py, test_job_metrics.py,
+  test_lakebase_flat_store.py}
+- tests/units/dtwin/test_dtwin_analytics.py
+- tests/units/objects/test_build_pipeline_materialize.py
+
+Test result:
+uv run --frozen pytest -q -m "not scenario" tests/units --deselect
+tests/units/api/test_routes.py -> 10676 passed, 1 skipped.
+Other suites (tests/ minus units) -> 564 passed, 334 skipped.
+tests/units/api/test_routes.py hangs in this environment and was deselected.
+
+================================================================================
+Build -> Overrides tab: breakdown tolerates a missing overrides table; tab renamed
+================================================================================
+
+Context:
+Opening the Build page tab "Inferred" failed with an internal error on graphs
+whose overrides table did not exist yet (graph built before the overrides
+layer, or never built / edited since). The breakdown read queried
+`…_overrides` (Delta) / `…__overrides` (Lakebase) directly, and the read path,
+unlike the write path, never creates it. The tab is also renamed "Overrides",
+since it breaks down the derived override rows.
+
+Changes:
+1. src/back/core/graphdb/delta/MaterializedStore.py
+   - get_inferred_breakdown: returns zero-filled categories when the overrides
+     table does not exist (materialize.relation_exists check), no SQL run.
+2. src/back/core/graphdb/lakebase/InferredBreakdownMixin.py
+   - get_inferred_breakdown: same guard, probed with to_regclass under the
+     store's search_path (_companion_ddl.relation_exists).
+3. src/front/templates/partials/dtwin/_query_build.html
+   - Tab label "Inferred" -> "Overrides". Element ids (buildTabInferredBtn,
+     buildPaneInferred, ...) are kept so the JS and existing tests are unchanged.
+4. tests/units/graphdb/test_inferred_breakdown_stores.py
+   - Lakebase and Delta tests for the missing-table case; existing tests make
+     the existence probe explicit.
+5. tests/units/front/test_build_inferred_tab_contract.py
+   - Contract test: the tab label is "Overrides".
+6. docs/user-guide.md, releases/ReleaseNotes_V0.10.0.md
+   - Tab renamed to Overrides (Cache / Objects references updated); the
+     missing-table behaviour is documented.
+
+Modified files:
+- src/back/core/graphdb/delta/MaterializedStore.py
+- src/back/core/graphdb/lakebase/InferredBreakdownMixin.py
+- src/front/templates/partials/dtwin/_query_build.html
+- tests/units/graphdb/test_inferred_breakdown_stores.py
+- tests/units/front/test_build_inferred_tab_contract.py
+- docs/user-guide.md
+- releases/ReleaseNotes_V0.10.0.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-24.log
+
+Test result:
+Targeted: tests/units/graphdb/test_inferred_breakdown_stores.py,
+tests/units/front/test_build_inferred_tab_contract.py,
+test_build_cache_tab_contract.py, test_runs_page.py,
+tests/units/graphdb/delta/test_delta_flat_store.py,
+tests/units/graphdb/test_lakebase_overrides.py -> 144 passed.
+Full suite: uv run --frozen pytest -q -m "not scenario" --deselect
+tests/units/api/test_routes.py -> 11244 passed, 334 skipped, 0 failed.
+
+================================================================================
+Overrides layer: behavioural tests for add / modify / delete and graph reads
+================================================================================
+
+Context:
+The existing overrides tests only check the shape and order of the emitted SQL
+(the warehouse / Postgres cannot be reached from unit tests), so nothing proved
+what an edit leaves in `_overrides` or what the effective graph and the asserted
+graph return afterwards. The new tests execute the stores' real SQL on in-memory
+SQLite doubles and assert on rows. No production code changed in this section.
+
+Changes:
+1. tests/fixtures/sqlite_graph_backends.py (new)
+   - SqliteDeltaWarehouse: warehouse client double. Translates only the Spark
+     constructs the stores emit (3-part names, CREATE OR REPLACE VIEW, USING
+     DELTA / CLUSTER BY, LEFT ANTI JOIN, MERGE ... WHEN MATCHED THEN DELETE,
+     (VALUES ...) AS v(...), current_timestamp(), DESCRIBE DETAIL). An unknown
+     construct fails loudly instead of being ignored.
+   - SqlitePostgres: psycopg-style cursor / transaction double (%s, ::TEXT,
+     TEMP TABLE ... ON COMMIT DROP, COPY ... FROM STDIN, DELETE ... USING,
+     ON CONFLICT DO NOTHING, to_regclass). Transactions roll back on error.
+2. tests/units/graphdb/test_overrides_behaviour.py (new, 73 tests)
+   - The same scenarios run on the Delta and the Lakebase store through a small
+     harness (production DDL, production views, production store methods).
+   - Add: new triple (rows, author, change_id, both graphs), mapped data never
+     written, already-visible triple writes nothing, idempotence, duplicates in a
+     batch, visible derived triple, restoring a hidden triple, quotes and
+     backslashes.
+   - Delete: mapped triple hidden from both graphs, user add dropped without a
+     del row, derived triple hidden from the graph only, unknown triple, twice,
+     mixed batch, delete / add round trip.
+   - Modify: mapped value, user-added value, subject / predicate change, merge
+     onto an existing triple, chain of edits, identical triple rejected.
+   - Graphs: graph vs asserted (derived rows only in the graph), every derived
+     origin, edits visible on the next read, search cache marked stale.
+   - Overrides tab and counters: breakdown by origin ignores user rows, derived
+     count, override stats, dormant del after the source drops a triple.
+   - Build and purge: rebuild keeps user edits and drops derived rows, a hidden
+     triple stays hidden when the source brings it back, purge spares user rows,
+     cohort partition delete only touches its own origin.
+   - Missing overrides table: breakdown and derived count return zero (covers
+     the Overrides tab fix of this day).
+   - Delta lazy setup: reads use `_data` until the first edit, then `_graph` /
+     `_asserted`; the first edit creates the table and both views; legacy
+     `_inferred` rows are migrated with their origin.
+3. Validation of the tests themselves: 11 deliberate regressions of the
+   production SQL (restore, drop of user adds, graph / asserted views, visibility
+   check on add, clear_derived) were injected one by one; each made the new suite
+   fail. The production files were restored afterwards.
+
+Known limits:
+   - SQLite is not Spark or Postgres: the tests prove the set semantics of the
+     statements and views, not type coercion, `digest()` generated columns,
+     Delta MERGE concurrency or Lakeflow sync. Neo4j is not covered here (its
+     Cypher cannot run on SQLite); it keeps the mock-based tests of
+     test_neo4j_overrides.py.
+
+Modified files:
+- tests/fixtures/sqlite_graph_backends.py (new)
+- tests/units/graphdb/test_overrides_behaviour.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-24.log
+
+Test result:
+tests/units/graphdb/test_overrides_behaviour.py -> 73 passed.
+Full suite: uv run --frozen pytest -q -m "not scenario" --deselect
+tests/units/api/test_routes.py -> 11317 passed, 334 skipped, 0 failed.

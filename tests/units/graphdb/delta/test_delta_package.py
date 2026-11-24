@@ -195,31 +195,35 @@ class TestMaterializeSql:
         client.execute_statement.assert_called_once()
         assert "CREATE OR REPLACE TABLE" in client.execute_statement.call_args[0][0]
 
-    def test_ensure_inferred_table_executes(self):
+    def test_ensure_overrides_table_creates_a_missing_table(self):
         client = MagicMock()
-        materialize.ensure_inferred_table(client, "c.s.v_inferred")
-        client.execute_statement.assert_called_once()
+        client.execute_query.side_effect = RuntimeError("TABLE_OR_VIEW_NOT_FOUND")
+        assert materialize.ensure_overrides_table(client, "c.s.v_overrides") is True
         sql = client.execute_statement.call_args[0][0]
-        assert "CREATE TABLE IF NOT EXISTS c.s.v_inferred" in sql
+        assert "CREATE TABLE IF NOT EXISTS c.s.v_overrides" in sql
+        assert "op STRING" in sql and "origin STRING" in sql
+
+    def test_ensure_overrides_table_reports_an_existing_table(self):
+        client = MagicMock()
+        assert materialize.ensure_overrides_table(client, "c.s.v_overrides") is False
 
     def test_run_sql_falls_back_to_execute_query(self):
         client = MagicMock(spec=["execute_query"])
-        materialize.ensure_inferred_table(client, "c.s.v_inferred")
-        client.execute_query.assert_called_once()
-        assert "CREATE TABLE IF NOT EXISTS c.s.v_inferred" in (
-            client.execute_query.call_args[0][0]
-        )
+        materialize.ensure_overrides_table(client, "c.s.v_overrides")
+        executed = [c[0][0] for c in client.execute_query.call_args_list]
+        assert any("CREATE TABLE IF NOT EXISTS c.s.v_overrides" in s for s in executed)
 
-    def test_ensure_graph_view_unions_data_and_inferred(self):
+    def test_ensure_graph_view_applies_overrides(self):
         client = MagicMock()
         materialize.ensure_graph_view(
-            client, "c.s.v_graph", "c.s.v_data", "c.s.v_inferred"
+            client, "c.s.v_graph", "c.s.v_data", "c.s.v_overrides"
         )
         client.execute_statement.assert_called_once()
         sql = client.execute_statement.call_args[0][0]
         assert "CREATE OR REPLACE VIEW c.s.v_graph" in sql
         assert "FROM c.s.v_data" in sql
-        assert "FROM c.s.v_inferred" in sql
+        assert "FROM c.s.v_overrides" in sql
+        assert "LEFT ANTI JOIN" in sql
 
     def test_data_view_sql_copies_nothing(self):
         sql = materialize.build_data_view_sql("cat.sch.view1", "cat.sch.view1_data")

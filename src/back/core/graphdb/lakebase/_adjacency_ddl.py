@@ -46,7 +46,7 @@ def entity_search_asserted_phy(graph_name: str) -> str:
 
 def _asserted_stem_phy(graph_name: str) -> str:
     phy = view_phy(graph_name)
-    for suffix in ("_sync", "__app"):
+    for suffix in ("_sync", "__overrides", "__app", "_asserted"):
         if phy.endswith(suffix):
             return phy[: -len(suffix)]
     return phy
