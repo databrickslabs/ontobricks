@@ -1087,3 +1087,41 @@ def test_patterns_section_owns_discovery():
     tracker = _read(FRONT / "static/global/js/task-tracker.js")
     for task_type in ("pattern_detection", "pattern_save"):
         assert f"'{task_type}': '/intelligence/?section=patterns'" in tracker
+
+
+def _toggle_certified_body() -> str:
+    js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    start = js.index("async toggleCertified()")
+    return js[start : js.index("\n    },\n", start)]
+
+
+def test_certify_button_shows_a_spinner_while_saving():
+    """Same in-button spinner as Save / Detect while the PUT runs."""
+    js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    body = _toggle_certified_body()
+    assert body.index("_setCertifyBusy(btn, true)") < body.index("/certification")
+    busy = js[js.index("_setCertifyBusy(btn, on)") :]
+    busy = busy[: busy.index("\n    },\n")]
+    assert "spinner-border spinner-border-sm ob-btn-spinner" in busy
+    assert "aria-busy" in busy
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".pat-cert-btn.is-busy" in css
+    # Same spinner size as the Patterns Save / Detect button (Bootstrap sm).
+    assert ".pat-cert-btn .ob-btn-spinner" not in css
+
+
+def test_certify_refreshes_the_chart_from_the_reloaded_catalog():
+    body = _toggle_certified_body()
+    assert body.index("_reloadSavedCatalog(savedId)") < body.index("_refreshCertUi()")
+    js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    reload_fn = js[js.index("async _reloadSavedCatalog(savedId)") :]
+    reload_fn = reload_fn[: reload_fn.index("\n    },\n")]
+    assert "/patterns`" in reload_fn
+    refresh = js[js.index("_refreshCertUi() {") :]
+    assert "_patternsChartHtml(this.selectedId)" in refresh[: refresh.index("\n    },\n")]
+
+
+def test_certify_failure_restores_the_button():
+    body = _toggle_certified_body()
+    catch = body[body.index("} catch (err) {") :]
+    assert "_setCertifyBusy(btn, false)" in catch

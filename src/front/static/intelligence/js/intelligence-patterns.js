@@ -501,7 +501,8 @@ const IntelligencePatterns = {
         if (!hit) return;
         const next = !hit.certified;
         const btn = document.querySelector('#patDetails [data-pat-certify]');
-        if (btn) btn.disabled = true;
+        if (btn && btn.classList.contains('is-busy')) return;
+        this._setCertifyBusy(btn, true);
         try {
             await this._json(
                 `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/certification`,
@@ -512,10 +513,52 @@ const IntelligencePatterns = {
                 },
             );
             hit.certified = next;
+            await this._reloadSavedCatalog(savedId);
+            if (this._viewingSavedId !== savedId) return;
+            // Rebuilds the toolbar (fresh Certify/Certified button) and the
+            // "Matching entities per pattern" chart from the reloaded catalog.
             this._refreshCertUi();
         } catch (err) {
-            if (btn) btn.disabled = !this._canEdit();
+            this._setCertifyBusy(btn, false);
             this._notify(err.message || 'Could not update the certification', 'danger');
+        }
+    },
+
+    // Spinner inside the Certify button while the request runs (same markup
+    // as the Save / Detect buttons, see _setBtnSpinner).
+    _setCertifyBusy(btn, on) {
+        if (!btn) return;
+        btn.classList.toggle('is-busy', !!on);
+        if (on) {
+            if (!btn.dataset.origHtml) btn.dataset.origHtml = btn.innerHTML;
+            // Keep the toolbar from shifting while the label is swapped out.
+            btn.style.minWidth = `${btn.offsetWidth}px`;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm ob-btn-spinner" role="status" aria-hidden="true"></span>';
+            btn.setAttribute('aria-busy', 'true');
+            btn.disabled = true;
+        } else {
+            if (btn.dataset.origHtml) {
+                btn.innerHTML = btn.dataset.origHtml;
+                delete btn.dataset.origHtml;
+            }
+            btn.style.minWidth = '';
+            btn.removeAttribute('aria-busy');
+            btn.disabled = !this._canEdit();
+        }
+    },
+
+    // Re-read the saved run's pattern catalog so the chart reflects the
+    // server's certification state. Best-effort: on failure the local toggle
+    // already applied is kept.
+    async _reloadSavedCatalog(savedId) {
+        try {
+            const catalog = await this._json(
+                `/dtwin/patterns/saved/${encodeURIComponent(savedId)}/patterns`
+            );
+            if (this._viewingSavedId !== savedId || !Array.isArray(catalog.patterns)) return;
+            this.latest = { ...(this.latest || {}), patterns: catalog.patterns };
+        } catch (err) {
+            console.warn('[Patterns] Could not reload the saved catalog after certification:', err);
         }
     },
 

@@ -840,9 +840,18 @@ a.sim-uri-link:focus-visible {
 }
 
 #commDetectBtn.is-busy,
-#commMaterializeBtn.is-busy {
+#commMaterializeBtn.is-busy,
+.pat-cert-btn.is-busy {
     pointer-events: none;
     cursor: progress;
+}
+
+/* The busy Certify button is disabled only to block double clicks; keep it
+   at full opacity so the spinner stays readable. */
+.pat-cert-btn.is-busy:disabled {
+    opacity: 1;
+    color: var(--db-btn-secondary);
+    border-color: var(--db-btn-secondary-border);
 }
 
 #commDetectBtn .ob-btn-spinner,
