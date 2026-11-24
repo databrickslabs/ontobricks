@@ -435,8 +435,13 @@ window.AxiomsModule = {
             showNotification('Please select a type', 'warning');
             return;
         }
-        if (!subject && type !== 'propertyChain') {
-            showNotification('Please select a subject', 'warning');
+        if (!subject) {
+            showNotification(
+                type === 'propertyChain'
+                    ? 'Please select the result property'
+                    : 'Please select a subject',
+                'warning'
+            );
             return;
         }
         

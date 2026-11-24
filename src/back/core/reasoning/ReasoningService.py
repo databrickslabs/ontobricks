@@ -288,6 +288,11 @@ class ReasoningService:
         transitive_props = self._find_properties_by_characteristic(
             ontology, "transitive"
         )
+        # Modern path: transitivity declared as a self propertyChain axiom
+        # (p ∘ p ⊑ p) in Expr. & Axioms, not the legacy characteristics panel.
+        for prop_uri in self._find_transitive_from_axioms(ontology):
+            if prop_uri not in transitive_props:
+                transitive_props.append(prop_uri)
         logger.info(
             "Graph reasoning: %d transitive properties found%s",
             len(transitive_props),
@@ -650,3 +655,37 @@ class ReasoningService:
                 if uri:
                     result.append(uri)
         return result
+
+    @staticmethod
+    def _resolve_axiom_prop_uri(ref: str, data_ns: str, base_uri: str, sep: str) -> str:
+        """Resolve a property reference (full URI or bare name) taken from an
+        axiom to the data-namespace predicate URI stored in the triple store."""
+        ref = (ref or "").strip()
+        if not ref:
+            return ""
+        if ref.startswith("http"):
+            return ReasoningService._normalize_property_uri(ref, data_ns, base_uri, sep, "")
+        return ReasoningService._normalize_property_uri("", data_ns, base_uri, sep, ref)
+
+    @staticmethod
+    def _find_transitive_from_axioms(ontology: Dict) -> List[str]:
+        """Property URIs made transitive by a self ``owl:propertyChainAxiom``
+        (``p ∘ p ⊑ p``): a chain of length >= 2 whose elements and the result
+        property all resolve to the same property."""
+        base_uri = ontology.get("base_uri", "")
+        data_ns, sep = ReasoningService._namespace_parts(base_uri)
+        out: List[str] = []
+        for ax in ontology.get("axioms", []) or []:
+            if ax.get("type") != "propertyChain":
+                continue
+            chain = ax.get("chain") or []
+            result_ref = ax.get("resultProperty") or ax.get("subject") or ""
+            if len(chain) < 2 or not result_ref:
+                continue
+            uris = {
+                ReasoningService._resolve_axiom_prop_uri(r, data_ns, base_uri, sep)
+                for r in (result_ref, *chain)
+            }
+            if len(uris) == 1 and "" not in uris:
+                out.append(next(iter(uris)))
+        return out
