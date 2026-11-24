@@ -34,15 +34,10 @@ def _names(resources):
 
 
 class TestBuildResources:
-    def test_install_time_names_match_manifest(self):
+    def test_names_match_manifest(self):
         manifest = yaml.safe_load((_ROOT / "marketplace" / "manifest.yaml").read_text())
         expected = sorted(r["name"] for r in manifest["resource_specs"])
-        assert sorted(_names(mod.build_resources("wh1", None, None))) == expected
-
-    def test_postgres_is_added_as_the_post_install_binding(self):
-        # The manifest can't declare Lakebase (PLAN.md Q1); the installer binds it
-        # after install, which this helper does in the same step.
-        assert _names(mod.build_resources("wh1", _BRANCH, "db-abc")) == ["sql-warehouse", "postgres"]
+        assert sorted(_names(mod.build_resources("wh1", _BRANCH, "db-abc"))) == expected
 
     def test_postgres_paths_are_full_resource_paths(self):
         got = mod.build_resources("wh1", _BRANCH, "db-abc")
@@ -57,7 +52,7 @@ class TestBuildResources:
         # 0.10.x keeps no domain artefacts on a UC Volume.
         assert "volume" not in _names(mod.build_resources("wh1", _BRANCH, "db-abc"))
 
-    @pytest.mark.parametrize("bad", ["ontobricks-mp", "projects/p", "projects/p/branch/b"])
+    @pytest.mark.parametrize("bad", [None, "", "ontobricks-mp", "projects/p", "projects/p/branch/b"])
     def test_rejects_malformed_branch_path(self, bad):
         with pytest.raises(ValueError, match="projects/<project>/branches/<branch>"):
             mod.build_resources("wh1", bad, "db-abc")

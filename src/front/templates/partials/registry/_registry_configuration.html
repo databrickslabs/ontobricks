@@ -49,6 +49,33 @@
                 </button>
             </div>
             <small class="text-muted d-block mt-1" id="registryHelp"></small>
+
+            <!-- First-run setup (Marketplace installs): shown by registry.js while no location is set. -->
+            <form id="registrySetupForm" class="border rounded p-3 mt-3 d-none" novalidate>
+                <div class="fw-semibold small mb-1"><i class="bi bi-magic me-1"></i>Set up the registry</div>
+                <p class="text-muted small mb-2">
+                    Choose the Unity Catalog schema for the registry. OntoBricks creates it if needed and gives the
+                    app's service principal access to it and to this app, <strong>using your permissions</strong>.
+                    You need <code>USE CATALOG</code> and <code>CREATE SCHEMA</code> on the catalog, or must own it.
+                </p>
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-5">
+                        <label class="form-label small mb-1" for="registrySetupCatalog">Catalog</label>
+                        <input type="text" class="form-control form-control-sm" id="registrySetupCatalog"
+                               name="catalog" required pattern="[A-Za-z0-9_][A-Za-z0-9_\-]*" autocomplete="off">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1" for="registrySetupSchema">Schema</label>
+                        <input type="text" class="form-control form-control-sm" id="registrySetupSchema"
+                               name="schema" value="ontobricks" required pattern="[A-Za-z0-9_][A-Za-z0-9_\-]*" autocomplete="off">
+                    </div>
+                    <div class="col-md-3 d-grid">
+                        <button type="submit" class="btn btn-sm btn-primary" id="btnRegistrySetup">
+                            <i class="bi bi-check2-circle me-1"></i>Set up registry
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 

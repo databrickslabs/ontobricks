@@ -5,9 +5,9 @@ A Marketplace install takes the ``ontobricks/`` subfolder verbatim, binds the
 resources named in ``manifest.yaml``, grants the manifest's ``user_api_scopes``
 and runs the fixed ``app.yaml``. It does NOT run any of the ``make deploy``
 bootstrap steps (``app-permissions.sh``, ``lakebase-perms.sh``, the generated
-``app.yaml``). The manifest can't declare a Lakebase database (PLAN.md Q1), so
-the installer binds one right after install; this helper does that in the same
-step when ``--lakebase-branch`` is given. Steps:
+``app.yaml``). Every manifest resource is bound at install, so a Lakebase
+branch (``--lakebase-branch``) is required, as the installer must pick one in
+the Marketplace dialog. Steps:
 
 1. assemble ``ontobricks/`` (``scripts/marketplace/assemble.py``) into a temp dir
 2. upload it to ``/Workspace/Users/<you>/ontobricks-marketplace-test/<app>``
@@ -61,32 +61,26 @@ def validate_app_name(name: str) -> str:
     return name
 
 
-def build_resources(
-    warehouse_id: str,
-    branch: str | None,
-    database_segment: str | None,
-) -> list[dict]:
-    """Return the app ``resources`` array.
+def validate_branch(branch: str) -> str:
+    """Return *branch* if it is a ``projects/<project>/branches/<branch>`` path."""
+    if not _BRANCH_RE.match(branch or ""):
+        raise ValueError(
+            f"--lakebase-branch must be projects/<project>/branches/<branch>, got {branch!r}"
+        )
+    return branch
 
-    The install-time resources are named as in ``marketplace/manifest.yaml``;
-    ``postgres`` is the post-install Lakebase binding (added when *branch* is given).
-    """
-    resources: list[dict] = [
+
+def build_resources(warehouse_id: str, branch: str, database_segment: str | None) -> list[dict]:
+    """Return the app ``resources`` array, named as in ``marketplace/manifest.yaml``."""
+    validate_branch(branch)
+    if not database_segment:
+        raise ValueError("a Lakebase branch was given but no database resolved")
+    return [
         {
             "name": "sql-warehouse",
             "description": "SQL Warehouse for executing queries and metadata operations",
             "sql_warehouse": {"id": warehouse_id, "permission": "CAN_USE"},
         },
-    ]
-    if branch is None:
-        return resources
-    if not _BRANCH_RE.match(branch):
-        raise ValueError(
-            f"--lakebase-branch must be projects/<project>/branches/<branch>, got {branch!r}"
-        )
-    if not database_segment:
-        raise ValueError("a Lakebase branch was given but no database resolved")
-    resources.append(
         {
             "name": "postgres",
             "description": "Lakebase Autoscaling Postgres database for the OntoBricks registry",
@@ -95,9 +89,8 @@ def build_resources(
                 "database": f"{branch}/databases/{database_segment}",
                 "permission": "CAN_CONNECT_AND_CREATE",
             },
-        }
-    )
-    return resources
+        },
+    ]
 
 
 def manifest_user_scopes(manifest_path: Path) -> list[str]:
@@ -191,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--profile", required=True, help="Databricks CLI profile (required, never defaulted)")
     p.add_argument("--app-name", default=DEFAULT_APP_NAME)
     p.add_argument("--warehouse-id", required=True)
-    p.add_argument("--lakebase-branch", help="projects/<project>/branches/<branch>; omit to test with no Lakebase bound")
+    p.add_argument("--lakebase-branch", required=True, help="projects/<project>/branches/<branch>")
     p.add_argument("--lakebase-database", default="databricks_postgres", help="Postgres datname or db-… id")
     p.add_argument("--grant-self", action="store_true", help="also grant the app SP CAN_MANAGE on its own app")
     p.add_argument("--dry-run", action="store_true", help="print the CLI calls, change nothing")
@@ -199,9 +192,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         app_name = validate_app_name(args.app_name)
-        segment = None
-        if args.lakebase_branch:
-            segment = "db-DRYRUN" if args.dry_run else _resolve_database(args.profile, args.lakebase_branch, args.lakebase_database)
+        branch = validate_branch(args.lakebase_branch)
+        segment = "db-DRYRUN" if args.dry_run else _resolve_database(args.profile, branch, args.lakebase_database)
         resources = build_resources(args.warehouse_id, args.lakebase_branch, segment)
         user_scopes = manifest_user_scopes(REPO_ROOT / "marketplace" / "manifest.yaml")
     except ValueError as exc:
@@ -260,4 +252,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except subprocess.CalledProcessError as exc:
+        sys.exit(f"ERROR: {' '.join(exc.cmd[:3])} failed:\n{exc.stderr or exc.stdout}")

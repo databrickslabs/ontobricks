@@ -1,0 +1,204 @@
+## Resolve the Lakebase endpoint without walking every project
+
+Context: LakebaseAuth found the endpoint serving PGHOST by walking every
+Lakebase project, branch and endpoint, and aborted on the first project it
+could not read. In a large workspace (E2 dogfood has ~2,400 projects) that
+broke every Marketplace install, which has no LAKEBASE_PROJECT: the registry
+location saved in Lakebase was never read back after a redeploy. Resolution
+now tries the LAKEBASE_PROJECT/LAKEBASE_BRANCH branch, then the app's own
+`postgres` resource, and only then a full walk that skips projects and
+branches it can't read. Endpoint discovery moved into LakebaseProjectService
+(Extract Method + Move Method), which removes the duplicate env-branch lookup
+and brings LakebaseAuth closer to the class size budget.
+
+Changes:
+
+1. src/back/core/databricks/lakebase/LakebaseProjectService.py
+   New find_endpoint (known branches first, then every project) and
+   branch_endpoint (match host or read_only_host; empty host = first endpoint
+   with a host). Only NotFound/PermissionDenied are skipped; any other API
+   error propagates (src/.coding_rules.md §4).
+2. src/back/core/databricks/lakebase/LakebaseAuth.py
+   instance_name resolves via LakebaseProjectService, from the env branch,
+   then the app's `postgres` resource (GET /api/2.0/apps/<DATABRICKS_APP_NAME>).
+   A failed lookup is re-raised for 60 s without a new walk. The PGHOST-less
+   host path reuses branch_endpoint and caches the endpoint, so the branch is
+   listed once. A shared _api() helper serves the lookup and the credential mint.
+3. tests/units/auth/test_lakebase_auth_project_resolution.py (new)
+   Resolution order, tolerant walk, transient errors not skipped, failure
+   back-off, app without a postgres resource, PGHOST-less host.
+4. tests/units/core/test_lakebase_project_service.py
+   branch_endpoint matching and error handling; unit marker.
+5. tests/units/auth/test_lakebase_auth.py
+   Fixture also clears DATABRICKS_APP_NAME.
+
+Modified files:
+- src/back/core/databricks/lakebase/LakebaseProjectService.py
+- src/back/core/databricks/lakebase/LakebaseAuth.py
+- tests/units/auth/test_lakebase_auth_project_resolution.py
+- tests/units/core/test_lakebase_project_service.py
+- tests/units/auth/test_lakebase_auth.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes --deselect tests/units/core/test_health.py::TestRunReadinessChecks → 11317 passed, 335 skipped, 13 deselected in 84.5s.
+The deselected health/readiness tests make live network calls that hang in this sandbox; CI runs them as usual.
+
+## Marketplace: bind Lakebase at install again
+
+Context: On 2026-11-12 Lakebase was dropped from manifest.yaml because the
+SDK's AppManifestAppResourceSpec (0.82) has no postgres spec. That was wrong:
+the Apps manifest accepts `postgres_spec`, and Ontos, Lakemeter and the
+app-templates ship it (PLAN.md Q1). Lakebase is an install-time resource
+again; the installer creates a Lakebase project first and picks it in the
+install dialog.
+
+Changes:
+
+1. marketplace/manifest.yaml
+   Declares the `postgres` resource (postgres_spec, CAN_CONNECT_AND_CREATE).
+2. marketplace/app.yaml
+   Header comment: Lakebase is bound at install.
+3. marketplace/LISTING.md
+   "Before installing" (create a Lakebase project), Lakebase in the
+   install-time table, three post-install steps.
+4. scripts/marketplace/emulate_install.py
+   --lakebase-branch is required; validate_branch runs before any CLI call;
+   a failing CLI call prints its stderr instead of a traceback.
+5. tests/units/scripts/test_marketplace_package.py
+   AUTO_INJECTED_RESOURCES = {"postgres"}; replaces the SDK-model test with
+   test_manifest_binds_lakebase_at_install.
+6. tests/units/scripts/test_marketplace_emulate_install.py
+   Resource names match the manifest with Lakebase; a missing branch is rejected.
+7. marketplace/README.md, .planning/marketplace-listing/PLAN.md
+   Q1 correction; 2026-11-24 dogfood results.
+
+Modified files:
+- marketplace/manifest.yaml
+- marketplace/app.yaml
+- marketplace/LISTING.md
+- marketplace/README.md
+- scripts/marketplace/emulate_install.py
+- tests/units/scripts/test_marketplace_package.py
+- tests/units/scripts/test_marketplace_emulate_install.py
+- .planning/marketplace-listing/PLAN.md
+
+Tests: same full run as above (11317 passed). Live check in E2 dogfood
+(ontobricks-mp-test-011, fresh Lakebase project ontobricks-mp-test-011):
+- installed with the warehouse and Lakebase bound at install; app RUNNING
+- the Lakebase project resolved from the app's own postgres resource in ~2 s,
+  before the service principal had Can Manage on the app
+- Initialize succeeded once the registry schema existed and the service
+  principal had UC privileges on it; readiness 0 errors
+- after a plain redeploy (app.yaml only), readiness 0 errors and registry.cfg
+  read the catalog/schema back from Lakebase
+
+## Marketplace: sync the package with the latest 0.10.0
+
+Context: Rebasing on the latest 0.10.0 changed the app.yaml.template env and
+the ontology assistant route, so the Marketplace app.yaml and one guard test
+had to follow.
+
+Changes:
+
+1. marketplace/app.yaml
+   Drops ONTOBRICKS_ANALYTICS_MAX_TRIPLES and adds ONTOBRICKS_COMMUNITY_JOB_NAME
+   and ONTOBRICKS_PATTERN_JOB_NAME (empty: the jobs are not part of a
+   Marketplace install), matching the template.
+2. tests/units/api/test_assistant_invoke_credentials.py
+   The route now drops caller custom_inputs.host/token and passes the server
+   credentials to the agent constructor; the tests assert both, in Apps and
+   local mode.
+
+Modified files:
+- marketplace/app.yaml
+- tests/units/api/test_assistant_invoke_credentials.py
+
+Tests: same full run as above (11317 passed).
+
+## First-run registry setup for Marketplace installs
+
+Context: A Marketplace install has no deploy step and no REGISTRY_CATALOG /
+REGISTRY_SCHEMA, so Initialize could not run (PLAN.md Q7). Its service
+principal also lacked Can Manage on its own app, which locked every user out
+(Q4). The first admin can now open Settings → Registry → Set up the registry
+and pick a catalog and schema. Acting as that admin (user scopes `sql` and
+`apps`), the app gives its service principal Can Manage on the app, creates
+the schema, and grants the service principal its UC privileges. It then runs
+Initialize, which stores the location in Lakebase. The `apps` scope also lets
+an admin in before any grant. Verified end to end in E2 dogfood on
+ontobricks-mp-test-013. A fresh-context review found no security issue; its
+findings on retry, race and error classification are fixed.
+
+Changes:
+
+1. src/back/objects/registry/RegistrySetupService.py (new)
+   The admin-side steps: app Can Manage grant (a warning on failure), then
+   CREATE SCHEMA and least-privilege GRANTs over the Statement Execution API.
+   It uses the caller's token with auth_type="pat", because the app's own
+   client id/secret are also in the env. Not-found names become
+   ValidationError, missing privileges become AuthorizationError, and a
+   statement that times out is cancelled.
+2. src/back/objects/registry/__init__.py
+   Re-exports RegistrySetupService.
+3. src/back/objects/domain/settings/RegistrySettings.py
+   setup_registry_result prepares the schema and pins the location on the
+   session, then runs Initialize. It refuses to move an existing registry,
+   checks again on a fresh read after preparing, and unpins if Initialize
+   fails. initialize_registry_result falls back to the saved Lakebase row when
+   neither env nor session pins a location, which fixes "Apply upgrades"
+   returning 400 after a redeploy.
+4. src/api/routers/internal/settings.py
+   POST /settings/registry/setup is admin-only and passes the forwarded user
+   token. A malformed body returns 400.
+5. src/front/templates/partials/registry/_registry_configuration.html
+   "Set up the registry" form (catalog, schema), hidden until registry.js
+   shows it.
+6. src/front/static/registry/js/registry.js
+   Shows the form only while no location is set, hides the env-var hint in
+   that state, updates the not-configured message, and exposes
+   window.reloadRegistryConfig.
+7. src/front/static/config/js/settings-registry-configuration.js
+   Form submit handler, with native validation, showNotification, and the
+   results shown in the existing grants panel.
+8. marketplace/manifest.yaml, marketplace/app.yaml
+   Add the `apps` user scope (Marketplace only; the DAB deploy grants Can
+   Manage in app-permissions.sh).
+9. marketplace/LISTING.md, marketplace/README.md, docs/deployment.md,
+   .planning/marketplace-listing/PLAN.md
+   LISTING is down to two post-install steps; the docs gain a "Installing from
+   Databricks Marketplace" section; the README and PLAN record the
+   2026-11-24 (013) results.
+10. tests/units/registry/test_registry_setup.py (new),
+    tests/units/front/test_settings_registry_setup_form.py (new),
+    tests/units/scripts/test_marketplace_package.py
+    Cover the service, setup orchestration (guard, race, unpin), route
+    (admin-only, bad body), the Initialize fallback, the form contract, and
+    MARKETPLACE_ONLY_SCOPES.
+
+Modified files:
+- src/back/objects/registry/RegistrySetupService.py
+- src/back/objects/registry/__init__.py
+- src/back/objects/domain/settings/RegistrySettings.py
+- src/api/routers/internal/settings.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/static/registry/js/registry.js
+- src/front/static/config/js/settings-registry-configuration.js
+- marketplace/manifest.yaml
+- marketplace/app.yaml
+- marketplace/LISTING.md
+- marketplace/README.md
+- docs/deployment.md
+- .planning/marketplace-listing/PLAN.md
+- tests/units/registry/test_registry_setup.py
+- tests/units/front/test_settings_registry_setup_form.py
+- tests/units/scripts/test_marketplace_package.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes --deselect tests/units/core/test_health.py::TestRunReadinessChecks → 11343 passed, 335 skipped, 13 deselected in 89.8s.
+Browser: the local run of Settings → Registry was checked at 1440 and 390 px
+wide (no overflow, labelled fields, focus ring, an empty submit blocked, no
+console errors).
+Live (ontobricks-mp-test-013, user scopes sql + apps):
+- an admin got in without any self-grant
+- setup granted Can Manage, created dermot_smyth.ontobricks_mp_test_013,
+  granted the UC privileges, and initialized; readiness 0 errors
+- after a plain redeploy: readiness 0 errors, Apply upgrades 200, a second
+  setup 409, bad JSON 400

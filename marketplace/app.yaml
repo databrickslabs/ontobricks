@@ -4,8 +4,8 @@
 # deploy path uses ../app.yaml.template instead; the two are kept in sync
 # by tests/units/scripts/test_marketplace_package.py.
 #
-# Resources are declared in ./manifest.yaml and bound by the installer. The
-# Lakebase database is bound after install, and the Apps platform then injects
+# Resources are declared in ./manifest.yaml and bound by the installer. For
+# the Lakebase `postgres` resource the Apps platform injects
 # PGHOST/PGPORT/PGDATABASE/PGUSER (no valueFrom needed).
 
 command:
@@ -29,8 +29,6 @@ env:
     value: "databricks"
   - name: ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS
     value: "8192"
-  - name: ONTOBRICKS_ANALYTICS_MAX_TRIPLES
-    value: "500000"
   - name: ONTOBRICKS_ANALYTICS_TOP_N
     value: "100"
   # The graph-analytics job is bundle-deployed and not part of a Marketplace
@@ -39,12 +37,18 @@ env:
     value: "false"
   - name: ONTOBRICKS_ANALYTICS_JOB_NAME
     value: ""
+  - name: ONTOBRICKS_COMMUNITY_JOB_NAME
+    value: ""
+  - name: ONTOBRICKS_PATTERN_JOB_NAME
+    value: ""
   - name: ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS
     value: "20"
   - name: ONTOBRICKS_ANALYTICS_JOB_PIVOTS
     value: "64"
 
+# Mirrors manifest.yaml user_api_scopes (Marketplace installs read the manifest).
 authorization:
   user:
     scopes:
       - sql
+      - apps

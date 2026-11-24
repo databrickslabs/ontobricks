@@ -2,6 +2,7 @@
 
 from back.objects.registry.RegistryCfg import RegistryCfg
 from back.objects.registry.RegistryService import RegistryService
+from back.objects.registry.RegistrySetupService import RegistrySetupService
 from back.objects.registry.PermissionService import (
     PermissionService,
     permission_service,
@@ -28,6 +29,7 @@ from back.objects.registry.obx_format import CURRENT_OBX_FORMAT_VERSION
 __all__ = [
     "RegistryCfg",
     "RegistryService",
+    "RegistrySetupService",
     "ReviewService",
     "CommentService",
     "PermissionService",

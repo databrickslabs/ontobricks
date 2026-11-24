@@ -274,6 +274,55 @@
     // Expose so registry.js can surface the post-Initialize ``permissions``.
     window._obRenderRegistryGrants = _renderGrantResult;
 
+    // ── First-run setup (no registry location yet, e.g. Marketplace) ──
+    // POST /settings/registry/setup creates the schema and grants the app's
+    // service principal as the signed-in admin, then runs Initialize.
+    document.getElementById('registrySetupForm')?.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        var form = this;
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        var btn = document.getElementById('btnRegistrySetup');
+        var label = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Setting up…';
+        try {
+            var resp = await fetch('/settings/registry/setup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    catalog: form.elements.catalog.value.trim(),
+                    schema: form.elements.schema.value.trim()
+                })
+            });
+            var data = await resp.json();
+            if (!resp.ok || data.success === false) {
+                showNotification('Registry setup failed: ' + (data.message || data.error || ('HTTP ' + resp.status)), 'error');
+                return;
+            }
+            var setup = data.setup || {};
+            _renderGrantResult({
+                granted: (setup.granted || []).concat((data.permissions || {}).granted || []),
+                warnings: (setup.warnings || []).concat((data.permissions || {}).warnings || [])
+            });
+            showNotification(
+                (setup.warnings || []).length
+                    ? 'Registry set up, with warnings — review Permission Grants below.'
+                    : 'Registry set up and initialized.',
+                (setup.warnings || []).length ? 'warning' : 'success'
+            );
+            if (typeof window.reloadRegistryConfig === 'function') window.reloadRegistryConfig();
+        } catch (e) {
+            showNotification('Registry setup failed: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = label;
+        }
+    });
+
     document.getElementById('btnRepairRegistryPerms')?.addEventListener('click', async function () {
         var btn = this;
         btn.disabled = true;

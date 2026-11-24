@@ -10,16 +10,18 @@ Turn your Unity Catalog tables into a governed knowledge graph. OntoBricks lets 
 - Ontology assistant powered by Databricks Foundation Model APIs
 - Runs as the app service principal; access governed by Databricks Apps permissions
 
+## Before installing
+Create a **Lakebase Autoscaling project** (Compute → Lakebase → Create project) if you don't have one to dedicate to OntoBricks. The install dialog asks you to pick a branch and database from it.
+
 ## What you need at install time
 | Resource | Used for |
 |---|---|
 | SQL Warehouse (`CAN_USE`) | Queries and metadata |
+| Lakebase database (`Can connect and create`) | The OntoBricks registry (domains, versions, settings) |
 
 ## After installing
-1. **Bind a Lakebase database.** Compute → Apps → *your app* → Edit → Resources → add a **Database** resource named `postgres` (a Lakebase Autoscaling branch and database, permission *Can connect and create*), then redeploy. OntoBricks keeps its registry there.
-2. **Give the app's service principal Can Manage on the app itself.** Apps → *your app* → Permissions → add the app's service principal (shown on the app's Overview) → Can Manage. OntoBricks reads its own permission list to decide who is an admin; until this is done every user, including you, sees an access-denied page.
-3. Open the app and go to **Settings → Registry → Initialize**.
-4. Grant colleagues `CAN_USE` on the app (Apps → Permissions). Users with `CAN_MANAGE` are OntoBricks admins.
+1. Open the app as the installer and go to **Settings → Registry → Set up the registry**. Pick a Unity Catalog catalog and a schema name (default `ontobricks`). Using your permissions, OntoBricks creates the schema, gives its service principal access to it and **Can Manage** on the app, and initializes the registry. You need `USE CATALOG` and `CREATE SCHEMA` on that catalog, or must own it.
+2. Grant colleagues `CAN_USE` on the app (Apps → Permissions). Users with `CAN_MANAGE` are OntoBricks admins.
 
 ## Learn more
 - Source and docs: https://github.com/databrickslabs/ontobricks

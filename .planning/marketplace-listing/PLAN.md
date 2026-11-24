@@ -36,15 +36,27 @@
 | Q6 | Agree the **`/app` layout milestone** (end of this plan) as the release after the first listing, including dropping the generated `app.yaml` for `make deploy` too? | Benoit | `/app` milestone |
 | **Q7 (blocker, 0.10.x)** | Since `8fad03ff` (0.10.0) the registry catalog/schema come only from `REGISTRY_CATALOG`/`REGISTRY_SCHEMA`, which are deploy-time values. A fixed Marketplace `app.yaml` can't carry them: Apps binds only CONNECTION/FUNCTION/TABLE/VOLUME securables, and Settings has no input for them. `RegistryCfg.is_configured` requires them before Initialize. Options: (a) a Settings input persisted in the Lakebase registry row (fits Task 7's first-run screen); (b) bind a Volume again, only to carry the location. | Benoit + Dermot | Initialize on a Marketplace install |
 
+**Status (2026-11-24, later):** Q4 and Q7 have in-app fixes on this branch, verified on `ontobricks-mp-test-013`.
+- Q4: the Marketplace manifest adds the `apps` user scope, so the admin gets in before any grant.
+- Q7: **Settings → Registry → Set up the registry** runs the schema DDL and grants as the admin (`sql` scope), grants the service principal Can Manage (`apps` scope), then runs Initialize.
+- `LISTING.md` is down to two steps after install.
+- The `apps` scope needs a security note on FEIP-2484: it lets the app call the Apps API as the signed-in user.
+- Task 7's create-a-Lakebase-project screen is no longer needed, because Q1 = yes.
+
+**Status on 0.10.0 (2026-11-24):** Lakebase is back in the manifest, and the project-lookup fix is on this branch. Live re-test on `ontobricks-mp-test-011`:
+- Lakebase is bound at install, and the project resolves from the app's own `postgres` resource.
+- The registry location survives a plain redeploy.
+- Q7 additionally needs the installer to create the schema and grant the service principal UC privileges on it (`marketplace/README.md` › Results 2026-11-24). Task 7's setup screen should run that DDL as the admin (OBO `sql` scope).
+
 **Status on 0.10.0 (2026-11-12, branch `gvocode/marketplace-listing-0.10.0`):**
-- **Q1, strong evidence for "no".** The SDK's `AppManifestAppResourceSpec` (0.82, pinned by 0.10.0) has experiment/job/secret/serving-endpoint/sql-warehouse/uc-securable specs only. Lakebase is now post-install step 1 in `LISTING.md`, and Task 7 is the real fix.
+- **Q1 answered "yes" (corrected 2026-11-24).** The 2026-11-12 "no" was based on the SDK's `AppManifestAppResourceSpec` (0.82), which lacks a postgres spec. The model is just behind: Ontos, Lakemeter and the app-templates ship `postgres_spec` (`permission: CAN_CONNECT_AND_CREATE`). Lakebase is an install-time resource again. Q1(b) stands: the installer picks an existing project, so LISTING.md asks them to create one first. Task 7 becomes the nice-to-have that removes that step.
 - **Q7 opened** (registry catalog/schema), see the table.
 - **Startup bug found:** `httpx` was imported at runtime but was a dev-only dependency. The fix is on this branch.
 - **Already in 0.10.0 upstream:** the PAT write in Settings save is gone, and the assistant route always overwrites caller credentials. Only the session-host rejection and `/api/v1` needed porting.
 - **Live test in E2 dogfood (`ontobricks-mp-test-010`, see `marketplace/README.md` › Results):**
   - Q4 reproduces.
   - Q7 is confirmed, and it's the only thing blocking Initialize: with catalog/schema supplied, Initialize succeeds (it also creates a UC Volume, `OntoBricksRegistry`).
-- **Found:** `LakebaseAuth.instance_name` walks every Lakebase project to match `PGHOST` and aborts on the first one it can't read. So without `LAKEBASE_PROJECT` (always the case on Marketplace), the registry row is never read back in a large workspace. Q7's fix must not depend on it.
+- **Found:** `LakebaseAuth.instance_name` walks every Lakebase project to match `PGHOST` and aborts on the first one it can't read. So without `LAKEBASE_PROJECT` (always the case on Marketplace), the registry row is never read back in a large workspace. Q7's fix must not depend on it. **Fix (2026-11-24):** resolve the endpoint from `LAKEBASE_PROJECT`/`LAKEBASE_BRANCH`, then from the app's own `postgres` resource (`DATABRICKS_APP_NAME`), and only then a full walk that skips unreadable projects.
 
 **Status after the E2 dogfood test install (2026-11-03, `ontobricks-mp-test`, 0.7 base, see `marketplace/README.md` › Results):**
 - **Q3 answered.** Effective user scopes default to both `iam.*` scopes with none declared, so the manifest can omit `user_api_scopes`.

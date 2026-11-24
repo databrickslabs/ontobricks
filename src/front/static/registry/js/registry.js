@@ -181,7 +181,9 @@ document.addEventListener('DOMContentLoaded', function () {
             updateRegistryStatus(registryCfg);
 
             const regHelp = document.getElementById('registryHelp');
-            if (regHelp) {
+            if (regHelp && !(registryCfg.catalog && registryCfg.schema)) {
+                regHelp.innerHTML = '';  // the setup form explains how to set it
+            } else if (regHelp) {
                 regHelp.innerHTML = registryLocked
                     ? '<i class="bi bi-lock-fill text-muted me-1"></i> Configured via Databricks App resource binding (read-only)'
                     : '<i class="bi bi-gear text-muted me-1"></i> Configured via environment variables (<code>.env</code>) — restart the app to change';
@@ -280,6 +282,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const initBtn     = document.getElementById('btnInitRegistry');
         // These elements only exist on the Settings → Registry tab.
         if (!schemaLabel) return;
+        // First-run setup form: only while no location is set at all.
+        document.getElementById('registrySetupForm')?.classList.toggle(
+            'd-none', !!(registryCfg.catalog && registryCfg.schema)
+        );
 
         if (registryCfg.catalog && registryCfg.schema) {
             const lb = registryCfg.lakebase || {};
@@ -336,10 +342,9 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             setStatus(
                 '<p class="small text-danger mb-0">' +
-                '<i class="bi bi-x-circle-fill me-1"></i>Registry is not operational — not configured. ' +
-                'Set <code>REGISTRY_CATALOG</code> / <code>REGISTRY_SCHEMA</code> / <code>LAKEBASE_SCHEMA</code> in <code>.env</code> ' +
-                '(local development) or bind the Volume and Lakebase resources in <code>app.yaml</code> ' +
-                '(Databricks Apps deployment), then restart the app.</p>'
+                '<i class="bi bi-x-circle-fill me-1"></i>Registry is not operational — no location set. ' +
+                'Use <strong>Set up the registry</strong> above, or set <code>REGISTRY_CATALOG</code> / ' +
+                '<code>REGISTRY_SCHEMA</code> (<code>.env</code> locally, <code>app.yaml</code> on deploy) and restart the app.</p>'
             );
             const section = document.getElementById('registryDomainsSection');
             if (section) section.style.display = 'none';
@@ -406,6 +411,8 @@ document.addEventListener('DOMContentLoaded', function () {
         return domainsLoadPromise;
     }
     window.loadRegistryDomains = loadRegistryDomains;
+    // Re-read /settings/registry after the first-run setup (settings-registry-configuration.js).
+    window.reloadRegistryConfig = loadRegistryConfig;
 
     async function _loadRegistryDomains() {
         const section = document.getElementById('registryDomainsSection');

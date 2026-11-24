@@ -20,10 +20,8 @@ MARKETPLACE = REPO_ROOT / "marketplace"
 TEMPLATE = REPO_ROOT / "app.yaml.template"
 
 #: Manifest resources whose env vars the Apps platform injects, so they have no
-#: ``valueFrom`` in app.yaml. Empty since 0.10.0: the manifest can't declare a
-#: Lakebase ``postgres`` resource (no such spec in the SDK's AppManifest model),
-#: so Lakebase is bound after install instead (PLAN.md Q1).
-AUTO_INJECTED_RESOURCES: set[str] = set()
+#: ``valueFrom`` in app.yaml: Lakebase injects PGHOST/PGPORT/PGDATABASE/PGUSER.
+AUTO_INJECTED_RESOURCES = {"postgres"}
 
 #: Template env vars intentionally NOT shipped to Marketplace installs.
 #: Adding a var here is a deliberate decision — review it.
@@ -41,6 +39,11 @@ DEPLOY_ONLY_ENV = {
     "LAKEBASE_BRANCH",
     "ONTOBRICKS_SYNC_UC_CATALOG",  # optional, managed-synced only
 }
+
+
+#: User scopes only Marketplace installs need: they can't run the
+#: app-permissions.sh grant, so the first-run setup does it as the admin (Q4).
+MARKETPLACE_ONLY_SCOPES = {"apps"}
 
 
 def _load(path: Path) -> dict:
@@ -98,24 +101,22 @@ def test_literal_values_agree_with_template():
             assert entry.get("value") == tmpl["value"], name
 
 
-def test_user_authorization_matches_template():
-    """The ``sql`` user scope (admin group checks, MCP OBO) must ship too."""
-    assert _load(MARKETPLACE / "app.yaml").get("authorization") == _load(TEMPLATE).get("authorization")
+def _scopes(app_yaml: dict) -> set:
+    return set(app_yaml["authorization"]["user"]["scopes"])
 
 
-def test_manifest_user_scopes_match_template():
+def test_manifest_user_scopes_are_the_template_scopes_plus_marketplace_only():
     """Marketplace installs take user scopes from the manifest, not app.yaml."""
-    template_scopes = _load(TEMPLATE)["authorization"]["user"]["scopes"]
-    assert _load(MARKETPLACE / "manifest.yaml").get("user_api_scopes") == template_scopes
+    manifest_scopes = set(_load(MARKETPLACE / "manifest.yaml")["user_api_scopes"])
+    assert manifest_scopes == _scopes(_load(TEMPLATE)) | MARKETPLACE_ONLY_SCOPES
 
 
-def test_manifest_has_no_resource_type_the_sdk_cannot_express():
-    """Only resource specs the SDK's AppManifest model knows about."""
-    import dataclasses
+def test_app_yaml_scopes_mirror_the_manifest():
+    manifest_scopes = set(_load(MARKETPLACE / "manifest.yaml")["user_api_scopes"])
+    assert _scopes(_load(MARKETPLACE / "app.yaml")) == manifest_scopes
 
-    from databricks.sdk.service import apps
 
-    allowed = {f.name for f in dataclasses.fields(apps.AppManifestAppResourceSpec)} - {"name", "description"}
-    for spec in _load(MARKETPLACE / "manifest.yaml")["resource_specs"]:
-        kinds = set(spec) - {"name", "description"}
-        assert kinds <= allowed, f"{spec['name']}: {kinds - allowed} not in AppManifest"
+def test_manifest_binds_lakebase_at_install():
+    """The registry is Lakebase-only in 0.10.x, so the install must bind it."""
+    specs = {r["name"]: r for r in _load(MARKETPLACE / "manifest.yaml")["resource_specs"]}
+    assert specs["postgres"]["postgres_spec"] == {"permission": "CAN_CONNECT_AND_CREATE"}

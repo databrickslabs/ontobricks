@@ -1,9 +1,9 @@
 """POST /ontology/assistant/invoke must not forward caller credentials in Apps mode.
 
-Marketplace SOP (Phase 1): the app MUST NOT ask for or store user PATs. Since
-0.10.0 the route always overwrites ``custom_inputs.host/token`` with the
-server-resolved credentials (``require_domain_llm``), in every mode; these
-tests guard that behaviour.
+Marketplace SOP (Phase 1): the app MUST NOT ask for or store user PATs. The 0.10.0
+route drops caller ``custom_inputs.host/token`` and hands the server-resolved
+credentials (``require_domain_llm``) to the agent constructor, in every mode;
+these tests guard that behaviour.
 """
 
 import importlib
@@ -20,7 +20,8 @@ _route_module = importlib.import_module("api.routers.internal.ontology")
 _agent_module = importlib.import_module("agents.agent_ontology_assistant")
 
 
-def _forwarded_custom_inputs(app_mode: bool) -> dict:
+def _invoke(app_mode: bool):
+    """Return (custom_inputs sent to the agent request, agent constructor kwargs)."""
     domain = MagicMock()
     domain.info = {"llm_endpoint": "ep"}
     domain.ontology = {}
@@ -49,16 +50,16 @@ def _forwarded_custom_inputs(app_mode: bool) -> dict:
             },
         )
     assert resp.status_code == 200, resp.text
-    return request_cls.call_args.kwargs["custom_inputs"]
+    return request_cls.call_args.kwargs["custom_inputs"], agent_cls.call_args.kwargs
 
 
-def test_caller_token_is_replaced_by_server_token_in_app_mode():
-    assert _forwarded_custom_inputs(app_mode=True)["token"] == "server-token"
+@pytest.mark.parametrize("app_mode", [True, False])
+def test_caller_credentials_are_not_forwarded(app_mode):
+    custom_inputs, _ = _invoke(app_mode)
+    assert "token" not in custom_inputs and "host" not in custom_inputs
 
 
-def test_caller_host_is_replaced_by_server_host_in_app_mode():
-    assert _forwarded_custom_inputs(app_mode=True)["host"] == "https://server.example"
-
-
-def test_caller_token_is_replaced_in_local_mode_too():
-    assert _forwarded_custom_inputs(app_mode=False)["token"] == "server-token"
+@pytest.mark.parametrize("app_mode", [True, False])
+def test_agent_runs_with_server_credentials(app_mode):
+    _, agent_kwargs = _invoke(app_mode)
+    assert agent_kwargs == {"host": "https://server.example", "token": "server-token"}
