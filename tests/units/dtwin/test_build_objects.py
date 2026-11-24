@@ -86,7 +86,7 @@ def _delta_probe(raw, key="sales_1"):
     return probe
 
 
-def test_delta_keeps_only_the_current_version_and_its_analytics():
+def test_delta_lists_the_version_and_its_analytics_under_unity_catalog():
     probe = _delta_probe([])
     analytics = (
         "main.reg",
@@ -109,21 +109,20 @@ def test_delta_keeps_only_the_current_version_and_its_analytics():
         out = BuildObjects.list_for_domain(
             _domain("databricks"), MagicMock(), MagicMock()
         )
-    store, metrics = out["groups"]
+    (store,) = out["groups"]
     assert out["backend"] == "databricks"
-    assert [i["name"] for i in store["items"]] == [
-        "triplestore_sales_V1",
-        "triplestore_sales_V1_data",
+    assert (store["key"], store["title"]) == ("unity_catalog", "Unity Catalog")
+    assert [(i["kind"], i["name"]) for i in store["items"]] == [
+        ("view", "triplestore_sales_V1"),
+        ("table", "triplestore_sales_V1_data"),
+        ("metrics", "graph_metrics_sales_1"),
+        ("work", "graph_metrics_sales_1_work_x"),
     ]
     assert store["items"][0]["drop"] == {
         "api": "uc",
         "full_name": "main.reg.triplestore_sales_V1",
         "is_sync": False,
     }
-    assert [(i["kind"], i["name"]) for i in metrics["items"]] == [
-        ("metrics", "graph_metrics_sales_1"),
-        ("work", "graph_metrics_sales_1_work_x"),
-    ]
 
 
 def test_delta_listing_failure_is_an_error_group_not_a_failed_tab():
@@ -141,7 +140,7 @@ def test_delta_listing_failure_is_an_error_group_not_a_failed_tab():
     assert "uc down" in out["groups"][0]["error"]
 
 
-def test_empty_analytics_group_is_omitted_but_a_scan_error_is_kept():
+def test_analytics_scan_error_is_reported_on_the_unity_catalog_group():
     probe = _delta_probe([])
     with patch(_FACTORY) as factory, patch(
         f"{_SETTINGS}._analytics_objects",
@@ -152,8 +151,8 @@ def test_empty_analytics_group_is_omitted_but_a_scan_error_is_kept():
         out = BuildObjects.list_for_domain(
             _domain("databricks"), MagicMock(), MagicMock()
         )
-    assert [g["key"] for g in out["groups"]] == ["triplestore", "analytics"]
-    assert "Could not list" in out["groups"][1]["error"]
+    assert [g["key"] for g in out["groups"]] == ["unity_catalog"]
+    assert "Could not list" in out["groups"][0]["error"]
 
     with patch(_FACTORY) as factory, patch(
         f"{_SETTINGS}._analytics_objects", return_value=("main.reg", [], "")
@@ -163,7 +162,8 @@ def test_empty_analytics_group_is_omitted_but_a_scan_error_is_kept():
         out = BuildObjects.list_for_domain(
             _domain("databricks"), MagicMock(), MagicMock()
         )
-    assert [g["key"] for g in out["groups"]] == ["triplestore"]
+    assert [g["key"] for g in out["groups"]] == ["unity_catalog"]
+    assert out["groups"][0]["error"] == ""
 
 
 # --- Lakebase --------------------------------------------------------------
@@ -229,6 +229,29 @@ def test_lakebase_scopes_postgres_and_uc_objects_to_the_version():
     ]
     assert unity["items"][0]["state"] == "ONLINE"
     assert unity["location"] == "main.graph"
+
+
+def test_lakebase_analytics_join_the_unity_catalog_group():
+    uc = {"uc_catalog": "main", "uc_schema": "graph", "uc_tables": []}
+    analytics = (
+        "main.reg",
+        [{"key": "sales_1", "items": [
+            {"name": "graph_metrics_sales_1", "full_name": "main.reg.graph_metrics_sales_1"}
+        ]}],
+        "",
+    )
+    with patch(_FACTORY) as factory, patch(
+        f"{_SETTINGS}.graph_engine_lakebase_objects_result", return_value={}
+    ), patch(
+        f"{_SETTINGS}.graph_engine_lakebase_sync_objects_result", return_value=uc
+    ), patch(f"{_SETTINGS}._analytics_objects", return_value=analytics):
+        factory._resolve_graph_backend.return_value = "lakebase"
+        factory.get_health_probe.return_value = _delta_probe([])
+        out = BuildObjects.list_for_domain(_domain("lakebase"), MagicMock(), MagicMock())
+    assert [g["key"] for g in out["groups"]] == ["postgres", "unity_catalog"]
+    unity = out["groups"][1]
+    assert [i["name"] for i in unity["items"]] == ["graph_metrics_sales_1"]
+    assert unity["location"] == "main.graph, main.reg"
 
 
 # --- Neo4j -----------------------------------------------------------------

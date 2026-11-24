@@ -10,7 +10,7 @@ Settings drop endpoint expects), so the page can delete it without knowing
 whether it is a Postgres table, a Unity Catalog object or a Neo4j graph.
 Items inside a group, and groups themselves, are ordered so that dropping them
 top to bottom is safe (views before tables, sync registrations before their
-source, analytics last).
+source, analytics last inside the Unity Catalog group).
 """
 
 from __future__ import annotations
@@ -111,7 +111,7 @@ class BuildObjects:
             raw = probe.fetch_schema_tables(catalog, schema)
         except Exception as exc:  # noqa: BLE001
             logger.warning("build objects: UC listing failed: %s", exc)
-            return [cls._group("triplestore", "Triple store", location, [], error=str(exc))]
+            return [cls._group("unity_catalog", "Unity Catalog", location, [], error=str(exc))]
 
         grouped = probe.group_triplestore_objects(raw, catalog, schema)
         items = [
@@ -120,26 +120,29 @@ class BuildObjects:
             if probe.domain_match_key(g["base"]) == key
             for i in g["sorted_items"]
         ]
-        return [
-            cls._group("triplestore", "Triple store", location, items)
-        ] + cls._analytics_groups(settings, catalog, schema, key, raw)
+        group = cls._group("unity_catalog", "Unity Catalog", location, items)
+        return [cls._with_analytics(group, settings, catalog, schema, key, raw)]
 
     @classmethod
-    def _analytics_groups(
+    def _with_analytics(
         cls,
+        group: Dict[str, Any],
         settings,
         catalog: str,
         schema: str,
         key: str,
         raw: Optional[List[Dict[str, Any]]] = None,
-    ) -> List[Dict[str, Any]]:
-        """Analytics job output of this version (any backend), best-effort.
+    ) -> Dict[str, Any]:
+        """Append this version's analytics job output to the Unity Catalog *group*.
 
-        Empty unless the version has analytics tables or the scan failed.
+        Analytics tables are UC tables, so they belong to that source rather
+        than to a group of their own. Appended last: they depend on nothing
+        else, so dropping top to bottom stays safe. Best-effort: a failed scan
+        only adds its reason to the group error.
         """
         from back.objects.domain.settings.SettingsService import SettingsService
 
-        def analytics() -> List[Dict[str, Any]]:
+        try:
             tables = raw
             if tables is None:
                 tables = GraphDBFactory.get_health_probe(
@@ -148,15 +151,18 @@ class BuildObjects:
             location, found, message = SettingsService._analytics_objects(
                 settings, catalog, schema, tables
             )
-            items = [
-                cls._analytics_item(i)
-                for g in found
-                if g["key"] == key
-                for i in g["items"]
-            ]
-            return [cls._group("analytics", "Analytics", location, items, error=message)]
+        except Exception as exc:  # noqa: BLE001 - never fail the whole tab
+            logger.warning("build objects: analytics scan failed: %s", exc)
+            location, found, message = "", [], str(exc)
 
-        return [g for g in cls._guarded(analytics) if g["items"] or g["error"]]
+        items = [cls._analytics_item(i) for g in found if g["key"] == key for i in g["items"]]
+        merged = cls._group(
+            group["key"], group["title"], group["location"], group["items"] + items,
+            error="; ".join(e for e in (group["error"], message) if e),
+        )
+        if items and location and location != group["location"]:
+            merged["location"] = ", ".join(p for p in (group["location"], location) if p)
+        return merged
 
     # ------------------------------------------------------------------
     # Lakebase
@@ -207,14 +213,14 @@ class BuildObjects:
                 )
             ]
 
-        groups = cls._guarded(postgres) + cls._guarded(unity_catalog)
         catalog, schema = cls._registry_location(domain)
         key = cls._graph_key(graph_name)
-        return groups + (
-            cls._analytics_groups(settings, catalog, schema, key)
-            if catalog and schema and key
-            else []
-        )
+        uc_groups = cls._guarded(unity_catalog)
+        if catalog and schema and key:
+            uc_groups = [
+                cls._with_analytics(g, settings, catalog, schema, key) for g in uc_groups
+            ]
+        return cls._guarded(postgres) + uc_groups
 
     # ------------------------------------------------------------------
     # Neo4j
