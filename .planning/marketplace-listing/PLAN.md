@@ -42,6 +42,7 @@
 - `LISTING.md` is down to two steps after install.
 - The `apps` scope needs a security note on FEIP-2484: it lets the app call the Apps API as the signed-in user.
 - Task 7's create-a-Lakebase-project screen is no longer needed, because Q1 = yes.
+- Check 3 (non-admin user) passed: Benoit, with `CAN_USE` only, opened 013 as `app_user`. Task 6 Step 1 (running demo in dogfood) is complete.
 
 **Status on 0.10.0 (2026-11-24):** Lakebase is back in the manifest, and the project-lookup fix is on this branch. Live re-test on `ontobricks-mp-test-011`:
 - Lakebase is bound at install, and the project resolves from the app's own `postgres` resource.
