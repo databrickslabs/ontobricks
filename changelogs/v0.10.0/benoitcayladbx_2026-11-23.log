@@ -1,0 +1,416 @@
+================================================================================
+Context load: stop the Genie Pages Domains lookup from freezing the server
+================================================================================
+
+Context:
+Opening a Context kept the loading overlay up for ~18-20 s. The load itself
+(POST /domain/load-from-uc) takes ~2 s; the overlay waits for /navbar/state
+on the next page. Logs showed /navbar/state, /domain/documents/list,
+/domain/pages/list, /domain/version-status and /settings/registry all
+finishing at the same millisecond after ~18.3 s: the event loop was blocked.
+Root cause: PagesManager.init() ran on every /domain/ page load and called
+GET /domain/pages/list?include_domains=true. KnowledgePageService.list_domains()
+pages through the Databricks Domains API (999 domains = ~10 sequential calls,
+measured 15.4 s vs 1.1 s without include_domains) with synchronous `requests`
+inside an async route, stalling every concurrent request.
+
+Changes:
+1. src/front/static/domain/js/domain-pages.js
+   - Pages hydrate lazily: init() only binds events; the new activate()
+     (Domains labels, then saved selection) runs on the first
+     `sidebarSectionChanged` to "pages", or immediately when the page opens
+     on ?section=pages / with the Pages section active.
+   - ensureDomains() deduplicates concurrent callers through one in-flight
+     promise (_domainsPromise); the fetch moved to _fetchDomains().
+2. src/back/core/databricks/KnowledgePageService.py
+   - list_domains() memoises results per (host, identity fingerprint) for
+     10 minutes (_DOMAINS_CACHE_TTL_S). The fingerprint is a truncated
+     SHA-256 of the Authorization header (the token is never stored).
+     Only successful fetches are cached; callers get a deep copy.
+   - Pagination moved to _fetch_domains(); clear_domains_cache() added.
+3. src/api/routers/internal/domain.py
+   - GET /domain/pages/list runs its blocking REST calls through
+     run_blocking (_knowledge_pages_payload) so it can no longer stall the
+     event loop.
+4. tests/units/core/test_knowledge_pages.py
+   - TestListDomainsCache: cache hit, copy isolation, per-identity keys,
+     failures not cached, TTL expiry. Autouse fixture clears the cache.
+5. tests/units/api/test_knowledge_pages_route.py (new)
+   - Route payload with/without domains, domains failure envelope, and the
+     blocking body running through run_blocking.
+6. tests/units/front/test_domain_pages_contract.py
+   - Contract: Pages hydrate on section change, init() does not fetch
+     Domains, in-flight promise dedup.
+
+Modified files:
+- src/front/static/domain/js/domain-pages.js
+- src/back/core/databricks/KnowledgePageService.py
+- src/api/routers/internal/domain.py
+- tests/units/core/test_knowledge_pages.py
+- tests/units/api/test_knowledge_pages_route.py
+- tests/units/front/test_domain_pages_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11204 passed, 334 skipped, 8 deselected
+Live check (local dev server): /domain/pages/list?include_domains=true
+15.4 s cold -> 0.69 s cached; /health and /navbar/state answer in 3-6 ms
+while a cold Domains fetch is in flight (previously blocked for its full
+duration).
+(Not browser-tested: overlay timing on Context open not re-measured in the UI.)
+
+================================================================================
+Event loop: offload blocking route handlers + keep OBO identity in run_blocking
+================================================================================
+
+Context:
+Request logs (5 rotated files) showed 306 event-loop stalls: 3+ requests
+finishing at the same instant with identical durations. The culprits are
+`async def` handlers with no `await` that perform synchronous Lakebase /
+Databricks REST I/O on the loop (e.g. /settings/registry/bridges p50 14.1 s,
+/domain/documents/list, /domain/version-status, /review/my-tasks), freezing
+every concurrent request including /navbar/state.
+While preparing the change, run_blocking was found to drop ContextVars: it
+used loop.run_in_executor() without copying the context, so in Databricks App
+mode any code reached through it saw an empty RequestIdentity
+(get_data_plane_client() would raise AuthorizationError; Delta reads in
+graphdb/delta/Base.py silently fell back to the service principal).
+
+Changes:
+1. src/back/core/helpers/DatabricksHelpers.py
+   - run_blocking executes the call inside contextvars.copy_context() (same
+     semantics as asyncio.to_thread), so the on-behalf-of identity and other
+     request-scoped ContextVars are visible in the worker thread.
+2. src/api/routers/internal/domain.py
+   - Offloaded via run_blocking: list_domains (/domain/list-projects),
+     get_version_status, list_version_details, get_edit_lock,
+     release_edit_lock, renew_edit_lock, list_documents.
+3. src/api/routers/internal/settings.py
+   - Offloaded: get_current_config, list_registry_domains,
+     list_registry_bridges, get_default_emoji, get_analytics_job_enabled,
+     teams_matrix, get_delta_warehouse, get_graph_engine_config,
+     list_schedules.
+4. src/api/routers/internal/review.py
+   - Offloaded: my_tasks, review_detail (run_blocking import added).
+5. src/api/routers/internal/dtwin.py
+   - Offloaded: get_graph_metrics_summary, databricks_build_info.
+   Handlers stay `async def` (coding rules §5); single-call bodies become
+   `await run_blocking(fn, ...)`, multi-statement bodies move into a local
+   `_work()` closure. Logic and error mapping are unchanged.
+6. tests/units/core/test_run_blocking_context.py (new)
+   - RequestIdentity visible inside run_blocking; worker-side ContextVar
+     changes do not leak back to the caller.
+
+Modified files:
+- src/back/core/helpers/DatabricksHelpers.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/settings.py
+- src/api/routers/internal/review.py
+- src/api/routers/internal/dtwin.py
+- tests/units/core/test_run_blocking_context.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11206 passed, 334 skipped, 8 deselected
+Live check (local dev server): while /settings/registry/bridges (14.8 s) and
+/settings/registry/domains (3.3 s) run, /health and /navbar/state answer in
+6-7 ms. Ruff: only UP006/UP045 annotation-style notices, matching the
+existing Dict/Optional style of these files.
+Not covered (follow-ups): handlers that already await but still do sync I/O
+inside an async helper (/validate/detailed, /navbar/state internals,
+/settings/warehouses, /dtwin/sync/stats); the intrinsic cost of
+/settings/registry/bridges (reads every domain version).
+
+================================================================================
+Lakebase registry store: share registry id + lazy-heal flags process-wide
+================================================================================
+
+Context:
+LakebaseRegistryStore is rebuilt on every request (RegistryService.from_context,
+EditLockService._store, ...), but its resolved registry id and its lazy-heal
+guards ("does column/table X exist?") lived on the instance. Every request
+therefore re-ran the registries lookup plus up to three information_schema
+probes before the real query (~150 ms per round-trip from a dev laptop):
+e.g. POST /domain/edit-lock/renew p50 458 ms for a single UPDATE.
+Controlled read-only A/B on the dev Lakebase (fresh store, list_versions +
+read_version, the core of load-from-uc): p50 997 ms -> 310 ms.
+
+Changes:
+1. src/back/objects/registry/store/lakebase/store.py
+   - New _SharedStoreState descriptor + _SHARED_STATE map keyed by
+     (database override, schema). _registry_id and the 16 lazy-heal flags
+     (_status_column_ready, _edit_locks_ready, ...) are now class-level
+     descriptors backed by that shared dict; __init__ binds
+     self._shared_state instead of resetting each attribute.
+   - Instances built via __new__ (no __init__) fall back to plain
+     per-instance attributes.
+   - LakebaseRegistryStore.reset_shared_state(database=None, schema=None)
+     clears state in place (live instances keep their dict reference).
+2. src/back/objects/registry/store/lakebase/Bootstrap.py
+   - initialize() clears the shared state first so the registry id and
+     column/table guards are re-probed after (re)provisioning.
+3. src/back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py
+   - After an admin DROP SCHEMA/TABLE/VIEW, reset the shared store state
+     (the dropped object may back the registry). Nested `with` merged so
+     the class does not grow (architecture size budget).
+4. src/api/routers/internal/domain.py
+   - POST /domain/load-from-uc: edit-lock orchestration
+     (release_prev_on_switch, on_domain_loaded, reacquire) now runs through
+     run_blocking, like the load itself.
+5. tests/conftest.py
+   - Autouse fixture resets the shared store state around every test.
+6. tests/units/registry/test_lakebase_store_shared_state.py (new)
+   - Sharing across instances, isolation per schema/database, single
+     registry lookup for many instances, in-place reset, targeted reset,
+     initialize() forgets cached state, __new__ fallback.
+7. tests/units/registry/test_mcp_policy_column.py
+   - Memoisation contract now checks the shared descriptor declaration.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/Bootstrap.py
+- src/back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py
+- src/api/routers/internal/domain.py
+- tests/conftest.py
+- tests/units/registry/test_lakebase_store_shared_state.py
+- tests/units/registry/test_mcp_policy_column.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11216 passed, 334 skipped, 8 deselected
+Live check (local dev server, warm): /settings/registry/domains ~160 ms
+(log p50 1070 ms), /review/my-tasks ~310 ms (log p50 1832 ms); log figures
+also include former event-loop stalls, so the controlled A/B above is the
+reference number.
+Caveat: a registry schema dropped or re-seeded outside the app (psql) keeps
+stale cached ids in running processes until Initialize or a restart.
+
+================================================================================
+Intelligence → Analytics: show the loading spinner immediately on section open
+================================================================================
+
+Context:
+Opening /intelligence/?section=analytics left the Analytics pane empty for
+seconds before the spinner appeared. analyticsLoadTypes() first awaited the
+graph probe (/dtwin/sync/stats: 2.3-3.3 s on the dev server, p90 7.1 s in the
+logs) and only then called analyticsLoadLatest(), which is where the spinner
+was shown. /dtwin/metrics/latest and /dtwin/metrics/series also read the
+registry synchronously on the event loop.
+
+Changes:
+1. src/front/static/query/js/query-analytics.js
+   - analyticsLoadTypes() shows the "Loading the last analysis…" spinner
+     right away and starts the /dtwin/metrics/latest fetch in parallel with
+     the graph probe.
+   - analyticsResume(prefetched) / analyticsLoadLatest(prefetched) reuse
+     that in-flight promise; the stored result is still rendered only after
+     the _graphMissing gate (stale-result contract unchanged). The missing
+     graph path now hides the spinner.
+   - New helpers _showLoadingLatestSpinner / _hideLoadingLatestSpinner
+     (default compute message kept in data-default-msg and restored) and
+     _fetchLatestMetrics.
+2. src/api/routers/internal/dtwin.py
+   - GET /dtwin/metrics/latest and /dtwin/metrics/series read the stored
+     metrics through run_blocking.
+3. tests/units/front/test_analytics_stale_result_gate.py
+   - Spinner shown before the probe, latest prefetched during the probe,
+     missing-graph path hides the spinner.
+
+Modified files:
+- src/front/static/query/js/query-analytics.js
+- src/api/routers/internal/dtwin.py
+- tests/units/front/test_analytics_stale_result_gate.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11219 passed, 334 skipped, 8 deselected
+Live check: dev server serves the updated script; /dtwin/sync/stats
+2.3-3.3 s (the former blank delay), /dtwin/metrics/latest 0.16-0.32 s.
+(Not browser-tested: the chrome-devtools MCP is not connected.)
+Note: `tab=design` in the reported URL belongs to the Cohorts section and is
+dropped by sidebar-nav on Analytics; it plays no part in the delay.
+
+================================================================================
+Home pages: border-color hover instead of drop shadow on tiles and cards
+================================================================================
+
+Context:
+Workspace homes (Context / Ontology / Graph / Intelligence ?section=home) and
+the app Home lifted their tiles with a drop shadow on hover. They now use the
+same hover as the list cards of Intelligence → Scenarios (.ob-rule-card):
+the border turns primary with a faint primary ring, no drop shadow.
+
+Changes:
+1. src/front/static/global/css/main.css
+   - .ob-workspace-home-tile:hover and .ob-workspace-home-resource:hover:
+     primary border + 0.15rem ring at 10% opacity (was 0 2px 8px shadow).
+     The resource card transition now includes border-color. Header comment
+     updated.
+2. src/front/static/home/css/home.css
+   - .home-nav-tile:hover and a/button.home-resource-card:hover: same hover;
+     resource card transition includes border-color.
+3. tests/units/front/test_workspace_home_contract.py,
+   tests/units/ui/test_home_and_explorer_contracts.py
+   - Contracts assert the primary-border hover and the absence of the drop
+     shadow.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/static/home/css/home.css
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/ui/test_home_and_explorer_contracts.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11219 passed, 334 skipped, 8 deselected
+(Not browser-tested: the chrome-devtools MCP is not connected; served CSS
+checked on the dev server.)
+
+================================================================================
+Settings → UI: reorganised and explained branding / theme page
+================================================================================
+
+Context:
+The UI settings page stacked two cards, repeated the "Admin only" badge three
+times, split every colour into separate "picker" and "Hex value" columns and
+gave little explanation of what each colour drives (Aurora in particular).
+The live preview was also misleading: `.ui-branding-preview-btn` repainted
+both preview buttons with Primary, while real Create / Share buttons use
+their own colours.
+
+Changes:
+1. src/front/templates/settings.html (#ui-section)
+   - One card under the section header (Section Body Surface rule), with a
+     single admin note explaining Save / Discard changes / Default and that
+     the default entity icon is saved immediately.
+   - Branding block: title and default entity icon side by side, logo row
+     with the Reset icon button next to the file input (stacked on small
+     screens); help texts say where each item appears.
+   - Theme block: the four colours (Primary, Aurora, Create button, Share
+     button) each show picker + hex on one line and a help text describing
+     what they drive; a sticky "Live preview" panel (active item with the
+     Primary → Aurora bar, hovered row, Create / Share buttons, focused
+     field) and the derived palette with a usage caption per swatch.
+   - Hex inputs get accessible names; every existing id, aria-describedby
+     association and JS hook is unchanged.
+2. src/front/static/global/css/config.css
+   - Removed the .ui-branding-preview-btn override so the preview shows the
+     real (live-previewed) Create / Share paint.
+   - Active preview item mirrors the sidebar active-row gradient bar.
+   - New layout helpers: .ui-branding-color-field, .ui-branding-color-inputs,
+     .ui-branding-hex, .ui-branding-preview-panel, .ui-branding-swatch-caption.
+3. tests/units/front/test_ui_branding_settings_contract.py
+   - Theme heading lookup tolerates the spacing class; new contracts: single
+     card, admin scope stated once, colour help texts, hex accessible names,
+     swatch captions, preview buttons not overridden.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/global/css/config.css
+- tests/units/front/test_ui_branding_settings_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11225 passed, 334 skipped, 8 deselected
+Browser check: Playwright (headless Chromium) screenshots of
+/settings?section=ui at 1440 px and 390 px, no console errors.
+
+================================================================================
+Toasts: align icon, message and close button on one line
+================================================================================
+
+Context:
+Bottom-right toasts (e.g. "Context saved") showed the status icon, the text
+and the close X at three different heights. Measured with Playwright on the
+first text line (centre 753.5 px): icon 4 px lower (`mt-1`), close X 7 px
+higher and only 7 px tall. Root cause of the X: the global `.btn-close` rule
+set `height: auto`; the button has no content, so it collapsed to its
+padding — the same bug flattened modal-header close buttons (16x30 px) and
+reduced the tag-chip close (`.oc-tag-chip`, padding 0) to 0 px height.
+
+Changes:
+1. src/front/static/global/css/components.css
+   - `.btn-close` keeps Bootstrap's `height: 1em` (was `height: auto`).
+2. src/front/static/global/js/utils.js
+   - _showToast: removed `mt-1` from the status icon.
+3. tests/units/front/test_toast_alignment_contract.py (new)
+   - Icon not nudged, row aligned to the first line, `.btn-close` 1em box.
+
+Modified files:
+- src/front/static/global/css/components.css
+- src/front/static/global/js/utils.js
+- tests/units/front/test_toast_alignment_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11228 passed, 334 skipped, 8 deselected
+Browser check (Playwright, headless Chromium): one- and two-line toasts now
+have icon, first text line and X centred on the same y (757.5 / 683.5 px);
+modal-header close is 30x30 px, centred on the title.
+
+================================================================================
+Intelligence → Analytics: "No analytics runs found" empty state
+================================================================================
+
+Context:
+When no graph analysis had ever been run for the context, the Analytics pane
+stayed blank. It now shows the same empty state as the Runs tab
+(`_domain_analytics_runs.html`): bi-graph-up-arrow icon + "No analytics runs
+found", with a hint pointing at the Run button.
+
+Changes:
+1. src/front/templates/partials/intelligence/_intel_analytics.html
+   - New hidden #analyticsEmpty block (same icon and message as Runs).
+2. src/front/static/query/js/query-analytics.js
+   - analyticsLoadLatest records _noStoredResult when /dtwin/metrics/latest
+     answers success with has_result=false (not on request failures).
+   - analyticsResume shows the empty state only after the running-task check
+     (no flash before a resumed run's spinner); hidden on render, while busy,
+     on errors and when the graph is missing (its own banner applies).
+3. tests/units/front/test_analytics_stale_result_gate.py
+   - Contracts: same icon/message as Runs, hidden by default, shown only when
+     nothing is stored or running, hidden on render/busy/error.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_analytics.html
+- src/front/static/query/js/query-analytics.js
+- tests/units/front/test_analytics_stale_result_gate.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11232 passed, 334 skipped, 8 deselected
+Browser check: temporary 0.10.0 server on 127.0.0.1:8010 (stopped afterwards),
+probe context imported into the Playwright session only, stats / latest /
+tasks responses stubbed: only #analyticsEmpty visible, rendered like Runs.
+
+================================================================================
+Intelligence → Patterns: Certify button spinner + chart refresh
+================================================================================
+
+Context:
+Certifying a pattern of a saved Detect run only disabled the button while the
+PUT ran (16.8 s in the dev logs), with no visual feedback, then re-rendered
+the chart from the local toggle only.
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   - toggleCertified: shows the same in-button spinner as Save / Detect
+     (`spinner-border spinner-border-sm ob-btn-spinner`) via the new
+     _setCertifyBusy (is-busy, aria-busy, disabled, width kept so the
+     toolbar does not shift); ignores clicks while busy.
+   - After success, the new _reloadSavedCatalog re-reads
+     /dtwin/patterns/saved/{id}/patterns (best-effort; keeps the local toggle
+     on failure), then _refreshCertUi rebuilds the toolbar and the
+     "Matching entities per pattern" chart.
+   - On failure the button is restored and the error is notified.
+2. src/front/static/intelligence/css/intelligence.css
+   - .pat-cert-btn.is-busy: progress cursor, no pointer events, full opacity
+     and Share colours so the spinner stays readable while disabled.
+3. tests/units/front/test_intelligence_page_contract.py
+   - Spinner before the PUT, catalog reload before the chart re-render,
+     button restored on failure.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11235 passed, 334 skipped, 8 deselected
+Browser check: temporary 0.10.0 server on 127.0.0.1:8010 (stopped), probe
+context in the Playwright session, pattern APIs stubbed (PUT delayed 2 s):
+spinner shown in the 91 px button during the call; afterwards the button
+reads "Certified", the catalog was fetched again and the chart bar #1 and
+the gauge (0% -> 60%) switched to certified.

@@ -183,7 +183,7 @@ class GraphDBFactory:
         if not conn_name:
             logger.warning(
                 "Store: domain has no neo4j_connection — pick one in "
-                "Domain → General → Knowledge Graph"
+                "Configuration → Backend"
             )
             return None
 

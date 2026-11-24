@@ -112,7 +112,6 @@ var SigmaGraph = (function () {
     var _clusterCount = 0;
     var _clusterColorByActive = false;
     var _showQualityRings = true;  // SHACL facet ring on checked nodes
-    var _clusterResolution = 1.0;
     var _collapsedClusters = new Set();
     var _clusterCollapseActive = false;
 
@@ -388,7 +387,33 @@ var SigmaGraph = (function () {
         return _groupMemberMap[id] || _groupMemberMap[type] || _groupMemberMap[_extractLocalName(id)] || _groupMemberMap[_extractLocalName(type)] || null;
     }
 
+    function _groupsAllCollapsed() {
+        return _groupsDefs.length > 0 && _groupsDefs.every(function (g) {
+            return _collapsedGroups.has(g.name);
+        });
+    }
+
+    function _applyExplorerGroupsToggle() {
+        var btn = document.getElementById('sgToggleAllGroupsBtn');
+        if (!btn) return;
+        var has = _groupsDefs.length > 0;
+        btn.disabled = !has;
+        var allCollapsed = has && _groupsAllCollapsed();
+        btn.classList.toggle('active', allCollapsed);
+        btn.setAttribute('aria-pressed', allCollapsed ? 'true' : 'false');
+        var icon = btn.querySelector('i');
+        if (allCollapsed) {
+            btn.title = 'Expand all groups';
+            if (icon) icon.className = 'bi bi-arrows-expand';
+        } else {
+            btn.title = 'Collapse all groups';
+            if (icon) icon.className = 'bi bi-arrows-collapse';
+        }
+        btn.setAttribute('aria-label', btn.title);
+    }
+
     function _populateGroupsPanel() {
+        _applyExplorerGroupsToggle();
         var container = document.getElementById('sgGroupsChips');
         if (!container) return;
         if (!_groupsDefs || _groupsDefs.length === 0) {
@@ -428,80 +453,79 @@ var SigmaGraph = (function () {
         return CLUSTER_COLORS[clusterId % CLUSTER_COLORS.length];
     }
 
-    function _detectClusters(resolution) {
-        if (!_graph || _graph.order === 0) return;
-        if (typeof graphologyLibrary === 'undefined' || !graphologyLibrary.communitiesLouvain) {
-            console.warn('[SigmaGraph] communitiesLouvain not available');
-            return;
-        }
+    var _clustersHydrated = false;
 
-        var louvain = graphologyLibrary.communitiesLouvain;
-        var undirected;
-        try {
-            var GraphClass = graphology.Graph || graphology;
-            undirected = new GraphClass({ multi: false, type: 'undirected' });
-            _graph.forEachNode(function (node, attrs) {
-                if (!attrs._isGroup) undirected.addNode(node);
-            });
-            _graph.forEachEdge(function (edge, attrs, source, target) {
-                if (source === target) return;
-                var sa = _graph.getNodeAttributes(source);
-                var ta = _graph.getNodeAttributes(target);
-                if (sa._isGroup || ta._isGroup) return;
-                if (!undirected.hasEdge(source, target)) {
-                    undirected.addEdge(source, target);
-                }
-            });
-        } catch (e) {
-            console.error('[SigmaGraph] Error building undirected projection:', e);
-            return;
-        }
-
-        if (undirected.order === 0) return;
-
-        try {
-            _clusterAssignments = louvain.assign(undirected, {
-                nodeCommunityAttribute: '_cluster',
-                resolution: resolution || 1.0
-            });
-
-            _clusterAssignments = {};
-            var maxCluster = -1;
-            undirected.forEachNode(function (node, attrs) {
-                var c = attrs._cluster;
-                if (c === undefined) c = 0;
-                _clusterAssignments[node] = c;
-                if (c > maxCluster) maxCluster = c;
-            });
-            _clusterCount = maxCluster + 1;
-
-            _graph.forEachNode(function (node) {
-                if (_clusterAssignments[node] !== undefined) {
-                    _graph.setNodeAttribute(node, '_cluster', _clusterAssignments[node]);
-                }
-            });
-        } catch (e) {
-            console.error('[SigmaGraph] Louvain detection failed:', e);
-            _clusterAssignments = null;
-            _clusterCount = 0;
-        }
-
-        _populateClustersPanel();
+    function _applyClusterAssignmentsToGraph() {
+        if (!_graph || !_clusterAssignments) return;
+        _graph.forEachNode(function (node) {
+            if (_clusterAssignments[node] !== undefined) {
+                _graph.setNodeAttribute(node, '_cluster', _clusterAssignments[node]);
+            }
+        });
     }
 
-    function _clearClusters() {
-        _clusterAssignments = null;
-        _clusterCount = 0;
-        _clusterColorByActive = false;
-        _collapsedClusters.clear();
-        _clusterCollapseActive = false;
-        if (_graph) {
-            _graph.forEachNode(function (node) {
-                _graph.removeNodeAttribute(node, '_cluster');
-            });
+    // Materialized partitions can span millions of entities: the summary
+    // comes from /dtwin/clusters/current, and memberships are looked up only
+    // for the nodes actually drawn.
+    var ASSIGNMENTS_BATCH = 5000;
+    var _assignmentsAsked = {};
+
+    function _fetchClusterAssignments() {
+        if (!_graph || !_clusterCount) return;
+        var pending = [];
+        _graph.forEachNode(function (node, attrs) {
+            if (attrs._isGroup || attrs._isClusterNode || _assignmentsAsked[node]) return;
+            _assignmentsAsked[node] = true;
+            pending.push(node);
+        });
+        if (!pending.length) {
+            _applyClusterAssignmentsToGraph();
+            return;
         }
-        _populateClustersPanel();
-        if (_renderer) _renderer.refresh();
+        var batches = [];
+        for (var i = 0; i < pending.length; i += ASSIGNMENTS_BATCH) {
+            batches.push(pending.slice(i, i + ASSIGNMENTS_BATCH));
+        }
+        Promise.all(batches.map(function (uris) {
+            return fetch('/dtwin/clusters/assignments', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uris: uris })
+            }).then(function (resp) { return resp.json(); });
+        })).then(function (results) {
+            results.forEach(function (data) {
+                var found = (data && data.assignments) || {};
+                for (var uri in found) _clusterAssignments[uri] = found[uri];
+            });
+            _applyClusterAssignmentsToGraph();
+            _populateClustersPanel();
+            if (_renderer) _renderer.refresh();
+        }).catch(function (err) {
+            console.warn('[SigmaGraph] Could not load cluster assignments:', err);
+        });
+    }
+
+    function _ensureMaterializedClusters() {
+        if (_clustersHydrated) {
+            _fetchClusterAssignments();
+            return;
+        }
+        _clustersHydrated = true;
+        fetch('/dtwin/clusters/current?top=1', { credentials: 'same-origin' })
+            .then(function (resp) { return resp.json(); })
+            .then(function (data) {
+                var stats = (data && data.stats) || {};
+                _clusterCount = ((data && data.clusters) || []).length ? (stats.cluster_count || 0) : 0;
+                _clusterAssignments = _clusterCount ? {} : null;
+                _assignmentsAsked = {};
+                _populateClustersPanel();
+                _fetchClusterAssignments();
+            })
+            .catch(function (err) {
+                console.warn('[SigmaGraph] Could not load materialized clusters:', err);
+                _populateClustersPanel();
+            });
     }
 
     function _getClusterStats() {
@@ -528,14 +552,18 @@ var SigmaGraph = (function () {
 
         var stats = _getClusterStats();
         if (stats.length === 0) {
-            container.innerHTML = '<span class="text-muted small">No clusters detected yet.</span>';
+            container.innerHTML = '<span class="text-muted small">No materialized clusters — run Intelligence → Discovery → Communities.</span>';
             var countEl = document.getElementById('sgClusterCount');
             if (countEl) countEl.textContent = '';
             return;
         }
 
         var countEl = document.getElementById('sgClusterCount');
-        if (countEl) countEl.textContent = stats.length + ' clusters found';
+        if (countEl) {
+            countEl.textContent = _clusterCount > stats.length
+                ? stats.length + ' of ' + _clusterCount.toLocaleString() + ' clusters in view'
+                : stats.length + ' clusters found';
+        }
 
         var html = '';
         stats.forEach(function (cl) {
@@ -1044,6 +1072,7 @@ var SigmaGraph = (function () {
         }
 
         _graph = _buildGraph(filterIds);
+        _ensureMaterializedClusters();
         if (!_graph || _graph.order === 0) {
             console.warn('[SigmaGraph] graph is empty (0 nodes)');
             _searchTimerPending = false;
@@ -1836,21 +1865,34 @@ var SigmaGraph = (function () {
             html += _sec('bi bi-speedometer2', 'Dashboard', dashBody);
         }
 
-        var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
-        if (dataset && (dataset.fullName || dataset.asset)) {
-            var dsFullName = dataset.fullName
-                || [dataset.catalog, dataset.schema, dataset.asset].filter(Boolean).join('.');
-            var hasKeyCol = Boolean(dataset.key_column);
-            var dsBody = '<div class="entity-detail-item"><span class="detail-key">Table</span>' +
-                '<span class="detail-value"><code>' + esc(dsFullName) + '</code></span></div>';
-            if (dataset.key_column) {
-                dsBody += '<div class="entity-detail-item"><span class="detail-key">Key</span>' +
-                    '<span class="detail-value"><code>' + esc(dataset.key_column) + '</code></span></div>';
-            }
-            if (dataset.description) {
-                dsBody += '<div class="entity-detail-item"><span class="detail-key">Description</span>' +
-                    '<span class="detail-value">' + esc(dataset.description) + '</span></div>';
-            }
+        var datasets = (entityMapping && entityMapping.datasets)
+            || (classInfo && classInfo.datasets)
+            || null;
+        if (!datasets || !datasets.length) {
+            var one = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
+            datasets = one ? [one] : [];
+        }
+        datasets = datasets.filter(function (d) { return d && (d.fullName || d.asset); });
+        if (datasets.length) {
+            var hasKeyCol = datasets.some(function (d) { return Boolean(d.key_column); });
+            var dsBody = datasets.map(function (dataset) {
+                var dsFullName = dataset.fullName
+                    || [dataset.catalog, dataset.schema, dataset.asset].filter(Boolean).join('.');
+                var kind = String(dataset.type || '').toUpperCase();
+                var kindLabel = kind === 'METRIC_VIEW' ? 'Metric View'
+                    : (kind === 'VIEW' ? 'View' : 'Table');
+                var block = '<div class="entity-detail-item"><span class="detail-key">' + esc(kindLabel) + '</span>' +
+                    '<span class="detail-value"><code>' + esc(dsFullName) + '</code></span></div>';
+                if (dataset.key_column) {
+                    block += '<div class="entity-detail-item"><span class="detail-key">Key</span>' +
+                        '<span class="detail-value"><code>' + esc(dataset.key_column) + '</code></span></div>';
+                }
+                if (dataset.description) {
+                    block += '<div class="entity-detail-item"><span class="detail-key">Description</span>' +
+                        '<span class="detail-value">' + esc(dataset.description) + '</span></div>';
+                }
+                return block;
+            }).join('');
             if (hasKeyCol) {
                 dsBody += '<div class="entity-detail-item"><button type="button" onclick="openDatasetPreviewModal(\'' +
                     esc(entity.id) + '\', \'' + esc(ontologyTypeName) + '\', \'' + esc(actualIdValue || '') +
@@ -1861,10 +1903,10 @@ var SigmaGraph = (function () {
                     'class="btn btn-sm btn-outline-info w-100" title="Key column is not configured — preview unavailable">' +
                     '<i class="bi bi-table me-1"></i>Preview rows</button></div>';
             }
-            html += _sec('bi bi-table', 'Dataset', dsBody);
+            html += _sec('bi bi-table', 'Datasets', dsBody);
         }
 
-        // Behaviour: UC functions, jobs, and SWRL rules — one section.
+        // Behaviour: UC functions, jobs, and IF-THEN rules — one section.
         var nodeActions = (entityMapping && entityMapping.actions) || (classInfo && classInfo.actions) || [];
         var nodeRules = (classInfo && classInfo.businessRules) || [];
         var behaviourBody = '';
@@ -2659,13 +2701,20 @@ var SigmaGraph = (function () {
         var bridges = (entityMapping && entityMapping.bridges) || (classInfo && classInfo.bridges) || [];
         var dashboardUrl = (entityMapping && entityMapping.dashboard) || (classInfo && classInfo.dashboard) || null;
         var dashboardParams = (entityMapping && entityMapping.dashboardParams) || (classInfo && classInfo.dashboardParams) || {};
-        var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
+        var datasets = (entityMapping && entityMapping.datasets)
+            || (classInfo && classInfo.datasets)
+            || null;
+        if (!datasets || !datasets.length) {
+            var oneDs = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
+            datasets = oneDs ? [oneDs] : [];
+        }
+        var dataset = datasets[0] || null;
         var actions = (entityMapping && entityMapping.actions) || (classInfo && classInfo.actions) || [];
         var businessRules = (classInfo && classInfo.businessRules) || [];
         var virtualAttributes = (entityMapping && entityMapping.virtualAttributes) || (classInfo && classInfo.virtualAttributes) || [];
         var shaclShapeCount = (classInfo && classInfo.shaclShapeCount) || 0;
 
-        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, actions: actions, businessRules: businessRules, virtualAttributes: virtualAttributes, shaclShapeCount: shaclShapeCount, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
+        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, datasets: datasets, dataset: dataset, actions: actions, businessRules: businessRules, virtualAttributes: virtualAttributes, shaclShapeCount: shaclShapeCount, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
     }
 
     function _showNodeContextMenu(nodeId, mouseEvent) {
@@ -2712,11 +2761,16 @@ var SigmaGraph = (function () {
                 '<i class="bi bi-speedometer2"></i> View Dashboard</div>';
         }
 
-        var dataset = meta.dataset;
-        if (dataset && (dataset.fullName || dataset.asset) && meta.entity && meta.entity.id) {
+        var menuDatasets = (meta.datasets || []).filter(function (d) {
+            return d && (d.fullName || d.asset);
+        });
+        if (!menuDatasets.length && meta.dataset && (meta.dataset.fullName || meta.dataset.asset)) {
+            menuDatasets = [meta.dataset];
+        }
+        if (menuDatasets.length && meta.entity && meta.entity.id) {
             var dsClassName = (meta.classInfo && (meta.classInfo.label || meta.classInfo.name)) || (meta.entityMapping && meta.entityMapping.className) || '';
             if (items) items += '<div class="ctx-divider"></div>';
-            items += '<div class="ctx-header">Dataset</div>';
+            items += '<div class="ctx-header">Datasets</div>';
             items += '<div class="ctx-item" data-sg-node-action="dataset-preview" data-uri="' + esc(meta.entity.id) +
                 '" data-class="' + esc(dsClassName) + '" data-id="' + esc(meta.actualIdValue || '') + '">' +
                 '<i class="bi bi-table"></i> Dataset preview</div>';
@@ -3732,36 +3786,19 @@ var SigmaGraph = (function () {
             SigmaGraph.refresh(true);
         },
 
+        toggleAllGroups: function () {
+            if (!_groupsDefs.length) return;
+            if (_groupsAllCollapsed()) {
+                SigmaGraph.expandAllGroups();
+            } else {
+                SigmaGraph.collapseAllGroups();
+            }
+        },
+
         reloadGroups: function () {
             _loadGroups().then(function () {
                 if (_hasData()) SigmaGraph.refresh();
             });
-        },
-
-        // --- Data cluster detection ---
-
-        detectClusters: function (resolution) {
-            if (!_graph || _graph.order === 0) {
-                if (typeof showNotification === 'function') showNotification('No graph data loaded.', 'warning');
-                return;
-            }
-            _clusterResolution = resolution || parseFloat(document.getElementById('sgClusterResolution')?.value) || 1.0;
-            _detectClusters(_clusterResolution);
-            if (_clusterAssignments && _clusterCount > 0) {
-                if (typeof showNotification === 'function') {
-                    showNotification('Detected ' + _clusterCount + ' clusters (resolution ' + _clusterResolution.toFixed(2) + ')', 'info');
-                }
-                if (_renderer) _renderer.refresh();
-            } else {
-                if (typeof showNotification === 'function') showNotification('No clusters detected.', 'warning');
-            }
-        },
-
-        clearClusters: function () {
-            _clearClusters();
-            var colorCheck = document.getElementById('sgClusterColorBy');
-            if (colorCheck) colorCheck.checked = false;
-            if (typeof showNotification === 'function') showNotification('Clusters cleared.', 'info');
         },
 
         toggleQualityRings: function () {
@@ -3810,60 +3847,6 @@ var SigmaGraph = (function () {
             _showPlaceholder();
             _populateClustersPanel();
             SigmaGraph.refresh(true);
-        },
-
-        detectClustersBackend: async function () {
-            if (typeof showNotification === 'function') showNotification('Detecting clusters on full graph...', 'info');
-            var algorithm = document.getElementById('sgClusterAlgorithm')?.value || 'louvain';
-            var resolution = parseFloat(document.getElementById('sgClusterResolution')?.value) || 1.0;
-            try {
-                var resp = await fetch('/dtwin/clusters/detect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ algorithm: algorithm, resolution: resolution })
-                });
-                var data = await resp.json();
-                if (!data.success) {
-                    if (typeof showNotification === 'function') showNotification(data.message || 'Detection failed', 'danger');
-                    return;
-                }
-                var clusters = data.clusters || [];
-                _clusterAssignments = {};
-                _clusterCount = clusters.length;
-                clusters.forEach(function (cl) {
-                    (cl.members || []).forEach(function (uri) {
-                        _clusterAssignments[uri] = cl.id;
-                    });
-                });
-                if (_graph) {
-                    _graph.forEachNode(function (node) {
-                        if (_clusterAssignments[node] !== undefined) {
-                            _graph.setNodeAttribute(node, '_cluster', _clusterAssignments[node]);
-                        }
-                    });
-                }
-                _populateClustersPanel();
-                if (_renderer) _renderer.refresh();
-                var stats = data.stats || {};
-                if (typeof showNotification === 'function') {
-                    showNotification(
-                        'Backend: ' + _clusterCount + ' clusters detected (' +
-                        (stats.node_count || '?') + ' nodes, ' +
-                        (stats.elapsed_ms || '?') + 'ms)',
-                        'success'
-                    );
-                }
-            } catch (e) {
-                console.error('[SigmaGraph] Backend cluster detection error:', e);
-                if (typeof showNotification === 'function') showNotification('Backend detection error: ' + e.message, 'danger');
-            }
-        },
-
-        updateClusterResolutionLabel: function () {
-            var slider = document.getElementById('sgClusterResolution');
-            var label = document.getElementById('sgClusterResolutionValue');
-            if (slider && label) label.textContent = parseFloat(slider.value).toFixed(2);
         },
 
         computeMetrics: async function () {
@@ -3993,7 +3976,7 @@ async function _openGraphSwitcherModal() {
         '<div class="modal-dialog modal-lg modal-dialog-centered" style="max-height:50vh;">' +
         '<div class="modal-content" style="max-height:50vh;">' +
         '<div class="modal-header flex-shrink-0">' +
-        '<h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Switch Domain</h5>' +
+        '<h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Switch Context</h5>' +
         '<button type="button" class="btn-close" data-bs-dismiss="modal"></button>' +
         '</div>' +
         '<div class="modal-body" style="overflow-y:auto;">' +
@@ -4003,7 +3986,7 @@ async function _openGraphSwitcherModal() {
         '</div>' +
         '<div id="graphSwitcherLoading" class="text-center py-4">' +
         '<div class="spinner-border spinner-border-sm text-primary"></div>' +
-        '<span class="ms-2">Loading registry domains...</span>' +
+        '<span class="ms-2">Loading registry contexts...</span>' +
         '</div>' +
         '<div id="graphSwitcherContent" style="display:none;">' +
         '<div id="graphSwitcherList"></div>' +
@@ -4024,7 +4007,7 @@ async function _openGraphSwitcherModal() {
         var list = document.getElementById('graphSwitcherList');
         var rows = data.domains || data.projects || [];
         if (!data.success || !rows.length) {
-            list.innerHTML = '<div class="text-muted text-center p-3">No domains found in the registry</div>';
+            list.innerHTML = '<div class="text-muted text-center p-3">No contexts found in the registry</div>';
             return;
         }
 
@@ -4058,7 +4041,7 @@ async function _openGraphSwitcherModal() {
                 '</div>';
         });
 
-        list.innerHTML = domainsHtml || '<div class="text-muted text-center p-3">No domains with versions found</div>';
+        list.innerHTML = domainsHtml || '<div class="text-muted text-center p-3">No contexts with versions found</div>';
     } catch (err) {
         console.error('[GraphSwitcher] Error:', err);
         document.getElementById('graphSwitcherLoading').innerHTML =
@@ -4101,7 +4084,7 @@ async function _graphSwitcherSelect(domainName, version) {
         } else {
             if (typeof hideDomainLoading === 'function') hideDomainLoading();
             if (list) list.innerHTML = '<div class="text-danger p-3"><i class="bi bi-exclamation-triangle me-1"></i>' +
-                esc(data.message || 'Failed to load domain') + '</div>';
+                esc(data.message || 'Failed to load context') + '</div>';
         }
     } catch (err) {
         if (typeof hideDomainLoading === 'function') hideDomainLoading();
@@ -4280,7 +4263,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         var params = new URLSearchParams(qs);
                         var tgtDom = params.get('domain') || params.get('project') || '';
                         if (typeof showDomainLoading === 'function') {
-                            showDomainLoading('Loading ' + (tgtDom || 'domain') + '...');
+                            showDomainLoading('Loading ' + (tgtDom || 'context') + '...');
                         }
                     } catch (_) { /* ignore */ }
                     window.location.href = url;

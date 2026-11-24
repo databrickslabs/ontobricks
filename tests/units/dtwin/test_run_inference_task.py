@@ -65,23 +65,23 @@ def _run(options, *, build_kind, inferred=2):
 
 class TestAppendToGraph:
     def test_a_scheduled_run_appends_when_asked(self):
-        tm, svc, _delta = _run({"swrl": True, "append_graph": True}, build_kind="scheduled")
+        tm, svc, _delta = _run({"if_then": True, "append_graph": True}, build_kind="scheduled")
 
         svc.materialize_inferred.assert_called_once()
         result = tm.complete_task.call_args[1]["result"]
         assert result["append_graph_count"] == 2
 
     def test_an_api_run_still_appends(self):
-        _tm, svc, _delta = _run({"swrl": True, "append_graph": True}, build_kind="api")
+        _tm, svc, _delta = _run({"if_then": True, "append_graph": True}, build_kind="api")
         svc.materialize_inferred.assert_called_once()
 
     def test_the_interactive_ui_does_not(self):
-        _tm, svc, _delta = _run({"swrl": True}, build_kind="session")
+        _tm, svc, _delta = _run({"if_then": True}, build_kind="session")
         svc.materialize_inferred.assert_not_called()
 
     def test_nothing_inferred_means_nothing_to_append(self):
         _tm, svc, _delta = _run(
-            {"swrl": True, "append_graph": True}, build_kind="scheduled", inferred=0
+            {"if_then": True, "append_graph": True}, build_kind="scheduled", inferred=0
         )
         svc.materialize_inferred.assert_not_called()
 
@@ -99,7 +99,7 @@ class TestAppendToGraph:
                 "task-1",
                 SimpleNamespace(),
                 SimpleNamespace(),
-                {"swrl": True, "append_graph": True},
+                {"if_then": True, "append_graph": True},
                 build_kind="scheduled",
             )
 
@@ -113,7 +113,7 @@ class TestAppendToGraph:
 class TestMaterialiseToDelta:
     def _options(self, **over):
         base = {
-            "swrl": True,
+            "if_then": True,
             "materialize": True,
             "materialize_table": "cat.sch.inferred",
         }
@@ -138,7 +138,7 @@ class TestMaterialiseToDelta:
         delta.assert_not_called()
 
     def test_the_interactive_ui_does_not_write(self):
-        _tm, _svc, delta = _run({"swrl": True}, build_kind="session")
+        _tm, _svc, delta = _run({"if_then": True}, build_kind="session")
         delta.assert_not_called()
 
 
@@ -146,7 +146,7 @@ class TestCompletionMessage:
     def test_it_counts_both_write_backs(self):
         tm, _svc, _delta = _run(
             {
-                "swrl": True,
+                "if_then": True,
                 "append_graph": True,
                 "materialize": True,
                 "materialize_table": "cat.sch.inferred",
@@ -164,7 +164,7 @@ class TestCompletionMessage:
         'Inference failed' would be useless."""
         tm = MagicMock()
         svc = MagicMock()
-        svc.run_full_reasoning.side_effect = RuntimeError("SWRL parser blew up")
+        svc.run_full_reasoning.side_effect = RuntimeError("IF-THEN parser blew up")
 
         with patch("back.core.reasoning.ReasoningService", return_value=svc), patch(
             "back.core.graphdb.get_graphdb", return_value=MagicMock()
@@ -174,16 +174,16 @@ class TestCompletionMessage:
                 "task-1",
                 SimpleNamespace(),
                 SimpleNamespace(),
-                {"swrl": True},
+                {"if_then": True},
                 build_kind="scheduled",
             )
 
-        tm.fail_task.assert_called_once_with("task-1", "SWRL parser blew up")
+        tm.fail_task.assert_called_once_with("task-1", "IF-THEN parser blew up")
 
     def test_the_interactive_ui_gets_a_generic_failure(self):
         tm = MagicMock()
         svc = MagicMock()
-        svc.run_full_reasoning.side_effect = RuntimeError("SWRL parser blew up")
+        svc.run_full_reasoning.side_effect = RuntimeError("IF-THEN parser blew up")
 
         with patch("back.core.reasoning.ReasoningService", return_value=svc), patch(
             "back.core.graphdb.get_graphdb", return_value=MagicMock()
@@ -193,7 +193,7 @@ class TestCompletionMessage:
                 "task-1",
                 SimpleNamespace(),
                 SimpleNamespace(),
-                {"swrl": True},
+                {"if_then": True},
                 build_kind="session",
             )
 

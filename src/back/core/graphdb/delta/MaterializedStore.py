@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import concurrent.futures
 import time
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.graphdb.delta.GraphRelation import GraphRelation
+from back.core.graphdb.inferred_breakdown import build_breakdown_sql, normalise_breakdown
 from back.core.graphdb.delta.ReadStore import ReadStore
 from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.props import forget_missing_props
@@ -39,6 +40,7 @@ class MaterializedStore(ReadStore, MaterializedGraphBackend):
     """
 
     supports_materialized_inference_purge = True
+    supports_inferred_breakdown = True
     supports_adjacency = True
     supports_entity_search = True
     supports_props = True
@@ -287,6 +289,23 @@ class MaterializedStore(ReadStore, MaterializedGraphBackend):
         GraphRelation.refresh_after_write(self._client, target)
         return written
 
+    def insert_triples_from_select(self, table_name: str, select_sql: str) -> None:
+        """``INSERT INTO <companion> SELECT …`` on the warehouse.
+
+        *select_sql* must project ``subject, predicate, object``. Used for
+        bulk writes whose rows already live in Delta (community partitions),
+        so no row transits the app.
+        """
+        target = (
+            table_name
+            if self._domain is None
+            else self._ensure_companion_objects(table_name)
+        )
+        validate_table_name(target)
+        self._client.execute_statement(
+            f"INSERT INTO {target} (subject, predicate, object)\n{select_sql}"
+        )
+
     def optimize_inferred_companion(self, table_name: str) -> None:
         """Compact and re-cluster the inferred companion after app writes."""
         try:
@@ -336,3 +355,12 @@ class MaterializedStore(ReadStore, MaterializedGraphBackend):
             return self.count_triples(inferred)
         except Exception:  # noqa: BLE001
             return 0
+
+    def get_inferred_breakdown(self, table_name: str, base_uri: str) -> List[Dict[str, Any]]:
+        """Per-category triples / entities / groups over the writable inferred table."""
+        if self._domain is None:
+            return normalise_breakdown([])
+        inferred = self._writable_table_fqn(table_name)
+        validate_table_name(inferred)
+        sql = build_breakdown_sql(inferred, base_uri, self._sql_escape)
+        return normalise_breakdown(self.execute_query(sql))

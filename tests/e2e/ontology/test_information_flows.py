@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 import pytest
 
+pytestmark = pytest.mark.needs_domain
+
 
 def _csrf_headers(context) -> dict:
     cookies = {c["name"]: c["value"] for c in context.cookies()}

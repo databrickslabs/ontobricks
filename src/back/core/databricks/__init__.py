@@ -21,6 +21,7 @@ from back.core.databricks.uc import (  # noqa: F401
 from back.core.databricks.DatabricksClient import DatabricksClient  # noqa: F401
 from back.core.databricks.WorkspaceService import WorkspaceService  # noqa: F401
 from back.core.databricks.DashboardService import DashboardService  # noqa: F401
+from back.core.databricks.KnowledgePageService import KnowledgePageService  # noqa: F401
 from back.core.databricks.document.DocumentExtractor import DocumentExtractor  # noqa: F401
 from back.core.databricks.document.DocumentParseService import DocumentParseService  # noqa: F401
 from back.core.databricks.document.ParseStatus import ParseStatus  # noqa: F401
@@ -72,6 +73,7 @@ __all__ = [
     "VolumeFileService",
     "WorkspaceService",
     "DashboardService",
+    "KnowledgePageService",
     "MetadataService",
     "UCDomainIO",
     "DocumentExtractor",

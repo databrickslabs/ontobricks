@@ -42,14 +42,14 @@ other tokens are **fixed** — they are not overridden at runtime.
 
 | Role | Token | CSS static default |
 |------|-------|--------------------|
-| Brand primary *(configurable)* | `--db-primary` | `#4F46E5` |
-| Primary dark / darker *(configurable)* | `--db-primary-dark`, `--db-primary-darker` | `#4338CA`, `#3730A3` |
-| Primary tint *(configurable)* | `--db-primary-light` | `rgba(79, 70, 229, 0.1)` |
+| Brand primary *(configurable)* | `--db-primary` | `#737373` |
+| Primary dark / darker *(configurable)* | `--db-primary-dark`, `--db-primary-darker` | `#626262`, `#515151` |
+| Primary tint *(configurable)* | `--db-primary-light` | `rgba(115, 115, 115, 0.1)` |
 | Primary soft fill *(derived from RGB)* | `--db-primary-soft`, `--db-primary-soft-hover` | `rgba(var(--db-primary-rgb), 0.18)` / `0.28` |
-| Primary RGB components *(configurable)* | `--db-primary-rgb` | `79, 70, 229` |
-| Hover well *(configurable)* | `--db-hover-indigo` | `rgba(79, 70, 229, 0.08)` |
-| Focus ring *(configurable)* | `--db-focus-ring` | `0 0 0 0.2rem rgba(79, 70, 229, 0.35)` |
-| Shadow primary *(configurable)* | `--db-shadow-primary` | `0 8px 20px rgba(79, 70, 229, 0.35)` |
+| Primary RGB components *(configurable)* | `--db-primary-rgb` | `115, 115, 115` |
+| Hover well *(configurable)* | `--db-hover-indigo` | `rgba(115, 115, 115, 0.06)` |
+| Focus ring *(configurable)* | `--db-focus-ring` | `0 0 0 0.2rem rgba(115, 115, 115, 0.18)` |
+| Shadow primary *(configurable)* | `--db-shadow-primary` | `0 8px 20px rgba(115, 115, 115, 0.35)` |
 | On-primary foreground *(configurable)* | `--db-on-primary` | `#FFFFFF` |
 | Selected text *(configurable)* | `--db-primary-selected-text` | derived dark variant |
 | Warm canvas / surface / line *(fixed)* | `--db-canvas-warm`, `--db-surface-warm`, `--db-line-soft` | `#FAFAF9`, `#FFFFFF`, `#F4F2EF` |
@@ -57,7 +57,7 @@ other tokens are **fixed** — they are not overridden at runtime.
 | Borders *(fixed)* | `--db-border`, `--db-border-light` | `#ECEAE6`, `#F4F2EF` |
 | Text *(fixed)* | `--db-text`, `--db-text-secondary`, `--db-text-muted` | `#191817`, `#6B6864`, `#6F6B65` |
 | Semantic tinted status *(fixed)* | `--db-status-success/warning/danger/info/draft` + `*-soft-bg` | success / warning / danger / info / draft on soft backgrounds |
-| Shared radii *(fixed)* | `--db-radius-control`, `--db-radius-card`, `--db-radius-chip` | `10px`, `14px`, `999px` |
+| Shared radii *(fixed)* | `--db-radius-control`, `--db-radius-card`, `--db-radius-chip` | `2px`, `2px`, `2px` |
 | Shadows *(fixed)* | `--db-shadow-sm`, `--db-shadow-md`, `--db-shadow-lg` | floating surfaces only |
 | Transitions *(fixed)* | `--db-transition`, `--db-transition-fast` | `0.2s` / `0.15s ease` |
 
@@ -75,8 +75,9 @@ Configuration → UI**. The runtime theme system follows these rules:
   family: dark, darker, light/alpha variants, RGB components, hover well, focus
   ring, shadow, and a WCAG-contrast–safe `--db-on-primary` foreground (white or
   near-black, ≥ 4.5:1 ratio).
-- `#4F46E5` is the factory default; it is **not** an immutable runtime color.
-  Any valid hex is accepted after admin save.
+- `#737373` is the factory default; it is **not** an immutable runtime color.
+  Any valid hex is accepted after admin save. The factory Aurora accent is
+  `#6B6B6B`.
 - The server injects these values as a `<style id="uiBrandingTokens">` block
   placed **after** the static CSS loads and **before** any `{% block extra_css
   %}` — this ensures no flash of unstyled primary color on first paint.
@@ -87,8 +88,7 @@ All `--db-status-*`, `--db-*-bg`, `--db-text-*`, `--db-border-*`,
 `--db-navbar-bg`, `--db-subnav-bg`, radii, shadows, and transitions are **not
 overridable** via the branding feature. They remain as defined in `main.css :root`.
 `--db-subnav-bg` is retained as a compatibility token but is not the L2 row
-surface: `#obSubnav` is transparent and its segmented workspace control uses
-`--db-surface-warm`.
+surface: `#obSubnav` is transparent; workspace navigation uses the app switcher.
 `--ovz-*` tokens are fully isolated and are never touched by runtime branding.
 
 **First-paint rules**
@@ -136,19 +136,59 @@ surface: `#obSubnav` is transparent and its segmented workspace control uses
   `back.core.helpers.UIBranding._derive_aurora_hex`) — there is no unstyled or
   undefined state.
 - `--db-gradient-primary` (`linear-gradient(120deg, var(--db-primary),
-  var(--db-gradient-end))`) is the only gradient used on filled CTAs
-  (`.btn-primary`, `.ob-subnav-save-btn`) and the selected L2 workspace chip.
-  `--db-gradient-end` is Primary mixed 45% toward Aurora, contrast-corrected
-  server-side against `--db-on-primary` — never hardcode a second color on a
-  button.
+  var(--db-gradient-end))`) is a defined design token but no component uses it
+  any more: filled CTAs use the solid Create tokens (see below). `--db-gradient-end`
+  is Primary mixed 45% toward Aurora, contrast-corrected server-side against
+  `--db-on-primary` — never hardcode a second color on a button.
 - `--db-gradient-rail` (`linear-gradient(180deg, var(--db-primary),
   var(--db-aurora))`) is reserved for the sidebar's 3px active-row leading bar
   only.
 - `--db-halo` and `--db-canvas-warm` are the only Aurora-aware page-level
   treatments; forms, tables, and modals stay flat `--db-surface-warm` with no
   gradients.
-- Resting cards (`.card`) now carry `--db-shadow-sm` in addition to their
-  1px border — previously the shadow was overlay-only.
+- Resting cards (`.card`) stay flat: 1px border only, `box-shadow: none`.
+  Elevation (`--db-shadow-*`) is reserved for floating surfaces
+  (dropdowns, modals, overlays, transient toasts).
+
+**Databricks button styles: Create (filled) and Share (outlined)**
+
+- Settings → Configuration → UI → Theme exposes two colour inputs, next to
+  Primary and Aurora: **Create button color** (`button_primary_color`) and
+  **Share button color** (`button_secondary_color`). Both default to the
+  Databricks Catalog browse page values (Create `#2272B4`, Share label
+  `#11171C`) and are stored in the `ui_branding` global-config document.
+- Blank or invalid stored values fall back to the defaults (never a load
+  error), like Aurora. Defaults use the published Databricks companion tints
+  exactly (Create hover `#1D619C`, Share border `#C6C9D1`, Share hover
+  `#F0F1F3`); custom colours derive them (Create hover = 14% toward black,
+  Share border = 76% toward white, Share hover = 6% tint on white, on-Create
+  label = WCAG-safe black or white).
+- The backend derives them in `back.core.helpers.UIBranding.derive_button_palette`;
+  `settings.js` mirrors that derivation for the live preview and must stay
+  numerically identical.
+- The server injects `--db-btn-primary`, `--db-btn-primary-hover`,
+  `--db-btn-primary-on`, `--db-btn-secondary`, `--db-btn-secondary-border`
+  and `--db-btn-secondary-hover` through `#uiBrandingTokens`. `main.css`
+  ships the same defaults in `:root`.
+- Mapping: `.btn-primary` = **Create** (solid `--db-btn-primary`, no gradient,
+  no resting shadow). Every other Bootstrap action variant = **Share**
+  (`.btn-secondary`, `.btn-outline-secondary`, `.btn-outline-primary`,
+  `.btn-success`, `.btn-warning`, `.btn-info`, `.btn-light`, `.btn-dark` and
+  their outline forms): white `--db-surface-warm` at rest, `--db-btn-secondary-border`
+  1px border, `--db-btn-secondary` label, `--db-btn-secondary-hover` on hover.
+  Class names may stay semantic for JS/intent; the paint is Share.
+- Destructive exception: `.btn-danger` and `.btn-outline-danger` keep the Share
+  structure with danger colours (`--db-status-danger`). `.btn-link` stays
+  text-only; `.btn-close` is unchanged.
+- This covers page CTAs, modal footers, section headers, and Studio / graph
+  toolbars. Navbar chrome (Save / Close / Resume) uses the Genie chip style
+  instead — see Unified app chrome below.
+- Geometry is Du Bois md for every `.btn` / `.btn-sm` / `.btn-lg`: height
+  `--db-btn-height` (32px), radius `--db-btn-radius` (4px), font
+  `--db-btn-font-size` / `--db-btn-font-weight` (13px / 500), horizontal
+  padding `--db-btn-padding-x`. Navbar chrome reuses the same tokens.
+  `.btn-link` and `.btn-close` stay out of that ramp. Form fields keep
+  `--db-radius-control` (2px); only buttons use `--db-btn-radius`.
 
 ### Accent Use and Button Hierarchy
 
@@ -162,11 +202,13 @@ The Clarity indigo accent (`--db-primary`) is used for high-signal moments:
 
 Button hierarchy in `global/css/components.css` is mandatory:
 
-- `.btn-primary` is the only **filled primary** action and should be the
+- `.btn-primary` (Create) is the only **filled primary** action and should be the
   rightmost section CTA.
-- Secondary solid and non-danger outline variants remain unfilled/neutral.
-- `.btn-outline-danger` is the semantic destructive exception (red text/border,
-  soft-danger hover background), without turning it into a generic filled CTA.
+- Every other non-danger action variant is **Share** (outlined on the white
+  surface with the secondary button tokens) — including `.btn-outline-primary`
+  and the solid/outline success/warning/info/light/dark classes.
+- `.btn-danger` / `.btn-outline-danger` are the semantic destructive exception
+  (Share structure, red text/border, soft-danger hover), never a filled CTA.
 - Status/destructive intent cannot rely on color alone; include icon + label.
 
 ### Typography
@@ -201,7 +243,7 @@ Status color is assistive, not sufficient alone: provide icon + label text.
 
 - Resting component borders are one-pixel and warm (`--db-border` /
   `--db-border-light`).
-- Shared shape scale is mandatory: `14px` cards, `10px` controls/buttons, pill
+- Shared shape scale is mandatory: `2px` cards, `2px` controls/buttons, `2px`
   chips (`--db-radius-chip`).
 - Resting cards/forms/tables keep `box-shadow: none`; elevation is reserved for
   floating surfaces (dropdowns, modals, overlays, transient toasts).
@@ -226,15 +268,12 @@ the entire app chrome — never duplicate or substitute any of it:
 
 | Element | Provided by `base.html` | Don't reimplement |
 |---------|-------------------------|-------------------|
-| L1 navbar (top) | `<nav class="navbar navbar-expand-lg navbar-light">` driven by `menu_config.json` | a custom top bar |
-| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the domain identity launcher, segmented Domain / Ontology / Mapping / KG workspace control, breadcrumb, and Versions → Close → Save actions | a second nav element |
-| Breadcrumb | `#obBreadcrumb` inside `#obBreadcrumbWrap` (`<li>` in the L2 subnav row), populated by `breadcrumb.js` | a per-page breadcrumb |
-| Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav | a per-page save button |
+| Unified app chrome | `<nav id="obSubnav" class="ob-subnav navbar navbar-light">` — always visible; left = sidebar toggle + brand; right = Context crumb, Close → Save, app switcher (`#obAppSwitcher`), Activity, User | a second top bar or page-local chrome |
+| Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of `#obSubnav`, with dirty dot and shortcut keycap | a per-page save button |
 | Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
-| Notification Center dropdown | `#notifCenterDropdown` (bell) | a per-page notif list |
-| Task Tracker dropdown | `#taskTrackerDropdown` (hourglass) | a per-page task panel |
+| Activity Center dropdown | `#activityCenterDropdown` (`bi-inboxes`) | a per-page tasks + notifications panel |
 | Help Center modal | included via `partials/layout/help_modal.html` | a custom help dialog |
-| Workspace Map modal | included via `partials/layout/_workspace_map_modal.html`, opened from `#domainContextTrigger` | a duplicate workspace launcher |
+| Workspace Map modal | included via `partials/layout/_workspace_map_modal.html`, opened from `#domainContextTrigger`; header top-right has Save/Close (`data-navbar-action`) above the version switch strip | a duplicate workspace launcher |
 | UC File Browser modal | included via `partials/layout/uc_file_browser_modal.html` | another file picker |
 | Body data attributes | `data-app-role`, `data-domain-role`, `data-app-mode` | re-fetching them |
 | Bootstrap JS bundle | loaded after `{% block content %}` | re-loading Bootstrap |
@@ -295,6 +334,13 @@ modal, not a sixth sidebar family.
 
 Rules for sidebar pages:
 
+- The active section is a Databricks-style **white page panel** (title,
+  subtitle and body on white, 1px border). Under `.section-header`, wrap
+  the rest of the section in `<div class="card"><div class="card-body">…</div></div>`
+  (or an equivalent `.card` workspace such as Versions /
+  `ob-tabs-wrap`). Do not leave tiles, tables, forms, or empty states
+  floating outside a card. Reference: Domain → Versions
+  (good) vs a bare Validation layout (bad).
 - The sidebar **must** be the `_sidebar_nav.html` partial driven by
   `menu_config.json` — never hand-code `<nav class="sidebar-nav">` items.
 - Section ids are `<menu-item-id>-section`. The id must match the
@@ -363,9 +409,17 @@ keyboard handling.
   and on `popstate` (Back / Forward work).
 - Collapsed/expanded state is persisted in `localStorage` under
   `ontobricks-sidebar-collapsed`. **Default state is collapsed** — do
-  not change this default.
-- The collapse toggle button is injected automatically at the top of
-  the sidebar. Do not author your own toggle.
+  not change this default. Preference is applied before first paint by
+  synchronous `global/js/sidebar-collapse-init.js` (sets
+  `html.ob-sidebar-collapsed`); `sidebar-nav.js` keeps `.sidebar-nav.collapsed`
+  in sync. Do not remove the pre-paint script or reintroduce a flash of
+  the expanded rail on load.
+- The collapse toggle is a **fixed chrome control** (`#obSidebarToggle`,
+  `.ob-subnav-sidebar-toggle`) placed left of the brand (and still
+  visible on Settings, left of the return link). `SidebarNav._setupCollapse()`
+  reveals it when a `.sidebar-nav` exists and removes any legacy in-rail
+  `.sidebar-toggle`. Do not inject a toggle into the sidebar. It has no
+  hover highlight (no `:hover` background); do not add one.
 - A `sidebarSectionChanged` `CustomEvent` (`detail: { section,
   targetSection }`) is dispatched on `document` after every switch.
   This is the official extension point — listen to it instead of
@@ -384,11 +438,11 @@ keyboard handling.
 
 - Sidebar width: `200px` expanded, `48px` collapsed (driven by
   `.sidebar-nav.collapsed`). Do not override per page.
-- The sidebar is a **framed card**, not a flush rail: `1px solid
-  var(--db-border)`, `var(--db-radius-card)` on all four corners,
-  `margin: 0`, `height: 100%`. The **shell** owns the 0.5rem outer
-  gutter (`.sidebar-layout { padding: 0.5rem; gap: 0.5rem; }`); do not
-  put a 0.5rem margin on `.sidebar-nav` or size it with
+- The sidebar has no background (`background: transparent`) and no border
+  (`border: none`), matching the unified chrome bar (`#obSubnav`):
+  `margin: 0`, `height: 100%`. The **shell** owns the compact outer
+  gutter (`.sidebar-layout { padding: 0.15rem 0.25rem 0.25rem; gap: 0.25rem; }`); do not
+  put a margin on `.sidebar-nav` or size it with
   `calc(100% - 1rem)`. Don't reintroduce the `border-right`-only
   hairline. See *Desktop geometry, scroll, and bottom alignment*.
 - Nav-link visual: `0.82rem`, left-border accent of `3px transparent`
@@ -409,6 +463,11 @@ keyboard handling.
   the `data-domain-saved` body attributes.
 - Badges inside a nav-link are auto-wrapped into the `.nav-label`
   span by the collapse logic and hidden when collapsed.
+- When the sidebar is collapsed, hover tooltips (`placement: right`,
+  `trigger: hover`, `container: body`) indicate the feature name via
+  Bootstrap Tooltip, powered by `data-sidebar-title="{{ item.label }}"` on
+  each link. When expanded, tooltips are disabled so they do not duplicate
+  the visible label.
 
 **Don'ts**
 
@@ -436,19 +495,18 @@ and `global/css/sidebar-layout.css`.
 **Shell.** On desktop, `.sidebar-layout` is
 `height` / `max-height: calc(100vh - var(--ob-chrome-height, 60px))`,
 `padding: 0.25rem 0.5rem 0.5rem`, `gap: 0.5rem`, `box-sizing: border-box`,
-`overflow: hidden`. `--ob-chrome-height` remains navbar + L2, written only
-by `breadcrumb.js`.
+`overflow: hidden`. `--ob-chrome-height` is the single `#obSubnav` bar height,
+written only by `breadcrumb.js`.
 
-**Gutter.** `.ob-subnav-nav` owns only the `0.25rem` space above the visible L2
-workspace rail (`padding: 0.25rem 0 0`); `.sidebar-layout` owns the matching
-`0.25rem` space below it. Therefore the visible L1→L2 and L2→page gaps are both
-4px. `.sidebar-nav` fills the shell (`margin: 0; height: 100%`), while
+**Gutter.** `.ob-subnav-nav` owns vertical padding inside the chrome bar
+(`padding: 0.15rem 0`); `.sidebar-layout` owns the matching space below the
+bar. Therefore the visible chrome→page gap is ~4px. `.sidebar-nav` fills the shell (`margin: 0; height: 100%`), while
 `.sidebar-content` uses `padding: 0 0.5rem`: no second vertical inset, and a
 0.5rem horizontal inset. Page-specific fixed panes may change horizontal
 padding but must keep a zero top/bottom inset. Do not restore vertical content
 padding that shifts the title below the sidebar or shortens the pane.
-Every `.sidebar-layout .section-header` uses `padding-top: 0.5rem` and
-`margin-bottom: 0.5rem !important`, so the space above the title equals the
+Every `.sidebar-layout .section-header` uses `padding-top: 0.25rem` and
+`margin-bottom: 0.25rem !important`, so the space above the title equals the
 space below the subtitle, identically across sections (including Ontology
 Studio and Business Views). The top inset must not be zeroed on desktop.
 
@@ -468,10 +526,10 @@ main surface vs the menu, not stuffing every form field into one viewport.
 **Rendered invariant.** At 1600×1000, `.sidebar-nav` and the visible
 primary pane share `getBoundingClientRect().bottom` within **1px**.
 The visible section title box (`.section-header h4`, including its icon) sits
-**0.5rem (8px ±1px)** below the sidebar content top — the same gap as subtitle
+**0.25rem (4px ±1px)** below the sidebar content top — the same gap as subtitle
 → content. Desktop headers must not use a negative transform. The
-visible L1→L2 and L2→sidebar gaps are both **4px ±1px**. The gap from subtitle
-to primary content is **8px ±1px**.
+visible chrome→sidebar gap is **2.5px ±1px**. The gap from subtitle
+to primary content is **4px ±1px**.
 Fixed-height routes must not grow the document past the viewport by more
 than 1px.
 
@@ -491,24 +549,28 @@ and `0.5rem` horizontal padding) so `scrollWidth <= clientWidth` remains true.
 **Excluded.** Home, About, and Access Denied stay on Layout 2. True
 modals are not the measured pane.
 
-### Two-Level Navigation (L1 + L2 subnav)
+### Unified App Chrome (`#obSubnav`)
 
-The app chrome has **two horizontal nav levels**, both provided by `base.html`.
+The app chrome is **one horizontal bar** provided by `base.html`
+(`<nav id="obSubnav" class="ob-subnav navbar navbar-light">`). Former L1 and
+L2 are merged; do not restore a second top nav.
 
-#### L1 Navbar
+- Always visible. Brand, Activity, and User never hide with domain state
+  (on Home, the Activity button is not necessary and is hidden via CSS).
+- Domain chrome toggles via `updateDomainMenuVisibility(hasDomain)` in
+  `navbar.js` (elements marked `data-subnav-domain-chrome`):
+  - **Workspace page + loaded domain:** show Context crumb, Close/Save, app switcher.
+  - **Settings/Home + loaded domain:** show `#settingsDomainReturnLink` only
+    (hide workspace domain chrome).
+  - **No loaded domain:** hide domain chrome and the settings return.
+- User control is a Databricks-style initials avatar (`.ob-user-avatar`), not
+  `bi-person-circle`. Settings (admin-only, `#navSettingsLink` with a separator
+  underneath), Help, and Report an issue live inside the user dropdown. No gear
+  in chrome and no Settings row in `#obAppSwitcher`.
+- Visual contract: transparent bar over the canvas grey (no bottom border),
+  dark text, indigo hover/active emphasis.
 
-- Standard Bootstrap `<nav class="navbar navbar-expand-lg">`.
-- L1 is global app chrome: brand, icon-only Registry launcher, and global
-  utilities (warehouse, tasks, notifications, help, user menu).
-- L1 no longer carries a Domain link target. Domain identity and the workspace
-  map launcher live in L2 as `#domainContextTrigger`.
-- Other menus (Graph / digitaltwin) may be hidden via
-  `"navbar_hidden": true` in `menu_config.json`.
-- Visual contract: white L1 surface, warm one-pixel divider, dark text, indigo
-  active/hover emphasis.
-
-**Top-level menu icons** (source of truth: `menu_config.json`; keep
-`breadcrumb.js` `_ROUTE_MAP` in sync):
+**Top-level workspace icons** (source of truth: `menu_config.json`):
 
 | Menu | `id` | Icon |
 |------|------|------|
@@ -517,145 +579,92 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
 | Ontology | `ontology` | `bi-bezier2` |
 | Mapping | `assignment` | `bi-shuffle` |
 | Graph | `digitaltwin` | `bi-radar` |
-| Simulation | `simulation` | `bi-sliders2-vertical` |
-| Settings | `settings` | `bi-gear` |
+| Intelligence | `intelligence` | `bi-sliders2-vertical` |
+| Settings | `settings` | `bi-gear` (user dropdown only) |
 
-Do not reuse Domain's `bi-box` for Graph (or any other
-top-level menu). `tests/units/front/test_knowledge_graph_icon.py`
-asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
+Do not reuse Domain's `bi-box` for Graph (or any other top-level menu).
+`tests/units/front/test_knowledge_graph_icon.py` asserts Domain ≠ Graph.
 
-#### L2 Subnav (`#obSubnav`)
+**Layout (left → right inside `.ob-subnav-nav`):**
 
-- `<nav id="obSubnav" class="ob-subnav d-none">` — hidden by default.
-- Revealed by `updateDomainMenuVisibility(true)` in `navbar.js` when
-  `hasDomain` becomes true (domain has a name or content in session).
-- The slot remains singular and mutually exclusive:
-  - **Non-Settings + loaded domain:** show the normal domain context rail.
-  - **Settings + loaded domain:** show only the return link
-    (`#settingsDomainReturnLink`) inside `#settingsDomainReturnNav`.
-  - **Any page + no loaded domain:** hide all L2 chrome.
-- `breadcrumb.js` must never reveal `#obBreadcrumbWrap` on Settings pages.
-  The guard runs before removing `d-none`, preventing a transient breadcrumb
-  while asynchronous navbar state resolves.
-- Layout (left → right inside `.ob-subnav-nav`):
-  1. **Domain identity launcher** (`#domainContextTrigger`): current domain
-     status → name → version, opens `#workspaceMapModal`, and updates its
-     accessible label from `/navbar/state`.
-  2. **Workspace segmented control** (`.ob-subnav-workspaces` containing
-     `.ob-subnav-workspace-list`): Domain, divider, Ontology, Mapping, and
-     Graph. The current workspace is a static `aria-current="page"`
-     target; only the other workspace targets retain Bootstrap dropdowns.
-  3. A `.ob-subnav-flex-spacer` (`flex: 1`) — always pushes the right group to the edge.
-  4. **Breadcrumb** (`#obBreadcrumbWrap`) — hidden until >1 crumb.
-  5. **Versions button** (`.ob-subnav-switch-btn`, icon `bi-123`).
-  6. **Close Domain button** (`.ob-subnav-close-btn`).
-  7. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`).
-- The three tab toggles (Ontology/Mapping/KG) do **not** carry
-  `nav-requires-domain`. They are enabled whenever the subnav is
-  visible. Specific dropdown items that truly need a UC-saved domain
-  keep `dropdown-requires-domain`.
-- `--ob-chrome-height` = navbar height + subnav height (subnav already
-  contains the breadcrumb). Updated by `_updateChromeHeight()` in
-  `breadcrumb.js` and called from `updateDomainMenuVisibility`.
-- Active-state behavior is owned by `initSubnavActiveState()` and
-  `disableCurrentSubnavDropdown()` in `navbar.js`. The route-prefix match adds
-  `.active`, removes Bootstrap dropdown wiring and the matching menu, sets
-  `aria-current="page"`, and prevents navigation. Do not hard-code the active
-  workspace in Jinja and do not duplicate this behavior in page scripts.
-- Every non-active workspace keeps its original `.dropdown`,
-  `.dropdown-toggle`, `data-bs-toggle="dropdown"`, route and menu. A click opens
-  the existing Bootstrap menu; selecting an item navigates to its existing
-  route/section.
-- Visual contract: the L2 row is transparent with no full-width bottom
-  border. Domain / Ontology / Mapping / Graph sit in one compact
-  white segmented control (`--db-surface-warm`, one-pixel `--db-border`,
-  `--db-radius-control`). The selected workspace uses
-  `--db-primary-light` fill, `--db-primary-darker` text, and no dropdown;
-  non-selected workspaces retain their dropdowns. L1 and L2 dropdown items
-  use the same hover as the left sidebar (`--db-hover-indigo` well,
-  `9px` radius) — not a solid indigo invert, not a grey well. L1/L2
-  structure, order, and ownership are immutable.
-- Domain context geometry is fixed on desktop/tablet: `.ob-subnav-context-trigger`
-  stays exactly `200px` wide (matching expanded `.sidebar-nav` width), keeps
-  one-line ellipsis for long names, and shares the exact same fixed height as
-  `.ob-subnav-workspace-list` via one shared CSS source of truth. The shared
-  control height is `3rem`. Domain-name length must not change the row
-  height.
-- Workspace target geometry: `.ob-subnav-workspace-list` keeps its `0.2rem`
-  inset while direct `.ob-subnav-item` children and their `.ob-subnav-link`
-  targets stretch with `height: 100%`. Hover and selected backgrounds therefore
-  occupy the near-full inner rail height (approximately `40px` inside the
-  `48px` / `3rem` outer rail) without touching the segmented-control border.
-  The same stretch rule applies to all four workspace targets at every width.
-- The full `.ob-subnav-context-trigger` reads as a filled Domain badge:
-  `--db-primary-soft` background (darker than `--db-primary-light`) with
-  primary-darker text and **no** hard primary outline. Hover darkens the
-  wash (`--db-primary-soft-hover`); keyboard focus keeps `--db-focus-ring`.
-- Inside `.ob-subnav-context-copy`, status and labels are centered against the
-  full `200px` control. The leading `bi-box` icon may be absolutely positioned
-  at the left so copy remains visually centered. The copy is a two-row grid:
-  lifecycle status in row 1 of the main text area, domain name (ellipsized) in
-  row 2 of the main text area, and the raw numeric version in a right-side
-  column spanning both rows. The version cell is emphasized with a darker
-  themed fill (`--db-primary-darker`), contrast-safe text (`--db-on-primary`),
-  larger bold numerals, and shared control-radius tokens. Keep a small explicit
-  row gap between status and name in that scoped grid to improve legibility
-  without increasing the shared rail height. The scoped
-  `.ob-subnav-context-copy .domain-status-badge` removes Bootstrap's `ms-2`
-  offset only in this context, and `.ob-subnav-context-name` remains
-  constrained as a grid item (`min-width: 0` with bounded width) so long names
-  cannot blow out the 200px control or overlap the icon/version cells.
-- The segmented control's left edge aligns exactly with the framed sidebar
-  panel's left edge. Both use the shell's `0.5rem` horizontal outer gutter:
-  `.sidebar-layout { padding: 0.25rem 0.5rem 0.5rem; }` and
-  `#obSubnav .container-fluid { padding-left: 0.5rem !important; }`. The ID
-  specificity and priority are required because the later-loaded legacy
-  full-width body rule zeroes nested `.container-fluid` padding with
-  `!important`. Keep the L2 right padding independent at `1rem` (`0.5rem` on
-  mobile).
-- The selected segment is rounded inside the outer control
-  (`calc(var(--db-radius-control) - 2px)`), not a square tab and not an
-  underlined tab. Keyboard focus uses `--db-focus-ring` plus a transparent
-  outline for forced-colour support.
-- Domain-action styles are fixed, and the rendered order is owned explicitly by
-  sequential Jinja blocks in `templates/base.html` (Versions → Close → Save).
-  `menu_config.json` supplies each action's metadata and IDs, but its
-  `navbar_actions` array order does not control render order. Save is the only
-  filled primary control (`--db-primary` / `--db-on-primary`); Versions
-  remains a neutral white outline with an indigo-soft hover; Close remains a
-  neutral white outline with danger text and a soft-danger hover. Preserve
-  existing IDs, permission classes, and handlers.
-- Shared ownership: L2 markup stays in `templates/base.html`, styling stays in
-  `static/global/css/main.css`, active behavior stays in
-  `static/global/js/navbar.js`, and menu contents stay driven by
-  `menu_config.json`. Never add per-page L2 CSS or JS.
-- Stable IDs for the Settings/domain switch contract are mandatory:
-  `#domainWorkspaceSubnavNav`, `#settingsDomainReturnNav`, and
-  `#settingsDomainReturnLink`. On desktop/tablet, the settings return control
-  (`#settingsDomainReturnLink` / `.ob-settings-domain-return-link`) keeps
-  exact `200px` width/min-width/max-width so it aligns with the expanded
-  `200px` sidebar width and same shell left gutter.
-- Mobile contract (below `768px`): keep all four workspace targets plus
-  Save / Versions / Close, but show them as titled icons by hiding
-  only their `.ob-subnav-label`. Hide the redundant inline breadcrumb and
-  flex spacer, and compact horizontal padding. Reset
-  `.ob-subnav-context-trigger` and `#settingsDomainReturnLink`
-  width/min-width/max-width so desktop `200px` fixed widths do not force
-  overflow. Do not make the subnav horizontally scrollable: Bootstrap dropdowns
-  must remain able to escape the row without clipping. Mobile keeps the
-  selected-color domain trigger as an icon-only control and hides
-  status/name/version details
-  (`.ob-subnav-context-copy` stays hidden). The text stays in the DOM for
-  accessible names, and every workspace target carries a `title` tooltip.
+1. **Sidebar collapse toggle** (`#obSidebarToggle`, fixed — not under
+   `data-subnav-domain-chrome`): revealed only when the page has a
+   `.sidebar-nav`. Sits left of the brand.
+2. **Brand** (`#brandLogoImg` + `#brandTitleText` + optional app version):
+   links to `menu_config.brand.route`.
+3. **Settings/Home return** (`#settingsDomainReturnNav`, mutually exclusive
+   with domain chrome): aligned on the right, just before Activity, shown on
+   Settings/Home when a domain is loaded.
+4. **`.ob-subnav-flex-spacer`** (`flex: 1`) — pushes the right group to the edge.
+5. **Domain crumb** (`#domainContextTrigger`, `.ob-subnav-crumb`, domain chrome):
+   domain name, optional status badge, version badge (`#domainContextVersion`),
+   and caret. Opens `#workspaceMapModal` (also hosts Switch Version / New Version).
+6. **Close** (`.ob-subnav-close-btn`) then **Save** (`#menuSaveDomain`,
+   `.ob-subnav-save-btn`) — domain chrome. See action-styles below.
+7. **App switcher** (`#obAppSwitcher`, `.ob-subnav-app-switcher`): Databricks-style
+   9-dot `nav-icon` after Close/Save. Opens `.ob-app-switcher-menu` as a vertical
+   list (icon + title + subtitle + check) for Context / Ontology / Graph /
+   Intelligence. Each item opens that workspace's **Home** (`?section=home`).
+   Graph + Intelligence carry `nav-requires-graph`. Current workspace gets
+   `.is-current` via `initAppSwitcherActiveState()`. Popover min-width `22rem`;
+   menu/items use rounded boxes (`0.5rem` / `0.375rem`). Workspace Home tiles
+   follow the Databricks MCP card pattern in `_workspace_home.html`.
+8. **Settings/Home return link** (`#settingsDomainReturnNav`): when active on
+   Settings/Home, aligned on the right immediately preceding Activity.
+9. **Activity** (`#activityCenterToggle`) then **User** (`#userMenuDropdown`).
+   Settings is the admin-gated `#navSettingsLink` inside the user dropdown
+   (`data-requires-app="admin"`), not an app-switcher row.
+
+- The old segmented workspace dropdown rail and the separate L1 top navbar are
+  **removed**. Do not restore them. Per-section navigation stays in each page's
+  left sidebar; the app switcher is the only workspace navigator.
+- `--ob-chrome-height` = `#obSubnav` height only. Updated by
+  `_updateChromeHeight()` in `breadcrumb.js` (also called from
+  `updateDomainMenuVisibility`).
+- Active-state behavior for workspaces is owned by `initAppSwitcherActiveState()`
+  (called from `initSubnavActiveState()`). Do not hard-code the active workspace
+  in Jinja and do not duplicate this behavior in page scripts.
+- Domain crumb is text (`--db-text`, weight 600; hover `--db-primary-darker` on
+  `--db-hover-indigo`). Name ellipsized (`max-width: 10rem`); rail height stays
+  `2.25rem`.
+- Left edge aligns with the sidebar panel: `.sidebar-layout` padding and
+  `#obSubnav .container-fluid { padding-left: 0.25rem !important; }` (ID
+  specificity required against legacy `!important` zeroing). Right padding
+  stays `0.5rem`.
+- Keyboard focus uses `--db-focus-ring` plus a transparent outline for forced-colour support.
+- Action styles: Close, Save, and Resume share `.ob-subnav-action` as Genie
+  Code-inspired chips (Du Bois md: 32px / `--ob-subnav-btn-height`, 4px /
+  `--ob-subnav-btn-radius`, 13px weight 500): white surface, 1px `--db-border`,
+  secondary label/icon. Hover uses the same fill as Activity
+  (`--db-hover-indigo`) — never a gradient and never the Create/Share fills.
+  Save and Close are **icon-only** (visible label removed; `title` + `aria-label`
+  required): bare at rest, and on hover they show the same `--ob-subnav-icon-hit`
+  (2rem) / `--ob-subnav-icon-radius` square as Activity and the feature switcher,
+  filled with `--db-hover-indigo`. Resume is **text-only** (`Resume`, no icon),
+  warning-coloured. Save keeps its dirty dot (`.ob-subnav-save-dirty`). No
+  shortcut keycap.
+  Rendered right-side order: Context → Close → Save → app switcher → Activity →
+  User. Preserve existing IDs, permission classes, and handlers.
+- Shared ownership: markup in `templates/base.html`, styling in
+  `static/global/css/main.css`, behavior in `static/global/js/navbar.js`, menus
+  from `menu_config.json`. Never add per-page chrome CSS or JS.
+- Stable IDs: `#settingsDomainReturnNav`, `#settingsDomainReturnLink`,
+  `#obAppSwitcher`. The settings return control sits on the right side of the chrome
+  bar immediately preceding Activity Center (`#activityCenterToggle`).
+  The label is never truncated (natural width, `white-space: nowrap`).
+- Mobile contract (below `768px`): keep app switcher, Save, and Close as titled
+  icons by hiding `.ob-subnav-label`. Hide the flex spacer,
+  `.ob-subnav-context-copy`, and the save keycap. Context collapses to its caret.
+  Do not make the bar horizontally scrollable.
 
 **Tokens**
 
 | Level | Token | Value |
 |-------|-------|-------|
-| L1 navbar background | `--db-navbar-bg` | `#FFFFFF` |
-| L2 workspace control | `--db-surface-warm` + `--db-border` | white segmented surface on the transparent row |
-| L2 Domain badge | `--db-primary-soft` / `--db-primary-soft-hover` | filled wash, no primary outline |
-| Breadcrumb strip | `.ob-subnav-breadcrumb-wrap` | muted text + one-pixel left separator |
+| Chrome bar background | transparent (canvas grey shows through) | no bottom border |
+| App switcher current row | `--db-primary-light` / `--db-primary-darker` | `.ob-app-switcher-item.is-current` (+ visible check) |
+| Context crumb | `--db-text` / `--db-hover-indigo` | quiet text crumb on the chrome bar |
+| Save dirty dot | `--db-status-warning` | `.ob-subnav-save-dirty`, shown only when dirty |
 
 **New Domain flow**
 
@@ -673,72 +682,98 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
 - ❌ Adding a third nav level above or below these two.
 - ❌ Toggling `#obSubnav` visibility from page code — it is controlled
   exclusively by `updateDomainMenuVisibility` in `navbar.js`.
-- ❌ Adding `nav-requires-domain` to the L2 tab toggles — the subnav
-  itself being hidden is the gate. Use `dropdown-requires-domain` on
-  items inside a dropdown that need UC.
-- ❌ Restoring a full-width L2 background, bottom border, active underline,
+- ❌ Restoring the L2 workspace dropdown rail
+  (`.ob-subnav-workspaces` / `#subnavDomainDropdown` / etc.) beside the
+  Context crumb — use `#obAppSwitcher` only.
+- ❌ Restoring a separate L1 top navbar above `#obSubnav`
+- ❌ Restoring a full-width second-row background, active underline,
   square selected tab or horizontally scrollable strip.
-- ❌ Removing dropdowns from inactive workspaces, or restoring dropdown or
-  navigation behavior on the active workspace.
-- ❌ Splitting the four workspaces into independent unframed controls; they
-  stay inside `.ob-subnav-workspaces > .ob-subnav-workspace-list`.
-- ❌ Giving L2 a different left gutter from `.sidebar-layout`; the segmented
-  control and sidebar panel must remain vertically aligned.
-- ❌ Filling Versions or Close with the primary colour. Save is the only
-  filled primary action in L2.
-- ❌ Hard-coding `.active`, `aria-current`, dropdown removal, or route-prefix
-  checks in `base.html` or page code — `navbar.js` owns that state.
-- ❌ Moving the Save Domain button out of the L2 subnav.
+- ❌ Giving L2 a different left gutter from `.sidebar-layout`; the L2 row
+  and sidebar panel must remain vertically aligned.
+- ❌ Filling Save/Close with Create/Share colours, or a hover gradient on
+  chrome actions. Chrome chips stay bordered neutrals; hover is Activity's
+  `--db-hover-indigo` only.
+- ❌ Hard-coding `.is-current` / `aria-current` on app-switcher items in
+  Jinja or page code — `navbar.js` owns that state.
+- ❌ Restoring a 2×2 tile grid for the app switcher — keep the Databricks
+  line-item list (`.ob-app-switcher-list` / `.ob-app-switcher-item`).
+- ❌ Moving the Save Domain button out of `#obSubnav`.
 - ❌ Manually setting `--ob-chrome-height` from page code.
 
-### Breadcrumb Behaviour & Style
+### Breadcrumb (removed)
 
-The breadcrumb is owned by `global/js/breadcrumb.js`. It is **not**
-configured per page — it is fully derived from the URL and the
-currently-active sidebar section.
+The inline L2 breadcrumb was removed (Nov 2026). Do not reintroduce a
+breadcrumb trail in the L2 row or below the navbar; the active workspace is
+already shown by the workspace track, and the section by the sidebar.
 
-**Location**
-
-The breadcrumb now lives **inside the L2 subnav row** as
-`<li id="obBreadcrumbWrap" class="ob-subnav-item ob-subnav-breadcrumb-wrap d-none">`.
-It is not a standalone `<nav>` below the navbar. `breadcrumb.js`
-shows/hides `#obBreadcrumbWrap` (not `#obBreadcrumb`).
-
-**Behaviour**
-
-- `breadcrumb.js` auto-runs on `DOMContentLoaded`, builds the crumbs
-  and removes `d-none` from `#obBreadcrumbWrap` only when there is
-  more than one crumb to show.
-- The route hierarchy is fixed in `breadcrumb.js`:
-  Registry → Domain → Ontology → Mapping → Graph (plus
-  Settings as a flat entry). Adding a new top-level page means
-  extending `_ROUTE_MAP` and `_HIERARCHY` — not patching templates.
-- The "Domain" crumb label is read from `#currentDomainName` (set by
-  the navbar).
-- The last crumb is the active sidebar section, updated live on every
-  `sidebarSectionChanged` event.
-- `breadcrumb.js` exposes itself as `window.OBBreadcrumb` so
-  `navbar.js` can call `OBBreadcrumb._updateChromeHeight()` after the
-  subnav appears/disappears.
-- `--ob-chrome-height` = navbar height + subnav height (breadcrumb is
-  inside the subnav, so no separate measurement). **Don't set this
-  variable from anywhere else.**
-
-**Style**
-
-- Inline in the subnav row: `font-size: 0.65rem`, italic, no icons,
-  muted colour, left border separator.
-- Active crumb: `--db-text`, weight 500.
-- Links: `--db-text-muted`, no underline; underline on `:hover`.
+`global/js/breadcrumb.js` now only keeps `--ob-chrome-height` in sync and
+exposes `window.OBBreadcrumb._updateChromeHeight()` for `navbar.js`.
 
 **Don'ts**
 
-- ❌ Manually mutating `#obBreadcrumbList` from page JS. Use the
-  `_ROUTE_MAP` extension or rely on `sidebarSectionChanged`.
-- ❌ Adding a per-page breadcrumb — the global one is the only one allowed.
-- ❌ Toggling `#obBreadcrumb` or `#obBreadcrumbWrap` from page code.
-- ❌ Forcing the breadcrumb visible on a single-crumb page — use
-  `.page-header` instead.
+- ❌ Adding a breadcrumb trail to the L2 row or any page header.
+- ❌ Setting `--ob-chrome-height` from page code (see above).
+
+### Section Body Surface (Databricks page panel + card under the title)
+
+Canonical reference: **Domain → Versions** (`partials/domain/_domain_versions.html`).
+Like Databricks product pages, the active sidebar section
+(`.sidebar-section.active`) is **one white panel** with a 1px `--db-border`
+border, only the **top-left corner rounded** (`--ob-page-panel-radius`, 0.5rem,
+declared on `.sidebar-layout`; the other corners stay square) and
+`padding: var(--ob-page-padding)` (also declared on `.sidebar-layout`). Title, subtitle and body all sit on that
+white panel; only the sidebar and the outer gutter stay on the warm canvas.
+Full-height sections that override padding by ID (`#logs-section`,
+`#design-section`, `#map-section`, `#sigmagraph-section`, `#graphql-section`)
+must reuse `var(--ob-page-padding)`.
+
+Typography (`.section-header`): title `h1`–`h4` 1.375rem (22px), weight 600,
+1.75rem line, `--db-text`; title icon 0.85em in `--db-text-secondary`;
+subtitle `p` 0.8125rem (13px) in `--db-text-secondary`. The header has no
+top padding (the panel owns it) and a 0.75rem gap to the body.
+
+Inside the panel every section follows the same two-zone layout:
+
+1. **Title zone.** `.content-section` holds one
+   `.section-header` (title, subtitle, top-right actions). Nothing else
+   sits in the title zone.
+2. **Body zone — on a bordered card.** Everything below the header lives in one
+   `.card` (or an equivalent `.card` workspace such as `.card h-100` +
+   `ob-tabs-wrap`), with `.card-body` for padding when the content is not
+   already a card-integrated workspace.
+
+Skeleton:
+
+```html
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-<icon> me-2"></i>Section Title</h4>
+            <p class="text-muted mb-0 small">One-line description.</p>
+        </div>
+        <div class="d-flex gap-2"><!-- actions --></div>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <!-- tiles, tables, forms, empty / loading states -->
+        </div>
+    </div>
+</div>
+```
+
+Rules:
+
+- Never leave body content (tiles, tables, forms, placeholders, spinners,
+  empty states) directly under `.section-header` outside a card.
+  Validation before the fix is the counter-example.
+- Do not paint `.sidebar-content` white or add a second page border: the
+  page panel belongs to `.sidebar-section.active` only.
+- Do not nest a second white card around a body that already is a card
+  (Versions, `_domain_metadata`, Ontology Studio split shells). Full-height
+  split panes keep their existing `.card` / `ob-split-shell` structure.
+- The sidebar itself (`.sidebar-nav`) stays transparent.
+- Contract tests: `tests/units/front/test_section_content_white_panel.py`,
+  `tests/units/front/test_databricks_page_panel_contract.py`.
 
 ### Section / Partial Conventions
 
@@ -834,10 +869,9 @@ hide inside a Bootstrap `.card-header`.
 
 **States**
 
-`.btn-primary` is the only variant that fills. Everything else — including
-`.btn-secondary`, `.btn-success` and `.btn-danger`, which the app renders as
-outlines — stays unfilled in **every** state: hover tints the background,
-active deepens it slightly, and focus keeps the resting background and shows
+`.btn-primary` (Create) is the only variant that fills. Everything else is
+Share (or danger-Share): white surface at rest, hover tints the surface,
+active keeps the hover tint, and focus keeps the resting surface and shows
 `--db-focus-ring` alone. Bootstrap's own `:focus-visible` repaints a button
 with its *hover* palette, which for these variants is the solid fill we
 dropped, so `components.css` pins both `:focus` and `:focus-visible`. When you
@@ -860,20 +894,104 @@ so `main.css` re-pins `.form-control-sm`, `.form-select-sm` and every
 `.input-group-sm > *` to the token — otherwise small joined controls silently
 fall back to Bootstrap's legacy 4px next to their full-size siblings.
 
+#### Kebab / overflow menu (`.ob-dbx-menu`) — Databricks Du Bois style
+
+When a section header has secondary actions that should not compete with the
+primary CTA (purge, refresh cache, import/export, …), put them in a **borderless
+⋮ kebab** immediately **left of** the primary button. Do not invent a second
+overflow pattern.
+
+**Files**
+
+| Piece | Location |
+|-------|----------|
+| Styles | `src/front/static/global/css/components.css` (`.ob-dbx-menu*`) |
+| Reference consumer | `src/front/templates/partials/dtwin/_build_more_actions.html` |
+
+**Skeleton**
+
+```html
+<div class="dropdown">
+    <button type="button"
+            class="btn btn-sm ob-dbx-menu-toggle border-0 shadow-none"
+            id="myMoreActionsBtn"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+            aria-label="More actions"
+            title="More actions">
+        <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end ob-dbx-menu"
+        aria-labelledby="myMoreActionsBtn">
+        <li>
+            <button type="button" class="dropdown-item">
+                <span class="ob-dbx-menu-icon" aria-hidden="true">
+                    <i class="bi bi-trash"></i>
+                </span>
+                <span class="ob-dbx-menu-label">Purge inferences</span>
+            </button>
+        </li>
+        <li>
+            <button type="button" class="dropdown-item">
+                <span class="ob-dbx-menu-icon" aria-hidden="true">
+                    <i class="bi bi-arrow-repeat"></i>
+                </span>
+                <span class="ob-dbx-menu-label">Refresh cache</span>
+            </button>
+        </li>
+    </ul>
+</div>
+```
+
+**Behaviour & style rules**
+
+- Toggle: **no border**, muted icon, hover / open → `--db-hover-indigo` well.
+  Use `bi-three-dots-vertical` (not a caret `dropdown-toggle`).
+- Menu: warm surface, one-pixel `--db-border`, `--db-shadow-md`,
+  `--db-radius-card`, ~13px (`0.8125rem`) labels — Du Bois action-menu density.
+- Each item is **icon + label** via `.ob-dbx-menu-icon` / `.ob-dbx-menu-label`.
+  Icons stay muted (`--db-text-muted`); labels use `--db-text`. Do **not** paint
+  the whole row `text-danger` — keep destructive confirmation in the click
+  handler (`showConfirmDialog`), not in the resting menu colour.
+- Sentence-case labels ("Purge inferences", "Refresh cache").
+- Role-gate items the same way as the equivalent header button (disabled + lock
+  icon for viewers/editors).
+- Wire actions with shared classes / `data-*` hooks (e.g.
+  `js-purge-inferences-btn`, `data-sync-action="…"`); do not use inline
+  `onclick=`.
+- Place the kebab **left of** the primary CTA in `.section-header` actions.
+  Never after the primary.
+
+**Anti-patterns**
+
+- ❌ `btn-outline-secondary` on the ⋮ toggle (Databricks kebabs are borderless).
+- ❌ Bootstrap `dropdown-toggle` caret on a kebab.
+- ❌ Red / danger text on resting menu rows.
+- ❌ Re-declaring `.ob-dbx-menu` styles in an area CSS file — extend
+  `components.css` if the shared contract needs a change.
+
 ### Tabs (`.ob-tabs`) — transparent underline rail
 
 There is **one** tab-navigation treatment across the application. It lives in
-`global/css/components.css`: a transparent, square rail with a 1px warm
-baseline. The active item keeps a transparent background, uses
-`--db-primary-darker` text at weight 600, and draws a 2px
-`--db-primary` underline. The rail has no outer fill, card outline, shadow, or
-radius, so it remains subordinate to the L2 workspace control and surrounding
-content surfaces.
+`global/css/components.css` and follows the Databricks product tabs (such as
+Computes / Serverless): a transparent, square rail with a continuous 1px
+baseline header line (`border-bottom: 1px solid var(--db-border)`), left-aligned
+13px labels spaced `1.5rem` apart (`gap`), and links with **no horizontal padding**
+so the active underline is exactly as wide as the label. Inactive labels use
+`--db-text-secondary` at weight 500. The active item keeps a transparent
+background, uses `--db-text` at weight 600, and draws a **3px** `--db-primary`
+underline sitting on top of the baseline border (`margin-bottom: -1px`). The
+rail has no outer fill, card outline, shadow, or radius.
 
-Inactive tabs use the configurable `--db-hover-indigo` well on hover. This
-token is derived from the branding colour selected in Settings and remains
-lighter than `--db-primary-light`; never substitute the fixed grey
-`--db-hover-warm` for tab navigation.
+Hover only recolours the label to `--db-primary` (follows the Settings
+branding colour); there is **no hover fill**. Keyboard focus draws a 2px
+`--db-primary` outline offset by 2px.
+
+Inside the page panel, enclosing workspace cards (`.sidebar-section > .content-section > .card`,
+`form.card`, `.card:has(.ob-tabs-wrap)`, `.card.ob-tabs-wrap`) have no border,
+shadow or card background, so there is never an enclosing box/border under the
+section title/sub-title; tabs and page content sit directly on the panel surface
+flush with the section header.
 
 Every tab navigation must carry `nav nav-tabs ob-tabs`. Use
 `ob-tabs--compact` only for constrained right-hand panels. Do not introduce
@@ -970,14 +1088,14 @@ surfaces:
   underline are owned by `.ob-tabs`; never override `.nav-link.active` in an
   area stylesheet.
 - Two densities are allowed:
-  - Standard: `.ob-tabs` (`0.9rem`, `0.5rem 0.875rem`) for pages, cards,
-    settings, and modals.
-  - Compact: `.ob-tabs.ob-tabs--compact` (`0.75rem`, `0.35rem 0.6rem`) for
-    narrow right-hand panels and generated panel tabs.
+  - Standard: `.ob-tabs` (`0.8125rem`, `0.5rem 0`, `1.5rem` gap) for pages,
+    cards, settings, and modals.
+  - Compact: `.ob-tabs.ob-tabs--compact` (`0.75rem`, `0.35rem 0`, `1rem` gap)
+    for narrow right-hand panels and generated panel tabs.
 - Layout helpers (`nav-fill`, `flex-shrink-0`, `mb-0`) may accompany
   `ob-tabs`. The catalogued combinations are:
   - `nav nav-tabs ob-tabs mb-0` — independent Domain / Settings surfaces.
-  - `nav nav-tabs ob-tabs` — Import / Registry modal.
+  - `nav nav-tabs ob-tabs` — Import / Home Registry tabs.
   - `nav nav-tabs ob-tabs nav-fill` — Domain → General / Ontology Generate /
     Ontology DQ / Business Rules / Axioms.
   - `nav nav-tabs ob-tabs nav-fill flex-shrink-0` —
@@ -1050,6 +1168,61 @@ surfaces:
 - ❌ Adding tab styles to `main.css`'s `.nav-tabs` block —
   that's the legacy fallback. New work goes through
   `.ob-tabs` in `components.css`.
+
+### Run Lists (`.ob-runs-table`) — Databricks Jobs → Runs style
+
+Graph → Build → Runs, Intelligence → Analytics → Runs and Settings →
+Automation → Runs share one flat list modelled on the Databricks Jobs → Runs
+page. Rows come only from `global/js/runs-render.js` (`RunsRender.*RunCells`);
+styling lives only in `components.css`.
+
+- Toolbar (`.ob-runs-toolbar`): run count (`.ob-runs-count`, e.g. `12 runs`)
+  on the left, Refresh on the right. Settings keeps its section-header Refresh
+  and Context filter.
+- Table: `table table-hover align-middle ob-runs-table`, plain `<thead>` (no
+  `table-light`, no inline `font-size` or column widths). Header 12px
+  semibold `--db-text-secondary` on a transparent row with a 1px
+  `--db-border` underline; cells 13px with `--db-border-light` hairlines;
+  hover `--db-hover`.
+- Columns use sentence case and **Start time** is always first, rendered as a
+  `--db-link` link (`.ob-run-link`) that opens the run details. Build runs
+  also show **Run ID** and **Duration**. The last column is a ghost
+  `.ob-run-details-btn` (visually hidden "Details" header).
+- Status is icon + word (`RunsRender.runStatus` → `.ob-run-status.is-*`):
+  Succeeded (success), Failed (danger), Running (info), Canceled / Pending
+  (muted). Version is plain `vN` text (`.ob-run-version`). Filled badges
+  (`*StatusBadge`, `versionBadge`) stay for the run-details modals only.
+- ❌ Filled status pills, grey header bands, or outline-primary eye buttons in
+  run-list rows.
+
+### Work-List Template (`.ob-filter-bar` + `.ob-runs-table`) — Databricks Query History style
+
+This is the **app-wide template for every flat work list**: a filter bar above
+one compact, hoverable table. Styles live in `global/css/components.css`;
+the free-text filter helper is `global/js/list-filter.js` (`ObListFilter.bind`).
+Used by Context → My Tasks, Graph → Build → Runs, Intelligence → Analytics →
+Runs, and the Home → My tasks tile (table only). Settings → Runs lists keep
+the same table but have no filter bar yet.
+
+- Filter bar (`.ob-filter-bar`, flex row with `gap: 0.5rem`):
+  - search: `.ob-filter-search` wrapping a leading `bi-search` icon and an
+    `input[type=search].form-control-sm`; filtered by `ObListFilter.bind`
+    on the rows' visible text.
+  - filter dropdowns (My Tasks only): Bootstrap `.dropdown` with a
+    `.ob-filter-btn` toggle that shows `Label: Value` and gains `.is-active`.
+  - row count: `.ob-runs-count` (`N runs`, or `N of M runs` while filtering).
+  - a trailing action such as Refresh gets `ms-auto` to sit on the right.
+- Table: `table table-hover align-middle ob-runs-table`, plain `<thead>`.
+  Rows are compact: cell padding `0.3rem 0.75rem`, row buttons `btn-sm` with
+  tighter vertical padding (see `.ob-runs-table .btn-sm`).
+- Re-apply the filter (`ObListFilter.bind(...).apply()`) after every render
+  so the count stays accurate.
+- **Status** is icon + word via `.ob-run-status.is-*`; no filled badges.
+  Row actions are `btn-sm btn-outline-secondary`.
+- Task-specific bits only (e.g. `.ob-tasks-title`, `.ob-tasks-meta`) live in
+  `domain/css/domain-collaboration.css`.
+- ❌ Per-list copies of the filter bar or table styles, separate tables with
+  uppercase captions, or filled status badges.
 
 ### Split-Panel Canvas Layout (canvas + resizable right panel)
 
@@ -1137,8 +1310,6 @@ These already exist; reuse before reinventing.
   *Loading Spinners* for the full contract.
 - **Page-level loading overlay** — `.domain-loading-overlay` already wired
   in `base.html` as `#domainLoadingOverlay`. Toggle via `.d-none`.
-- **Breadcrumb** — `#obBreadcrumbWrap` (`<li>` inside `#obSubnav`),
-  driven by `breadcrumb.js`; do not build a parallel breadcrumb.
 - **Save Domain button** — `#menuSaveDomain` (`.ob-subnav-save-btn`) in the
   L2 subnav. Enabled/disabled by `updateVersionStatus()` in
   `domain-actions.js`. Do not add a second Save button on a page.
@@ -1149,14 +1320,18 @@ These already exist; reuse before reinventing.
   `components.css`; see *Tabs (`.ob-tabs`) — transparent underline rail*
   above. `.ob-tab-content` is the optional independent bordered surface.
 - **Cards** — Bootstrap `.card` / `.card-header`; styling already neutered
-  to project tokens (`14px` radius, one-pixel border, no resting shadow).
+  to project tokens (`2px` radius, one-pixel border, no resting shadow).
 - **Forms** — Bootstrap `.form-control` / `.form-select` / `.form-label`;
-  one-pixel warm borders, white/warm surfaces, `10px` radius, themed focus ring.
+  one-pixel warm borders, white/warm surfaces, `2px` radius, themed focus ring.
 - **Alerts** — Bootstrap `.alert` with `.alert-success` / `.alert-danger`
   using project status background tokens.
 - **Wizard overlay** — `.wizard-form-overlay` for absolute-positioned
   blocking spinners over a form during async tasks.
 - **Keyboard shortcut overlay** — `.ob-shortcut-overlay` + `.ob-shortcut-card`.
+- **Kebab / overflow menu** — `.ob-dbx-menu-toggle` + `.ob-dbx-menu` (Du Bois
+  ⋮ menu). Icon+label rows; styles in `components.css`. Reference:
+  `partials/dtwin/_build_more_actions.html`. See *Section Header → Kebab /
+  overflow menu*.
 
 ### Loading Spinners
 
@@ -1202,6 +1377,12 @@ loading spinner — leave it as is.
   spinner. The override lives once in `main.css`.
 - ❌ Redrawing the brand spinner SVG (`loading-spinner.svg` / the
   `.ob-spinner-svg` rings + diamond) in page code.
+- ❌ Wrapping spinners and loading text in a separate background container
+  (e.g. Bootstrap `.alert-secondary`, rounded grey boxes, or bordered wells).
+  Spinners and loading labels must sit seamlessly on the parent surface
+  (transparent background, muted/standard text). Never use a separate
+  background (in rounded boxes) for spinners or loading states anywhere in
+  the app.
 
 ### Popups, Modals, Confirmations & Notifications
 
@@ -1211,35 +1392,37 @@ loading spinner — leave it as is.
    `confirm()`, or `prompt()` from any frontend code. They bypass our
    design system, block the main thread, look like a 2003 Windows error,
    and cannot be tested from JS.
-2. **All user-facing messages route through the navbar Notification
-   Center.** There is one message bus for the whole app — the bell
-   dropdown in the top-right of the navbar (`#notifCenterDropdown`),
+2. **All user-facing messages route through the navbar Activity
+   Center.** There is one message bus for the whole app — the inboxes
+   dropdown in the top-right of the navbar (`#activityCenterDropdown`),
    backed by the `NotificationCenter` singleton in
-   `global/js/utils.js`. Every success / error / warning / info that a
-   user should see goes through `showNotification(...)`. No
-   per-page toasts. No inline `<div class="alert">` blocks bolted on as
-   a status line. No console-only errors for things the user needs to
-   know.
+   `global/js/utils.js` (and the Task Tracker list in the same panel).
+   Every success / error / warning / info that a user should see goes
+   through `showNotification(...)`. No per-page toasts. No inline
+   `<div class="alert">` blocks bolted on as a status line. No
+   console-only errors for things the user needs to know.
 
-#### Single message bus — the navbar Notification Center
+#### Single message bus — the navbar Activity Center
 
-The Notification Center is provided by `base.html` and runs on every
+The Activity Center is provided by `base.html` and runs on every
 page:
 
-- Bell toggle: `#notifCenterToggle` (icon `bi-bell`).
-- Dropdown: `#notifCenterDropdown` with list `#notifCenterList`.
-- Unread badge: `#notifCenterBadge` (auto-managed; shows `99+` past 99).
+- Toggle: `#activityCenterToggle` (icon `bi-inboxes`).
+- Dropdown: `#activityCenterDropdown` with `#taskTrackerList` (running
+  jobs) above `#notifCenterList` (messages).
+- Combined unread/active badge: `#activityCenterBadge` (auto-managed;
+  shows `99+` past 99).
 - Buffer: in-memory ring buffer capped by
   `<html data-max-notifications>` (default `10`).
-- Each entry shows icon + message + relative time
+- Each notification shows icon + message + relative time
   (`just now`, `5s ago`, `12m ago`, `3h ago`, then absolute date).
-- Opening the dropdown marks all entries read; the user can clear all
-  via the trash button in the dropdown header.
+- Opening the dropdown marks all notifications read; refresh reloads
+  tasks; trash clears notifications.
 
 **The only API you should call is `showNotification(message, type,
 duration?)`.** It pushes to the centre **and** flashes a transient
 toast for `success` / `warning` / `error` so urgent messages are
-immediately visible without forcing the user to open the bell.
+immediately visible without forcing the user to open the panel.
 
 #### What goes through the Notification Center
 
@@ -1430,11 +1613,9 @@ src/front/static/
 - ❌ Pane-level `100vh` on sidebar pages, extra content `padding-bottom`
   that breaks menu/pane bottom alignment, or restoring
   `.sidebar-nav { margin: 0.5rem; height: calc(100% - 1rem); }`.
-- ❌ A custom per-page breadcrumb. Extend `_ROUTE_MAP` in
-  `breadcrumb.js` instead.
-- ❌ Toggling `#obSubnav` or `#obBreadcrumbWrap` from page code.
-- ❌ Adding `nav-requires-domain` to L2 subnav tab toggles — use
-  `dropdown-requires-domain` on individual items instead.
+- ❌ Toggling `#obSubnav` from page code.
+- ❌ Restoring L2 workspace dropdown tabs beside the Context crumb — use
+  `#obAppSwitcher` (Graph + Intelligence items keep `nav-requires-graph`).
 - ❌ A Save Domain button anywhere outside `#obSubnav`.
 - ❌ Calling `alert()` / `prompt()` for new-domain input — use
   `showNewDomainDialog()` from `utils.js`.

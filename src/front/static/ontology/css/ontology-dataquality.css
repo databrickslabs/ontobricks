@@ -20,18 +20,6 @@
     overflow-x: hidden;
 }
 
-.dq-shape-card {
-    border: 1px solid var(--bs-border-color);
-    border-radius: 0.375rem;
-    padding: 0.625rem 0.75rem;
-    transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.dq-shape-card:hover {
-    border-color: var(--bs-primary);
-    box-shadow: 0 0 0 0.15rem rgba(var(--bs-primary-rgb), 0.1);
-}
-
 .dq-shacl-preview {
     background: var(--bs-gray-100);
     border: 1px solid var(--bs-border-color);

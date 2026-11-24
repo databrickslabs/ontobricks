@@ -1,9 +1,9 @@
 /**
- * Home → My Tasks
+ * Home → My tasks tab
  *
- * Compact review worklist surfaced on the home page, just below the
- * Current Domain panel. Only reveals itself when the current user
- * actually has pending review tasks.
+ * Review worklist + tasks assigned to the current user. The tab is always
+ * visible; an empty state is shown when there is nothing to do. Reloads each
+ * time the tab is opened (``sidebarSectionChanged`` with section ``tasks``).
  *
  * Data source: GET /review/my-tasks (see ReviewService.my_tasks).
  */
@@ -11,11 +11,13 @@
     'use strict';
 
     document.addEventListener('DOMContentLoaded', loadTasks);
+    document.addEventListener('sidebarSectionChanged', (e) => {
+        if (e.detail?.section === 'tasks') loadTasks();
+    });
 
     async function loadTasks() {
-        const section = document.getElementById('homeTasksSection');
         const container = document.getElementById('homeTasksContainer');
-        if (!section || !container) return;
+        if (!container) return;
 
         try {
             const resp = await fetch('/review/my-tasks', {
@@ -25,21 +27,33 @@
             const ok = resp.ok && data.success;
             const tasks = (ok && data.tasks) ? data.tasks : [];
             const assigned = (ok && data.assigned_tasks) ? data.assigned_tasks : [];
-            if (!tasks.length && !assigned.length) {
-                section.style.display = 'none';
-                return;
-            }
             render(container, tasks, assigned);
-            section.style.display = '';
+            setTileCount(tasks.length + assigned.length);
         } catch (err) {
             // Home page must stay usable even if the review API is down.
             console.error('home loadTasks error:', err);
-            section.style.display = 'none';
+            setTileCount(null);
+            container.innerHTML =
+                '<div class="my-tasks-empty text-muted small py-3">' +
+                '<i class="bi bi-exclamation-triangle me-1"></i>Could not load tasks.</div>';
         }
+    }
+
+    /** My tasks tile count (null = unavailable). */
+    function setTileCount(n) {
+        const el = document.getElementById('homeCountTasks');
+        if (el) el.textContent = (n === null) ? '\u2014' : String(n);
     }
 
     function render(container, tasks, assigned) {
         assigned = assigned || [];
+        if (!tasks.length && !assigned.length) {
+            container.innerHTML =
+                '<div class="my-tasks-empty text-muted small py-4 text-center">' +
+                '<i class="bi bi-check2-circle fs-4 d-block mb-2"></i>' +
+                'No tasks waiting for you.</div>';
+            return;
+        }
         const rows = tasks.map((t) => {
             const actions = validateButton(t);
             return '<tr>' +
@@ -54,9 +68,9 @@
 
         const reviewBlock = tasks.length
             ? '<div class="table-responsive">' +
-              '<table class="table table-sm align-middle my-tasks-table mb-0">' +
+              '<table class="table table-hover align-middle ob-runs-table mb-0">' +
               '<thead><tr>' +
-              '<th>Domain</th><th>Version</th><th>Status</th>' +
+              '<th>Context</th><th>Version</th><th>Status</th>' +
               '<th>Approvals</th><th class="text-end">Review</th>' +
               '</tr></thead><tbody>' + rows + '</tbody></table></div>'
             : '';
@@ -95,8 +109,8 @@
         return '<div class="mt-3 mb-2 fw-medium small text-uppercase text-muted">' +
             '<i class="bi bi-person-check me-1"></i>Assigned to me</div>' +
             '<div class="table-responsive">' +
-            '<table class="table table-sm align-middle my-tasks-table mb-0">' +
-            '<thead><tr><th>Task</th><th>Domain</th><th>Status</th>' +
+            '<table class="table table-hover align-middle ob-runs-table mb-0">' +
+            '<thead><tr><th>Task</th><th>Context</th><th>Status</th>' +
             '<th class="text-end">Action</th></tr></thead>' +
             '<tbody>' + rows + '</tbody></table></div>';
     }
@@ -137,7 +151,7 @@
     }
 
     // The worklist no longer drives the workflow inline. Every task links
-    // to the Domain → Validation workspace (loading the version first), the
+    // to the Context → Validation workspace (loading the version first), the
     // single place to submit / approve / publish / send back to draft.
     function validateButton(task) {
         return '<button type="button" class="btn btn-sm btn-outline-info ms-1" ' +
@@ -150,6 +164,9 @@
 
     async function loadDomainAndReview(domain, version) {
         try {
+            if (typeof showDomainLoading === 'function') {
+                showDomainLoading('Opening ' + domain + '…');
+            }
             showNotification('Opening ' + domain + ' v' + version + '…', 'info', 4000);
             const resp = await fetch('/domain/load-from-uc', {
                 method: 'POST',
@@ -159,12 +176,19 @@
             });
             const data = await resp.json();
             if (!data.success) {
-                showNotification('Error: ' + (data.message || 'Failed to load domain'), 'error');
+                if (typeof hideDomainLoading === 'function') hideDomainLoading();
+                showNotification('Error: ' + (data.message || 'Failed to load context'), 'error');
                 return;
+            }
+            if (typeof rememberLoadedDomainOrClear === 'function') {
+                rememberLoadedDomainOrClear(data);
+            } else if (typeof clearRememberedDomainInfo === 'function') {
+                clearRememberedDomainInfo();
             }
             window.location.href = '/domain/?section=review';
         } catch (err) {
-            showNotification('Error loading domain: ' + err.message, 'error');
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
+            showNotification('Error loading context: ' + err.message, 'error');
         }
     }
 

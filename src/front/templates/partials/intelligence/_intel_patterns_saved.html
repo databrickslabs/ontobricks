@@ -1,0 +1,295 @@
+<!-- Intelligence → Discovery → Patterns (list — Scenarios-style) -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div class="me-auto">
+        <h4 class="mb-1"><i class="bi bi-grid-3x3-gap me-2"></i>Patterns{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
+        <p class="text-muted mb-0 small">
+            Discover recurring neighbourhood shapes for a chosen entity type.
+            Detect runs on Databricks and saves a Unity Catalog snapshot automatically.
+        </p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn" id="patSavedDiscussBtn"
+                title="Open the ontology discussion" aria-label="Open the ontology discussion">
+            <i class="bi bi-chat-dots"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="patSavedRefreshBtn" title="Reload saved patterns">
+            <i class="bi bi-arrow-clockwise"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-primary" id="patDetectBtn">
+            <i class="bi bi-plus-lg me-1"></i>New
+        </button>
+    </div>
+</div>
+
+<div class="card h-100">
+    <div class="card-body p-0 ob-tabs-wrap">
+        <ul class="nav nav-tabs ob-tabs nav-fill" id="patListTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="patListTabPatternsBtn" data-bs-toggle="tab"
+                        data-bs-target="#patListPanePatterns" type="button" role="tab"
+                        aria-controls="patListPanePatterns" aria-selected="true">
+                    <i class="bi bi-collection me-1"></i>Patterns
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="patListTabHowBtn" data-bs-toggle="tab"
+                        data-bs-target="#patListPaneHow" type="button" role="tab"
+                        aria-controls="patListPaneHow" aria-selected="false">
+                    <i class="bi bi-info-circle me-1"></i>How it works
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="patListTabContent">
+            <div class="tab-pane fade show active p-3" id="patListPanePatterns"
+                 role="tabpanel" aria-labelledby="patListTabPatternsBtn">
+                <div id="patSavedLoading" class="text-muted small d-none" aria-live="polite">
+                    <div class="text-center py-4">
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Loading saved patterns…
+                    </div>
+                </div>
+                <div id="patSavedEmpty" class="text-muted small">
+                    <p class="mb-0 text-center py-4">No saved patterns yet. Run <strong>Detect</strong> to discover and save a run.</p>
+                </div>
+                <div id="patSavedList" class="pat-saved-list d-none"></div>
+            </div>
+
+            <div class="tab-pane fade p-3" id="patListPaneHow"
+                 role="tabpanel" aria-labelledby="patListTabHowBtn">
+                <div class="pat-how-it-works small">
+                    <p class="howto-lead mb-3">
+                        <strong>Patterns find entities that look alike</strong>: the same kind of
+                        connections and similar characteristics. Think of them as
+                        <em>typical profiles</em> discovered automatically in your data, without
+                        writing a single rule.
+                    </p>
+                    <p class="howto-example mb-4">
+                        <strong>Energy example.</strong> Among 10&nbsp;000 customers, Patterns might find that
+                        3&nbsp;200 have a residential contract, a smart meter and high consumption, while
+                        900 have a business contract with several meters. Each of these groups is a
+                        <strong>pattern</strong>, and you can open the list of customers behind it.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">Step 1: Pick what you want to profile</h6>
+                    <p class="text-muted mb-3">
+                        Choose one type of entity, for example <strong>Customer</strong>. Every customer will be
+                        described and compared with the others.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">Step 2: Look around each one</h6>
+                    <p class="text-muted mb-2">
+                        For each customer, OntoBricks follows the relationships a few steps away
+                        (the <strong>Hops</strong> setting): its contracts, the tariff of each contract, the
+                        sites it owns, the meters installed there, and so on.
+                    </p>
+                    <figure class="howto-figure">
+                        <svg class="howto-svg" viewBox="0 0 720 225" role="img"
+                             aria-labelledby="patHowFig1Title">
+                            <title id="patHowFig1Title">A customer and what surrounds it, one and two hops away</title>
+                            <defs>
+                                <marker id="patHowArrow" viewBox="0 0 10 10" refX="9" refY="5"
+                                        markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                    <path class="hw-arrowhead" d="M0,0 L10,5 L0,10 z"/>
+                                </marker>
+                            </defs>
+                            <line class="hw-ring" x1="90" y1="15" x2="90" y2="195"/>
+                            <line class="hw-ring" x1="330" y1="15" x2="330" y2="195"/>
+                            <line class="hw-ring" x1="580" y1="15" x2="580" y2="195"/>
+
+                            <path class="hw-edge" d="M150,110 L268,72" marker-end="url(#patHowArrow)"/>
+                            <path class="hw-edge" d="M150,110 L268,152" marker-end="url(#patHowArrow)"/>
+                            <path class="hw-edge" d="M390,70 L518,70" marker-end="url(#patHowArrow)"/>
+                            <path class="hw-edge" d="M390,150 L518,160" marker-end="url(#patHowArrow)"/>
+                            <text class="hw-small" x="200" y="78" text-anchor="middle">holds</text>
+                            <text class="hw-small" x="200" y="150" text-anchor="middle">owns</text>
+                            <text class="hw-small" x="455" y="62" text-anchor="middle">on tariff</text>
+                            <text class="hw-small" x="455" y="145" text-anchor="middle">equipped with</text>
+
+                            <rect class="hw-node hw-node--anchor" x="30" y="85" width="120" height="50" rx="10"/>
+                            <text class="hw-title" x="90" y="106" text-anchor="middle">Customer</text>
+                            <text class="hw-small" x="90" y="123" text-anchor="middle">usage: high</text>
+
+                            <rect class="hw-node" x="270" y="48" width="120" height="44" rx="10"/>
+                            <text x="330" y="67" text-anchor="middle">Contract</text>
+                            <text class="hw-small" x="330" y="82" text-anchor="middle">type: residential</text>
+                            <rect class="hw-node" x="270" y="128" width="120" height="44" rx="10"/>
+                            <text x="330" y="155" text-anchor="middle">Site</text>
+
+                            <rect class="hw-node" x="520" y="48" width="120" height="44" rx="10"/>
+                            <text x="580" y="67" text-anchor="middle">Tariff</text>
+                            <text class="hw-small" x="580" y="82" text-anchor="middle">name: Green</text>
+                            <rect class="hw-node" x="520" y="138" width="120" height="44" rx="10"/>
+                            <text x="580" y="157" text-anchor="middle">Meter</text>
+                            <text class="hw-small" x="580" y="172" text-anchor="middle">kind: smart</text>
+
+                            <text class="hw-small" x="90" y="215" text-anchor="middle">The customer</text>
+                            <text class="hw-small" x="330" y="215" text-anchor="middle">1 hop away</text>
+                            <text class="hw-small" x="580" y="215" text-anchor="middle">2 hops away</text>
+                        </svg>
+                        <figcaption>With Hops = 2, each customer is described by everything up to two steps away.</figcaption>
+                    </figure>
+
+                    <h6 class="fw-semibold mb-2">Step 3: Describe each one in simple terms</h6>
+                    <p class="text-muted mb-3">
+                        Exact values would make every customer unique, so details are simplified:
+                        numbers become ranges (a consumption of 4&nbsp;812&nbsp;kWh becomes
+                        <em>high</em>), short lists of categories are kept (<em>residential</em>,
+                        <em>business</em>), and unique identifiers such as emails or contract numbers are ignored.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">Step 4: Group the look-alikes</h6>
+                    <p class="text-muted mb-2">
+                        Customers with the same description fall into the same pattern. The number of customers
+                        in a pattern is its <strong>support</strong>. Patterns that are too rare
+                        (below <strong>Min support</strong>) are hidden.
+                    </p>
+                    <figure class="howto-figure">
+                        <svg class="howto-svg" viewBox="0 0 720 250" role="img"
+                             aria-labelledby="patHowFig2Title">
+                            <title id="patHowFig2Title">Four customers grouped into two patterns</title>
+                            <defs>
+                                <marker id="patHowArrow2" viewBox="0 0 10 10" refX="9" refY="5"
+                                        markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                    <path class="hw-arrowhead" d="M0,0 L10,5 L0,10 z"/>
+                                </marker>
+                            </defs>
+                            <rect class="hw-node" x="10" y="15" width="250" height="44" rx="10"/>
+                            <text class="hw-title" x="22" y="33">Customer C-101</text>
+                            <text class="hw-small" x="22" y="49">Residential contract · smart meter · usage high</text>
+                            <rect class="hw-node" x="10" y="70" width="250" height="44" rx="10"/>
+                            <text class="hw-title" x="22" y="88">Customer C-102</text>
+                            <text class="hw-small" x="22" y="104">Residential contract · smart meter · usage high</text>
+                            <rect class="hw-node" x="10" y="125" width="250" height="44" rx="10"/>
+                            <text class="hw-title" x="22" y="143">Customer C-103</text>
+                            <text class="hw-small" x="22" y="159">Residential contract · smart meter · usage high</text>
+                            <rect class="hw-node" x="10" y="180" width="250" height="44" rx="10"/>
+                            <text class="hw-title" x="22" y="198">Customer C-104</text>
+                            <text class="hw-small" x="22" y="214">Business contract · 2 meters · usage medium</text>
+
+                            <path class="hw-edge" d="M262,37 L438,70" marker-end="url(#patHowArrow2)"/>
+                            <path class="hw-edge" d="M262,92 L438,78" marker-end="url(#patHowArrow2)"/>
+                            <path class="hw-edge" d="M262,147 L438,86" marker-end="url(#patHowArrow2)"/>
+                            <path class="hw-edge hw-edge--bridge" d="M262,202 L438,188" marker-end="url(#patHowArrow2)"/>
+
+                            <rect class="hw-node hw-node--added" x="440" y="40" width="270" height="76" rx="12"/>
+                            <text class="hw-title" x="455" y="63">Pattern A: 3 customers</text>
+                            <text class="hw-small" x="455" y="82">Residential contract + smart meter</text>
+                            <text class="hw-small" x="455" y="98">+ high usage</text>
+
+                            <rect class="hw-node hw-node--muted" x="440" y="160" width="270" height="60" rx="12"/>
+                            <text class="hw-title" x="455" y="183">Pattern B: 1 customer</text>
+                            <text class="hw-small" x="455" y="201">Hidden: below Min support (2)</text>
+                        </svg>
+                        <figcaption>Identical profiles share one pattern. Rare profiles can be filtered out.</figcaption>
+                    </figure>
+
+                    <h6 class="fw-semibold mb-2">Step 5: Simplify automatically when needed</h6>
+                    <p class="text-muted mb-3">
+                        If almost every customer is still unique, OntoBricks drops the finer details step by step
+                        (first the neighbours’ characteristics, then all characteristics) until at least half of
+                        the customers belong to a pattern. The diagram badge tells you which level was used.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">Settings in plain words</h6>
+                    <ul class="text-muted mb-3">
+                        <li><strong>Hops</strong>: how far to look around each entity (2–3 is usually enough).</li>
+                        <li><strong>Numeric bins</strong>: how finely numbers are split into ranges (more bins means stricter look-alikes).</li>
+                        <li><strong>Min support</strong>: the smallest group worth showing.</li>
+                        <li><strong>Refine top-N</strong>: merges near-identical top patterns that differ only by counts (0 = off).</li>
+                    </ul>
+
+                    <h6 class="fw-semibold mb-2">What to do with the results</h6>
+                    <ul class="text-muted mb-3">
+                        <li>Open a run to see each pattern drawn as a diagram (the entity on the left, then 1 hop, 2 hops, …).</li>
+                        <li>Hover a box to highlight its path; hover a link or a badge for an explanation.</li>
+                        <li><strong>Matching entities</strong> lists the customers behind a pattern, with links to Graph Explorer.</li>
+                        <li><strong>Certify</strong> the patterns you have validated (none is certified by default). Bars in the chart turn green when certified and red otherwise, and the gauge next to <strong>Matching entities</strong> shows the share of entities that follow a certified pattern. The chart switch <strong>Group by certification</strong> merges them into two bars; pick one to list its patterns and entities. The last bar, <strong>Outside</strong>, counts the entities that follow no pattern (not clickable).</li>
+                        <li>Typical uses: segment customers, spot unusual set-ups (rare patterns), check data quality.</li>
+                    </ul>
+
+                    <details class="howto-tech">
+                    <summary>Technical details</summary>
+
+                    <h6 class="fw-semibold mb-2">1. Choose the anchor type</h6>
+                    <p class="mb-3 text-muted">
+                        Detect starts from one ontology class (for example <code>Customer</code> or
+                        <code>Claim</code>). Every instance of that type becomes an <strong>anchor</strong>.
+                        Neighbours of other types are still walked and recorded in each anchor’s signature.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">2. Expand the neighbourhood (Hops)</h6>
+                    <p class="mb-3 text-muted">
+                        From each anchor the job walks the graph up to the configured hop depth
+                        (default 3, range 1–5), following relationships in the direction they are
+                        asserted (subject → object). Inbound relationships are not followed. At every
+                        hop it records the parent type, the predicate (<code>via</code>), and the child type.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">3. Bin attributes (Numeric bins)</h6>
+                    <p class="mb-2 text-muted">
+                        Exact values would make almost every entity unique, so attributes on the
+                        anchor and on typed neighbours are normalised:
+                    </p>
+                    <ul class="text-muted mb-3">
+                        <li><strong>Numeric</strong> values are cut into quantile buckets
+                            (default 8 bins → labels like <code>bin 1/8</code> … <code>bin 8/8</code>).</li>
+                        <li><strong>Categorical</strong> values are kept as-is when the property has
+                            at most 20 distinct values in the graph.</li>
+                        <li><strong>Identifier-like</strong> properties (emails, UUIDs, free text —
+                            more than 20 distinct values) are ignored so they cannot shatter patterns.</li>
+                    </ul>
+
+                    <h6 class="fw-semibold mb-2">4. Build canonical tokens</h6>
+                    <p class="mb-2 text-muted">Each anchor’s neighbourhood becomes a sorted bag of tokens, for example:</p>
+                    <ul class="text-muted mb-3">
+                        <li><strong>Structure</strong> — <code>hop | relation | neighbour-type</code></li>
+                        <li><strong>Anchor attributes</strong> — <code>0 || anchor-type | self | property | bin</code></li>
+                        <li><strong>Neighbour attributes</strong> — <code>hop | relation | type | property | bin</code></li>
+                    </ul>
+
+                    <h6 class="fw-semibold mb-2">5. Adaptive detail levels</h6>
+                    <p class="mb-2 text-muted">
+                        If the full token set is too specific (almost every anchor unique), the job
+                        walks down four abstraction levels until patterns cover at least
+                        <strong>50&nbsp;%</strong> of the anchors:
+                    </p>
+                    <ol class="text-muted mb-3">
+                        <li><strong>full</strong> — structure, multiplicities, and all binned attributes.</li>
+                        <li><strong>neighbour</strong> — ignore multiplicities; neighbour attributes only at 1 hop.</li>
+                        <li><strong>own</strong> — multi-hop structure, but attributes only on the anchor.</li>
+                        <li><strong>structure</strong> — typed paths only; no attributes.</li>
+                    </ol>
+
+                    <h6 class="fw-semibold mb-2">6. Hash into a pattern id</h6>
+                    <p class="mb-3 text-muted">
+                        Tokens are sorted and hashed (MD5). Anchors that produce the same hash
+                        share one <strong>pattern</strong>. Support is the number of anchors in that group.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">7. Optional refine (Refine top-N)</h6>
+                    <p class="mb-3 text-muted">
+                        When Refine top-N is greater than 0, the job inspects the top N patterns by
+                        support and collapses near-duplicates that share the same typed paths but
+                        differ only by small multiplicity differences into unified motif templates.
+                        <code>0</code> leaves refine off.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">8. Filter by Min support</h6>
+                    <p class="mb-3 text-muted">
+                        Patterns with fewer anchors than <strong>Min support</strong> (default 3)
+                        are dropped. Raise it to keep only dominant shapes; lower it to surface rare ones.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">Execution and storage</h6>
+                    <p class="text-muted mb-0">
+                        Detection runs as a Databricks job on the Knowledge Graph snapshot, not in the browser.
+                        Each Detect run is saved automatically to Unity Catalog as a pattern catalog
+                        (cardinalities and diagrams, not every member row); open a card to revisit it.
+                    </p>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

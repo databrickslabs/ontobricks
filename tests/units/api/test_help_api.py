@@ -170,12 +170,45 @@ class TestHelpDocsIndex:
             for cat in response.json()["categories"]
             for doc in cat["docs"]
         }
-        assert {"backend", "advanced-features", "development"} <= slugs
+        assert {"backend", "advanced-features", "development", "intelligence"} <= slugs
 
         backend = client.get("/api/help/docs/backend").json()["markdown"]
         assert "Neo4j" in backend and "Aura" in backend and "Lakebase" in backend
         advanced = client.get("/api/help/docs/advanced-features").json()["markdown"]
-        assert "Cohort" in advanced and "registry_transfer" in advanced
+        assert "Cohort" in advanced and "Registry → Browse" in advanced
+        intelligence = client.get("/api/help/docs/intelligence").json()["markdown"]
+        assert "Cohorts" in intelligence
+        assert "Analytics" in intelligence
+        assert "Communities" in intelligence
+        assert "Patterns" in intelligence
+        assert "Scenarios" in intelligence
+        assert "Compare" in intelligence
+        assert "## Home" in intelligence
+        assert "**Coverage**" in intelligence
+        getting = client.get("/api/help/docs/getting-started").json()["markdown"]
+        assert "Discover and simulate (Intelligence)" in getting
+        assert "Patterns" in getting and "Compare" in getting
+
+    def test_user_guide_documents_every_intelligence_page(self, client):
+        """The User Guide must describe each Intelligence page and its main tabs."""
+        guide = client.get("/api/help/docs/user-guide").json()["markdown"]
+        step4 = guide[guide.index("## Step 4: Intelligence"):guide.index("## Context Management")]
+        for heading in (
+            "### Home",
+            "### Cohorts (Configuration)",
+            "### Analytics (Discovery)",
+            "### Communities (Discovery)",
+            "### Patterns (Discovery)",
+            "### Scenarios (Simulation)",
+            "### Compare (Simulation)",
+            "### Activity and run history",
+        ):
+            assert heading in step4, heading
+        for term in ("Data Model Health", "AI Insights", "Coverage", "Propose facts", "Ask both", "Activity"):
+            assert term in step4, term
+        inventory = guide[guide.index("## Feature inventory"):]
+        for term in ("AI Insights", "Scenario workbench", "Compare metrics and report", "**Purge**"):
+            assert term in inventory, term
 
 
 class TestHelpCatalogIntegrity:

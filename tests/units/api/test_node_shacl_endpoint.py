@@ -70,7 +70,7 @@ def domain():
     mock_domain.domain_folder = "customer-360"
     mock_domain.get_classes.return_value = _CLASSES
     mock_domain.shacl_shapes = _SHAPES
-    mock_domain.swrl_rules = []
+    mock_domain.if_then_rules = []
     return mock_domain
 
 

@@ -38,7 +38,7 @@ def test_editor_can_save_existing_domain():
 def test_non_admin_cannot_create_domain(role):
     with pytest.raises(
         AuthorizationError,
-        match="Only administrators can create a domain",
+        match="Only administrators can create a context",
     ):
         _permissions.assert_admin_can_create_domain(
             _request(role),

@@ -44,7 +44,8 @@ class TestGlobalConfigUiBranding:
         assert "ui_branding" in empty
         assert empty["ui_branding"]["version"] == 1
         assert empty["ui_branding"]["app_title"] == "OntoBricks"
-        assert empty["ui_branding"]["primary_color"] == "#4F46E5"
+        assert empty["ui_branding"]["primary_color"] == "#737373"
+        assert empty["ui_branding"]["aurora_color"] == "#6B6B6B"
         assert empty["ui_branding"]["logo_data_url"] == ""
 
     def test_legacy_navbar_logo_is_resolved_into_unified_branding(self):

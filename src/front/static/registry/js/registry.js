@@ -7,7 +7,7 @@ var registryGithubEnabled = false;
 
 function githubDomainDeleteExtras(enabled) {
     return enabled
-        ? { checkboxLabel: 'Also delete this domain from GitHub', checkboxChecked: false }
+        ? { checkboxLabel: 'Also delete this context from GitHub', checkboxChecked: false }
         : {};
 }
 
@@ -54,10 +54,10 @@ function createRegistryVersionDeleteControl(v, domainName) {
 
 async function deleteRegistryDomain(domainName) {
     const options = {
-        title: 'Delete Domain',
-        message: 'Permanently delete domain "' + escapeHtml(domainName)
+        title: 'Delete Context',
+        message: 'Permanently delete context "' + domainName
             + '" and all its versions from the registry? This permanently '
-            + 'removes all Knowledge Store content and cannot be undone.',
+            + 'removes all Documents content and cannot be undone.',
         confirmText: 'Delete',
         confirmClass: 'btn-danger',
         icon: 'trash',
@@ -85,7 +85,7 @@ async function deleteRegistryDomain(domainName) {
             showNotification('Error: ' + data.message, 'error');
         }
     } catch (e) {
-        showNotification('Error deleting domain: ' + e.message, 'error');
+        showNotification('Error deleting context: ' + e.message, 'error');
     }
 }
 
@@ -97,15 +97,15 @@ async function deleteRegistryVersion(
     deletesDomain = false
 ) {
     const options = {
-        title: deletesDomain ? 'Delete last version and domain' : 'Delete Version',
+        title: deletesDomain ? 'Delete last version and context' : 'Delete Version',
         message: deletesDomain
-            ? 'Version v' + escapeHtml(String(version))
-                + ' is the only version of "' + escapeHtml(String(domainName))
-                + '". Deleting it will also delete the domain and all Knowledge '
+            ? 'Version v' + version
+                + ' is the only version of "' + domainName
+                + '". Deleting it will also delete the context and all Knowledge '
                 + 'Store content. This cannot be undone.'
-            : 'Permanently delete version v' + escapeHtml(String(version)) +
-                ' from domain "' + escapeHtml(String(domainName)) +
-                '"? This permanently removes its Knowledge Store content '
+            : 'Permanently delete version v' + version +
+                ' from context "' + domainName +
+                '"? This permanently removes its Documents content '
                 + 'and cannot be undone.',
         confirmText: 'Delete',
         confirmClass: 'btn-danger',
@@ -279,14 +279,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const volumeLabel = document.getElementById('registryVolumeLabel');
         const initBtn     = document.getElementById('btnInitRegistry');
         // These elements only exist on the Settings → Registry tab.
-        if (!schemaLabel && !volumeLabel) return;
+        if (!schemaLabel) return;
 
         if (registryCfg.catalog && registryCfg.schema) {
             const lb = registryCfg.lakebase || {};
             // Schema line: catalog.schema
             const schemaPath = escapeHtml(registryCfg.catalog + '.' + registryCfg.schema);
             if (schemaLabel) schemaLabel.innerHTML = '<span class="font-monospace">' + schemaPath + '</span>';
-            // Volume line: volume name only
+            // Volume line: volume name only (if element present)
             const volName = registryCfg.volume || 'OntoBricksRegistry';
             if (volumeLabel) volumeLabel.innerHTML = '<span class="font-monospace">' + escapeHtml(volName) + '</span>';
             if (initBtn) {
@@ -348,31 +348,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Helpers ---
 
-    function _shortDate(iso) {
-        if (!iso) return '';
-        try {
-            const d = new Date(iso);
-            if (isNaN(d.getTime())) return '';
-            const now = new Date();
-            const pad = n => String(n).padStart(2, '0');
-            const date = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-            const time = pad(d.getHours()) + ':' + pad(d.getMinutes());
-            if (d.toDateString() === now.toDateString()) return 'Today ' + time;
-            const yesterday = new Date(now);
-            yesterday.setDate(yesterday.getDate() - 1);
-            if (d.toDateString() === yesterday.toDateString()) return 'Yesterday ' + time;
-            return date + ' ' + time;
-        } catch (_) { return ''; }
-    }
-
     function _formatVersionDates(lastUpdate, lastBuild) {
         if (!lastUpdate && !lastBuild) return '';
         let html = '<div class="registry-version-dates text-muted">';
         if (lastUpdate) {
-            html += '<div><i class="bi bi-pencil-square me-1"></i><span class="registry-date-label">Updated:</span> ' + escapeHtml(_shortDate(lastUpdate)) + '</div>';
+            html += '<div><i class="bi bi-pencil-square me-1"></i><span class="registry-date-label">Updated:</span> ' + escapeHtml(formatDateTime(lastUpdate)) + '</div>';
         }
         if (lastBuild) {
-            html += '<div><i class="bi bi-hammer me-1"></i><span class="registry-date-label">Built:</span> ' + escapeHtml(_shortDate(lastBuild)) + '</div>';
+            html += '<div><i class="bi bi-hammer me-1"></i><span class="registry-date-label">Built:</span> ' + escapeHtml(formatDateTime(lastBuild)) + '</div>';
         }
         html += '</div>';
         return html;
@@ -399,13 +382,19 @@ document.addEventListener('DOMContentLoaded', function () {
     // Lifecycle/workflow actions are NOT surfaced here. The Browse view is
     // read-only with respect to the review workflow: each version exposes a
     // "Validate" button that loads the version (if needed) and jumps to the
-    // Domain → Validation workspace, the single place to drive the workflow.
+    // Context → Validation workspace, the single place to drive the workflow.
 
     // --- Registry domain list ---
 
     const DOMAINS_CACHE_TTL_MS = 15000;
     let domainsLoadPromise = null;
     let domainsLoadedAt = 0;
+
+    function _setHomeContextsTileCount(count) {
+        const el = document.getElementById('homeCountContexts');
+        if (!el) return;
+        el.textContent = (count === null || count === undefined) ? '\u2014' : String(count);
+    }
 
     function loadRegistryDomains(force = false) {
         const cacheIsFresh = Date.now() - domainsLoadedAt < DOMAINS_CACHE_TTL_MS;
@@ -425,7 +414,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         section.style.display = 'flex';
         listDiv.innerHTML = '<div class="text-center text-muted small py-3">' +
-            '<span class="spinner-border spinner-border-sm me-1"></span> Loading domains...</div>';
+            '<span class="spinner-border spinner-border-sm me-1"></span> Loading contexts...</div>';
 
         try {
             const [data, vsData] = await Promise.all([
@@ -438,16 +427,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!data.success) {
                 listDiv.innerHTML = '<div class="text-muted small py-3"><i class="bi bi-exclamation-triangle text-warning me-1"></i> ' +
-                    (data.message || 'Could not load domains') + '</div>';
+                    (data.message || 'Could not load contexts') + '</div>';
+                _setHomeContextsTileCount(null);
                 return;
             }
 
             domainsLoadedAt = Date.now();
             registryGithubEnabled = !!data.github_enabled;
             const rows = data.domains || data.projects || [];
+            _setHomeContextsTileCount(rows.length);
             if (!rows.length) {
                 listDiv.innerHTML = '<div class="text-muted small py-3 text-center">' +
-                    '<i class="bi bi-folder"></i> No domains in registry yet</div>';
+                    '<i class="bi bi-folder"></i> No contexts in registry yet</div>';
                 return;
             }
 
@@ -499,7 +490,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     ? '<button type="button" class="btn btn-sm border-0 text-muted" data-requires-app="admin" disabled title="Cannot delete the currently loaded domain">' +
                           '<i class="bi bi-trash"></i></button>'
                     : '<button type="button" class="btn btn-sm btn-outline-danger border-0 registry-delete-btn" data-requires-app="admin" ' +
-                          'data-domain="' + escapeHtml(d.name) + '" title="Delete domain and all versions">' +
+                          'data-domain="' + escapeHtml(d.name) + '" title="Delete context and all versions">' +
                           '<i class="bi bi-trash"></i></button>';
                 const versionsBadge = publishedVer
                     ? '<span class="badge bg-secondary">' + vCount + '</span> ' +
@@ -623,16 +614,17 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
         } catch (e) {
-            console.error('Error loading registry domains:', e);
+            console.error('Error loading registry contexts:', e);
             listDiv.innerHTML = '<div class="text-danger small py-3">' +
                 '<i class="bi bi-x-circle me-1"></i> Error loading domains</div>';
+            _setHomeContextsTileCount(null);
         }
     }
 
     async function loadRegistryDomainVersion(domainName, version) {
         const confirmed = await showConfirmDialog({
-            title: 'Load Domain',
-            message: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' + escapeHtml(version) + '</strong>? Any unsaved changes to the current domain will be lost.',
+            title: 'Load Context',
+            messageHtml: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' + escapeHtml(version) + '</strong>? Any unsaved changes to the current context will be lost.',
             confirmText: 'Load',
             confirmClass: 'btn-primary',
             icon: 'box-arrow-in-down'
@@ -640,6 +632,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!confirmed) return;
 
         try {
+            if (typeof showDomainLoading === 'function') {
+                showDomainLoading('Loading ' + domainName + '…');
+            }
             showNotification('Loading ' + domainName + ' v' + version + '…', 'info', 5000);
             const resp = await fetch('/domain/load-from-uc', {
                 method: 'POST',
@@ -649,36 +644,44 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             const data = await resp.json();
             if (data.success) {
-                showNotification(data.message || 'Domain loaded!', 'success');
+                showNotification(data.message || 'Context loaded!', 'success');
                 if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
-                // Generic loads open Domain → General; do not reload Browse.
-                setTimeout(() => {
-                    if (typeof navigateToDomainGeneral === 'function') {
-                        navigateToDomainGeneral();
-                    } else {
-                        window.location.href = '/domain/?section=information';
-                    }
-                }, 800);
+                if (typeof rememberLoadedDomainOrClear === 'function') {
+                    rememberLoadedDomainOrClear(data);
+                } else if (typeof clearRememberedDomainInfo === 'function') {
+                    clearRememberedDomainInfo();
+                }
+                // Overlay persists via sessionStorage until chrome paints.
+                if (typeof navigateToDomainGeneral === 'function') {
+                    navigateToDomainGeneral();
+                } else {
+                    window.location.href = '/domain/?section=home';
+                }
             } else {
-                showNotification('Error: ' + (data.message || 'Failed to load domain'), 'error');
+                if (typeof hideDomainLoading === 'function') hideDomainLoading();
+                showNotification('Error: ' + (data.message || 'Failed to load context'), 'error');
             }
         } catch (e) {
-            showNotification('Error loading domain: ' + e.message, 'error');
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
+            showNotification('Error loading context: ' + e.message, 'error');
         }
     }
 
-    // Jump to the Domain → Validation workspace for a registry version,
+    // Jump to the Context → Validation workspace for a registry version,
     // loading it from Unity Catalog first when it is not already current.
     async function openVersionInValidation(domainName, version, alreadyLoaded) {
         if (alreadyLoaded) {
+            if (typeof showDomainLoading === 'function') {
+                showDomainLoading('Opening validation…');
+            }
             window.location.href = '/domain/?section=review';
             return;
         }
         const confirmed = await showConfirmDialog({
             title: 'Open in Validation',
-            message: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' +
+            messageHtml: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' +
                 escapeHtml(version) + '</strong> and open its Validation workspace? ' +
-                'Any unsaved changes to the current domain will be lost.',
+                'Any unsaved changes to the current context will be lost.',
             confirmText: 'Open',
             confirmClass: 'btn-info',
             icon: 'ui-checks'
@@ -686,6 +689,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!confirmed) return;
 
         try {
+            if (typeof showDomainLoading === 'function') {
+                showDomainLoading('Opening ' + domainName + '…');
+            }
             showNotification('Opening ' + domainName + ' v' + version + '…', 'info', 5000);
             const resp = await fetch('/domain/load-from-uc', {
                 method: 'POST',
@@ -696,12 +702,19 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await resp.json();
             if (resp.ok && data.success) {
                 if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
+                if (typeof rememberLoadedDomainOrClear === 'function') {
+                    rememberLoadedDomainOrClear(data);
+                } else if (typeof clearRememberedDomainInfo === 'function') {
+                    clearRememberedDomainInfo();
+                }
                 window.location.href = '/domain/?section=review';
             } else {
-                showNotification('Error: ' + (data.message || 'Failed to load domain'), 'error');
+                if (typeof hideDomainLoading === 'function') hideDomainLoading();
+                showNotification('Error: ' + (data.message || 'Failed to load context'), 'error');
             }
         } catch (e) {
-            showNotification('Error loading domain: ' + e.message, 'error');
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
+            showNotification('Error loading context: ' + e.message, 'error');
         }
     }
 
@@ -728,13 +741,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await resp.json();
             if (!data.success) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-danger small py-3">' +
-                    escapeHtml(data.message || 'Could not load domains') + '</td></tr>';
+                    escapeHtml(data.message || 'Could not load contexts') + '</td></tr>';
                 return;
             }
             const rows = data.domains || [];
             if (!rows.length) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-muted small py-3 text-center">' +
-                    'No domains in registry yet</td></tr>';
+                    'No contexts in registry yet</td></tr>';
                 return;
             }
             tbody.innerHTML = rows.map((d, idx) => {
@@ -806,7 +819,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         if (!selected.length) {
-            showNotification('Pick at least one domain to export', 'warning');
+            showNotification('Pick at least one context to export', 'warning');
             return;
         }
 
@@ -840,7 +853,7 @@ document.addEventListener('DOMContentLoaded', function () {
             a.click();
             a.remove();
             URL.revokeObjectURL(url);
-            showNotification('Exported ' + selected.length + ' domain(s) to ' + filename, 'success');
+            showNotification('Exported ' + selected.length + ' context(s) to ' + filename, 'success');
             bootstrap.Modal.getInstance(document.getElementById('exportObxModal'))?.hide();
         } catch (e) {
             showNotification('Export error: ' + e.message, 'error');
@@ -1008,7 +1021,11 @@ document.addEventListener('DOMContentLoaded', function () {
         tbody.innerHTML = (data.domains || []).map((d, idx) => {
             const versionBadges = (d.incoming_versions || []).map(v => {
                 const conflict = (d.conflicting_versions || []).includes(v);
-                return '<span class="badge ' + (conflict ? 'bg-warning text-dark' : 'bg-secondary') + ' me-1">v' + escapeHtml(v) + '</span>';
+                const title = conflict
+                    ? ' title="Exists locally — will be skipped"'
+                    : ' title="Will be written"';
+                return '<span class="badge ' + (conflict ? 'bg-warning text-dark' : 'bg-secondary') +
+                    ' me-1"' + title + '>v' + escapeHtml(v) + '</span>';
             }).join('');
             const statusBadge = d.exists
                 ? '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Exists</span>'
@@ -1019,7 +1036,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const actionControls = d.exists
                 ? '<div class="btn-group btn-group-sm import-obx-conflict-actions" role="group">' +
                       actionRadio(idx, 'skip', 'Skip', true, false) +
-                      actionRadio(idx, 'overwrite', 'Overwrite', false, false) +
+                      actionRadio(idx, 'add_missing', 'Add missing versions', false, false) +
                   '</div>' +
                   '<span class="small text-muted import-obx-create-action d-none">' +
                       '<i class="bi bi-plus-circle me-1"></i>Create new</span>'
@@ -1036,7 +1053,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     '<input type="text" class="form-control form-control-sm import-obx-name" ' +
                         'value="' + escapeHtml(importName) + '" required maxlength="64" ' +
                         'pattern="[A-Z][A-Za-z0-9]*" autocomplete="off" spellcheck="false" ' +
-                        'aria-label="Imported domain name">' +
+                        'aria-label="Imported context name">' +
                     '<div class="invalid-feedback">Use a unique CamelCase alphanumeric name.</div>' +
                 '</td>' +
                 '<td>' + versionBadges + '</td>' +
@@ -1071,10 +1088,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function actionRadio(rowIdx, value, label, checked, disabled) {
         const id = 'obx-action-' + rowIdx + '-' + value;
+        const outline = value === 'add_missing' ? 'primary' : 'secondary';
         return '<input type="radio" class="btn-check" name="obx-action-' + rowIdx + '" ' +
                     'id="' + id + '" value="' + value + '" ' +
                     (checked ? 'checked' : '') + ' ' + (disabled ? 'disabled' : '') + '>' +
-                '<label class="btn btn-outline-' + (value === 'overwrite' ? 'warning' : 'secondary') +
+                '<label class="btn btn-outline-' + outline +
                     '" for="' + id + '">' + escapeHtml(label) + '</label>';
     }
 
@@ -1114,12 +1132,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     new_name: importName
                 });
             } else if (row.dataset.exists === '1') {
+                const chosen = row.querySelector('input[type="radio"]:checked')?.value || 'skip';
                 decisions.push({
                     name: sourceFolder,
-                    action: row.querySelector('input[type="radio"]:checked')?.value || 'skip'
+                    action: chosen === 'skip' ? 'skip' : 'add_missing'
                 });
             } else {
-                decisions.push({ name: sourceFolder, action: 'overwrite' });
+                decisions.push({ name: sourceFolder, action: 'add_missing' });
             }
         });
 
@@ -1127,27 +1146,31 @@ document.addEventListener('DOMContentLoaded', function () {
             '#importObxTableBody .import-obx-pick:checked'
         ).length;
         if (!selectedCount) {
-            showNotification('Pick at least one domain to import', 'warning');
+            showNotification('Pick at least one context to import', 'warning');
             return;
         }
 
         if (!namesValid) {
             showNotification(
-                'Use a unique CamelCase alphanumeric name for every imported domain',
+                'Use a unique CamelCase alphanumeric name for every imported context',
                 'warning'
             );
             document.querySelector('#importObxTableBody .import-obx-name.is-invalid')?.focus();
             return;
         }
 
-        const overwrites = decisions.filter(d => d.action === 'overwrite').length;
-        if (overwrites > 0) {
+        const addMissing = decisions.filter(d =>
+            d.action === 'overwrite' || d.action === 'add_missing'
+        ).length;
+        if (addMissing > 0) {
             const ok = await showConfirmDialog({
-                title: 'Confirm overwrite',
-                message: 'You are about to overwrite ' + overwrites + ' existing domain(s). This cannot be undone.',
-                confirmText: 'Import & overwrite',
-                confirmClass: 'btn-warning',
-                icon: 'exclamation-triangle'
+                title: 'Confirm import',
+                message:
+                    'Existing versions will be left unchanged. Only missing ' +
+                    'versions will be added (' + addMissing + ' context(s)).',
+                confirmText: 'Import',
+                confirmClass: 'btn-primary',
+                icon: 'info-circle'
             });
             if (!ok) return;
         }
@@ -1175,7 +1198,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 showNotification(data.message || 'Import failed', 'error');
                 return;
             }
-            showNotification(data.message || 'Import complete', 'success');
+            let successMsg = data.message || 'Import complete';
+            const skippedBits = (data.domains || [])
+                .filter(d => (d.skipped_versions || []).length)
+                .map(d => d.name + ' v' + d.skipped_versions.join(', v'));
+            if (skippedBits.length) {
+                successMsg += ' — skipped existing: ' + skippedBits.join('; ');
+            }
+            showNotification(successMsg, 'success');
             if (data.errors && data.errors.length) {
                 console.warn('OBX import warnings:', data.errors);
             }
@@ -1258,8 +1288,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!btn) return;
         const view = btn.dataset.view;
         _applyBridgesView(view);
-        // Re-render after layout so the canvas gets real dimensions (critical
-        // inside the Registry modal where the graph pane is flex-sized).
+        // Re-render after layout so the canvas gets real dimensions (the
+        // graph pane is hidden while the Table view is active).
         if (view === 'graph' && bridgesData) {
             const graphModel = _buildGraphModel(bridgesData);
             requestAnimationFrame(() => {
@@ -1275,21 +1305,18 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('sidebarSectionChanged', (e) => {
         const section = e.detail?.section;
         // Reuse a recent domain list when navigating back to Browse. The
-        // short TTL avoids duplicate modal-open requests while still
+        // short TTL avoids duplicate tab-switch requests while still
         // refreshing data that may have changed in another tab or after a
         // build. Skip requests while the registry is still being configured;
         // the initial loadRegistryConfig call primes the list when ready.
         if (section === 'domains' && registryConfigured) {
             loadRegistryDomains();
         }
-        if (e.detail?.source === 'registry-modal' && !bridgesLoaded) {
-            loadRegistryBridges();
-        }
         if (section === 'bridges') {
             if (!bridgesLoaded) {
                 loadRegistryBridges();
             } else if (bridgesData && _getBridgesView() === 'graph') {
-                // Modal tab may have been hidden when first rendered; re-measure.
+                // Bridges tab may have been hidden when first rendered; re-measure.
                 const graphModel = _buildGraphModel(bridgesData);
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
@@ -1301,8 +1328,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     const urlSection = new URLSearchParams(window.location.search).get('section');
+    // Home: prefetch Contexts first (ungated by /settings/registry) so the
+    // popup is warm before click; defer Bridges until domains settle so the
+    // heavy bridges call does not starve the Contexts table.
+    // Deep-link ?section=bridges still loads bridges immediately.
     if (urlSection === 'bridges') {
         loadRegistryBridges();
+    } else if (document.getElementById('homeCountContexts')) {
+        Promise.resolve(loadRegistryDomains()).finally(() => loadRegistryBridges());
     }
 
     document.getElementById('btnRefreshBridges')?.addEventListener('click', () => {
@@ -1444,7 +1477,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
 
-        // Domain group circles
+        // Context group circles
         const domainG = g.append('g').attr('class', 'bridges-domains-layer');
         groups.forEach(domain => {
             const dg = domainG.append('g')
@@ -1659,6 +1692,8 @@ document.addEventListener('DOMContentLoaded', function () {
             bridgesData = domains;
             const domainsWithBridges = domains.filter(d => (d.bridges || []).length > 0);
             const totalBridges = domains.reduce((sum, d) => sum + (d.bridges || []).length, 0);
+            const bridgesTileCount = document.getElementById('homeCountBridges');
+            if (bridgesTileCount) bridgesTileCount.textContent = String(totalBridges);
 
             if (totalBridges === 0) {
                 content.innerHTML = '<div class="text-muted small py-3 text-center">' +
@@ -1677,10 +1712,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     '<div class="summary-item"><i class="bi bi-signpost-split text-primary"></i> ' +
                         '<span class="summary-value">' + totalBridges + '</span> bridge' + (totalBridges !== 1 ? 's' : '') + '</div>' +
                     '<div class="summary-item"><i class="bi bi-box text-secondary"></i> ' +
-                        '<span class="summary-value">' + domainsWithBridges.length + '</span> domain' + (domainsWithBridges.length !== 1 ? 's' : '') +
+                        '<span class="summary-value">' + domainsWithBridges.length + '</span> context' + (domainsWithBridges.length !== 1 ? 's' : '') +
                         ' with bridges</div>' +
                     '<div class="summary-item"><i class="bi bi-globe text-secondary"></i> ' +
-                        '<span class="summary-value">' + domains.length + '</span> total domain' + (domains.length !== 1 ? 's' : '') + '</div>' +
+                        '<span class="summary-value">' + domains.length + '</span> total context' + (domains.length !== 1 ? 's' : '') + '</div>' +
                 '</div>';
                 summaryEl.style.display = '';
             }
@@ -1719,7 +1754,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         '<thead><tr>' +
                             '<th>Source Entity</th>' +
                             '<th style="width:3rem;"></th>' +
-                            '<th>Target Domain</th>' +
+                            '<th>Target Context</th>' +
                             '<th>Target Entity</th>' +
                             '<th>Label</th>' +
                         '</tr></thead><tbody>';

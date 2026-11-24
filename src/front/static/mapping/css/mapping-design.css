@@ -108,6 +108,17 @@
     filter: drop-shadow(0 0 6px rgba(220, 53, 69, 0.5));
 }
 
+/* Pulse on nodes / relationship handles a running Auto-Map just mapped */
+.mapping-map-node.live-mapped .mapping-map-node-hitarea,
+.mapping-map-link-hitarea.live-mapped {
+    animation: mapping-live-mapped 0.8s ease-in-out 3;
+}
+
+@keyframes mapping-live-mapped {
+    0%, 100% { stroke-width: 3px; }
+    50%      { stroke-width: 9px; }
+}
+
 /* Excluded entity node - grey */
 .mapping-map-node.excluded .mapping-map-node-hitarea {
     fill: rgba(173, 181, 189, 0.15);
@@ -306,7 +317,7 @@
     bottom: 15px;
     left: 15px;
     background: rgba(255,255,255,0.95);
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     padding: 10px 14px;
     font-size: 11px;
     color: #495057;
@@ -386,7 +397,7 @@
 .mapping-map-context-menu {
     position: absolute;
     background: white;
-    border-radius: 8px;
+    border-radius: var(--db-radius-card);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     border: 1px solid #e9ecef;
     min-width: 180px;
@@ -469,4 +480,57 @@
 
 .mapping-map-context-item.mapping-map-context-warning:hover {
     background: #f1f5f9;
+}
+
+/* Studio Visual | List tabs — top pane grows so the shared bottom panel
+   sticks to the page/shell bottom (same for Visual and List). */
+#design-section .ob-tabs-wrap {
+    min-height: 0;
+}
+#mappingStudioMainPane {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#mappingStudioTabContent {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+#mappingStudioTabContent > .tab-pane.active {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+#mappingStudioPaneVisual > .d-flex,
+#mappingStudioPaneList > #mappingStudioListRoot {
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
+}
+
+/* Clean tabbed-card embedding: remove nested inner card borders/radii so
+   the embedded tab content fills the outer card seamlessly without round corners inside the tab. */
+#design-section .mapping-designer-container.ob-split-shell--column {
+    gap: 0;
+}
+#design-section #mappingStudioMainPane {
+    border: none;
+    border-radius: 0;
+}
+#design-section .mapping-right-panel {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    border-top: 1px solid var(--db-border);
+}
+#design-section .ob-split-shell--column > .detail-panel-resize-handle {
+    margin-top: -1px;
+    margin-bottom: -1px;
+    height: 2px;
 }

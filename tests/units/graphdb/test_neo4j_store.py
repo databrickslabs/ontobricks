@@ -373,21 +373,21 @@ class TestFactoryDispatch:
 
 class TestReasoningTranslator:
     def test_get_query_translator_returns_cypher_translator(self):
-        from back.core.reasoning.swrl.SWRLFlatCypherTranslator import (
-            SWRLFlatCypherTranslator,
+        from back.core.reasoning.shacl_rules.ShaclFlatCypherBackend import (
+            ShaclFlatCypherBackend,
         )
 
         s = _store()
         translator = s.get_query_translator("dom_V1")
-        assert isinstance(translator, SWRLFlatCypherTranslator)
+        assert isinstance(translator, ShaclFlatCypherBackend)
         assert translator.node_label == "dom_V1"
 
     def test_translator_builds_read_only_inference_query(self):
-        from back.core.reasoning.swrl.SWRLFlatCypherTranslator import (
-            SWRLFlatCypherTranslator,
+        from back.core.reasoning.shacl_rules.ShaclFlatCypherBackend import (
+            ShaclFlatCypherBackend,
         )
 
-        t = SWRLFlatCypherTranslator(node_label="dom_V1")
+        t = ShaclFlatCypherBackend(node_label="dom_V1")
         query = t.build_inference_sql(
             "dom_V1",
             {

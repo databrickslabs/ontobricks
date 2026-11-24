@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import os
 import re
 import threading
@@ -121,7 +122,11 @@ class DatabricksHelpers:
             if _inflight_blocking > _peak_inflight_blocking:
                 _peak_inflight_blocking = _inflight_blocking
         try:
-            return await loop.run_in_executor(_BLOCKING_POOL, call)
+            # Run inside a copy of the caller's context (like asyncio.to_thread)
+            # so request-scoped ContextVars — notably the on-behalf-of
+            # RequestIdentity — stay visible in the worker thread.
+            ctx = contextvars.copy_context()
+            return await loop.run_in_executor(_BLOCKING_POOL, ctx.run, call)
         finally:
             with _inflight_lock:
                 _inflight_blocking -= 1
@@ -244,7 +249,9 @@ class DatabricksHelpers:
                 if val:
                     return val
             except Exception as exc:
-                logger.debug("Could not read global config (%s): %s", getter_name, exc)
+                logger.warning(
+                    "Could not read global config (%s): %s", getter_name, exc
+                )
         return ""
 
     @staticmethod
@@ -412,6 +419,53 @@ class DatabricksHelpers:
             return explicit
         app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
         return f"{app_name}-graph-analytics" if app_name else ""
+
+    @staticmethod
+    def resolve_community_job_name(settings) -> str:
+        """Return the community-detection job name, or ``""`` if none can be formed.
+
+        ``ONTOBRICKS_COMMUNITY_JOB_NAME`` wins when set. Otherwise:
+
+        1. ``<app>-community-detection`` from the app name (Apps runtime), or
+        2. the analytics job name with its ``-graph-analytics`` suffix swapped
+           for ``-community-detection`` — so a local ``.env`` that only pins
+           ``ONTOBRICKS_ANALYTICS_JOB_NAME`` (the usual local-dev setup) also
+           resolves the sister job without a second variable.
+        """
+        explicit = (getattr(settings, "community_job_name", "") or "").strip()
+        if explicit:
+            return explicit
+        app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
+        if app_name:
+            return f"{app_name}-community-detection"
+        analytics = DatabricksHelpers.resolve_analytics_job_name(settings)
+        suffix = "-graph-analytics"
+        if analytics.endswith(suffix):
+            return f"{analytics[: -len(suffix)]}-community-detection"
+        return ""
+
+    @staticmethod
+    def resolve_pattern_job_name(settings) -> str:
+        """Return the pattern-detection job name, or ``""`` if none can be formed.
+
+        ``ONTOBRICKS_PATTERN_JOB_NAME`` wins when set. Otherwise:
+
+        1. ``<app>-pattern-detection`` from the app name (Apps runtime), or
+        2. the analytics job name with its ``-graph-analytics`` suffix swapped
+           for ``-pattern-detection`` — so a local ``.env`` that only pins
+           ``ONTOBRICKS_ANALYTICS_JOB_NAME`` also resolves the sister job.
+        """
+        explicit = (getattr(settings, "pattern_job_name", "") or "").strip()
+        if explicit:
+            return explicit
+        app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
+        if app_name:
+            return f"{app_name}-pattern-detection"
+        analytics = DatabricksHelpers.resolve_analytics_job_name(settings)
+        suffix = "-graph-analytics"
+        if analytics.endswith(suffix):
+            return f"{analytics[: -len(suffix)]}-pattern-detection"
+        return ""
 
     @staticmethod
     def get_databricks_client(domain, settings):
@@ -610,7 +664,7 @@ class DatabricksHelpers:
         endpoint = str(info.get("llm_endpoint") or "").strip()
         if not endpoint:
             raise ValidationError(
-                "No LLM selected. Select one in Domain → General → AI."
+                "No LLM selected. Select one in Configuration → AI."
             )
         host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
         if not host or not token:

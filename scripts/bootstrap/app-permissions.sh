@@ -286,6 +286,9 @@ if match:
 }
 
 _grant_job_run "${_MAIN_APP}-graph-analytics" "Graph analytics job"
+# The community-detection and pattern-detection jobs need the same grant.
+_grant_job_run "${_MAIN_APP}-community-detection" "Community detection job"
+_grant_job_run "${_MAIN_APP}-pattern-detection" "Pattern detection job"
 # The realtime stream job is deployed inert; the app starts and cancels its runs.
 _grant_job_run "${_MAIN_APP}-triple-rtm" "Realtime stream job"
 

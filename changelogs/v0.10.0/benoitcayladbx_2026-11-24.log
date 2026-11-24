@@ -1,0 +1,33 @@
+================================================================================
+Build -> Objects: analytics tables listed under Unity Catalog when grouped by source
+================================================================================
+
+Context:
+In Graph -> Build -> Objects, the "By source" view showed "Analytics" as its own
+group, next to Lakebase (Postgres) / Unity Catalog / Triple store. Analytics is a
+usage, not a source: the analytics job output tables are Unity Catalog tables.
+Sources are now only Lakebase (Postgres), Unity Catalog or Neo4j. The "By usage"
+view keeps its Analytics bucket.
+
+Changes:
+1. src/back/objects/digitaltwin/build/BuildObjects.py
+   - _analytics_groups replaced by _with_analytics: appends the version's
+     analytics items (last, drop-safe) to the Unity Catalog group; a failed
+     scan adds its reason to that group's error instead of a separate group.
+     When the analytics schema differs, the group location lists both.
+   - Delta backend: the "Triple store" group is now "Unity Catalog"
+     (key unity_catalog), with the analytics tables merged into it.
+   - Lakebase backend: analytics merged into the Unity Catalog (sync) group.
+2. tests/units/dtwin/test_build_objects.py
+   - Delta and scan-error tests updated to the single Unity Catalog group;
+     new test for the Lakebase merge (items and combined location).
+3. docs/user-guide.md
+   - Objects tab: "by source" groups listed; analytics sit in Unity Catalog.
+
+Modified files:
+- src/back/objects/digitaltwin/build/BuildObjects.py
+- tests/units/dtwin/test_build_objects.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-24.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11236 passed, 334 skipped, 8 deselected

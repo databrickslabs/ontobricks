@@ -51,7 +51,7 @@ class TwinGraphAccess:
         """
         sid = TwinGraphAccess.sandbox_id(simulation_id)
         if sid:
-            from back.objects.simulation import Simulation
+            from back.objects.intelligence import Simulation
 
             return Simulation(domain, settings).explorer_relation(
                 sid, store=store

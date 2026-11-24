@@ -31,7 +31,11 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    flex: 0 0 auto;
+    /* Must be able to shrink, otherwise its `flex-wrap` never kicks in and
+       the Discuss button overflows narrow (mobile) viewports. */
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
     padding-top: 0.1rem;
 }
 /* Header action buttons are plain `.btn-sm.btn-outline-danger` — the global
@@ -41,41 +45,29 @@
     font-size: 0.85rem;
 }
 
+/* Layout only on `.graph-chat-container`. Borderless chrome for the chat
+   panel (same as Graph → Query) is scoped under `#chat-section` so the
+   shared `.card` defaults stay untouched for other pages. */
 .graph-chat-container {
     --gc-user-start: var(--db-primary);
     --gc-user-end:   var(--db-primary-dark);
     --gc-bot-bg:     #ffffff;
     --gc-bot-border: #e9ecef;
-    --gc-panel-bg:   #ffffff;
     --gc-shadow-sm:  0 1px 2px rgba(15, 23, 42, 0.06);
     --gc-shadow-md:  0 4px 14px rgba(15, 23, 42, 0.08);
-    --gc-radius:     16px;
 
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;                /* crucial: allow inner overflow:auto */
-    border: 1px solid #e4e8ef;
-    border-radius: var(--gc-radius);
-    background: var(--gc-panel-bg);
-    box-shadow: var(--gc-shadow-md);
     overflow: hidden;
     position: relative;
 }
 
-.graph-chat-container::before {
-    content: "";
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(
-        90deg,
-        var(--db-primary) 0%,
-        var(--db-primary-dark) 45%,
-        var(--db-status-info) 100%
-    );
-    z-index: 2;
-    opacity: 0.9;
+#chat-section .graph-chat-container {
+    border: none;
+    background: transparent;
+    box-shadow: none;
 }
 
 
@@ -125,7 +117,7 @@
     width: 64px;
     height: 64px;
     margin-bottom: 0.85rem;
-    border-radius: 16px;
+    border-radius: var(--db-radius-control);
     background: #ffffff;
     box-shadow: var(--gc-shadow-md);
     display: flex;
@@ -245,7 +237,7 @@
     padding: 0.65rem 0.95rem;
     font-size: 0.9rem;
     line-height: 1.5;
-    border-radius: 14px;
+    border-radius: var(--db-radius-control);
     box-shadow: var(--gc-shadow-sm);
     word-break: break-word;
     /* prevent the bubble from stretching to fill the row */
@@ -257,7 +249,7 @@
     background: linear-gradient(135deg, var(--gc-user-start), var(--gc-user-end));
     color: #ffffff;
     border: none;
-    border-bottom-right-radius: 4px;
+    border-bottom-right-radius: 2px;
     box-shadow: 0 4px 14px rgba(var(--db-primary-rgb), 0.22);
 }
 .graph-chat-messages .user-msg .assistant-msg-body a {
@@ -269,7 +261,7 @@
     background: var(--gc-bot-bg);
     color: #0f172a;
     border: 1px solid var(--gc-bot-border);
-    border-bottom-left-radius: 4px;
+    border-bottom-left-radius: 2px;
 }
 
 .graph-chat-messages .assistant-msg.error-msg .assistant-msg-body {
@@ -291,8 +283,8 @@
     padding: 0.55rem 0.9rem;
     background: #ffffff;
     border: 1px solid var(--gc-bot-border);
-    border-radius: 14px;
-    border-bottom-left-radius: 4px;
+    border-radius: var(--db-radius-control);
+    border-bottom-left-radius: 2px;
     box-shadow: var(--gc-shadow-sm);
     color: var(--db-text-secondary);
     font-size: 0.85rem;
@@ -370,8 +362,11 @@
     border: none !important;
 }
 
-/* Send button: circular gradient, vertically centered */
-.graph-chat-input-area #chatSendBtn {
+/* Send button: circular gradient, vertically centered.
+   #craSendBtn is the Complex rule assistant's button (ontology page), which
+   reuses this exact styling. */
+.graph-chat-input-area #chatSendBtn,
+.graph-chat-input-area #craSendBtn {
     width: 38px;
     height: 38px;
     min-width: 38px;
@@ -389,15 +384,18 @@
     font-size: 0.95rem;
     align-self: center;
 }
-.graph-chat-input-area #chatSendBtn:hover:not(:disabled) {
+.graph-chat-input-area #chatSendBtn:hover:not(:disabled),
+.graph-chat-input-area #craSendBtn:hover:not(:disabled) {
     transform: translateY(-1px) scale(1.04);
     box-shadow: 0 6px 16px rgba(var(--db-primary-rgb), 0.40);
     color: #fff;
 }
-.graph-chat-input-area #chatSendBtn:active:not(:disabled) {
+.graph-chat-input-area #chatSendBtn:active:not(:disabled),
+.graph-chat-input-area #craSendBtn:active:not(:disabled) {
     transform: scale(0.96);
 }
-.graph-chat-input-area #chatSendBtn:disabled {
+.graph-chat-input-area #chatSendBtn:disabled,
+.graph-chat-input-area #craSendBtn:disabled {
     background: #cbd5e1;
     box-shadow: none;
     opacity: 0.85;
@@ -580,6 +578,110 @@
     font-weight: 500;
 }
 
+/* ---------------------------------------------------
+   Thinking process (full, collapsible agent trace)
+--------------------------------------------------- */
+
+.graph-chat-thinking {
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px dashed #e2e8f0;
+    font-size: 0.76rem;
+    color: var(--db-text-secondary);
+}
+
+.graph-chat-thinking-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+}
+.graph-chat-thinking-title::-webkit-details-marker { display: none; }
+.graph-chat-thinking-title:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+.graph-chat-thinking[open] > .graph-chat-thinking-title {
+    background: #EEF2FF;
+    color: #3730A3;
+}
+
+.graph-chat-thinking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.graph-chat-step {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.graph-chat-step-title {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.55rem;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    background: #F8FAFC;
+}
+.graph-chat-step-title::-webkit-details-marker { display: none; }
+.graph-chat-step-title:hover { background: #e2e8f0; }
+
+.graph-chat-step-title code {
+    font-size: 0.72rem;
+    padding: 0;
+    background: transparent;
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.graph-chat-step-meta {
+    margin-left: auto;
+    color: var(--db-text-secondary);
+    font-style: italic;
+    white-space: nowrap;
+}
+
+.graph-chat-step-section {
+    padding: 0.35rem 0.55rem 0.45rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.graph-chat-step-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--db-text-secondary);
+    margin-bottom: 0.2rem;
+}
+
+.graph-chat-step-pre {
+    margin: 0;
+    padding: 0.4rem 0.5rem;
+    max-height: 320px;
+    overflow: auto;
+    font-size: 0.7rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 4px;
+}
+
 
 /* ---------------------------------------------------
    Pending action card (Confirm / Cancel before invoking a UC Action)
@@ -757,7 +859,7 @@
 .graph-chat-messages .bot-msg .assistant-msg-body pre {
     margin: 0.5em 0;
     padding: 0.6em 0.75em;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     background: #0f172a;
     color: #e2e8f0;
     overflow-x: auto;
@@ -821,7 +923,6 @@
         overflow: visible;
     }
 
-    .graph-chat-container { border-radius: 12px; }
     .graph-chat-messages { padding: 0.9rem; }
     .graph-chat-messages .assistant-msg { max-width: 92%; }
 }

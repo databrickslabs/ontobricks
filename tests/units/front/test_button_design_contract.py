@@ -49,43 +49,44 @@ def _has_declaration(blocks: list[str], prop: str, value: str) -> bool:
     )
 
 
-NEUTRAL_BUTTON_VARIANTS = [
+# All non-Create action variants use the Share (or danger-Share) paint.
+SHARE_BUTTON_VARIANTS = [
     ".btn-secondary",
     ".btn-success",
-    ".btn-danger",
     ".btn-warning",
     ".btn-info",
     ".btn-outline-primary",
     ".btn-outline-secondary",
     ".btn-outline-success",
+    ".btn-danger",
     ".btn-outline-danger",
 ]
 
 
-@pytest.mark.parametrize("variant", NEUTRAL_BUTTON_VARIANTS)
+@pytest.mark.parametrize("variant", SHARE_BUTTON_VARIANTS)
 def test_unfilled_buttons_stay_unfilled_when_focused(variant):
     """Bootstrap's `:focus-visible` repaints a button with its hover palette,
     which for these variants is the solid fill the design drops. Focus must
-    keep the resting background and carry the state in the ring alone."""
+    keep the Share white surface and carry the state in the ring alone."""
     css = _read(COMPONENTS_CSS)
 
     for state in (f"{variant}:focus", f"{variant}:focus-visible"):
         blocks = _blocks_for_selector(css, state)
         assert blocks, f"No focus rule pins {state}"
-        assert _has_declaration(blocks, "background-color", "transparent"), (
-            f"{state} does not pin a transparent background"
-        )
+        assert _has_declaration(
+            blocks, "background-color", r"var\(--db-surface-warm\)"
+        ), f"{state} does not keep the Share resting background"
 
     ring_blocks = _blocks_for_selector(css, f"{variant}:focus")
     assert _has_declaration(ring_blocks, "box-shadow", r"var\(--db-focus-ring\)")
 
 
 def test_outline_danger_keeps_its_red_lettering_on_focus():
-    """The shared focus rule neutralises colour; danger opts back out."""
+    """Destructive Share keeps the danger label when focused."""
     css = _read(COMPONENTS_CSS)
-    blocks = _blocks_for_selector(css, ".btn-outline-danger:focus")
-
-    assert _has_declaration(blocks, "color", r"var\(--db-status-danger\)")
+    for selector in (".btn-outline-danger:focus", ".btn-danger:focus"):
+        blocks = _blocks_for_selector(css, selector)
+        assert _has_declaration(blocks, "color", r"var\(--db-status-danger\)")
 
 
 def test_small_joined_controls_use_the_control_radius_token():
@@ -95,13 +96,16 @@ def test_small_joined_controls_use_the_control_radius_token():
     css = _read(MAIN_CSS)
 
     for selector in (
-        ".input-group-sm > .btn",
         ".input-group-sm > .form-control",
         ".form-control-sm",
     ):
         blocks = _blocks_for_selector(css, selector)
         assert blocks, f"No radius rule for {selector}"
         assert _has_declaration(blocks, "border-radius", r"var\(--db-radius-control\)")
+
+    btn_blocks = _blocks_for_selector(css, ".input-group-sm > .btn")
+    assert btn_blocks, "No radius rule for .input-group-sm > .btn"
+    assert _has_declaration(btn_blocks, "border-radius", r"var\(--db-btn-radius\)")
 
 
 def test_section_headers_wrap_their_control_cluster():
@@ -131,7 +135,7 @@ def test_grouped_buttons_become_pills_when_they_have_to_wrap():
     assert re.search(r"\.section-header\s+\.btn-group\s*\{[^}]*flex-wrap:\s*wrap", body)
     assert re.search(
         r"\.section-header\s+\.btn-group\s*>\s*\.btn\s*\{[^}]*"
-        r"border-radius:\s*var\(--db-radius-control\)",
+        r"border-radius:\s*var\(--db-btn-radius\)",
         body,
         flags=re.DOTALL,
     )
@@ -215,6 +219,37 @@ def test_graph_chat_buttons_use_clarity_tokens():
     )
 
 
+def test_graph_chat_panel_defers_to_shared_card_surface():
+    """Graph Chat body must look like other sidebar cards — no custom chrome.
+
+    The panel used a 3px ``::before`` stripe ending in ``--db-status-info``
+    (blue) plus a harder border / shadow / 16px radius that diverged from
+    ``.card`` in ``main.css`` (``.cursor/11`` §Section Body Surface).
+    """
+    css = _read(CHAT_CSS)
+    html = _read(
+        REPO_ROOT / "src/front/templates/partials/dtwin/_query_chat.html"
+    )
+
+    assert re.search(r'class="[^"]*\bcard\b[^"]*\bgraph-chat-container\b', html) or re.search(
+        r'class="[^"]*\bgraph-chat-container\b[^"]*\bcard\b', html
+    ), "graph-chat-container must also carry the shared .card class"
+    assert "graph-chat-container::before" not in css
+    assert "--db-status-info" not in css
+
+    container_blocks = _blocks_for_selector(css, ".graph-chat-container")
+    for prop in ("border", "border-radius", "box-shadow", "background"):
+        assert not _has_declaration(container_blocks, prop, r"."), (
+            f".graph-chat-container must not override .card {prop}"
+        )
+    # Borderless on the chat page only (Databricks page-panel style), scoped
+    # under #chat-section so the bare `.graph-chat-container` rule stays clean.
+    scoped = _blocks_for_selector(css, "#chat-section .graph-chat-container")
+    assert _has_declaration(scoped, "border", r"none")
+    assert _has_declaration(scoped, "background", r"transparent")
+    assert _has_declaration(scoped, "box-shadow", r"none")
+
+
 def test_settings_header_buttons_carry_the_small_size():
     """Section headers use `btn-sm`; without it these were 110px tall on a
     phone."""
@@ -278,7 +313,6 @@ def test_section_header_primary_cta_is_the_right_most_button():
         "partials/ontology/_ontology_relationships.html": "ontology-edit-btn",
         "partials/ontology/_ontology_wizard.html": "wizardTopGenerateBtn",
         "partials/domain/_domain_metadata.html": "loadMetadataBtn",
-        "partials/mapping/_mapping_diagnostics.html": "runDiagnosticsBtn",
         "partials/ontology/_ontology_cohorts.html": "cohortSaveBtn",
     }
 

@@ -1,30 +1,53 @@
 <!--
-    Cohort Discovery — DESIGN (Simulation → Cohorts).
-    Preview and materialise live under Simulation → Run.
+    Cohort Discovery — Intelligence → Configuration → Cohorts.
+
+    One page with two tabs: Design (rule form) and Runs (preview / materialise).
+    The saved-rules rail on the left is shared by both tabs. The header actions
+    swap with the active tab (data-cohort-actions="design|runs").
 -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="bi bi-people-fill me-2"></i>Cohorts</h4>
+            <h4 class="mb-1"><i class="bi bi-people-fill me-2"></i>Cohorts{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
             <p class="text-muted mb-0 small">
-                Design constraint-based grouping rules — preview and execute them from
-                <em>Simulation → Run</em>.
+                Design constraint-based grouping rules, then preview and materialise them from the <em>Runs</em> tab.
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
-                    title="Open the ontology discussion" aria-label="Open the ontology discussion"
-                    onclick="typeof openOntologyDiscussion === 'function' && openOntologyDiscussion()">
-                <i class="bi bi-chat-dots"></i>
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" id="cohortNewBtn"
-                    onclick="CohortModule.newRule()">
-                <i class="bi bi-plus-lg me-1"></i>New rule
-            </button>
-            <button class="btn btn-sm btn-primary" id="cohortSaveBtn"
-                    onclick="CohortModule.save()">
-                <i class="bi bi-check2 me-1"></i>Save rule
-            </button>
+            <div class="d-flex align-items-center gap-2" data-cohort-actions="design">
+                <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
+                        title="Open the ontology discussion" aria-label="Open the ontology discussion"
+                        onclick="openOntologyDiscussion()">
+                    <i class="bi bi-chat-dots"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="cohortNewBtn"
+                        onclick="CohortModule.newRule()">
+                    <i class="bi bi-plus-lg me-1"></i>New
+                </button>
+                <button class="btn btn-sm btn-primary" id="cohortSaveBtn"
+                        onclick="CohortModule.save()">
+                    <i class="bi bi-check2 me-1"></i>Save
+                </button>
+            </div>
+            <div class="d-flex align-items-center gap-2 d-none" data-cohort-actions="runs">
+                {% include "partials/dtwin/_purge_inferences_button.html" %}
+                <button class="btn btn-sm btn-outline-secondary"
+                        id="cohortOutputsBtn"
+                        onclick="CohortModule.openOutputsModal()"
+                        title="Configure outputs (graph triples, UC table)">
+                    <i class="bi bi-sliders me-1"></i>Outputs
+                </button>
+                <button class="btn btn-sm btn-outline-secondary"
+                        id="cohortPreviewBtn"
+                        onclick="CohortModule.preview()" disabled>
+                    <i class="bi bi-eye me-1"></i>Preview
+                </button>
+                <button class="btn btn-sm btn-primary"
+                        id="cohortMaterializeBtn"
+                        onclick="CohortModule.openMaterializeModal()" disabled>
+                    <i class="bi bi-cloud-upload me-1"></i>Materialise
+                </button>
+            </div>
         </div>
     </div>
 
@@ -45,16 +68,36 @@
                 </div>
                 <div class="cohort-rail-body" id="cohortRulesList">
                     <div class="text-center py-4 text-muted small" id="cohortRulesEmpty">
-                        No rules yet. Click <em>New rule</em> to create one.
+                        No rules yet. Click <em>New</em> to create one.
                     </div>
                 </div>
             </div>
         </aside>
 
-        <!-- Main column: Build rule form -->
+        <!-- Main column: Design / Runs tabs (rail above is shared) -->
         <section class="cohort-content-card card">
-            <div class="card-body cohort-tab-content p-3">
-                <!-- Build rule form -->
+            <div class="card-body p-0 ob-tabs-wrap">
+                <ul class="nav nav-tabs ob-tabs nav-fill" id="cohortTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="cohortTabDesignBtn" data-bs-toggle="tab"
+                                data-bs-target="#cohortPaneDesign" type="button" role="tab"
+                                aria-controls="cohortPaneDesign" aria-selected="true">
+                            <i class="bi bi-pencil-square me-1"></i>Design
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cohortTabRunsBtn" data-bs-toggle="tab"
+                                data-bs-target="#cohortPaneRuns" type="button" role="tab"
+                                aria-controls="cohortPaneRuns" aria-selected="false">
+                            <i class="bi bi-play-circle me-1"></i>Runs
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="cohortTabContent">
+                <!-- Design pane: build rule form -->
+                <div class="tab-pane fade show active p-3 cohort-tab-content" id="cohortPaneDesign"
+                     role="tabpanel" aria-labelledby="cohortTabDesignBtn">
 
                         <!-- Section 1 — Identity -->
                         <div class="cohort-section mb-4">
@@ -247,6 +290,14 @@
                             </div>
                         </div>
 
+                </div><!-- /cohortPaneDesign -->
+
+                <!-- Runs pane: preview and materialise a saved rule -->
+                <div class="tab-pane fade p-3" id="cohortPaneRuns"
+                     role="tabpanel" aria-labelledby="cohortTabRunsBtn">
+                    {% include "partials/dtwin/_query_cohorts.html" %}
+                </div>
+                </div><!-- /cohortTabContent -->
             </div><!-- /card-body -->
         </section>
     </div><!-- /cohort-layout -->

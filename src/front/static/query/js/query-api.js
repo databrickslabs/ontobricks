@@ -94,7 +94,7 @@ async function loadApiDomains() {
         });
         const data = await resp.json();
 
-        select.innerHTML = '<option value="">Select a domain...</option>';
+        select.innerHTML = '<option value="">Select a context...</option>';
         const domainRows = data.domains || [];
         if (data.success && domainRows.length) {
             for (const p of domainRows) {
@@ -202,7 +202,7 @@ function syncApiDomainCapabilities() {
     if (status) {
         if (!hasSelection) {
             status.textContent =
-                'Select an API-exposed domain to inspect its backend availability.';
+                'Select an API-exposed context to inspect its backend availability.';
         } else if (graphless) {
             status.textContent = 'No Backend · Ontology only';
         } else if (hasGraph) {
@@ -218,8 +218,8 @@ function syncApiDomainCapabilities() {
         control.disabled = hasSelection && !hasGraph;
         control.title = control.disabled
             ? (graphless
-                ? 'Unavailable for an ontology-only domain'
-                : 'Build this domain before using graph operations')
+                ? 'Unavailable for an ontology-only context'
+                : 'Build this context before using graph operations')
             : '';
     });
 }
@@ -404,7 +404,7 @@ function getGraphqlDomainSlug() {
 function openGraphiQL() {
     const domainSlug = getGraphqlDomainSlug();
     if (!domainSlug) {
-        showNotification('Enter a domain name first.', 'warning');
+        showNotification('Enter a context name first.', 'warning');
         return;
     }
     window.open(
@@ -418,7 +418,7 @@ function openGraphiQL() {
 async function tryGraphqlQuery(btnEl) {
     const domainSlug = getGraphqlDomainSlug();
     if (!domainSlug) {
-        showNotification('Enter a domain name first.', 'warning');
+        showNotification('Enter a context name first.', 'warning');
         return;
     }
 
@@ -482,7 +482,7 @@ async function tryGraphqlQuery(btnEl) {
 async function tryGraphqlSchema(btnEl) {
     const domainSlug = getGraphqlDomainSlug();
     if (!domainSlug) {
-        showNotification('Enter a domain name first.', 'warning');
+        showNotification('Enter a context name first.', 'warning');
         return;
     }
     const path = appendDomainParam(

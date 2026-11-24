@@ -20,7 +20,7 @@
     flex: 1 1 0 !important;
     min-height: 0 !important;
     overflow: hidden !important;
-    padding: 0 0.5rem;
+    padding: var(--ob-page-padding);
 }
 
 #design-section .content-section {
@@ -47,7 +47,9 @@
     position: relative;
 }
 
-/* Designer Loading Overlay */
+/* Designer Loading Overlay — hidden until showMappingDesignerLoading(true).
+   Starting as display:flex left the Visual spinner stuck whenever init was
+   skipped (Informations default tab, or Visual opened before MappingState). */
 .mapping-designer-container .designer-loading-overlay {
     position: absolute;
     top: 0;
@@ -55,12 +57,12 @@
     right: 0;
     bottom: 0;
     background: rgba(255, 255, 255, 0.95);
-    display: flex;
+    display: none;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     z-index: 100;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
 }
 
 
@@ -78,7 +80,7 @@
     min-height: 200px;
     height: 100% !important;
     border: 1px solid #e0e0e0;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
 }
 
 /* ==========================================================================
@@ -441,26 +443,6 @@
 }
 
 /* ==========================================================================
-   R2RML Preview
-   ========================================================================== */
-#r2rmlPreview {
-    font-size: 0.85rem;
-    min-height: 400px;
-    background-color: #1e1e1e !important;
-    color: #d4d4d4 !important;
-    border: 1px solid #333;
-}
-
-#r2rmlPreview:read-only {
-    background-color: #1e1e1e !important;
-    color: #d4d4d4 !important;
-}
-
-#r2rmlPreview::placeholder {
-    color: #6c757d;
-}
-
-/* ==========================================================================
    Query Results Table
    ========================================================================== */
 #queryResultsContainer,
@@ -540,17 +522,6 @@
     pointer-events: none;
     opacity: 0.5;
     color: #999;
-}
-
-/* ==========================================================================
-   Badge Styling
-   ========================================================================== */
-.badge.bg-secondary {
-    background-color: #6c757d !important;
-}
-
-.badge.bg-success {
-    background-color: #28a745 !important;
 }
 
 /* ==========================================================================

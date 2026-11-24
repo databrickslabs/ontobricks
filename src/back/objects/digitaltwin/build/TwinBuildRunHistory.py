@@ -74,7 +74,7 @@ class TwinBuildRunHistory:
             getattr(snap, "ontology", {}),
             getattr(snap, "assignment", {}),
             constraints=getattr(snap, "constraints", None),
-            swrl_rules=getattr(snap, "swrl_rules", None),
+            if_then_rules=getattr(snap, "if_then_rules", None),
             axioms=getattr(snap, "axioms", None),
             shacl_shapes=getattr(snap, "shacl_shapes", None),
         )

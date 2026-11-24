@@ -1,6 +1,6 @@
 /* -----------------------------------------------------------------
    Settings → Admin → Teams matrix
-   A compact Principals × Domains grid with sticky headers.
+   A compact Principals × Contexts grid with sticky headers.
    ----------------------------------------------------------------- */
 
 .teams-matrix-wrapper {
@@ -11,6 +11,12 @@
     border-radius: 0.375rem;
     background: #fff;
     position: relative;
+}
+
+.teams-matrix-wrapper:has(.spinner-border),
+.teams-matrix-wrapper.is-loading {
+    border: none;
+    background: transparent;
 }
 
 .teams-matrix {

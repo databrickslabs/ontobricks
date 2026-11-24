@@ -1,0 +1,63 @@
+================================================================================
+## Merge origin/0.10.0 (191 commits) into the incremental-materialization branch
+================================================================================
+
+Context: `origin/0.10.0` moved on by 191 commits since the 2026-11-04 merge:
+the SWRL engine replaced by the `back/core/reasoning/shacl_rules/` package
+(IF-THEN rules), Domain renamed to Context in the UI, Runs moved into the
+Build / Analytics tabs, Intelligence (analytics, communities, patterns),
+Knowledge Pages, security hardening and the v0.10.0 release notes. 34 files
+conflicted.
+
+1. Reasoning: upstream's `shacl_rules` package taken as is
+   (`ShaclFlatSqlBackend`, `RuleBuiltinRegistry`); our `swrl/SWRLEngine.py`,
+   `SWRLSQLBuiltinFilters.py` and `tests/units/ontology/test_swrl_builtin_defects.py`
+   are removed — upstream carries the same fixes (prefix-tolerant builtins,
+   data-property URI map, builtin filters on inference / materialization,
+   Postgres dialect) under the new names and
+   `tests/units/ontology/test_if_then_builtin_defects.py`.
+   `lakebase/Base.py` hands out `ShaclFlatSqlBackend(dialect="postgres")`.
+2. Build: `build/__init__.py` exports both sides' classes; `_build_pipeline.py`
+   keeps `TwinBuildRunHistory.build_run_stats`, which now passes
+   `if_then_rules` to `collect_domain_stats` (renamed upstream from
+   `swrl_rules`); `MaterializedStore.py`, `FlatStore.py`, `dtwin.py`,
+   `settings.py` keep both sides' imports.
+3. Domain info: `Domain._graph_settings_info` (upstream's name) returns our
+   `materialization_mode` / `realtime_source` next to upstream's
+   `graph_cache_refreshed_at` / `knowledge_pages`; `DomainSession`'s extracted
+   `_export_domain_info` / `_import_domain_info` carry the two fields too.
+4. `OntologyGenerator.py` uses upstream's `serialize_graph` and imports
+   `ONTOBRICKS_NS` from `back.core.w3c.owl.iri` (the shared constants module
+   keeps only the URI string, so the stream job closure stays rdflib-free).
+5. Runs UI: `_domain_runs.html` is gone upstream; the Materialization column
+   header moves to `_domain_build_runs.html` and `runs-render.js` adds the
+   cell after upstream's Status cell. `domain-information.js`: the
+   materialization-mode / row-tracking / realtime wiring moves into upstream's
+   relocated init block and the deferred `hydrateInformationSection`.
+6. Help Center (`help_modal.html`), `about.html`, registry configuration
+   partial, README and docs: upstream's wording and Context naming, with the
+   Lakebase registry / Knowledge Store / three-stage Generate statements kept
+   where upstream's text still described a UC Volume registry; `docs/README.md`
+   keeps the Incremental materialization index row.
+7. Deploy: `app.yaml.template` keeps the realtime entries and gains the
+   community / pattern job names; `scripts/bootstrap/app-permissions.sh` keeps
+   `_grant_job_run` and calls it for the graph-analytics, community-detection,
+   pattern-detection and triple-rtm jobs.
+8. Lockfiles: upstream's `uv.lock` and `src/mcp-server/uv.lock` as is (public
+   hosts). `uv lock --check` reports them stale on this machine only, because
+   the local uv index is the Databricks PyPI mirror; upstream's own tree gives
+   the same message here.
+9. Size baseline: union of both parents (max per entry), then
+   `python -m tests.units.architecture.ratchet`.
+10. Tests: `test_runs_page.py` keeps `TestMaterializationColumn`;
+    `test_settings_lakebase_sync_defaults.py` keeps our sync-mode assertions and
+    upstream's two new tests; `test_bundle_job_resource.py` upstream's;
+    `test_inferred_triple_ledger.py` imports `graph_analysis.cohort.CohortBuilder`;
+    `test_lakehouse_materialization_ui.py` reads a longer span of
+    `saveDomainInfo`; `update_to_0.9.0.md` removed as upstream did.
+
+Modified files: see `git show --stat` of the merge commit.
+
+Test result: `uv run --frozen pytest -q -m "not scenario" -o faulthandler_timeout=240`
+— 13188 passed, 343 skipped, 9 deselected. Not redeployed and not exercised
+against a workspace after this merge.

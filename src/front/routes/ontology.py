@@ -20,7 +20,7 @@ async def ontology_page(
     if redirect is not None:
         return redirect
     if request.query_params.get("section") == "cohorts":
-        dest = "/simulation/?section=cohorts"
+        dest = "/intelligence/?section=cohorts"
         rule = request.query_params.get("rule")
         if rule:
             dest += f"&rule={rule}"

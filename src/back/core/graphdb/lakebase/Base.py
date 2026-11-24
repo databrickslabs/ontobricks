@@ -212,11 +212,13 @@ class Base(MaterializedGraphBackend):
         return "sql"
 
     def get_query_translator(self, table_name: str = "") -> Any:
-        from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
+        from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import (
+            ShaclFlatSqlBackend,
+        )
 
         # Lakebase is Postgres: without the dialect, builtin filters emit
-        # Databricks-only TRY_CAST/DOUBLE and fail with a syntax error.
-        return SWRLSQLTranslator(dialect="postgres")
+        # Spark TRY_CAST, which is a syntax error on the default backend.
+        return ShaclFlatSqlBackend(dialect="postgres")
 
     def get_connection(self) -> Any:
         raise InfrastructureError(

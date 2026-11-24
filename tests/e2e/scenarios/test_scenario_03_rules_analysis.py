@@ -14,7 +14,7 @@ the fresh DRAFT version scenario 2 branched off (V2). It exercises the
     3. **generate data-quality rules** — auto-suggest SHACL shapes from the
        ontology and accept them into the domain
     4. **generate business rules** — run ``agent_business_rules_generator``
-       (SWRL / decision tables / SPARQL / aggregate) and accept the proposals
+       (IF-THEN / decision tables / SPARQL / aggregate) and accept the proposals
     5. persist the enriched domain to the registry
     6. **run the data-quality rules on the knowledge graph**
        (``/dtwin/dataquality/start`` with ``backend=graph``) and poll
@@ -308,7 +308,7 @@ class TestScenario3RulesAnalysis:
         _step(f"domain now carries {len(shapes)} SHACL data-quality shape(s)")
 
         # ── 6. Generate business rules with the AI agent ────────────────────
-        _step("generating business rules (agent: SWRL / decision tables / SPARQL / aggregate)")
+        _step("generating business rules (agent: IF-THEN / decision tables / SPARQL / aggregate)")
         resp = page.context.request.post(
             f"{base}/ontology/business-rules/generate-async",
             headers=headers(),
@@ -338,7 +338,7 @@ class TestScenario3RulesAnalysis:
             f"error={gen_task.get('error')}"
         )
         proposed = gen_task.get("result") or {}
-        rule_keys = ("swrl_rules", "decision_tables", "sparql_rules", "aggregate_rules")
+        rule_keys = ("if_then_rules", "sparql_rules")
         proposed_counts = {k: len(proposed.get(k, []) or []) for k in rule_keys}
         _step(f"agent proposed rules: {proposed_counts} — {gen_task.get('message', '')}")
 
@@ -403,11 +403,9 @@ class TestScenario3RulesAnalysis:
             data=json.dumps(
                 {
                     "tbox": True,
-                    "swrl": True,
+                    "if_then": True,
                     "graph": True,
-                    "decision_tables": True,
                     "sparql_rules": True,
-                    "aggregate_rules": True,
                 }
             ),
             timeout=120_000,

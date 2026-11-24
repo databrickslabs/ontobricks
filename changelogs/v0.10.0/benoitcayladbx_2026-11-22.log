@@ -1,0 +1,211 @@
+================================================================================
+2026-11-22 — Graph / Build / Objects: work-list styling
+================================================================================
+
+--------------------------------------------------------------------------------
+Objects tab uses the shared Databricks work-list style
+--------------------------------------------------------------------------------
+
+Context:
+The Objects tab (Graph → Build → Objects) rendered plain tables without column
+headers, with coloured kind pills and an inline column width. The user asked for
+the usual Databricks list styling. The app's Work-List template (filter bar +
+.ob-runs-table, as in Build → Runs) is the reference, so the Objects tab now
+follows it.
+
+Changes:
+1. src/front/templates/partials/dtwin/_build_objects.html
+   - Filter bar uses the work-list layout: search box (.ob-filter-search),
+     row count (.ob-runs-count) and trailing actions. The subtitle line is
+     removed. The Reload button is renamed Refresh.
+2. src/front/static/query/js/query-build-objects.js
+   - Each table has a sentence-case header row (tableHead): Kind, Name, State
+     and an actions column; by-usage adds Source.
+   - Kind is plain text. Coloured kind badges (KIND_BADGES) and the inline
+     90px width are removed; group location and usage counts are muted text.
+   - The shared ObListFilter filters the rows across all group tables and
+     drives the row count. It is re-applied after every render, including the
+     notice and error states, which now clear the content.
+3. src/front/static/global/js/list-filter.js
+   - Counts and filters body rows only (tbody > tr), so header rows of a
+     multi-table container are never counted or hidden. Existing callers pass a
+     tbody and are unaffected.
+4. tests/units/front/test_build_objects_tab_contract.py
+   - Checks the work-list markup, header rows, no filled badges or inline widths,
+     filter binding and the body-row selector.
+
+Not changed:
+- Settings → Objects tables still use table-light and the ob-table class, which
+  has no CSS rule. They are the older style and are left as they are.
+
+Modified files:
+- src/front/templates/partials/dtwin/_build_objects.html
+- src/front/static/query/js/query-build-objects.js
+- src/front/static/global/js/list-filter.js
+- tests/units/front/test_build_objects_tab_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-22.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11187 passed, 334 skipped, 8 deselected
+
+================================================================================
+Intelligence → Patterns: certified patterns, certification gauge, green/red chart
+================================================================================
+
+Context:
+Patterns can now be certified by the user. No pattern is certified by default.
+The pattern details toolbar gets a Certify toggle and, next to "Matching
+entities", a gauge showing the share of entities that follow a certified
+pattern. In "Matching entities per pattern", certified patterns are green and
+non-certified ones are red. Certification is stored per saved Detect run (the
+view every Detect opens), so the live, unsaved view shows no certification UI.
+
+Changes:
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   - New nullable `certified BOOLEAN` column on the saved catalog table
+     (created for new tables, added by the existing column migration for old
+     ones). Save never writes it, so every pattern starts non-certified.
+   - `patterns()` returns `certified` per pattern and
+     `stats.certified_pattern_count` / `stats.certified_count` (entities in
+     certified patterns).
+   - New `set_certified(saved_id, pattern_id, certified)`; rejects an unknown
+     pattern or a missing pattern_id.
+2. src/back/objects/digitaltwin/TwinAnalytics.py
+   - `certify_saved_pattern` delegator.
+3. src/api/routers/internal/dtwin.py
+   - New `PUT /dtwin/patterns/saved/{saved_id}/certification`
+     (`{pattern_id, certified}`, builder role at domain scope).
+4. src/front/static/intelligence/js/intelligence-patterns.js
+   - Certify / Certified toggle in the toolbar, certified icon in the picker,
+     certification gauge (donut + %) after the "Matching entities" button,
+     green / red bars with a legend in the chart. The toolbar and chart are
+     re-rendered in place after a toggle, so the diagram is not reloaded.
+   - Gauge: certified entities / run population (falls back to covered entities
+     for runs saved without a population). Everything else counts as not
+     certified.
+5. src/front/static/intelligence/css/intelligence.css,
+   src/front/static/global/css/permissions.css
+   - Status-colour bars, legend, gauge and toggle styles; the toggle is blocked
+     for viewers and read-only versions like the other pattern write actions.
+6. src/front/templates/partials/intelligence/_intel_patterns_saved.html,
+   src/front/templates/partials/layout/help_modal.html, docs/architecture.md
+   - Documented the certification feature and endpoint.
+7. tests/units/core/test_saved_pattern_store.py,
+   tests/units/front/test_intelligence_page_contract.py
+   - Default non-certified, certify / un-certify, per-run scope, validation,
+     migration of old tables, and the UI contract.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- src/front/static/global/css/permissions.css
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/architecture.md
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-22.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11192 passed, 334 skipped, 8 deselected
+(Not browser-tested: the Patterns UI needs a Databricks run.)
+
+================================================================================
+Intelligence → Patterns: group the chart by certification
+================================================================================
+
+Context:
+Follow-up to the certified patterns work. The "Matching entities per pattern"
+chart gets a "Group by certification" switch that merges all certified and all
+non-certified patterns into two bars. The detail canvas then lists every
+pattern of the selected group with its values, and "Matching entities" opens
+the entities of the whole group.
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   - Chart switch (saved runs only). Grouped mode draws a green Certified bar and
+     a red Not certified bar (entities, % of the population, pattern count).
+     Clicking a bar selects the group.
+   - Group detail canvas: group toolbar (Patterns / Entities / Share KPIs,
+     Matching entities, gauge) and a table of the group's patterns (entities,
+     share, meter; top 100). Clicking a row opens that pattern and leaves
+     grouped mode.
+   - Matching entities in grouped mode pages the members of the whole group.
+2. src/api/routers/internal/dtwin.py,
+   src/back/objects/digitaltwin/TwinAnalytics.py,
+   src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   - `GET /dtwin/patterns/saved/{id}/members` accepts `certified=true|false`
+     (used when no pattern_id is given), for both live-Detect and legacy
+     member-row snapshots.
+3. src/back/core/graph_analysis/pattern/SavedKpiBackfill.py (new),
+   src/back/core/graph_analysis/pattern/saved_pattern_sql.py
+   - The KPI backfill methods moved out of SavedPatternStore into a mixin to
+     stay under the 800-LOC class budget; `as_int` now lives in
+     saved_pattern_sql.py. No behaviour change.
+4. src/front/static/intelligence/css/intelligence.css
+   - Switch, group table, meter and status-colour styles.
+5. src/front/templates/partials/intelligence/_intel_patterns_saved.html,
+   src/front/templates/partials/layout/help_modal.html, docs/architecture.md
+   - Documentation of the switch and the `certified` members filter.
+6. tests/units/core/test_saved_pattern_store.py,
+   tests/units/front/test_intelligence_page_contract.py
+   - Members filtered by certification (catalog and legacy rows); UI contract.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/back/core/graph_analysis/pattern/SavedKpiBackfill.py
+- src/back/core/graph_analysis/pattern/saved_pattern_sql.py
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/architecture.md
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-22.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11194 passed, 334 skipped, 8 deselected
+(Not browser-tested: the Patterns UI needs a Databricks run.)
+
+================================================================================
+Intelligence → Patterns: "Outside" bar in the matching-entities chart
+================================================================================
+
+Context:
+Both chart modes (one bar per pattern, and grouped by certification) now end
+with an "Outside" bar: the entities of the type that follow no pattern, shown
+with their count and percentage of the population. The bar is informational
+and not clickable.
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   - _patternsChartHtml appends an outside item:
+     population_count - sum of pattern supports (clamped at 0). Rendered with
+     role="img", no data-pat-id, dashed outline, and a separator line before it.
+     Unknown population (older runs) shows "—" and "population unknown".
+   - The outside value takes part in the bar-height scale, so bars stay
+     proportional to the population.
+2. src/front/static/intelligence/css/intelligence.css
+   - Dashed, transparent outside bar with no pointer or hover tint; dashed
+     separator line.
+3. src/front/templates/partials/intelligence/_intel_patterns_saved.html,
+   src/front/templates/partials/layout/help_modal.html
+   - Help text for the Outside bar.
+4. tests/units/front/test_intelligence_page_contract.py
+   - Contract assertions for the outside bar and its styles.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-22.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11194 passed, 334 skipped, 8 deselected
+Render check: chart HTML generated under Node for saved/live, grouped/not
+grouped, and unknown population (bar labels and values verified).
+(Not browser-tested: the Patterns UI needs a Databricks run.)

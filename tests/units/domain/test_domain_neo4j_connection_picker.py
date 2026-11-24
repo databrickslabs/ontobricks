@@ -66,7 +66,7 @@ class TestNeo4jConnectionPickerWiring:
         assert guard >= 0 and guard < payload
 
     def test_save_refreshes_saved_value_baseline(self, domain_js):
-        idx = domain_js.find("Domain info saved successfully!")
+        idx = domain_js.find("Context info saved successfully!")
         assert idx >= 0
         body = domain_js[idx : idx + 500]
         assert "dataset.savedValue" in body
@@ -132,10 +132,11 @@ class TestNeo4jFieldEditRaceGuard:
     """
 
     def test_change_marks_graph_backend_dirty(self, info_js):
-        idx = info_js.find("const graphBackendEl = document.getElementById('domainGraphBackend');")
+        idx = info_js.find("graphBackendEl.dataset.userEdited = '1'")
         assert idx >= 0
-        body = info_js[idx : idx + 1400]
-        assert "graphBackendEl.dataset.userEdited = '1'" in body
+        # Wired on the change listener in DOMContentLoaded, not only as a guard.
+        body = info_js[max(0, idx - 500) : idx + 80]
+        assert "addEventListener('change'" in body
 
     def test_change_marks_neo4j_connection_dirty(self, info_js):
         idx = info_js.find("neo4jDbElInit")
@@ -158,8 +159,14 @@ class TestNeo4jFieldEditRaceGuard:
         assert "!neo4jDbEl.dataset.userEdited" in preceding
 
     def test_dirty_listeners_attached_before_the_slow_fetch(self, info_js):
-        """The dirty flag must be wired before ``Promise.all`` starts, or a
-        user could edit during the race window before listeners exist."""
+        """Listeners bind on DOMContentLoaded; the slow fetch runs only when
+        Configuration is shown (``hydrateInformationSection``)."""
+        assert "async function hydrateInformationSection()" in info_js
         listener_idx = info_js.find("graphBackendEl.dataset.userEdited = '1'")
-        fetch_idx = info_js.find("Promise.all([")
-        assert 0 <= listener_idx < fetch_idx
+        hydrate_call_idx = info_js.find("hydrateInformationSection();")
+        assert 0 <= listener_idx < hydrate_call_idx
+        # Promise.all lives inside hydrate, not in the always-on bind path.
+        bind = info_js.split(
+            "document.addEventListener('DOMContentLoaded', function()", 1
+        )[1]
+        assert "Promise.all([" not in bind.split("hydrateInformationSection();", 1)[0]

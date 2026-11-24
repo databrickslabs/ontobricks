@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-PANEL = REPO_ROOT / "src/front/templates/partials/dtwin/_query_analytics.html"
+PANEL = REPO_ROOT / "src/front/templates/partials/intelligence/_intel_analytics.html"
 SCRIPT = REPO_ROOT / "src/front/static/query/js/query-analytics.js"
 
 

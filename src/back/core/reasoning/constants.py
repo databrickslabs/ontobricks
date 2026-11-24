@@ -47,29 +47,14 @@ NOISE_TYPES = {
 }
 
 # ---------------------------------------------------------------------------
-# SWRL parsing regexes
+# IF-THEN parsing regexes
 # ---------------------------------------------------------------------------
 
-SWRL_ATOM_RE = re.compile(r"([A-Za-z_][\w.]*)\(([^)]+)\)")
+IF_THEN_ATOM_RE = re.compile(r"([A-Za-z_][\w.]*)\(([^)]+)\)")
 NEGATED_ATOM_RE = re.compile(r"not\(\s*([A-Za-z_][\w.]*)\(([^)]+)\)\s*\)")
 
 # ---------------------------------------------------------------------------
-# Aggregate rule constants
-# ---------------------------------------------------------------------------
-
-AGG_FUNCTIONS = {"count", "sum", "avg", "min", "max"}
-
-AGG_OPERATORS = {
-    "lt": "<",
-    "gt": ">",
-    "eq": "=",
-    "lte": "<=",
-    "gte": ">=",
-    "neq": "<>",
-}
-
-# ---------------------------------------------------------------------------
-# Decision table operator maps
+# Condition operator maps (Data Quality conditional shapes)
 # ---------------------------------------------------------------------------
 
 DT_STRING_OPS = {"eq", "neq", "startsWith", "endsWith", "contains"}

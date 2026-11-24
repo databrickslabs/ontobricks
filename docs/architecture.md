@@ -15,6 +15,7 @@
 - [Triple Store & Graph DB Backends](#triple-store--graph-db-backends)
 - [Reasoning Engine](#reasoning-engine)
 - [Simulation — What-if Sandboxes](#simulation--what-if-sandboxes)
+- [Graph Analysis — Pattern Detection](#graph-analysis--pattern-detection)
 - [Graph Analysis — Community Detection](#graph-analysis--community-detection)
 - [SHACL Data Quality](#shacl-data-quality)
 - [Technology Stack](#technology-stack)
@@ -36,8 +37,8 @@
 OntoBricks is a web-based **Graph Viewer Builder** that runs natively on Databricks. The core workflow is:
 
 1. **Design** an ontology visually (or import one from OWL / industry standards).
-2. **Map** ontology entities to Unity Catalog tables using R2RML.
-3. **Materialize** a triple store (Delta table) and a graph backend (Lakebase Postgres).
+2. **Map** ontology entities to [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) tables using R2RML.
+3. **Materialize** a triple store (Delta table) and a graph backend ([Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/)).
 4. **Explore** the resulting graph viewer — visual navigation, SPARQL, GraphQL, data-quality checks, and reasoning.
 
 Under the hood, SPARQL translates ontology mappings into Spark SQL — users never need to write SPARQL themselves.
@@ -51,10 +52,10 @@ Under the hood, SPARQL translates ontology mappings into Spark SQL — users nev
 | **User Interface** | Bootstrap 5.3 + OntoViz visual editor + Sigma.js / D3.js graph views |
 | **MCP Server** | Separate Databricks App (`mcp-ontobricks`) exposing knowledge-graph tools to LLM clients (Cursor, Claude Desktop, Playground) |
 | **FastAPI Application** | Routes → Domain Objects → Core layered architecture with GlobalConfigService, PermissionService, and BuildScheduler |
-| **LLM Agents** | MLflow-traced agentic loops for ontology generation, auto-mapping, icon mapping, and conversational assistance |
-| **Reasoning Engine** | OWL 2 RL deductive closure, SWRL rules (compiled to SQL), graph reasoning, and constraint validation |
+| **LLM Agents** | [MLflow](https://docs.databricks.com/aws/en/mlflow/)-traced agentic loops for ontology generation, auto-mapping, icon mapping, and conversational assistance |
+| **Reasoning Engine** | OWL 2 RL deductive closure, IF-THEN rules (compiled to SQL), graph reasoning, and constraint validation |
 | **Triple Store Backends** | Delta-backed view in Unity Catalog plus a per-domain pluggable Graph DB engine (Lakebase Postgres, Unity Catalog Delta, or Neo4j) via the `GraphDBFactory` pattern, with BFS, shortest path, and transitive closure built in |
-| **Databricks Platform** | Unity Catalog (metadata & governance), SQL Warehouse (query execution), UC Volumes (shared storage) |
+| **Databricks Platform** | Unity Catalog (metadata & governance), [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) (query execution), UC Volumes (shared storage) |
 | **GitHub mirror** *(optional)* | One repository per instance; coalesced commits of registry JSON plus generated OWL/R2RML Turtle. Lakebase stays the source of truth. |
 
 ---
@@ -69,13 +70,14 @@ The stack shows how each layer builds upon the previous:
 
 | Layer | Standard | Role in OntoBricks |
 |-------|----------|-------------------|
-| **Query** | SPARQL | Semantic query language (used internally for SQL generation) |
+| **Query** | SPARQL | Semantic query language (used internally for SQL generation); CONSTRUCT/DESCRIBE can return JSON-LD |
 | **Validation** | SHACL | Shapes Constraint Language for data quality validation |
 | **Mapping** | R2RML | Maps tables to RDF triples |
-| **Rules** | SWRL | Horn-clause rules for inference and violation detection |
+| **Rules** | IF-THEN | Horn-clause rules for inference and violation detection |
 | **Ontology** | OWL/RDFS | Defines classes and properties |
+| **Exchange** | JSON-LD | W3C JSON for Linked Data — OWL import/export, SPARQL graph results, MCP `describe_ontology` |
 | **Data** | RDF | Triple data model (S, P, O) |
-| **Storage** | SQL | Delta view (Spark SQL) + Lakebase Postgres flat triple table |
+| **Storage** | SQL | Delta view (Spark SQL) + [Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/) flat triple table |
 
 ---
 
@@ -104,7 +106,7 @@ The stack shows how each layer builds upon the previous:
 - **Form-based interface** for detailed class/property definition
 - Classes defined as `owl:Class`
 - Properties defined as `owl:ObjectProperty` (relationships) or `owl:DatatypeProperty` (attributes)
-- Stored in Turtle (.ttl) format
+- Serialized as Turtle (default) or [JSON-LD](https://www.w3.org/TR/json-ld11/)
 
 **Generated OWL Example**:
 ```turtle
@@ -121,9 +123,24 @@ The stack shows how each layer builds upon the previous:
 ```
 
 **OntoBricks Components**:
-- `OntologyGenerator` (`src/back/core/w3c/owl/OntologyGenerator.py`) - Generates OWL from UI configuration
-- `OntologyParser` (`src/back/core/w3c/owl/OntologyParser.py`) - Parses existing OWL files
+- `OntologyGenerator` (`src/back/core/w3c/owl/OntologyGenerator.py`) - Generates OWL from UI configuration (Turtle or JSON-LD)
+- `OntologyParser` (`src/back/core/w3c/owl/OntologyParser.py`) - Parses existing OWL files (Turtle, RDF/XML, JSON-LD)
+- `serialize_graph` (`src/back/core/w3c/owl/iri.py`) - Shared Turtle / JSON-LD serialization
 - `OntoViz` (`src/front/static/global/ontoviz/ontoviz.js`) - Visual ontology designer
+
+### 2b. JSON-LD (JSON for Linked Data)
+
+**What it is**: A W3C Recommendation that encodes RDF as JSON with a `@context`, so web apps and LLM agents can consume linked data without a Turtle parser.
+
+**How OntoBricks uses it**:
+- OWL export/import via `format=json-ld` (`GET /api/v1/domain/ontology`, `GET /export-owl`, ontology import)
+- SPARQL `CONSTRUCT` / `DESCRIBE` via `output_format=json-ld` on `POST /api/v1/query`
+- MCP tool `describe_ontology` returns the ontology document as JSON-LD
+- Defaults remain Turtle (OWL) and tabular rows (SPARQL SELECT)
+
+**OntoBricks Components**:
+- `serialize_graph(..., "json-ld")` — builds `@context` from graph namespaces
+- `SparqlQueryRunner.execute_local_query(..., output_format="json-ld")`
 
 ### 3. R2RML (RDB to RDF Mapping Language)
 
@@ -208,7 +225,7 @@ LIMIT 100
 
 ### 5. Query Processing Pipeline (inspired by SANSA)
 
-**What it is**: OntoBricks translates ontology mappings into SQL queries to extract triples from Databricks tables and materialize them into a Delta view in Unity Catalog and into the domain's configured Graph DB engine (Lakebase Postgres, Unity Catalog Delta, or Neo4j).
+**What it is**: OntoBricks translates ontology mappings into SQL queries to extract triples from Databricks tables and materialize them into a Delta view in [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) and into the domain's configured Graph DB engine ([Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/), Unity Catalog Delta, or Neo4j).
 
 **How OntoBricks implements this** (inspired by the [SANSA Stack](https://github.com/SANSA-Stack)):
 
@@ -224,7 +241,7 @@ LIMIT 100
 6. **Generated Spark SQL** - Query with JOINs and UNION ALL
 7. **Triple Store Backend Dispatch** - The single `GraphDBFactory` returns the active engine — a Delta-backed store (`MaterializedStore`) or the Lakebase engine (`FlatStore`). Both subclass `GraphBackend` and expose the same `(subject, predicate, object)` contract.
 8. **RDF-style Results** - Uniform (subject, predicate, object) triples from both backends
-9. **Graph Viewer** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and data cluster detection (Louvain/Label Propagation/Greedy Modularity)
+9. **Graph Viewer** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and visualization of communities materialized from Intelligence → Discovery → Communities
 
 **Generated Spark SQL Example** (for generic triple query):
 ```sql
@@ -287,8 +304,8 @@ OntoBricks separates configuration into several layers:
 |------|---------|---------|
 | `src/shared/config/settings.py` | **Environment-specific settings** loaded from `.env` / env vars via Pydantic `BaseSettings` | Databricks host, token, session directory |
 | `src/shared/config/constants.py` | **Static constants and defaults** that rarely change and are shared across modules | App name/version, OWL namespaces, LLM defaults, wizard quick-templates |
-| `src/front/config/menu_config.json` | **Navbar + sidebar navigation** for the Jinja2 UI | Page labels, Bootstrap Icons (`icon`), menu structure; top-level icons must stay distinct (Registry `bi-boxes`, Domain `bi-box`, Ontology `bi-bezier2`, Mapping `bi-shuffle`, Graph `bi-radar`) and match `breadcrumb.js` `_ROUTE_MAP` |
-| `src/back/objects/session/GlobalConfigService.py` | **Instance-level `GlobalConfigService`** — admin-editable settings stored in the registry (`global_config` JSONB, or `.global_config.json` on Volume-backed registries), shared across all user sessions | SQL Warehouse ID, default base URI, default class icon, UI branding (`ui_branding`) |
+| `src/front/config/menu_config.json` | **Navbar + sidebar navigation** for the Jinja2 UI | Page labels, Bootstrap Icons (`icon`), menu structure; top-level icons must stay distinct (Registry `bi-boxes`, Domain `bi-box`, Ontology `bi-bezier2`, Mapping `bi-shuffle`, Graph `bi-radar`) |
+| `src/back/objects/session/GlobalConfigService.py` | **Instance-level `GlobalConfigService`** — admin-editable settings stored in the registry (`global_config` JSONB, or `.global_config.json` on Volume-backed registries), shared across all user sessions | [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) ID, default base URI, default class icon, UI branding (`ui_branding`) |
 | `src/back/objects/registry/PermissionService.py` | **`PermissionService`** — stores per-user permission levels in `.permissions.json` (app-wide) and per-domain overrides in `.domain_permissions.json` (per domain folder). Defines the role hierarchy: `admin > builder > editor > viewer > none`. | `CAN MANAGE` admin flag |
 
 **`src/shared/config/constants.py`** key contents:
@@ -324,8 +341,8 @@ disabling Query and mirroring Build. RT mode requires a distinct query
 warehouse; disabling it persists an empty Lakehouse warehouse ID.
 Quality checks and `engine="view"` always call `resolve_build_warehouse_id()`
 so a Lakehouse//RT query warehouse never serves UC-view SQL, including on
-Lakebase domains.
-In Databricks Apps, RT reads bypass the SQL connector's Kernel adapter and use
+[Lakebase](https://docs.databricks.com/aws/en/oltp/) domains.
+In [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/), RT reads bypass the SQL connector's Kernel adapter and use
 Statement Execution directly with `JSON_ARRAY` / `INLINE`. Internal chunk links
 stay on the workspace host, external CloudFetch links are rejected, and a
 truncated 24 MiB response fails explicitly. Local RT reads retain Kernel;
@@ -370,7 +387,7 @@ paths are derived through `effective_uc_version_path` in `DatabricksHelpers.py`.
 4. **No Manual Query Writing**: SPARQL is used internally — translated to SQL automatically for triple materialization
 5. **Visual-First Design**: OntoViz enables drag-and-drop ontology creation
 6. **Agentic Automation**: LLM-powered agents with MCP-style tools handle complex tasks autonomously (see [Agentic Architecture](architecture.md#agentic-architecture))
-7. **Observability**: MLflow tracing captures every agent → LLM → tool span for debugging, cost tracking, and evaluation
+7. **Observability**: [MLflow](https://docs.databricks.com/aws/en/mlflow/) tracing captures every agent → LLM → tool span for debugging, cost tracking, and evaluation
 8. **MCP Integration**: The MCP server exposes knowledge-graph tools (entity search, GraphQL queries, domain selection) to LLM clients via the Model Context Protocol (see [MCP Server](mcp.md))
 
 `DocumentParseService` owns the Knowledge Store document lifecycle, backed by
@@ -467,12 +484,13 @@ src/
 │   │   │   ├── lakebase/               # FlatStore, Base, SyncedTableManager
 │   │   │   └── interfaces/             # backend contract (hats + capability ABCs)
 │   │   │
-│   │   ├── reasoning/                  # Reasoning engine (OWL 2 RL + SWRL + SPARQL rules + Decision tables)
+│   │   ├── reasoning/                  # Reasoning engine (OWL 2 RL + SHACL-AF rules + SPARQL rules)
 │   │   │   ├── ReasoningService.py     # Multi-phase orchestrator
 │   │   │   ├── OWLRLReasoner.py        # OWL 2 RL deductive closure via owlrl
-│   │   │   ├── swrl/                   # SWRLEngine, SWRLParser, SWRLSQLTranslator, SWRLFlatCypherTranslator,
-│   │   │   │                           # SWRLBuiltinRegistry, SWRLBuiltin, SWRLAtomPartition, SWRLTextCodec
-│   │   │   ├── rules/                  # SPARQLRuleEngine, AggregateRuleEngine, DecisionTableEngine
+│   │   │   ├── shacl_rules/            # ShaclRuleEngine, IfThenToShaclTranspiler, ShaclRule, ShaclRuleSqlTranslator,
+│   │   │   │                           # ShaclFlatSqlBackend, ShaclFlatCypherBackend, RuleExpressionParser,
+│   │   │   │                           # RuleBuiltinRegistry, RuleBuiltin, RuleAtomPartition, RuleTextCodec, rule_uri_map
+│   │   │   ├── rules/                  # SPARQLRuleEngine + SparqlConstructCompiler (Complex rules)
 │   │   │   └── results/                # InferredTriple, RuleViolation, ReasoningResult
 │   │   │
 │   │   ├── industry/                   # Industry-standard ontology importers
@@ -480,9 +498,12 @@ src/
 │   │   │   ├── cdisc/                  # CdiscImportService
 │   │   │   └── iof/                    # IofImportService
 │   │   │
-│   │   ├── graph_analysis/             # Community detection & clustering
-│   │   │   ├── CommunityDetector.py    # CommunityDetector (NetworkX backend)
-│   │   │   └── models.py              # ClusterRequest, ClusterResult, DetectionResult, DetectionStats
+│   │   ├── graph_analysis/             # Graph analysis, grouped by type of analysis
+│   │   │   ├── community/              # JobCommunities, CommunityMaterializer, CommunityVocabulary
+│   │   │   ├── cohort/                 # CohortBuilder, CohortVocabulary
+│   │   │   ├── pattern/                # JobPatterns, SavedPatternStore, pattern_diagram
+│   │   │   ├── metrics/                # JobMetrics (graph metrics)
+│   │   │   └── models.py               # Shared models; LakeflowRunner, preflight, profiles also shared
 │   │   │
 │   │   ├── github/                     # GitHub Git Data API client (no git clone)
 │   │   │   └── GitHubClient.py         # Atomic tree commits for the registry mirror
@@ -536,6 +557,7 @@ src/
 │   ├── agent_owl_generator/            # OWL ontology generation agent
 │   ├── agent_auto_assignment/          # Entity/relationship → SQL mapping agent
 │   ├── agent_auto_icon_assign/         # Emoji icon mapping agent
+│   ├── agent_design_fixer/             # Sanity Checks Auto-fix proposals (read-only)
 │   └── agent_ontology_assistant/       # Conversational assistant + ResponsesAgent wrapper
 │
 └── mcp-server/                         # MCP Server (separate Databricks App; under src/)
@@ -639,15 +661,16 @@ The UI uses a consistent **sidebar layout** across all main pages:
 
 - **L1 (global utilities):** icon-only Registry launcher plus warehouse status,
   task tracker, notification center, help, and user menu.
-- **L2 (domain context rail):** domain identity target
-  (`#domainContextTrigger`), the four-workspace segmented rail (Domain,
-  Ontology, Mapping, Knowledge Graph), inline breadcrumb, and
-  Versions -> Close -> Save actions.
+- **L2 (domain context rail):** domain crumb (`#domainContextTrigger`),
+  version badge (`#domainContextVersion`), the Databricks-style app switcher
+  (`#obAppSwitcher` — Context / Ontology / Graph / Intelligence), and
+  Close → Save actions (Save shows a dirty dot while registry writes are
+  unsaved). The old segmented workspace dropdown rail is removed.
 - **Settings override in same L2 slot:** when `body[data-page="settings"]`
   and a domain is loaded, `#obSubnav` swaps to a single return control
-  (`#settingsDomainReturnLink`) under `#settingsDomainReturnNav`; the regular
-  rail (`#domainWorkspaceSubnavNav`), domain identity, breadcrumb, and actions
-  are hidden.
+  (`#settingsDomainReturnLink`) under `#settingsDomainReturnNav`; domain
+  chrome (`[data-subnav-domain-chrome]`, including the app switcher and
+  Close/Save) is hidden.
 - **Workspace map:** clicking `#domainContextTrigger` opens
   `#workspaceMapModal` (menu-driven four-column map). The same handler is
   bound to `#settingsDomainReturnLink`; its fallback `href` is `/domain/` when
@@ -656,9 +679,8 @@ The UI uses a consistent **sidebar layout** across all main pages:
   routes (`front/routes/{domain,ontology,mapping,dtwin}.py`) 303-redirect to
   `/` when `WorkspacePresence.is_loaded()` is false, matching `domainIsLoaded`
   in `navbar.js`. Home, Settings, and About do not require a domain.
-- **Active workspace:** `navbar.js` marks the current workspace as a static
-  `aria-current="page"` segment and removes its dropdown wiring; inactive
-  segments keep their Bootstrap dropdown menus.
+- **Active workspace:** `navbar.js` marks the current app-switcher tile with
+  `.is-current` / `aria-current="page"`.
 - **Responsive behavior:** below `768px`, labels are visually hidden and the
   rail uses titled icon targets while preserving DOM labels for accessibility.
 
@@ -717,6 +739,8 @@ edges; the entity panel lists them read-only. OWL export and R2RML keep a
 single `rdfs:domain` on the declaring class. Incoming (range) inheritance is
 out of scope.
 
+**Instance IRI scope.** `ontology["identity_scope"]` (`class` by default, `hierarchy` opt-in) controls the class segment of minted instance URIs. `InstanceIdentity.segment_map` maps each class to the root of its designer `parent` chain; `R2RMLGenerator` and `TwinMapping` apply it to entity subjects and to relationship subject/object templates, while each TriplesMap keeps its own `rr:class`, so the shared node carries every mapped type. `InstanceIdentity.sibling_collisions` drives the Mapping diagnostics warning for unrelated mapped classes under one root.
+
 ### Page Structure
 
 Each main page (Ontology, Mapping, Knowledge Graph) follows this pattern:
@@ -760,9 +784,9 @@ Long-running operations use the **TaskManager** pattern (`src/back/core/task_man
 
 | Task Type | Triggered By | Description |
 |-----------|-------------|-------------|
-| `triplestore_sync` | Knowledge Graph → Build | Generates and writes triples to Delta and the domain's configured Graph DB engine (Lakebase, Delta, or Neo4j) |
+| `triplestore_sync` | Knowledge Graph → Build | Generates and writes triples to Delta and the domain's configured Graph DB engine ([Lakebase](https://docs.databricks.com/aws/en/oltp/), Delta, or Neo4j) |
 | `quality_checks` | Knowledge Graph → Quality | Runs all quality checks sequentially with per-check progress |
-| `auto_assign` | Mapping → Auto-Map | Batch-maps entities and relationships via LLM; splits large jobs into chunks of `AUTO_ASSIGN_CHUNK_SIZE` with cooldown between chunks to avoid rate limits |
+| `auto_assign` | Graph → Management → Mapping → Auto-Map (modal) | Batch-maps entities and relationships via LLM; splits large jobs into chunks of `AUTO_ASSIGN_CHUNK_SIZE` with cooldown between chunks to avoid rate limits |
 **How it works:**
 1. Frontend sends a `POST` to start the task; backend creates a `TaskManager` task and spawns a `threading.Thread`
 2. Frontend stores the `task_id` in `sessionStorage` and polls `/tasks/{task_id}` for progress
@@ -803,7 +827,7 @@ The session middleware maintains state using a **unified domain session** patter
     "current_version": "1.0",
     "ontology": { 
         "name", "base_uri", "classes", "properties",
-        "constraints", "swrl_rules", "axioms" 
+        "constraints", "if_then_rules", "axioms" 
     },
     "assignment": { 
         "entities", "relationships", 
@@ -828,12 +852,12 @@ The `DomainSession` class (`src/back/objects/session/DomainSession.py`) provides
 
 ## Registry Storage
 
-Since v0.4.0 the domain registry lives in **Databricks Lakebase**
+Since v0.4.0 the domain registry lives in **Databricks [Lakebase](https://docs.databricks.com/aws/en/oltp/)**
 (Postgres). The historical JSON-on-Volume backend was removed —
 operators with pre-v0.4.0 deployments must run
 `scripts/migrations/migrate-registry-to-lakebase.sh` once before upgrading.
 Uploaded Knowledge Store documents also live in Lakebase (parsed text in
-`domain_documents`); the Unity Catalog Volume is now reserved only for ad-hoc
+`domain_documents`); the [Unity Catalog Volume](https://docs.databricks.com/aws/en/volumes/) is now reserved only for ad-hoc
 registry export bundles (OWL import / R2RML export use arbitrary user-chosen
 volumes). An optional GitHub repository can mirror the same registry
 documents for review and restore — see [GitHub repository
@@ -842,7 +866,7 @@ mirror](#github-repository-mirror).
 | Storage | Identifier | What lives in it |
 |---|---|---|
 | Databricks Lakebase (Postgres) | `lakebase` | Domain JSON, permissions, schedules, history, global config, and Knowledge Store parsed documents (`domain_documents`) — normalised into relational tables (with JSONB columns for the larger blobs) |
-| Unity Catalog Volume | n/a | Ad-hoc registry export bundles (no document uploads) |
+| [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) Volume | n/a | Ad-hoc registry export bundles (no document uploads) |
 | GitHub repository *(optional)* | `github_config` | Reviewable commits of domain/version JSON + generated Turtle; not a second source of truth |
 
 The single :class:`RegistryStore` implementation
@@ -882,12 +906,14 @@ relational tables:
 | `build_runs` | Append-only build-run trace (all paths) keyed by `(domain_id, version)` for analytics; active build = latest successful run |
 | `graph_analytics` | Cache of the LAST knowledge-graph metrics result (centrality/structure) keyed by `(domain_id, version)`; one row, replaced on every successful async recompute (UPSERT). Backs the KG Analytics page and the Domain Validation cockpit |
 | `graph_analytics_runs` | Append-only history of every analytics run launched (success or failure) keyed by `(domain_id, version)`; lightweight per-run metadata (node/edge counts, components, avg degree, density, duration, scope, status). Capped per tuple. Backs the KG Analytics "History" tab |
+| `community_runs` | Append-only history of every community-detection (Detect) run that finished, completed or failed, keyed by `(domain_id, version)`; node and community counts, convergence, scope, duration, job-run link. Written by `DetectRunHistory` from the background task. Capped per tuple. Backs the Community runs tab of Settings → Automation → Runs |
+| `pattern_runs` | Append-only history of every pattern-detection (Detect) run that finished, completed or failed, keyed by `(domain_id, version)`; anchor type, hops, min support, detail level, anchor and pattern counts, duration, job-run link. Written by `DetectRunHistory`. Capped per tuple. Backs the Pattern runs tab of Settings → Automation → Runs |
 | `domain_review_events` | Append-only review/validation audit log (submit / sign-off / publish / reopen / comment) keyed by `(domain_id, version)` |
-| `domain_change_events` | Append-only ontology/mapping change audit ("who changed what, and when") keyed by `(domain_id, version)`. Fine-grained edits (class/property/mapping add/update/remove, SHACL/SWRL/groups/axioms/expressions/business rules, imports, resets) are buffered in the working session as they happen and flushed here in one batch on save-to-registry; `source` tags human vs AI-assistant edits; `occurred_at` is the real edit time, `created_at` the flush time |
+| `domain_change_events` | Append-only ontology/mapping change audit ("who changed what, and when") keyed by `(domain_id, version)`. Fine-grained edits (class/property/mapping add/update/remove, SHACL/IF-THEN/groups/axioms/expressions/business rules, imports, resets) are buffered in the working session as they happen and flushed here in one batch on save-to-registry; `source` tags human vs AI-assistant edits; `occurred_at` is the real edit time, `created_at` the flush time |
 | `domain_comments` | Domain-wide threaded discussion keyed by `(domain_id, version)`; `parent_id` links replies, `resolved` closes a thread |
 | `domain_tasks` | Personalised work items assigned to a teammate (usually born from a comment); `status` walks `open → in_progress → done` (or `cancelled`), surfaced in the assignee's "My Tasks" worklist |
 
-Authentication is fully app-managed: the Databricks Apps runtime
+Authentication is fully app-managed: the [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) runtime
 injects `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER` and OntoBricks mints a
 short-lived OAuth token via `WorkspaceClient().config.authenticate()`
 (`back/core/databricks/LakebaseAuth.py`). No user secrets are stored.
@@ -938,7 +964,7 @@ For security and regeneration reasons, these are excluded from exports:
 - **OWL output** (regenerated from ontology on load)
 - **Query results** (ephemeral data)
 - **User preferences** (runtime only)
-- **GitHub tokens** (resolved live from a Databricks secret or
+- **GitHub tokens** (resolved live from a [Databricks secret](https://docs.databricks.com/aws/en/security/secrets/) or
   `ONTOBRICKS_GITHUB_TOKEN`; never written to the repository)
 
 ### GitHub repository mirror
@@ -1010,19 +1036,19 @@ User Action → OntoViz Event → Debounce → syncDesignToOntology → /ontolog
 
 OntoBricks separates two concerns:
 
-1. **Triple Store (Lakehouse UC objects)** — a family of Unity Catalog objects in the registry `catalog.schema`, always created by **Knowledge Graph → Build**. Not a single view: see [Lakehouse Unity Catalog objects](#lakehouse-unity-catalog-objects) below.
+1. **Triple Store (Lakehouse UC objects)** — a family of [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) objects in the registry `catalog.schema`, always created by **Knowledge Graph → Build**. Not a single view: see [Lakehouse Unity Catalog objects](#lakehouse-unity-catalog-objects) below.
 2. **Graph DB** — the queryable graph engine used by the Knowledge Graph, reasoning, and BFS / shortest-path helpers. Pluggable via the `GraphDBFactory` abstraction. When the per-domain backend is `databricks`, the Graph DB *is* those Delta tables; when it is `lakebase` or `neo4j`, Build also mirrors triples into that engine.
 
 The active Graph DB engine is chosen **per domain** via `graph_backend`
-(`none` | `lakebase` | `databricks` | `neo4j`), set under **Domain →
-General → Knowledge Graph**; connection settings live under **Settings →
+(`none` | `lakebase` | `databricks` | `neo4j`), set under **Context →
+Configuration → Knowledge Graph**; connection settings live under **Settings →
 Back end**. `none` is the ontology-only mode: no graph is built and the MCP
 surface exposes ontology information only.
 
 | Layer | Key | Storage | Query Language | Source of truth |
 |-------|-----|---------|----------------|-----------------|
-| **Delta Triple Store** | `view` / `_data` / `_inferred` / `_graph` | Unity Catalog R2RML VIEW + Delta tables, or views only (SQL Warehouse) | Spark SQL | Yes (mapped triples = `_data`) |
-| **Lakebase Graph DB** | `graph` (engine `lakebase`) | Postgres flat `(subject, predicate, object)` table on the App-bound Lakebase instance | Postgres SQL | Mirror of the mapped snapshot |
+| **Delta Triple Store** | `view` / `_data` / `_inferred` / `_graph` | Unity Catalog R2RML VIEW + Delta tables, or Virtual Graph (no copy) ([SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)) | Spark SQL | Yes (mapped triples = `_data`) |
+| **[Lakebase](https://docs.databricks.com/aws/en/oltp/) Graph DB** | `graph` (engine `lakebase`) | Postgres flat `(subject, predicate, object)` table on the App-bound Lakebase instance | Postgres SQL | Mirror of the mapped snapshot |
 | **Databricks Graph DB** | `graph` (engine `databricks`) | Same Delta objects as the triple store (no second copy) | Spark SQL | The mapped snapshot itself |
 | **Neo4j Graph DB** | `graph` (engine `neo4j`) | Bolt-connected Neo4j (Aura / self-hosted); flat-triple nodes per store | Cypher | Mirror of the mapped snapshot |
 
@@ -1033,10 +1059,10 @@ Build always creates the Unity Catalog triple-store family in the registry
 *mirrors* them (Lakebase, Neo4j). **Copy** below means a physical snapshot of
 rows; **no copy** means a VIEW that re-reads the source on each query.
 
-| Capability | Lakehouse · table (copy) | Lakehouse · views only (no mapped copy) | Lakebase · `app_managed` | Lakebase · `managed_synced` | Neo4j |
+| Capability | Lakehouse · Materialized Graph | Lakehouse · Virtual Graph (no copy) | Lakebase · `app_managed` | Lakebase · `managed_synced` | Neo4j |
 |------------|--------------------------|-----------------------------------------|--------------------------|-----------------------------|-------|
-| Chosen where | Domain → Knowledge Graph, backend `databricks`, materialization `table` | Same backend, materialization `view` | Domain backend `lakebase`; Settings → Lakebase `sync_mode` | Same backend, `sync_mode=managed_synced` | Domain backend `neo4j` |
-| Mapped triples | `_data` **TABLE** — CTAS from the R2RML VIEW, then `OPTIMIZE` / Liquid Clustering | `_data` **VIEW** — pass-through over the R2RML VIEW; no row copy | UC `_data` is always a **TABLE** (analytics needs a Delta scan). Postgres `_sync` is a second copy loaded by the app (`COPY FROM STDIN`) | UC `_data` **TABLE**. Postgres `_sync` is a second copy kept by Lakeflow | UC `_data` **TABLE**. Neo4j nodes are a second copy (`MERGE`) |
+| Chosen where | Context → Knowledge Graph, backend `databricks`, materialization `table` | Same backend, materialization `view` | Domain backend `lakebase`; Settings → Lakebase `sync_mode` | Same backend, `sync_mode=managed_synced` | Domain backend `neo4j` |
+| Mapped triples | `_data` **TABLE** — CTAS from the R2RML VIEW, then `OPTIMIZE` / [Liquid Clustering](https://docs.databricks.com/aws/en/delta/clustering) | `_data` **VIEW** — pass-through over the R2RML VIEW; no row copy | UC `_data` is always a **TABLE** (analytics needs a Delta scan). Postgres `_sync` is a second copy loaded by the app (`COPY FROM STDIN`) | UC `_data` **TABLE**. Postgres `_sync` is a second copy kept by Lakeflow | UC `_data` **TABLE**. Neo4j nodes are a second copy (`MERGE`) |
 | Inferred / app writes | `_inferred` **TABLE** (truncated on full Build, then refilled) | Same `_inferred` **TABLE** — inferred rows have no source table | Postgres `__app` companion; UC `_inferred` still exists for the UC family | Same `__app` companion; Lakeflow never writes it | Stored as Neo4j triples in the same store label; no `_adj_*` |
 | Interactive read façade | `_graph` VIEW = `_data UNION ALL _inferred` | Same `_graph` VIEW (each read re-runs mapping SQL through `_data`) | Postgres union view `g_<dom>_v<n>` = `_sync UNION ALL __app` | Same union view | Bolt / Cypher against the store |
 | Explorer hop + Preview indexes | `_adj_out`, `_adj_in`, `_entity_search`, `_props` **TABLES** (always copies of a projection) | Same four **TABLES** — views-only does **not** leave indexes as views | Same four **TABLES** in the Postgres graph schema | Same four Postgres tables | None — native traversal / search |
@@ -1087,7 +1113,7 @@ source tables
 
 **Materialization modes** are a per-domain Lakehouse setting (`info['lakehouse_materialization']`, resolved by `GraphDBFactory.resolve_lakehouse_materialization`, applied by `materialize.apply_data_relation`):
 
-- `view` (new-domain default, **Domain → General → Backend → Access type**) — no copy at all. `_data` is a view over the gateway, so every read re-executes the mapping SQL against the source tables and always sees live data. Builds only run DDL, and `OPTIMIZE` is skipped since there is nothing to compact.
+- `view` (new-domain default, **Context → Configuration → Backend → Access type**) — no copy at all. `_data` is a view over the gateway, so every read re-executes the mapping SQL against the source tables and always sees live data. Builds only run DDL, and `OPTIMIZE` is skipped since there is nothing to compact.
 - `table` — CTAS + `OPTIMIZE`. One copy of the triples; reads are a single clustered Delta scan. A missing or unrecognised value still normalises to `table` so Lakehouse domains created before the option existed keep their copy.
 
 Lakebase and Neo4j domains always get the table: the resolver returns `table` for any backend other than `databricks`, because their own graph is not what the analytics job reads.
@@ -1171,7 +1197,7 @@ Lakebase Postgres is one of three shipped Graph DB engines (alongside the Delta/
 
 Neo4j is a Cypher-native engine for domains whose `graph_backend` is `neo4j`. The implementation lives in `src/back/core/graphdb/neo4j/` and is split into a thin `Store` façade over three services: `Connection` (Bolt driver lifecycle + auth), `WriteOps` (schema constraints and `UNWIND`/`MERGE` bulk writes), and `ReadOps` (statistics, entity lookup, KG-filter primitives, and reasoning helpers). Triples are stored as `(:<store_label> {subject, predicate, object})` nodes, one label per logical store so Neo4j 5+ single-label `CREATE CONSTRAINT` applies.
 
-Connection settings are configured under **Settings → Back end → Neo4j**. The Bolt password is resolved from the `NEO4J_PASSWORD` env var (a Databricks Apps secret resource) in the deployed app, falling back to the persisted `engine_config` only in local development; there is no raw-Cypher entry point (`execute_query` raises `NotImplementedError`) — all writes enter through `insert_triples` after ontology validation in the build pipeline. `neo4j>=5` ships as a core dependency (`pyproject.toml`).
+Connection settings are configured under **Settings → Back end → Neo4j**. The Bolt password is resolved from the `NEO4J_PASSWORD` env var (a [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) secret resource) in the deployed app, falling back to the persisted `engine_config` only in local development; there is no raw-Cypher entry point (`execute_query` raises `NotImplementedError`) — all writes enter through `insert_triples` after ontology validation in the build pipeline. `neo4j>=5` ships as a core dependency (`pyproject.toml`).
 
 **Adding a new engine** — implement the contracts in `src/back/core/graphdb/interfaces/` (subclass the right hat + the capability ABCs you need), register the engine key in `GraphDBFactory`, and add it to `ALLOWED_GRAPH_ENGINES`. Pure-SQL engines inherit the named-query defaults from `GraphBackend`; non-SQL engines (Cypher / Gremlin / SPARQL stores) override the relevant methods and may flip `supports_cypher` to re-enable the corresponding reasoning paths.
 
@@ -1201,11 +1227,11 @@ OntoBricks includes a **multi-phase reasoning engine** (`src/back/core/reasoning
          ▼                        ▼                        ▼
    ┌───────────┐           ┌───────────┐           ┌───────────┐
    │  Phase 1  │           │  Phase 2  │           │  Phase 3  │
-   │  T-Box    │           │   SWRL    │           │   Graph   │
+   │  T-Box    │           │   IF-THEN    │           │   Graph   │
    │ (OWL 2 RL)│           │  Rules    │           │ Reasoning │
    └─────┬─────┘           └─────┬─────┘           └─────┬─────┘
          │                       │                       │
-   owlrl library           SWRLEngine              GraphBackend
+   owlrl library           ShaclRuleEngine         GraphBackend
    DeductiveClosure        └─ SQL translator       methods
    (OWLRL_Semantics)              │                ├─ transitive_closure
          │                        │                ├─ symmetric_expand
@@ -1250,30 +1276,33 @@ The `OWLRLReasoner` class uses the [`owlrl`](https://owl-rl.readthedocs.io/) Pyt
 - **T-Box only** (default): Closure over the ontology schema — fast, suitable for all dataset sizes
 - **T-Box + A-Box**: Closure over ontology + instance data — suitable for small datasets (< ~50,000 triples)
 
-### Phase 2: SWRL Rule Evaluation
+### Phase 2: Business Rule Evaluation (SHACL-AF)
 
-**SWRL** (Semantic Web Rule Language) extends OWL with Horn-clause rules. OntoBricks implements a custom SWRL engine that compiles rules into the query language of the active triple store backend.
+Business rules are **authored** in IF-THEN-style Horn-clause syntax in the UI, then **transpiled** to canonical [W3C SHACL Advanced Features](https://www.w3.org/TR/shacl-af/) rules (`sh:TripleRule` / `sh:SPARQLRule`) and executed against the active triple store backend via a flat-triple SQL/Cypher backend. The engine lives in `src/back/core/reasoning/shacl_rules/`.
 
-**Rule format:**
+**Rule format (authoring):**
 ```
 Antecedent → Consequent
 ```
 Where atoms are class assertions (`Person(?x)`) or property assertions (`worksIn(?x, ?y)`).
 
-**Implementation** (`src/back/core/reasoning/swrl/SWRLEngine.py`, `SWRLSQLTranslator.py`):
+**Implementation** (`src/back/core/reasoning/shacl_rules/`):
 
 | Component | File | Role |
 |-----------|------|------|
-| `SWRLEngine` | `SWRLEngine.py` | Orchestrator — executes rules, collects results |
-| `SWRLSQLTranslator` | `SWRLSQLTranslator.py` | Compiles SWRL atoms into SQL with multi-join + `NOT EXISTS` for violation detection |
+| `ShaclRuleEngine` | `ShaclRuleEngine.py` | Orchestrator — transpiles + executes rules, collects results |
+| `IfThenToShaclTranspiler` | `IfThenToShaclTranspiler.py` | Transpiles authored IF/THEN rules into canonical SHACL-AF rules (`ShaclRule`) |
+| `ShaclRuleSqlTranslator` | `ShaclRuleSqlTranslator.py` | Builds SQL for a `ShaclRule` by delegating to the flat-triple backend |
+| `ShaclFlatSqlBackend` | `ShaclFlatSqlBackend.py` | Compiles rule atoms into SQL with multi-join + `NOT EXISTS` for violation detection |
+| `ShaclFlatCypherBackend` | `ShaclFlatCypherBackend.py` | Cypher backend for Neo4j (scaffolded) |
 
 **Execution modes:**
 - **Violation detection**: Finds instances where the antecedent holds but the consequent does not (generates `NOT EXISTS` subqueries)
 - **Materialization**: Inserts inferred consequent triples into the store (generates `INSERT` statements)
 
-**Backend dispatch**: The two SQL backends — `MaterializedStore` (Spark SQL on the SQL Warehouse) and `FlatStore` (Postgres SQL) — use `SWRLSQLTranslator`. The `Store` engine reports `supports_cypher = True` and returns a `SWRLFlatCypherTranslator`, but that translator is currently scaffolded — full SWRL → Cypher reasoning lands in a follow-up; on Neo4j the SWRL materialization phase therefore short-circuits. The capability flags (`supports_cypher`, `query_dialect`) on `GraphBackend` let the correct translator be selected per engine without touching `SWRLEngine`.
+**Backend dispatch**: The two SQL backends — `MaterializedStore` (Spark SQL on the [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)) and `FlatStore` (Postgres SQL) — use `ShaclFlatSqlBackend`. The `Store` engine reports `supports_cypher = True` and returns a `ShaclFlatCypherBackend`, but that backend is currently scaffolded — full rule → Cypher reasoning lands in a follow-up; on Neo4j the materialization phase therefore short-circuits. The capability flags (`supports_cypher`, `query_dialect`) on `GraphBackend` let the correct backend be selected per engine without touching `ShaclRuleEngine`.
 
-**URI resolution**: The engine builds a lowercase-name → URI map from the ontology, normalizing property URIs to the data namespace used by R2RML so that SWRL atom names match the predicates stored in the triple store.
+**URI resolution**: `rule_uri_map.build_uri_map` builds a lowercase-name → URI map from the ontology, normalizing property URIs to the data namespace used by R2RML so that rule atom names match the predicates stored in the triple store.
 
 ### Phase 3: Graph Reasoning
 
@@ -1282,7 +1311,7 @@ Graph reasoning leverages **OWL property characteristics** to perform structural
 **Transitive closure** (`owl:TransitiveProperty`):
 - For properties like `partOf`, `subRegionOf`, or `reportsTo`
 - Discovers indirect relationships not explicitly asserted (if A partOf B and B partOf C, infers A partOf C)
-- **Delta** & **Lakebase**: SQL recursive CTE with depth limit
+- **Delta** & **[Lakebase](https://docs.databricks.com/aws/en/oltp/)**: SQL recursive CTE with depth limit
 
 **Symmetric expansion** (`owl:SymmetricProperty`):
 - For properties like `adjacentTo`, `siblingOf`, or `marriedTo`
@@ -1317,7 +1346,7 @@ All reasoning phases produce standardized output via three dataclasses (`src/bac
 
 | Model | Purpose |
 |-------|---------|
-| `InferredTriple` | A new triple with `subject`, `predicate`, `object`, `provenance` (e.g., `"owlrl"`, `"swrl:RuleName"`, `"graph:transitive"`) |
+| `InferredTriple` | A new triple with `subject`, `predicate`, `object`, `provenance` (e.g., `"owlrl"`, `"if_then:RuleName"`, `"graph:transitive"`) |
 | `RuleViolation` | A constraint failure with `rule_name`, `subject`, `message`, `check_type` |
 | `ReasoningResult` | Aggregated output: `inferred_triples[]`, `violations[]`, `stats{}` — mergeable across phases |
 
@@ -1333,8 +1362,8 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 |------|---------|
 | `src/back/core/reasoning/ReasoningService.py` | `ReasoningService` — orchestrates all phases |
 | `src/back/core/reasoning/OWLRLReasoner.py` | `OWLRLReasoner` — OWL 2 RL deductive closure |
-| `src/back/core/reasoning/swrl/SWRLEngine.py` | `SWRLEngine` — SWRL rule orchestration |
-| `src/back/core/reasoning/swrl/SWRLSQLTranslator.py` | `SWRLSQLTranslator` — SWRL → Spark / Postgres SQL compilation |
+| `src/back/core/reasoning/shacl_rules/ShaclRuleEngine.py` | `ShaclRuleEngine` — business-rule orchestration (SHACL-AF) |
+| `src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py` | `ShaclFlatSqlBackend` — rule → Spark / Postgres SQL compilation |
 | `src/back/core/reasoning/models.py` | `InferredTriple`, `RuleViolation`, `ReasoningResult` dataclasses |
 | `src/back/core/graphdb/GraphBackend.py` | Graph DB primitives: `transitive_closure()`, `symmetric_expand()`, `shortest_path()` |
 
@@ -1342,18 +1371,20 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 
 ## Simulation — What-if Sandboxes
 
-The **Simulation** menu (after Graph) answers *"what
-would the graph conclude if these facts were true?"* without touching the live
-knowledge graph. v1 supports the **Lakebase** graph backend only; graphless
-domains redirect to Domain, other backends show a disabled page.
+The **Intelligence** workspace (after Graph) opens on **Home** and groups
+**Configuration** (cohorts), **Discovery** (Analytics, Communities, Patterns),
+and **Simulation** (Scenarios, Compare). Simulation answers *"what would the
+graph conclude if these facts were true?"* without touching the live knowledge
+graph. Scenarios run on **[Lakebase](https://docs.databricks.com/aws/en/oltp/)**, **Lakehouse (Delta)** and **Neo4j**.
+Analytics, Communities and Patterns always run as serverless Databricks jobs
+over the mapped `…_data` snapshot. Graphless domains redirect to Context.
 
 ### Run pipeline
 
 1. **Scope** (`Scope`) resolves an entity set on the live graph
    (read-only): an entity neighbourhood (`expand_and_fetch_subgraph`, default 2
-   hops), a saved cohort rule (`CohortService.dry_run`), or a class population
-   (`find_subjects_by_type`, capped at 5000 entities — exceeding the cap fails
-   the run instead of truncating).
+   hops) or a saved cohort rule (`CohortService.dry_run`, capped at 5000
+   entities — exceeding the cap fails the run instead of truncating).
 2. **Seed** (`Sandbox`) creates a standalone table
    `<graph>__sim_<id>` and copies every live triple whose *subject* is in scope
    with one `INSERT … SELECT … WHERE subject = ANY(…)` (datatype / lang kept).
@@ -1362,9 +1393,9 @@ domains redirect to Domain, other backends show a disabled page.
 3. **Patch** applies the hypothetical facts in order: `add`, `remove`, or `set`
    (delete every `(s, p, *)` then assert the new value).
 4. **Reason** with `Reasoning`, a `ReasoningService` subclass
-   whose `_get_graph_name()` returns the sandbox table, so every phase (SWRL,
-   graph, decision tables, SPARQL, aggregate, optional T-Box) reads the
-   sandbox. Inferred triples are materialised into the sandbox only.
+   whose `_get_graph_name()` returns the sandbox table, so every phase (IF-THEN,
+   graph, SPARQL, optional T-Box) reads the sandbox. Inferred triples are
+   materialised into the sandbox only.
 5. **Diff** (`Diff`) compares the seeded slice (S0) with the final
    sandbox (S2): added triples are tagged `patch` or `inferred` (with rule
    provenance), removed triples come from patches. Exact counts plus the first
@@ -1408,67 +1439,202 @@ in `__smp_`, so a last-value `remove` does not resurrect the live fact.
 | `POST /simulation/{id}/run` | Start the run; poll `GET /tasks/{task_id}` (Builder) |
 | `POST /simulation/{id}/purge` | Drop sandbox after-picture; keep spec as draft (Builder) |
 | `GET /simulation/{id}/diff?kind=added\|removed&page=&search=` | Paged diff rows + summary |
+| `GET /simulation/{id}/compare?include_inferred=true\|false` | Sandbox vs current live graph on the same scope: status-tagged nodes/edges + exact counts |
 | `GET /simulation/runs?simulation_id=` | Run history |
+
+`Simulation.compare_to_live` reads the sandbox triples, takes their subjects
+as the comparison scope, reads the live triples of exactly those subjects
+(inferred union or asserted-only relation) and hands both to `CompareGraph`,
+which classifies each triple `unchanged` / `added` / `removed` (via `Diff`)
+and projects it into a capped `{nodes, edges, summary}` payload.
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/back/objects/simulation/Simulation.py` | Facade: CRUD, backend gate, run launch, diff paging |
-| `src/back/objects/simulation/Runner.py` | Background run: scope → seed → patch → reason → diff → persist |
-| `src/back/objects/simulation/Sandbox.py` | Sandbox lifecycle and patch semantics |
+| `src/back/objects/intelligence/Simulation.py` | Facade: CRUD, backend gate, run launch, diff paging, live compare |
+| `src/back/objects/intelligence/CompareGraph.py` | Sandbox-vs-live triple diff projected as a capped node/edge graph |
+| `src/back/objects/intelligence/Runner.py` | Background run: scope → seed → patch → reason → diff → persist |
+| `src/back/objects/intelligence/Sandbox.py` | Sandbox lifecycle and patch semantics |
 | `src/back/core/graphdb/lakebase/SimulationStore.py` | Sandbox-pinned Lakebase store with the write-target guard |
 | `src/back/objects/registry/store/lakebase/Simulations.py` | `simulations` / `simulation_runs` registry mixin |
 | `src/api/routers/internal/simulation.py` | Internal JSON API |
 | `src/api/routers/simulation.py` | Public `/api/v1/simulations` CRUD + run |
 | `src/back/objects/digitaltwin/query/TwinSandboxSparql.py` | SPARQL over a ready sandbox snapshot |
-| `src/front/templates/simulation.html` | Cohorts / Run / Scenarios / Results / Runs page (scenario editor is not a sidebar item) |
+| `src/front/templates/intelligence.html` | Configuration / Discovery / Simulation page (scenario editor is not a sidebar item) |
+| `src/front/static/intelligence/js/simulation-compare.js` | Compare section: scenario picker, Sigma overlay graph, details panel |
 
 Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
-(former Knowledge Graph → Cohorts) live under this menu. Bookmarks to
-`/ontology/?section=cohorts` and `/dtwin/?section=cohorts` redirect here.
+(former Knowledge Graph → Cohorts) are one page, **Intelligence → Configuration
+→ Cohorts**, with **Design** and **Runs** tabs sharing one saved-rules rail.
+Bookmarks to `/ontology/?section=cohorts` redirect to the Design tab;
+`/dtwin/?section=cohorts` and `/intelligence/?section=cohort-run` redirect to
+the Runs tab (`?section=cohorts&tab=runs`).
 Materialise still writes to the live graph via `/dtwin/cohorts/*`.
+
+---
+
+## Graph Analysis — Pattern Detection
+
+**Intelligence → Discovery → Patterns** mirrors Scenarios list/details: the list
+shows saved neighbourhood snapshots (hops, patterns found, saved-at); **Detect**
+opens the details pane (Workbench-style) with the live discovery result for a
+required anchor class and **auto-saves** the whole run (label =
+entity type + date/time); opening a card shows that snapshot under the saved name.
+Same
+job-only gate as Community (analytics toggle +
+`…_data` snapshot); job name is `ONTOBRICKS_PATTERN_JOB_NAME` /
+`<app>-pattern-detection`.
+
+### Discover on Databricks, then materialize
+
+1. **Detect** (`POST /dtwin/patterns/detect`) checks `pattern_job_status`, then
+   starts a `pattern_detection` task. `TwinAnalytics.detect_patterns` calls
+   `JobPatterns.run`, which triggers `<app>-pattern-detection` via
+   `LakeflowRunner`.
+2. The job (`src/jobs/graph_analytics_job.py --task patterns`, `PatternSQL`)
+   expands anchors up to `hops` along forward edges only (subject → object;
+   inbound relationships are never walked), bins attributes, hashes canonical
+   signatures (finest detail level that covers >= 50% of anchors, down to
+   structure-only), filters by `min_support`, optionally refines top-N
+   multiplicity near-duplicates (`refine_top`), and writes:
+
+   | Table | Content |
+   |-------|---------|
+   | `graph_patterns_<slug>` | anchor → `pattern_id`, support rank |
+   | `…_shapes` | shape tokens, support, refined / near-duplicate metadata |
+   | `…_shape_edges` | typed edges the Discover diagram draws (includes `parent_via`; the UI still shows one box per type per hop) |
+   | `…_preview_nodes` / `…_preview_edges` | capped preview |
+   | `…_summary` | counts, hops, bins, min_support, algorithm, `stage_ms`, `hub_degree`, `hub_count` |
+
+   Performance notes (see
+   `docs/superpowers/specs/2026-11-16-pattern-detection-performance-design.md`):
+
+   - Neighbourhood expansion skips walking *through* nodes whose out-
+     degree exceeds `--pattern-hub-degree` (default 5 000; `0` disables). The
+     hub itself still contributes structural/attribute tokens.
+   - Endpoint types are denormalised onto the forward edge table once;
+     signatures for all detail levels are hashed in one aggregation; shapes
+     for non-refined runs use one representative member per pattern.
+   - The summary carries `stage_ms` (per-stage wall time) for operators
+     reading the job log / summary table.
+
+3. **Read back** — `GET /dtwin/patterns/latest` (top-N + stats + job gate);
+   `GET /dtwin/patterns/{id}/shape` (tokens + layered diagram) and `/members`
+   (paged ≤ 500).
+4. **Auto-save (same task)** — after a successful Detect with at least one
+   pattern, the `pattern_detection` background task snapshots the catalog
+   itself (`SavedPatternStore`, label `{entity type} — {YYYY/MM/DD HH:MM:SS}`).
+   One row per pattern lands in `graph_pattern_saved_<slug>` (KPIs, support,
+   seed label, shape tokens, `diagram_json`). Member lists are **not**
+   copied — the members modal reads them from the live Detect output while
+   that run is current. The task result carries `saved_id`. Several saved
+   runs coexist. The RDF graph is not written. `POST /dtwin/patterns/save`
+   remains for a manual re-save of the last Detect.
+5. **Saved** — Read-back: `GET /dtwin/patterns/saved` (list),
+   `GET …/saved/{id}/patterns` (picker catalog),
+   `GET …/saved/{id}/members?pattern_id=` (paged from live Detect, or from
+   legacy member-row snapshots),
+   `GET …/saved/{id}/shape?pattern_id=` (diagram), `DELETE …/saved/{id}`,
+   `PUT …/saved/{id}/certification` (`{pattern_id, certified}`, builder role).
+   Certification is a user-set `certified BOOLEAN` column on the saved
+   catalog rows (default NULL = not certified; Save never writes it). The
+   catalog read returns `certified` per pattern plus
+   `stats.certified_pattern_count` / `stats.certified_count` (entities in
+   certified patterns) for the UI gauge.
+   `GET …/saved/{id}/members?certified=true|false` (without `pattern_id`)
+   pages the members of all certified / non-certified patterns, which backs
+   the chart's *Group by certification* switch.
+   Catalog and diagrams survive the next Detect; member lists for a new-style
+   save follow the live Detect output.
+
+`class_filter` for patterns is a **single** required anchor type; hops walk
+the full graph (not induced). `via` in shape records is the full predicate
+URI. Variation axes (structure, bins, frequency, refine, run params,
+lifecycle) are documented for operators — not separate product modes in v1.
+
+### File Reference
+
+| File | Purpose |
+|------|---------|
+| `src/jobs/graph_analytics_job.py` | `PatternSQL` / `run_patterns` — signatures, refine, outputs |
+| `resources/pattern_detection.job.yml` | Bundle job `<app>-pattern-detection` |
+| `src/back/core/graph_analysis/pattern/JobPatterns.py` | Trigger the job and read bounded outputs |
+| `src/back/core/graph_analysis/pattern/pattern_diagram.py` | Shape-edge rows → layered diagram model |
+| `src/back/core/graph_analysis/pattern/SavedPatternStore.py` | Save, list, page, delete saved snapshots ([Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/)). Save = constant statement count: one `INSERT … SELECT` for every pattern + one INSERT for the focus and top-100 patterns' diagrams (`EAGER_DIAGRAMS`); other diagrams draw lazily on first open |
+| `src/back/core/graph_analysis/pattern/saved_pattern_sql.py` | Pure SQL builders for the saved catalog (`kpi_sql`, `insert_catalog_sql`, `insert_rest_sql`) |
+| `src/api/routers/internal/dtwin.py` | `/dtwin/patterns/*` endpoints |
+| `src/back/objects/digitaltwin/TwinAnalytics.py` | Job wiring and pattern entry points |
+| `src/back/objects/digitaltwin/PatternBackgroundTasks.py` | `pattern_detection` (Detect + catalog save), `pattern_save` |
+| `src/front/static/intelligence/js/intelligence-patterns.js` | Patterns list / details UI |
 
 ---
 
 ## Graph Analysis — Community Detection
 
-OntoBricks provides **data cluster detection** on the graph viewer, allowing users to discover communities of densely connected entities. Detection is available at two levels:
+**Intelligence → Discovery → Communities** configures and detects partitions.
+**Explorer** only visualizes a materialized partition (colour / collapse).
 
-### Client-Side (Graphology)
+### Detect on Databricks, then materialize
 
-The frontend uses the `graphology-communities-louvain` algorithm (bundled with `graphology-library`) to run Louvain community detection directly in the browser on the currently displayed subgraph. This is instant and requires no backend call.
+Detection used to load every triple into the app and run NetworkX in memory,
+which could not finish on large domains (proxy timeout, memory). It now runs
+on a dedicated serverless Lakeflow job, and every read the app performs is
+bounded.
 
-### Server-Side (NetworkX)
+1. **Detect** (`POST /dtwin/clusters/detect`) checks `community_job_status`
+   (admin toggle → job name → non-empty `…_data` snapshot), then starts a
+   `community_detection` background task. `TwinAnalytics.detect_clusters`
+   takes an `analytics_snapshot` and calls `JobCommunities.run`, which
+   triggers `<app>-community-detection` through `LakeflowRunner`.
+2. The job (`src/jobs/graph_analytics_job.py --task communities`,
+   `CommunitySQL`) runs **semi-synchronous label propagation** in Spark SQL:
+   each round updates half the nodes (by `md5` parity), a node's own label
+   counts as one vote, ties break on the smallest label, and it stops after
+   two quiet rounds or `lp_iterations` (30). It writes, per domain version:
 
-For full-graph analysis, the backend `CommunityDetector` service (`src/back/core/graph_analysis/CommunityDetector.py`) loads all triples from the triple store, builds an undirected NetworkX graph (filtering out RDF type/label predicates), and runs one of three algorithms:
+   | Table | Content |
+   |-------|---------|
+   | `graph_communities_<slug>` | node → `community_rank` (0 = largest), label, type |
+   | `…_sizes` | size and seed per community |
+   | `…_preview_nodes` / `…_preview_edges` | capped preview (top 20 communities × 75, ≤ 1,500 nodes / 5,000 edges) |
+   | `…_summary` | counts, SQL-computed modularity, rounds, convergence |
 
-| Algorithm | NetworkX Function | Description |
-|-----------|-------------------|-------------|
-| **Louvain** | `community.louvain_communities()` | Modularity-maximizing hierarchical clustering (default) |
-| **Label Propagation** | `community.label_propagation_communities()` | Fast, near-linear-time detection |
-| **Greedy Modularity** | `community.greedy_modularity_communities()` | Greedy agglomerative approach |
+3. **Read back** — `GET /dtwin/clusters/latest` returns the summary, top-N
+   clusters (≤ 200) and the preview; `GET /dtwin/clusters/{id}/members` pages
+   members (≤ 500 per page, `source=latest|materialized`).
+4. **Materialize** (`POST /dtwin/clusters/materialize`) starts a
+   `community_materialize` task. `CommunityMaterializer` clears the previous
+   partition, then on Delta runs two `INSERT … SELECT` statements straight from
+   the job output (no row transits the app); other stores stream keyset
+   batches of 50k memberships. A failure clears the partial partition.
+5. **Explorer** reads totals from `GET /dtwin/clusters/current` (top-N, no
+   members) and looks up memberships for the drawn nodes only with
+   `POST /dtwin/clusters/assignments` (≤ 5,000 URIs per call).
 
-The result includes cluster membership, modularity score, and per-cluster member lists. It is returned to the frontend via `POST /dtwin/clusters/detect`.
+Bounded reads on Neo4j fall back to a scan of the graph's community triples;
+SQL stores (Delta, [Lakebase](https://docs.databricks.com/aws/en/oltp/)) aggregate in the database.
 
-### Visualization
+### Visualization (Explorer)
 
-Detected clusters can be visualized in several ways:
-
-- **Color by cluster** — nodes are recolored by community assignment instead of entity type
-- **Resolution slider** — controls Louvain granularity (higher resolution = more clusters)
+- **Color by cluster** — nodes are recolored by materialized community instead of entity type
 - **Collapse/expand** — clusters can be collapsed into super-nodes showing size and member count; clicking a super-node shows its members in the detail panel
 
 ### File Reference
 
 | File | Purpose |
 |------|---------|
-| `src/back/core/graph_analysis/CommunityDetector.py` | `CommunityDetector` — loads triples, builds NetworkX graph, runs algorithm |
-| `src/back/core/graph_analysis/models.py` | `ClusterRequest`, `ClusterResult`, `DetectionResult`, `DetectionStats` dataclasses |
-| `src/api/routers/internal/dtwin.py` | `POST /dtwin/clusters/detect` endpoint |
-| `src/back/objects/digitaltwin/digitaltwin.py` | `DigitalTwin.detect_clusters()` method |
-| `src/front/static/query/js/query-sigmagraph.js` | Client-side Louvain detection, cluster UI logic, super-node rendering |
-| `src/front/templates/partials/dtwin/_query_sigmagraph.html` | Data Clusters sidebar panel |
+| `src/jobs/graph_analytics_job.py` | `CommunitySQL` / `run_communities` — label propagation and outputs on the job |
+| `resources/community_detection.job.yml` | Bundle job `<app>-community-detection` |
+| `src/back/core/graph_analysis/community/JobCommunities.py` | Trigger the job and read its bounded outputs |
+| `src/back/core/graph_analysis/community/CommunityVocabulary.py` | Cluster / `inCluster` URI helpers |
+| `src/back/core/graph_analysis/community/CommunityMaterializer.py` | Set-based materialize, bounded `load_current` / `assignments` / `members`, clear |
+| `src/api/routers/internal/dtwin.py` | detect / latest / members / current / assignments / materialize / clear endpoints |
+| `src/back/objects/digitaltwin/TwinAnalytics.py` | Job wiring and cluster read/write entry points |
+| `src/back/objects/digitaltwin/TwinBackgroundTasks.py` | `run_community_task`, `run_community_materialize_task` |
+| `src/front/static/intelligence/js/intelligence-communities.js` | Intelligence Community UI (tasks, preview, paged members) |
+| `src/front/static/query/js/query-sigmagraph.js` | Colour / collapse from assignments of drawn nodes |
+| `src/front/templates/partials/dtwin/_query_sigmagraph.html` | Data Clusters visualization panel |
 | `src/front/static/query/css/query-sigmagraph.css` | Cluster panel and chip styles |
 
 ---
@@ -1539,9 +1705,9 @@ Shapes are organized into six data quality categories:
 | RDFLib | 7.0+ | RDF/OWL operations |
 | owlrl | 7.0+ | OWL 2 RL forward-chaining reasoner (deductive closure on RDFLib graphs) |
 | PySHACL | 0.26+ | W3C SHACL validator for RDFLib graphs (data quality shapes validation) |
-| psycopg | 3.2+ | Postgres driver for the Lakebase Graph DB engine |
-| Databricks SQL Connector | 3.0+ | Database connectivity |
-| MLflow | 2.19+ | Agent tracing, evaluation, and Databricks Agent Framework |
+| psycopg | 3.2+ | Postgres driver for the [Lakebase](https://docs.databricks.com/aws/en/oltp/) Graph DB engine |
+| [Databricks SQL Connector](https://docs.databricks.com/aws/en/dev-tools/python-sql-connector) | 3.0+ | Database connectivity |
+| [MLflow](https://docs.databricks.com/aws/en/mlflow/) | 2.19+ | Agent tracing, evaluation, and Databricks Agent Framework |
 | FastMCP | 2.3+ | MCP server SDK for LLM tool integration |
 | Strawberry GraphQL | 0.220+ | Auto-generated typed GraphQL schema from ontology |
 
@@ -1564,11 +1730,12 @@ Shapes are organized into six data quality categories:
 |----------|---------|---------|
 | RDF | 1.1 | Data model |
 | OWL | 2 | Ontology language |
+| JSON-LD | 1.1 | RDF serialization for APIs and agents |
 | R2RML | W3C Rec | Mapping language |
 | SPARQL | 1.1 | Query language |
-| SWRL | W3C Sub | Rule language |
+| IF-THEN | W3C Sub | Rule language |
 | SHACL | W3C Rec | Data quality validation |
-| Turtle | 1.1 | RDF serialization |
+| Turtle | 1.1 | RDF serialization (default OWL export) |
 
 ---
 
@@ -1602,7 +1769,7 @@ OntoBricks uses Python's standard `logging` module with `logging.config.dictConf
 
 The file handler writes to a path determined by (in priority order):
 1. `LOG_DIR` environment variable
-2. `/local_disk0/logs` when running inside Databricks Apps
+2. `/local_disk0/logs` when running inside [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/)
 3. `./logs` for local development
 
 ### Format
@@ -1700,11 +1867,11 @@ In the Databricks workspace:
 
 ### Databricks Agent Framework
 
-The Ontology Assistant agent has a `ResponsesAgent` wrapper (`src/agents/agent_ontology_assistant/responses_agent.py`) that implements the MLflow [`ResponsesAgent`](https://mlflow.org/docs/latest/genai/serving/responses-agent) interface. This enables:
+The Ontology Assistant agent has a `ResponsesAgent` wrapper (`src/agents/agent_ontology_assistant/responses_agent.py`) that implements the [MLflow](https://docs.databricks.com/aws/en/mlflow/) [`ResponsesAgent`](https://mlflow.org/docs/latest/genai/serving/responses-agent) interface. This enables:
 
 - **AI Playground** — interactive testing
 - **Agent Evaluation** — quality measurement with LLM judges
-- **Model Serving** — deployment as a managed endpoint
+- **[Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/)** — deployment as a managed endpoint
 - **MLflow Model Logging** — versioning and tracking via `log_model.py`
 
 ### Configuration
@@ -1734,7 +1901,7 @@ Tracing degrades gracefully: if MLflow is not configured or the tracking server 
 `SQLWarehouse` maintains a `queue.Queue`-based pool of reusable database connections (`src/back/core/databricks/SQLWarehouse.py`). Instead of opening a fresh `databricks.sql.connect()` per query (costly due to TLS handshakes), connections are borrowed from the pool and returned after use. Stale connections (idle > 300 s) are discarded automatically.
 
 Lakehouse/RT graph reads select `StatementExecutionWarehouse` inside
-Databricks Apps. It uses direct SEA `INLINE` responses and workspace-host
+[Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/). It uses direct SEA `INLINE` responses and workspace-host
 internal chunk links, so this route does not create pooled connector sessions
 or require CloudFetch egress. Local RT reads keep `SQLWarehouse` with Kernel.
 
@@ -1757,7 +1924,7 @@ All blocking Databricks I/O runs through `run_blocking()` in `DatabricksHelpers.
 
 ### Authentication
 - Personal Access Token (development)
-- Service Principal (production/Databricks Apps)
+- Service Principal (production/[Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/))
 - Tokens stored in environment variables
 
 ### CSRF Protection
@@ -1771,11 +1938,11 @@ All blocking Databricks I/O runs through `run_blocking()` in `DatabricksHelpers.
 ### Data Protection
 - Session cookies use `secure=True` and `samesite=lax` when running as a Databricks App (`DATABRICKS_APP_PORT` set), ensuring cookies are only sent over HTTPS
 - No credentials persisted to disk
-- GitHub PATs are resolved live from a Databricks secret (or `ONTOBRICKS_GITHUB_TOKEN` locally); only the secret scope/key is stored in `github_config`
+- GitHub PATs are resolved live from a [Databricks secret](https://docs.databricks.com/aws/en/security/secrets/) (or `ONTOBRICKS_GITHUB_TOKEN` locally); only the secret scope/key is stored in `github_config`
 - HTTPS enforced in production
 
 ### SQL Injection Prevention
-- Parameterized queries via Databricks SQL Connector
+- Parameterized queries via [Databricks SQL Connector](https://docs.databricks.com/aws/en/dev-tools/python-sql-connector)
 - Read-only query validation for test queries
 
 ---
@@ -1805,7 +1972,7 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 >   remain accessible on all statuses.
 >
 > On top of the lifecycle gate, a **single-editor lock** (`EditLockService` +
-> the Lakebase `domain_edit_locks` table) enforces that only one user edits a
+> the [Lakebase](https://docs.databricks.com/aws/en/oltp/) `domain_edit_locks` table) enforces that only one user edits a
 > given DRAFT `(domain, version)` at a time. The model is **renew-only lease**:
 > the first opener acquires the lock (on `POST /domain/load-from-uc`), later
 > openers are read-only, and the lock is held until the holder explicitly
@@ -1883,7 +2050,7 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/v1/health` | GET | Health check |
-| `/api/v1/domains/list` | POST | List domains in Unity Catalog |
+| `/api/v1/domains/list` | POST | List domains in [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) |
 | `/api/v1/domain/info` | POST | Get domain metadata |
 | `/api/v1/domain/ontology` | POST | Get ontology details |
 | `/api/v1/domain/ontology/classes` | POST | Get ontology classes |
@@ -1943,9 +2110,9 @@ See [API Documentation](api.md) for complete endpoint reference.
 5. **Custom Visualizations**: Extend Sigma.js graph viewer in query template
 6. **Authentication Providers**: Add new auth methods in `DatabricksClient`
 7. **OntoViz Extensions**: Add new entity/relationship types, custom rendering
-8. **Graph DB Engines**: Implement the `back.core.graphdb.interfaces` contracts in `src/back/core/graphdb/` (Lakebase Postgres, Unity Catalog Delta, and Neo4j ship today; the `interfaces/` package plus `GraphDBFactory` make it straightforward to add Memgraph, Gremlin, or other engines).
+8. **Graph DB Engines**: Implement the `back.core.graphdb.interfaces` contracts in `src/back/core/graphdb/` ([Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/), [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) Delta, and Neo4j ship today; the `interfaces/` package plus `GraphDBFactory` make it straightforward to add Memgraph, Gremlin, or other engines).
 9. **Theming**: Modify OntoViz CSS variables for custom themes
-10. **SWRL Built-ins**: Extend the SWRL engine (`src/back/core/reasoning/swrl/SWRLEngine.py`) with additional built-in atoms beyond class and property assertions (e.g., math, string, comparison built-ins)
+10. **Rule Built-ins**: Extend the business-rule engine (`src/back/core/reasoning/shacl_rules/RuleBuiltinRegistry.py`) with additional built-in atoms beyond class and property assertions (e.g., math, string, comparison built-ins)
 11. **Reasoning Profiles**: Add new reasoning profiles beyond OWL 2 RL (e.g., OWL 2 EL) by implementing alternative reasoner classes in `src/back/core/reasoning/`
 12. **Custom Constraint Types**: Add domain-specific constraint validators to the constraint checking phase in `ReasoningService`
 13. **New LLM Agents**: Add agents under `src/agents/` using the shared tool framework (see [Agentic Architecture](architecture.md#agentic-architecture))
@@ -1962,7 +2129,8 @@ See [API Documentation](api.md) for complete endpoint reference.
 - **RDF 1.1 Primer**: https://www.w3.org/TR/rdf11-primer/
 - **OWL 2 Web Ontology Language**: https://www.w3.org/TR/owl2-overview/
 - **OWL 2 Profiles (RL, EL, QL)**: https://www.w3.org/TR/owl2-profiles/
-- **SWRL**: https://www.w3.org/submissions/SWRL/
+- **JSON-LD 1.1**: https://www.w3.org/TR/json-ld11/
+- **IF-THEN**: https://www.w3.org/submissions/IF-THEN/
 - **SHACL**: https://www.w3.org/TR/shacl/
 - **R2RML: RDB to RDF Mapping Language**: https://www.w3.org/TR/r2rml/
 - **SPARQL 1.1 Query Language**: https://www.w3.org/TR/sparql11-query/
@@ -1971,9 +2139,9 @@ See [API Documentation](api.md) for complete endpoint reference.
 - **RDFLib Documentation**: https://rdflib.readthedocs.io/
 - **owlrl (OWL 2 RL Reasoner)**: https://owl-rl.readthedocs.io/
 - **PySHACL**: https://github.com/RDFLib/pySHACL
-- **Lakebase Postgres**: Databricks-hosted Postgres for OLTP / Apps — https://docs.databricks.com/aws/en/oltp/
+- **[Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/)**: Databricks-hosted Postgres for OLTP / Apps — https://docs.databricks.com/aws/en/oltp/
 - **SANSA Stack (inspiration)**: https://github.com/SANSA-Stack
-- **Databricks SQL Connector**: https://docs.databricks.com/dev-tools/python-sql-connector.html
+- **[Databricks SQL Connector](https://docs.databricks.com/aws/en/dev-tools/python-sql-connector)**: https://docs.databricks.com/dev-tools/python-sql-connector.html
 
 
 ---
@@ -1987,10 +2155,10 @@ The following sections were previously separate documents.
 
 OntoBricks uses **LLM-powered agents** to automate complex, multi-step tasks that would otherwise require significant manual effort. Each agent follows an MCP-style (Model Context Protocol) pattern: an autonomous loop where the LLM reasons about the task, calls tools to gather context or perform actions, and iterates until the goal is achieved.
 
-All in-app agents use the **LLM saved on the domain** (`Domain → General → AI`):
-an executable Unity Catalog **AI Gateway** model service
+All in-app agents use the **LLM saved on the domain** (`Context → Configuration → AI`):
+an executable [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) **[AI Gateway](https://docs.databricks.com/aws/en/ai-gateway/)** model service
 (`kind: "ai_gateway"`, `POST /ai-gateway/mlflow/v1/chat/completions` with
-`model` set to the three-part name) or a legacy **Model Serving** endpoint
+`model` set to the three-part name) or a legacy **[Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/)** endpoint
 (`kind: "serving"`, `POST /serving-endpoints/{name}/invocations`). They do not
 pick a model independently. An empty target (**No LLM**) is rejected before any
 LLM request. Agents degrade gracefully if the selected endpoint does not support
@@ -2028,7 +2196,7 @@ In addition to the UI-driven agents, OntoBricks provides an **MCP server** (`mcp
 
 #### 1. OWL Generator Agent (`agent_owl_generator`)
 
-**Purpose**: Autonomously generate a complete OWL ontology (Turtle format) from domain metadata and the parsed documents in the Lakebase Knowledge Store (`domain_documents`).
+**Purpose**: Autonomously generate a complete OWL ontology (Turtle format) from domain metadata and the parsed documents in the [Lakebase](https://docs.databricks.com/aws/en/oltp/) Knowledge Store (`domain_documents`).
 
 | Parameter | Value |
 |-----------|-------|
@@ -2129,7 +2297,7 @@ In addition to the UI-driven agents, OntoBricks provides an **MCP server** (`mcp
 saved domain `endpoint_name` and `endpoint_kind` via `require_domain_llm`
 before the agent runs.
 
-**Databricks Agent Framework**: This agent has a `ResponsesAgent` wrapper (`responses_agent.py`) that implements the MLflow `ResponsesAgent` interface, enabling AI Playground testing, Agent Evaluation, Model Serving deployment, and MLflow model logging (see the MLflow section in [Architecture](architecture.md)).
+**Databricks Agent Framework**: This agent has a `ResponsesAgent` wrapper (`responses_agent.py`) that implements the [MLflow](https://docs.databricks.com/aws/en/mlflow/) `ResponsesAgent` interface, enabling AI Playground testing, Agent Evaluation, Model Serving deployment, and MLflow model logging (see the MLflow section in [Architecture](architecture.md)).
 
 ---
 
@@ -2150,7 +2318,7 @@ All tools live in `src/agents/tools/` and follow a consistent pattern:
 | `list_documents` | `documents.py` | Lists Knowledge Store documents from the Lakebase `domain_documents` table | OWL Generator |
 | `read_document` | `documents.py` | Reads the parsed text of a specific Knowledge Store document from Lakebase | OWL Generator |
 | `get_ontology` | `ontology.py` | Returns current ontology (entities, relationships, attributes) | Auto-Mapping, Icon Mapping, Ontology Assistant |
-| `execute_sql` | `sql.py` | Executes a SQL query via Databricks SQL Warehouse | Auto-Mapping |
+| `execute_sql` | `sql.py` | Executes a SQL query via Databricks [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) | Auto-Mapping |
 | `submit_entity_mapping` | `mapping.py` | Saves a validated entity → SQL mapping | Auto-Mapping |
 | `submit_relationship_mapping` | `mapping.py` | Saves a validated relationship → SQL mapping | Auto-Mapping |
 | `assign_icons` | `icons.py` | Saves entity → emoji icon mapping | Icon Mapping |
@@ -2348,9 +2516,12 @@ Content-Type: application/json
 ```
 
 The route overwrites `custom_inputs` with the saved domain LLM target
-(`host`, `token`, `endpoint_name`, `endpoint_kind`) and fills ontology context
-from the active session. Caller-supplied credentials or endpoint names are
-ignored. If the ontology is modified, the domain is saved.
+(`endpoint_name`, `endpoint_kind`) and fills ontology context from the active
+session. Databricks credentials are passed to the agent constructor
+(`OntologyAssistantResponsesAgent(host=..., token=...)`), never through
+`custom_inputs`: MLflow auto-traces `predict` / `predict_stream` and records
+the whole request as span inputs. Caller-supplied `host` / `token` keys are
+dropped. If the ontology is modified, the domain is saved.
 
 ##### Usage — Log to MLflow
 
@@ -2358,14 +2529,12 @@ ignored. If the ontology is modified, the domain is saved.
 python -m agents.agent_ontology_assistant.log_model
 ```
 
-This creates an MLflow run with the agent model, which can then be registered in Unity Catalog and served via Databricks Model Serving.
+This creates an MLflow run with the agent model, which can then be registered in Unity Catalog and served via Databricks Model Serving. A served endpoint reads its credentials from the `DATABRICKS_HOST` / `DATABRICKS_TOKEN` environment variables (bind them to a secret scope).
 
 ##### Custom inputs / outputs
 
 | Field | Direction | Contents |
 |-------|-----------|----------|
-| `custom_inputs.host` | in | Databricks workspace URL |
-| `custom_inputs.token` | in | Databricks access token |
 | `custom_inputs.endpoint_name` | in | AI Gateway FQN or Model Serving endpoint name |
 | `custom_inputs.endpoint_kind` | in | `ai_gateway` or `serving` (authoritative; do not infer from the name) |
 | `custom_inputs.classes` | in | Current ontology classes (list of dicts) |
@@ -2399,7 +2568,7 @@ Entities represent ontology classes (`owl:Class`) and are displayed as interacti
 
 | Feature | Description |
 |---------|-------------|
-| **Name** | Editable entity name (click to edit) |
+| **ID** | Editable entity ID (click to edit) |
 | **Icon** | Customizable emoji icon for visual identification |
 | **Description** | Optional text description |
 | **Attributes** | Data properties with name and type |
@@ -2441,7 +2610,7 @@ Relationships represent object properties (`owl:ObjectProperty`) that connect en
 
 | Feature | Description |
 |---------|-------------|
-| **Name** | Editable relationship name (click on label) |
+| **ID** | Editable relationship ID (click on label) |
 | **Direction** | Forward (→), Reverse (←), or Bidirectional (↔) |
 | **Attributes** | Optional relationship properties |
 | **Visual** | Solid line with arrow indicating direction |
@@ -2941,8 +3110,8 @@ languages, two are engine-facing dialects the platform translates *down to*.
 | **REST** | user-facing | `api/external_app.py`, `api/routers/...`, `api/routers/internal/dtwin.py` | Calls into Python services (`DigitalTwin`, `DomainQueryService`, registry, …) |
 | **GraphQL** | user-facing | `back/core/graphql/GraphQLSchemaBuilder.py`, `ResolverFactory.py`, `back/fastapi/graphql_routes.py` | Resolvers internally call SPARQL / triples-find → Spark SQL |
 | **SPARQL** | user-facing (read-only in chat) | `back/core/w3c/sparql/SparqlTranslator.py`, `SparqlQueryRunner.py`, `DomainQueryService.py` | Translated to **Spark SQL** via R2RML mappings |
-| **Spark SQL** | engine-facing | `back/core/graphdb/delta/MaterializedStore.py` | Native execution on Databricks SQL Warehouse against Delta views in Unity Catalog |
-| **Cypher** *(reserved for future engines)* | engine-facing | `back/core/graphdb/GraphBackend.py` + concrete engines under `back/core/graphdb/<engine>/` (`supports_cypher = True`, `query_dialect = "cypher"`) | None of the currently shipped engines speaks Cypher — Lakebase Postgres is SQL-only. The capability flags are kept as a seam for plugging in Cypher / Gremlin / SPARQL-store engines. |
+| **Spark SQL** | engine-facing | `back/core/graphdb/delta/MaterializedStore.py` | Native execution on Databricks [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) against Delta views in [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) |
+| **Cypher** *(reserved for future engines)* | engine-facing | `back/core/graphdb/GraphBackend.py` + concrete engines under `back/core/graphdb/<engine>/` (`supports_cypher = True`, `query_dialect = "cypher"`) | None of the currently shipped engines speaks Cypher — [Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/) is SQL-only. The capability flags are kept as a seam for plugging in Cypher / Gremlin / SPARQL-store engines. |
 
 #### Supporting W3C standards (not query languages)
 
@@ -2954,7 +3123,8 @@ constraints, and rule definitions:
 | **R2RML** | Maps relational tables → RDF; consumed by `SparqlTranslator` to lift SPARQL to Spark SQL | `back/core/w3c/r2rml/` |
 | **SHACL** | Constraint validation over RDF (data quality) | `back/core/w3c/shacl/SHACLService.py` |
 | **OWL / RDFS** | Schema definition + entailment (`OWLRLReasoner` materializes derived triples) | `back/core/w3c/owl/`, `back/core/reasoning/OWLRLReasoner.py` |
-| **SWRL** | Rule language; compiled to SQL via `SWRLSQLTranslator` (Spark SQL on Delta, Postgres SQL on Lakebase). The `query_dialect` flag on `GraphBackend` reserves a slot for a future Cypher translator. | `back/core/reasoning/SWRL*.py` |
+| **JSON-LD** | RDF serialization for OWL exchange and SPARQL graph results (APIs, MCP) | `back/core/w3c/owl/iri.py`, `SparqlQueryRunner` |
+| **IF-THEN** | Authoring syntax for business rules; transpiled to SHACL-AF and compiled to SQL via `ShaclFlatSqlBackend` (Spark SQL on Delta, Postgres SQL on Lakebase). The `query_dialect` flag on `GraphBackend` reserves a slot for a future Cypher backend. | `back/core/reasoning/shacl_rules/` |
 
 ---
 
@@ -2998,7 +3168,7 @@ swapped.
         │                                  │            │                │
        REST                              SPARQL      GraphQL          Cypher
    (/api/v1/* or /dtwin/*)            (free-form    (typed,       (graph traversal,
-                                       triples,     nested,        SWRL rules)
+                                       triples,     nested,        IF-THEN rules)
                                        aggregates,  schema-driven)       │
                                        analytics)                        │
                                                                   Internal only
@@ -3018,7 +3188,7 @@ and the engine that ultimately runs (column **Engine**).
 
 | UI Feature | Page / JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
-| Browse / open / create / save domain | Registry modal (`partials/layout/registry_modal.html`), `templates/domain.html` | `GET/POST /api/v1/domain/...`, `/settings/registry/...`, `/domain/...` | REST | Python services (`DomainService`, `RegistryService`); files on UC Volumes |
+| Browse / open / create / save domain | Home Registry tabs (`templates/home.html`, `partials/registry/_registry_domains.html`), `templates/domain.html` | `GET/POST /api/v1/domain/...`, `/settings/registry/...`, `/domain/...` | REST | Python services (`DomainService`, `RegistryService`); files on UC Volumes |
 | Schedule (background actions) | `settings` (Automation → Scheduler) | `/settings/schedules`, `/settings/cohort-schedules` | REST | Python `BuildScheduler` + Databricks Jobs SDK |
 | Cockpit / readiness | `domain-validation` | `GET /api/v1/domain/design-status` | REST | Python aggregator over OWL / R2RML / metadata |
 | Data Assets (UC tables / views / metric views preview) | `domain-metadata` | Internal REST → `databricks-sql-connector` | REST → Spark SQL | **Spark SQL** on UC tables, views and **metric views** (sample queries). Each source is tagged with `object_kind` (`table` / `view` / `metric_view`); metric-view columns also carry a `role` (`dimension` / `measure`) resolved via `SHOW CREATE TABLE`. |
@@ -3034,22 +3204,22 @@ and the engine that ultimately runs (column **Engine**).
 | Visual ontology editor (`Model`, `Entities`, `Relationships`, `Groups`, `Business Views`) | `ontology-design.js`, `ontology-shared-panels.js`, `ontology-groups.js` | Internal REST `/ontology/...` | REST | Python ontology object model |
 | OWL viewer / generator | `ontology-owl.js`, agent `OWLGenerator` | `/ontology/owl/...`, `/agents/owl-generator/run` | REST | `OntologyParser`, `OntologyGenerator` (rdflib) |
 | Import (OWL, FIBO, CDISC, IOF) | `ontology-import.js` | `/ontology/import/*` | REST | rdflib parsers |
-| Generate (Wizard) | `ontology-wizard.js` | Domain LLM via `agent_owl_generator` | REST → LLM | Saved domain LLM: Databricks AI Gateway or Model Serving + tool-calling; selected ready documents come from the shared parsed corpus in the Lakebase Knowledge Store (`domain_documents`) |
+| Generate (Wizard) | `ontology-wizard.js` | Domain LLM via `agent_owl_generator` | REST → LLM | Saved domain LLM: Databricks [AI Gateway](https://docs.databricks.com/aws/en/ai-gateway/) or [Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/) + tool-calling; selected ready documents come from the shared parsed corpus in the Lakebase Knowledge Store (`domain_documents`) |
 | AI Assistant | Studio floating chat, `agent_ontology_assistant` | `POST /ontology/assistant/chat`, `POST /ontology/assistant/invoke` | REST → LLM | Saved domain LLM (`llm_endpoint` + `llm_endpoint_kind`): AI Gateway chat completions or Model Serving invocations |
 | **Data Quality** rules editor | `ontology-dataquality.js` | `/ontology/dataquality/...` | REST | SHACL (`SHACLService`) on the in-memory ontology |
-| **Business Rules (SWRL)** editor | `ontology-business-rules.js` | `/ontology/swrl/...` | REST | `SWRLParser`, validated against ontology |
+| **Sanity Checks** | `ontology-design-checks.js` | `GET /ontology/design-checks` | REST | `DesignChecks` on the in-memory ontology (advisory) |
+| **Business Rules (IF-THEN)** editor | `ontology-business-rules.js` | `/ontology/if-then/...` | REST | `RuleExpressionParser`, validated against ontology |
 | Expressions & Axioms | `ontology-axioms.js` | `/ontology/axioms/...` | REST | OWL axiom storage |
 
 #### 4.3 Mapping (R2RML)
 
 | UI Feature | JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
-| Mapping designer / manual mapping | `mapping-design.js`, `mapping-manual.js` | `/mapping/...` | REST | `R2RMLGenerator` |
+| Mapping designer / manual mapping | `mapping-design.js`, `mapping-manual.js` (hosted on `/dtwin/?section=design|manual`) | `/mapping/...` | REST | `R2RMLGenerator` |
 | Auto-Map (LLM) | `mapping-autoassign.js`, agent `AutoAssignment` | `/mapping/auto-assign/...` | REST → LLM | Databricks AI Gateway or FM API; agent samples UC tables via Spark SQL and preloads the same ready parsed-document corpus as Generate |
 | Diagnostics | `mapping-diagnostics.js` | `/mapping/diagnostics/*` | REST | Python validator |
 | Source schema drift | `mapping-design.js`, `mapping-diagnostics.js` | `GET /mapping/schema-drift` | REST | One `DESCRIBE` per distinct source table via `UnityCatalog.get_table_columns` |
 | **R2RML** view | `mapping-r2rml.js` | `/mapping/r2rml/raw` | REST | rdflib serializer |
-| **Spark SQL** preview | `mapping-sparksql.js` | `POST /dtwin/translate` | REST → SPARQL **translation only** | `SparqlTranslator` (no execution; shows the generated SQL) |
 
 #### 4.4 Knowledge Graph (the core read surface)
 
@@ -3060,14 +3230,15 @@ storage.
 
 | UI Feature | JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
-| **Insight / Overview** | `query-sync.js` (stats panel), `query.js` | `GET /dtwin/sync/stats`, `GET /dtwin/sync/status` | REST | Spark SQL aggregates on the Delta view, or Postgres SQL aggregates on the Lakebase Graph DB |
+| **Overview** (Graph → Management) | `query-sync.js` (stats panel), `query.js` | `GET /dtwin/sync/stats`, `GET /dtwin/sync/status` | REST | Spark SQL aggregates on the Delta view, or Postgres SQL aggregates on the Lakebase Graph DB |
+| **Analytics** (Intelligence → Discovery) | `query-analytics.js` | `POST /dtwin/metrics/compute`, `GET /dtwin/metrics/latest`, `GET /dtwin/metrics/series` | REST | Serverless Databricks Lakeflow job over mapped triples; last result cached in registry `graph_analytics` |
 | **Graph Viewer** (Sigma.js viz) | `query-sigmagraph.js`, `query-d3graph.js` | `GET /dtwin/groups`, `POST /dtwin/sync/filter`, `GET /dtwin/sync/stats?refresh=true`, `POST /dtwin/clusters/detect`, `GET /dtwin/reasoning/inferred` | REST | Each `/sync/filter` call is a **SPARQL** under the hood, translated to **Spark SQL** (Delta) or **Postgres SQL** (Lakebase Graph DB) |
 | **Query → SPARQL playground** | `query-execute.js` | `POST /dtwin/execute` | **SPARQL** | `SparqlTranslator` → **Spark SQL** on the SQL Warehouse (Delta view); read-only safety gate blocks update verbs |
 | **GraphQL** | `query-graphql.js` | `GET /graphql/{domain}/schema`, `POST /graphql/{domain}`, `GET /graphql/settings/depth` | **GraphQL** | Schema generated from OWL; resolvers call `DomainQueryService` → SPARQL → **Spark SQL** |
 | **Graph Chat** | `query-chat.js`, agent `agent_dtwin_chat` | `POST /dtwin/assistant/chat`, `GET/DELETE /dtwin/assistant/history` | REST → LLM tool-calling | LLM calls REST + GraphQL + SPARQL tools (see §6) |
 | **Build** (materialize triple store) | `query-sync.js` | `POST /dtwin/sync/start`, `POST /dtwin/sync/load` | REST | `_BuildPipeline` runs the R2RML SQL on the Warehouse (Delta `CREATE OR REPLACE VIEW`) and streams the rows into the active Graph DB engine via `bulk_insert_iter` (`COPY FROM STDIN` on Lakebase) |
 | **Data Quality** (SHACL execution) | `query-dataquality.js` | `POST /dtwin/dataquality/start`, `POST /dtwin/dataquality/execute` | REST | `SHACLService` translates shapes to **SQL** SELECTs that find violations |
-| **Inference (Reasoning)** | `query-reasoning.js`, `query-purge-inferences.js` | `POST /dtwin/reasoning/start`, `POST /dtwin/reasoning/materialize`, `GET/DELETE /dtwin/reasoning/inferred` | REST | `ReasoningService`: OWL-RL closure (rdflib) **+** SWRL rules compiled to **SQL** (Spark SQL on Delta, Postgres SQL on Lakebase) **or** `SPARQLRuleEngine`; GET counts the generated companion shared by reasoning and cohorts, while DELETE truncates only that companion. On Databricks Apps, companion DDL/DML (CREATE, INSERT, TRUNCATE, OPTIMIZE, graph-index rebuild) uses INLINE Statement Execution — the same path as graph reads — because Apps cannot open a Thrift SQL session. |
+| **Inference (Reasoning)** | `query-reasoning.js`, `query-purge-inferences.js` | `POST /dtwin/reasoning/start`, `POST /dtwin/reasoning/materialize`, `GET/DELETE /dtwin/reasoning/inferred` | REST | `ReasoningService`: OWL-RL closure (rdflib) **+** IF-THEN rules compiled to **SQL** (Spark SQL on Delta, Postgres SQL on Lakebase) **or** `SPARQLRuleEngine`; GET counts the generated companion shared by reasoning and cohorts, while DELETE truncates only that companion. On [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/), companion DDL/DML (CREATE, INSERT, TRUNCATE, OPTIMIZE, graph-index rebuild) uses INLINE Statement Execution — the same path as graph reads — because Apps cannot open a Thrift SQL session. |
 | **Cockpit → Knowledge Graph** | `domain-validation.js` | `GET /validate/detailed`, `GET /dtwin/reasoning/inferred` | REST | Displays mapped graph health plus the live combined materialized reasoning-and-cohort count; unsupported source-indistinguishable backends return the count as unavailable |
 
 `GET /dtwin/reasoning/inferred` is a lightweight status call: it returns
@@ -3106,14 +3277,14 @@ traffic. Data-plane routes are fail-closed when no user identity is forwarded.
 | `list_domains` | `GET /api/v1/domains` | REST | UC Volume listing |
 | `list_domain_versions` | `GET /api/v1/domain/versions` | REST | UC Volume listing |
 | `get_design_status` | `GET /api/v1/domain/design-status` | REST | Python aggregator |
-| `describe_ontology` | `GET /api/v1/domain/ontology` + `GET /api/v1/domain/classes` | REST | Ontology schema only (no graph): structured class summary + raw OWL/Turtle |
+| `describe_ontology` | `GET /api/v1/domain/ontology?format=json-ld` + `GET /api/v1/domain/classes` | REST | Ontology schema only (no graph): structured class summary + raw OWL/JSON-LD |
 | `select_domain` | `GET /api/v1/digitaltwin/status` + `GET /api/v1/domain/classes` | REST | MaterializedStore status (Spark SQL) or GraphDB status; class attachments cached for `[Context]` blocks |
 | `list_entity_types` | `GET /api/v1/digitaltwin/stats` | REST | **Spark SQL** GROUP BY on the triple view (Delta) or GraphDB MATCH counts |
 | `describe_entity` | `GET /api/v1/digitaltwin/triples/find` | REST | SPARQL-style BFS internally → **Spark SQL** (Delta) or **Cypher** (GraphDB) |
 | `get_entity_context` | `GET /api/v1/digitaltwin/nodes/context` | REST | Class resolution + optional **Spark SQL** dataset read and bridge traversal |
 | `compute_virtual_attributes` | `GET /api/v1/digitaltwin/nodes/virtual-attributes` | REST | **Unity Catalog function** call for declared virtual attributes |
 | `invoke_entity_action` | `POST /api/v1/digitaltwin/nodes/action` | REST | **Unity Catalog function** via SQL warehouse, or Databricks Job `run_now` (`job:<id>`) tracked in TaskManager |
-| `run_entity_business_rule` | `POST /api/v1/digitaltwin/nodes/business-rule` | REST | SWRL rule → entity-scoped **Spark SQL** inference + insert into the graph (Builder role required) |
+| `run_entity_business_rule` | `POST /api/v1/digitaltwin/nodes/business-rule` | REST | IF-THEN rule → entity-scoped **Spark SQL** inference + insert into the graph (Builder role required) |
 | `check_entity_shacl_facets` | `GET /api/v1/digitaltwin/nodes/shacl` | REST | Applicable SHACL shapes (class + ancestors + global) → one entity-scoped `UNION ALL` **Spark SQL** batch, per-shape fallback on error. Explorer UI uses `POST /dtwin/nodes/shacl/start` + task poll for a live activity log |
 | `get_status` | `GET /api/v1/digitaltwin/status` | REST | Same as `select_domain` |
 | `get_graphql_schema` | `GET /graphql/{domain}/schema` | **GraphQL** | `GraphQLSchemaBuilder` (no DB hit; SDL only) |
@@ -3122,7 +3293,7 @@ traffic. Data-plane routes are fail-closed when no user identity is forwarded.
 
 > **Per-domain policy.** The first three tools are registry-level and always
 > available. The rest are domain-scoped: a domain can hide any of them from
-> **Domain → General → MCP**, and can set its dataset / bridges / actions
+> **Context → Configuration → MCP**, and can set its dataset / bridges / actions
 > attachments to *disabled*. Because the MCP server is a proxy, the disabling
 > is enforced **at the endpoints above**, not in the proxy — `nodes/context`
 > and `domain/classes` omit the element, and `nodes/action` refuses. Hiding a
@@ -3182,6 +3353,7 @@ These agents do not query the triple store at runtime; they operate on the
 | `agent_owl_generator` | Build an OWL ontology from metadata + documents | `metadata.list_tables`, `metadata.preview_table`, `documents.read`, `ontology.write_owl` | REST + Spark SQL (samples) | `databricks-sql-connector` against UC tables, plus rdflib write |
 | `agent_auto_assignment` | Map ontology entities to Spark SQL queries | `tables.list`, `tables.sample`, `mapping.write` | REST + Spark SQL (samples) | Same as above; output stored as R2RML. Metric-view sources (`object_kind == "metric_view"`) drive metric-aware generation — measures are wrapped in `MEASURE()` and a `GROUP BY` over dimensions is emitted; a deterministic evaluator rejects `SELECT *`, unwrapped measures, or a missing `GROUP BY`. |
 | `agent_auto_icon_assign` | Pick emojis for entities | Inspects ontology + metadata | REST | None — generation only |
+| `agent_design_fixer` | Propose Sanity Checks Auto-fix plans | Read-only inspect tools + `submit_fix_plan` | REST | Python ontology object model (apply is separate, confirmed) |
 | `agent_ontology_assistant` | Conversational ontology editing | Dozens of tools mutating the in-session ontology | REST | Python ontology object model |
 | `agent_dtwin_chat` | Conversational graph querying | See §6 | REST + **GraphQL** + **SPARQL** | **Spark SQL** + **Cypher** (engine-side) |
 
@@ -3227,10 +3399,8 @@ based on the active triple-store backend's `query_dialect`.
 | Component | Input | Compiled to | Engine |
 |---|---|---|---|
 | `OWLRLReasoner` | OWL 2 RL fragment + facts | RDF graph operations (rdflib) | Python in-memory; results materialized to triple store via Spark SQL or GraphDB bulk insert |
-| `SWRLEngine` + `SWRLSQLTranslator` | SWRL rules | **SQL** | Databricks SQL Warehouse on the Delta view, and the Lakebase Postgres Graph DB engine. Future Cypher / Gremlin engines can plug in their own `SWRL*Translator`. |
-| `SPARQLRuleEngine` | SPARQL `CONSTRUCT` rules | **SPARQL** → Spark SQL | Same as SPARQL execution path |
-| `DecisionTableEngine` | Decision tables | **Spark SQL** | Databricks SQL Warehouse |
-| `AggregateRuleEngine` | Aggregate rules | **Spark SQL** | Databricks SQL Warehouse |
+| `ShaclRuleEngine` + `ShaclFlatSqlBackend` | Business rules (SHACL-AF) | **SQL** | Databricks SQL Warehouse on the Delta view, and the Lakebase Postgres Graph DB engine. Future Cypher / Gremlin engines can plug in their own flat-triple backend. |
+| `SPARQLRuleEngine` + `SparqlConstructCompiler` | Complex (SPARQL `CONSTRUCT`) rules | **SQL** on the flat triple table (rdflib algebra → Spark / Postgres SQL; fail-closed subset, already-known triples skipped) | Same engines as `ShaclRuleEngine`; a query outside the subset is refused on save and reported as a phase error at run time |
 
 ---
 
@@ -3336,6 +3506,6 @@ Wrappers in play: REST → (SPARQL → **Spark SQL** on Delta) and **Postgres SQ
 - GraphDB backend — `src/back/core/graphdb/GraphBackend.py`
 - Delta engine — `src/back/core/graphdb/delta/MaterializedStore.py`
 - GraphDB engine (Lakebase Postgres) — `src/back/core/graphdb/lakebase/{Base,FlatStore,SyncedTableManager}.py`
-- Reasoning — `src/back/core/reasoning/{OWLRLReasoner,SWRLSQLTranslator,SPARQLRuleEngine,DecisionTableEngine,AggregateRuleEngine}.py`
+- Reasoning — `src/back/core/reasoning/OWLRLReasoner.py`, `src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py`, `src/back/core/reasoning/rules/SPARQLRuleEngine.py`
 - MCP server — `src/mcp-server/server/app.py`, `src/mcp-server/mcp_server.py`
 - Graph Chat — `src/agents/agent_dtwin_chat/{engine,tools}.py`

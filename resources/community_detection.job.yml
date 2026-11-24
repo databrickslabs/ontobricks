@@ -1,0 +1,65 @@
+# Serverless job detecting knowledge-graph communities with label propagation.
+# Same script as the graph-analytics job (``--task communities``) so both
+# agree on what an edge is; separate job because each allows one run at a
+# time and a community run must not be rejected while metrics are computing.
+#
+# Reads the R2RML-mapped Delta snapshot (``…_data``) and writes five tables
+# the app reads back (``<out>``, ``_sizes``, ``_preview_nodes``,
+# ``_preview_edges``, ``_summary``). Triggered on demand by ``LakeflowRunner``;
+# no schedule. The app service principal needs CAN_MANAGE_RUN, granted by
+# ``scripts/bootstrap/app-permissions.sh``.
+
+resources:
+  jobs:
+    community_detection_job:
+      name: "${var.app_name}-community-detection"
+      description: "OntoBricks: knowledge-graph community detection (label propagation)"
+
+      email_notifications:
+        on_failure:
+          - "${workspace.current_user.userName}"
+
+      # The app polls a single run, and a second concurrent run would fight
+      # over the same output tables.
+      max_concurrent_runs: 1
+
+      environments:
+        - environment_key: default
+          spec:
+            client: "3"
+
+      tasks:
+        - task_key: detect_communities
+          environment_key: default
+          spark_python_task:
+            python_file: "${workspace.file_path}/src/jobs/graph_analytics_job.py"
+            parameters:
+              - "--task"
+              - "communities"
+              - "--source-table"
+              - "{{job.parameters.source_table}}"
+              - "--output-table"
+              - "{{job.parameters.output_table}}"
+              - "--exclude-predicates"
+              - "{{job.parameters.exclude_predicates}}"
+              - "--class-filter"
+              - "{{job.parameters.class_filter}}"
+              - "--lp-iterations"
+              - "{{job.parameters.lp_iterations}}"
+              - "--computed-at"
+              - "{{job.parameters.computed_at}}"
+
+      parameters:
+        - name: source_table
+          default: ""
+        - name: output_table
+          default: ""
+        - name: exclude_predicates
+          default: ""
+        - name: class_filter
+          default: ""
+        # Cap on rounds; two rounds update every node once.
+        - name: lp_iterations
+          default: "30"
+        - name: computed_at
+          default: ""

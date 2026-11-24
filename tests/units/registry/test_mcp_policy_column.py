@@ -38,8 +38,9 @@ def test_store_self_heals_the_column() -> None:
     catalog = CATALOG_PY.read_text()
     store = STORE_PY.read_text()
     assert "ADD COLUMN IF NOT EXISTS mcp_policy jsonb" in catalog
-    # Memoised, like every other lazy column guard.
-    assert "self._mcp_policy_column_ready = False" in store
+    # Memoised (process-wide, shared by every store instance), like every
+    # other lazy column guard.
+    assert "_mcp_policy_column_ready = _SharedStoreState(False)" in store
 
 
 def test_self_heal_runs_at_every_call_site_that_reads_the_column() -> None:

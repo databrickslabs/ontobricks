@@ -17,11 +17,16 @@ const NotificationCenter = {
         'info':    { icon: 'bi-info-circle-fill', color: '#0d6efd', label: 'Info' }
     },
 
-    add(message, type) {
+    /**
+     * @param {string} message - Plain text, escaped on render
+     * @param {string} type - 'success', 'error', 'warning', 'info'
+     * @param {boolean} isHtml - Trusted markup whose dynamic parts the caller escaped
+     */
+    add(message, type, isHtml = false) {
         const cfg = this.TYPE_CONFIG[type] || this.TYPE_CONFIG.info;
         this.messages.unshift({
             id: Date.now() + Math.random(),
-            message,
+            html: isHtml ? String(message) : escapeHtml(message),
             type,
             icon: cfg.icon,
             color: cfg.color,
@@ -48,46 +53,18 @@ const NotificationCenter = {
     },
 
     toggle(event) {
-        if (event) { event.preventDefault(); event.stopPropagation(); }
-        const dropdown = document.getElementById('notifCenterDropdown');
-        const toggle = document.getElementById('notifCenterToggle');
-        if (!dropdown) return;
-        const isOpen = dropdown.classList.contains('show');
-        // Close task-tracker if open
-        const taskDd = document.getElementById('taskTrackerDropdown');
-        if (taskDd) taskDd.classList.remove('show');
-
-        if (isOpen) {
-            dropdown.classList.remove('show');
-        } else {
-            this._positionDropdown(dropdown, toggle);
-            dropdown.classList.add('show');
-            this.markAllRead();
+        if (window.ActivityCenter) {
+            ActivityCenter.toggle(event);
+            return;
         }
-    },
-
-    _positionDropdown(dropdown, toggle) {
-        if (!toggle) return;
-        const rect = toggle.getBoundingClientRect();
-        dropdown.style.position = 'fixed';
-        dropdown.style.top = (rect.bottom + 4) + 'px';
-        dropdown.style.right = (window.innerWidth - rect.right) + 'px';
-        dropdown.style.left = 'auto';
     },
 
     _updateBadge() {
-        const badge = document.getElementById('notifCenterBadge');
-        if (!badge) return;
-        if (this.unreadCount > 0) {
-            badge.textContent = this.unreadCount > 99 ? '99+' : this.unreadCount;
-            badge.style.display = '';
-        } else {
-            badge.style.display = 'none';
-        }
+        if (window.ActivityCenter) ActivityCenter.updateBadge();
     },
 
     _flashIcon() {
-        const icon = document.getElementById('notifCenterIcon');
+        const icon = document.getElementById('activityCenterIcon');
         if (!icon) return;
         icon.classList.add('notif-flash');
         setTimeout(() => icon.classList.remove('notif-flash'), 600);
@@ -101,7 +78,7 @@ const NotificationCenter = {
         if (mins < 60) return mins + 'm ago';
         const hrs = Math.floor(mins / 60);
         if (hrs < 24) return hrs + 'h ago';
-        return date.toLocaleDateString();
+        return formatDateTime(date);
     },
 
     _renderList() {
@@ -119,7 +96,7 @@ const NotificationCenter = {
         list.innerHTML = this.messages.map(m =>
             '<div class="notif-item d-flex align-items-start px-3 py-2 border-bottom">' +
             '<i class="bi ' + m.icon + ' me-2 mt-1" style="color:' + m.color + ';"></i>' +
-            '<div class="flex-grow-1 small" style="word-break:break-word;">' + m.message +
+            '<div class="flex-grow-1 small" style="word-break:break-word;">' + m.html +
             '<div class="text-muted" style="font-size:0.7rem;">' + this._timeAgo(m.time) + '</div>' +
             '</div></div>'
         ).join('');
@@ -129,11 +106,16 @@ const NotificationCenter = {
 /**
  * Show a notification message (pushes into the Notification Center).
  * Errors also display a temporary floating toast so they are immediately visible.
- * @param {string} message - The message to display
+ * @param {string} message - Plain text to display (HTML-escaped)
  * @param {string} type - 'success', 'error', 'warning', 'info'
  * @param {number} duration - For errors: toast display time in ms (default 6000)
  */
 function showNotification(message, type = 'info', duration) {
+    // Bootstrap/legacy callers pass 'danger'; treat it as 'error' so the
+    // floating toast and Notification Center both use the error styling
+    // instead of silently falling through to info (no toast).
+    if (type === 'danger') type = 'error';
+
     var isProgress = typeof message === 'string' && /\.\.\.\s*$/.test(message);
     if (!isProgress) {
         NotificationCenter.add(message, type);
@@ -160,8 +142,8 @@ function _showToast(message, cssClass, iconClass, closeWhite, duration) {
     var toast = document.createElement('div');
     toast.className = cssClass + ' fade show d-flex align-items-start';
     toast.innerHTML =
-        '<i class="bi ' + iconClass + ' me-2 mt-1"></i>' +
-        '<div class="flex-grow-1">' + message + '</div>' +
+        '<i class="bi ' + iconClass + ' me-2"></i>' +
+        '<div class="flex-grow-1">' + escapeHtml(message) + '</div>' +
         '<button type="button" class="btn-close' + (closeWhite ? ' btn-close-white' : '') + ' ms-2" aria-label="Close"></button>';
     toast.querySelector('.btn-close').addEventListener('click', function() {
         toast.classList.remove('show');
@@ -174,10 +156,56 @@ function _showToast(message, cssClass, iconClass, closeWhite, duration) {
     }, duration);
 }
 
-// Close notification dropdown when clicking outside
+const ActivityCenter = {
+    toggle(event) {
+        if (event) { event.preventDefault(); event.stopPropagation(); }
+        const dropdown = document.getElementById('activityCenterDropdown');
+        const toggle = document.getElementById('activityCenterToggle');
+        if (!dropdown) return;
+        const isOpen = dropdown.classList.contains('show');
+
+        document.querySelectorAll('.dropdown-menu.show').forEach((menu) => {
+            if (menu !== dropdown) menu.classList.remove('show');
+        });
+
+        if (isOpen) {
+            dropdown.classList.remove('show');
+            return;
+        }
+        if (toggle) {
+            const rect = toggle.getBoundingClientRect();
+            dropdown.style.position = 'fixed';
+            dropdown.style.top = (rect.bottom + 6) + 'px';
+            dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+            dropdown.style.left = 'auto';
+        }
+        dropdown.classList.add('show');
+        NotificationCenter.markAllRead();
+        if (typeof window.refreshTasks === 'function') window.refreshTasks();
+    },
+
+    updateBadge() {
+        const badge = document.getElementById('activityCenterBadge');
+        if (!badge) return;
+        const tasks = typeof window.getActiveTaskCount === 'function'
+            ? window.getActiveTaskCount() : 0;
+        const unread = NotificationCenter.unreadCount || 0;
+        const total = tasks + unread;
+        if (total > 0) {
+            badge.textContent = total > 99 ? '99+' : String(total);
+            badge.style.display = 'inline-flex';
+            const running = typeof window.hasRunningTask === 'function' && window.hasRunningTask();
+            badge.classList.toggle('pulse-animation', !!running);
+        } else {
+            badge.style.display = 'none';
+            badge.classList.remove('pulse-animation');
+        }
+    }
+};
+
 document.addEventListener('click', function(e) {
-    const dropdown = document.getElementById('notifCenterDropdown');
-    const toggle = document.getElementById('notifCenterToggle');
+    const dropdown = document.getElementById('activityCenterDropdown');
+    const toggle = document.getElementById('activityCenterToggle');
     if (dropdown && dropdown.classList.contains('show') &&
         !dropdown.contains(e.target) && toggle && !toggle.contains(e.target)) {
         dropdown.classList.remove('show');
@@ -342,6 +370,69 @@ function renderMarkdown(text) {
 }
 
 
+// ========== DATE / TIME FORMATTING ==========
+
+const _DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const _NAIVE_ISO_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?$/;
+
+function _pad2(n) {
+    return String(n).padStart(2, '0');
+}
+
+/**
+ * Parse a timestamp (ISO-8601 string, Date or epoch ms) into a Date.
+ * Naive ISO strings (no offset) are read as UTC, the convention used by every
+ * backend timestamp. Returns null when the value cannot be parsed.
+ */
+function _parseTimestamp(value) {
+    let d;
+    if (value instanceof Date) {
+        d = value;
+    } else if (typeof value === 'number') {
+        d = new Date(value);
+    } else if (typeof value === 'string') {
+        // Python isoformat() emits microseconds; keep milliseconds (Safari rejects more digits).
+        let s = value.trim().replace(/(\.\d{3})\d+/, '$1');
+        if (_NAIVE_ISO_RE.test(s)) s = s.replace(' ', 'T') + 'Z';
+        d = new Date(s);
+    } else {
+        return null;
+    }
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Display a timestamp as "YYYY/MM/DD HH:MM:SS" in the browser's local time zone.
+ * A bare date ("YYYY-MM-DD") is shown as "YYYY/MM/DD". Returns '' for empty
+ * input and the raw value when it cannot be parsed.
+ * @param {*} value - ISO-8601 string, Date or epoch ms
+ * @returns {string}
+ */
+function formatDateTime(value) {
+    if (value === null || value === undefined || value === '') return '';
+    if (typeof value === 'string' && _DATE_ONLY_RE.test(value.trim())) {
+        return value.trim().replace(/-/g, '/');
+    }
+    const d = _parseTimestamp(value);
+    if (!d) return String(value);
+    return formatDateOnly(d) + ' ' + _pad2(d.getHours()) + ':' + _pad2(d.getMinutes()) + ':' + _pad2(d.getSeconds());
+}
+
+/**
+ * Display a date as "YYYY/MM/DD" (no time), in the browser's local time zone.
+ * @param {*} value - ISO-8601 string, Date or epoch ms
+ * @returns {string}
+ */
+function formatDateOnly(value) {
+    if (value === null || value === undefined || value === '') return '';
+    if (typeof value === 'string' && _DATE_ONLY_RE.test(value.trim())) {
+        return value.trim().replace(/-/g, '/');
+    }
+    const d = _parseTimestamp(value);
+    if (!d) return String(value);
+    return d.getFullYear() + '/' + _pad2(d.getMonth() + 1) + '/' + _pad2(d.getDate());
+}
+
 // ========== STRING UTILITIES ==========
 
 /**
@@ -420,7 +511,9 @@ function showStackedModal(modalEl) {
  * Show a confirmation dialog (replaces native confirm())
  * @param {Object} options - Dialog options
  * @param {string} options.title - Dialog title (default: 'Confirm')
- * @param {string} options.message - Message to display
+ * @param {string} options.message - Plain-text message (HTML-escaped)
+ * @param {string} options.messageHtml - Trusted markup used instead of `message`;
+ *   the caller must escape every dynamic value with escapeHtml()
  * @param {string} options.confirmText - Confirm button text (default: 'Yes')
  * @param {string} options.cancelText - Cancel button text (default: 'Cancel')
  * @param {string} options.confirmClass - Bootstrap button class for confirm (default: 'btn-primary')
@@ -438,6 +531,7 @@ function showConfirmDialog(options = {}) {
         const {
             title = 'Confirm',
             message = 'Are you sure?',
+            messageHtml = '',
             confirmText = 'Yes',
             cancelText = 'Cancel',
             confirmClass = 'btn-primary',
@@ -472,7 +566,7 @@ function showConfirmDialog(options = {}) {
                             <button type="button" class="btn-close ${closeClass}" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <p class="mb-0">${message}</p>
+                            <p class="mb-0">${messageHtml || escapeHtml(message)}</p>
                             ${checkboxBlock}
                             ${detailBlock}
                         </div>
@@ -544,7 +638,7 @@ function showInfoDialog(options = {}) {
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <p class="mb-0">${message}</p>
+                            <p class="mb-0">${escapeHtml(message)}</p>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn ${okClass}" id="${modalId}_ok">
@@ -579,7 +673,7 @@ function showInfoDialog(options = {}) {
 function showDeleteConfirm(itemName, itemType = 'item') {
     return showConfirmDialog({
         title: 'Confirm Delete',
-        message: `Are you sure you want to delete ${itemType} "<strong>${itemName}</strong>"? This action cannot be undone.`,
+        messageHtml: `Are you sure you want to delete ${escapeHtml(itemType)} "<strong>${escapeHtml(itemName)}</strong>"? This action cannot be undone.`,
         confirmText: 'Delete',
         cancelText: 'Cancel',
         confirmClass: 'btn-danger',
@@ -832,7 +926,7 @@ function enforceDomainNameCamelCase(value) {
 }
 
 /**
- * Domain names must be CamelCase alphanumeric (no spaces or special characters).
+ * Context names must be CamelCase alphanumeric (no spaces or special characters).
  */
 function isValidDomainName(name) {
     return /^[A-Z][a-zA-Z0-9]*$/.test(String(name || '').trim());
@@ -851,14 +945,14 @@ function showNewDomainDialog() {
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">
-                                <i class="bi bi-file-earmark-plus me-2"></i>New Domain
+                                <i class="bi bi-file-earmark-plus me-2"></i>New Context
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <p class="text-muted small mb-3">Enter a name for your new domain. You can add more details later.</p>
                             <div class="mb-3">
-                                <label for="${modalId}_name" class="form-label fw-semibold">Domain name <span class="text-danger">*</span></label>
+                                <label for="${modalId}_name" class="form-label fw-semibold">Context name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control new-domain-field" id="${modalId}_name"
                                        placeholder="e.g. PatientCare, SupplyChain…" autocomplete="off" maxlength="64"
                                        pattern="[A-Z][A-Za-z0-9]*" inputmode="text" spellcheck="false">
@@ -868,12 +962,12 @@ function showNewDomainDialog() {
                             <div class="mb-3">
                                 <label for="${modalId}_desc" class="form-label fw-semibold">Description <span class="text-muted fw-normal">(optional)</span></label>
                                 <textarea class="form-control new-domain-field" id="${modalId}_desc" rows="2"
-                                          placeholder="Short description of this domain…" maxlength="256"></textarea>
+                                          placeholder="Short description of this context…" maxlength="256"></textarea>
                             </div>
                             <div class="alert alert-light border small py-2 mb-3">
                                 <i class="bi bi-hdd-network me-1"></i>
                                 This domain uses the <strong>Lakehouse</strong> graph backend by default. You can
-                                change it anytime in <strong>Domain → General</strong>:
+                                change it anytime in <strong>Configuration</strong>:
                                 <ul class="mb-0 mt-1 ps-3">
                                     <li><strong>Lakehouse</strong> — graph stored as Delta tables in Unity Catalog (default).</li>
                                     <li><strong>Lakebase</strong> — graph stored in a managed Postgres instance.</li>
@@ -901,7 +995,7 @@ function showNewDomainDialog() {
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="${modalId}_cancel">Cancel</button>
                             <button type="button" class="btn btn-primary" id="${modalId}_confirm">
-                                <i class="bi bi-check2 me-1"></i>Create Domain
+                                <i class="bi bi-check2 me-1"></i>Create Context
                             </button>
                         </div>
                     </div>
@@ -980,6 +1074,7 @@ function showNewDomainDialog() {
 // Make all utility functions globally available
 window.showNotification = showNotification;
 window.NotificationCenter = NotificationCenter;
+window.ActivityCenter = ActivityCenter;
 window.DocumentPreview = DocumentPreview;
 window.showConfirmDialog = showConfirmDialog;
 window.showInfoDialog = showInfoDialog;
@@ -995,3 +1090,5 @@ window.fetchOnce = fetchOnce;
 window.fetchOnceInvalidate = fetchOnceInvalidate;
 window.fetchCached = fetchCached;
 window.fetchCachedInvalidate = fetchCachedInvalidate;
+window.formatDateTime = formatDateTime;
+window.formatDateOnly = formatDateOnly;

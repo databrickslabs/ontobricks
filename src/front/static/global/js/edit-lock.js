@@ -147,7 +147,7 @@
             '<i class="bi bi-lock-fill me-1"></i>' +
             'This version is being edited by <strong>' +
             escapeHtml(holderLabel(data)) +
-            '</strong> — you have read-only access until they close the domain.';
+            '</strong> — you have read-only access until they close the context.';
         banner.appendChild(msg);
 
         var actions = document.createElement('span');
@@ -200,10 +200,8 @@
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.id = 'editLockResumeBtn';
-        btn.className = 'ob-subnav-resume-btn';
-        btn.innerHTML =
-            '<i class="bi bi-arrow-clockwise"></i>' +
-            '<span class="ob-subnav-label">Resume editing</span>';
+        btn.className = 'ob-subnav-action ob-subnav-resume-btn';
+        btn.innerHTML = '<span class="ob-subnav-label">Resume</span>';
         btn.setAttribute('aria-label', expiredTooltipText());
         btn.addEventListener('click', onResumeEditingClick);
         saveBtn.parentNode.insertBefore(btn, saveBtn);

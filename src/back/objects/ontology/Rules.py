@@ -1,4 +1,4 @@
-"""SWRL/SHACL/constraint validation extracted from :class:`Ontology`.
+"""IF-THEN/SHACL/constraint validation extracted from :class:`Ontology`.
 
 Fowler Extract Class. ``Ontology`` keeps one-line delegators.
 """
@@ -8,19 +8,22 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Set
 
-from back.core.reasoning.rules.DecisionTableEngine import ASSIGN_CLASS
 from back.core.w3c.shacl.constants import QUALITY_CATEGORIES
 
 class Rules:
-    """Validate SWRL, SPARQL, decision-table, aggregate, and SHACL shapes."""
+    """Validate IF-THEN, SPARQL, and SHACL shapes."""
 
-    _SWRL_ATOM_RE = re.compile(r"(?:(\w+):)?([A-Za-z_]\w*)\s*\(([^)]*)\)")
+    _IF_THEN_ATOM_RE = re.compile(r"(?:(\w+):)?([A-Za-z_]\w*)\s*\(([^)]*)\)")
 
-    _SWRL_BUILTIN_PREFIXES = frozenset({"swrlb", "xsd", "rdf", "rdfs", "owl", "sqwrl"})
+    # Namespaces never checked against the ontology. ``swrlb`` is the builtin
+    # prefix of rules saved before the rename (``builtin`` is canonical now).
+    _IF_THEN_BUILTIN_PREFIXES = frozenset(
+        {"builtin", "swrlb", "xsd", "rdf", "rdfs", "owl", "sqwrl"}
+    )
 
     @staticmethod
-    def validate_swrl_rule(rule: Dict[str, Any]) -> List[str]:
-        """Validate a SWRL rule dict, return list of error strings (empty = valid)."""
+    def validate_if_then_rule(rule: Dict[str, Any]) -> List[str]:
+        """Validate an IF-THEN rule dict, return list of error strings (empty = valid)."""
         errors: List[str] = []
         if not rule.get("name"):
             errors.append("Rule name is required")
@@ -31,23 +34,23 @@ class Rules:
         return errors
 
     @staticmethod
-    def swrl_reference_errors(
+    def if_then_reference_errors(
         rule: Dict[str, Any],
         class_names: Set[str],
         property_names: Set[str],
     ) -> List[str]:
-        """Return errors for SWRL atoms referencing terms absent from the ontology.
+        """Return errors for IF-THEN atoms referencing terms absent from the ontology.
 
         ``class_names`` / ``property_names`` are sets of lowercased local names.
         EVERY class and property atom — in both the antecedent AND the
         consequent — must already exist in the ontology. Inventing a new
         consequent class (e.g. a "derived subtype") is NOT allowed: a rule may
         only classify an instance into an existing ontology class. Namespaced
-        builtins (``swrlb:``, ``xsd:``…) are ignored.
+        builtins (``builtin:``, ``xsd:``…) are ignored.
         """
 
         def _atoms(text: str):
-            for m in Rules._SWRL_ATOM_RE.finditer(text or ""):
+            for m in Rules._IF_THEN_ATOM_RE.finditer(text or ""):
                 prefix = (m.group(1) or "").lower()
                 name = m.group(2)
                 args = [a.strip() for a in m.group(3).split(",") if a.strip()]
@@ -85,13 +88,13 @@ class Rules:
             )
         return errors
 
-    # -- Entity business rules (SWRL rules referenced from a class) ---------
+    # -- Entity business rules (IF-THEN rules referenced from a class) ---------
 
     @staticmethod
-    def _swrl_class_atoms(rule: Dict[str, Any]):
+    def _if_then_class_atoms(rule: Dict[str, Any]):
         """Yield ``(name, variable)`` for every unprefixed unary atom of *rule*."""
         for part in ("antecedent", "consequent"):
-            for m in Rules._SWRL_ATOM_RE.finditer(rule.get(part, "") or ""):
+            for m in Rules._IF_THEN_ATOM_RE.finditer(rule.get(part, "") or ""):
                 if m.group(1):
                     continue
                 args = [a.strip() for a in m.group(3).split(",") if a.strip()]
@@ -99,9 +102,9 @@ class Rules:
                     yield m.group(2), args[0]
 
     @staticmethod
-    def swrl_rule_classes(rule: Dict[str, Any]) -> Set[str]:
-        """Lowercased local names of the classes a SWRL rule references."""
-        return {name.lower() for name, _ in Rules._swrl_class_atoms(rule)}
+    def if_then_rule_classes(rule: Dict[str, Any]) -> Set[str]:
+        """Lowercased local names of the classes an IF-THEN rule references."""
+        return {name.lower() for name, _ in Rules._if_then_class_atoms(rule)}
 
     @staticmethod
     def class_lineage(classes: List[Dict[str, Any]], class_name: str) -> List[str]:
@@ -113,25 +116,25 @@ class Rules:
     @staticmethod
     def rules_for_class(
         class_name: str,
-        swrl_rules: List[Dict[str, Any]],
+        if_then_rules: List[Dict[str, Any]],
         classes: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """SWRL rules whose class atoms cite *class_name* or one of its ancestors."""
+        """IF-THEN rules whose class atoms cite *class_name* or one of its ancestors."""
         lineage = {n.lower() for n in Rules.class_lineage(classes, class_name)}
         return [
             r
-            for r in swrl_rules or []
-            if isinstance(r, dict) and Rules.swrl_rule_classes(r) & lineage
+            for r in if_then_rules or []
+            if isinstance(r, dict) and Rules.if_then_rule_classes(r) & lineage
         ]
 
     @staticmethod
-    def swrl_focus_variables(
+    def if_then_focus_variables(
         rule: Dict[str, Any], class_names: List[str]
     ) -> List[str]:
         """Variables typed by one of *class_names* in *rule*, in atom order."""
         wanted = {n.lower() for n in class_names}
         out: List[str] = []
-        for name, var in Rules._swrl_class_atoms(rule):
+        for name, var in Rules._if_then_class_atoms(rule):
             if name.lower() in wanted and var.startswith("?") and var not in out:
                 out.append(var)
         return out
@@ -179,62 +182,10 @@ class Rules:
             return False, ""
         if ":" in t and not t.lower().startswith("http"):
             prefix, local = t.split(":", 1)
-            if prefix.lower() in Rules._SWRL_BUILTIN_PREFIXES:
+            if prefix.lower() in Rules._IF_THEN_BUILTIN_PREFIXES:
                 return False, ""
             return True, local
         return True, t
-
-    @staticmethod
-    def decision_table_reference_errors(
-        rule: Dict[str, Any], class_names: Set[str], property_names: Set[str]
-    ) -> List[str]:
-        """Flag a decision table referencing unknown classes/properties.
-
-        Target class, every input-column property, the output-column
-        property and any class assigned by an ``assign_class`` output must
-        already exist in the ontology.
-        """
-
-        errors: List[str] = []
-        target = rule.get("target_class", "")
-        if target and target.lower() not in class_names:
-            errors.append(f"target class '{target}' does not exist in the ontology")
-        for col in rule.get("input_columns", []) or []:
-            prop = (col or {}).get("property", "")
-            if prop and prop.lower() not in property_names:
-                errors.append(f"input column references unknown property '{prop}'")
-        out = rule.get("output_column") or {}
-        out_prop = out.get("property", "")
-        if out_prop and out_prop.lower() not in property_names:
-            errors.append(f"output column references unknown property '{out_prop}'")
-        if out.get("action") == ASSIGN_CLASS:
-            assigned = [out.get("value", "")] + [
-                r.get("action_value", "") for r in rule.get("rows", []) or []
-            ]
-            for cls in filter(None, assigned):
-                if cls.lower() not in class_names:
-                    errors.append(f"output assigns unknown class '{cls}'")
-        return errors
-
-    @staticmethod
-    def aggregate_reference_errors(
-        rule: Dict[str, Any], class_names: Set[str], property_names: Set[str]
-    ) -> List[str]:
-        """Flag an aggregate rule referencing unknown classes/properties.
-
-        Both ``target_class`` and ``result_class`` must already exist, as must
-        the grouped/aggregated properties.
-        """
-        errors: List[str] = []
-        for cls_field in ("target_class", "result_class"):
-            cls = rule.get(cls_field, "")
-            if cls and cls.lower() not in class_names:
-                errors.append(f"{cls_field} '{cls}' does not exist in the ontology")
-        for field in ("group_by_property", "aggregate_property"):
-            prop = rule.get(field, "")
-            if prop and prop.lower() not in property_names:
-                errors.append(f"{field} references unknown property '{prop}'")
-        return errors
 
     @staticmethod
     def sparql_reference_errors(
@@ -275,19 +226,11 @@ class Rules:
         class_names: Set[str],
         property_names: Set[str],
     ) -> List[str]:
-        """Dispatch existence validation for any of the four rule-list types."""
-        if key == "swrl_rules":
-            return Rules.swrl_reference_errors(rule, class_names, property_names)
-        if key == "decision_tables":
-            return Rules.decision_table_reference_errors(
-                rule, class_names, property_names
-            )
+        """Dispatch existence validation for the IF-THEN / SPARQL rule-list types."""
+        if key == "if_then_rules":
+            return Rules.if_then_reference_errors(rule, class_names, property_names)
         if key == "sparql_rules":
             return Rules.sparql_reference_errors(rule, class_names, property_names)
-        if key == "aggregate_rules":
-            return Rules.aggregate_reference_errors(
-                rule, class_names, property_names
-            )
         return []
 
     @staticmethod

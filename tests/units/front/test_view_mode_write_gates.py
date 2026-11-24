@@ -16,7 +16,6 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PERMISSIONS_CSS = REPO_ROOT / "src/front/static/global/css/permissions.css"
 PERMISSIONS_JS = REPO_ROOT / "src/front/static/global/js/permissions.js"
-INFO_HTML = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_information.html"
 DESIGN_HTML = REPO_ROOT / "src/front/templates/partials/mapping/_mapping_design.html"
 INFO_JS = REPO_ROOT / "src/front/static/global/js/mapping-information.js"
 SYNC_JS = REPO_ROOT / "src/front/static/query/js/query-sync.js"
@@ -64,14 +63,6 @@ def _gated(css: str, selector: str) -> bool:
 
 
 class TestCssGates:
-    def test_unmap_all_information_is_disabled_not_hidden(self):
-        css = _css()
-        assert _gated(css, "#resetMappingsBtn")
-        # Must not be under the display:none ontology-edit-btn hide rule only.
-        html = INFO_HTML.read_text(encoding="utf-8")
-        assert 'id="resetMappingsBtn"' in html
-        assert "ontology-edit-btn" not in html.split('id="resetMappingsBtn"')[0][-80:]
-
     def test_unmap_all_designer_is_disabled(self):
         assert _gated(_css(), "#resetMappingsDesignBtn")
         assert 'id="resetMappingsDesignBtn"' in DESIGN_HTML.read_text(encoding="utf-8")
@@ -90,6 +81,19 @@ class TestCssGates:
     def test_cohort_materialise_is_disabled(self):
         assert _gated(_css(), "#cohortMaterializeBtn")
         assert _gated(_css(), "#cohortMaterializeNowBtn")
+
+    def test_intelligence_write_ctas_are_disabled(self):
+        """Patterns New, Communities Clear/Detect/Materialize, Scenarios New."""
+        css = _css()
+        for selector in (
+            "#patDetectBtn",
+            "#patDetectRunBtn",
+            "#commClearBtn",
+            "#commDetectBtn",
+            "#commMaterializeBtn",
+            "#simNewBtn",
+        ):
+            assert _gated(css, selector), selector
 
     def test_reasoning_materialise_is_status_open_but_view_mode_disabled(self):
         css = _css()
@@ -173,6 +177,17 @@ class TestJsGuards:
         js = COHORT_JS.read_text(encoding="utf-8")
         assert "canEditOntology" in js.split("openMaterializeModal()")[1][:400]
         assert "canEditOntology" in js.split("async materialize()")[1][:400]
+
+    def test_simulation_new_scenario_refuses_when_cannot_edit(self):
+        js = (
+            REPO_ROOT / "src/front/static/intelligence/js/simulation.js"
+        ).read_text(encoding="utf-8")
+        assert "_canEdit" in js
+        assert "_applyEditGate" in js
+        assert "canEditOntology" in js
+        body = js.split("newScenario({", 1)[1][:500]
+        assert "_canEdit" in body
+        assert "read-only" in body
 
     def test_reasoning_materialise_refuses_when_cannot_refresh_graph(self):
         js = REASONING_JS.read_text(encoding="utf-8")

@@ -57,6 +57,7 @@ from agents.tools.sql import (
     SQL_TOOL_HANDLERS,
 )
 from agents.tracing import trace_agent
+from agents.llm_utils import llm_failure_message
 
 logger = get_logger(__name__)
 
@@ -560,7 +561,7 @@ def run_entity_generator(
                     "EntityGenerator: endpoint refused tools — cannot produce a mapping"
                 )
                 return result
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             result.iterations = current_iteration
             result.usage = total_usage
             logger.error(
@@ -576,7 +577,7 @@ def run_entity_generator(
             logger.error("EntityGenerator: timeout at iteration %d", current_iteration)
             return result
         except requests.exceptions.RequestException as exc:
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             result.iterations = current_iteration
             result.usage = total_usage
             logger.error(

@@ -1049,7 +1049,7 @@ class TestFailedCheckReporting:
         result = DigitalTwin._failed_check_result(
             "Monthly fee between 1 and 10",
             "conformance",
-            "dt:fees",
+            "if_then:fees",
             "SELECT 1",
             Exception("[CAST_INVALID_INPUT] The value 'free' cannot be cast to DOUBLE"),
         )
@@ -1059,7 +1059,7 @@ class TestFailedCheckReporting:
 
     def test_the_failing_sql_is_kept_for_inspection(self):
         result = DigitalTwin._failed_check_result(
-            "Rule", "conformance", "dt:1", "SELECT DISTINCT t0.subject", Exception("x")
+            "Rule", "conformance", "if_then:1", "SELECT DISTINCT t0.subject", Exception("x")
         )
         assert result["sql"] == "SELECT DISTINCT t0.subject"
 

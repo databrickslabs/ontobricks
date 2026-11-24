@@ -71,18 +71,30 @@ async def save_mapping(
 
 @router.post("/reset")
 async def reset_mapping_endpoint(
+    keep_exclusions: bool = False,
     session_mgr: SessionManager = Depends(get_session_manager),
 ):
-    """Reset mapping configuration."""
+    """Reset mapping configuration.
+
+    Query:
+        keep_exclusions: when ``true`` the user's exclusions (hidden entities and
+            relationships, excluded attributes) survive; only the mappings are
+            deleted. Defaults to ``false`` (wipe everything).
+    """
     domain = get_domain(session_mgr)
-    Mapping(domain).reset_mapping()
+    Mapping(domain).reset_mapping(keep_exclusions=keep_exclusions)
     return {"success": True, "message": "Mapping reset"}
 
 
 @router.post("/clear")
-async def clear_mapping(session_mgr: SessionManager = Depends(get_session_manager)):
+async def clear_mapping(
+    keep_exclusions: bool = False,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
     """Clear all mapping data from session (delegates to reset)."""
-    return await reset_mapping_endpoint(session_mgr)
+    return await reset_mapping_endpoint(
+        keep_exclusions=keep_exclusions, session_mgr=session_mgr
+    )
 
 
 # ===========================================
@@ -649,10 +661,10 @@ async def start_auto_assign(
             data.get("schema_context") or {}
         )
     except ValidationError as exc:
+        # Surface the actionable reason (e.g. no UC metadata loaded) — do not
+        # wrap it in a vague "schema context could not be resolved" message.
         logger.warning("Auto-assign: %s", exc.message)
-        raise ValidationError(
-            "Schema context could not be resolved", detail=exc.message
-        ) from exc
+        raise
     logger.info(
         "Auto-assign: schema_context — %d table(s)",
         len(schema_context.get("tables", [])),
@@ -766,12 +778,7 @@ async def single_auto_assign(
     if not warehouse_id:
         raise ValidationError("No SQL warehouse configured")
 
-    try:
-        schema_context = Mapping(domain).resolve_auto_assign_schema_context(None)
-    except ValidationError as exc:
-        raise ValidationError(
-            "Schema context could not be resolved", detail=exc.message
-        ) from exc
+    schema_context = Mapping(domain).resolve_auto_assign_schema_context(None)
 
     client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
 

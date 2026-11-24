@@ -34,14 +34,50 @@ def _fix(term):
     return term
 
 
-def serialize_turtle(graph: Graph) -> str:
-    """Serialize *graph* as Turtle, escaping invalid IRIs instead of failing."""
+def _safe_graph(graph: Graph) -> Graph:
+    """Return *graph*, or a copy with IRI-illegal characters percent-encoded."""
     if not any(_fix(t) is not t for triple in graph for t in triple):
-        return graph.serialize(format="turtle")
+        return graph
     safe = Graph()
     for prefix, ns in graph.namespaces():
         safe.bind(prefix, URIRef(escape_iri(str(ns))), override=True, replace=True)
     for s, p, o in graph:
         safe.add((_fix(s), _fix(p), _fix(o)))
-    logger.warning("Percent-encoded invalid IRIs (e.g. spaces) for Turtle output")
-    return safe.serialize(format="turtle")
+    return safe
+
+
+def serialize_graph(graph: Graph, fmt: str = "turtle") -> str:
+    """Serialize *graph* as Turtle or JSON-LD, escaping invalid IRIs.
+
+    Args:
+        graph: RDFLib graph to serialize.
+        fmt: ``turtle`` (default) or ``json-ld``.
+
+    Returns:
+        Serialized RDF as a string.
+
+    Raises:
+        ValidationError: If *fmt* is not supported.
+    """
+    if fmt not in ("turtle", "json-ld"):
+        from back.core.errors.ValidationError import ValidationError
+
+        raise ValidationError(
+            f"Unsupported RDF serialization format: {fmt}",
+            detail="Supported formats: turtle, json-ld",
+        )
+
+    source = _safe_graph(graph)
+    if source is not graph:
+        logger.warning("Percent-encoded invalid IRIs (e.g. spaces) for %s output", fmt)
+
+    if fmt == "turtle":
+        return source.serialize(format="turtle")
+
+    context = {prefix: str(ns) for prefix, ns in source.namespaces() if prefix}
+    return source.serialize(format="json-ld", context=context, indent=2)
+
+
+def serialize_turtle(graph: Graph) -> str:
+    """Serialize *graph* as Turtle, escaping invalid IRIs instead of failing."""
+    return serialize_graph(graph, "turtle")

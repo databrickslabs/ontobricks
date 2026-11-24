@@ -56,6 +56,10 @@ class GraphBackend(
     """
 
     supports_materialized_inference_purge = False
+    # Per-category breakdown of materialised inferred triples
+    # (back.core.graphdb.inferred_breakdown). False -> the route reports
+    # ``supported: false`` instead of calling the store.
+    supports_inferred_breakdown = False
     supports_adjacency = False
     supports_entity_search = False
     supports_props = False
@@ -155,7 +159,7 @@ class GraphBackend(
         return table_name
 
     def sql_table_reference(self, graph_name: str) -> str:
-        """Stable identifier for translators (SWRL, SPARQL, aggregate/DT SQL)."""
+        """Stable identifier for translators (IF-THEN, SPARQL, aggregate/DT SQL)."""
         return self._sql_relation(graph_name)
 
     def sql_flavor(self) -> Optional[Literal["spark", "postgres"]]:
@@ -249,11 +253,13 @@ class GraphBackend(
     # ------------------------------------------------------------------
 
     def get_query_translator(self, table_name: str = "") -> Any:
-        """Return the appropriate SWRL/rule query translator for this backend.
+        """Return the appropriate rule query translator for this backend.
 
-        SQL-based backends should return an ``SWRLSQLTranslator``.
-        Cypher-based backends should return the matching Cypher translator.
+        SQL-based backends should return a ``ShaclFlatSqlBackend``.
+        Cypher-based backends should return the matching Cypher backend.
         """
-        from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
+        from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import (
+            ShaclFlatSqlBackend,
+        )
 
-        return SWRLSQLTranslator(dialect=self.sql_flavor() or SQL_DIALECT_SPARK)
+        return ShaclFlatSqlBackend(dialect=self.sql_flavor() or SQL_DIALECT_SPARK)

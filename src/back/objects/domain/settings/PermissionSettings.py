@@ -272,7 +272,7 @@ class PermissionSettings:
         if role not in _ss.ASSIGNABLE_ROLES:
             raise ValidationError('Role must be "viewer", "editor", or "builder"')
         if not domain_name:
-            raise ValidationError("Domain name is required")
+            raise ValidationError("Context name is required")
 
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
@@ -292,7 +292,7 @@ class PermissionSettings:
         )
         if not ok:
             raise InfrastructureError(
-                "Failed to add or update domain permission", detail=msg
+                "Failed to add or update context permission", detail=msg
             )
         return {"success": ok, "message": msg}
 
@@ -317,7 +317,7 @@ class PermissionSettings:
             principal,
         )
         if not ok:
-            raise InfrastructureError("Failed to remove domain permission", detail=msg)
+            raise InfrastructureError("Failed to remove context permission", detail=msg)
         return {"success": ok, "message": msg}
 
     @staticmethod

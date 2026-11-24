@@ -22,7 +22,7 @@ def assert_admin_can_create_domain(request: Request, domain: Any) -> None:
     user_role = getattr(request.state, "user_role", "") or ""
     if user_role == ROLE_ADMIN:
         return
-    raise AuthorizationError("Only administrators can create a domain")
+    raise AuthorizationError("Only administrators can create a context")
 
 
 def filter_visible_domains(

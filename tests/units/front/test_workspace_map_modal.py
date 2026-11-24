@@ -20,9 +20,8 @@ COMPONENTS_CSS = REPO_ROOT / "src/front/static/global/css/components.css"
 _COLUMN_ICONS = {
     "domain": "bi-box",
     "ontology": "bi-bezier2",
-    "assignment": "bi-shuffle",
     "digitaltwin": "bi-radar",
-    "simulation": "bi-sliders2-vertical",
+    "intelligence": "bi-sliders2-vertical",
 }
 
 
@@ -45,17 +44,17 @@ def test_base_includes_workspace_map_modal():
     assert 'partials/layout/_workspace_map_modal.html' in _read(BASE_HTML)
 
 
-def test_modal_root_and_five_columns():
+def test_modal_root_and_four_columns():
     html = _render_modal()
     assert 'id="workspaceMapModal"' in html
     assert "modal-dialog-centered modal-xl" in html
     assert re.findall(r'data-workspace-map-col="([^"]+)"', html) == [
         "domain",
         "ontology",
-        "assignment",
         "digitaltwin",
-        "simulation",
+        "intelligence",
     ]
+    assert "assignment" not in re.findall(r'data-workspace-map-col="([^"]+)"', html)
 
 
 def test_column_icons_match_menu_config():
@@ -69,9 +68,9 @@ def test_column_icons_match_menu_config():
 
 def test_simulation_workbench_is_not_on_the_map():
     html = _render_modal()
-    sim_column = html.split('data-workspace-map-col="simulation"', 1)[1]
-    assert "/simulation/?section=workbench" not in sim_column
-    assert "/simulation/?section=scenarios" in sim_column
+    sim_column = html.split('data-workspace-map-col="intelligence"', 1)[1]
+    assert "/intelligence/?section=workbench" not in sim_column
+    assert "/intelligence/?section=scenarios" in sim_column
 
 
 def test_representative_workspace_routes_are_rendered():
@@ -79,6 +78,8 @@ def test_representative_workspace_routes_are_rendered():
     assert "/domain/?section=information" in html
     assert "/ontology/?section=map" in html
     assert "/dtwin/?section=sigmagraph" in html
+    assert "/dtwin/?section=design" in html
+    assert "/dtwin/?section=manual" not in html
 
 
 def test_domain_sidebar_only_w3c_items_are_omitted():
@@ -90,24 +91,22 @@ def test_domain_sidebar_only_w3c_items_are_omitted():
     assert "/domain/?section=r2rml" not in domain_column
 
 
-def test_mapping_and_kg_items_carry_graph_gate():
+def test_graph_and_intelligence_items_carry_graph_gate():
     html = _render_modal()
-    mapping_column = html.split('data-workspace-map-col="assignment"', 1)[1].split(
-        'data-workspace-map-col="digitaltwin"', 1
-    )[0]
     kg_column = html.split('data-workspace-map-col="digitaltwin"', 1)[1].split(
-        'data-workspace-map-col="simulation"', 1
+        'data-workspace-map-col="intelligence"', 1
     )[0]
-    sim_column = html.split('data-workspace-map-col="simulation"', 1)[1]
-    assert "nav-requires-graph" in mapping_column
+    sim_column = html.split('data-workspace-map-col="intelligence"', 1)[1]
     assert "nav-requires-graph" in kg_column
     assert "nav-requires-graph" in sim_column
+    assert "/dtwin/?section=design" in kg_column
 
 
 def test_workspace_map_css_uses_shell_tokens():
     css = _read(COMPONENTS_CSS)
     assert ".ob-workspace-map-grid" in css
     assert ".ob-workspace-map-item.is-current" in css
+    assert "repeat(4, minmax(0, 1fr))" in css
     block = css[css.index("Workspace map modal") : css.index("/* Local color")]
     assert "--db-hover-indigo" in block
     assert "--db-primary-light" in block
@@ -131,7 +130,7 @@ def test_settings_return_link_reuses_workspace_map_modal_handler():
     js = _read(NAVBAR_JS)
     assert "const triggerIds = ['domainContextTrigger', 'settingsDomainReturnLink'];" in js
     assert "link.addEventListener('click', openWorkspaceMap);" in js
-    assert "opens domain navigation via the workspace map" in js
+    assert "opens context navigation via the workspace map" in js
 
 
 def test_navbar_highlights_current_workspace_map_item():
@@ -149,3 +148,47 @@ def test_navbar_syncs_workspace_map_title_and_status():
     assert "workspaceMapDomainLabel" in js
     apply_block = js[js.index("function applyDomainInfo(") :][:1800]
     assert "applyDomainStatusBadge(mapLabel" in apply_block
+
+
+def test_workspace_map_embeds_switch_version_controls():
+    """The context popup owns the former Switch Version modal controls."""
+    html = _render_modal()
+    assert 'id="switchVersionSelect"' in html
+    assert 'id="switchSaveFirst"' in html
+    assert 'id="btnConfirmSwitch"' in html
+    assert 'id="btnCreateVersionFromSwitch"' in html
+    assert "ob-workspace-map-versions" in html
+    assert html.index("ob-workspace-map-versions") < html.index("ob-workspace-map-grid")
+
+
+def test_open_workspace_map_initialises_version_controls():
+    js = _read(NAVBAR_JS)
+    open_block = js[js.index("function openWorkspaceMap(") :][:1200]
+    assert "initWorkspaceMapVersions(" in open_block or "populateSwitchVersions(" in open_block
+    assert "configureSwitchSaveOption(" in open_block or "initWorkspaceMapVersions(" in open_block
+    assert "function bindWorkspaceMapVersionActions(" in js
+    assert "domainSwitchModal" not in js
+
+
+def test_domain_switch_opens_the_combined_workspace_map():
+    js = _read(NAVBAR_JS)
+    switch_fn = js[js.index("async function domainSwitch(") :][:900]
+    assert "openWorkspaceMap(" in switch_fn
+    assert "showSwitchDomainDialog(" not in switch_fn
+
+
+def test_workspace_map_header_has_save_and_close():
+    """Context popup exposes Save/Close above the version switch."""
+    html = _render_modal()
+    header = html.split("modal-header", 1)[1].split("ob-workspace-map-versions", 1)[0]
+    assert 'data-navbar-action="domainClose"' in header
+    assert 'data-navbar-action="domainSave"' in header
+    assert header.index('data-navbar-action="domainClose"') < header.index(
+        'data-navbar-action="domainSave"'
+    )
+    # Above the version strip: header actions appear before the versions block.
+    assert html.index("ob-workspace-map-header-actions") < html.index(
+        "ob-workspace-map-versions"
+    )
+    css = _read(COMPONENTS_CSS)
+    assert ".ob-workspace-map-header-actions" in css

@@ -112,12 +112,23 @@ def mcp_env(monkeypatch):
         "classes": [],
         "ontology": {
             "success": True,
+            "format": "json-ld",
             "base_uri": "https://example.com/customer360#",
             "class_count": 2,
             "property_count": 1,
             "content": (
-                "@prefix : <https://example.com/customer360#> .\n"
-                ":Customer a owl:Class .\n:Contract a owl:Class ."
+                '{\n'
+                '  "@context": {\n'
+                '    "": "https://example.com/customer360#",\n'
+                '    "owl": "http://www.w3.org/2002/07/owl#"\n'
+                "  },\n"
+                '  "@graph": [\n'
+                '    {"@id": "https://example.com/customer360#Customer", '
+                '"@type": "owl:Class"},\n'
+                '    {"@id": "https://example.com/customer360#Contract", '
+                '"@type": "owl:Class"}\n'
+                "  ]\n"
+                "}"
             ),
         },
         "status": {
@@ -125,10 +136,12 @@ def mcp_env(monkeypatch):
             "graph_name": "g", "view_table": "v",
         },
         "get_calls": [],
+        "get_params": [],
     }
 
     async def fake_get(client, path, params=None):
         state["get_calls"].append(path)
+        state["get_params"].append((path, params or {}))
         if path == mcp_app.API_V1_DOMAINS:
             return {"success": True, "domains": state["domains"]}
         if path == mcp_app.API_V1_DT_STATUS:
@@ -607,8 +620,19 @@ async def test_describe_ontology_is_allowed_on_an_ontology_only_domain(
     assert "Customer" in text and "Contract" in text
     # The dataset attachment is surfaced as a tag ...
     assert "[dataset]" in text
-    # ... and the raw OWL rides along.
-    assert ":Customer a owl:Class ." in text
+    # ... and the raw OWL (JSON-LD) rides along.
+    assert "OWL (JSON-LD)" in text
+    assert "https://example.com/customer360#Customer" in text
+    # MCP must request JSON-LD from the domain ontology route.
+    from server.app import API_V1_DOMAIN_ONTOLOGY  # type: ignore[import-not-found]
+
+    ontology_calls = [
+        params
+        for path, params in state["get_params"]
+        if path == API_V1_DOMAIN_ONTOLOGY
+    ]
+    assert ontology_calls
+    assert ontology_calls[-1].get("format") == "json-ld"
 
 
 async def test_describe_ontology_can_target_a_domain_without_select(mcp_env) -> None:

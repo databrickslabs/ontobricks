@@ -11,7 +11,7 @@ from back.core.errors import ValidationError
 from back.objects.digitaltwin.constants import RDF_TYPE
 from back.core.graphdb.lakebase import _companion_ddl
 from back.core.graphdb.lakebase.SimulationStore import SimulationStore
-from back.objects.simulation import (
+from back.objects.intelligence import (
     Diff,
     Patch,
     Reasoning,
@@ -19,7 +19,7 @@ from back.objects.simulation import (
     Scope,
     Spec,
 )
-from back.objects.simulation.overlay import overlay_relation
+from back.objects.intelligence.overlay import overlay_relation
 
 pytestmark = pytest.mark.unit
 
@@ -58,6 +58,10 @@ class TestSimPhy:
         assert _companion_ddl.sim_overlay_phy("MyDomain_V3", "sAbc") == "mydomain_v3__smp_sabc"
         assert _companion_ddl.overlay_phy_from("g_v1__sim_s1") == "g_v1__smp_s1"
         assert _companion_ddl.overlay_phy_from("g_v1__smu_s1") == "g_v1__smp_s1"
+        assert _companion_ddl.before_phy_from("g_v1__sim_s1") == "g_v1__smb_s1"
+        assert _companion_ddl.origin_phy_from("g_v1__sim_s1") == "g_v1__smo_s1"
+        assert _companion_ddl.is_sim_family_phy("g_v1__smb_s1")
+        assert _companion_ddl.is_sim_family_phy("g_v1__smo_s1")
         assert overlay_relation("g_v1__sim_s1") == "g_v1__smp_s1"
         assert overlay_relation("cat.sch.g__smu_s1") == "cat.sch.g__smp_s1"
         assert overlay_relation("live") == ""
@@ -150,6 +154,9 @@ class _Cursor:
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
 
+    def fetchone(self):
+        return {"ok": 1}
+
 
 def _sim_store():
     store = object.__new__(SimulationStore)
@@ -210,6 +217,66 @@ class TestSimulationStoreGuard:
             store.create_table("Dom_V1")
         assert cur.calls == []
 
+    def test_clone_sandbox_table_inserts_from_source(self):
+        store, cur = _sim_store()
+        store.clone_sandbox_table("dom_v1__sim_s1", "dom_v1__smb_s1")
+        sqls = [c[0] for c in cur.calls]
+        assert any("DROP TABLE IF EXISTS dom_v1__smb_s1" in s for s in sqls)
+        assert any(
+            "INSERT INTO dom_v1__smb_s1 (subject, predicate, object, datatype, lang)" in s
+            and "FROM dom_v1__sim_s1" in s
+            for s in sqls
+        )
+
+    def test_clone_sandbox_table_refuses_same_name(self):
+        store, _ = _sim_store()
+        with pytest.raises(ValidationError):
+            store.clone_sandbox_table("dom_v1__sim_s1", "dom_v1__sim_s1")
+
+
+class TestBeforePicture:
+    def test_persist_before_clones_when_store_supports_it(self):
+        from back.objects.intelligence.Sandbox import _CompanionMixin
+
+        class Store:
+            def __init__(self):
+                self.cloned = None
+
+            def clone_sandbox_table(self, src, dst):
+                self.cloned = (src, dst)
+
+            def drop_table(self, name):
+                raise AssertionError("python recreate should not run")
+
+        class Box(_CompanionMixin):
+            def __init__(self):
+                self.table = "g__sim_s1"
+                self.store = Store()
+
+        box = Box()
+        box.persist_before([{"subject": "s", "predicate": "p", "object": "o"}])
+        assert box.store.cloned == ("g__sim_s1", "g__smb_s1")
+
+    def test_has_before_picture_uses_table_exists(self):
+        from back.objects.intelligence.Sandbox import _CompanionMixin
+
+        class Store:
+            def table_exists(self, name):
+                self.probed = name
+                return True
+
+            def query_triples(self, name):
+                raise AssertionError("existence must not scan triples")
+
+        class Box(_CompanionMixin):
+            def __init__(self):
+                self.table = "g__sim_s1"
+                self.store = Store()
+
+        box = Box()
+        assert box.has_before_picture() is True
+        assert box.store.probed == "g__smb_s1"
+
 
 # -- patches / scope / spec -----------------------------------------------
 
@@ -237,6 +304,73 @@ class TestPatch:
         Patch.from_dict({"op": "remove", "subject": "s", "predicate": "p"})
 
 
+class TestPatchAppend:
+    _S = EX + "person"
+    _SCORE = EX + "score"
+    _REL = EX + "hasContract"
+    _C1 = EX + "C1"
+    _C2 = EX + "C2"
+
+    def _set(self, value):
+        return {"op": "set", "subject": self._S, "predicate": self._SCORE, "object": value}
+
+    def _add(self, obj):
+        return {"op": "add", "subject": self._S, "predicate": self._REL, "object": obj}
+
+    def _remove(self, obj):
+        return {"op": "remove", "subject": self._S, "predicate": self._REL, "object": obj}
+
+    def test_appends_new_fact(self):
+        assert Patch.append_all([self._set("410")], [self._add(self._C1)]) == [
+            self._set("410"),
+            self._add(self._C1),
+        ]
+
+    def test_skips_exact_duplicate(self):
+        existing = [self._set("420")]
+        assert Patch.append_all(existing, [self._set("420")]) == existing
+
+    def test_replaces_conflicting_set(self):
+        assert Patch.append_all([self._set("410")], [self._set("420")]) == [self._set("420")]
+
+    def test_set_replaces_adds_on_same_predicate(self):
+        assert Patch.append_all(
+            [self._add(self._C1), self._add(self._C2)],
+            [{"op": "set", "subject": self._S, "predicate": self._REL, "object": self._C1}],
+        ) == [{"op": "set", "subject": self._S, "predicate": self._REL, "object": self._C1}]
+
+    def test_remove_cancels_matching_add(self):
+        assert Patch.append_all([self._add(self._C1)], [self._remove(self._C1)]) == []
+
+    def test_add_cancels_matching_remove(self):
+        assert Patch.append_all([self._remove(self._C1)], [self._add(self._C1)]) == [
+            self._add(self._C1)
+        ]
+
+    def test_remove_of_other_set_value_is_ignored(self):
+        existing = [self._set("420")]
+        incoming = [
+            {
+                "op": "remove",
+                "subject": self._S,
+                "predicate": self._SCORE,
+                "object": "410",
+            }
+        ]
+        assert Patch.append_all(existing, incoming) == existing
+
+    def test_dedupes_incoming_batch(self):
+        assert Patch.append_all([], [self._add(self._C1), self._add(self._C1)]) == [
+            self._add(self._C1)
+        ]
+
+    def test_skips_invalid_rows(self):
+        assert Patch.append_all(
+            [{"op": "upsert", "subject": "s", "predicate": "p", "object": "o"}],
+            [self._add(self._C1)],
+        ) == [self._add(self._C1)]
+
+
 class TestSpec:
     def _body(self, **over):
         body = {
@@ -254,12 +388,12 @@ class TestSpec:
         assert spec.phases == Spec.DEFAULT_PHASES
         opts = spec.reasoning_options()
         assert opts["materialize"] is False
-        assert opts["tbox"] is False and opts["swrl"] is True
-        assert "swrl_rule_names" not in opts
+        assert opts["tbox"] is False and opts["if_then"] is True
+        assert "if_then_rule_names" not in opts
         assert spec.rule_names == {}
 
     def test_cap_is_clamped_to_default(self):
-        body = self._body(scope={"type": "class", "focus": EX + "Customer", "cap": 99999})
+        body = self._body(scope={"type": "entity", "focus": EX + "Customer", "cap": 99999})
         spec = Spec.from_dict(body, default_hops=2, default_cap=5000)
         assert spec.scope.cap == 5000
 
@@ -311,39 +445,44 @@ class TestSpec:
     def test_selected_rule_names_filter_reasoning_options(self):
         spec = Spec.from_dict(
             self._body(
-                phases={"swrl": True, "graph": False},
-                rule_names={"swrl": ["AttachMeter", "AttachMeter", ""], "decision_tables": []},
+                phases={"if_then": True, "graph": False},
+                rule_names={"if_then": ["AttachMeter", "AttachMeter", ""], "sparql_rules": []},
             ),
             default_hops=2,
             default_cap=10,
         )
-        assert spec.rule_names == {"swrl": ["AttachMeter"]}
+        assert spec.rule_names == {"if_then": ["AttachMeter"]}
         opts = spec.reasoning_options()
-        assert opts["swrl_rule_names"] == {"AttachMeter"}
-        assert "decision_table_names" not in opts
+        assert opts["if_then_rule_names"] == {"AttachMeter"}
+        assert "sparql_rule_names" not in opts
 
     def test_rule_names_ignored_when_phase_off(self):
         spec = Spec.from_dict(
-            self._body(phases={"swrl": False}, rule_names={"swrl": ["AttachMeter"]}),
+            self._body(phases={"if_then": False}, rule_names={"if_then": ["AttachMeter"]}),
             default_hops=2,
             default_cap=10,
         )
-        assert "swrl_rule_names" not in spec.reasoning_options()
+        assert "if_then_rule_names" not in spec.reasoning_options()
+
+    def test_spec_saved_with_legacy_phase_keys_still_loads(self):
+        spec = Spec.from_dict(
+            self._body(phases={"swrl": False, "graph": True}, rule_names={"swrl": ["AttachMeter"]}),
+            default_hops=2,
+            default_cap=10,
+        )
+        assert spec.phases["if_then"] is False
+        assert spec.rule_names == {"if_then": ["AttachMeter"]}
+        assert "swrl" not in spec.to_dict()["phases"]
 
 
 class _LiveStore:
-    def __init__(self, sub=None, typed=None):
+    def __init__(self, sub=None):
         self._sub = sub or []
-        self._typed = typed or []
         self.calls = []
 
     def expand_and_fetch_subgraph(self, table, uris, depth, max_entities, max_triples):
         self.calls.append(("expand", table, tuple(uris), depth, max_entities))
         return {"results": self._sub}
-
-    def find_subjects_by_type(self, table, type_uri, limit=50, offset=0, search=None):
-        self.calls.append(("typed", table, type_uri, limit))
-        return self._typed[:limit]
 
 
 class TestScope:
@@ -372,17 +511,13 @@ class TestScope:
         assert scope.resolve_entities(store, "g") == [EX + "a", EX + "b"]
         assert store.calls[0][:4] == ("expand", "g", (EX + "a",), 1)
 
-    def test_class_population_cap_exceeded(self):
-        store = _LiveStore(typed=[EX + str(i) for i in range(5)])
-        scope = Scope(type="class", focus=EX + "C", cap=3)
+    def test_class_scope_rejected(self):
         with pytest.raises(ValidationError):
-            scope.resolve_entities(store, "g")
-        assert store.calls[0][3] == 4
-
-    def test_class_population_within_cap(self):
-        store = _LiveStore(typed=[EX + "1", EX + "2"])
-        scope = Scope(type="class", focus=EX + "C", cap=3)
-        assert scope.resolve_entities(store, "g") == [EX + "1", EX + "2"]
+            Scope.from_dict(
+                {"type": "class", "focus": EX + "C", "cap": 3},
+                default_hops=2,
+                default_cap=5000,
+            )
 
     def test_cohort_members(self):
         svc = SimpleNamespace(dry_run=lambda rule, store, g: {
@@ -398,9 +533,12 @@ class TestScope:
             scope.resolve_entities(_LiveStore(), "g")
 
     def test_empty_scope_rejected(self):
-        scope = Scope(type="class", focus=EX + "C", cap=3)
+        svc = SimpleNamespace(dry_run=lambda rule, store, g: {"cohorts": []})
+        scope = Scope(type="cohort", focus="r1", cap=3)
         with pytest.raises(ValidationError):
-            scope.resolve_entities(_LiveStore(), "g")
+            scope.resolve_entities(
+                _LiveStore(), "g", cohort_service=svc, cohort_rule={"id": "r1"}
+            )
 
 
 # -- diff ---------------------------------------------------------------
@@ -413,14 +551,14 @@ class TestDiff:
         patch_key = Diff.key(_t("a", "score", "300"))
         risk_key = Diff.key(_t("a", "risk", "high"))
         diff = Diff.compute(
-            before, after, patch_added={patch_key}, provenance={risk_key: "swrl:Risk"}
+            before, after, patch_added={patch_key}, provenance={risk_key: "if_then:Risk"}
         )
         s = diff["summary"]
         assert (s["added_count"], s["added_patch_count"], s["added_inferred_count"]) == (2, 1, 1)
         assert s["removed_count"] == 1
         assert s["touched_entity_count"] == 1
         inferred = [r for r in diff["added"] if r["origin"] == "inferred"]
-        assert inferred[0]["provenance"] == "swrl:Risk"
+        assert inferred[0]["provenance"] == "if_then:Risk"
         assert diff["removed"][0]["object"] == "700"
         assert diff["removed"][0]["origin"] == "patch"
 
@@ -430,6 +568,13 @@ class TestDiff:
         assert len(diff["added"]) == 4
         assert diff["summary"]["added_count"] == 10
         assert diff["summary"]["capped"] is True
+
+    def test_unlimited_row_cap(self):
+        after = [_t(str(i), "p", "o") for i in range(10)]
+        diff = Diff.compute([], after, patch_added=set(), row_cap=None)
+        assert len(diff["added"]) == 10
+        assert diff["summary"]["capped"] is False
+        assert diff["summary"]["row_cap"] is None
 
     def test_page_and_search(self):
         rows = [{"subject": f"s{i}", "predicate": "p", "object": "o"} for i in range(7)]
@@ -589,14 +734,14 @@ class TestSandboxApply:
         assert EX + "c2" in seeded
         assert EX + "m1" in seeded
 
-    def test_seed_focus_for_swrl_copies_sandbox_objects(self):
+    def test_seed_focus_for_if_then_copies_sandbox_objects(self):
         sandbox = object.__new__(Sandbox)
         calls = []
         sandbox.seed_neighbourhood = (
             lambda uris, hops=1: calls.append((list(uris), hops)) or len(uris)
         )
         sandbox.uri_objects_of = lambda subject: [EX + "c2", subject]
-        sandbox.seed_focus_for_swrl(EX + "cust")
+        sandbox.seed_focus_for_if_then(EX + "cust")
         assert calls[0] == ([EX + "cust"], 2)
         assert calls[1] == ([EX + "c2"], 1)
 
@@ -665,18 +810,18 @@ def test_reasoning_service_targets_sandbox():
     assert svc._get_graph_name() == "dom_v1__sim_s1"
 
 
-def test_domain_snapshot_loads_swrl_from_ontology():
+def test_domain_snapshot_loads_if_then_from_ontology():
     from back.objects.digitaltwin.models import DomainSnapshot
 
     domain = SimpleNamespace(
         info={},
         databricks={},
         ontology={
-            "swrl_rules": [{"name": "AttachMeter"}],
+            "if_then_rules": [{"name": "AttachMeter"}],
             "classes": [],
             "properties": [],
         },
         generated={},
     )
     snap = DomainSnapshot(domain)
-    assert snap.swrl_rules[0]["name"] == "AttachMeter"
+    assert snap.if_then_rules[0]["name"] == "AttachMeter"

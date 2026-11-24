@@ -1,10 +1,10 @@
 """Settings -> Automation -> Runs: the cross-domain twin of the Knowledge
 Graph Runs page, and the removal of the Build Analytics page it replaces.
 
-The layout mirrors ``_domain_runs.html`` (two tabs, one per run kind, each
-owning its loading / empty / error elements) and adds the two things the
-per-domain page has no use for: a Domain filter whose default is every domain,
-and real pagination.
+The layout mirrors ``_domain_runs.html`` for build/analytics (two tabs, each
+owning its loading / empty / error elements), plus a Simulation tab moved
+from Intelligence, and adds the two things the per-domain page has no use
+for: a Domain filter whose default is every domain, and real pagination.
 
 Most assertions drive a ``TestClient`` and parse the RENDERED ``/settings``
 HTML, which proves the partial is actually included. File-reads are used only
@@ -122,8 +122,14 @@ class TestRunsSection:
             "settingsRunsTabContent",
             "srtab-btn-build",
             "srtab-btn-analytics",
+            "srtab-btn-community",
+            "srtab-btn-pattern",
+            "srtab-btn-simulation",
             "srtab-build",
             "srtab-analytics",
+            "srtab-community",
+            "srtab-pattern",
+            "srtab-simulation",
         ):
             assert _find(tags, id_=element_id) is not None
 
@@ -132,9 +138,10 @@ class TestRunsSection:
         section_start = html.index('id="runs-section"')
         section_end = html.index('<!-- Run details modals for Automation → Runs.')
         section = html[section_start:section_end]
+        # Context filter may sit inside the white card above the tab rail.
         pattern = re.compile(
             r'<div class="card h-100">\s*'
-            r'<div class="card-body p-0 ob-tabs-wrap">\s*'
+            r'<div class="card-body p-0 ob-tabs-wrap">[\s\S]*?'
             r'<ul class="nav nav-tabs ob-tabs nav-fill" id="settingsRunsTabs" role="tablist">[\s\S]*?</ul>\s*'
             r'<div class="tab-content p-3" id="settingsRunsTabContent">[\s\S]*?</div>\s*'
             r'</div>\s*</div>',
@@ -161,6 +168,9 @@ class TestRunsSection:
         for button_id, pane_id in (
             ("srtab-btn-build", "#srtab-build"),
             ("srtab-btn-analytics", "#srtab-analytics"),
+            ("srtab-btn-community", "#srtab-community"),
+            ("srtab-btn-pattern", "#srtab-pattern"),
+            ("srtab-btn-simulation", "#srtab-simulation"),
         ):
             btn = _find(tags, id_=button_id)
             assert btn.get("data-bs-target") == pane_id
@@ -170,7 +180,10 @@ class TestRunsSection:
         html = _html(client, "/settings")
         tags = _tags(html)
         active_panes = [
-            i for i in ("srtab-build", "srtab-analytics")
+            i for i in (
+                "srtab-build", "srtab-analytics", "srtab-community",
+                "srtab-pattern", "srtab-simulation",
+            )
             if "active" in (_find(tags, id_=i).get("class") or "")
         ]
         assert active_panes == ["srtab-build"]
@@ -190,6 +203,24 @@ class TestRunsSection:
             "srAnalyticsErrorMessage",
             "srAnalyticsTableWrapper",
             "srAnalyticsTableBody",
+            "srCommunityLoading",
+            "srCommunityEmpty",
+            "srCommunityError",
+            "srCommunityErrorMessage",
+            "srCommunityTableWrapper",
+            "srCommunityTableBody",
+            "srPatternLoading",
+            "srPatternEmpty",
+            "srPatternError",
+            "srPatternErrorMessage",
+            "srPatternTableWrapper",
+            "srPatternTableBody",
+            "srSimLoading",
+            "srSimEmpty",
+            "srSimError",
+            "srSimErrorMessage",
+            "srSimTableWrapper",
+            "srSimTableBody",
         ],
     )
     def test_each_tab_owns_its_state_elements(self, client, element_id):
@@ -202,18 +233,24 @@ class TestRunsSection:
         html = _html(client, "/settings")
         build_pane = html.index('id="srtab-build"')
         analytics_pane = html.index('id="srtab-analytics"')
+        community_pane = html.index('id="srtab-community"')
+        pattern_pane = html.index('id="srtab-pattern"')
+        simulation_pane = html.index('id="srtab-simulation"')
 
         assert build_pane < html.index('id="srBuildTableBody"') < analytics_pane
-        assert analytics_pane < html.index('id="srAnalyticsTableBody"')
+        assert analytics_pane < html.index('id="srAnalyticsTableBody"') < community_pane
+        assert community_pane < html.index('id="srCommunityTableBody"') < pattern_pane
+        assert pattern_pane < html.index('id="srPatternTableBody"') < simulation_pane
+        assert simulation_pane < html.index('id="srSimTableBody"')
 
-    def test_both_tables_name_a_domain_column(self, client):
+    def test_all_tables_name_a_domain_column(self, client):
         """The column that makes this page different from the per-domain one."""
         html = _html(client, "/settings")
         section = html[html.index('id="runs-section"'):]
         build = section[section.index('id="srBuildTableBody"'):]
-        assert section.count(">Domain<") >= 2
-        assert ">Domain<" in section[: section.index('id="srBuildTableBody"')]
-        assert ">Domain<" in build
+        assert section.count(">Context<") >= 3
+        assert ">Context<" in section[: section.index('id="srBuildTableBody"')]
+        assert ">Context<" in build
 
     def test_there_is_no_version_filter(self, client):
         """Version is a column here, as on the Knowledge Graph page — a
@@ -236,11 +273,11 @@ class TestDomainFilter:
         select = html[html.index('id="settingsRunsDomain"'):]
         first_option = select[select.index("<option"): select.index("</select>")]
         assert 'value=""' in first_option
-        assert "All domains" in first_option
+        assert "All contexts" in first_option
 
 
 class TestPagination:
-    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics"])
+    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srCommunity", "srPattern", "srSim"])
     @pytest.mark.parametrize(
         "suffix",
         ["Pagination", "PagingControls", "PageInfo", "Prev", "Next", "PageSize"],
@@ -249,7 +286,7 @@ class TestPagination:
         html = _html(client, "/settings")
         assert _find(_tags(html), id_=f"{prefix}{suffix}") is not None
 
-    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics"])
+    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srCommunity", "srPattern", "srSim"])
     def test_the_rows_selector_sits_outside_the_hideable_paging_controls(
         self, client, prefix
     ):
@@ -266,7 +303,7 @@ class TestPagination:
 
         assert rows_select < controls < prev
 
-    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics"])
+    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srCommunity", "srPattern", "srSim"])
     def test_the_footer_starts_hidden_by_class_not_by_inline_style(
         self, client, prefix
     ):
@@ -321,7 +358,7 @@ class TestPagination:
 
         assert "ids.pagination).classList.add('d-none')" in slice_
 
-    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics"])
+    @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics", "srCommunity", "srPattern", "srSim"])
     def test_page_size_offers_25_50_100(self, client, prefix):
         html = _html(client, "/settings")
         select = html[html.index(f'id="{prefix}PageSize"'):]
@@ -338,14 +375,27 @@ class TestDetailsModals:
             "srRunDetailsBody",
             "srAnalyticsRunDetailsModal",
             "srAnalyticsRunDetailsBody",
+            "srCommunityRunDetailsModal",
+            "srCommunityRunDetailsBody",
+            "srPatternRunDetailsModal",
+            "srPatternRunDetailsBody",
+            "srSimRunDetailsModal",
+            "srSimRunDetailsBody",
         ],
     )
-    def test_both_modals_render(self, client, element_id):
+    def test_all_modals_render(self, client, element_id):
         html = _html(client, "/settings")
         assert _find(_tags(html), id_=element_id) is not None
 
     @pytest.mark.parametrize(
-        "modal_id", ["srRunDetailsModal", "srAnalyticsRunDetailsModal"]
+        "modal_id",
+        [
+            "srRunDetailsModal",
+            "srAnalyticsRunDetailsModal",
+            "srCommunityRunDetailsModal",
+            "srPatternRunDetailsModal",
+            "srSimRunDetailsModal",
+        ],
     )
     def test_modals_are_page_level_not_inside_the_section(self, modal_id):
         """A modal inside a hidden .sidebar-section shows its backdrop but
@@ -355,7 +405,14 @@ class TestDetailsModals:
         assert modal_id not in _read(_PARTIAL)
 
     @pytest.mark.parametrize(
-        "modal_id", ["srRunDetailsModal", "srAnalyticsRunDetailsModal"]
+        "modal_id",
+        [
+            "srRunDetailsModal",
+            "srAnalyticsRunDetailsModal",
+            "srCommunityRunDetailsModal",
+            "srPatternRunDetailsModal",
+            "srSimRunDetailsModal",
+        ],
     )
     def test_modal_aria_labelledby_points_at_a_real_id(self, client, modal_id):
         html = _html(client, "/settings")
@@ -383,10 +440,13 @@ class TestSharedRenderer:
             "fmtMillis",
             "buildStatusBadge",
             "analyticsStatusBadge",
+            "simulationStatusBadge",
             "kindBadge",
             "analyticsScope",
             "buildRunDetailsHtml",
             "analyticsRunDetailsHtml",
+            "simulationRunDetailsHtml",
+            "simulationRunCells",
         ],
     )
     def test_it_exposes_the_shared_members(self, member):
@@ -449,15 +509,18 @@ class TestSharedRenderer:
 
 
 class TestSettingsRunsScript:
-    def test_it_fetches_both_new_endpoints(self):
+    def test_it_fetches_all_run_endpoints(self):
         src = _read(_SETTINGS_JS)
         assert "/settings/runs/build" in src
         assert "/settings/runs/analytics" in src
+        assert "/settings/runs/community" in src
+        assert "/settings/runs/patterns" in src
+        assert "/settings/runs/simulation" in src
 
     def test_it_populates_the_dropdown_from_the_existing_domains_endpoint(self):
         assert "/settings/registry/domains" in _read(_SETTINGS_JS)
 
-    def test_the_two_fetches_are_independent(self):
+    def test_the_fetches_are_independent(self):
         """Same isolation rule as the Knowledge Graph page: one tab's endpoint
         failing must leave the other's table on screen."""
         assert "Promise.all(" not in _read(_SETTINGS_JS)

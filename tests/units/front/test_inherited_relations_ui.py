@@ -6,7 +6,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 HELPER = REPO_ROOT / "src/front/static/global/js/ontology-inheritance.js"
 ONTOLOGY_HTML = REPO_ROOT / "src/front/templates/ontology.html"
-MAPPING_HTML = REPO_ROOT / "src/front/templates/mapping.html"
+MAPPING_HTML = REPO_ROOT / "src/front/templates/dtwin.html"
 MAP_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-map.js"
 MAP_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-map.css"
 PANEL_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-shared-panels.js"

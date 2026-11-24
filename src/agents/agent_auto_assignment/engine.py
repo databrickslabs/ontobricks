@@ -30,6 +30,7 @@ from agents.engine_base import (
     accumulate_usage,
 )
 from agents.tracing import trace_agent
+from agents.llm_utils import llm_failure_message
 
 logger = get_logger(__name__)
 
@@ -198,6 +199,7 @@ def run_agent(
     documents: Optional[list] = None,
     on_step: Optional[Callable[[str, int], None]] = None,
     max_iterations: Optional[int] = None,
+    on_mapping: Optional[Callable[[str, dict], None]] = None,
 ) -> AgentResult:
     """Run the auto-mapping agent.
 
@@ -221,10 +223,6 @@ def run_agent(
         len(relationships),
         iteration_limit,
     )
-    logger.debug(
-        "run_agent: metadata tables=%d", len((metadata or {}).get("tables", []))
-    )
-
     ctx = ToolContext(
         host=host.rstrip("/"),
         token=token,
@@ -234,6 +232,7 @@ def run_agent(
         entity_mappings=list(entity_mappings or []),
         relationships=list(relationship_mappings or []),
         documents=list(documents or []),
+        on_mapping=on_mapping,
     )
 
     result = AgentResult(success=False)
@@ -326,7 +325,7 @@ def run_agent(
                 notify("Endpoint does not support tools – aborting.")
                 result.error = "LLM endpoint does not support function calling"
                 return result
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             logger.error(
                 "Agent: LLM request failed at iteration %d: %s", iteration + 1, exc
             )
@@ -336,7 +335,7 @@ def run_agent(
             logger.error("Agent: timeout at iteration %d", iteration + 1)
             return result
         except requests.exceptions.RequestException as exc:
-            result.error = f"LLM request failed: {exc}"
+            result.error = llm_failure_message(exc)
             logger.error(
                 "Agent: request exception at iteration %d: %s", iteration + 1, exc
             )

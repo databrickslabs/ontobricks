@@ -67,6 +67,7 @@ from back.objects.registry.gitsync.GitHubMirrorHooks import GitHubMirrorHooks
 from .Collab import Collab
 from .Documents import Documents
 from .Analytics import Analytics
+from .DetectRuns import DetectRuns
 from .Bootstrap import Bootstrap
 from .BuildRuns import BuildRuns
 from .Simulations import Simulations
@@ -113,6 +114,8 @@ _KNOWN_TABLES = frozenset(
         "simulation_runs",
         "graph_analytics",
         "graph_analytics_runs",
+        "community_runs",
+        "pattern_runs",
         "domain_review_events",
         "domain_change_events",
         "domain_comments",
@@ -258,12 +261,75 @@ def reset_lakebase_triplet_cache() -> None:
         _TRIPLET_NEG_TS.clear()
 
 
+# ---------------------------------------------------------------------------
+# Process-wide store state
+# ---------------------------------------------------------------------------
+#
+# ``LakebaseRegistryStore`` instances are cheap and rebuilt on every request
+# (RegistryService.from_context, EditLockService._store, ...). Their lazy-heal
+# guards ("does column X exist?") and the resolved registry id used to live on
+# the instance, so each request paid the information_schema probes and the
+# registry-row lookup again (3-4 extra round-trips per call). They are now
+# shared by every store bound to the same (database, schema).
+_SHARED_STATE: Dict[Tuple[str, str], Dict[str, Any]] = {}
+_SHARED_STATE_LOCK = threading.Lock()
+
+
+def _shared_state_for(database: str, schema: str) -> Dict[str, Any]:
+    key = (database or "", schema or "")
+    with _SHARED_STATE_LOCK:
+        return _SHARED_STATE.setdefault(key, {})
+
+
+def _reset_shared_state(database: str | None = None, schema: str | None = None) -> None:
+    with _SHARED_STATE_LOCK:
+        targets = list(_SHARED_STATE.items())
+    # Clear in place (never pop): live store instances keep a reference to
+    # their state dict, so a replaced dict would silently orphan their writes.
+    for key, state in targets:
+        if (database is None or key[0] == (database or "")) and (
+            schema is None or key[1] == schema
+        ):
+            state.clear()
+
+
+class _SharedStoreState:
+    """Descriptor backing a store attribute with the process-wide state.
+
+    Instances created without ``__init__`` (``__new__`` in tests) have no
+    ``_shared_state`` and fall back to a plain per-instance attribute.
+    """
+
+    def __init__(self, default: Any) -> None:
+        self._default = default
+        self._name = ""
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self._name = name
+
+    def __get__(self, obj: Any, objtype: Any = None) -> Any:
+        if obj is None:
+            return self
+        state = obj.__dict__.get("_shared_state")
+        if state is None:
+            return obj.__dict__.get(self._name, self._default)
+        return state.get(self._name, self._default)
+
+    def __set__(self, obj: Any, value: Any) -> None:
+        state = obj.__dict__.get("_shared_state")
+        if state is None:
+            obj.__dict__[self._name] = value
+        else:
+            state[self._name] = value
+
+
 class LakebaseRegistryStore(
     GitHubMirrorHooks,
     Documents,
     Collab,
     EditLocks,
     Analytics,
+    DetectRuns,
     ReviewEvents,
     ChangeEvents,
     BuildRuns,
@@ -295,6 +361,77 @@ class LakebaseRegistryStore(
         without a re-mint.
     """
 
+    _registry_id = _SharedStoreState(None)  # cached after the first lookup
+    # Guards the lazy ``CREATE TABLE IF NOT EXISTS build_runs`` used to
+    # self-heal deployments created before the build-run trace existed
+    # (the full DDL only runs from the Settings "Initialize" action).
+    _build_runs_ready = _SharedStoreState(False)
+    # Guards the lazy ``CREATE TABLE IF NOT EXISTS simulations /
+    # simulation_runs`` (same pattern as ``_build_runs_ready``).
+    _simulation_tables_ready = _SharedStoreState(False)
+    # Guards the lazy ``CREATE TABLE IF NOT EXISTS graph_analytics`` used
+    # to self-heal deployments created before the async graph-analytics
+    # cache existed (same pattern as ``_build_runs_ready``).
+    _graph_analytics_ready = _SharedStoreState(False)
+    # Guards the lazy ``CREATE TABLE IF NOT EXISTS graph_analytics_runs``
+    # (append-only analysis run history; same pattern as above).
+    _graph_analytics_runs_ready = _SharedStoreState(False)
+    # Guards the lazy ``CREATE TABLE IF NOT EXISTS community_runs`` /
+    # ``pattern_runs`` (one flag per kind; same pattern as above).
+    _community_runs_ready = _SharedStoreState(False)
+    _pattern_runs_ready = _SharedStoreState(False)
+    # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS status``
+    # used to self-heal deployments created before the lifecycle status
+    # column existed (same pattern as ``_build_runs_ready``).
+    _status_column_ready = _SharedStoreState(False)
+    # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS
+    # review_quorum`` used to self-heal deployments created before the
+    # per-domain sign-off quorum existed (same pattern as
+    # ``_status_column_ready``).
+    _quorum_column_ready = _SharedStoreState(False)
+    # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS
+    # mcp_policy`` used to self-heal deployments created before the
+    # per-domain MCP policy existed (same pattern as
+    # ``_quorum_column_ready``).
+    _mcp_policy_column_ready = _SharedStoreState(False)
+    # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_review_events``
+    # used to self-heal deployments created before the review/validation
+    # audit log existed (same pattern as ``_build_runs_ready``).
+    _review_events_ready = _SharedStoreState(False)
+    # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_change_events``
+    # used to self-heal deployments created before the ontology/mapping
+    # change audit log existed (same pattern as ``_review_events_ready``).
+    _change_events_ready = _SharedStoreState(False)
+    # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_comments /
+    # domain_tasks`` used to self-heal deployments created before the
+    # collaborative comments + tasks feature existed (same pattern as
+    # ``_review_events_ready``).
+    _collab_tables_ready = _SharedStoreState(False)
+    # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_edit_locks``
+    # used to self-heal deployments created before the single-editor
+    # lock feature existed (same pattern as ``_collab_tables_ready``).
+    _edit_locks_ready = _SharedStoreState(False)
+    # Guards the lazy migration that turns the build-only ``schedules``
+    # table into the generic scheduled-task table (task_type /
+    # target_key / config / detail + the widened unique constraint).
+    _schedule_columns_ready = _SharedStoreState(False)
+    # Guards the one-shot import of cohort schedules out of the
+    # ``global_config`` JSONB blob into the ``schedules`` table.
+    _cohort_schedules_imported = _SharedStoreState(False)
+    # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_documents``
+    # used to self-heal deployments created before the Lakebase
+    # Knowledge Store existed (same pattern as ``_build_runs_ready``).
+    _domain_documents_ready = _SharedStoreState(False)
+
+    @staticmethod
+    def reset_shared_state(database: str | None = None, schema: str | None = None) -> None:
+        """Forget cached registry ids / lazy-heal flags (all, or one target).
+
+        Call after anything that can invalidate them: Initialize, dropping
+        the registry schema, or between tests.
+        """
+        _reset_shared_state(database, schema)
+
     def __init__(
         self,
         *,
@@ -311,63 +448,11 @@ class LakebaseRegistryStore(
         self._schema = schema
         self._database = database or ""
         self._auth = get_lakebase_auth()
-        self._registry_id: Optional[str] = None  # cached after initialize()
-        # Guards the lazy ``CREATE TABLE IF NOT EXISTS build_runs`` used to
-        # self-heal deployments created before the build-run trace existed
-        # (the full DDL only runs from the Settings "Initialize" action).
-        self._build_runs_ready = False
-        # Guards the lazy ``CREATE TABLE IF NOT EXISTS simulations /
-        # simulation_runs`` (same pattern as ``_build_runs_ready``).
-        self._simulation_tables_ready = False
-        # Guards the lazy ``CREATE TABLE IF NOT EXISTS graph_analytics`` used
-        # to self-heal deployments created before the async graph-analytics
-        # cache existed (same pattern as ``_build_runs_ready``).
-        self._graph_analytics_ready = False
-        # Guards the lazy ``CREATE TABLE IF NOT EXISTS graph_analytics_runs``
-        # (append-only analysis run history; same pattern as above).
-        self._graph_analytics_runs_ready = False
-        # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS status``
-        # used to self-heal deployments created before the lifecycle status
-        # column existed (same pattern as ``_build_runs_ready``).
-        self._status_column_ready = False
-        # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS
-        # review_quorum`` used to self-heal deployments created before the
-        # per-domain sign-off quorum existed (same pattern as
-        # ``_status_column_ready``).
-        self._quorum_column_ready = False
-        # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS
-        # mcp_policy`` used to self-heal deployments created before the
-        # per-domain MCP policy existed (same pattern as
-        # ``_quorum_column_ready``).
-        self._mcp_policy_column_ready = False
-        # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_review_events``
-        # used to self-heal deployments created before the review/validation
-        # audit log existed (same pattern as ``_build_runs_ready``).
-        self._review_events_ready = False
-        # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_change_events``
-        # used to self-heal deployments created before the ontology/mapping
-        # change audit log existed (same pattern as ``_review_events_ready``).
-        self._change_events_ready = False
-        # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_comments /
-        # domain_tasks`` used to self-heal deployments created before the
-        # collaborative comments + tasks feature existed (same pattern as
-        # ``_review_events_ready``).
-        self._collab_tables_ready = False
-        # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_edit_locks``
-        # used to self-heal deployments created before the single-editor
-        # lock feature existed (same pattern as ``_collab_tables_ready``).
-        self._edit_locks_ready = False
-        # Guards the lazy migration that turns the build-only ``schedules``
-        # table into the generic scheduled-task table (task_type /
-        # target_key / config / detail + the widened unique constraint).
-        self._schedule_columns_ready = False
-        # Guards the one-shot import of cohort schedules out of the
-        # ``global_config`` JSONB blob into the ``schedules`` table.
-        self._cohort_schedules_imported = False
-        # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_documents``
-        # used to self-heal deployments created before the Lakebase
-        # Knowledge Store existed (same pattern as ``_build_runs_ready``).
-        self._domain_documents_ready = False
+        # Lazy-heal flags and the registry id live in a process-wide state
+        # shared by every store bound to the same (database, schema): see
+        # _SharedStoreState. Stores are rebuilt per request, so per-instance
+        # flags were re-probed on every call.
+        self._shared_state = _shared_state_for(self._database, self._schema)
 
     # ------------------------------------------------------------------
     # Identity

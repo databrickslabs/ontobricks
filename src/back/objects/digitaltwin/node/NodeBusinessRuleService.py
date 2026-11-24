@@ -1,6 +1,6 @@
-"""Declare and trigger entity business rules (SWRL) for an ontology class.
+"""Declare and trigger entity business rules (IF-THEN) for an ontology class.
 
-A business rule is an existing SWRL rule of the domain, referenced by name
+A business rule is an existing IF-THEN rule of the domain, referenced by name
 from ``cls["business_rules"]``. Triggering it on one entity runs the rule's
 inference restricted to that entity (the class-typed variables of the rule
 are bound to the entity URI) and writes the inferred triples to the graph.
@@ -36,16 +36,16 @@ class NodeBusinessRuleService:
     """Business rule declaration reading and entity-scoped execution."""
 
     @staticmethod
-    def domain_swrl_rules(domain: Any) -> List[Dict[str, Any]]:
-        rules = getattr(domain, "swrl_rules", None)
+    def domain_if_then_rules(domain: Any) -> List[Dict[str, Any]]:
+        rules = getattr(domain, "if_then_rules", None)
         if rules is None:
             ontology = getattr(domain, "ontology", None) or {}
-            rules = ontology.get("swrl_rules", []) if isinstance(ontology, dict) else []
+            rules = ontology.get("if_then_rules", []) if isinstance(ontology, dict) else []
         return [r for r in rules or [] if isinstance(r, dict)]
 
     @staticmethod
     def class_entries(
-        cls: Dict[str, Any], swrl_rules: List[Dict[str, Any]]
+        cls: Dict[str, Any], if_then_rules: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Return the class's business rules that exist and are enabled.
 
@@ -53,7 +53,7 @@ class NodeBusinessRuleService:
         disabled are dropped with a warning instead of raising, so one stale
         entry never breaks the whole node context.
         """
-        by_name = {r.get("name"): r for r in swrl_rules if r.get("name")}
+        by_name = {r.get("name"): r for r in if_then_rules if r.get("name")}
         entries: List[Dict[str, Any]] = []
         seen = set()
         for ref in cls.get("business_rules") or []:
@@ -109,7 +109,7 @@ class NodeBusinessRuleService:
         sid = TwinGraphAccess.sandbox_id(simulation_id)
         store = get_graphdb(snap, settings, for_write=sid is None)
         if store is None:
-            raise InfrastructureError("Graph store is not available for this domain")
+            raise InfrastructureError("Graph store is not available for this context")
 
         svc, graph_target, after_write = NodeBusinessRuleService._reasoning_target(
             domain, settings, snap, store, entity_uri, sid
@@ -123,7 +123,7 @@ class NodeBusinessRuleService:
             graph_target,
         )
         result = await run_blocking(
-            svc.run_swrl_rules,
+            svc.run_if_then_rules,
             rule_names={requested},
             focus={"vars": focus_vars, "uri": entity_uri},
         )
@@ -162,10 +162,10 @@ class NodeBusinessRuleService:
         """Return ``(class_name, rule_name, focus_vars)`` or raise."""
         class_name = matched_cls.get("name", "")
         requested = (rule_name or "").strip()
-        swrl_rules = NodeBusinessRuleService.domain_swrl_rules(domain)
+        if_then_rules = NodeBusinessRuleService.domain_if_then_rules(domain)
         declared = {
             e["name"]
-            for e in NodeBusinessRuleService.class_entries(matched_cls, swrl_rules)
+            for e in NodeBusinessRuleService.class_entries(matched_cls, if_then_rules)
         }
         if requested not in declared:
             logger.warning(
@@ -176,8 +176,8 @@ class NodeBusinessRuleService:
             raise ValidationError(
                 f"Business rule {requested!r} is not configured on class {class_name!r}"
             )
-        rule = next(r for r in swrl_rules if r.get("name") == requested)
-        focus_vars = Rules.swrl_focus_variables(
+        rule = next(r for r in if_then_rules if r.get("name") == requested)
+        focus_vars = Rules.if_then_focus_variables(
             rule, Rules.class_lineage(domain.get_classes() or [], class_name)
         )
         if not focus_vars:
@@ -190,10 +190,15 @@ class NodeBusinessRuleService:
     async def _materialize_inferred(
         svc: Any, requested: str, entity_uri: str, inferred_triples: Any
     ):
-        """Write inferred URI triples; return ``(triples, written_count)``."""
+        """Write inferred triples (URI or literal objects); return ``(triples, written)``.
+
+        Set-attribute consequents carry a literal object; those used to be
+        dropped by the URI-only filter.  Literal writes use replace semantics
+        (delete existing ``(s, p, *)`` then insert) when the store supports it.
+        """
         from back.core.reasoning import InferredTriple, ReasoningResult
 
-        triples = TwinInferredMaterialize.uri_triples(
+        triples = TwinInferredMaterialize.writable_triples(
             [
                 {"subject": t.subject, "predicate": t.predicate, "object": t.object}
                 for t in inferred_triples
@@ -201,12 +206,13 @@ class NodeBusinessRuleService:
         )
         if not triples:
             return triples, 0
+        NodeBusinessRuleService._replace_literal_attributes(svc, triples)
         inferred = [
             InferredTriple(
                 subject=t["subject"],
                 predicate=t["predicate"],
                 object=t["object"],
-                provenance=f"swrl:{requested}",
+                provenance=f"if_then:{requested}",
                 rule_name=requested,
             )
             for t in triples
@@ -228,6 +234,91 @@ class NodeBusinessRuleService:
         return triples, written
 
     @staticmethod
+    def _literal_attribute_pairs(
+        triples: List[Dict[str, Any]],
+    ) -> List[Dict[str, str]]:
+        """Unique ``(subject, predicate)`` pairs for literal-object triples."""
+        from back.core.helpers import is_uri
+
+        pairs: List[Dict[str, str]] = []
+        seen = set()
+        for t in triples:
+            if is_uri(t.get("object", "")):
+                continue
+            key = (t["subject"], t["predicate"])
+            if key in seen:
+                continue
+            seen.add(key)
+            pairs.append({"subject": t["subject"], "predicate": t["predicate"]})
+        return pairs
+
+    @staticmethod
+    def _graph_table_for(svc: Any) -> str:
+        getter = getattr(svc, "_get_graph_name", None)
+        if callable(getter):
+            name = getter() or ""
+            if name:
+                return name
+        return getattr(svc, "table", "") or getattr(svc, "_table", "") or ""
+
+    @staticmethod
+    def _replace_literal_attributes(svc: Any, triples: List[Dict[str, Any]]) -> None:
+        """Delete prior ``(s, p, *)`` rows for set-attribute (literal object) triples."""
+        store = getattr(svc, "_store", None)
+        if store is None:
+            return
+        pairs = NodeBusinessRuleService._literal_attribute_pairs(triples)
+        if not pairs:
+            return
+        table = NodeBusinessRuleService._graph_table_for(svc)
+        if not table:
+            logger.warning(
+                "nodes/business-rule: cannot replace literal attributes — no graph table"
+            )
+            return
+        deleter = getattr(store, "delete_subject_predicate", None)
+        if callable(deleter):
+            deleter(table, pairs)
+            return
+        # FlatStore (live): exact-delete current objects, then insert replaces them.
+        NodeBusinessRuleService._replace_via_exact_delete(store, table, pairs)
+
+    @staticmethod
+    def _replace_via_exact_delete(store: Any, table: str, pairs: List[Dict[str, str]]) -> None:
+        delete_triples = getattr(store, "delete_triples", None)
+        execute = getattr(store, "execute_query", None)
+        sql_ref = getattr(store, "sql_table_reference", None)
+        if not all(callable(fn) for fn in (delete_triples, execute, sql_ref)):
+            return
+        from back.core.helpers import SQL_DIALECT_POSTGRES, sql_literal
+
+        relation = sql_ref(table)
+        to_delete: List[Dict[str, str]] = []
+        for pair in pairs:
+            s = sql_literal(pair["subject"], SQL_DIALECT_POSTGRES)
+            p = sql_literal(pair["predicate"], SQL_DIALECT_POSTGRES)
+            rows = (
+                execute(
+                    f"SELECT subject, predicate, object FROM {relation} "
+                    f"WHERE subject = {s} AND predicate = {p}"
+                )
+                or []
+            )
+            for row in rows:
+                obj = row.get("object", "")
+                if obj is None or obj == "":
+                    continue
+                to_delete.append(
+                    {
+                        "subject": str(row.get("subject", "") or ""),
+                        "predicate": str(row.get("predicate", "") or ""),
+                        "object": str(obj),
+                    }
+                )
+        if to_delete:
+            delete_triples(table, to_delete)
+
+    @staticmethod
     def _reasoning_target(
         domain: Any,
         settings: Any,
@@ -236,14 +327,14 @@ class NodeBusinessRuleService:
         entity_uri: str,
         simulation_id: Optional[str],
     ):
-        """Return ``(service, graph_target, after_write)`` for live or sandbox SWRL."""
+        """Return ``(service, graph_target, after_write)`` for live or sandbox IF-THEN."""
         from back.core.reasoning import ReasoningService
 
         if not simulation_id:
             return ReasoningService(snap, store), "live", None
 
         from back.core.helpers import effective_graph_name, effective_graph_query_table
-        from back.objects.simulation import (
+        from back.objects.intelligence import (
             Simulation,
             Reasoning,
             Sandbox,
@@ -252,7 +343,7 @@ class NodeBusinessRuleService:
         sim = Simulation(domain, settings)
         sim.sandbox_relation(simulation_id)
         sandbox = Sandbox(store, effective_graph_name(domain), simulation_id)
-        seed = getattr(sandbox, "seed_focus_for_swrl", None)
+        seed = getattr(sandbox, "seed_focus_for_if_then", None)
         if callable(seed):
             seed(entity_uri)
         svc = Reasoning(snap, sandbox.store, sandbox.table)

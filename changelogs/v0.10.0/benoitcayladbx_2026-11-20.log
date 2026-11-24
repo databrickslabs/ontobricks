@@ -1,0 +1,1770 @@
+================================================================================
+## Docs: official Databricks documentation links
+================================================================================
+
+Context: The online docs named Databricks products and concepts (Unity
+Catalog, SQL warehouses, Lakebase, Databricks Apps, bundles, Model Serving,
+AI Gateway, Delta, service principals, secrets, PATs, MLflow, ...) without
+pointing readers to the official Databricks documentation. Each target URL
+was checked against docs.databricks.com (HTTP 200) before use.
+
+Changes:
+
+1. docs/*.md (all pages except docs/mcp.md)
+   Added inline links to docs.databricks.com/aws/en/... at the first prose
+   mention of each Databricks term in each H2 section. Covered terms: Unity
+   Catalog (and Unity Catalog volumes), Lakeflow Jobs, Lakebase, Databricks
+   Apps, SQL warehouses, Model Serving, Foundation Model APIs, AI / Unity
+   Gateway, Delta Lake, liquid clustering, serverless compute, personal access
+   tokens, service principals, Databricks secrets, Databricks SQL Connector,
+   Databricks SDK, Catalog Explorer, Databricks CLI, MLflow, Declarative
+   Automation Bundles (formerly Asset Bundles), and AI/BI dashboards.
+   Headings, the TOC, code spans, existing links and diagrams were left
+   untouched, so anchors and the generated TOC do not change.
+2. Links were not added to docs/mcp.md: it already has uncommitted content
+   edits from another change and is left as is.
+
+Modified files:
+- docs/README.md
+- docs/advanced_features.md
+- docs/api.md
+- docs/architecture.md
+- docs/backend.md
+- docs/contributing.md
+- docs/deployment.md
+- docs/development.md
+- docs/getting-started.md
+- docs/intelligence.md
+- docs/product.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10995 passed, 334 skipped,
+8 deselected in 55.79s (no failures). The earlier full run in this session
+counted 11001 passed; the difference comes from the shared working tree, not
+from these doc edits.
+
+================================================================================
+## User Guide: full Intelligence feature coverage
+================================================================================
+
+Context: The User Guide's Step 4 was a short map that deferred to
+intelligence.md, and the feature inventory listed Intelligence in a few
+bullets. Users reading the User Guide could not see Home, the Analytics
+Data Model Health / AI Insights / Runs tabs, the Patterns Coverage and bar
+chart, the scenario workbench tabs (facts, reasoning, results, Propose facts),
+Compare metrics / Evaluate, cohort outputs, or the Activity panel.
+
+Changes:
+
+1. docs/user-guide.md (Step 4)
+   Replaced the page table with one section per Intelligence page: Home,
+   Cohorts, Analytics, Communities, Patterns, Scenarios, Compare, plus
+   Activity and run history, Before you start and a typical flow.
+2. docs/user-guide.md (Feature inventory → Intelligence)
+   Analytics tabs, scenario workbench, Compare metrics and report, cohort
+   runs, and background runs / history bullets.
+3. tests/units/api/test_help_api.py
+   New contract: the User Guide documents every Intelligence page heading and
+   key terms (Data Model Health, AI Insights, Coverage, Propose facts,
+   Ask both, Activity) and the inventory names the workbench and report items.
+4. docs/user-guide.md TOC
+   Regenerated with `make docs-toc` (no change to the top-level TOC).
+
+Note: relationship prediction (Intelligence → Relationships) is only a design
+spec (docs/superpowers/specs/2026-11-15-relationship-prediction-design.md);
+it is not in menu_config.json or the code, so it is not documented as a feature.
+
+Modified files:
+- docs/user-guide.md
+- tests/units/api/test_help_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 11001 passed, 334 skipped,
+8 deselected in 49.49s.
+
+================================================================================
+## Document Intelligence capabilities in Help Center, Starter Guide and Sphinx
+================================================================================
+
+Context: Intelligence (Home, Analytics, Communities, Patterns, Cohorts,
+Scenarios, Compare) was already in the operator guide, but the Starter Guide,
+Getting Started first-run, workspace Home resources, README, product deck and
+Architecture still stopped at Explore or described Simulation as Lakebase-only.
+
+Changes:
+
+1. src/front/templates/partials/layout/help_modal.html
+   Starter Guide step 5 (Intelligence); Feature Guide Analytics card; FAQ;
+   glossary; troubleshooting; workflow copy.
+2. src/front/templates/partials/layout/_workspace_home.html
+   Intelligence Home Help / resources open the Intelligence guide; Starter
+   and Workflow copy mention Intelligence.
+3. src/front/config/menu_config.json
+   Intelligence workspace subtitle lists analytics, communities, patterns,
+   cohorts and sandboxes.
+4. src/front/templates/home.html
+   Help Center resource mentions Intelligence in the Starter Guide.
+5. docs/intelligence.md
+   Home landing; Graph-ready badge; Patterns Hops/Entities/Patterns/Coverage
+   KPIs and bar chart.
+6. docs/getting-started.md
+   First Steps §7 Discover and simulate; navigation includes Intelligence.
+7. docs/README.md, README.md, docs/user-guide.md, docs/examples.md,
+   docs/product.md, docs/architecture.md, docs/development.md
+   Online docs, examples, GTM and architecture aligned with Intelligence.
+8. tests/units/front/test_help_center_menu_sync.py
+   Starter Guide and glossary contracts for Intelligence terms.
+9. tests/units/front/test_workspace_home_contract.py
+   Intelligence Home help_doc contract.
+10. tests/units/api/test_help_api.py
+    Catalog assertions for Home, Coverage, Getting Started Intelligence.
+
+Modified files:
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/layout/_workspace_home.html
+- src/front/config/menu_config.json
+- src/front/templates/home.html
+- docs/intelligence.md
+- docs/getting-started.md
+- docs/README.md
+- README.md
+- docs/user-guide.md
+- docs/examples.md
+- docs/product.md
+- docs/architecture.md
+- docs/development.md
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/api/test_help_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10992 passed, 8 failed
+(unrelated: `_InMemoryStore.read_version()` missing `include_simulations`),
+334 skipped, 8 deselected in 51.62s. Targeted help/workspace-home tests:
+83 passed.
+
+================================================================================
+## Home tiles restyled to Databricks Jobs create-tile pattern
+================================================================================
+
+Context: After adding the Settings resource card, Home launch tiles still used
+tall illustrated cards (SVG art, bullet lists, lift-on-hover). Align them with
+the Databricks Jobs create tiles (Ingestion pipeline / ETL Pipeline style) and
+the existing Workspace Home MCP card pattern (`.ob-workspace-home-tile`).
+
+Changes:
+
+1. src/front/templates/home.html
+   - Launch tiles: icon square + title + count in a head row, short description
+     below. Dropped SVG art, bullet lists, and trailing arrows. Icons:
+     `bi-layers` (Contexts), `bi-signpost-split` (Bridges), `bi-clipboard-check`
+     (My tasks). Count element IDs unchanged for JS.
+   - Resource cards: same compact pattern; removed trailing arrows.
+2. src/front/static/home/css/home.css
+   - Restyle `.home-nav-tile` / `.home-resource-card` to match Workspace Home:
+     `--home-tile-radius` (0.5rem), bordered icon square, flat rest, soft
+     `0 2px 8px` hover shadow, no translateY / primary-border hover.
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   - Replaced points-list assertion with
+     `test_home_launch_tiles_use_databricks_jobs_card_pattern`.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/home/css/home.css
+- tests/units/ui/test_home_and_explorer_contracts.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/ui/test_home_and_explorer_contracts.py
+  tests/units/front/test_clarity_design_contract.py` -> 59 passed
+- `uv run --frozen pytest -q -m "not scenario"` -> 10982 passed, 334 skipped,
+  8 deselected
+
+================================================================================
+## Settings entry point on the Home page
+================================================================================
+
+Context: The Home page had no direct way to reach Settings (Databricks warehouse,
+graph engine backends, branding, automation runs). Design agreed in brainstorming:
+add a "Settings & Config" card to the existing "Keep exploring" resources strip,
+next to Help Center. The strip grows from 3 to 4 cards.
+
+Changes:
+
+1. src/front/templates/home.html
+   - Added `<a class="home-resource-card" href="/settings" data-home-resource="settings">`
+     right after the Help Center card. Internal link, same markup as the other cards,
+     `bi-arrow-right` affordance (no new tab).
+   - Updated the section lead to mention system settings.
+2. src/front/static/home/css/home.css
+   - `.home-resources-grid`: 4 columns on desktop.
+   - Under 991.98px: 2 columns (tablet). Existing <768px rule keeps 1 column.
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   - `test_home_resources_strip_links_to_settings`: card links to /settings, is
+     same-tab, and has no external-link affordance.
+   - `test_home_resources_grid_is_four_columns_on_desktop`: pins the 4 / 2 column
+     grid rules.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/home/css/home.css
+- tests/units/ui/test_home_and_explorer_contracts.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/ui/test_home_and_explorer_contracts.py` -> 8 passed
+- `uv run --frozen pytest -q -m "not scenario"` -> 10966 passed, 334 skipped, 8 deselected
+
+================================================================================
+## Configurable Databricks button styles: Create (filled) and Share (outlined)
+================================================================================
+
+Context: The Databricks Catalog browse page uses two button styles: Create
+(solid primary) and Share (outlined secondary). OntoBricks now exposes both in
+Settings → Configuration → UI → Theme, defaulting to the Databricks values and
+letting an admin change the colours. Applied to page buttons (`.btn-primary` =
+Create, `.btn-secondary` / `.btn-outline-secondary` = Share) and to the navbar
+chrome: Save = Create, Close = Share, Resume editing stays a warning ghost.
+Blank or invalid stored colours fall back to the Databricks defaults.
+
+Changes:
+
+1. src/back/core/helpers/UIBranding.py
+   - `DEFAULT_BUTTON_PRIMARY_COLOR` (#2272B4) and `DEFAULT_BUTTON_SECONDARY_COLOR`
+     (#11171C); Databricks companion tints (`DATABRICKS_CREATE_HOVER`,
+     `DATABRICKS_SHARE_BORDER`, `DATABRICKS_SHARE_HOVER`) used exactly for defaults.
+   - `BrandPalette` gains `button_primary`, `button_primary_hover`,
+     `button_on_primary`, `button_secondary`, `button_secondary_border`,
+     `button_secondary_hover`; `UIBranding` gains `button_primary_color` and
+     `button_secondary_color`.
+   - New `derive_button_palette()`; `derive_brand_palette()` and
+     `normalize_ui_branding()` accept and resolve the two colours.
+2. src/back/core/helpers/__init__.py
+   - Re-exports the two default constants.
+3. src/shared/fastapi/ui_branding.py
+   - `render_ui_branding_css_vars` emits `--db-btn-primary`, `-hover`, `-on`,
+     `--db-btn-secondary`, `-border`, `-hover` into `#uiBrandingTokens`.
+4. src/back/objects/session/GlobalConfigService.py
+   - Persists `button_primary_color` / `button_secondary_color` in `ui_branding`;
+     `_empty()` defaults updated.
+5. src/back/objects/domain/settings/WorkspaceUiSettings.py
+   - `save_ui_branding_result` takes the two colours (keyword, default blank),
+     validates them, and persists the normalized values.
+6. src/back/objects/domain/settings/SettingsService.py
+   - Facade forwards the two colours (kept on one line to stay within the
+     `SettingsService` size baseline).
+7. src/api/routers/internal/settings.py
+   - `POST /ui-branding` accepts `button_primary_color` and `button_secondary_color`
+     form fields.
+8. src/front/static/global/css/main.css
+   - `:root` defaults for the six `--db-btn-*` tokens.
+   - `.ob-subnav-save-btn` → Create (solid); `.ob-subnav-save-kbd` on Create label colour;
+     `.ob-subnav-close-btn` → Share (white surface, border, hover tint).
+9. src/front/static/global/css/components.css
+   - `.btn-primary` → solid Create (`--db-btn-primary`), no gradient, no resting shadow.
+   - `.btn-secondary` / `.btn-outline-secondary` → Share block (white surface at
+     rest, `--db-btn-secondary-border`, hover `--db-btn-secondary-hover`, focus ring);
+     removed from the neutral and outline lists.
+10. src/front/static/config/js/settings.js
+   - `UI_BRANDING_DEFAULTS` gains the two colours and the six palette keys.
+   - `deriveButtonPalette()` mirrors the Python derivation (verified numerically
+     identical for default and custom colours); `deriveBrandPalette()` takes the
+     two colours; `draftPalette()` keeps them across primary/Aurora edits.
+   - `normalizeUIBrandingDraft()` builds the palette from one fallback object.
+   - Preview sets the `--db-btn-*` variables; validity, dirty state, saved-default
+     check, input sync, blur handling and the save `FormData` cover both colours.
+11. src/front/templates/settings.html
+   - Theme card: "Create button color" and "Share button color" pickers (colour +
+     hex + help + error) after Aurora; preview gains a Share sample button.
+12. .cursor/11-frontend-design.mdc
+   - Documents the Create/Share tokens, derivation rules, the navbar mapping, and
+     the updated button hierarchy/states; `--db-gradient-primary` marked unused.
+13. tests/units/front/test_button_design_contract.py
+   - Share focus keeps the white surface (`var(--db-surface-warm)`) as its resting
+     background, in addition to `transparent`.
+14. tests/units/front/test_clarity_design_contract.py
+   - `.btn-primary` asserts Create tokens and no shadow; `.btn-secondary` and
+     `.btn-outline-secondary` assert the white surface token.
+15. tests/units/front/test_segmented_subnav_contract.py
+   - Renamed to `test_chrome_actions_use_create_and_share_styles`; asserts Save =
+     Create and Close = Share, with their hover tints.
+16. tests/units/settings/test_v090_settings_workspace_ui.py
+   - Exact-dict persistence assertion includes the two colours; new tests for
+     explicit, blank and invalid Create colours.
+17. tests/units/ui/test_ui_button_styles.py (new)
+   - Databricks default palette is exact; custom colours derive companions;
+     invalid stored colours fall back; CSS variables are published.
+18. tests/units/front/test_ui_button_styles_contract.py (new)
+   - Settings pickers, preview sample, JS payload and preview variables, and
+     `main.css` / `components.css` token contracts.
+
+Design notes:
+- Navbar Save (filled) and Close (outlined) reverse the earlier borderless /
+  no-background-at-rest chrome for those two buttons. This is the approved
+  content_and_chrome option; Resume editing is unchanged.
+- `--db-gradient-primary` is no longer used by any component. It is kept because
+  the contract tests assert the token; remove it in a follow-up.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/api/routers/internal/settings.py
+- src/back/core/helpers/UIBranding.py
+- src/back/core/helpers/__init__.py
+- src/back/objects/domain/settings/SettingsService.py
+- src/back/objects/domain/settings/WorkspaceUiSettings.py
+- src/back/objects/session/GlobalConfigService.py
+- src/front/static/config/js/settings.js
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- src/front/templates/settings.html
+- src/shared/fastapi/ui_branding.py
+- tests/units/front/test_button_design_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_ui_button_styles_contract.py (new)
+- tests/units/settings/test_v090_settings_workspace_ui.py
+- tests/units/ui/test_ui_button_styles.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium computed styles and screenshots: defaults render #2272B4 Create
+  and #11171C Share; custom colours (#FF0000 / #00AA00) propagate to all buttons.
+- JS vs Python `derive_button_palette` compared numerically: identical output.
+- `uv run --frozen pytest -q -m "not scenario"`: 10982 passed, 334 skipped, 8 deselected, 0 failed in 49.16s.
+
+================================================================================
+## Apply Create/Share button paint to every Bootstrap action variant
+================================================================================
+
+Context: Create and Share were wired for `.btn-primary` / `.btn-secondary` /
+`.btn-outline-secondary`, but ~127 `btn-outline-primary` usages (and the
+success/warning/info/light/dark solid and outline classes) still used the old
+neutral grey outline. The app now has only two button looks everywhere:
+Create (filled) and Share (outlined), including Studio / graph toolbars that
+already use those Bootstrap classes. Destructive keeps Share structure with
+danger colours; `.btn-link` stays text-only.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   - Folded `.btn-outline-primary`, `.btn-success`, `.btn-warning`, `.btn-info`,
+     `.btn-light`, `.btn-dark` and their outline forms into the Share selector
+     family (same `--db-btn-secondary*` tokens, white surface, hover tint).
+   - `.btn-danger` joins `.btn-outline-danger` as the destructive Share paint
+     (red label/border, soft-danger hover, white surface at rest/focus).
+   - Removed the old transparent/neutral outline blocks those variants used.
+2. .cursor/11-frontend-design.mdc
+   - Documents the universal Create/Share mapping and the danger exception.
+3. tests/units/front/test_button_design_contract.py
+   - Share-family focus contract covers the expanded list; danger focus keeps
+     the red label for both `.btn-danger` and `.btn-outline-danger`.
+4. tests/units/front/test_clarity_design_contract.py
+   - `.btn-outline-primary` asserts the Share white surface token.
+5. tests/units/front/test_ui_button_styles_contract.py
+   - New resting-paint contract: outline-primary uses Share surface + border.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/components.css
+- tests/units/front/test_button_design_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_ui_button_styles_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium: outline-primary / success / warning / info match Share
+  (#FFFFFF / #C6C9D1 / #11171C); danger matches red Share; primary stays Create.
+- `uv run --frozen pytest -q -m "not scenario"`: 10983 passed, 334 skipped, 8 deselected, 0 failed in 48.60s.
+
+================================================================================
+## Du Bois md geometry for page buttons (Create/Share look on every CTA)
+================================================================================
+
+Context: Create/Share colour tokens were applied, but page buttons (e.g.
+Context → Versions) still looked Bootstrap-native: auto height, 2px radius,
+14px / weight 400. Databricks Catalog Create/Share use Du Bois md geometry
+(32px, 4px, 13px / 500). Page CTAs now share that geometry with the navbar
+chrome.
+
+Root cause: `components.css` only restyled colour on `.btn-*` variants; the
+base `.btn` / `.btn-sm` size ramp was still Bootstrap's.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - Added `--db-btn-height` (2rem), `--db-btn-radius` (0.25rem),
+     `--db-btn-font-size` (0.8125rem), `--db-btn-font-weight` (500),
+     `--db-btn-padding-x` (0.75rem).
+   - Navbar chrome tokens `--ob-subnav-btn-*` now alias those values.
+   - Input-group / btn-group size ramps: form fields keep `--db-radius-control`;
+     buttons use `--db-btn-radius`. Section-header wrapped groups use the
+     button radius.
+2. src/front/static/global/css/components.css
+   - `.btn` / `.btn-sm` / `.btn-lg` use Du Bois md geometry (inline-flex,
+     fixed height, 13px/500, 4px radius). `.btn-link` and `.btn-close` are
+     excluded from that ramp.
+3. .cursor/11-frontend-design.mdc
+   - Documents the shared button geometry tokens.
+4. tests/units/front/test_button_design_contract.py
+   - Button radius assertions use `--db-btn-radius`; form fields stay on
+     `--db-radius-control`.
+5. tests/units/front/test_segmented_subnav_contract.py
+   - Chrome height/radius assert the alias to `--db-btn-*`.
+6. tests/units/front/test_ui_button_styles_contract.py
+   - New contract for Du Bois md geometry tokens and `.btn` usage.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- tests/units/front/test_button_design_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_ui_button_styles_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium with Bootstrap CDN: Versions-style header buttons measure
+  32px / 4px / 13px / 500; Create fill #2272B4; Share border #C6C9D1.
+- Live `http://127.0.0.1:8000/` Create CTA: same geometry after reload.
+- `uv run --frozen pytest -q -m "not scenario"`: 10984 passed, 334 skipped, 8 deselected, 0 failed in 51.10s.
+
+================================================================================
+## Navbar Save/Close/Resume: Genie Code chips with Activity hover
+================================================================================
+
+Context: Navbar Save/Close/Resume had been mapped to Create/Share (filled /
+outlined). They now follow a Genie Code-inspired chip (bordered, Du Bois md)
+with the same hover fill as the Activity icon (`--db-hover-indigo`), and no
+gradient. Save and Close are icon-only; Resume keeps the text label "Resume"
+only.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Save/Close: removed visible labels and the Save shortcut keycap; kept
+     icon + dirty dot; added `aria-label` (shortcut remains in Save `title`).
+2. src/front/static/global/js/edit-lock.js
+   - Resume button markup is text-only: label `Resume` (no icon, no "editing").
+3. src/front/static/global/css/main.css
+   - `.ob-subnav-action` is a square Genie chip (white surface, 1px
+     `--db-border`); hover/focus use `--db-hover-indigo` (Activity), never
+     Create/Share fills or a gradient.
+   - Resume is auto-width with warning text colour; same hover fill.
+   - Dirty dot repositioned on the icon chip; shortcut keycap styles removed.
+   - Constrained/mobile rules keep Resume's label visible while other labels
+     stay hidden.
+4. .cursor/11-frontend-design.mdc
+   - Chrome actions documented as Genie chips; Create/Share no longer apply
+     to the navbar.
+5. tests/units/front/test_segmented_subnav_contract.py
+   - Chrome contract asserts Genie chip + Activity hover.
+6. tests/units/front/test_mobile_subnav_contract.py
+   - Icon-only Save/Close, Resume label `Resume`, mobile padding on Resume.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/front/templates/base.html
+- src/front/static/global/js/edit-lock.js
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_mobile_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium: Save/Close 32×32 bordered chips; hover matches Activity
+  (`--db-hover-indigo`); Resume shows "Resume" text only.
+- `uv run --frozen pytest -q -m "not scenario"`: 10984 passed, 334 skipped, 8 deselected, 0 failed in 48.94s.
+
+================================================================================
+## Save and Close: bare icons (no background, no border, no hover)
+================================================================================
+
+Context: After the Genie chip restyle, Save and Close still rendered a chip
+(surface + border) and a hover fill. Requested: Save and Close must have no
+background and no border, and no hover change. Resume keeps its chip.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-subnav-save-btn` and `.ob-subnav-close-btn` are pinned to a transparent
+     background, `border: 0` and the secondary icon colour at rest, on hover and
+     on focus. The pin comes after the generic `.ob-subnav-action:hover` so the
+     chip hover cannot leak back in.
+   - Keyboard focus keeps only the focus ring (`:focus-visible`), not a fill.
+2. tests/units/front/test_segmented_subnav_contract.py
+   - New contract: one pinned rule covers Save/Close rest, hover and focus,
+     with transparent background and no border, placed after the chip hover.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium: Save and Close background rgba(0,0,0,0) and border 0 at rest
+  and on hover; Resume keeps its chip.
+- `uv run --frozen pytest -q -m "not scenario"`: 10985 passed, 334 skipped, 8 deselected, 0 failed in 48.67s.
+
+================================================================================
+## Unified navbar icon hover square (Save, Close, Activity, switcher)
+================================================================================
+
+Context: The hover hit areas differed across navbar icons (Activity was
+padding-sized, the feature switcher used the 2.25rem rail, Save/Close had no
+hover). They now share one 2rem / 4px square; Save and Close stay bare at rest
+and show that hover fill.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - Added `--ob-subnav-icon-hit` (2rem) and `--ob-subnav-icon-radius`
+     (aliases Du Bois button radius). Chrome button height aliases the icon hit.
+   - `.ob-subnav-utility-link` (Activity / User) and `.ob-subnav-app-switcher`
+     use the shared hit square and radius.
+   - Save/Close: transparent + borderless at rest; hover/focus use
+     `--db-hover-indigo` on the same square.
+2. .cursor/11-frontend-design.mdc
+   - Documents the shared icon-hit hover square.
+3. tests/units/front/test_segmented_subnav_contract.py
+   - Contract that the four icon controls share the hit tokens; Save/Close
+     rest vs hover paint.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Headless Chromium: Close/Save/Switcher/Activity all measure 32×32 / 4px at rest;
+  Save/Close transparent; hover uses `--db-hover-indigo`.
+- `uv run --frozen pytest -q -m "not scenario"`: 10985 passed, 334 skipped, 8 deselected, 0 failed in 48.83s.
+
+================================================================================
+## More space between Activity and User (notification badge clearance)
+================================================================================
+
+Context: With a notification bubble on Activity, the badge sat against the
+user avatar because the two utility items only had the default 0.35rem gap.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-subnav-nav .ob-subnav-item:has(#activityCenterToggle) + .ob-subnav-item`
+     uses `margin-inline-start: 0.85rem` so the overflow badge clears the avatar.
+2. tests/units/front/test_segmented_subnav_contract.py
+   - Contract pins that spacing rule.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py`: 12 passed.
+
+================================================================================
+## Workspace map: Save and Close in the Context popup header
+================================================================================
+
+Context: Opening Context opens the workspace map modal (with version switch).
+Save and Close were only in the navbar chrome; they are now also available in
+the modal header, top-right, above the version switch strip.
+
+Changes:
+
+1. src/front/templates/partials/layout/_workspace_map_modal.html
+   - Header actions: Close then Save (`data-navbar-action`, same handlers as
+     the navbar), then the dismiss `btn-close`. Labels/icons come from
+     `menu_config` Context `navbar_actions`.
+2. src/front/static/global/css/components.css
+   - `.ob-workspace-map-header-actions` right-aligns the action group in the
+     modal header.
+3. tests/units/front/test_workspace_map_modal.py
+   - Contract: Save/Close sit in the header above the versions strip.
+4. .cursor/11-frontend-design.mdc
+   - Workspace Map row notes the header Save/Close.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- src/front/static/global/css/components.css
+- tests/units/front/test_workspace_map_modal.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_workspace_map_modal.py`: 16 passed.
+
+================================================================================
+## docs/mcp.md: Genie One connection setup delegated to official Databricks docs
+================================================================================
+
+Context: The "Register the MCP in Unity Catalog and Genie One" section repeated
+the full Databricks setup procedure (service principal, OAuth secret, CAN_USE
+grant, UC HTTP connection creation, Genie One UI steps, worked example). That
+duplicates Databricks documentation and goes stale when the UI changes. The
+section now points to the official Genie One guide and keeps only the
+OntoBricks-specific values and checks.
+
+Changes:
+
+1. docs/mcp.md (Register the MCP in Unity Catalog and Genie One)
+   - Replaced the intro with a reference to the official Genie One external
+     sources guide (plus the HTTP connection and MCP server references).
+   - Added an "OntoBricks values" table (endpoint, OAuth M2M, is_mcp_connection,
+     base path/port, scope, token endpoint, dedicated service principal,
+     CAN_USE on the MCP app, workspace preview, API / MCP domain flag).
+   - Removed the Prerequisites, Variables, and numbered CLI/API setup steps
+     (service principal, CAN_USE grant, connection creation, UI alternative).
+   - Removed the Genie One UI steps (preview enablement, attach-connection
+     walkthrough) and the 08x worked example.
+   - Kept verification prompts and expected-behaviour checks ("Verify in Genie One").
+   - Renumbered the remaining sections (MCP Service, Grants, Playground /
+     Genie Code, Troubleshooting, Security notes) and updated troubleshooting
+     wording that referenced the removed procedure.
+
+Modified files:
+- docs/mcp.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests:
+- Documentation-only change; no code modified, test suite not affected.
+
+================================================================================
+## Persist Context loading spinner across open/create/validate navigation
+================================================================================
+
+Context: Opening or creating a Context left a long blank wait before the
+navbar name and Save/Close chrome appeared. Registry/home validate/open
+paths never showed the overlay, and a full page navigation dropped it
+even when navbar.js had started it. Persist the overlay in sessionStorage,
+restore it early on the next page, and clear it only after /navbar/state
+paints the chrome.
+
+Changes:
+
+1. src/front/templates/base.html
+   Inline restore of `#domainLoadingOverlay` from `ob_domain_loading`
+   immediately after the overlay markup (before deferred navbar.js runs).
+2. src/front/static/global/js/navbar.js
+   `showDomainLoading` / `hideDomainLoading` persist and clear
+   `ob_domain_loading`; `applyDomainInfo` hides once navbar state paints;
+   `domainNew`, `doDomainSave(afterSave)`, `doDomainLoad`, and import keep
+   the overlay across navigate (no pre-nav `loadNavbarState` clear).
+3. src/front/static/registry/js/registry.js
+   Load Context and Open in Validation show/hide the overlay around
+   load-from-uc + navigation.
+4. src/front/static/home/js/home-tasks.js
+   Home Validate uses the same overlay around open-to-review.
+5. src/front/static/domain/js/domain-versions.js
+   Load version / reload saved version show the overlay across navigate.
+6. src/front/static/domain/js/domain.js
+   Belt-and-suspenders re-show from `ob_domain_loading` on Context page boot.
+7. src/front/static/domain/js/domain-information.js
+   Stop clearing overlay from the obsolete `ob_creating_new_domain` path;
+   chrome paint owns hide.
+8. tests/units/front/test_domain_loading_overlay.py
+   New contracts for persist/restore/call sites.
+9. tests/units/front/test_navbar_domain_badge_persistence.py
+   Align `doDomainLoad` contract with overlay-across-navigate behaviour.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/static/registry/js/registry.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/domain/js/domain.js
+- src/front/static/domain/js/domain-information.js
+- tests/units/front/test_domain_loading_overlay.py
+- tests/units/front/test_navbar_domain_badge_persistence.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10995 passed, 334 skipped, 8 deselected in 48.79s
+
+================================================================================
+## Speed up Context open (skip sims/OWL, paint chrome early)
+================================================================================
+
+Context: Opening a Context felt slow even with the loading spinner. Root
+causes: every load-from-uc attached up to 500 simulation runs (never imported
+into the session), eagerly regenerated OWL/R2RML that save() immediately
+strips, double session saves, artificial 150 ms navigate delays, and the UI
+waiting on /navbar/state before Save/Close appeared.
+
+Changes:
+
+1. src/back/objects/domain/Domain.py
+   Lean load_domain_from_uc: include_simulations=False, no
+   ensure_generated_content, single save; return domain payload for chrome;
+   extract _resolve_uc_load_version / _commit_uc_load_session helpers.
+2. src/back/objects/registry/store/lakebase/Catalog.py
+   read_version(include_simulations=…) skips attach_simulations_to_doc when False.
+3. src/back/objects/registry/store/base.py + RegistryService.py
+   Thread the include_simulations flag; status helper skips sims.
+4. src/api/routers/internal/domain.py
+   run_blocking around load_domain_from_uc so Lakebase I/O does not block the loop.
+5. src/front/static/global/js/navbar.js
+   rememberLoadedDomainOrClear from load response; navigate immediately;
+   clear remembered domain on close.
+6. src/front/static/registry/js/registry.js
+   home-tasks.js, domain-versions.js: remember loaded domain before navigate.
+7. tests/units/domain/test_load_domain_from_uc_perf.py
+   Contracts for sims skip / single save / domain payload.
+8. tests/units/architecture/baseline.json
+   Drop load_domain_from_uc from oversized_functions (now under budget).
+
+Modified files:
+- src/back/objects/domain/Domain.py
+- src/back/objects/registry/store/lakebase/Catalog.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/RegistryService.py
+- src/api/routers/internal/domain.py
+- src/front/static/global/js/navbar.js
+- src/front/static/registry/js/registry.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/domain/js/domain-versions.js
+- tests/units/domain/test_load_domain_from_uc_perf.py
+- tests/units/front/test_domain_loading_overlay.py
+- tests/units/front/test_navbar_domain_badge_persistence.py
+- tests/units/registry/test_registry.py
+- tests/units/registry/test_registry_store.py
+- tests/units/registry/test_github_sync.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11000 passed, 334 skipped, 8 deselected in 49.64s
+
+================================================================================
+## Keep Context loading overlay until Configuration section is active
+================================================================================
+
+Context: After loading a Context the page opened on the default Home section
+instead of Configuration. The previous change stored the loaded-domain payload
+so the next page could paint chrome early; navbar init restored it and called
+applyDomainInfo, which hid the loading overlay before domain.js switched to
+?section=information. The Home section was visible during that window.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   applyDomainInfo no longer hides the overlay. New _settlePendingDomainLoading
+   helper runs in a finally block of loadNavbarState, so the overlay drops only
+   after the fresh /navbar/state (or the error fallback) has settled.
+2. tests/units/front/test_domain_loading_overlay.py
+   Contracts: restore does not hide the overlay; loadNavbarState settles it in finally.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_domain_loading_overlay.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11002 passed, 334 skipped, 8 deselected in 48.70s
+
+================================================================================
+## Fix Ontology Studio Group dropdown edit pencil right-border alignment
+================================================================================
+
+Context: In Ontology Studio, each item in the Group dropdown toolbar menu
+(#studioGroupsMenu) had its edit pencil icon pushed to the far right via ms-auto
+without any right margin, causing the top-right slanted edge of the icon glyph to
+stick against the right border of the dropdown menu.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-groups.js
+   Added `me-2` to the edit pencil `<i>` element in `_populateStudioMenu` so it has
+   balanced margin-right (0.5rem), matching the Business Views dropdown rename pencil.
+2. src/front/static/ontology/css/ontology-groups.css
+   Added `.studio-group-menu-item .bi-pencil { margin-left: auto; margin-right: 0.5rem; }`
+   rule to guarantee margin-right even when styled independently.
+3. tests/units/front/test_studio_views_groups_contract.py
+   Updated contracts to assert `me-2` and `.studio-group-menu-item .bi-pencil` styling.
+
+Modified files:
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/static/ontology/css/ontology-groups.css
+- tests/units/front/test_studio_views_groups_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11002 passed, 334 skipped, 8 deselected in 57.37s
+
+
+================================================================================
+## Business Rules header: shorter labels and primary Add button
+================================================================================
+
+Context: On Ontology → Business Rules, the header buttons read "Export rules",
+"Import rules" and "+ Add Rule". The word "rules" is redundant in the section
+context, and the Add action (the main CTA of the section) was rendered as an
+outline button, so it did not stand out. Labels are shortened and Add is made
+the filled primary (Create) action, the rightmost section CTA.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_business_rules.html
+   - "Export rules" button label → "Export" (link still downloads the rules file).
+   - "Import rules" button label → "Import" (title attribute unchanged).
+   - "Add Rule" button → "Add", class `btn-outline-primary` → `btn-primary`.
+   - Complex pane empty-state hint now reads "Click Add to create a CONSTRUCT rule".
+2. docs/user-guide.md (Exporting and importing rules; Simple rule steps)
+   - Button names updated to Export / Import / Add.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11002 passed, 334 skipped, 8 deselected in 48.96s
+
+================================================================================
+## Expressions & Axioms header: primary Add button style
+================================================================================
+
+Context: On Ontology → Expressions & Axioms (`?section=axioms`), the "+ Add"
+button was styled as `btn-outline-primary`. Per the design system
+(`.cursor/11-frontend-design.mdc`), the primary action of a section header
+must use `.btn-primary` (solid Create style).
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_axioms.html
+   - Switched the "+ Add" button class from `btn-outline-primary` to `btn-primary`.
+2. tests/units/front/test_axioms_list_ui.py
+   - Added `test_section_header_add_button_is_primary` contract asserting the
+     primary button styling on the Add button.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_axioms.html
+- tests/units/front/test_axioms_list_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11003 passed, 334 skipped, 8 deselected in 49.06s
+
+================================================================================
+## Data Quality header: "+ Add" renamed and primary
+================================================================================
+
+Context: On Ontology → Data Quality (`?section=dataquality`), the first button of
+the header group was labelled "Add Rule" and styled `btn-outline-primary`. It is
+the main action of the section, so it is renamed "Add" and made the filled
+primary (Create) button, consistent with the Business Rules and Expressions &
+Axioms headers.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_dataquality.html
+   - "Add Rule" label → "Add"; class `btn-outline-primary` → `btn-primary`.
+   - Other group buttons (Auto-generate, Cleanup, SHACL) unchanged.
+2. tests/units/front/test_dataquality_header_buttons.py (new)
+   - Contract: Add button is `btn-primary`, labelled "Add", no "Add Rule" text.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_dataquality.html
+- tests/units/front/test_dataquality_header_buttons.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11004 passed, 334 skipped, 8 deselected in 49.32s
+
+================================================================================
+## Data Quality header: "+ Add" moved left of the discussion button
+================================================================================
+
+Context: On Ontology → Data Quality, "+ Add" sat inside the Auto-generate /
+Cleanup / SHACL button group. It is moved out of the group and placed directly
+left of the discussion button, as a standalone primary button, so it reads as
+its own action.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_dataquality.html
+   - "+ Add" removed from the `btn-group` and re-added as a standalone
+     `btn btn-sm btn-primary ontology-edit-btn` before the discussion button
+     (permission-hidden buttons stay out of a `.btn-group`).
+   - Group spacing `me-2` → `me-3` to separate it from the Add button.
+2. tests/units/front/test_dataquality_header_buttons.py
+   - Contract updated: Add is primary, labelled "Add", outside the group and
+     left of the discussion button.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_dataquality.html
+- tests/units/front/test_dataquality_header_buttons.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11005 passed, 334 skipped, 8 deselected in 48.78s
+
+================================================================================
+## Ontology Studio: remove the Export (OWL) toolbar button
+================================================================================
+
+Context: Ontology Studio had an "Export" button in its top-right toolbar that
+downloaded the generated OWL (Turtle). The same download already lives in
+Ontology → General → OWL (Download), so the Studio button is removed.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_map.html
+   - Removed the `#mapDownloadOwl` "Export" button from the Studio toolbar.
+2. src/front/static/ontology/js/ontology-owl-content.js
+   - Removed the `#mapDownloadOwl` click handler (dead after the removal).
+     `_downloadOwlText` and the OWL tab's `#downloadOwl` handler are unchanged.
+3. src/front/templates/partials/layout/help_modal.html
+   - Help text now points to Ontology → General → OWL → Download.
+4. tests/units/front/test_help_center_menu_sync.py
+   - Asserts the Studio toolbar no longer has `#mapDownloadOwl` / "Export OWL".
+5. tests/e2e/ontology/test_owl_export_flows.py
+   - `test_designer_download_owl_button_present` → `test_designer_has_no_download_owl_button`.
+6. docs/user-guide.md, docs/getting-started.md, docs/development.md
+   - Removed mentions of the Studio Export button; point to the OWL tab's Download.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-owl-content.js
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_help_center_menu_sync.py
+- tests/e2e/ontology/test_owl_export_flows.py
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/development.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11005 passed, 334 skipped, 8 deselected in 48.78s
+(tests/e2e/ontology/test_owl_export_flows.py was updated but not run in this session.)
+
+================================================================================
+## Ontology Studio: View dropdown edit pencil right-border alignment
+================================================================================
+
+Context: In Ontology Studio, the View dropdown (#studioViewMenu) rows had the
+rename pencil button (.studio-view-rename) sticking against the right border of
+the dropdown menu because .btn-link.btn-sm's padding: 0 reset the button padding
+and there was no margin-right separating the pencil glyph from the right border.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   - Added `me-2` to the `studio-view-rename` button and `me-2` to the inner
+     `<i class="bi bi-pencil">` element, matching the spacing used in the
+     Group dropdown.
+2. src/front/static/ontology/css/ontology-map.css
+   - Styled `.studio-view-rename` with `padding: 0 0.5rem !important;` and
+     `margin-right: 0.5rem;`, and added `.studio-view-rename .bi-pencil { margin-right: 0.5rem; }`
+     so the icon has proper spacing from the right border.
+3. tests/units/front/test_studio_views_groups_contract.py
+   - Added contract assertions for `studio-view-rename me-2`, `bi-pencil me-2`,
+     and the `.studio-view-rename .bi-pencil` CSS rules.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- tests/units/front/test_studio_views_groups_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11005 passed, 334 skipped, 8 deselected in 49.45s
+
+================================================================================
+## Entities / Relationships "+ Add" and uniform Import tab buttons
+================================================================================
+
+Context: Ontology → Entities and Relationships headers used "+ Add Entity" and
+"+ Add Relationship". On Ontology → Import, each format tab had a different
+button style and label ("From Local File", "Import Selected Contexts",
+"Import Selected Standards", "Import Selected Domains" in the docs).
+Headers now use "+ Add"; all six Import tab buttons use one style
+(`btn btn-sm btn-primary`) and one label, "Import".
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_entities.html
+   - "+ Add Entity" → "+ Add".
+2. src/front/templates/partials/ontology/_ontology_relationships.html
+   - "+ Add Relationship" → "+ Add".
+3. src/front/templates/partials/ontology/_ontology_import.html
+   - OWL and RDFS "From Local File" buttons → "Import" (icon bi-download).
+   - FIBO, CDISC, IOF, FHIR "Import Selected …" buttons → "Import".
+   - All six buttons: `btn btn-sm btn-primary` (previously mixed outline
+     primary / info / warning / danger).
+4. src/front/static/ontology/js/ontology-import.js
+   - The four post-import button resets restore the "Import" label
+     (previously "Import Selected Contexts" / "Import Selected Standards").
+5. docs/user-guide.md
+   - FIBO, CDISC and IOF steps: "Click **Import**."
+6. tests/units/front/test_ontology_header_labels.py (new)
+   - Contract: Entities/Relationships Add buttons are primary and labelled Add;
+     all six Import buttons share class and label; JS resets use the same label.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_entities.html
+- src/front/templates/partials/ontology/_ontology_relationships.html
+- src/front/templates/partials/ontology/_ontology_import.html
+- src/front/static/ontology/js/ontology-import.js
+- docs/user-guide.md
+- tests/units/front/test_ontology_header_labels.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11008 passed, 334 skipped, 8 deselected in 50.19s
+
+================================================================================
+## Navbar user menu: Databricks-style name + email header
+================================================================================
+
+Context: The navbar user dropdown only showed the email and role badges.
+Aligned it with the Databricks workspace user popover: display name and email
+in a header row next to the avatar, and a neutral avatar colour instead of the
+brand grey. The display name is derived from the email (no extra SCIM call).
+Avatar colour is a best match to the Databricks UI, not pixel-verified against
+the Databricks page (Okta blocks headless access).
+
+Changes:
+
+1. src/front/fastapi/dependencies.py
+   - New Jinja helper `get_user_display_name` ("first.last@x" → "First Last";
+     falls back to the raw email when no local part). Registered as a template
+     global. Added `import re`.
+2. src/front/templates/base.html
+   - User dropdown identity block: avatar + name (`ob-user-menu-name`) + email
+     in a `ob-user-menu-header` row; role badges kept below.
+3. src/front/static/global/css/main.css
+   - `.ob-user-avatar`: neutral background (`--db-border`) and dark text
+     (`--db-text`) instead of brand primary / white.
+   - New `.ob-user-avatar-lg`, `.ob-user-menu-header`, `.ob-user-menu-who`,
+     `.ob-user-menu-name`; email uses `--db-text-muted` and wraps at word
+     boundaries (`overflow-wrap: anywhere`). Menu min-width 240px.
+4. tests/units/front/test_user_menu_contract.py
+   - Contract: menu renders name + email + large avatar.
+   - Parametrized unit test for `get_user_display_name`.
+
+Modified files:
+- src/front/fastapi/dependencies.py
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- tests/units/front/test_user_menu_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11015 passed, 334 skipped, 8 deselected in 54.41s
+
+================================================================================
+## Navbar user menu: fix oval avatar and wrapping email
+================================================================================
+
+Context: The in-menu avatar was squashed by flex shrink (~27×36) into an
+oval, and `.ob-subnav .dropdown-menu { min-width: 200px }` overrode the
+user-menu width so the email wrapped onto two lines.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - Avatar: `flex-shrink: 0`, `aspect-ratio: 1 / 1`, matching min-width /
+     min-height so the circle stays round in the flex header.
+   - User menu: more specific `.ob-subnav .dropdown-menu.ob-user-menu`
+     with `min-width: 18rem` / `width: max-content` so email fits.
+   - Email + name: `white-space: nowrap` (no mid-address wrap).
+2. tests/units/front/test_user_menu_contract.py
+   - Contract asserts nowrap, flex-shrink, aspect-ratio, and the
+     subnav-specific menu selector.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_user_menu_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_user_menu_contract.py → 9 passed
+
+================================================================================
+## Navbar user avatar: blue like Databricks
+================================================================================
+
+Context: In the Databricks workspace the user icon is blue; OntoBricks showed
+a grey circle (after the previous neutral-avatar change).
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-user-avatar` background switched to `var(--db-status-info)`
+     (#2563EB, existing token) with white initials, for both the navbar
+     trigger and the in-menu avatar (contrast ~5:1).
+2. tests/units/front/test_user_menu_contract.py
+   - Asserts the avatar uses the status-info background and white text.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_user_menu_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -p no:cacheprovider
+
+================================================================================
+## Navbar: user avatar colour and Activity icon position
+================================================================================
+
+Context: The user avatar colour is set to the Databricks workspace user-icon
+colour rgb(67, 74, 147). The Activity icon moves one step left, before the
+app switcher (9-dot).
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - New root token `--db-user-avatar-bg: rgb(67, 74, 147)` (next to the
+     status tokens).
+   - `.ob-user-avatar` background uses `var(--db-user-avatar-bg)`, white text.
+2. src/front/templates/base.html
+   - Activity Center `<li>` moved from after the Back-to-context link to
+     before the app switcher block. Visible order on a context page is now:
+     Context · Close/Save · Activity · App switcher · Back-to-context (settings)
+     · User.
+3. Contract tests updated for the new order (the old order was pinned):
+   - tests/units/front/test_app_switcher_contract.py
+   - tests/units/front/test_segmented_subnav_contract.py
+   - tests/units/front/test_settings_subnav_hidden.py (return link now checked
+     before the user menu, not before Activity)
+   - tests/units/front/test_workspace_home_contract.py
+   - tests/units/front/test_no_backend_ui.py
+   - tests/units/front/test_backend_brand_icons.py
+   - Menu slices now end at `userMenuDropdown` (Activity precedes the switcher).
+4. tests/units/front/test_user_menu_contract.py
+   - Asserts the avatar uses `--db-user-avatar-bg` with the rgb value.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/templates/base.html
+- tests/units/front/test_user_menu_contract.py
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_settings_subnav_hidden.py
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_backend_brand_icons.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+================================================================================
+## Navbar: Save and Close icons
+================================================================================
+
+Context: The navbar Save and Close actions used bi-cloud-upload and bi-x-circle.
+No Databricks icon asset is available in the repo and the Databricks page
+could not be read (Okta), so the closest Bootstrap Icons were chosen:
+bi-floppy for Save and bi-x-lg for Close. Swap the names here if exact
+Databricks icons are supplied.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Domain `navbar_actions` → Save: `bi-cloud-upload` → `bi-floppy`.
+   - Domain `navbar_actions` → Close: `bi-x-circle` → `bi-x-lg`.
+   The in-modal "Save & Close" buttons (navbar.js) are unchanged.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -p no:cacheprovider
+
+================================================================================
+## Navbar: final Save and Close icons
+================================================================================
+
+Context: User chose the final navbar icons after previewing candidates.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Domain `navbar_actions` → Save icon: `bi-check2-square`.
+   - Domain `navbar_actions` → Close icon: `bi-box-arrow-right`.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -p no:cacheprovider
+
+================================================================================
+## Move Settings from feature selector into User dropdown
+================================================================================
+
+Context: Settings was the admin-only fifth row of the feature selector
+(#obAppSwitcher). Users expect Settings with other account utilities, so
+it now lives in the User dropdown and is removed from the feature selector.
+
+Changes:
+
+1. src/front/templates/base.html
+   Removed the Settings app-switcher row; added admin-gated #navSettingsLink
+   in the User dropdown (before Help / Report an issue).
+2. src/front/static/global/css/permissions.css
+   Dropped the unused .ob-app-switcher-item[data-requires-app="admin"] flex
+   restore; dropdown-item admin gate remains for the new Settings link.
+3. .cursor/11-frontend-design.mdc
+   Documented Settings as user-dropdown-only (not an app-switcher row).
+4. docs/user-guide.md
+   Updated the Settings navigation instruction to the User dropdown.
+5. tests/units/front/test_app_switcher_contract.py
+   Feature selector now expects four workspaces and no Settings row.
+6. tests/units/front/test_user_menu_contract.py
+   Added contract that Settings lives in the User dropdown, not the switcher.
+7. tests/units/front/test_backend_brand_icons.py
+   Updated the "no top-navbar gear" contract for the user-dropdown link.
+8. tests/units/front/test_workspace_home_contract.py
+   Renamed/updated admin-only Settings assertions for the user dropdown.
+9. tests/units/api/test_ui_rendering.py
+   Asserts #navSettingsLink instead of any /settings anchor.
+10. tests/e2e/navigation/test_navigation_flows.py
+    Updated comment to match the new Settings entry point.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/permissions.css
+- .cursor/11-frontend-design.mdc
+- docs/user-guide.md
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_user_menu_contract.py
+- tests/units/front/test_backend_brand_icons.py
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/navigation/test_navigation_flows.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11016 passed, 334 skipped, 8 deselected in 54.48s
+
+================================================================================
+## Separator under Settings and hide Activity on Home page
+================================================================================
+
+Context: In the User dropdown, Settings needed a visual divider separating
+it from the general Help / Report issue items below. On the Home page
+(the landing Registry surface), the Activity button is not necessary and
+caused visual clutter.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Added an admin-gated `<hr class="dropdown-divider">` immediately below
+     Settings in the User dropdown.
+   - Added `id="activityCenterNavItem"` to the Activity Center `<li>` element.
+2. src/front/static/global/css/main.css
+   - Added rule hiding `#activityCenterNavItem` on `body[data-page="home"]`.
+   - Adjusted sibling margin to maintain clean spacing next to User dropdown.
+3. .cursor/11-frontend-design.mdc
+   - Documented the separator under Settings in the User dropdown.
+   - Documented that Activity button is hidden on the Home page.
+4. tests/units/front/test_user_menu_contract.py
+   - Added test verifying the separator between Settings and Help.
+5. tests/units/front/test_activity_center_contract.py
+   - Added test verifying Activity Center is hidden on the Home page.
+6. tests/units/front/test_workspace_home_contract.py
+   - Updated count of admin-gated elements in user dropdown (link + divider).
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_user_menu_contract.py
+- tests/units/front/test_activity_center_contract.py
+- tests/units/front/test_workspace_home_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11018 passed, 334 skipped, 8 deselected in 54.35s
+
+================================================================================
+## Digital Twin Reasoning: Run button switched to primary and moved left of discussion
+================================================================================
+
+Context: On Digital Twin → Business rules / Reasoning (`/dtwin/?section=reasoning`),
+the Run button was styled as `btn-outline-primary` and placed before the Purge
+Inferences button. The Run button is the primary CTA of the section; it is now
+styled as `btn-primary` and placed immediately to the left of the discussion
+shortcut button (after the Purge Inferences button).
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_reasoning.html
+   - Switched the Run button class from `btn-outline-primary` to `btn-primary`.
+   - Reordered header action buttons so `_purge_inferences_button.html` comes
+     first, followed by the Run button, followed by the discussion button
+     (`onto-discuss-btn`).
+2. tests/units/front/test_reasoning_header_buttons.py (new)
+   - Added unit test contract verifying that the Run button is styled as
+     `btn-primary` and placed immediately to the left of the discussion button,
+     preceded by the Purge Inferences button.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- tests/units/front/test_reasoning_header_buttons.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11020 passed, 334 skipped, 8 deselected in 50.85s
+
+================================================================================
+## Run buttons: primary style and Run labels (Data Quality, Analytics, Communities)
+================================================================================
+
+Context: The main action of three Knowledge Graph / Intelligence sections was
+not consistent: the Data Quality Run button was outline, the Graph Analytics
+action was labelled "Run Analysis" and sat before the Interpret button, and the
+Communities action was labelled "Detect". The primary action of each header is
+now the filled Run button, placed left of the discussion shortcut.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_dataquality.html
+   - Run button (`#runDQChecksBtn`) switched from `btn-outline-primary` to `btn-primary`.
+2. src/front/templates/partials/intelligence/_intel_analytics.html
+   - Header action (`#analyticsComputeBtn`) relabelled "Run Analysis" → "Run",
+     switched to `btn-primary`, and moved after the Interpret button so it sits
+     immediately left of the discussion button. The scope dialog's confirm button
+     is unchanged.
+3. src/front/templates/partials/intelligence/_intel_communities.html
+   - Header action (`#commDetectBtn`) relabelled "Detect" → "Run". Its in-page
+     hints ("Run Detect to draw…" and the step-by-step help list) now say "Run".
+4. tests/units/front/test_run_button_primary_contract.py (new)
+   - Contract: DQ Run is primary; Analytics Run is labelled Run, primary and
+     directly left of the discussion button; Communities action is labelled Run.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/partials/intelligence/_intel_analytics.html
+- src/front/templates/partials/intelligence/_intel_communities.html
+- tests/units/front/test_run_button_primary_contract.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11024 passed, 334 skipped, 8 deselected in 49.50s
+
+================================================================================
+## Build page: Inferred tab with a breakdown of materialized inferred triples
+================================================================================
+
+Context: The Build page (`/dtwin/?section=sync&tab=build`) reported one number
+for inferred triples (Overview "Inferred triples") with no split by origin.
+Operators could not tell how many triples came from reasoning rules, cohort
+runs or community runs. The companion table has no provenance column, so the
+origin is derived at query time from the vocabulary the cohort and community
+features already write (`<base>/cohort/`, `<base>/inCohort<RuleId>`,
+`<base>/fromRule`, `<base>/cohortSize`, `<base>/cluster/`, `<base>/inCluster`,
+`<base>/clusterSize`, `<base>/fromAlgorithm`, `<base>/modularity`,
+`<base>/resolution`). Everything else is Reasoning. The new **Inferred** tab
+shows one row per category with Triples, Entities (distinct subjects) and
+Groups (distinct cohorts or communities; not applicable to Reasoning), and a
+total equal to the Overview figure. Neo4j reports the breakdown as not
+supported.
+
+Changes:
+
+1. src/back/core/graphdb/inferred_breakdown.py (new)
+   - Pure module: `build_breakdown_sql(relation, base_uri, escape)` builds one
+     `GROUP BY category` statement (uses `substr` for prefix matching so it runs
+     on Spark SQL, Postgres and SQLite); `normalise_breakdown(rows)` returns the
+     three categories in display order, zero-filled when absent.
+2. src/back/core/graphdb/interfaces/GraphBackend.py
+   - New capability flag `supports_inferred_breakdown = False` (default unsupported).
+3. src/back/core/graphdb/lakebase/InferredBreakdownMixin.py (new)
+   - Mixin for `FlatStore`: `get_inferred_breakdown(table_name, base_uri)` runs
+     the breakdown over the `*__app` companion table. Extracted as a mixin so
+     `FlatStore` stays within the class size budget (architecture ratchet).
+4. src/back/core/graphdb/lakebase/FlatStore.py
+   - Inherits `InferredBreakdownMixin` (class line only; no body growth).
+5. src/back/core/graphdb/delta/MaterializedStore.py
+   - `supports_inferred_breakdown = True` and `get_inferred_breakdown(...)` over
+     the writable inferred table (`_writable_table_fqn`); zero rows without a domain.
+6. src/api/routers/internal/dtwin.py
+   - New route `GET /dtwin/reasoning/inferred/breakdown` returning
+     `{success, graph_name, supported, categories, total}`; `supported: false`
+     skips the store call. Base URI from the domain ontology, falling back to
+     `DEFAULT_BASE_URI`.
+7. src/front/templates/partials/dtwin/_query_build.html
+   - New **Inferred** tab button after Runs and its pane (`buildPaneInferred`),
+     in the usual list style of the Runs tab: `.ob-filter-bar` with search box,
+     `.ob-runs-count` and Refresh; loading spinner, empty state, inline warning
+     alert on error, `table-responsive > .ob-runs-table`; total line below the table.
+8. src/front/static/query/js/query-build-inferred.js (new)
+   - `InferredBreakdownModule`: loads on every show of the tab and on Refresh;
+     binds the shared `ObListFilter` (rows: "N rows"); renders rows with
+     `textContent`; unsupported backends show a notice; errors show the inline
+     alert (same as Runs) instead of a toast.
+9. src/front/templates/dtwin.html
+   - Loads `query/js/query-build-inferred.js`.
+10. docs/user-guide.md
+    - New "Inferred tab" paragraph and category table under `### Build (Sidebar)`.
+11. Tests (new):
+    - tests/units/graphdb/test_inferred_breakdown_sql.py: SQL run on SQLite
+      checked against an independent Python classifier, plus a cross-check of the
+      prefixes against `CohortVocabulary` / `CommunityVocabulary`.
+    - tests/units/graphdb/test_inferred_breakdown_stores.py: flags and the store
+      wrappers (Delta and Lakebase) with the executor patched.
+    - tests/units/dtwin/test_inferred_breakdown_api.py: route supported,
+      default base URI, and unsupported backend.
+    - tests/units/front/test_build_inferred_tab_contract.py: tab order, pane hooks,
+      no inline style, script wiring, no native dialogs.
+
+Modified files:
+- src/back/core/graphdb/inferred_breakdown.py (new)
+- src/back/core/graphdb/interfaces/GraphBackend.py
+- src/back/core/graphdb/lakebase/InferredBreakdownMixin.py (new)
+- src/back/core/graphdb/lakebase/FlatStore.py
+- src/back/core/graphdb/delta/MaterializedStore.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/static/query/js/query-build-inferred.js (new)
+- src/front/templates/dtwin.html
+- docs/user-guide.md
+- tests/units/graphdb/test_inferred_breakdown_sql.py (new)
+- tests/units/graphdb/test_inferred_breakdown_stores.py (new)
+- tests/units/dtwin/test_inferred_breakdown_api.py (new)
+- tests/units/front/test_build_inferred_tab_contract.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11062 passed, 334 skipped, 8 deselected in 51.37s
+
+================================================================================
+## Build: Inferred loading spinner + Graph cache status on the Build tab
+================================================================================
+
+Context: The Inferred tab needed a clearer loading spinner (matching the Runs
+tab), and the Build tab itself had no surface for Search-cache status next to
+the Refresh cache action. Operators could not see whether the cache was on,
+whether it was ready, or when it was last rebuilt.
+
+Changes:
+
+1. src/front/static/query/js/query-build-inferred.js
+   - Shows `#buildInferredLoading` (Bootstrap spinner) for the whole load;
+     the Refresh button icon also becomes a `spinner-border-sm` while busy.
+2. src/back/core/graphdb/SearchCachePolicy.py
+   - `mark_graph_cache_ready` stamps `graph_cache_refreshed_at` (UTC ISO) on
+     the domain info whenever a companion rebuild succeeds.
+3. src/back/objects/domain/Domain.py / TwinGraphStats.py
+   - Expose `graph_cache_refreshed_at` / `refreshed_at` on domain info and the
+     Overview/stats `graph_cache` block.
+4. src/front/templates/partials/dtwin/_query_sync.html
+   - Build Graph card now shows Graph cache (On/Off), Cache state
+     (Ready / Refresh required / Disabled), and Last cache refresh.
+5. src/front/static/query/js/query-sync.js
+   - `renderBuildGraphCacheStatus` paints those fields from `/dtwin/sync/info`
+     domain info and refreshes them from `/dtwin/sync/stats` graph_cache;
+     Overview cache status text also includes the last refresh when known.
+6. docs/user-guide.md
+   - Documents the Graph cache status rows on Build.
+7. tests/units/front/test_build_inferred_tab_contract.py
+   - Contract for the spinner and the three Build cache status hooks.
+8. tests/units/graphdb/test_v090_graph_access_search_cache_policy.py
+   - Asserts `mark_graph_cache_ready` writes `graph_cache_refreshed_at`.
+
+Modified files:
+- src/front/static/query/js/query-build-inferred.js
+- src/back/core/graphdb/SearchCachePolicy.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/digitaltwin/TwinGraphStats.py
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-sync.js
+- docs/user-guide.md
+- tests/units/front/test_build_inferred_tab_contract.py
+- tests/units/graphdb/test_v090_graph_access_search_cache_policy.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11072 passed, 334 skipped, 8 deselected in 49.14s
+
+================================================================================
+## Build header actions stay visible on Runs and Inferred
+================================================================================
+
+Context: Switching to the Runs tab hid `#buildHeaderActions` (Refresh /
+Refresh cache / Purge / Build). With the new Inferred tab that made the
+graph actions disappear whenever the operator left the Build pane.
+
+Changes:
+
+1. src/front/static/domain/js/domain-runs.js
+   - `_syncBuildPageTab` no longer hides the header actions; it clears
+     `d-none` instead. Also wires `tab=inferred` into the URL / restore path
+     and listens for `buildTabInferredBtn`.
+2. tests/units/front/test_build_inferred_tab_contract.py /
+   tests/units/front/test_runs_page.py
+   - Contracts that the Build header-actions sync function never toggles
+     `d-none` off for Runs/Inferred.
+
+Modified files:
+- src/front/static/domain/js/domain-runs.js
+- tests/units/front/test_build_inferred_tab_contract.py
+- tests/units/front/test_runs_page.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11072 passed, 334 skipped, 8 deselected in 49.14s
+
+================================================================================
+## Build: Cache updated shows Build/creation time instead of Never
+================================================================================
+
+Context: When no dedicated Refresh-cache stamp existed yet, the Build card
+showed "Last cache refresh: Never". Operators want the date/time the cache
+was created (the Build that produced the companions) instead.
+
+Changes:
+
+1. src/back/objects/digitaltwin/TwinGraphStats.py
+   - `graph_cache.refreshed_at` falls back to `domain.last_build` when
+     `graph_cache_refreshed_at` is unset.
+2. src/front/static/query/js/query-sync.js
+   - `renderBuildGraphCacheStatus` falls back to `last_built` / `last_build`
+     and never prints "Never" (dash only when no Build has run).
+3. src/front/templates/partials/dtwin/_query_sync.html
+   - Label renamed to **Cache updated**.
+4. docs/user-guide.md + contract / TwinGraphStats unit tests.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinGraphStats.py
+- src/front/static/query/js/query-sync.js
+- src/front/templates/partials/dtwin/_query_sync.html
+- docs/user-guide.md
+- tests/units/front/test_build_inferred_tab_contract.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11072 passed, 334 skipped, 8 deselected in 49.14s
+
+
+================================================================================
+## Build: Cache tab (status, companions, Activate link, Refresh cache)
+================================================================================
+
+Context: Cache status had been embedded on the Build Graph card, and Refresh
+cache lived in the page header. Operators asked for a dedicated Cache tab
+(after Inferred) with companion-table detail, a link to activate/deactivate
+Search cache in Context Settings, and the Refresh cache action moved into
+that tab.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   - New **Cache** tab after Inferred; status rows, companions table, Activate /
+     deactivate link (`/domain/?section=information#searchCacheSection`),
+     Reload, and both Lakebase / Lakehouse Refresh cache buttons (same IDs as
+     before). Header no longer hosts Refresh cache.
+2. src/front/templates/partials/dtwin/_query_sync.html
+   - Removed the Graph-card cache status rows (moved into the Cache tab).
+3. src/front/static/query/js/query-build-cache.js (new)
+   - Loads `/dtwin/sync/stats` on tab show / Reload; paints companions and
+     reuses `renderBuildGraphCacheStatus`.
+4. src/front/static/domain/js/domain-runs.js / dtwin.html / query-sync.js
+   - Wires `tab=cache`, loads the new script, reloads Cache after a successful
+     adjacency refresh.
+5. docs/user-guide.md + tests/units/front/test_build_cache_tab_contract.py
+   - and test_adjacency_refresh_ui.py updated for the new button location.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-build-cache.js (new)
+- src/front/static/query/js/query-sync.js
+- src/front/static/domain/js/domain-runs.js
+- src/front/templates/dtwin.html
+- docs/user-guide.md
+- tests/units/front/test_build_cache_tab_contract.py (new)
+- tests/units/front/test_build_inferred_tab_contract.py
+- tests/units/front/test_adjacency_refresh_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11085 passed, 334 skipped, 8 deselected in 52.95s
+
+================================================================================
+## Build: move Purge into the Inferred tab (renamed "Purge")
+================================================================================
+
+Context: The Purge Inferences button sat in the Build header actions, next to
+  Refresh and Build. It belongs with the inferred triples it removes, so it
+  moves into the Inferred tab toolbar and is renamed "Purge".
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   - Removed both `_purge_inferences_button.html` includes from
+     `#buildHeaderActions` (Lakebase and Lakehouse groups).
+   - Added the include in `#buildPaneInferred` toolbar, next to the Refresh
+     button (wrapped in a flex group with `ms-auto`).
+2. src/front/templates/partials/dtwin/_purge_inferences_button.html
+   - Label changed from "Purge Inferences" to "Purge". The shared partial also
+     renders on the Reasoning and Cohorts pages, so their label is now "Purge"
+     too. Class `js-purge-inferences-btn` and `data-graph-name` are unchanged.
+3. src/front/static/query/js/query-purge-inferences.js
+   - After a successful purge, reloads the Inferred breakdown via
+     `InferredBreakdownModule.load()` when available.
+4. docs/user-guide.md, docs/intelligence.md
+   - Purge wording updated; Build location now "Build → Inferred".
+5. tests/units/front/test_purge_inferences_ui.py
+   - Label assertion updated; new contract tests for placement (Inferred pane,
+     not header) and the breakdown reload hook.
+6. tests/units/api/test_help_api.py
+   - Feature inventory term updated from "Purge Inferences" to "**Purge**".
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/partials/dtwin/_purge_inferences_button.html
+- src/front/static/query/js/query-purge-inferences.js
+- docs/user-guide.md
+- docs/intelligence.md
+- tests/units/front/test_purge_inferences_ui.py
+- tests/units/api/test_help_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: targeted (purge, reasoning header, cohorts tabs, build inferred/cache,
+  adjacency refresh, help API, runs page) → 141 passed.
+  Full suite: see result line below.
+
+Tests (full): uv run --frozen pytest -q -m "not scenario" → 11087 passed, 334 skipped, 8 deselected
+
+================================================================================
+## Build: remove the header Refresh button (Lakebase)
+================================================================================
+
+Context: The top-right Refresh button in the Build header re-probed the triple
+  store status. Operators asked for it to be removed.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   - Removed the `refresh-triple-store` button from `#sync-lakebase-actions`
+     in `#buildHeaderActions`. It was the only instance in the template.
+2. src/front/static/query/js/query-sync.js
+   - Removed the now-dead `refresh-triple-store` branch from the sync-section
+     click delegate. `checkTripleStoreStatus(true)` is still called by the
+     Inferred purge flow and by other paths.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/static/query/js/query-sync.js
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11087 passed, 334 skipped, 8 deselected
+
+================================================================================
+## Build: header ⋮ menu (Purge inferences, Refresh cache) — Du Bois style
+================================================================================
+
+Context: Secondary Build actions (Purge, Refresh cache) needed a Databricks-style
+  kebab left of Build, always available across tabs. The trigger is borderless;
+  the dropdown mirrors Du Bois action menus (icon + label rows, neutral text,
+  soft hover).
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_build_more_actions.html (new)
+   - Borderless ⋮ toggle (`ob-dbx-menu-toggle`) and `ob-dbx-menu` dropdown with
+     **Purge inferences** and **Refresh cache** (Lakebase / Lakehouse paths).
+2. src/front/templates/partials/dtwin/_query_build.html
+   - Includes the kebab left of Build in both action groups; Purge removed from
+     the Inferred tab toolbar.
+3. src/front/static/query/css/query-sync.css
+   - Du Bois-like menu styles (icon slot, 0.8125rem label, hover well, no
+     outline on the toggle).
+4. src/front/static/query/js/query-sync.js /
+   query-databricks-build.js
+   - Keep header Refresh cache disabled state in sync with the Cache-tab buttons;
+     bind Lakehouse kebab items via `js-dbx-adjacency-refresh`.
+5. docs/user-guide.md + contract tests updated.
+
+Modified files:
+- src/front/templates/partials/dtwin/_build_more_actions.html (new)
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/static/query/css/query-sync.css
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+- docs/user-guide.md
+- tests/units/front/test_purge_inferences_ui.py
+- tests/units/front/test_adjacency_refresh_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11090 passed, 334 skipped, 8 deselected
+
+================================================================================
+## Frontend: promote `.ob-dbx-menu` kebab to shared component
+================================================================================
+
+Context: The Build ⋮ Du Bois menu should be reusable anywhere a section header
+  needs overflow actions. Styles moved out of Build-only CSS into the shared
+  catalog and documented in the design system.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   - Added shared `.ob-dbx-menu-toggle` / `.ob-dbx-menu` (+ icon/label) styles.
+2. src/front/static/query/css/query-sync.css
+   - Removed the `#buildHeaderActions`-scoped duplicate.
+3. .cursor/11-frontend-design.mdc
+   - New *Kebab / overflow menu* subsection under Section Header; catalog entry.
+4. tests/units/front/test_purge_inferences_ui.py
+   - Asserts the shared CSS lives in `components.css`, not `query-sync.css`.
+
+Modified files:
+- src/front/static/global/css/components.css
+- src/front/static/query/css/query-sync.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_purge_inferences_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: see result line below.
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11090 passed, 334 skipped, 8 deselected
+
+================================================================================
+## Context load lands on Home; defer Configuration hydration
+================================================================================
+
+Context: Opening a Context still felt slow and landed on Configuration
+  (`?section=information`) instead of Context → Home. Configuration was also
+  eagerly fetching `/domain/version-status` and `/domain/info` on every Context
+  page load, even when Home was shown.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   - `navigateToDomainHome()` → `/domain/?section=home`; General alias kept.
+2. registry.js / domain-versions.js / graphless route redirects
+   - Fallbacks and no-backend redirects use Home.
+3. src/front/static/domain/js/domain-information.js
+   - Extract `hydrateInformationSection()`; run only when Configuration is
+     (or becomes) active.
+4. src/front/static/domain/js/domain.js
+   - `loadDomainInfo()` deferred the same way.
+5. docs/user-guide.md + contract tests updated.
+   - New Context still opens Configuration after first save.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain.js
+- src/front/routes/dtwin.py
+- src/front/routes/mapping.py
+- src/front/routes/intelligence.py
+- docs/user-guide.md
+- tests/units/front/test_domain_load_redirect.py
+- tests/units/front/test_navbar_domain_badge_persistence.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/domain/test_domain_neo4j_connection_picker.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11091 passed, 334 skipped, 8 deselected
+
+================================================================================
+Release Notes for v0.10.0
+================================================================================
+
+Context:
+The user asked for the 0.10.0 Release Notes (and a December 2026 roadmap from
+Asana). The Release Notes were built from every changelog under
+changelogs/v0.10.0/ (2026-10-22 to 2026-11-20) following the structure of
+releases/ReleaseNotes_V0.9.0.md. The roadmap is not part of this change: the
+Asana MCP server could not be authorized from the local session.
+
+Changes:
+1. releases/ReleaseNotes_V0.10.0.md (new)
+   - Highlights, Intelligence workspace (Simulation sandbox, Patterns,
+     Communities), SHACL-AF business rules, Ontology and Mapping, Graph /
+     Build / Explorer, Home and chrome, Registry / identity / MCP,
+     Documentation, Bug Fixes, Security (Dependabot), Upgrade Notes.
+
+Modified files:
+- releases/ReleaseNotes_V0.10.0.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11091 passed, 334 skipped, 8 deselected (documentation-only change)

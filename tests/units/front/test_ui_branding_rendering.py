@@ -80,7 +80,7 @@ def test_branding_resolution_failure_falls_back_to_defaults(client):
         html = client.get("/", headers={"accept": "text/html"}).text
 
     assert "<title>Home - OntoBricks</title>" in html
-    assert '--db-primary: #4F46E5;' in html
+    assert '--db-primary: #737373;' in html
     assert 'href="/static/global/img/favicon.svg"' in html
 
 

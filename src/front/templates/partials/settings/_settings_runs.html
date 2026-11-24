@@ -1,9 +1,11 @@
 <!-- JS: /static/config/js/settings-runs.js -->
-<!-- Settings → Automation → Runs: build and analytics history across EVERY
-     domain in the registry (admin only). Same two-tab layout as Knowledge
-     Graph → Management → Runs, plus a Domain column, a Domain filter whose
-     default is every domain, and server-side pagination — cross-domain
-     history has no natural bound the way one domain's does.
+<!-- Settings → Automation → Runs: build, analytics, community, pattern and simulation history
+     across EVERY domain in the registry (admin only). Same tab layout as
+     Graph → Build → Runs and Intelligence → Analytics → Runs, plus a
+     Simulation tab (moved from Intelligence → Simulation → Runs), a Context
+     column, a Context filter whose default is every domain, and server-side
+     pagination — cross-domain history has no natural bound the way one
+     domain's does.
 
      Element ids are prefixed `sr` so a grep for a Runs id is never ambiguous
      between this page and the per-domain one. Each tab owns its own loading /
@@ -14,7 +16,7 @@
         <div>
             <h4 class="mb-1"><i class="bi bi-list-check me-2"></i>Runs</h4>
             <p class="text-muted mb-0 small">
-                Build and analytics history across every domain (newest first)
+                Build, analytics, community, pattern and simulation history across every context (newest first)
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -25,17 +27,18 @@
         </div>
     </div>
 
-    <div class="row g-2 mb-3">
-        <div class="col-sm-6 col-md-4">
-            <label for="settingsRunsDomain" class="form-label fw-semibold small mb-1">Domain</label>
-            <select class="form-select form-select-sm" id="settingsRunsDomain">
-                <option value="">All domains</option>
-            </select>
-        </div>
-    </div>
-
     <div class="card h-100">
         <div class="card-body p-0 ob-tabs-wrap">
+            <div class="px-3 pt-3">
+                <div class="row g-2 mb-3">
+                    <div class="col-sm-6 col-md-4">
+                        <label for="settingsRunsDomain" class="form-label fw-semibold small mb-1">Context</label>
+                        <select class="form-select form-select-sm" id="settingsRunsDomain">
+                            <option value="">All contexts</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
             <ul class="nav nav-tabs ob-tabs nav-fill" id="settingsRunsTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="srtab-btn-build" data-bs-toggle="tab"
@@ -49,6 +52,27 @@
                             data-bs-target="#srtab-analytics" type="button" role="tab"
                             aria-controls="srtab-analytics" aria-selected="false">
                         <i class="bi bi-graph-up-arrow me-1"></i>Analytics runs
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="srtab-btn-community" data-bs-toggle="tab"
+                            data-bs-target="#srtab-community" type="button" role="tab"
+                            aria-controls="srtab-community" aria-selected="false">
+                        <i class="bi bi-diagram-3 me-1"></i>Community runs
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="srtab-btn-pattern" data-bs-toggle="tab"
+                            data-bs-target="#srtab-pattern" type="button" role="tab"
+                            aria-controls="srtab-pattern" aria-selected="false">
+                        <i class="bi bi-puzzle me-1"></i>Pattern runs
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="srtab-btn-simulation" data-bs-toggle="tab"
+                            data-bs-target="#srtab-simulation" type="button" role="tab"
+                            aria-controls="srtab-simulation" aria-selected="false">
+                        <i class="bi bi-sliders2-vertical me-1"></i>Simulation runs
                     </button>
                 </li>
             </ul>
@@ -79,16 +103,17 @@
 
                     <div id="srBuildTableWrapper" style="display:none;">
                         <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light">
+                            <table class="table table-hover align-middle ob-runs-table">
+                                <thead>
                                     <tr>
-                                        <th class="text-end" style="width:7%;">ID</th>
-                                        <th style="width:18%;">Domain</th>
-                                        <th style="width:21%;">Date &amp; Time</th>
-                                        <th class="text-center" style="width:13%;">Version</th>
-                                        <th class="text-center" style="width:15%;">Status</th>
-                                        <th class="text-end" style="width:14%;">Triples</th>
-                                        <th class="text-center" style="width:12%;">Details</th>
+                                        <th>Start time</th>
+                                        <th>Context</th>
+                                        <th>Run ID</th>
+                                        <th>Version</th>
+                                        <th>Duration</th>
+                                        <th>Status</th>
+                                        <th class="text-end">Triples</th>
+                                        <th class="text-end"><span class="visually-hidden">Details</span></th>
                                     </tr>
                                 </thead>
                                 <tbody id="srBuildTableBody">
@@ -150,21 +175,21 @@
 
                     <div id="srAnalyticsTableWrapper" style="display:none;">
                         <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0" style="font-size:0.85rem">
-                                <thead class="table-light">
+                            <table class="table table-hover align-middle ob-runs-table">
+                                <thead>
                                     <tr>
-                                        <th>Date &amp; Time</th>
-                                        <th>Domain</th>
+                                        <th>Start time</th>
+                                        <th>Context</th>
                                         <th>Scope</th>
-                                        <th class="text-center">Version</th>
-                                        <th class="text-center">Status</th>
+                                        <th>Version</th>
+                                        <th>Status</th>
                                         <th class="text-end">Nodes</th>
                                         <th class="text-end">Edges</th>
                                         <th class="text-end">Components</th>
-                                        <th class="text-end">Avg Degree</th>
+                                        <th class="text-end">Avg degree</th>
                                         <th class="text-end">Density</th>
                                         <th class="text-end">Duration</th>
-                                        <th class="text-center">Details</th>
+                                        <th class="text-end"><span class="visually-hidden">Details</span></th>
                                     </tr>
                                 </thead>
                                 <tbody id="srAnalyticsTableBody">
@@ -199,10 +224,222 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- ── TAB: Community runs ── -->
+                <div class="tab-pane fade" id="srtab-community" role="tabpanel"
+                     aria-labelledby="srtab-btn-community">
+
+                    <div id="srCommunityLoading" class="text-center py-5" style="display:none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-muted mt-2 small">Loading community runs from registry&hellip;</p>
+                    </div>
+
+                    <div id="srCommunityEmpty" class="text-center py-5" style="display:none;">
+                        <i class="bi bi-diagram-3 text-muted fs-1"></i>
+                        <p class="text-muted mt-2 mb-1">No community runs recorded</p>
+                        <p class="text-muted small" id="srCommunityEmptyScope"></p>
+                    </div>
+
+                    <div id="srCommunityError" class="alert alert-warning m-3" role="alert" style="display:none;">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <span id="srCommunityErrorMessage"></span>
+                    </div>
+
+                    <div id="srCommunityTableWrapper" style="display:none;">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle ob-runs-table">
+                                <thead>
+                                    <tr>
+                                        <th>Start time</th>
+                                        <th>Context</th>
+                                        <th>Scope</th>
+                                        <th>Version</th>
+                                        <th>Status</th>
+                                        <th class="text-end">Nodes</th>
+                                        <th class="text-end">Communities</th>
+                                        <th>Converged</th>
+                                        <th class="text-end">Duration</th>
+                                        <th class="text-end"><span class="visually-hidden">Details</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="srCommunityTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- See the note on #srBuildPagination above. -->
+                    <div class="d-flex d-none justify-content-between align-items-center mt-3 flex-wrap gap-2"
+                         id="srCommunityPagination">
+                        <div class="d-flex align-items-center gap-2">
+                            <label for="srCommunityPageSize" class="text-muted small mb-0">Rows</label>
+                            <select class="form-select form-select-sm w-auto" id="srCommunityPageSize">
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <div class="d-flex d-none align-items-center gap-2" id="srCommunityPagingControls">
+                            <span class="text-muted small" id="srCommunityPageInfo"></span>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Community runs pagination">
+                                <button type="button" class="btn btn-outline-secondary" id="srCommunityPrev">
+                                    <i class="bi bi-chevron-left"></i> Prev
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="srCommunityNext">
+                                    Next <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── TAB: Pattern runs ── -->
+                <div class="tab-pane fade" id="srtab-pattern" role="tabpanel"
+                     aria-labelledby="srtab-btn-pattern">
+
+                    <div id="srPatternLoading" class="text-center py-5" style="display:none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-muted mt-2 small">Loading pattern runs from registry&hellip;</p>
+                    </div>
+
+                    <div id="srPatternEmpty" class="text-center py-5" style="display:none;">
+                        <i class="bi bi-puzzle text-muted fs-1"></i>
+                        <p class="text-muted mt-2 mb-1">No pattern runs recorded</p>
+                        <p class="text-muted small" id="srPatternEmptyScope"></p>
+                    </div>
+
+                    <div id="srPatternError" class="alert alert-warning m-3" role="alert" style="display:none;">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <span id="srPatternErrorMessage"></span>
+                    </div>
+
+                    <div id="srPatternTableWrapper" style="display:none;">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle ob-runs-table">
+                                <thead>
+                                    <tr>
+                                        <th>Start time</th>
+                                        <th>Context</th>
+                                        <th>Anchor type</th>
+                                        <th>Version</th>
+                                        <th>Status</th>
+                                        <th class="text-end">Anchors</th>
+                                        <th class="text-end">Patterns</th>
+                                        <th class="text-end">Hops</th>
+                                        <th class="text-end">Min support</th>
+                                        <th class="text-end">Duration</th>
+                                        <th class="text-end"><span class="visually-hidden">Details</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="srPatternTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- See the note on #srBuildPagination above. -->
+                    <div class="d-flex d-none justify-content-between align-items-center mt-3 flex-wrap gap-2"
+                         id="srPatternPagination">
+                        <div class="d-flex align-items-center gap-2">
+                            <label for="srPatternPageSize" class="text-muted small mb-0">Rows</label>
+                            <select class="form-select form-select-sm w-auto" id="srPatternPageSize">
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <div class="d-flex d-none align-items-center gap-2" id="srPatternPagingControls">
+                            <span class="text-muted small" id="srPatternPageInfo"></span>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Pattern runs pagination">
+                                <button type="button" class="btn btn-outline-secondary" id="srPatternPrev">
+                                    <i class="bi bi-chevron-left"></i> Prev
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="srPatternNext">
+                                    Next <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── TAB: Simulation runs ── -->
+                <div class="tab-pane fade" id="srtab-simulation" role="tabpanel"
+                     aria-labelledby="srtab-btn-simulation">
+
+                    <div id="srSimLoading" class="text-center py-5" style="display:none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-muted mt-2 small">Loading simulation runs from registry&hellip;</p>
+                    </div>
+
+                    <div id="srSimEmpty" class="text-center py-5" style="display:none;">
+                        <i class="bi bi-sliders2-vertical text-muted fs-1"></i>
+                        <p class="text-muted mt-2 mb-1">No simulation runs recorded</p>
+                        <p class="text-muted small" id="srSimEmptyScope"></p>
+                    </div>
+
+                    <div id="srSimError" class="alert alert-warning m-3" role="alert" style="display:none;">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <span id="srSimErrorMessage"></span>
+                    </div>
+
+                    <div id="srSimTableWrapper" style="display:none;">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle ob-runs-table">
+                                <thead>
+                                    <tr>
+                                        <th>Start time</th>
+                                        <th>Context</th>
+                                        <th>Version</th>
+                                        <th>Scenario</th>
+                                        <th>Status</th>
+                                        <th>Outcome</th>
+                                        <th class="text-end">Duration</th>
+                                        <th class="text-end"><span class="visually-hidden">Details</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="srSimTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- See the note on #srBuildPagination above. -->
+                    <div class="d-flex d-none justify-content-between align-items-center mt-3 flex-wrap gap-2"
+                         id="srSimPagination">
+                        <div class="d-flex align-items-center gap-2">
+                            <label for="srSimPageSize" class="text-muted small mb-0">Rows</label>
+                            <select class="form-select form-select-sm w-auto" id="srSimPageSize">
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <div class="d-flex d-none align-items-center gap-2" id="srSimPagingControls">
+                            <span class="text-muted small" id="srSimPageInfo"></span>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Simulation runs pagination">
+                                <button type="button" class="btn btn-outline-secondary" id="srSimPrev">
+                                    <i class="bi bi-chevron-left"></i> Prev
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="srSimNext">
+                                    Next <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
-<!-- NOTE: both run-details modals are rendered at page level in settings.html
+<!-- NOTE: run-details modals are rendered at page level in settings.html
      so they work from any section (a modal inside a hidden .sidebar-section
      shows its backdrop but leaves the dialog invisible). -->

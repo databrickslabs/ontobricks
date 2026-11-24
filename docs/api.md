@@ -41,7 +41,7 @@ The generated references remain available at `/api/docs` (Swagger UI),
 
 ## Authentication
 
-All endpoints that access Unity Catalog require Databricks authentication. Credentials can be provided via:
+All endpoints that access [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) require Databricks authentication. Credentials can be provided via:
 
 ### HTTP Headers (Recommended)
 ```
@@ -74,7 +74,7 @@ These are **not** the same as `GET /api/v1/health`.
 | Endpoint | Who | What it returns |
 |----------|-----|-----------------|
 | `GET /health` | Public | Cheap liveness: `{status, version, service, timestamp}`. Always HTTP 200. No catalog names, paths, or exception text. |
-| `GET /settings/diagnostics/readiness` | Admin | Full readiness: Databricks auth, SQL warehouse, registry DDL, Lakebase USAGE, … as `{status, summary, checks}`. Settings → Health → Databricks calls this. |
+| `GET /settings/diagnostics/readiness` | Admin | Full readiness: Databricks auth, [SQL warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/), registry DDL, [Lakebase](https://docs.databricks.com/aws/en/oltp/) USAGE, … as `{status, summary, checks}`. Settings → Health → Databricks calls this. |
 
 Probes that only need HTTP 200 should keep calling `/health`. Anything that parsed the old `checks` list from `/health` must switch to the readiness endpoint.
 
@@ -126,7 +126,7 @@ URLs use `/api/v1/domains` and `/api/v1/domain/…` for **domain** operations (s
 
 #### `POST /api/v1/domains/list`
 
-List domains in the Lakebase registry identified by the catalog / schema / volume triplet (the volume name is the registry key, not a JSON-on-Volume store).
+List domains in the [Lakebase](https://docs.databricks.com/aws/en/oltp/) registry identified by the catalog / schema / volume triplet (the volume name is the registry key, not a JSON-on-Volume store).
 
 **Request:**
 ```json
@@ -355,17 +355,19 @@ Execute a SPARQL query against a domain's ontology.
     "project_path": "/Volumes/catalog/schema/volume/domain.json",
     "query": "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10",
     "limit": 100,
-    "engine": "local"
+    "engine": "local",
+    "output_format": "rows"
 }
 ```
 
 **Parameters:**
-- `project_path` (required): Path to the domain JSON file in Unity Catalog
+- `project_path` (required): Path to the domain JSON file in [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/)
 - `query` (required): SPARQL query string
-- `limit` (optional): Maximum number of results (default: 100)
+- `limit` (optional): Maximum number of results (default: 100). For `CONSTRUCT`/`DESCRIBE` with `output_format=json-ld`, this truncates triples (not complete subgraphs).
 - `engine` (optional): Query engine - `local` (RDFLib) or `spark` (default: `local`)
+- `output_format` (optional): `rows` (default tabular bindings) or `json-ld` (`CONSTRUCT`/`DESCRIBE` only; rejected for `SELECT`/`ASK`)
 
-**Response:**
+**Response (rows):**
 ```json
 {
     "success": true,
@@ -376,6 +378,24 @@ Execute a SPARQL query against a domain's ontology.
         "columns": ["s", "p", "o"],
         "count": 1,
         "engine": "local"
+    }
+}
+```
+
+**Response (`output_format=json-ld` on CONSTRUCT/DESCRIBE):**
+```json
+{
+    "success": true,
+    "data": {
+        "results": [],
+        "columns": [],
+        "count": 3,
+        "engine": "local",
+        "format": "json-ld",
+        "jsonld": {
+            "@context": {"ex": "http://example.org/"},
+            "@graph": [{"@id": "ex:entity1", "@type": "ex:Person"}]
+        }
     }
 }
 ```
@@ -628,7 +648,7 @@ List all domains that have at least one version in the registry.
 ```
 
 `mcp_policy` is the domain's [per-domain MCP policy](mcp.md#per-domain-mcp-policy),
-authored in **Domain → General → MCP**. Only non-default entries are
+authored in **Context → Configuration → MCP**. Only non-default entries are
 stored, so `{}` means "every tool exposed, every ontology attachment surfaced
 normally" — the pre-0.8 behaviour. `disabled_tools` never contains a
 registry-level tool, and a missing `context` key defaults to `normal`.
@@ -656,7 +676,7 @@ has not been built yet.
 
 #### `GET /api/v1/domain/classes`
 
-Return per-class **dataset**, **bridge**, Unity Catalog **action** and **virtual
+Return per-class **dataset**, **bridge**, [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) **action** and **virtual
 attribute** metadata for every class in the domain's published ontology, without
 loading the full OWL. This is what the MCP server caches on `select_domain` to
 build its `[Context]` blocks. Only non-empty values are included, and virtual
@@ -774,10 +794,12 @@ Check backend type, table name, data availability, and triple count.
 
 #### `GET /api/v1/domain/ontology`
 
-Return the domain's OWL ontology in Turtle format.
+Return the domain's OWL ontology. Defaults to Turtle; pass `format=json-ld` for JSON-LD.
 
 **Parameters:**
-- `project_name` (query, optional): Domain name in the registry
+- `domain_name` (query, optional): Context name in the registry
+- `domain_version` (query, optional): Context version (latest if omitted)
+- `format` (query, optional): `turtle` (default) or `json-ld`
 
 ---
 
@@ -933,17 +955,17 @@ with `success: false` and nothing is executed. Table-valued UC functions run as
 
 #### `POST /api/v1/digitaltwin/nodes/business-rule`
 
-Run one of the SWRL business rules attached to the node's class (Ontology →
-Studio → Behaviour → **Inference rules (SWRL)**), **scoped to that entity**, and
+Run one of the IF-THEN business rules attached to the node's class (Ontology →
+Studio → Behaviour → **Inference rules (IF-THEN)**), **scoped to that entity**, and
 materialise the inferred triples into the graph.
 
 **Body:**
 - `entity_uri`: Instance URI of the node the rule is triggered on
-- `rule`: Name of a SWRL rule declared in the class's `business_rules` list
+- `rule`: Name of an IF-THEN rule declared in the class's `business_rules` list
 - `domain_name` / `domain_version` (optional): Registry domain and version
 
 Only rules declared on the resolved class (and still present and enabled in the
-domain's SWRL rules) can be run — the ontology is the allow-list. The rule's
+domain's IF-THEN rules) can be run — the ontology is the allow-list. The rule's
 antecedent gets an extra predicate binding the class variable(s) to
 `entity_uri`, so only facts involving that entity are inferred. Re-running is
 idempotent: facts already in the graph are not inserted twice.
@@ -956,7 +978,7 @@ idempotent: facts already in the graph are not inserted twice.
 > domain sets **Business rules** to **Disabled** in its MCP policy, every call
 > is refused.
 >
-> **Neo4j.** The Cypher translation of SWRL rules is not implemented yet, so on
+> **Neo4j.** The Cypher translation of IF-THEN rules is not implemented yet, so on
 > a Neo4j-backed domain the call succeeds with `inferred_count: 0`.
 
 The Graph Explorer uses a confirm-gated internal flow instead:
@@ -1105,7 +1127,7 @@ curl -X POST http://localhost:8000/api/v1/query \
 
 ## Notes
 
-1. **Stateless**: The API is stateless - each request loads the domain fresh from Unity Catalog.
+1. **Stateless**: The API is stateless - each request loads the domain fresh from [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/).
 2. **Engine**: Currently, only the `local` engine (RDFLib) is fully supported. The `spark` engine requires additional setup.
 3. **R2RML Required**: SPARQL queries require the domain to have an R2RML mapping generated. Use the web interface to generate mappings first.
 4. **Security**: Never share your Databricks token. Consider using environment variables or secure credential management.
@@ -1123,7 +1145,7 @@ This document describes the REST API endpoints available in OntoBricks.
 ### Base URL
 
 - **Local Development**: `http://localhost:8000`
-- **Databricks Apps**: `https://<workspace>.databricks.com/apps/<app-id>/`
+- **[Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/)**: `https://<workspace>.databricks.com/apps/<app-id>/`
 
 ---
 
@@ -1138,7 +1160,7 @@ This document describes the REST API endpoints available in OntoBricks.
 | GitHub mirror | `/settings/github` | Instance repository config, test/claim, sync-all, OBX rebuild (admin) |
 | Scheduled Builds | `/settings/schedules` | Automated triple store build scheduling |
 | Ontology | `/ontology` | Ontology design, OWL operations |
-| SWRL Rules | `/ontology/swrl` | SWRL rule management |
+| IF-THEN Rules | `/ontology/if_then` | IF-THEN rule management |
 | Constraints | `/ontology/constraints` | Property constraints |
 | Axioms | `/ontology/axioms` | OWL expressions & axioms |
 | SHACL Data Quality | `/ontology/dataquality` | SHACL shape CRUD, Turtle import/export |
@@ -1146,7 +1168,7 @@ This document describes the REST API endpoints available in OntoBricks.
 | SQL Wizard | `/mapping/wizard` | LLM-assisted SQL generation for mappings |
 | Knowledge Graph | `/dtwin` | Sync, graph viewer, quality checks, internal query execution |
 | Data Quality Execution | `/dtwin/dataquality` | Run SHACL checks against triple store |
-| Reasoning | `/dtwin/reasoning` | OWL 2 RL + SWRL inference, inferred triples |
+| Reasoning | `/dtwin/reasoning` | OWL 2 RL + IF-THEN inference, inferred triples |
 | GraphQL | `/graphql` (UI); `/api/v1/graphql` (external API mount) | Auto-generated typed GraphQL schema from ontology |
 | Domain | `/domain` | Domain save/load operations (UI route) |
 
@@ -1218,7 +1240,7 @@ POST /reset-session
 
 #### Browse Volume Files
 
-List files in a Unity Catalog volume.
+List files in a [Unity Catalog volume](https://docs.databricks.com/aws/en/volumes/).
 
 ```http
 POST /browse-volume
@@ -1252,7 +1274,7 @@ POST /browse-volume
 
 #### Read Volume File
 
-Read a file from a Unity Catalog volume.
+Read a file from a [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) volume.
 
 ```http
 POST /read-volume-file
@@ -1403,7 +1425,7 @@ POST /settings/save
 #### GitHub repository mirror (admin)
 
 Instance-wide mirror of the registry into one GitHub repository. The PAT is
-never stored — only a Databricks secret scope/key (or `ONTOBRICKS_GITHUB_TOKEN`
+never stored — only a [Databricks secret](https://docs.databricks.com/aws/en/security/secrets/) scope/key (or `ONTOBRICKS_GITHUB_TOKEN`
 locally). See [User Guide — GitHub](user-guide.md#configuration--github-repository-mirror).
 
 ```http
@@ -1450,11 +1472,11 @@ POST /settings/ui-branding
   "success": true,
   "branding": {
     "app_title": "OntoBricks",
-    "primary_color": "#4F46E5",
+    "primary_color": "#737373",
     "logo_url": "/static/global/img/favicon.svg",
     "is_custom_logo": false,
     "palette": {
-      "primary_rgb": "79, 70, 229",
+      "primary_rgb": "115, 115, 115",
       "primary_dark": "#4338CA",
       "on_primary": "#FFFFFF"
     }
@@ -1579,6 +1601,32 @@ POST /ontology/save
 }
 ```
 
+#### Design checks (sanity)
+
+```http
+GET /ontology/design-checks
+```
+
+Runs the advisory ontology design catalog against the session ontology (classes, properties, groups). Does not persist anything and does not change `ontology_valid`.
+
+**Response:**
+```json
+{
+  "success": true,
+  "findings": [
+    {
+      "rule": "DC-E01",
+      "severity": "error",
+      "kind": "class",
+      "uri": "http://example.org#Child",
+      "name": "Child",
+      "message": "Parent 'Missing' is not a class in this ontology."
+    }
+  ],
+  "summary": { "error": 1, "warning": 0, "info": 0 }
+}
+```
+
 #### Load Ontology from Session
 
 ```http
@@ -1694,7 +1742,7 @@ POST /ontology/assistant/chat
 
 Conversational ontology editing used by **Ontology → Studio**. The request
 does not include an LLM target; the route uses the LLM saved on the domain
-(`llm_endpoint` + `llm_endpoint_kind`, AI Gateway or Model Serving). An empty
+(`llm_endpoint` + `llm_endpoint_kind`, [AI Gateway](https://docs.databricks.com/aws/en/ai-gateway/) or [Model Serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/)). An empty
 target (**No LLM**) returns HTTP 400.
 
 **Request Body:**
@@ -1725,19 +1773,20 @@ POST /ontology/assistant/invoke
 
 OpenAI Responses-compatible wrapper around the same agent. The route injects
 the saved domain LLM target into `custom_inputs` (`endpoint_name`,
-`endpoint_kind`, credentials). Request-supplied host, token, or endpoint
-fields are ignored.
+`endpoint_kind`) and hands the credentials to the agent constructor, so they
+never appear in the MLflow-traced request. Request-supplied host, token, or
+endpoint fields are ignored.
 
 ---
 
-### SWRL Rules Endpoints
+### IF-THEN Rules Endpoints
 
-SWRL (Semantic Web Rule Language) rules for automatic inference.
+IF-THEN rules for automatic inference.
 
-#### List SWRL Rules
+#### List IF-THEN Rules
 
 ```http
-GET /ontology/swrl/list
+GET /ontology/if-then/list
 ```
 
 **Response:**
@@ -1755,10 +1804,10 @@ GET /ontology/swrl/list
 }
 ```
 
-#### Save SWRL Rule
+#### Save IF-THEN Rule
 
 ```http
-POST /ontology/swrl/save
+POST /ontology/if-then/save
 ```
 
 **Request Body:**
@@ -1776,10 +1825,53 @@ POST /ontology/swrl/save
 
 **Note:** Set `index` to -1 for new rules, or the rule index to update existing.
 
-#### Delete SWRL Rule
+#### Export Rules
 
 ```http
-POST /ontology/swrl/delete
+GET /ontology/rules/export
+```
+
+Downloads all Simple (`if_then_rules`) and Complex (`sparql_rules`) rules of the active domain as one JSON document (`Content-Disposition: attachment; filename="<domain>_rules.json"`):
+
+```json
+{
+  "format": "ontobricks-rules",
+  "version": 1,
+  "exported_at": "2026-11-10T09:00:00Z",
+  "domain": "MyDomain",
+  "if_then_rules": [
+    {"name": "InferGrandparent", "description": "", "antecedent": "...", "consequent": "...", "enabled": true}
+  ],
+  "sparql_rules": [
+    {"name": "CustomerHasClaim", "description": "", "query": "CONSTRUCT { ... } WHERE { ... }", "enabled": true}
+  ]
+}
+```
+
+#### Import Rules
+
+```http
+POST /ontology/rules/import
+```
+
+**Request Body:** a document in the format above. Files with another `format`, or a `version` above `1`, are rejected with a 4xx error and nothing is saved.
+
+**Behaviour:** upsert by name. A rule with a known name replaces the existing one in place; a new name is appended. Each rule is validated with the same checks as the single-rule save routes (Simple: `Rules.validate_if_then_rule`; enabled Complex: `SPARQLRuleEngine.validate_rule`). Invalid rules are skipped and reported; the valid ones are still saved.
+
+**Response:**
+```json
+{
+  "success": true,
+  "added": ["NewRule"],
+  "replaced": ["InferGrandparent"],
+  "rejected": [{"type": "if_then_rules", "name": "Broken", "reason": "Rule antecedent is required"}]
+}
+```
+
+#### Delete IF-THEN Rule
+
+```http
+POST /ontology/if-then/delete
 ```
 
 **Request Body:**
@@ -1789,10 +1881,10 @@ POST /ontology/swrl/delete
 }
 ```
 
-#### Validate SWRL Rule
+#### Validate IF-THEN Rule
 
 ```http
-POST /ontology/swrl/validate
+POST /ontology/if-then/validate
 ```
 
 **Request Body:**
@@ -2153,13 +2245,16 @@ GET /ontology/axioms/get-by-type/<axiom_type>
 
 ### Mapping Endpoints
 
-#### Get Mapping Page
+#### Get Mapping Page (redirect)
 
 ```http
 GET /mapping/
 ```
 
-Returns the mapping configuration HTML page.
+Legacy HTML entry point. Redirects (303) into **Graph → Management → Mapping**
+(`/dtwin/?section=design&tab=informations` by default, preserving query string such as
+`?open=automap`). Mapping JSON APIs remain under
+`/mapping/*` (see below).
 
 #### Get Tables
 
@@ -2326,8 +2421,14 @@ POST /mapping/parse-r2rml
 #### Reset Mappings
 
 ```http
-POST /mapping/reset
+POST /mapping/reset?keep_exclusions=false
 ```
+
+Deletes every entity and relationship mapping and the generated R2RML. `POST /mapping/clear` is an alias with the same query parameter.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `keep_exclusions` | `false` | When `true`, hidden (excluded) entities/relationships and excluded attributes survive as exclusion-only entries; only the mappings are removed. The Studio's **Unmap all** sends `true`. |
 
 #### Download R2RML
 
@@ -2513,7 +2614,7 @@ The `last_modified` field is retrieved from the Unity Catalog Delta table metada
 
 #### Auto-Map Entity Icons (LLM)
 
-Use the LLM saved in **Domain → General → AI** to suggest emoji icons for entity names.
+Use the LLM saved in **Context → Configuration → AI** to suggest emoji icons for entity names.
 
 ```http
 POST /dtwin/auto-assign-icons
@@ -2539,13 +2640,13 @@ POST /dtwin/auto-assign-icons
 }
 ```
 
-> **Note**: Requires a saved LLM on the domain (`llm_endpoint`). An empty target (**No LLM**) returns HTTP 400 with guidance to select a model in Domain → General → AI.
+> **Note**: Requires a saved LLM on the domain (`llm_endpoint`). An empty target (**No LLM**) returns HTTP 400 with guidance to select a model in Context → Configuration → AI.
 
 ---
 
 ### Data Quality Execution Endpoints
 
-Execute SHACL data quality checks against the triple store (Delta view or the active Graph DB engine — Lakebase Postgres).
+Execute SHACL data quality checks against the triple store (Delta view or the active Graph DB engine — [Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/)).
 
 #### Execute Quality Checks (Synchronous)
 
@@ -2600,7 +2701,7 @@ Returns a `task_id` for progress polling via `GET /tasks/{task_id}/status`.
 
 ### Reasoning Endpoints
 
-Run OWL 2 RL inference and SWRL rule execution against the triple store.
+Run OWL 2 RL inference and IF-THEN rule execution against the triple store.
 
 #### Start Reasoning (Async)
 
@@ -2611,13 +2712,13 @@ POST /dtwin/reasoning/start
 **Request Body:**
 ```json
 {
-  "phases": ["tbox", "swrl", "structural"],
+  "phases": ["tbox", "if_then", "structural"],
   "materialize": true,
   "target_table": "catalog.schema.triples_inferred"
 }
 ```
 
-Returns a `task_id`. Reasoning runs OWL 2 RL T-Box closure, SWRL rules, and optional structural reasoning (transitivity, symmetry).
+Returns a `task_id`. Reasoning runs OWL 2 RL T-Box closure, IF-THEN rules, and optional structural reasoning (transitivity, symmetry).
 
 #### Get Inferred Triples
 
@@ -2636,7 +2737,7 @@ GET /dtwin/reasoning/inferred
       "predicate": "https://example.org/ontology#hasGrandparent",
       "object": "https://example.org/Person/P003",
       "rule": "InferGrandparent",
-      "phase": "swrl"
+      "phase": "if_then"
     }
   ]
 }
@@ -2850,9 +2951,9 @@ Check backend type, table name, data availability, and triple count.
 GET /api/v1/domain/ontology
 ```
 
-**Query Parameters:** `project_name` (optional)
+**Query Parameters:** `domain_name` (optional), `domain_version` (optional), `format` (`turtle` default, or `json-ld`)
 
-Return the domain's OWL ontology in Turtle format.
+Return the domain's OWL ontology in Turtle or JSON-LD.
 
 #### R2RML Mapping
 
@@ -2947,10 +3048,11 @@ DELETE /settings/schedules/{schedule_id}
 
 ### Run History Endpoints
 
-Read the registry's build-run trace (`build_runs`) and analytics-run history
-(`graph_analytics_runs`). **All four are admin-only**, like every other
-`/settings` path. The first two back **Settings → Automation → Runs**; the last
-two are per-domain readers kept for programmatic use.
+Read the registry's build-run trace (`build_runs`), analytics-run history
+(`graph_analytics_runs`), community-detection history (`community_runs`) and
+pattern-detection history (`pattern_runs`). **All of them are admin-only**, like
+every other `/settings` path. The cross-domain readers back **Settings →
+Automation → Runs**; the per-domain readers are kept for programmatic use.
 
 #### List Build Runs (every domain, paginated)
 
@@ -2988,6 +3090,28 @@ Same contract and same response envelope as above, over analytics runs
 `connected_components`, `avg_degree`, `density`, `duration_ms`,
 `computed_at`). Spans every version of every domain.
 
+#### List Community Runs (every domain, paginated)
+
+```http
+GET /settings/runs/community?domain=&limit=25&offset=0
+```
+
+Same contract and envelope. One row per community-detection run that finished,
+completed or failed (`status`, `class_filter`, `node_count`, `cluster_count`,
+`converged`, `duration_ms`, `error`, `run_page_url`, `computed_at`). Only Detect
+runs are recorded; Materialize is not.
+
+#### List Pattern Runs (every domain, paginated)
+
+```http
+GET /settings/runs/patterns?domain=&limit=25&offset=0
+```
+
+Same contract and envelope. One row per pattern-detection run that finished,
+completed or failed (`status`, `anchor_type`, `hop_count`, `min_support`,
+`detail_level`, `anchor_count`, `pattern_count`, `duration_ms`, `error`,
+`run_page_url`, `computed_at`). Saving a pattern is not recorded.
+
 #### Build Runs for One Domain
 
 ```http
@@ -3022,8 +3146,8 @@ GET /mapping/wizard/llm-endpoints
 ```
 
 Returns executable Unity AI Gateway model services first (`kind: "ai_gateway"`),
-then legacy Model Serving endpoints (`kind: "serving"`). Domain → General →
-**Browse** and New Domain use this same list. Gateway rows require Unity Catalog
+then legacy Model Serving endpoints (`kind: "serving"`). Context → Configuration →
+**Browse** and New Context use this same list. Gateway rows require Unity Catalog
 `EXECUTE` or an effective `ALL_PRIVILEGES` grant for the application service
 principal. Saving a row on the domain is what Ontology Assistant, Wizard,
 Auto-Map, and the other in-app agents actually call.
@@ -3154,8 +3278,8 @@ OntoBricks uses Databricks authentication for all data operations:
 
 **Required Environment Variables:**
 - `DATABRICKS_HOST`: Workspace URL (with `https://`)
-- `DATABRICKS_TOKEN`: Personal access token or service principal token
-- `DATABRICKS_SQL_WAREHOUSE_ID`: SQL Warehouse identifier
+- `DATABRICKS_TOKEN`: [Personal access token](https://docs.databricks.com/aws/en/dev-tools/auth/pat) or [service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals) token
+- `DATABRICKS_SQL_WAREHOUSE_ID`: [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) identifier
 
 ---
 
@@ -3184,7 +3308,7 @@ HTML routes are thin; they call **domain objects** under `back/objects/*` and **
 | `front/routes/mapping.py`, `api/routers/internal/mapping.py` | `back/objects/mapping/mapping.py`, `back/core/w3c/r2rml/*` | Table mapping & R2RML |
 | `front/routes/dtwin.py`, `api/routers/internal/dtwin.py` | `back/objects/digitaltwin/digitaltwin.py`, `back/core/w3c/sparql/SparqlTranslator.py` | Knowledge Graph, SPARQL, query UI |
 | `front/routes/domain.py`, `api/routers/internal/domain.py` | `back/objects/domain/Domain.py`, `back/objects/session/DomainSession.py` | Domain save/load & registry UX |
-| `api/routers/internal/tasks.py` | (handlers in routes; registry scheduler via `back/objects/registry`) | Task status / triggers |
+| `api/routers/internal/tasks.py` | `back/core/task_manager` | Task status / cancel. Owner-scoped: users see their own and system tasks, admins see all; `clear-completed` is admin-only |
 | `api/routers/v1.py`, `api/routers/domains.py`, `api/routers/digitaltwin.py` | `api/service.py` | External stateless REST |
 | `back/fastapi/graphql_routes.py` | `back/core/graphql/GraphQLSchemaBuilder.py`, `back/core/graphql/ResolverFactory.py` | GraphQL (also mounted under `/api/v1/graphql`) |
 

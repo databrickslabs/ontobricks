@@ -49,6 +49,7 @@ const SidebarNav = {
 
         document.querySelectorAll(`${navSelector} .nav-link[data-section]`).forEach(link => {
             link.addEventListener('click', async function(e) {
+                window.bootstrap?.Tooltip?.getInstance(this)?.hide();
                 e.preventDefault();
                 const section = this.dataset.section;
                 
@@ -75,7 +76,8 @@ const SidebarNav = {
                 if (targetSection) {
                     targetSection.classList.add('active');
                 }
-                
+
+                SidebarNav._clearInitialSectionStyle();
                 SidebarNav._pushSectionState(section);
 
                 document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
@@ -86,6 +88,15 @@ const SidebarNav = {
                 if (changeHook && typeof changeHook === 'function') {
                     changeHook(section, targetSection, { isTrusted: !!e.isTrusted });
                 }
+            });
+        });
+
+        document.querySelectorAll('.ob-workspace-home-tile[data-section]').forEach((tile) => {
+            tile.addEventListener('click', function (e) {
+                if (e.target.closest('[data-help-jump]')) return;
+                e.preventDefault();
+                const section = this.getAttribute('data-section');
+                if (section) SidebarNav.switchTo(section);
             });
         });
     },
@@ -115,15 +126,49 @@ const SidebarNav = {
     },
 
     /**
+     * ``?tab=`` is owned by a specific section (Build/Runs on sync, GraphQL/SPARQL
+     * on graphql, …). Drop it when navigating away so URLs do not stick as
+     * ``?section=design&tab=build`` after leaving Build.
+     */
+    _TAB_OWNERS: {
+        sync: ['build', 'runs'],
+        graphql: ['graphql', 'sparql'],
+        analytics: ['analytics', 'runs'],
+        cohorts: ['design', 'runs'],
+        design: ['informations', 'visual', 'list']
+    },
+
+    /**
      * Update the URL query string to reflect the active section without a
      * full page reload, so that Back / Forward and bookmarks work.
      */
     _pushSectionState: function(section) {
         if (!section || !window.history || !window.history.pushState) return;
         const url = new URL(window.location);
-        if (url.searchParams.get('section') === section) return;
-        url.searchParams.set('section', section);
+        const prevSection = url.searchParams.get('section');
+        const tab = url.searchParams.get('tab');
+        const ownerTabs = SidebarNav._TAB_OWNERS[section];
+        let changed = false;
+        if (prevSection !== section) {
+            url.searchParams.set('section', section);
+            changed = true;
+        }
+        if (tab && (!ownerTabs || ownerTabs.indexOf(tab) === -1)) {
+            url.searchParams.delete('tab');
+            changed = true;
+        }
+        if (!changed) return;
         window.history.pushState({ section: section }, '', url);
+    },
+
+    /**
+     * Remove the pre-paint flash-prevention style from mapping-init-section.js
+     * (and similar). That style uses ``display: … !important`` and would otherwise
+     * permanently lock the first URL section on Graph after Mapping was merged in.
+     */
+    _clearInitialSectionStyle: function() {
+        const tempStyle = document.getElementById('initial-section-style');
+        if (tempStyle) tempStyle.remove();
     },
 
     /**
@@ -148,6 +193,7 @@ const SidebarNav = {
         if (link) link.classList.add('active');
         document.querySelectorAll('.sidebar-section').forEach(s => s.classList.remove('active'));
         target.classList.add('active');
+        SidebarNav._clearInitialSectionStyle();
         document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
             detail: { section: sectionName, targetSection: target }
         }));
@@ -159,14 +205,82 @@ const SidebarNav = {
     },
 
     /**
+     * Apply collapsed preference to the nav + html class (pre-paint twin).
+     */
+    _applyCollapsed: function(collapsed) {
+        const nav = document.querySelector('.sidebar-nav');
+        if (nav) nav.classList.toggle('collapsed', collapsed);
+        document.documentElement.classList.toggle('ob-sidebar-collapsed', collapsed);
+        SidebarNav._syncToggleChrome(collapsed);
+    },
+
+    /**
+     * Keep the fixed L2 collapse control in sync with the rail state.
+     */
+    _syncToggleChrome: function(collapsed) {
+        const btn = document.getElementById('obSidebarToggle');
+        if (!btn) return;
+        const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    },
+
+    /**
      * Toggle the sidebar collapsed state
      */
     toggleCollapse: function() {
         const nav = document.querySelector('.sidebar-nav');
         if (!nav) return;
-        nav.classList.toggle('collapsed');
-        const collapsed = nav.classList.contains('collapsed');
+        const collapsed = !nav.classList.contains('collapsed');
+        SidebarNav._applyCollapsed(collapsed);
         try { localStorage.setItem(SidebarNav._STORAGE_KEY, collapsed ? '1' : '0'); } catch (_) { /* ignore */ }
+        SidebarNav._updateTooltips();
+    },
+
+    /**
+     * Update tooltips for collapsed sidebar navigation links.
+     * When collapsed, hover shows a tooltip with the feature name to the right.
+     * When expanded, tooltips are disabled so they do not duplicate the visible label.
+     */
+    _updateTooltips: function() {
+        const nav = document.querySelector('.sidebar-nav');
+        if (!nav) return;
+        const isCollapsed = nav.classList.contains('collapsed');
+        nav.querySelectorAll('.nav-link').forEach(link => {
+            let label = link.getAttribute('data-sidebar-title');
+            if (!label) {
+                const labelEl = link.querySelector('.nav-label');
+                label = labelEl ? labelEl.textContent.trim() : link.textContent.trim();
+                if (label) link.setAttribute('data-sidebar-title', label);
+            }
+            if (!label) return;
+
+            let tip = window.bootstrap?.Tooltip?.getInstance(link);
+            if (!tip && window.bootstrap?.Tooltip) {
+                tip = new window.bootstrap.Tooltip(link, {
+                    title: () => link.getAttribute('data-sidebar-title') || '',
+                    placement: 'right',
+                    trigger: 'hover',
+                    container: 'body',
+                });
+            }
+
+            if (tip) {
+                if (isCollapsed) {
+                    tip.enable();
+                } else {
+                    tip.hide();
+                    tip.disable();
+                }
+            } else {
+                if (isCollapsed) {
+                    link.setAttribute('title', label);
+                } else {
+                    link.removeAttribute('title');
+                }
+            }
+        });
     },
 
     /**
@@ -211,25 +325,30 @@ const SidebarNav = {
             }
         });
 
-        // Inject toggle button at the top of the sidebar
-        if (nav.querySelector('.sidebar-toggle')) return;
-        const btn = document.createElement('button');
-        btn.className = 'sidebar-toggle';
-        btn.type = 'button';
-        btn.title = 'Collapse / Expand sidebar';
-        btn.innerHTML = '<i class="bi bi-layout-sidebar-inset"></i>';
-        btn.addEventListener('click', () => SidebarNav.toggleCollapse());
-        nav.insertBefore(btn, nav.firstChild);
+        // Fixed L2 toggle (left of Context name). Remove any legacy in-rail toggle.
+        nav.querySelectorAll('.sidebar-toggle').forEach((legacy) => legacy.remove());
+        const toggleItem = document.getElementById('obSidebarToggleItem');
+        const toggleBtn = document.getElementById('obSidebarToggle');
+        if (toggleItem) toggleItem.classList.remove('d-none');
+        if (toggleBtn && !toggleBtn.dataset.bound) {
+            if (nav.id) toggleBtn.setAttribute('aria-controls', nav.id);
+            toggleBtn.addEventListener('click', () => SidebarNav.toggleCollapse());
+            toggleBtn.dataset.bound = '1';
+        }
 
-        // Restore saved state (default: collapsed)
+        // Restore saved state (default: collapsed). Prefer the html class already
+        // set by sidebar-collapse-init.js so first paint and JS stay aligned.
+        let collapsed = document.documentElement.classList.contains('ob-sidebar-collapsed');
         try {
             const saved = localStorage.getItem(SidebarNav._STORAGE_KEY);
-            if (saved !== '0') {
-                nav.classList.add('collapsed');
-            }
+            collapsed = saved !== '0';
         } catch (_) {
-            nav.classList.add('collapsed');
+            collapsed = true;
         }
+        SidebarNav._applyCollapsed(collapsed);
+        document.documentElement.classList.add('ob-sidebar-ready');
+
+        SidebarNav._updateTooltips();
     }
 };
 

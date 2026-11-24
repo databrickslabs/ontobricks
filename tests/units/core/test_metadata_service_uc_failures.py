@@ -63,4 +63,4 @@ class TestColumnReadFailure:
         _ok, _msg, meta = svc.load_selected_tables("c", "s", ["orders"])
         table = meta["tables"][0]
         assert table["error"] == "Could not read columns of c.s.orders"
-        assert table["can_select"] is False
+        assert table["can_select"] is None

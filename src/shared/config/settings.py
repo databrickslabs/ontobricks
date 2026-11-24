@@ -10,6 +10,7 @@ import os
 
 #: Lakeflow release channels a slot pipeline may run on.
 SLOT_PIPELINE_CHANNELS = ("PREVIEW", "CURRENT")
+from shared.config.constants import DTWIN_CHAT_MAX_TOKENS
 
 
 def _get_default_session_dir() -> str:
@@ -97,14 +98,16 @@ class Settings(BaseSettings):
     session_dir: str = _get_default_session_dir()
     session_max_age: int = 86400  # 24 hours
 
-    # Knowledge-graph analytics: the maximum number of triples the cluster
-    # detection endpoint will load into memory. Raise with care: the full
-    # triple set is held in memory during community detection.
-    analytics_max_triples: int = Field(
-        default=500_000,
+    # Output-token budget per LLM call of the Graph Chat agent (Digital Twin
+    # assistant). Reasoning models spend part of it before writing the answer;
+    # when it runs out first, the user gets the "couldn't display" fallback.
+    dtwin_chat_max_tokens: int = Field(
+        default=DTWIN_CHAT_MAX_TOKENS,
+        ge=1,
+        le=DTWIN_CHAT_MAX_TOKENS,
         validation_alias=AliasChoices(
-            "ONTOBRICKS_ANALYTICS_MAX_TRIPLES",
-            "analytics_max_triples",
+            "ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS",
+            "dtwin_chat_max_tokens",
         ),
     )
 
@@ -148,6 +151,29 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "ONTOBRICKS_ANALYTICS_JOB_NAME",
             "analytics_job_name",
+        ),
+    )
+
+    # Deployed name of the community-detection job. Empty means "derive it
+    # from the app name" as ``<app>-community-detection``, matching the bundle
+    # (``resources/community_detection.job.yml``).
+    community_job_name: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_COMMUNITY_JOB_NAME",
+            "community_job_name",
+        ),
+    )
+
+    # Deployed name of the pattern-detection job. Empty means "derive it
+    # from the app name" as ``<app>-pattern-detection``, matching the bundle
+    # (``resources/pattern_detection.job.yml``). Gated by the same analytics
+    # toggle as metrics / communities.
+    pattern_job_name: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_PATTERN_JOB_NAME",
+            "pattern_job_name",
         ),
     )
 

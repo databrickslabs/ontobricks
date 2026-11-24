@@ -252,10 +252,8 @@ class DigitalTwin:
         store,
         t0,
         total,
-        swrl_rules=None,
+        if_then_rules=None,
         ontology=None,
-        decision_tables=None,
-        aggregate_rules=None,
         violation_limit=None,
         parallel=False,
     ):
@@ -269,10 +267,8 @@ class DigitalTwin:
             store,
             t0,
             total,
-            swrl_rules,
+            if_then_rules,
             ontology,
-            decision_tables,
-            aggregate_rules,
             violation_limit,
             parallel=parallel,
         )
@@ -352,10 +348,8 @@ class DigitalTwin:
         triplestore_table: str,
         total: int,
         *,
-        swrl_rules=None,
+        if_then_rules=None,
         ontology_dict=None,
-        decision_tables=None,
-        aggregate_rules=None,
         violation_limit=None,
         failure_message: str = "Data quality checks failed",
         use_exception_message_on_failure: bool = False,
@@ -368,10 +362,8 @@ class DigitalTwin:
             shapes,
             triplestore_table,
             total,
-            swrl_rules=swrl_rules,
+            if_then_rules=if_then_rules,
             ontology_dict=ontology_dict,
-            decision_tables=decision_tables,
-            aggregate_rules=aggregate_rules,
             violation_limit=violation_limit,
             failure_message=failure_message,
             use_exception_message_on_failure=use_exception_message_on_failure,
@@ -536,30 +528,6 @@ class DigitalTwin:
     @staticmethod
     def is_owlrl_available() -> bool:
         return TwinResolve.is_owlrl_available()
-
-    # ------------------------------------------------------------------
-    # Community detection
-    # ------------------------------------------------------------------
-
-    def detect_clusters(
-        self,
-        store: Any,
-        graph_name: str,
-        algorithm: str = "louvain",
-        resolution: float = 1.0,
-        predicate_filter: Optional[List[str]] = None,
-        class_filter: Optional[List[str]] = None,
-        max_triples: int = 500_000,
-    ) -> Dict[str, Any]:
-        return TwinAnalytics(self._domain).detect_clusters(
-            store,
-            graph_name,
-            algorithm=algorithm,
-            resolution=resolution,
-            predicate_filter=predicate_filter,
-            class_filter=class_filter,
-            max_triples=max_triples,
-        )
 
     def compute_graph_metrics(
         self,

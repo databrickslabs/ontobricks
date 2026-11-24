@@ -409,7 +409,7 @@ def test_save_domain_permissions_replaces_entries_with_defaults():
 
     ok, msg = make_store(db).save_domain_permissions("acme", data)
 
-    assert ok and msg == "Domain permissions saved"
+    assert ok and msg == "Context permissions saved"
     assert db.transactions == 1, "DELETE + INSERTs run in a single transaction"
     assert db.one("DELETE FROM").params == ("dom-1",)
     inserts = db.sql_with("INSERT INTO")
@@ -423,7 +423,7 @@ def test_save_domain_permissions_unknown_domain_and_error():
     db = FakeDB()
     assert make_store(db).save_domain_permissions("nope", {}) == (
         False,
-        "Domain 'nope' not found",
+        "Context 'nope' not found",
     )
     assert not db.sql_with("DELETE FROM")
     db.on("SELECT id FROM", raises=RuntimeError("e"))

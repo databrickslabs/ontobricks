@@ -138,7 +138,7 @@ MCP_DOMAIN_TOOLS: tuple[Dict[str, Any], ...] = (
     {
         "name": "run_entity_business_rule",
         "label": "Run entity business rule",
-        "description": "Trigger a SWRL business rule declared on the entity's "
+        "description": "Trigger an IF-THEN business rule declared on the entity's "
         "class and write the inferred triples to the graph (Builder role).",
         "requires_graph": True,
     },
@@ -188,7 +188,7 @@ MCP_CONTEXT_FEATURES: tuple[Dict[str, str], ...] = (
     {
         "name": "business_rules",
         "label": "Business rules",
-        "description": "SWRL rules declared on a class that can be triggered "
+        "description": "IF-THEN rules declared on a class that can be triggered "
         "on one entity to materialise inferred facts. Disabling this also "
         "refuses execution, not just the listing.",
     },

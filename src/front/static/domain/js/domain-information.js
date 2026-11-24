@@ -444,98 +444,16 @@ function updateVersionStatusUI(isActive, version, hasRegistry) {
     }
 }
 
-// Fetch and update version status on page load
-document.addEventListener('DOMContentLoaded', async function() {
+/**
+ * Hydrate Context → Configuration (version status, LLM, graph backend, …).
+ * Deferred until that section is shown so Context → Home opens without waiting
+ * on these registry / domain-info round-trips.
+ */
+let _informationHydrated = false;
+async function hydrateInformationSection() {
+    if (_informationHydrated) return;
+    _informationHydrated = true;
     try {
-        refreshDtNamesFromForm();
-
-        // Re-derive the DT names whenever the Triple Store tab is shown
-        // (panel is initially hidden) and whenever the user commits a
-        // change to the domain name (on blur / Enter, NOT per-keystroke).
-        const tsTab = document.getElementById('tab-triplestore');
-        if (tsTab) {
-            tsTab.addEventListener('shown.bs.tab', refreshDtNamesFromForm);
-        }
-        const nameEl = document.getElementById('domainName');
-        if (nameEl) {
-            nameEl.addEventListener('change', refreshDtNamesFromForm);
-            nameEl.addEventListener('blur', refreshDtNamesFromForm);
-            // Duplicate-name guard runs on blur as well as the
-            // existing debounced ``input`` hook in domain.js, so the
-            // user gets immediate feedback when committing the field.
-            // The check itself, the inline ``invalid-feedback`` hint,
-            // and the ``is-invalid`` class are owned by domain.js.
-            if (typeof checkDomainNameAvailability === 'function') {
-                nameEl.addEventListener('blur', () => checkDomainNameAvailability(nameEl));
-            }
-        }
-        const versionEl = document.getElementById('domainVersionSelect');
-        if (versionEl) {
-            versionEl.addEventListener('change', refreshDtNamesFromForm);
-        }
-        const graphBackendEl = document.getElementById('domainGraphBackend');
-        const neo4jDbElInit = document.getElementById('domainNeo4jDatabase');
-        // The template already renders persisted values server-side. Mark
-        // controls dirty on first interaction so the `/domain/info` refresh
-        // below cannot overwrite a newer browser selection.
-        if (graphBackendEl) {
-            graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
-            graphBackendEl.addEventListener('change', syncNeo4jConnectionSection);
-            graphBackendEl.addEventListener('change', toggleLakehouseMaterializationSection);
-            graphBackendEl.addEventListener('change', toggleSearchCacheSection);
-            graphBackendEl.addEventListener('change', applyGraphlessConstraints);
-            graphBackendEl.addEventListener('change', () => {
-                graphBackendEl.dataset.userEdited = '1';
-            });
-        }
-        if (neo4jDbElInit) {
-            neo4jDbElInit.addEventListener('change', () => {
-                neo4jDbElInit.dataset.userEdited = '1';
-            });
-        }
-        const materializationElInit = document.getElementById('domainLakehouseMaterialization');
-        if (materializationElInit) {
-            materializationElInit.addEventListener('change', () => {
-                materializationElInit.dataset.userEdited = '1';
-            });
-        }
-        const materializationModeElInit = document.getElementById('domainMaterializationMode');
-        if (materializationModeElInit) {
-            materializationModeElInit.addEventListener('change', () => {
-                materializationModeElInit.dataset.userEdited = '1';
-            });
-        }
-        const cacheElInit = document.getElementById('domainGraphCacheEnabled');
-        if (cacheElInit) {
-            cacheElInit.addEventListener('change', () => {
-                cacheElInit.dataset.userEdited = '1';
-                refreshSearchCacheStatusLine();
-            });
-        }
-        const enableRowTrackingBtn = document.getElementById('enableRowTrackingBtn');
-        if (enableRowTrackingBtn) {
-            enableRowTrackingBtn.addEventListener('click', enableRowTracking);
-        }
-        const materializationModeSelect = document.getElementById('domainMaterializationMode');
-        if (materializationModeSelect) {
-            materializationModeSelect.addEventListener('change', toggleRealtimeSourceSection);
-        }
-        toggleRealtimeSourceSection();
-        loadMaterializationReadiness();
-        initGraphBackendCards();
-        syncNeo4jConnectionSection();
-        toggleLakehouseMaterializationSection();
-        toggleSearchCacheSection();
-        applyGraphlessConstraints();
-        const refreshDbBtn = document.getElementById('btnRefreshNeo4jDatabases');
-        if (refreshDbBtn) {
-            refreshDbBtn.addEventListener('click', () => loadNeo4jDatabases(true));
-        }
-        const llmBrowse = document.getElementById('domainLlmBrowse');
-        if (llmBrowse) {
-            llmBrowse.addEventListener('click', browseLlmEndpoints);
-        }
-
         const [statusData, infoData] = await Promise.all([
             fetchOnce('/domain/version-status').catch(() => null),
             fetchOnce('/domain/info').catch(() => null)
@@ -598,12 +516,8 @@ document.addEventListener('DOMContentLoaded', async function() {
                     && infoData.info && infoData.info.materialization_mode) {
                 materializationModeEl.value = infoData.info.materialization_mode;
                 materializationModeEl.dataset.savedValue = infoData.info.materialization_mode;
+                toggleRealtimeSourceSection();
             }
-            // Runs after the saved value is known, so the freshly fetched
-            // option list keeps it selected. Safe even when the user already
-            // edited the field: it reads the select's *current* value first
-            // (see `_loadNeo4jConnectionOptions`) and only falls back to
-            // `dataset.savedValue` when the select has nothing of its own.
             const cacheEl = document.getElementById('domainGraphCacheEnabled');
             if (cacheEl && !cacheEl.dataset.userEdited && infoData.info) {
                 if (typeof infoData.info.graph_cache_enabled === 'boolean') {
@@ -613,6 +527,11 @@ document.addEventListener('DOMContentLoaded', async function() {
                 if (infoData.info.graph_cache_state) {
                     cacheEl.dataset.cacheState = infoData.info.graph_cache_state;
                 }
+            }
+            const scopeEl = document.getElementById('domainIdentityScope');
+            if (scopeEl && !scopeEl.dataset.userEdited && infoData.info && infoData.info.identity_scope) {
+                scopeEl.value = infoData.info.identity_scope;
+                scopeEl.dataset.savedValue = infoData.info.identity_scope;
             }
             syncNeo4jConnectionSection();
             toggleLakehouseMaterializationSection();
@@ -625,21 +544,107 @@ document.addEventListener('DOMContentLoaded', async function() {
         // version-status; rerun once after status is applied so the FQNs
         // line up with the real registry config.
         refreshDtNamesFromForm();
-        
+
         // Re-enable version selector after a short delay to override any global disabling
         setTimeout(enableVersionSelector, 100);
     } catch (e) {
-        console.log('Could not fetch domain status:', e);
-    } finally {
-        // Hand-off from navbar.js domainNew(): hide the overlay once the
-        // initial info round-trips have resolved.
-        try {
-            if (sessionStorage.getItem('ob_creating_new_domain') === '1') {
-                sessionStorage.removeItem('ob_creating_new_domain');
-                if (typeof hideDomainLoading === 'function') hideDomainLoading();
-            }
-        } catch (e) {}
+        _informationHydrated = false;
+        console.log('Could not fetch context status:', e);
     }
+}
+
+window.hydrateInformationSection = hydrateInformationSection;
+
+// Bind Configuration controls on page load; hydrate data only when that
+// section is (or becomes) active.
+document.addEventListener('DOMContentLoaded', function() {
+    refreshDtNamesFromForm();
+
+    // Re-derive the DT names whenever the Triple Store tab is shown
+    // (panel is initially hidden) and whenever the user commits a
+    // change to the domain name (on blur / Enter, NOT per-keystroke).
+    const tsTab = document.getElementById('tab-triplestore');
+    if (tsTab) {
+        tsTab.addEventListener('shown.bs.tab', refreshDtNamesFromForm);
+    }
+    const nameEl = document.getElementById('domainName');
+    if (nameEl) {
+        nameEl.addEventListener('change', refreshDtNamesFromForm);
+        nameEl.addEventListener('blur', refreshDtNamesFromForm);
+        if (typeof checkDomainNameAvailability === 'function') {
+            nameEl.addEventListener('blur', () => checkDomainNameAvailability(nameEl));
+        }
+    }
+    const versionEl = document.getElementById('domainVersionSelect');
+    if (versionEl) {
+        versionEl.addEventListener('change', refreshDtNamesFromForm);
+    }
+    const graphBackendEl = document.getElementById('domainGraphBackend');
+    const neo4jDbElInit = document.getElementById('domainNeo4jDatabase');
+    if (graphBackendEl) {
+        graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
+        graphBackendEl.addEventListener('change', syncNeo4jConnectionSection);
+        graphBackendEl.addEventListener('change', toggleLakehouseMaterializationSection);
+        graphBackendEl.addEventListener('change', toggleSearchCacheSection);
+        graphBackendEl.addEventListener('change', applyGraphlessConstraints);
+        graphBackendEl.addEventListener('change', () => {
+            graphBackendEl.dataset.userEdited = '1';
+        });
+    }
+    if (neo4jDbElInit) {
+        neo4jDbElInit.addEventListener('change', () => {
+            neo4jDbElInit.dataset.userEdited = '1';
+        });
+    }
+    const materializationElInit = document.getElementById('domainLakehouseMaterialization');
+    if (materializationElInit) {
+        materializationElInit.addEventListener('change', () => {
+            materializationElInit.dataset.userEdited = '1';
+        });
+    }
+    const cacheElInit = document.getElementById('domainGraphCacheEnabled');
+    if (cacheElInit) {
+        cacheElInit.addEventListener('change', () => {
+            cacheElInit.dataset.userEdited = '1';
+            refreshSearchCacheStatusLine();
+        });
+    }
+    const materializationModeElInit = document.getElementById('domainMaterializationMode');
+    if (materializationModeElInit) {
+        materializationModeElInit.addEventListener('change', () => {
+            materializationModeElInit.dataset.userEdited = '1';
+        });
+        materializationModeElInit.addEventListener('change', toggleRealtimeSourceSection);
+    }
+    const enableRowTrackingBtn = document.getElementById('enableRowTrackingBtn');
+    if (enableRowTrackingBtn) {
+        enableRowTrackingBtn.addEventListener('click', enableRowTracking);
+    }
+    toggleRealtimeSourceSection();
+    loadMaterializationReadiness();
+    initGraphBackendCards();
+    syncNeo4jConnectionSection();
+    toggleLakehouseMaterializationSection();
+    toggleSearchCacheSection();
+    applyGraphlessConstraints();
+    const refreshDbBtn = document.getElementById('btnRefreshNeo4jDatabases');
+    if (refreshDbBtn) {
+        refreshDbBtn.addEventListener('click', () => loadNeo4jDatabases(true));
+    }
+    const llmBrowse = document.getElementById('domainLlmBrowse');
+    if (llmBrowse) {
+        llmBrowse.addEventListener('click', browseLlmEndpoints);
+    }
+
+    const initialSection = new URLSearchParams(window.location.search).get('section') || 'home';
+    if (initialSection === 'information') {
+        hydrateInformationSection();
+    }
+    document.addEventListener('sidebarSectionChanged', function (e) {
+        if (e.detail?.section === 'information') {
+            hydrateInformationSection();
+        }
+    });
 });
 
 
@@ -693,89 +698,3 @@ function refreshDtNamesFromForm() {
     }
 }
 
-
-/* ──────────────────────────────────────────────────────────────────────────
-   Current-domain KPI / health band (moved here from the Home page).
-   Populates the #kpi* tiles rendered at the top of Domain → General:
-   entities, relationships, mappings, status, version.
-   Self-contained (IIFE) to avoid leaking generic helper names as globals.
-   ────────────────────────────────────────────────────────────────────────── */
-(function () {
-    function esc(text) {
-        return (typeof window.escapeHtml === 'function')
-            ? window.escapeHtml(text)
-            : String(text == null ? '' : text);
-    }
-
-    function setTile(valueId, tileId, value, active) {
-        const valueEl = document.getElementById(valueId);
-        const tileEl = document.getElementById(tileId);
-        if (valueEl) valueEl.textContent = value != null ? value : '-';
-        if (tileEl) tileEl.className = 'ob-kpi-tile ' + (active ? 'tile-success' : 'tile-muted');
-    }
-
-    function statusBadge(status) {
-        const map = {
-            'DRAFT': 'bg-warning-subtle text-dark border-warning',
-            'IN-REVIEW': 'bg-info-subtle text-dark border-info',
-            'PUBLISHED': 'bg-success-subtle text-dark border-success',
-        };
-        const key = (status || 'DRAFT').toUpperCase();
-        const cls = map[key] || map['DRAFT'];
-        const label = key === 'IN-REVIEW'
-            ? 'In Review'
-            : (key.charAt(0) + key.slice(1).toLowerCase());
-        return '<span class="badge border ' + cls + '">' + esc(label) + '</span>';
-    }
-
-    function renderStatus(status) {
-        const valueEl = document.getElementById('kpiStatus');
-        const tileEl = document.getElementById('kpiStatusTile');
-        if (!valueEl || !tileEl) return;
-        valueEl.innerHTML = statusBadge(status);
-        tileEl.className = 'ob-kpi-tile tile-muted';
-    }
-
-    function renderVersion(version) {
-        const valueEl = document.getElementById('kpiVersion');
-        const tileEl = document.getElementById('kpiVersionTile');
-        if (!valueEl || !tileEl) return;
-        valueEl.textContent = 'v' + version;
-        tileEl.className = 'ob-kpi-tile tile-muted';
-    }
-
-    async function loadDomainKpis() {
-        // Only run when the KPI band is on the page.
-        if (!document.getElementById('domainKpiPanel')) return;
-        try {
-            // Reuse fetchOnce so /domain/info is shared with the page's
-            // main version-status loader (single network round-trip).
-            const [info, session] = await Promise.all([
-                fetchOnce('/domain/info').catch(() => ({})),
-                fetchOnce('/session-status').catch(() => ({})),
-            ]);
-
-            const stats = (info && info.stats) || {};
-            const meta = (info && info.info) || {};
-
-            const entityCount = stats.entities != null
-                ? stats.entities
-                : (session.class_count || 0);
-            const relationshipCount = stats.relationships != null
-                ? stats.relationships
-                : (session.property_count || 0);
-            const mappingCount = (stats.entity_mappings || 0) + (stats.relationship_mappings || 0)
-                || ((session.entities || 0) + (session.relationships || 0));
-
-            setTile('kpiEntities', 'kpiEntitiesTile', entityCount, entityCount > 0);
-            setTile('kpiRelationships', 'kpiRelationshipsTile', relationshipCount, relationshipCount > 0);
-            setTile('kpiMappings', 'kpiMappingsTile', mappingCount, mappingCount > 0);
-            renderStatus(meta.status || 'DRAFT');
-            renderVersion(meta.version || session.version || '1');
-        } catch (error) {
-            console.error('Error loading domain KPIs:', error);
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', loadDomainKpis);
-})();

@@ -1,0 +1,2077 @@
+## Registry import consistency (#229)
+
+### Context
+Registry import left renamed domains with stale namespaces, flipped auto
+base URIs to the built-in host on Domain → General save, imported
+Published copies as Published, and Overwrite replaced existing versions.
+Ported from the 0.9.3 fix onto 0.10.0.
+
+### Changes
+1. `src/api/routers/internal/domain.py` — pass `settings` into `Domain` on save
+2. `src/back/objects/domain/Domain.py` — raise when default base URI resolve fails
+3. `src/back/core/helpers/DatabricksHelpers.py` — WARNING on global-config read failure
+4. `src/back/objects/domain/settings/ObxSettings.py` — full URI rewrite on rename; skip existing versions; DRAFT highest new; extract helpers under size budget
+5. `src/api/routers/internal/settings.py` — document `add_missing` / overwrite semantics
+6. `src/front/static/registry/js/registry.js` — Add missing versions UI and skipped-version notice
+7. `docs/user-guide.md`, `docs/advanced_features.md` — import behaviour
+8. `tests/units/domain/test_domain_service.py`, `tests/units/settings/test_settings_obx.py`,
+   `tests/units/settings/test_v090_settings_obx.py`, `tests/units/architecture/baseline.json`
+   — coverage and size ratchet update
+
+### Modified files
+- src/api/routers/internal/domain.py
+- src/back/objects/domain/Domain.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/objects/domain/settings/ObxSettings.py
+- src/api/routers/internal/settings.py
+- src/front/static/registry/js/registry.js
+- docs/user-guide.md
+- docs/advanced_features.md
+- tests/units/domain/test_domain_service.py
+- tests/units/settings/test_settings_obx.py
+- tests/units/settings/test_v090_settings_obx.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` — 10487 passed, 323 skipped, 8 deselected, 39 warnings in 45.97s
+
+================================================================================
+## Draw a layered neighbourhood diagram for a selected pattern
+================================================================================
+
+Context: The Patterns Discover page listed matching entities but did not show
+what the pattern itself looks like. Selecting a pattern now draws a hop-layered
+diagram (entity type, then neighbours at 1 / 2 / 3 hops) above the member list.
+Hop expansion also keeps shortest-distance shells so the walk does not step
+back onto nodes it already visited.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   Materialise node types once; emit typed edges per hop; write
+   `<out>_shape_edges`; skip already-seen nodes when expanding.
+2. src/back/core/graph_analysis/pattern_diagram.py
+   Pure builder: shape-edge rows + tokens → layered `{nodes, edges}`.
+3. src/back/core/graph_analysis/JobPatterns.py
+   `/shape` can attach the diagram (opt-in, so materialize stays cheap).
+4. src/back/objects/digitaltwin/TwinAnalytics.py
+   Pattern shape API requests the diagram.
+5. src/front/static/simulation/js/simulation-patterns.js
+   SVG diagram in Details; labels sit next to the target node.
+6. src/front/static/simulation/css/simulation.css
+   Diagram node / edge styles using theme variables.
+7. tests/units/core/test_pattern_job_sql.py
+   Typed edges, no backtrack to the anchor, shortest-distance shells.
+8. tests/units/core/test_pattern_diagram.py
+   Isolated pattern, hop/type nodes, attribute chips, edge cap.
+9. tests/units/core/test_job_patterns.py
+   Diagram is opt-in; missing edges table returns null.
+10. tests/units/front/test_simulation_page_contract.py
+    Details loads `/shape` and draws the diagram.
+11. docs/user-guide.md, docs/architecture.md
+    Diagram, `_shape_edges` table, `pattern_diagram.py`.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/pattern_diagram.py
+- src/back/core/graph_analysis/JobPatterns.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/front/static/simulation/js/simulation-patterns.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/core/test_pattern_job_sql.py
+- tests/units/core/test_pattern_diagram.py
+- tests/units/core/test_job_patterns.py
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+Requires `make deploy-no-run` so the job writes `_shape_edges`, then re-run Detect.
+
+================================================================================
+## Widen the pattern Details pane with KPI badges and a full-width diagram
+================================================================================
+
+Context: The Discover Details pane stacked a narrow diagram above the member
+list. The diagram now spans the full detail pane, run-level and pattern-level
+KPIs use the shared `sim-kpi-tile` badges, and the pattern list sits in a
+narrow left rail.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_patterns.html
+   Workspace layout: `pat-list-pane` + `pat-detail-pane`.
+2. src/front/static/simulation/js/simulation-patterns.js
+   Run KPIs and selected-pattern KPIs as tiles; full-width SVG; member rows
+   with type badges.
+3. src/front/static/simulation/css/simulation.css
+   Workspace / diagram / member styles on `--db-*` tokens.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract for workspace layout, KPI tiles, full-width diagram.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_patterns.html
+- src/front/static/simulation/js/simulation-patterns.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Use "Context" instead of "Domain" in the user-facing UI
+================================================================================
+
+Context: The Ontobricks concept was still labelled "Domain" in several places
+the user reads (Registry popups, Settings, Context page, help modal, toasts,
+confirm dialogs, API docs tags). The concept is now called "Context" in every
+visible label, title, placeholder, notification and error message. Kept as-is
+on purpose: code identifiers, routes (`/domain/...`), API parameters and
+response keys (`domain_name`, `domains`), CSS classes, element ids, OWL
+`rdfs:domain`, the Databricks Knowledge Pages `domain` attribute/filter, and
+the LLM/MCP-facing prompts and tool descriptions (agent behaviour unchanged,
+no eval impact).
+
+Changes:
+1. src/front/templates/** — visible text, titles, placeholders, aria-labels of
+   the Context page, Registry (Bridges subtitle now reads "Cross-contexts
+   bridges connecting ontology entities across contexts"), Settings, help
+   modal, ontology/mapping panels, dtwin API docs, access-denied page.
+2. src/front/static/**/*.js — notifications, confirm dialogs, tooltips,
+   dropdown placeholders, loading overlays, Registry/Bridges/Teams labels.
+3. src/api/**, src/back/**, src/front/routes/**, src/shared/** — HTTP error and
+   validation messages, job progress labels, OpenAPI descriptions and tag names
+   ("Domain" -> "Context", "List Contexts", ...). Log lines, docstrings and SQL
+   left untouched.
+4. src/front/static/domain/js/domain-pages.js and
+   src/front/templates/partials/domain/_domain_pages.html — kept "Databricks
+   Domain" wording for the Knowledge Pages filter (Databricks-side attribute).
+5. src/front/static/query/js/query-sigmagraph.js, src/front/static/global/js/navbar.js
+   — fallback labels ("context") shown in the loading and switch dialogs.
+6. src/shared/config/constants.py — no change (LLM wizard prompt kept as-is).
+7. tests/** — assertions updated to the new wording (API messages, OpenAPI tag,
+   UI strings, JS contract strings).
+
+Modified files:
+- src/api/constants.py
+- src/api/external_app.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/domains.py
+- src/api/routers/internal/_graph_access.py
+- src/api/routers/internal/_permissions.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/ontology.py
+- src/api/routers/v1.py
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/fastapi/graphql_routes.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/objects/digitaltwin/TwinResolve.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/HomeService.py
+- src/back/objects/domain/settings/GitHubSettings.py
+- src/back/objects/domain/settings/ObxSettings.py
+- src/back/objects/domain/settings/PermissionSettings.py
+- src/back/objects/domain/settings/RegistryDomainSettings.py
+- src/back/objects/domain/settings/graphengine/GraphEngineNeo4jSettings.py
+- src/back/objects/domain/settings/graphengine/GraphEngineSettings.py
+- src/back/objects/mapping/Mapping.py
+- src/back/objects/ontology/EntityImport.py
+- src/back/objects/ontology/Import.py
+- src/back/objects/ontology/generate/GenerateWorkflow.py
+- src/back/objects/registry/PermissionService.py
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/registry/collab/CommentService.py
+- src/back/objects/registry/collab/ReviewService.py
+- src/back/objects/registry/gitsync/DomainRepoLayout.py
+- src/back/objects/registry/gitsync/GitHubSyncService.py
+- src/back/objects/registry/schedule/TaskContext.py
+- src/back/objects/registry/schedule/__init__.py
+- src/back/objects/registry/schedule/analytics.py
+- src/back/objects/registry/schedule/build.py
+- src/back/objects/registry/schedule/cache_refresh.py
+- src/back/objects/registry/schedule/cohort.py
+- src/back/objects/registry/schedule/reasoning.py
+- src/back/objects/simulation/Simulation.py
+- src/front/routes/domain.py
+- src/front/routes/resolve.py
+- src/front/static/config/js/schedule.js
+- src/front/static/config/js/settings-github.js
+- src/front/static/config/js/settings-runs.js
+- src/front/static/config/js/settings.js
+- src/front/static/domain/js/domain-collaboration.js
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain-review.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/domain/js/domain.js
+- src/front/static/global/js/comments-panel.js
+- src/front/static/global/js/edit-lock.js
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/ontology-core.js
+- src/front/static/global/js/permissions.js
+- src/front/static/global/js/uc-location-widget.js
+- src/front/static/global/js/utils.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/home/js/home.js
+- src/front/static/ontology/js/ontology-entity-import.js
+- src/front/static/ontology/js/ontology-import.js
+- src/front/static/ontology/js/ontology-information.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/query/js/query-analytics.js
+- src/front/static/query/js/query-api.js
+- src/front/static/query/js/query-graphql.js
+- src/front/static/query/js/query-reasoning.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query.js
+- src/front/static/registry/js/registry-teams.js
+- src/front/static/registry/js/registry.js
+- src/front/templates/about.html
+- src/front/templates/access_denied.html
+- src/front/templates/base.html
+- src/front/templates/domain.html
+- src/front/templates/home.html
+- src/front/templates/partials/domain/_domain_audit.html
+- src/front/templates/partials/domain/_domain_discussions.html
+- src/front/templates/partials/domain/_domain_documents.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/templates/partials/domain/_domain_mytasks.html
+- src/front/templates/partials/domain/_domain_pages.html
+- src/front/templates/partials/domain/_domain_runs.html
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/domain/_domain_versions.html
+- src/front/templates/partials/dtwin/_query_api.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/mapping/_mapping_import.html
+- src/front/templates/partials/ontology/_ontology_entity_import_modal.html
+- src/front/templates/partials/ontology/_ontology_import.html
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/templates/partials/registry/_export_obx_modal.html
+- src/front/templates/partials/registry/_import_obx_modal.html
+- src/front/templates/partials/registry/_registry_bridges.html
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/templates/partials/registry/_registry_domains.html
+- src/front/templates/partials/settings/_settings_github.html
+- src/front/templates/partials/settings/_settings_locks.html
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/partials/settings/_settings_schedule.html
+- src/front/templates/partials/settings/_settings_teams.html
+- src/front/templates/partials/simulation/_sim_runs.html
+- src/front/templates/partials/simulation/_sim_scenarios.html
+- src/front/templates/settings.html
+- src/shared/fastapi/health.py
+- src/shared/fastapi/main.py
+- tests/contract/test_openapi_contract.py
+- tests/units/api/test_admin_only_domain_create.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_domain_versions_cards.py
+- tests/units/front/test_entity_panel_sections.py
+- tests/units/front/test_registry_obx_import_rename.py
+- tests/units/front/test_settings_github_loading.py
+- tests/units/front/test_settings_runs_page.py
+- tests/units/front/test_settings_subnav_hidden.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/ontology/test_v090_ontology_import.py
+- tests/units/settings/test_github_settings.py
+- tests/units/settings/test_settings_obx.py
+- tests/units/settings/test_v090_graph_engine_neo4j.py
+- tests/units/settings/test_v090_graph_engine_settings.py
+- tests/units/settings/test_v090_settings_obx.py
+- tests/units/settings/test_v090_settings_registry_domains.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+Lint: uv run --frozen ruff check --select F821,F811 on changed Python files → all checks passed.
+Syntax: py_compile on changed Python files, node --check on changed JS files, Jinja parse on changed templates → OK.
+
+================================================================================
+## Pattern picker as dropdown beside KPIs; full-width diagram
+================================================================================
+
+Context: The Discover page listed patterns in a left rail. Selection is now a
+dropdown to the left of the pattern KPIs, with support in a badge; Detail and
+Refined tiles are gone; the diagram uses the full right pane width.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_patterns.html
+   Drop the list pane; details fill the preview body.
+2. src/front/static/simulation/js/simulation-patterns.js
+   Pattern `<select>` + support badge; KPIs Hops/Types/Relations only.
+3. src/front/static/simulation/css/simulation.css
+   Toolbar alignment so dropdown, support badge and KPI tiles share height.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract for dropdown + support badge; no Detail/Refined tiles.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_patterns.html
+- src/front/static/simulation/js/simulation-patterns.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Compact pattern picker with in-control support badge
+================================================================================
+
+Context: The Discover preview still showed a run-level KPI strip, and the
+support badge sat beside the pattern select. The run KPIs are removed; support
+is a badge inside the pattern dropdown control and menu items; the remaining
+KPIs are a single compact line (value + label).
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_patterns.html
+   Remove `#patPreviewStats`.
+2. src/front/static/simulation/js/simulation-patterns.js
+   Custom dropdown with support badge in the toggle and each option; compact
+   KPI tiles; drop `_renderStats`.
+3. src/front/static/simulation/css/simulation.css
+   Compact picker / badge / inline KPI styles.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract for the compact picker and removed run KPIs.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_patterns.html
+- src/front/static/simulation/js/simulation-patterns.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Link Matching entities to Graph Explorer
+================================================================================
+
+Context: Pattern Discover listed matching entities as plain text. Each entity
+should deep-link into Graph Explorer focused on that URI, matching the cohorts
+and simulation Results pattern.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-patterns.js
+   Add `_explorerHref` / `_memberRow`; use in Discover details, load-more, and
+   Saved members lists.
+2. src/front/static/simulation/css/simulation.css
+   Style `.pat-member-link` for Explorer deep-links.
+3. tests/units/front/test_simulation_page_contract.py
+   Assert sigmagraph focus URL and `pat-member-link` in the patterns JS.
+
+Modified files:
+- src/front/static/simulation/js/simulation-patterns.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Rename Simulation to Intelligence and group graph analysis by analysis type
+================================================================================
+
+Context: The top-level menu is **Intelligence** (`menu_config.json` id
+`intelligence`, route `/intelligence/`). Simulation is one feature under it,
+next to Community, Cohorts and Patterns. The backend packages, frontend
+assets, templates and page route now follow that taxonomy. `back/core/graph_analysis`
+is split into topic sub-packages by type of analysis (community, cohort,
+pattern, metrics). External contracts keep their names: `/api/v1/simulations`,
+MCP tools, the internal `/simulation/*` JSON API used by the Simulation feature,
+the agents and the graph-DB `GraphSimulation` capability. No compatibility
+shims: the old page URL `/simulation/` now returns 404.
+
+Changes:
+
+1. src/back/objects/simulation/ -> src/back/objects/intelligence/
+   Folder rename (module names unchanged). Imports updated in src, tests and
+   tests/eval judges.
+2. src/back/core/graph_analysis/ -> topic sub-packages
+   `community/` (JobCommunities, CommunityMaterializer, CommunityVocabulary),
+   `cohort/` (CohortBuilder, CohortVocabulary), `pattern/` (JobPatterns,
+   PatternMaterializer, PatternVocabulary, pattern_diagram), `metrics/`
+   (JobMetrics). Shared job plumbing (LakeflowRunner, preflight, models,
+   profiles) stays at the root. Each sub-package `__init__.py` re-exports its
+   public names; the root `__init__.py` re-exports from them.
+3. src/front/config/menu_config.json
+   Menu id `simulation` -> `intelligence`, route `/simulation/` -> `/intelligence/`;
+   groups `intelligence-community`, `intelligence-cohorts`,
+   `intelligence-patterns`, `intelligence-simulation`.
+4. src/front/routes/simulation.py -> src/front/routes/intelligence.py
+   Page router prefix `/intelligence`, handler `intelligence_page`; registered in
+   src/front/routes/__init__.py. Template `simulation.html` -> `intelligence.html`.
+5. src/front/static/simulation/ -> src/front/static/intelligence/
+   `simulation.css` -> `intelligence.css`; `simulation-communities.js` ->
+   `intelligence-communities.js` (class `IntelligenceCommunities`);
+   `simulation-patterns.js` -> `intelligence-patterns.js` (class
+   `IntelligencePatterns`). Simulation-only feature files keep `simulation-*`.
+6. src/front/templates/partials/simulation/ -> partials/intelligence/
+   Community / pattern partials renamed `_intel_*.html`; simulation partials keep `_sim_*`.
+7. Menu-id consumers: `base.html` and `_workspace_map_modal.html` (`intel_m`),
+   `front/fastapi/dependencies.py` (template sub-dirs), `shared/fastapi/main.py`
+   (`/intelligence/` added to domain-scoped prefixes; `/simulation/` kept for the
+   internal API).
+8. Links `/simulation/?section=...` -> `/intelligence/?section=...` in
+   task-tracker.js, query cohort / entity pages, ontology and dtwin redirects.
+9. Help center: cohort breadcrumbs read Intelligence -> Cohorts (-> Run).
+10. Docs: docs/architecture.md, docs/development.md, docs/advanced_features.md,
+    docs/user-guide.md, .cursor/04-project-structure.mdc,
+    .cursor/11-frontend-design.mdc, docs/sphinx/api/app.core.graph_analysis.rst
+    (sphinx output is gitignored in this repo).
+11. tests/units/architecture/baseline.json — keys follow the moved files.
+12. tests — `test_simulation_page_contract.py` -> `test_intelligence_page_contract.py`;
+    path, menu-id and route assertions updated across front, core, dtwin,
+    graphdb and simulation suites.
+13. Import blocks re-sorted in graph_analysis `__init__.py`, CohortBuilder,
+    CommunityMaterializer, JobPatterns, PatternMaterializer (ruff I001).
+
+Modified files:
+- .cursor/04-project-structure.mdc
+- .cursor/11-frontend-design.mdc
+- docs/advanced_features.md
+- docs/architecture.md
+- docs/development.md
+- docs/user-guide.md
+- src/agents/agent_simulation_facts/tools.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/simulation.py
+- src/api/routers/simulation.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/core/graph_analysis/cohort/CohortBuilder.py
+- src/back/core/graph_analysis/cohort/CohortVocabulary.py
+- src/back/core/graph_analysis/cohort/__init__.py
+- src/back/core/graph_analysis/community/CommunityMaterializer.py
+- src/back/core/graph_analysis/community/CommunityVocabulary.py
+- src/back/core/graph_analysis/community/JobCommunities.py
+- src/back/core/graph_analysis/community/__init__.py
+- src/back/core/graph_analysis/metrics/JobMetrics.py
+- src/back/core/graph_analysis/metrics/__init__.py
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- src/back/core/graph_analysis/pattern/PatternMaterializer.py
+- src/back/core/graph_analysis/pattern/PatternVocabulary.py
+- src/back/core/graph_analysis/pattern/__init__.py
+- src/back/core/graph_analysis/pattern/pattern_diagram.py
+- src/back/core/graph_analysis/preflight.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/objects/digitaltwin/cohort/CohortService.py
+- src/back/objects/digitaltwin/explorer/GraphFilter.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/back/objects/digitaltwin/query/TwinSandboxSparql.py
+- src/back/objects/intelligence/Artifacts.py
+- src/back/objects/intelligence/CompareGraph.py
+- src/back/objects/intelligence/Diff.py
+- src/back/objects/intelligence/Patch.py
+- src/back/objects/intelligence/Reasoning.py
+- src/back/objects/intelligence/Runner.py
+- src/back/objects/intelligence/Sandbox.py
+- src/back/objects/intelligence/Scope.py
+- src/back/objects/intelligence/Simulation.py
+- src/back/objects/intelligence/Spec.py
+- src/back/objects/intelligence/__init__.py
+- src/back/objects/intelligence/overlay.py
+- src/front/config/menu_config.json
+- src/front/fastapi/dependencies.py
+- src/front/routes/__init__.py
+- src/front/routes/dtwin.py
+- src/front/routes/intelligence.py
+- src/front/routes/ontology.py
+- src/front/static/global/js/task-tracker.js
+- src/front/static/intelligence/css/intelligence.css
+- src/front/static/intelligence/js/intelligence-communities.js
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/js/simulation-compare.js
+- src/front/static/intelligence/js/simulation-evaluate.js
+- src/front/static/intelligence/js/simulation-fact-wizard.js
+- src/front/static/intelligence/js/simulation-results.js
+- src/front/static/intelligence/js/simulation-rules.js
+- src/front/static/intelligence/js/simulation-workbench.js
+- src/front/static/intelligence/js/simulation.js
+- src/front/static/query/js/query-cohorts.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/templates/base.html
+- src/front/templates/intelligence.html
+- src/front/templates/partials/_cohort_modals.html
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/intelligence/_sim_compare.html
+- src/front/templates/partials/intelligence/_sim_fact_wizard.html
+- src/front/templates/partials/intelligence/_sim_insights_report_modal.html
+- src/front/templates/partials/intelligence/_sim_results.html
+- src/front/templates/partials/intelligence/_sim_runs.html
+- src/front/templates/partials/intelligence/_sim_scenarios.html
+- src/front/templates/partials/intelligence/_sim_workbench.html
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- src/front/templates/partials/layout/help_modal.html
+- src/shared/fastapi/main.py
+- tests/eval/judges/simulation_facts.py
+- tests/eval/judges/simulation_insights.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/api/test_dtwin_insights_stream.py
+- tests/units/api/test_dtwin_nodes_business_rule.py
+- tests/units/architecture/baseline.json
+- tests/units/core/test_community_materializer.py
+- tests/units/core/test_community_vocabulary.py
+- tests/units/core/test_job_communities.py
+- tests/units/core/test_job_metrics.py
+- tests/units/core/test_job_patterns.py
+- tests/units/core/test_pattern_diagram.py
+- tests/units/core/test_pattern_materializer.py
+- tests/units/core/test_pattern_vocabulary.py
+- tests/units/core/test_try_cast_policy.py
+- tests/units/dtwin/test_cohort_builder.py
+- tests/units/dtwin/test_cohort_models.py
+- tests/units/dtwin/test_entity_business_rules.py
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/front/test_frontend_xss_hardening.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_phase_tree_ui.py
+- tests/units/front/test_rule_links_contract.py
+- tests/units/front/test_rules_export_import_ui.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_simulation_fact_wizard.py
+- tests/units/front/test_task_tracker_job_actions.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- tests/units/simulation/test_simulation_artifacts.py
+- tests/units/simulation/test_simulation_compare.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_fact_generation.py
+- tests/units/simulation/test_simulation_runner_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Test result: `uv run --frozen pytest -q -m "not scenario"` → 10499 passed, 323 skipped,
+8 deselected, 39 warnings (same counts before and after the rename).
+Also: `ruff check --select F` clean on touched Python files; Sphinx HTML build
+completes with no new warnings from the moved modules; runtime smoke: `/intelligence/`
+is registered and redirects to Home without a domain; `/simulation/` returns 404.
+
+================================================================================
+Fix Group_* Business View leaking ungrouped orphan entities
+================================================================================
+
+Context:
+Selecting a Group_<name> Business View (e.g. Group_Contract) in Ontology Studio
+showed entities that were not members of the group, often as isolated
+orphan-looking nodes. The canvas filtered with a stale hiddenEntities blacklist
+only, so entities added after the snapshot (or never recorded as hidden) leaked
+in. Collapse persist also grew the BV entities list from the All-map position
+cache.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Whitelist visible entities via _studioViewVisibleNames; Group_* views follow
+   live group membership; stop growing BV entities from the global position cache.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Contracts for whitelist filter, Group_* live members, and no cache growth.
+3. docs/user-guide.md
+   Document that Group_<groupName> views show current group members.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --ignore=tests/units/core/test_pattern_materializer.py → 10493 passed, 323 skipped, 8 deselected in 44.62s (pre-existing collection ImportError for missing PatternMaterializer; unrelated to this fix)
+
+
+================================================================================
+Save pattern snapshots in Unity Catalog instead of the graph
+================================================================================
+
+Context:
+Intelligence > Patterns > Save wrote named Pattern individuals and :inPattern
+triples into the domain graph ("Save & materialize"). The user only wants the
+pattern result saved, with no materialization in the graph. Saved patterns now
+live in a Delta table next to the pattern job output (graph_pattern_saved_<slug>),
+written through the Build SQL warehouse. The RDF graph is never written. Each
+saved pattern is a snapshot, so it survives the next Detect, which overwrites
+graph_patterns_<slug>. Endpoints, task types, and labels are renamed from
+"materialize" to "save" to match.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py (new)
+   SavedPatternStore: save (INSERT ... SELECT from the output table filtered by
+   pattern_id), list_saved (GROUP BY saved_id), members (bounded LIMIT/OFFSET),
+   delete (one saved_id). Table DDL is idempotent; saved_id is validated; string
+   literals escape quotes and backslashes.
+2. src/back/core/graph_analysis/pattern/JobPatterns.py
+   Shared _domain_slug; new saved_pattern_table(output_schema, domain, graph_name).
+3. src/back/core/graph_analysis/pattern/PatternMaterializer.py (deleted)
+   Graph-based save/list/delete replaced by SavedPatternStore.
+4. src/back/core/graph_analysis/pattern/PatternVocabulary.py (deleted)
+   inPattern / Pattern URI helpers no longer used.
+5. src/back/core/graph_analysis/pattern/__init__.py,
+   src/back/core/graph_analysis/__init__.py
+   Re-export SavedPatternStore and saved_pattern_table; drop removed names.
+6. src/back/objects/digitaltwin/TwinAnalytics.py
+   _pattern_warehouse helper shared by build_job_patterns and the new
+   build_saved_patterns; save_pattern / list_saved_patterns /
+   saved_pattern_members / delete_saved_pattern no longer take a graph store.
+7. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   run_pattern_materialize_task -> run_pattern_save_task (no store argument);
+   task message reports members, not triples.
+8. src/api/routers/internal/dtwin.py
+   POST /dtwin/patterns/materialize -> POST /dtwin/patterns/save (task_type
+   pattern_save); saved list / members / delete no longer read the graph store.
+9. src/front/static/intelligence/js/intelligence-patterns.js
+   Endpoint and task type renamed; _materialize/_awaitMaterialize -> _save/_awaitSave.
+10. src/front/static/global/js/task-tracker.js
+    pattern_materialize -> pattern_save mapping.
+11. src/front/templates/partials/intelligence/_intel_patterns.html
+    Button and confirm read "Save"; copy says the graph is not changed.
+12. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+    Copy describes snapshots in Unity Catalog; empty-state refers to Save.
+13. src/front/templates/partials/layout/help_modal.html
+    Saved entry text updated.
+14. tests/units/core/test_saved_pattern_store.py (new)
+    Save/list/members/delete on a SQLite stand-in for the warehouse; snapshot
+    survives re-Detect; no graph writes; escaping; id validation; table names.
+15. tests/units/core/test_pattern_materializer.py, tests/units/core/test_pattern_vocabulary.py (deleted)
+16. tests/units/api/test_dtwin_patterns.py
+    Save route and task-type assertions.
+17. tests/units/front/test_intelligence_page_contract.py
+    Save endpoint, pattern_save task type, and tracker mapping.
+18. docs/architecture.md, docs/user-guide.md
+    Pattern save described as a Unity Catalog snapshot; file reference updated.
+19. docs/superpowers/specs/2026-11-13-pattern-detection-design.md (local, gitignored)
+    Storage, API, and wording sections aligned with the snapshot design.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py (new)
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- src/back/core/graph_analysis/pattern/PatternMaterializer.py (deleted)
+- src/back/core/graph_analysis/pattern/PatternVocabulary.py (deleted)
+- src/back/core/graph_analysis/pattern/__init__.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/global/js/task-tracker.js
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/core/test_saved_pattern_store.py (new)
+- tests/units/core/test_pattern_materializer.py (deleted)
+- tests/units/core/test_pattern_vocabulary.py (deleted)
+- tests/units/api/test_dtwin_patterns.py
+- tests/units/front/test_intelligence_page_contract.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Test result: uv run --frozen pytest -q -m "not scenario" -> 10507 passed,
+323 skipped, 8 deselected, 39 warnings. Architecture ratchet clean.
+ruff check --select F clean on touched Python files.
+
+================================================================================
+Keep inheritance links on Group_* Business Views
+================================================================================
+
+Context:
+After whitelisting Group_<name> views to live group members, inheritance edges
+disappeared because superclass/subclass nodes outside the group were no longer
+on the canvas, and the snapshot's hiddenInheritances list still suppressed those
+edges. Group_* views now pull in direct inheritance neighbors and ignore the
+stale link hide lists.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   _studioExpandVisibleWithInheritance; Group_* filter expands members and keeps
+   links by remaining endpoints only.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Contract that Group_* views keep inheritance neighbors and skip hide lists.
+3. docs/user-guide.md
+   Note that Group_* views include direct inheritance neighbors.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --ignore=tests/units/core/test_pattern_materializer.py → 10508 passed, 323 skipped, 8 deselected in 45.57s
+
+
+================================================================================
+Limit Group_* Business Views to group members
+================================================================================
+
+Context:
+The inheritance-neighbour expansion added in the previous change pulled every
+superclass/subclass of a group member onto a Group_* view, even when that
+neighbour belongs to another group (e.g. Claim and Interaction appearing in
+Group_Contract). Group_* views now show exactly the group's members; links
+between members (including inheritance) are still drawn.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Removed _studioExpandVisibleWithInheritance and its call; the Group_* filter
+   uses live membership only.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Contract replaces the inheritance-neighbour test: no expansion, members only.
+3. docs/user-guide.md
+   Group_<groupName> description: members only; member-to-member links drawn.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+
+================================================================================
+Move Pattern Detect options into a modal
+================================================================================
+
+Context:
+Intelligence → Patterns → Discover kept hops, bins, min support, and entity
+type in a left rail that stole space from the pattern diagram. Detect now
+opens a Bootstrap dialog with those options; the main pane is the preview.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_patterns.html
+   Drop the left options rail; header Detect stays the primary CTA.
+2. src/front/templates/partials/intelligence/_intel_patterns_detect_modal.html
+   New Detect dialog: entity type, hops, bins, min support, refine top-N.
+3. src/front/static/intelligence/js/intelligence-patterns.js
+   Detect opens the modal; submit hides it and starts the Databricks job.
+4. src/front/static/intelligence/css/intelligence.css
+   Remove unused `.pat-rail` / config-card layout; preview fills the section.
+5. tests/units/front/test_intelligence_page_contract.py
+   Contract: no rail, modal include, openDetectModal wiring.
+6. docs/user-guide.md, docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+   Document the Detect dialog instead of a persistent options pane.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_detect_modal.html
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10508 passed, 323 skipped, 8 deselected, 39 warnings in 45.27s
+
+
+================================================================================
+Align and centre the Discover detail toolbar (picker + KPIs)
+================================================================================
+
+Context:
+In Intelligence → Patterns → Discover, the pattern dropdown and the KPI tiles
+on the first line had different heights, KPI tiles were baseline-aligned and
+their text sat off-centre, and the tiles carried `h-100` which overrode any
+explicit height. Both now share one chip height and centre their content.
+
+Changes:
+
+1. src/front/static/intelligence/css/intelligence.css
+   `--pat-chip-h` (2.25rem) on `.pat-detail-toolbar` drives the picker toggle and
+   KPI tiles; tiles centred with flex (not baseline); badges and KPI value/label
+   line-height 1; KPI row uses gap instead of column padding.
+2. src/front/static/intelligence/js/intelligence-patterns.js
+   KPI tile markup drops `h-100` so the shared chip height applies.
+
+Modified files:
+- src/front/static/intelligence/css/intelligence.css
+- src/front/static/intelligence/js/intelligence-patterns.js
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10508 passed, 323 skipped, 8 deselected, 39 warnings in 45.11s
+
+
+================================================================================
+## Open saved patterns in Discover details
+================================================================================
+
+Context: Patterns → Saved listed snapshots with an expand-members click.
+Clicking a saved pattern should switch to Discover and show that pattern's
+details (diagram + matching entities).
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Saved row click/Enter opens Discover via SidebarNav and selects the stored
+   pattern_id; drop inline member expansion.
+2. src/front/static/intelligence/css/intelligence.css
+   Clickable saved-row hover and focus styles.
+3. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Hint that a click opens Discover.
+4. src/front/templates/partials/layout/help_modal.html
+   Saved help text mentions the Discover jump.
+5. tests/units/front/test_intelligence_page_contract.py
+   Contract for data-pat-pattern-id, _openSavedInDiscover, and switchTo.
+6. docs/user-guide.md
+   Document click-to-Discover from Saved.
+7. docs/architecture.md
+   Saved click opens Discover details.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10508 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Style Saved patterns like Scenarios with snapshotted KPIs
+================================================================================
+
+Context: Patterns → Saved used a plain row list with only the member count.
+It should match Simulation → Scenarios cards and show saved-at plus Discover
+KPIs (hops / types / relations / members) and how many patterns that Detect
+run found.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   Snapshot hop_count, support, type_count, relation_count, pattern_count at
+   save time; return them from list_saved; migrate KPI columns on older tables.
+2. src/front/static/intelligence/js/intelligence-patterns.js
+   Render Saved items as ob-rule-card cards with badge, hops, meta line, and
+   delete button (same layout family as Scenarios).
+3. src/front/static/intelligence/css/intelligence.css
+   Clickable .pat-saved-card focus style on shared rule cards.
+4. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Align section header / card shell with Scenarios.
+5. tests/units/core/test_saved_pattern_store.py
+   Fixture shapes/summary/edges; assert KPI snapshot on save/list.
+6. tests/units/front/test_intelligence_page_contract.py
+   Contract for Saved Scenarios-style cards and KPI fields.
+7. docs/user-guide.md
+   Document Saved card KPIs.
+8. docs/architecture.md
+   Note Saved list mirrors Scenarios cards with snapshotted KPIs.
+9. src/front/templates/partials/layout/help_modal.html
+   Saved help text mentions the card KPIs.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+- src/front/templates/partials/layout/help_modal.html
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10509 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Add Open-in-Discover button on Saved pattern cards
+================================================================================
+
+Context: Saved pattern cards only exposed Delete in the action group, so it
+was unclear how to jump to Discover details (card click alone was easy to
+miss next to Delete).
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Add outline-secondary Open button (box-arrow-up-right) that calls
+   `_openSavedInDiscover`; keep card click as a secondary path.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract for `data-pat-open` and Open in Discover.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10509 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Fix Saved KPIs and Open-from-snapshot Discover
+================================================================================
+
+Context: Saved cards showed 0 types/relations/patterns-found because older
+rows predated the KPI columns and were never backfilled. Open called live
+Detect shape by pattern_id, which 400s after a new Detect and looked like a
+dead button.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   Enrich/backfill missing KPIs from live Detect tables on list; derive
+   type_count from members when needed; DESCRIBE before ALTER to avoid
+   FIELD_ALREADY_EXISTS noise.
+2. src/front/static/intelligence/js/intelligence-patterns.js
+   Open loads saved members + snapshotted KPIs; uses live shape only when
+   still present; Load more stays on the saved members endpoint.
+3. tests/units/core/test_saved_pattern_store.py
+   Cover KPI backfill for pre-snapshot rows.
+4. tests/units/front/test_intelligence_page_contract.py
+   Contract for `_showPendingSaved` / saved members URL.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Keep an opened saved pattern in Discover (no overwrite, no 400 probe)
+================================================================================
+
+Context: Open on a Saved card loaded the snapshot, then the reload of the
+latest Detect run replaced the pane with the first live pattern because the
+saved pattern_id was no longer in that run. The probe of the live /shape
+endpoint for that id also logged a 400 in the browser console.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Keep the open snapshot through loadLatest/_renderList; request the live
+   shape only when the pattern is still in the latest run; disable Save while
+   viewing a snapshot; Detect and the Reload button return to the live run.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract for the sticky saved view and the guarded shape request.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Slim Saved list meta line (drop members / types / relations)
+================================================================================
+
+Context: The Saved pattern cards showed members, types and relations next to
+patterns-found and saved-at. Those three belong in Discover details, not the
+list.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   List meta line keeps patterns-found and saved-at only (hops stay in the
+   badge row); data-* KPIs remain for the Open path.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract for the slim list meta line.
+3. docs/user-guide.md
+   Saved list description matches the slim meta line.
+4. docs/architecture.md
+   Same.
+5. src/front/templates/partials/layout/help_modal.html
+   Same.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+- src/front/templates/partials/layout/help_modal.html
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Make Saved → Discover Open switch the pane immediately
+================================================================================
+
+Context: Clicking Open loaded the snapshot into `#patDetails` but left the
+user on the Saved section, and the Discover refresh spinner wiped the
+snapshot. Read-only CSS also blocked the Open button via pointer-events.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Open uses `SidebarNav._showSection('patterns')`, renders the snapshot
+   immediately, skips the Discover loading overlay, and warms `/latest`
+   quietly for the picker; title is an Open link like Scenarios.
+2. src/front/static/global/css/permissions.css
+   Keep `[data-pat-open]` clickable in read-only; Delete stays blocked.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract for `_showSection`, `_skipDiscoverRefresh`, and Open link.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units/front/test_intelligence_page_contract.py → 41 passed.
+
+================================================================================
+## Fix Saved → Open doing nothing (SidebarNav is not on window)
+================================================================================
+
+Context: Open rendered the snapshot into the hidden Discover pane but never
+switched to it. The guard `window.SidebarNav && ...` was always falsy because
+`SidebarNav` is a top-level `const` (not a `window` property), so
+`_showSection('patterns')` was silently skipped. Reproduced and verified with a
+headless Chrome harness (real partials + real sidebar-nav.js + patterns JS).
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Probe the global with `typeof SidebarNav !== 'undefined'` instead of
+   `window.SidebarNav`, so Open switches to the Discover pane.
+2. tests/units/front/test_intelligence_page_contract.py
+   Regression assertions: no `window.SidebarNav`, `typeof SidebarNav` guard.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Fix Saved → Discover missing diagram and empty/wrong dropdown
+================================================================================
+
+Context: Opening a saved pattern switched to Discover and loaded members, but
+the neighbourhood diagram stayed blank and the pattern dropdown was empty or
+stale. Root cause: `_showPendingSaved` gated the live `/shape` call on
+`_patternOf` while `latest` was still empty, and `_warmLatestForPicker` raced
+ahead of `_selectedShape`, so the diagram upgrade never ran and the toolbar
+was never rebuilt with Discover patterns.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Open awaits snapshot then warm; always try `/shape` (tolerate 400); after
+   `/latest` re-render the pane so the dropdown lists Discover patterns and
+   the diagram upgrades when still available.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract for sequenced await, `_rerenderSavedDetails`, no `_patternOf` gate.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Saved Open shows snapshot values and renames Discover
+================================================================================
+
+Context: Opening a saved pattern was mixing in the latest Detect run (dropdown
+of live patterns, live support/KPIs). Discover must show the saved snapshot
+only, and the page title must become the saved pattern name.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Saved view uses snapshotted KPIs/members/label only; static toolbar (no
+   Discover dropdown); page heading becomes the saved name; dropped the
+   `/latest` warm overlay; live `/shape` is used only for the diagram.
+2. src/front/templates/partials/intelligence/_intel_patterns.html
+   Discover title/subtitle ids for rename while viewing a saved pattern.
+3. src/front/static/intelligence/css/intelligence.css
+   Styles for the static saved pattern label.
+4. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Hint updated to describe snapshot open behaviour.
+5. src/front/templates/partials/layout/help_modal.html
+   Help text: Saved opens snapshot under the saved name.
+6. docs/user-guide.md
+   Same wording for Saved → Discover.
+7. tests/units/front/test_intelligence_page_contract.py
+   Contracts for heading ids, static toolbar, no `/latest` warm path.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/static/intelligence/css/intelligence.css
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Patterns list/details navigation (Scenarios mirror)
+================================================================================
+
+Context: Patterns used sibling Discover + Saved nav items. Align with Simulation
+→ Scenarios: one Patterns item, saved cards as the list, Discover content as
+the in-page details pane (Detect ≈ New; Open ≈ Edit), with URL sync and
+snapshot-only saved views.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Single Patterns item; drop patterns-saved.
+2. src/front/templates/intelligence.html
+   One patterns-section with patPatternsList + patPatternsDetails; modals
+   included outside the details pane.
+3. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   List retitled Patterns; Detect on list header.
+4. src/front/templates/partials/intelligence/_intel_patterns.html
+   Details pane with Back; Detect removed from details header.
+5. src/front/templates/partials/intelligence/_intel_patterns_save_modal.html
+   Save modal extracted so it is not trapped in a hidden pane.
+6. src/front/static/intelligence/js/intelligence-patterns.js
+   showList / _toggleDetails / syncPatternUrl / applyPatternView; openSaved;
+   Detect opens details; Patterns nav returns to list.
+7. docs + help + design spec
+   Document list/details model.
+8. tests/units/front/test_intelligence_page_contract.py
+   tests/units/front/test_sidebar_content_stretch_contract.py
+   Contracts for single menu item and list/details shell.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/intelligence.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_save_modal.html
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/architecture.md
+- docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Persist pattern diagram on Save; load via saved shape API
+================================================================================
+
+Context: Opening an older saved pattern (e.g. Customer) showed no diagram and a
+static “Customer / 29” control that looked like an empty dropdown. Save only
+kept members + KPI scalars, so once Detect overwrote the live tables the
+neighbourhood diagram was gone.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   Snapshot seed_label / shape_json / diagram_json at save; shape(saved_id)
+   returns them (with one-time live backfill + persist for legacy rows).
+2. src/back/objects/digitaltwin/TwinAnalytics.py
+   saved_pattern_shape entry point.
+3. src/api/routers/internal/dtwin.py
+   GET /dtwin/patterns/saved/{id}/shape.
+4. src/front/static/intelligence/js/intelligence-patterns.js
+   Open saved loads /saved/{id}/shape; static toolbar shows a clear “saved”
+   badge (not a Detect picker).
+5. tests/units/core/test_saved_pattern_store.py
+   tests/units/front/test_intelligence_page_contract.py
+   Diagram survives Detect overwrite; front contract for saved shape URL.
+6. docs/architecture.md
+   Document saved shape endpoint and diagram persistence.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/front/test_intelligence_page_contract.py
+- docs/architecture.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10511 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Save entire Detect run (all patterns + diagrams) for reopen
+================================================================================
+
+Context: Save only kept one pattern’s members. Reopening could not restore the
+full Detect picker with every pattern’s diagram and infos. Save must snapshot
+the whole Detect run so every found pattern can be browsed later.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   save() copies every pattern from `_shapes` (members, KPIs, diagram);
+   patterns()/shape()/members() scoped by pattern_id; focus_pattern_id stored.
+2. src/back/objects/digitaltwin/TwinAnalytics.py
+   saved_pattern_patterns + pattern_id on members/shape.
+3. src/api/routers/internal/dtwin.py
+   GET …/saved/{id}/patterns; pattern_id query on members/shape.
+4. src/front/static/intelligence/js/intelligence-patterns.js
+   Open saved restores catalog into the picker; selectPattern loads saved
+   shape/members per pattern_id.
+5. src/front/templates/partials/intelligence/_intel_patterns_save_modal.html
+   Copy: Save Detect run (all patterns).
+6. tests + docs/help
+   Multi-pattern save survives Detect overwrite; contract for /patterns catalog.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/templates/partials/intelligence/_intel_patterns_save_modal.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/architecture.md
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/front/test_intelligence_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10512 passed, 323 skipped, 8 deselected.
+
+================================================================================
+## Reorganize Intelligence sidebar into Configuration / Discovery / Simulation
+================================================================================
+
+Context: The Intelligence menu mixed Community, Cohorts, Patterns and Simulation
+as sibling groups with outdated Detect / Discover / Saved labels. Reorganize into
+Configuration (cohort design + run), Discovery (communities + patterns), and
+Simulation; drop the obsolete Community and Patterns section headers and the
+Pattern/Discover submenu.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Groups: Configuration (Cohorts, Runs), Discovery (Communities, Patterns),
+   Simulation (Scenarios, Compare, Runs). Remove intelligence-community and
+   intelligence-patterns groups; keep section ids for routing.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract for the new group order and labels; assert no patterns-discover.
+3. tests/units/front/test_help_center_menu_sync.py
+   Walk help labels with an advancing cursor so duplicate Runs entries stay in
+   menu order.
+4. src/front/templates/partials/layout/help_modal.html
+   Intelligence workflow list and cohort copy match the new menu paths.
+5. docs/architecture.md, docs/user-guide.md, docs/development.md,
+   docs/getting-started.md, docs/product.md, README.md
+   Update Intelligence → Discovery / Configuration navigation paths.
+6. src/front/static/query/js/query-sigmagraph.js
+   src/front/templates/partials/dtwin/_query_sigmagraph.html
+   tests/units/front/test_explorer_clusters_readonly.py
+   Explorer empty-state / contract point at Discovery → Communities.
+7. Comment/path touch-ups in communities/patterns partials + JS, dtwin.py,
+   query-cohorts.js (English-only nav comments).
+
+Modified files:
+- src/front/config/menu_config.json
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_explorer_clusters_readonly.py
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/static/intelligence/js/intelligence-communities.js
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-cohorts.js
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/api/routers/internal/dtwin.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/development.md
+- docs/getting-started.md
+- docs/product.md
+- README.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10512 passed, 323 skipped, 8 deselected.
+
+
+================================================================================
+## Reshape Mapping menu and remove Spark SQL page
+
+Context: The Mapping Spark SQL preview page was no longer needed. The sidebar
+was still a single Mapping Design group plus a W3C Standards group that only
+held Spark SQL. Reorganize into Design / Advanced and drop the UI page while
+keeping the domain Spark SQL API.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Split Mapping into Design (General, Import, Studio, Manual) and Advanced
+   (Auto-Map, Diagnostics); remove Sparks SQL / W3C group.
+2. src/front/templates/mapping.html
+   Remove Sparks SQL section include.
+3. src/front/templates/partials/mapping/_mapping_sparksql.html
+   Deleted Sparks SQL page partial.
+4. src/front/static/mapping/js/mapping-sparksql.js
+   Deleted Sparks SQL page script.
+5. src/front/static/mapping/js/mapping-init.js
+   Drop Sparks SQL section refresh hooks.
+6. src/front/static/mapping/css/mapping-shared.css
+   Remove Sparks SQL loading overlay styles.
+7. src/front/static/global/css/components.css
+   Remove unused .ob-sparksql-console helper used only by that page.
+8. src/front/templates/partials/layout/help_modal.html
+   Drop Mapping → Spark SQL bullet from help workflow.
+9. tests/units/front/test_help_center_menu_sync.py
+   Assert Sparks SQL is no longer a Mapping sidebar item.
+10. tests/units/front/test_sidebar_content_stretch_contract.py
+    Drop Sparks SQL section/partial from Mapping stretch contract.
+11. tests/units/api/test_ui_rendering.py
+    Expect Design + Advanced Mapping sidebar sections.
+12. tests/e2e/mapping/test_mapping_flows.py
+    Cover import + diagnostics; drop Sparks SQL.
+13. tests/e2e/README.md
+    Sync Mapping E2E section list.
+14. docs/development.md
+    Document Design / Advanced Mapping sidebar groups.
+15. docs/architecture.md
+    Remove Mapping Sparks SQL preview UI feature row.
+16. docs/superpowers/specs/2026-11-14-mapping-menu-reshape-design.md
+    Design note for the reshape.
+17. docs/superpowers/plans/2026-11-14-mapping-menu-reshape.md
+    Implementation plan for the reshape.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/mapping.html
+- src/front/templates/partials/mapping/_mapping_sparksql.html (deleted)
+- src/front/static/mapping/js/mapping-sparksql.js (deleted)
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/css/mapping-shared.css
+- src/front/static/global/css/components.css
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/README.md
+- docs/development.md
+- docs/architecture.md
+- docs/superpowers/specs/2026-11-14-mapping-menu-reshape-design.md
+- docs/superpowers/plans/2026-11-14-mapping-menu-reshape.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 44.15s
+
+
+================================================================================
+## Auto-save Pattern Detect runs; remove Save button
+
+Context: After Detect, users had to click Save and name the run manually.
+Every successful Detect should snapshot the full run automatically under a
+stable label (entity type + local date/time), and the Save button/modal are
+no longer needed.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   After a successful Detect, auto-save the whole run as
+   `{entity} — {YYYY-MM-DD HH:MM:SS}`; drop Save modal handlers; reuse
+   pattern_save with the details loading overlay.
+2. src/front/templates/partials/intelligence/_intel_patterns.html
+   Remove Save button; update subtitle for auto-save.
+3. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Update list copy / empty state for automatic save.
+4. src/front/templates/intelligence.html
+   Stop including the Save modal partial.
+5. src/front/templates/partials/intelligence/_intel_patterns_save_modal.html
+   Deleted — manual Save dialog removed.
+6. src/front/templates/partials/layout/help_modal.html
+   Patterns help: Detect auto-saves the whole run.
+7. tests/units/front/test_intelligence_page_contract.py
+   Assert no Save button/modal; assert `_autoSaveAfterDetect` wiring.
+8. docs/architecture.md
+   Document auto-save after Detect.
+9. docs/user-guide.md
+   Document automatic naming and list behaviour.
+10. docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+    Details pane: auto-save instead of Save prompt.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/intelligence.html
+- src/front/templates/partials/intelligence/_intel_patterns_save_modal.html (deleted)
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_intelligence_page_contract.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 47.20s
+
+================================================================================
+## Rename Patterns Detect list button to New
+
+Context: The Patterns list header button opens the Detect dialog. Renamed to
+"New" to match the Scenarios "New scenario" entry point. The dialog's own run
+button still says Detect.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   List header button label Detect → New (icon bi-search → bi-plus-lg); id unchanged.
+2. tests/units/front/test_intelligence_page_contract.py
+   Assert the list button reads New and no Detect label remains.
+3. docs/user-guide.md
+   Patterns list paragraph refers to New instead of Detect for the entry button.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 47.20s
+
+================================================================================
+## Use the Configuration icon consistently across the app
+
+Context: The Context → Configuration item and its page heading used an info
+icon, while Settings and the Intelligence Configuration group used different
+icons. Standardize every Configuration item and group on `bi-sliders`, the
+icon already used by Settings → Configuration.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Context → Configuration item icon `bi-info-circle` → `bi-sliders`.
+2. src/front/config/menu_config.json
+   Context `domain-main` group icon `bi-sliders2` → `bi-sliders`.
+3. src/front/config/menu_config.json
+   Intelligence `intelligence-configuration` group icon `bi-people-fill` → `bi-sliders`.
+4. src/front/config/menu_config.json
+   Mapping Advanced group icon `bi-sliders` → `bi-tools` so `bi-sliders` stays reserved for Configuration.
+5. src/front/templates/partials/domain/_domain_information.html
+   Configuration page heading icon `bi-info-circle` → `bi-sliders`.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/domain/_domain_information.html
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 44.72s
+(one earlier run failed tests/units/front/test_intelligence_page_contract.py::test_patterns_section_owns_discovery; it passes in isolation and on rerun)
+
+
+================================================================================
+## Open saved Detect results after auto-save (fix blank details)
+
+Context: After Detect finished, auto-save showed a loading overlay that hid
+the preview body and never restored it, so the details pane stayed blank.
+Open the newly saved snapshot (picker + diagrams) as soon as save completes.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Return `saved_id` from `_awaitSave`; `_autoSaveAfterDetect` calls
+   `openSavedById`; add `_restoreDiscoverPreview` fallback; stop overwriting
+   the saved URL after Detect.
+2. tests/units/front/test_intelligence_page_contract.py
+   Assert open-after-save wiring (`openSavedById`, `task.result.saved_id`).
+3. docs/user-guide.md
+   Note that New/Detect auto-opens the saved snapshot after the run.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10510 passed, 324 skipped, 8 deselected, 39 warnings in 45.91s
+
+================================================================================
+## Move Intelligence Simulation Runs to Settings → Runs
+
+Context: Simulation run history lived under Intelligence → Simulation → Runs
+while build/analytics history already lived under Settings → Automation →
+Runs. Consolidate all run ledgers on the admin Runs page as a third tab so
+operators have one place to inspect history across contexts.
+
+Changes:
+
+1. src/front/templates/partials/settings/_settings_runs.html
+   Add Simulation runs tab (table, loading/empty/error, pagination).
+2. src/front/static/config/js/settings-runs.js
+   Wire the simulation tab to GET /settings/runs/simulation.
+3. src/front/static/global/js/runs-render.js
+   Shared simulation row/details/status badge helpers.
+4. src/front/templates/settings.html
+   Page-level Simulation Run Details modal.
+5. src/api/routers/internal/settings.py
+   GET /settings/runs/simulation (admin, paginated, optional domain filter).
+6. src/back/objects/domain/settings/ScheduleSettings.py
+   Extend _all_runs_result for kind=simulation via store.load_all_simulation_runs.
+7. src/back/objects/registry/store/base.py
+   Default load_all_simulation_runs → ([], 0).
+8. src/back/objects/registry/store/lakebase/Simulations.py
+   Cross-domain paginated simulation run reader with scenario label join.
+9. src/front/config/menu_config.json
+   Remove Intelligence → Simulation → Runs sidebar item.
+10. src/front/templates/intelligence.html
+    Drop runs-section include.
+11. src/front/templates/partials/intelligence/_sim_runs.html
+    Deleted (content moved to Settings).
+12. src/front/static/intelligence/js/simulation.js
+    Remove loadRuns / runs-section wiring.
+13. src/front/templates/partials/layout/help_modal.html
+    Point simulation run history at Settings → Automation → Runs.
+14. tests/units/front/test_settings_runs_page.py
+    Cover the third tab, modal, pagination, and endpoint wiring.
+15. tests/units/settings/test_all_runs_endpoints.py
+    Parametrize paging/filter tests for /settings/runs/simulation.
+16. tests/units/auth/test_permission_middleware.py
+    Admin-only gate for the simulation runs endpoint.
+17. tests/units/front/test_intelligence_page_contract.py
+    Menu/page no longer expose Simulation → Runs.
+18. tests/units/front/test_sidebar_content_stretch_contract.py
+    Drop runs from intelligence section inventory.
+19. tests/units/front/test_help_center_menu_sync.py
+    Update duplicate-label comment after Runs move.
+
+Modified files:
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/settings/ScheduleSettings.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/Simulations.py
+- src/front/config/menu_config.json
+- src/front/static/config/js/settings-runs.js
+- src/front/static/global/js/runs-render.js
+- src/front/static/intelligence/js/simulation.js
+- src/front/templates/intelligence.html
+- src/front/templates/partials/intelligence/_sim_runs.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/settings.html
+- tests/units/auth/test_permission_middleware.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_settings_runs_page.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/settings/test_all_runs_endpoints.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10544 passed, 324 skipped, 8 deselected, 39 warnings in 44.15s
+
+## Intelligence: merge Cohorts and Runs into one page with Design / Runs tabs
+
+Context: Intelligence → Configuration had two sidebar pages (Cohorts for the
+rule design, Runs for preview and materialise), each with its own saved-rules
+rail. They are now one Cohorts page. The rail is shared, the right card has
+Design and Runs tabs, and the header actions swap with the active tab. Design
+spec: docs/superpowers/specs/2026-11-14-cohorts-runs-tabs-design.md.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_cohorts.html
+   Page shell: header (title with KG status badge; Design actions = Discuss /
+   New rule / Save rule; Runs actions = Purge / Outputs / Preview / Materialise),
+   shared rail, and ob-tabs (Design, Runs). The design form moves into the
+   Design pane; the Runs partial is included in the Runs pane.
+2. src/front/templates/partials/dtwin/_query_cohorts.html
+   Reduced to the Runs pane body (rule summary, preview, path trace, explain).
+   Its own header, rail and action buttons moved to the shell.
+3. src/front/templates/intelligence.html
+   Removed the cohort-run-section sidebar section.
+4. src/front/config/menu_config.json
+   Removed the Runs item from Intelligence → Configuration.
+5. src/front/static/query/js/query-cohorts.js
+   Tab wiring: _bindTabs / _showTab / _syncTabChrome (swap header actions,
+   mirror the active tab in ?tab=design|runs). Single rules list; the pencil
+   edit link is gone. Loading a rule no longer forces the Design tab.
+   Init guard checks cohorts-section only.
+6. src/front/routes/intelligence.py
+   Legacy ?section=cohort-run redirects to ?section=cohorts&tab=runs (keeps rule=).
+7. src/front/routes/dtwin.py
+   /dtwin/?section=cohorts now redirects to ?section=cohorts&tab=runs.
+8. src/front/templates/partials/layout/help_modal.html
+   Help text points to the Design and Runs tabs.
+9. docs/user-guide.md, docs/advanced_features.md, docs/architecture.md
+   Navigation paths and redirect notes updated.
+10. tests/units/front/test_cohorts_runs_tabs_contract.py (new)
+    Contract for the shared rail, tabs, header action swap, tab URL sync,
+    and both legacy redirects.
+11. Updated contract tests for the new file split: test_intelligence_page_contract,
+    test_sidebar_content_stretch_contract, test_kg_section_headers,
+    test_kg_readiness_indicator, test_purge_inferences_ui,
+    test_cohort_run_busy_buttons, test_clarity_design_contract (cohort page now
+    asserts real ob-tabs instead of forbidding tab-pane).
+
+Modified files (this change):
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+- src/front/templates/partials/dtwin/_query_cohorts.html
+- src/front/templates/intelligence.html
+- src/front/config/menu_config.json
+- src/front/static/query/js/query-cohorts.js
+- src/front/routes/intelligence.py
+- src/front/routes/dtwin.py
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/advanced_features.md
+- docs/architecture.md
+- tests/units/front/test_cohorts_runs_tabs_contract.py (new)
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_cohort_run_busy_buttons.py
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/front/test_kg_section_headers.py
+- tests/units/front/test_purge_inferences_ui.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10547 passed, 324 skipped, 8 deselected, 39 warnings in 48.25s
+Browser check not run (no Databricks workspace in this session); the JS passes `node --check`.
+
+## Cohorts: rename header buttons
+
+1. src/front/templates/partials/ontology/_ontology_cohorts.html
+   Header buttons renamed: "New rule" → "New", "Save rule" → "Save"; empty-state hint updated.
+2. docs/user-guide.md, docs/advanced_features.md
+   Button names in the cohort docs updated to match.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+- docs/user-guide.md
+- docs/advanced_features.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10547 passed, 324 skipped, 8 deselected, 39 warnings in 44.45s
+
+## Cohorts: fix Discuss button (no-op on Intelligence)
+
+Context: The Cohorts header Discuss button called ``openOntologyDiscussion()``,
+which only existed in ``ontology-map.js``. Intelligence never loads that script,
+and the ``typeof … === 'function' &&`` guard silently did nothing.
+
+1. src/front/static/global/js/comments-panel.js
+   Export ``window.openOntologyDiscussion`` → ``OntoComments.openForSelection()``
+   (panel already ships on every page via base.html).
+2. src/front/templates/partials/ontology/_ontology_cohorts.html
+   Call ``openOntologyDiscussion()`` directly; drop the silent typeof guard.
+3. src/front/static/ontology/js/ontology-map.js
+   Remove the local duplicate; map toolbar uses the shared global at click time.
+4. tests/units/api/test_discussion_panel_assets.py
+   Contract that the global opener exists and Cohorts wires to it.
+
+Modified files:
+- src/front/static/global/js/comments-panel.js
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/api/test_discussion_panel_assets.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10549 passed, 324 skipped, 8 deselected, 39 warnings in 45.11s
+
+## Graph menu: rename "Advanced" group to "Compute"
+
+1. src/front/config/menu_config.json
+   Graph menu group `digitaltwin-advanced` title "Advanced" → "Compute" (id unchanged).
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10549 passed, 324 skipped, 8 deselected, 39 warnings in 45.00s
+
+## Discuss button on Communities, Patterns and Compare
+
+Context: The domain discussion (window.openOntologyDiscussion, exported by
+comments-panel.js) is domain-wide, so the same button opens the same thread
+everywhere. Added it to the Intelligence section headers that lacked it.
+Bound from JS by id; partials stay free of inline onclick.
+
+1. src/front/templates/partials/intelligence/_intel_communities.html
+   Discuss button (#commDiscussBtn) before Materialize; Detect stays the rightmost CTA.
+2. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Discuss button (#patSavedDiscussBtn) in the list header.
+3. src/front/templates/partials/intelligence/_intel_patterns.html
+   Discuss button (#patDiscussBtn) in the details header.
+4. src/front/templates/partials/intelligence/_sim_compare.html
+   Header now has an actions group with Discuss (#simCompareDiscussBtn).
+5. src/front/static/intelligence/js/intelligence-communities.js
+   init() binds #commDiscussBtn.
+6. src/front/static/intelligence/js/intelligence-patterns.js
+   init() binds #patSavedDiscussBtn and #patDiscussBtn.
+7. src/front/static/intelligence/js/simulation-compare.js
+   init() binds #simCompareDiscussBtn.
+8. tests/units/front/test_intelligence_discuss_buttons.py (new)
+   Contract: each header has the button, it is bound from JS, no inline onclick,
+   Communities Discuss sits before the primary CTA.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_sim_compare.html
+- src/front/static/intelligence/js/intelligence-communities.js
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/js/simulation-compare.js
+- tests/units/front/test_intelligence_discuss_buttons.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10558 passed, 324 skipped, 8 deselected, 39 warnings in 44.67s
+Browser check not run (no Databricks workspace in this session).
+
+## Fix pattern diagram ontology icons
+
+Context: Pattern details diagrams always showed the default 📦 icon instead of
+each class's ontology emoji. Opening a saved Detect run never loaded ontology
+classes before drawing the diagram, and icon lookup used exact URI match only
+(unlike Communities).
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Load ontology classes in selectPattern; resolve icons via _findOntologyClass
+   (flexible URI/label match) and cls.emoji || cls.icon, matching Communities.
+2. tests/units/front/test_intelligence_page_contract.py
+   Contract asserts class load + ontology icon resolution for pattern diagrams.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10547 passed, 324 skipped, 8 deselected, 39 warnings in 44.57s
+
+## Patterns diagram: hover highlights the connected neighbourhood
+
+Context: In Intelligence → Patterns, the neighbourhood diagram gave no feedback
+when exploring relationships. Hovering an entity now highlights every entity and
+path connected to it across all hops, and dims the rest. Spec:
+docs/superpowers/specs/2026-11-14-pattern-diagram-hover-highlight-design.md
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Node groups get class `pat-dg-node-g` and `data-node-id`; edges and their
+   labels get `data-source` / `data-target`. New `_bindDiagramHover()` uses
+   delegated `mouseover` / `mouseout` on `document` (no per-SVG listeners).
+   New `_highlightDiagram(node)` builds an undirected adjacency from the edge
+   data attributes and walks the connected component (all hops), then toggles
+   `is-on` on reached nodes and edges and `is-focus` on the hovered node.
+   New `_clearDiagramHighlight(svg)` removes the state. Caption now mentions
+   hovering a node to trace its connections.
+2. src/front/static/intelligence/css/intelligence.css
+   Opacity transition on diagram nodes, edges and labels; `cursor: pointer` on
+   nodes; `.is-hovering` dims unconnected elements to 0.25; `.is-focus` gives the
+   hovered node a primary-colour stroke.
+3. tests/units/front/test_pattern_diagram_hover.py (new)
+   Static contract: markup attributes, delegated listeners, BFS in both
+   directions, clear/reset, CSS dimming and focus rules, no inline handlers.
+4. docs/superpowers/specs/2026-11-14-pattern-diagram-hover-highlight-design.md
+   Status set to Implemented.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py (new)
+- docs/superpowers/specs/2026-11-14-pattern-diagram-hover-highlight-design.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `node --check` on intelligence-patterns.js → OK; Node harness exercising
+the highlight/clear logic with a DOM stub → 9/9 checks pass (ad hoc, not
+committed). `uv run --frozen pytest -q -m "not scenario"` → 10566 passed,
+324 skipped, 8 deselected, 39 warnings in 50.43s.
+Browser check not run (no Databricks workspace in this session).
+
+## Patterns diagram hover: lineage paths + accented relationships
+
+Context: The first hover pass used an undirected connected-component walk.
+Pattern diagrams are always one component rooted at hop 0, so almost nothing
+dimmed and relationships did not stand out — only the focus stroke was
+visible. Hover now lights the hovered node's lineage (ancestors toward the
+entity, descendants toward further hops) and accents those relationship
+edges across related hops; unrelated branches dim.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_highlightDiagram` walks parent→child down and child→parent up; marks
+   edges that lie on that lineage. Reads ids via `getAttribute` (not
+   `dataset`). Caption mentions related paths.
+2. src/front/static/intelligence/css/intelligence.css
+   Related edges/labels/nodes get a primary accent; unrelated stay at 0.25
+   opacity. Explicit 0.15s transitions (avoid broken `opacity var(--db-transition-fast)`).
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract asserts ancestor/descendant walk (not undirected), getAttribute
+   reads, and CSS accent rules.
+4. docs/superpowers/specs/2026-11-14-pattern-diagram-hover-highlight-design.md
+   Spec updated to lineage semantics.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- docs/superpowers/specs/2026-11-14-pattern-diagram-hover-highlight-design.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: Node harness (lineage tree A/B1/C1 vs B2/C2) → 9/9 checks pass (ad
+hoc, not committed). `uv run --frozen pytest -q -m "not scenario"` → 10567 passed,
+324 skipped, 8 deselected, 39 warnings in 44.68s.
+Hard-refresh the Patterns page if the old hover behaviour is still cached.
+
+## Pattern diagram: relationship name + count badge
+
+Context: Edge labels concatenated the relationship name with ×n / share % on
+one truncated line, so names disappeared next to the number. The name now
+sits on the path by itself; the count is a colored badge under it.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_diagramEdge` renders the full `via_label` as `pat-dg-edge-name` at the
+   curve midpoint and a primary ×avg badge (plus a warning % badge when
+   share < 1) underneath. Incoming-edge slot spacing increased for the
+   two-line label.
+2. src/front/static/intelligence/css/intelligence.css
+   Name + badge styles; hover still dims the label group and accents the
+   name in primary.
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract: name is not trimmed onto the count; badge markup present.
+4. tests/units/front/test_intelligence_page_contract.py
+   Diagram contract updated from `text-anchor="end"` to name + badge classes.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10568 passed,
+324 skipped, 8 deselected, 39 warnings in 47.82s.
+Hard-refresh the Patterns page if the old labels are still cached.
+
+## Pattern diagram: anti-overlap layout + relationship tooltips
+
+Context: Name + badge labels collided when several relationships entered the
+same node, and hovering a relationship gave no explanation of ×n / share %.
+Layout now reserves vertical bands for parallel edges; hovering a name or
+badge shows a floating tip with the meaning (and full URI for the name).
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   Wider columns, larger edgeSlot / gapY / labelPad; `_layoutDiagram` sizes
+   each node band from incoming fan-out so labels do not overlap. Edges carry
+   `data-pat-tip`; `_bindDiagramTooltips` shows a body-level tip on hover.
+2. src/front/static/intelligence/css/intelligence.css
+   `.pat-dg-tip` floating tooltip; `cursor: help` on names and badges.
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract for layout reservation, tip copy, and tooltip binding.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10570 passed, 324 skipped, 8 deselected, 39 warnings in 46.58s.
+Hard-refresh the Patterns page if the old layout is still cached.
+
+## Pattern diagram: arrows stay on entity boxes
+
+Context: Parallel-edge lane offsets pushed arrow tips into empty band space
+so relationships looked disconnected from their entities. Endpoints now
+attach on the node face; lane offset only bends the curve and labels.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_edgeAttachY` distributes attachments inside the visible rect; lane
+   offset applies to control points / label Y only.
+2. tests/units/front/test_pattern_diagram_hover.py
+   Contract that endpoints use `_edgeAttachY`, not `+ dy` off the box.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+## Patterns: full-height diagram + Matching entities modal
+
+Context: The neighbourhood diagram was capped (~58vh) and the matching
+entities list competed for space. The diagram now fills the details pane;
+Matching entities opens a modal with a spinner while members load.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `selectPattern` loads shape only; toolbar button `data-pat-members`
+   opens `openMembersModal` (spinner → list, Load more in the modal).
+2. src/front/templates/partials/intelligence/_intel_patterns_members_modal.html
+   New Bootstrap modal shell with loading spinner markup.
+3. src/front/templates/intelligence.html
+   Includes the members modal next to the Detect modal.
+4. src/front/static/intelligence/css/intelligence.css
+   Flex fill for details/diagram; remove max-height cap on the scroll area.
+5. tests/units/front/test_intelligence_page_contract.py
+   Contract for modal, button, deferred members load, full-height CSS.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- src/front/templates/intelligence.html
+- src/front/templates/partials/intelligence/_intel_patterns_members_modal.html (new)
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+## Pattern diagram: stronger dim on non-highlighted paths
+
+Context: On hover, unrelated nodes/edges stayed too visible at 0.25 opacity.
+They now fade to near-invisible with a light blur so the lineage stands out.
+
+Changes:
+
+1. src/front/static/intelligence/css/intelligence.css
+   Non-`.is-on` elements under `.is-hovering` use opacity 0.08 and blur(1.2px);
+   transition includes filter.
+2. tests/units/front/test_pattern_diagram_hover.py
+   Contract updated for the stronger dim.
+
+Modified files:
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10571 passed, 324 skipped, 8 deselected, 39 warnings in 45.24s.
+Hard-refresh the Patterns page if cached assets still show the old dim.
+
+## Patterns toolbar: vertically align picker, KPIs, Matching entities
+
+Context: The pattern dropdown, KPI chips and Matching entities button sat on
+different baselines because the KPIs used a Bootstrap row and the button used
+default btn-sm height.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   KPI strip is a flex row (no Bootstrap `row g-2`); members button gets
+   `pat-members-btn`.
+2. src/front/static/intelligence/css/intelligence.css
+   Shared `--pat-chip-h` height on picker, KPI tiles and members button;
+   toolbar/KPI strip use flex align-items center.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract for `pat-members-btn` height and non-Bootstrap KPI strip.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: targeted intelligence page contract passed; full suite covered with later sections.
+
+## Pattern diagram: dotted hop lane guides
+
+Context: Hop columns (Entity, 1 hop, …) had no vertical guide, so depth was
+harder to read. Each column now has a very light dotted vertical lane behind
+the nodes.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_diagramSvg` draws a `pat-dg-lane` line down each hop column centre.
+2. src/front/static/intelligence/css/intelligence.css
+   `.pat-dg-lane` uses `--db-border-light` with a sparse dash pattern.
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract for lane markup and CSS.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10572 passed, 324 skipped, 8 deselected, 39 warnings in 44.48s.
+
+## Pattern detect modal: parameter info tooltips
+
+Context: In the Detect patterns popup, users needed clear explanations for
+the detection parameters: Hops, Numeric bins, Min support, and Refine top-N.
+Added (i) info icons with tooltips explaining each parameter.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_patterns_detect_modal.html
+   Add `bi-info-circle` info icons with tooltips to Hops, Numeric bins,
+   Min support, and Refine top-N form labels.
+2. src/front/static/intelligence/css/intelligence.css
+   Add `.pat-form-info` helper class with `cursor: help` and primary hover color.
+3. src/front/static/intelligence/js/intelligence-patterns.js
+   Initialize Bootstrap tooltips on modal elements in `init()`.
+4. tests/units/front/test_intelligence_page_contract.py
+   Assert presence of `pat-form-info` and parameter labels in modal contract.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_patterns_detect_modal.html
+- src/front/static/intelligence/css/intelligence.css
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10572 passed, 324 skipped, 8 deselected, 39 warnings in 45.17s.
+
+## Pattern diagram: make hop lane guides visible
+
+Context: Hop lane lines used `--db-border-light` (#F4F2EF) on the warm
+canvas, so they were effectively invisible. Stroke contrast and dash size
+are increased; gutter separators between columns are added so guides stay
+visible beside the entity boxes.
+
+Changes:
+
+1. src/front/static/intelligence/css/intelligence.css
+   `.pat-dg-lane` uses a visible light grey (#C9C5BF), thicker dash, and
+   `vector-effect: non-scaling-stroke`. `.pat-dg-lane-gutter` for separators.
+2. src/front/static/intelligence/js/intelligence-patterns.js
+   Draw column-centre guides plus gutter separators between hops.
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract for gutter lanes and non-invisible stroke.
+
+Modified files:
+- src/front/static/intelligence/css/intelligence.css
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10572 passed, 324 skipped, 8 deselected, 39 warnings in 45.64s.
+Hard-refresh the Patterns page to pick up the visible lane CSS/JS.
+
+## Pattern diagram: dotted lane only on the Entity column
+
+Context: Hop / relationship columns also had dotted vertical guides, which
+cluttered the relationship area. Keep a single dotted guide on the Entity
+column only.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_diagramSvg` draws one `pat-dg-lane` at the Entity column centre.
+2. src/front/static/intelligence/css/intelligence.css
+   Remove unused `.pat-dg-lane-gutter`.
+3. tests/units/front/test_pattern_diagram_hover.py
+   Contract: entity lane only, no hop/gutter lanes.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/front/test_pattern_diagram_hover.py` → 14 passed.
+
+## Pattern diagram: dotted lanes on Entity and all hop columns
+
+Context: User wants vertical dotted guides on Entity and 1…x hop columns,
+without lines in the relationship gutter between columns.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   `_diagramSvg` draws one `pat-dg-lane` per hop column centre (0..maxHop).
+2. tests/units/front/test_pattern_diagram_hover.py
+   Contract: per-hop lanes, no gutter separators.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- tests/units/front/test_pattern_diagram_hover.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/front/test_pattern_diagram_hover.py` → 14 passed.

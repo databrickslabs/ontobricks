@@ -1,10 +1,19 @@
-/* Knowledge Graph -> Analytics section.
+/* Intelligence → Discovery → Analytics section.
  *
- * Paired with templates/partials/dtwin/_query_analytics.html.
- * The window.* functions at the bottom are called from query.js and
- * query-sigmagraph.js -- do not rename them without updating both.
+ * Paired with templates/partials/intelligence/_intel_analytics.html.
+ * Loads on sidebarSectionChanged('analytics'). The window.* helpers are
+ * also referenced from inline handlers in the partial — do not rename
+ * them without updating that markup.
  */
 (function () {
+    if (!window.__TRIPLESTORE_CONFIG) {
+        var _cfgEl = document.getElementById('triplestore-config');
+        if (_cfgEl) {
+            try { window.__TRIPLESTORE_CONFIG = JSON.parse(_cfgEl.textContent); }
+            catch (_) { window.__TRIPLESTORE_CONFIG = {}; }
+        }
+    }
+
     var _analyticsData = null;
     var _analyticsLastSections = null;
     var _charts = {};
@@ -46,7 +55,7 @@
             formula: 'BC(v) = Σ<sub>s ≠ v ≠ t</sub> <sup>σ(s, t | v)</sup>/<sub>σ(s, t)</sub>',
             formulaDesc: '<ul class="mb-0"><li><code>σ(s, t)</code> — total number of shortest paths from node <em>s</em> to node <em>t</em></li><li><code>σ(s, t | v)</code> — those shortest paths that pass through <em>v</em></li><li>Result is normalised to [0, 1] by dividing by <code>(N−1)(N−2)/2</code></li></ul>',
             example: '<strong>Scenario:</strong> A <em>Department</em> entity that connects multiple <em>Employee</em> clusters to <em>Project</em> entities lies on many shortest paths. Its betweenness is high — removing it would disconnect large parts of the graph.',
-            why: 'High-betweenness nodes are <strong>bottlenecks and single points of failure</strong>. They are the most critical entities for connectivity. In a knowledge graph, they often represent integration points, shared reference data, or cross-domain hubs.',
+            why: 'High-betweenness nodes are <strong>bottlenecks and single points of failure</strong>. They are the most critical entities for connectivity. In a knowledge graph, they often represent integration points, shared reference data, or cross-context hubs.',
         },
         degree: {
             title: 'Degree Centrality',
@@ -158,7 +167,7 @@
                 + 'to build one before running analysis.'
                 + '<span class="d-block mt-1">Results from an earlier analysis are '
                 + 'no longer shown, because the graph they describe does not exist. '
-                + 'The run history is kept under <strong>KG → Management → Runs</strong>.</span></span>';
+                + 'The run history is kept under the <strong>Runs</strong> tab on this page.</span></span>';
             var section = document.getElementById('analyticsSection');
             var header = section && section.querySelector('.section-header');
             if (header) header.insertAdjacentElement('afterend', banner);
@@ -366,7 +375,7 @@
         if (diffSec < 60) return 'just now';
         if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm ago';
         if (diffSec < 86400) return Math.floor(diffSec / 3600) + 'h ago';
-        return d.toLocaleString();
+        return formatDateTime(iso);
     }
 
     // Render a metrics payload (from compute OR from the stored cache) into
@@ -374,6 +383,7 @@
     // for the stored-result path (computed_at, class_filter).
     function _renderAnalyticsData(data, meta) {
         meta = meta || {};
+        _showAnalyticsEmpty(false);
         _analyticsData = data;
         var generation = meta.computed_at || '';
         if (generation !== _analyticsGeneration) {
@@ -445,19 +455,56 @@
         _analyticsLastSections = null;
     }
 
+    // Whether the last /dtwin/metrics/latest read found no stored analysis
+    // (as opposed to a failed request).
+    var _noStoredResult = false;
+
+    // Toggle the "No analytics runs found" empty state (mirrors the Runs tab).
+    function _showAnalyticsEmpty(show) {
+        var empty = document.getElementById('analyticsEmpty');
+        if (empty) empty.classList.toggle('d-none', !show);
+    }
+
+    // Show the spinner with the "loading the last analysis" message. The
+    // default (compute) message is kept on the element so it can be restored.
+    function _showLoadingLatestSpinner() {
+        var spinner = document.getElementById('analyticsSpinner');
+        if (!spinner) return;
+        var msg = spinner.querySelector('p');
+        if (msg && spinner.dataset.defaultMsg === undefined) {
+            spinner.dataset.defaultMsg = msg.textContent;
+        }
+        if (msg) msg.textContent = 'Loading the last analysis…';
+        spinner.classList.remove('d-none');
+    }
+
+    function _hideLoadingLatestSpinner() {
+        var spinner = document.getElementById('analyticsSpinner');
+        if (!spinner) return;
+        var msg = spinner.querySelector('p');
+        if (msg && spinner.dataset.defaultMsg !== undefined) {
+            msg.textContent = spinner.dataset.defaultMsg;
+        }
+        spinner.classList.add('d-none');
+    }
+
+    function _fetchLatestMetrics() {
+        return fetch('/dtwin/metrics/latest', { credentials: 'same-origin' })
+            .then(function (resp) { return resp.json(); });
+    }
+
     // Load and render the LAST persisted analytics result for this domain.
     // Returns true when a stored result was rendered. Shows the spinner while
     // the stored result is being fetched/rendered (e.g. on section open).
-    window.analyticsLoadLatest = async function () {
-        var spinner = document.getElementById('analyticsSpinner');
-        var spinnerMsg = spinner ? spinner.querySelector('p') : null;
-        var prevMsg = spinnerMsg ? spinnerMsg.textContent : '';
-        if (spinnerMsg) spinnerMsg.textContent = 'Loading the last analysis…';
-        if (spinner) spinner.classList.remove('d-none');
+    // ``prefetched`` (optional) is an in-flight _fetchLatestMetrics() promise
+    // started earlier so the request overlaps the graph probe.
+    window.analyticsLoadLatest = async function (prefetched) {
+        _showLoadingLatestSpinner();
+        _noStoredResult = false;
         try {
-            var resp = await fetch('/dtwin/metrics/latest', { credentials: 'same-origin' });
-            var data = await resp.json();
-            if (!data.success || !data.has_result) return false;
+            var data = await (prefetched || _fetchLatestMetrics());
+            if (data && data.success && !data.has_result) _noStoredResult = true;
+            if (!data || !data.success || !data.has_result) return false;
             _renderAnalyticsData(data, {
                 computed_at: data.computed_at,
                 class_filter: data.class_filter
@@ -466,8 +513,7 @@
         } catch (e) {
             return false;
         } finally {
-            if (spinner) spinner.classList.add('d-none');
-            if (spinnerMsg) spinnerMsg.textContent = prevMsg;
+            _hideLoadingLatestSpinner();
         }
     };
 
@@ -475,6 +521,7 @@
     function _setAnalysisBusy(busy) {
         var btn     = document.getElementById('analyticsComputeBtn');
         var spinner = document.getElementById('analyticsSpinner');
+        if (busy) _showAnalyticsEmpty(false);
         if (btn) btn.disabled = !!busy;
         if (spinner) spinner.classList.toggle('d-none', !busy);
     }
@@ -520,16 +567,21 @@
     // any in-flight task. Then, if a computation is still running in the
     // background, re-show the spinner and resume waiting (the last result stays
     // visible underneath until the new one lands).
-    window.analyticsResume = async function () {
+    window.analyticsResume = async function (prefetched) {
         // The stored result lives in the registry and outlives the graph it
         // describes. Rendering it next to the "not built yet" banner told the
         // user two contradictory things; the live probe wins.
         if (_graphMissing) {
             _clearAnalyticsResults();
+            _hideLoadingLatestSpinner();
+            _showAnalyticsEmpty(false);
             return;
         }
-        await window.analyticsLoadLatest();
+        await window.analyticsLoadLatest(prefetched);
         var running = await _findRunningAnalyticsTask();
+        // Empty state only once we know nothing is stored AND nothing is
+        // computing, so it never flashes before a resumed run's spinner.
+        _showAnalyticsEmpty(_noStoredResult && !running);
         if (running) {
             await _waitAndLoad(running.id);
         }
@@ -1293,6 +1345,7 @@
     }
 
     function _showAnalyticsError(msg) {
+        _showAnalyticsEmpty(false);
         var noData = document.getElementById('analyticsNoData');
         if (noData) {
             noData.innerHTML = '<div class="alert alert-danger small mb-3"><i class="bi bi-exclamation-triangle me-1"></i>' + msg + '</div>';
@@ -1307,17 +1360,31 @@
     function _setText(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
 
 
-    // Exposed so query.js can populate the dropdown on section activation.
-    // Also hydrates the page from the LAST stored analytics result (if any) —
-    // or, when a computation is still running in the background, re-shows the
-    // spinner and resumes waiting (so navigating away and back keeps progress).
+    // Populate the entity-type dropdown and hydrate the LAST stored result
+    // (or resume a still-running background job) on section activation.
     window.analyticsLoadTypes = function () {
+        // Immediate feedback on section open: the graph probe below
+        // (/dtwin/sync/stats) can take seconds before anything renders.
+        _showLoadingLatestSpinner();
+        // Overlap the stored-result read with the probe; it is only rendered
+        // after analyticsResume has checked _graphMissing.
+        var latest = _fetchLatestMetrics().catch(function () { return null; });
         _loadEntityTypes().then(function () {
-            window.analyticsResume();
+            window.analyticsResume(latest);
         }).catch(function () {
-            window.analyticsResume();
+            window.analyticsResume(latest);
         });
     };
+
+    document.addEventListener('sidebarSectionChanged', function (e) {
+        if (e.detail && e.detail.section === 'analytics') {
+            window.analyticsLoadTypes();
+        }
+    });
+    if (document.getElementById('analytics-section')
+            && document.getElementById('analytics-section').classList.contains('active')) {
+        window.analyticsLoadTypes();
+    }
 
     // Run an immediate guard on load: if the config already tells us there is no graph,
     // disable the button right away without waiting for an API round-trip.
@@ -1501,7 +1568,7 @@
             var vsResp = await fetch('/domain/version-status', { credentials: 'same-origin' });
             var vs = await vsResp.json();
             if (!vs.domain_folder || !vs.has_registry) {
-                throw new Error('Save this domain to the registry first.');
+                throw new Error('Save this context to the registry first.');
             }
 
             // POST the comment directly to the API
@@ -1527,7 +1594,8 @@
             }, 3000);
 
             // Open the discussion panel so the user can see the new comment
-            if (typeof openTwinDiscussion === 'function') openTwinDiscussion();
+            if (typeof openOntologyDiscussion === 'function') openOntologyDiscussion();
+            else if (typeof openTwinDiscussion === 'function') openTwinDiscussion();
 
         } catch (e) {
             if (typeof showNotification === 'function')

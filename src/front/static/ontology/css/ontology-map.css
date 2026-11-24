@@ -4,8 +4,7 @@
  */
 
 /* Map section: full-height canvas, no page scroll. Insets mirror the Knowledge
-   Graph Explorer (query-sigmagraph.css): flush vertically with the sidebar and
-   a 0.5rem horizontal inset. */
+   Graph Explorer (query-sigmagraph.css) through the shared page padding. */
 .sidebar-content:has(#map-section.active) {
     overflow: hidden;
     padding: 0;
@@ -13,7 +12,7 @@
 
 #map-section.active {
     overflow: hidden;
-    padding: 0 0.5rem;
+    padding: var(--ob-page-padding);
 }
 
 #map-section .section-header {
@@ -64,6 +63,107 @@
 
 #ontology-map-container.map-select-mode .map-node {
     cursor: pointer;
+}
+
+/* Studio Business View dropdown (toolbar toggle + rich menu) */
+.studio-view-toggle {
+    min-width: 140px;
+    max-width: 220px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+}
+
+.studio-view-toggle-name {
+    display: inline-block;
+    max-width: 180px;
+    min-width: 0;
+    text-align: left;
+    margin-right: 0.25rem;
+}
+
+#studioViewMenu {
+    min-width: 220px;
+    max-width: 320px;
+}
+
+.studio-view-item,
+.studio-view-row-pick {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.studio-view-check {
+    visibility: hidden;
+}
+
+.studio-view-item.is-current .studio-view-check,
+.studio-view-row-pick.is-current .studio-view-check {
+    visibility: visible;
+}
+
+.studio-view-row {
+    display: flex;
+    align-items: center;
+}
+
+.studio-view-rename {
+    flex-shrink: 0;
+    padding: 0 0.5rem !important;
+    margin-right: 0.5rem;
+}
+
+.studio-view-rename .bi-pencil {
+    margin-right: 0.5rem;
+}
+
+/* Collapse/expand control on entity and group nodes.
+   Circle fill is set inline to the ontology group color. */
+.studio-group-toggle {
+    pointer-events: all;
+}
+
+.studio-group-toggle-bg {
+    stroke: rgba(255, 255, 255, 0.9);
+    stroke-width: 1.25px;
+}
+
+.studio-group-toggle-icon {
+    font-size: 11px;
+    font-weight: 700;
+    fill: #ffffff;
+    pointer-events: none;
+    text-anchor: middle;
+    dominant-baseline: central;
+    alignment-baseline: middle;
+}
+
+.studio-group-toggle:hover .studio-group-toggle-bg {
+    stroke: #ffffff;
+    stroke-width: 1.75px;
+    filter: brightness(1.08);
+}
+
+.map-group-node .map-group-circle {
+    stroke: rgba(255, 255, 255, 0.85);
+    stroke-width: 2px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
+}
+
+.map-group-node.selected .map-group-circle {
+    stroke: var(--db-primary);
+    stroke-width: 3px;
+    filter: drop-shadow(0 0 10px rgba(var(--db-primary-rgb), 0.55));
+}
+
+.map-node.dimmed .map-group-circle {
+    opacity: 0.25;
+}
+
+.map-group-node .map-node-icon {
+    font-size: 22px;
 }
 
 /* Entity nodes - icon only, no circles */
@@ -212,7 +312,7 @@
     bottom: 15px;
     left: 15px;
     background: rgba(255,255,255,0.95);
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     padding: 10px 14px;
     font-size: 11px;
     color: #495057;
@@ -264,12 +364,12 @@
 .map-context-menu {
     position: absolute;
     background: white;
-    border-radius: 8px;
+    border-radius: var(--db-radius-card);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     border: 1px solid #e9ecef;
     min-width: 180px;
     z-index: 1000;
-    overflow: hidden;
+    overflow: visible;
     animation: mapContextFadeIn 0.15s ease;
 }
 
@@ -344,6 +444,95 @@
 
 .map-context-item.map-context-danger:hover {
     background: #fff5f5;
+}
+
+.map-context-has-submenu {
+    position: relative;
+}
+
+.map-context-chevron {
+    margin-left: auto;
+    font-size: 11px;
+    opacity: 0.65;
+}
+
+.map-context-submenu {
+    display: none;
+    position: absolute;
+    left: calc(100% - 4px);
+    top: -4px;
+    min-width: 200px;
+    max-width: 280px;
+    max-height: 280px;
+    overflow-y: auto;
+    background: #ffffff;
+    border: 1px solid var(--db-border, #e9ecef);
+    border-radius: var(--db-radius-card);
+    box-shadow: var(--db-shadow-md, 0 4px 20px rgba(0, 0, 0, 0.15));
+    z-index: 1001;
+    padding: 4px 0;
+}
+
+.map-context-submenu-left {
+    left: auto;
+    right: calc(100% - 4px);
+}
+
+.map-context-has-submenu:hover > .map-context-submenu,
+.map-context-has-submenu:focus-within > .map-context-submenu {
+    display: block;
+}
+
+.map-context-submenu-hint {
+    padding: 6px 14px 4px;
+    font-size: 11px;
+    color: var(--db-text-muted, #6F6B65);
+    white-space: nowrap;
+}
+
+.map-context-subitem {
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #495057;
+    white-space: nowrap;
+}
+
+.map-context-subitem:hover {
+    background: #e8f4fd;
+    color: #1a73e8;
+}
+
+.map-context-subitem-disabled {
+    cursor: default;
+    color: var(--db-text-muted, #6F6B65);
+    font-style: italic;
+}
+
+.map-context-subitem-disabled:hover {
+    background: transparent;
+    color: var(--db-text-muted, #6F6B65);
+}
+
+.map-context-group-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.map-context-group-icon {
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.map-context-group-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ─── Neighborhood highlight (on node click) ─── */
@@ -456,7 +645,7 @@
     background: rgba(33, 37, 41, 0.9);
     color: white;
     padding: 10px 16px;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     font-size: 13px;
     z-index: 100;
     white-space: nowrap;
@@ -513,7 +702,7 @@
     width: 240px;
     background: #fff;
     border: 1px solid #dee2e6;
-    border-radius: 10px;
+    border-radius: var(--db-radius-card);
     box-shadow: 0 6px 24px rgba(0,0,0,.12);
     z-index: 900;
     animation: mapContextFadeIn 0.15s ease;

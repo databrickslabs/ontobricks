@@ -1,10 +1,12 @@
 """The cross-domain, paginated run-history endpoints behind
 Settings -> Automation -> Runs.
 
-``GET /settings/runs/build`` and ``GET /settings/runs/analytics`` are the
-registry-wide counterparts of the per-domain readers: they span every domain
-unless a ``domain`` is given, and they page with ``limit`` / ``offset`` while
-reporting the full ``total`` so the page can render "Showing X-Y of Z".
+``GET /settings/runs/build``, ``GET /settings/runs/analytics``,
+``GET /settings/runs/community``, ``GET /settings/runs/patterns`` and
+``GET /settings/runs/simulation`` are the registry-wide counterparts of the
+per-domain readers: they span every domain unless a ``domain`` is given, and
+they page with ``limit`` / ``offset`` while reporting the full ``total`` so
+the page can render "Showing X-Y of Z".
 
 Driven through a real ``TestClient``. The only two seams mocked are
 ``get_domain`` (a real ``DomainSession`` needs a populated file-backed session)
@@ -25,6 +27,16 @@ SETTINGS_MODULE = "back.objects.domain.settings.SettingsService"
 
 BUILD_PATH = "/settings/runs/build"
 ANALYTICS_PATH = "/settings/runs/analytics"
+COMMUNITY_PATH = "/settings/runs/community"
+PATTERN_PATH = "/settings/runs/patterns"
+SIMULATION_PATH = "/settings/runs/simulation"
+ALL_PATHS = [
+    BUILD_PATH,
+    ANALYTICS_PATH,
+    COMMUNITY_PATH,
+    PATTERN_PATH,
+    SIMULATION_PATH,
+]
 
 
 class _FakeCfg:
@@ -50,6 +62,8 @@ class _FakeRegistryService:
         self.total = total
         self.cfg = _FakeCfg(configured)
         self.calls: List[Dict[str, Any]] = []
+        # Simulation reads go through ``svc.store.load_all_simulation_runs``.
+        self.store = self
 
     def _record(self, folder, limit, offset) -> Tuple[List[Dict[str, Any]], int]:
         self.calls.append({"folder": folder, "limit": limit, "offset": offset})
@@ -59,6 +73,15 @@ class _FakeRegistryService:
         return self._record(folder, limit, offset)
 
     def load_all_graph_analytics_runs(self, *, folder=None, limit=25, offset=0):
+        return self._record(folder, limit, offset)
+
+    def load_all_community_runs(self, *, folder=None, limit=25, offset=0):
+        return self._record(folder, limit, offset)
+
+    def load_all_pattern_runs(self, *, folder=None, limit=25, offset=0):
+        return self._record(folder, limit, offset)
+
+    def load_all_simulation_runs(self, *, folder=None, limit=25, offset=0):
         return self._record(folder, limit, offset)
 
 
@@ -77,7 +100,7 @@ def _get(client, path, svc, **params):
         return client.get(path, params=params)
 
 
-@pytest.mark.parametrize("path", [BUILD_PATH, ANALYTICS_PATH])
+@pytest.mark.parametrize("path", ALL_PATHS)
 class TestPaging:
     def test_defaults_to_the_first_page_of_25(self, client, path):
         svc = _FakeRegistryService(rows=[{"id": 1}], total=137)
@@ -115,7 +138,7 @@ class TestPaging:
         assert client.get(path, params={"offset": -1}).status_code == 422
 
 
-@pytest.mark.parametrize("path", [BUILD_PATH, ANALYTICS_PATH])
+@pytest.mark.parametrize("path", ALL_PATHS)
 class TestDomainFilter:
     def test_no_domain_spans_every_domain(self, client, path):
         svc = _FakeRegistryService()
@@ -151,7 +174,7 @@ class TestDomainFilter:
         assert resp.json()["total"] == 0
 
 
-@pytest.mark.parametrize("path", [BUILD_PATH, ANALYTICS_PATH])
+@pytest.mark.parametrize("path", ALL_PATHS)
 class TestRegistryNotConfigured:
     def test_surfaces_a_validation_error(self, client, path):
         svc = _FakeRegistryService(configured=False)

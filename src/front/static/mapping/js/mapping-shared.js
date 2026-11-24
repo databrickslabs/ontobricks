@@ -127,7 +127,7 @@ class SQLWizardBase {
                 if (displayEl) displayEl.innerHTML = `<i class="bi bi-robot me-1"></i>${data.info.llm_endpoint}`;
             } else {
                 if (hiddenInput) hiddenInput.value = '';
-                if (displayEl) displayEl.innerHTML = '<span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Not configured - set in Domain settings</span>';
+                if (displayEl) displayEl.innerHTML = '<span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Not configured - set in Context settings</span>';
             }
         } catch (e) {
             if (hiddenInput) hiddenInput.value = '';

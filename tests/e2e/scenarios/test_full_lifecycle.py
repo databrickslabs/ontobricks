@@ -92,8 +92,9 @@ class TestFullDomainLifecycle:
         info = _json(page.request.get(f"{live_server}/domain/info"))
         assert info.get("info", {}).get("name") == _DOMAIN_NAME
 
-        # Real DOM: the Domain page renders the saved name in an editable field.
-        page.goto(f"{live_server}/domain")
+        # Real DOM: Context → Configuration renders the saved name in an
+        # editable field (bare /domain lands on the workspace Home tiles).
+        page.goto(f"{live_server}/domain/?section=information")
         page.wait_for_load_state("domcontentloaded")
         name_field = page.locator("#domainName")
         name_field.wait_for(state="visible", timeout=10_000)
@@ -150,22 +151,14 @@ class TestFullDomainLifecycle:
         assert {_CUSTOMER_URI, _ORDER_URI} <= mapped_classes, mapped_classes
         assert len(mapping["relationships"]) >= 1
 
-        # ── 6. Generate R2RML through the real "Regenerate" button ───────────
-        # R2RML lives under Domain → W3C Standards.
-        page.goto(f"{live_server}/domain")
+        # ── 6. Generate R2RML through the real "Export" button ───────────────
+        # Graph → Management → Mapping, Informations tab (the default tab).
+        page.goto(f"{live_server}/dtwin/?section=design&tab=informations")
         page.wait_for_load_state("domcontentloaded")
-        page.evaluate('SidebarNav.switchTo("r2rml")')
-        page.locator("#regenerateR2RMLBtn").wait_for(state="visible", timeout=10_000)
-        page.click("#regenerateR2RMLBtn")
-
-        page.wait_for_function(
-            "() => {"
-            "  const el = document.getElementById('r2rmlPreview');"
-            "  return el && el.value && el.value.includes('rr:');"
-            "}",
-            timeout=10000,
-        )
-        r2rml_text = page.locator("#r2rmlPreview").input_value()
+        page.locator("#mappingExportR2RMLBtn").wait_for(state="visible", timeout=10_000)
+        with page.expect_download(timeout=15_000) as download_info:
+            page.click("#mappingExportR2RMLBtn")
+        r2rml_text = download_info.value.path().read_text(encoding="utf-8")
         assert "rr:TriplesMap" in r2rml_text or "rr:logicalTable" in r2rml_text
 
         # ── 7. Export the ontology back to OWL (round-trip) ──────────────────

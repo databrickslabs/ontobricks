@@ -1,0 +1,1666 @@
+================================================================================
+Complex rule builder: pre-save validate + rename gate, explain-on-open
+================================================================================
+
+Context:
+In the Complex (SPARQL CONSTRUCT) rule editor, Save saved immediately — it did
+not check that the query compiles, nor make the user review the agent-proposed
+Name/Description. Opening an existing rule also did not reliably explain what
+the current query does. Save is now a two-step gate (always validate, then ask
+to review/rename before confirming), and the assistant explains an existing
+rule up front.
+
+Changes:
+1. src/front/static/ontology/js/ontology-business-rules.js — Save flow reworked:
+   - new _craValidate() (shared backend validation) and _craShowValidation();
+     sparqlValidate() (manual button) now delegates to them.
+   - sparqlSave() is a two-step gate: it always validates and informs in the
+     chat; an invalid query is refused (error posted in chat); a valid query
+     posts a success message and, on the first click, asks the user to review /
+     rename the Name & Description and switches the button to "Confirm & Save";
+     the second click performs the real save via the new _craDoSave().
+   - _craSaveConfirmed / _craSetSaveConfirmUI / _craResetSaveConfirm manage the
+     confirm state; it resets on modal open, on manual edits to
+     name/description/query (input listeners), and when the agent rewrites the
+     draft (_craApplyResponse).
+2. src/agents/agent_complex_rule_builder/engine.py — SYSTEM_PROMPT "EDITING AN
+   EXISTING RULE" now requires the assistant's FIRST message to explain, in
+   plain language, what the current CONSTRUCT matches and infers before asking
+   what to change (and never to ask the user to paste the query).
+3. tests/units/agents/test_agent_complex_rule_builder.py — asserts the prompt
+   explains an existing rule first (matches/infers, first message).
+4. tests/units/front/test_business_rules_list_ui.py — contract tests for the
+   two-step validate/confirm Save and the confirm-state reset.
+
+Note: the SYSTEM_PROMPT change is a prompt change under CNS §3.5 — it adds to
+the deferred eval debt already tracked for agent_complex_rule_builder.
+
+Modified files:
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/agents/agent_complex_rule_builder/engine.py
+- tests/units/agents/test_agent_complex_rule_builder.py
+- tests/units/front/test_business_rules_list_ui.py
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" — 10187 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+
+
+================================================================================
+Complex rule builder: clickable answers for discrete-choice questions
+================================================================================
+
+Context:
+When the Complex rule assistant asks a question with a small, well-defined set
+of answers (a yes/no confirmation like "Does 'Active' sound like the right
+value to match?", a choice between a few named values, an operator, a short
+list of properties), it can now offer those answers as clickable controls in
+the chat so the user clicks instead of typing. The agent is instructed to use
+this ONLY for genuinely discrete questions, never for open-ended ones.
+Single-select renders as pills that send on click; multi-select renders as
+checkboxes + a Send button. Free-text input stays usable and answered groups
+lock.
+
+Changes:
+1. src/agents/tools/context.py — new ToolContext field rule_options
+   ({question, options: [str], multi}).
+2. src/agents/agent_complex_rule_builder/tools.py — new propose_options tool
+   (strips empty labels, stores the group or None), schema, and registration.
+3. src/agents/agent_complex_rule_builder/engine.py — AgentResult.options;
+   _surface_state() helper copies draft/ready/options onto the result (keeps
+   run_agent under its LOC budget); SYSTEM_PROMPT step 2 + TOOLS list instruct
+   the agent to call propose_options only for discrete-choice questions.
+4. src/api/routers/internal/ontology.py — complex_rule_assistant_chat returns
+   options in the JSON response.
+5. src/front/static/ontology/js/ontology-business-rules.js — _craApplyResponse
+   renders options via new _craRenderOptions / _craChooseOption /
+   _craLockPendingOptions (pills vs checkboxes+Send, lock on answer, single live
+   group); craSend/_craKickoff manage the pending group.
+6. src/front/static/ontology/css/ontology-business-rules.css — .cra-options /
+   .cra-opt-pill / .cra-opt-check / .cra-opt-send + locked/is-chosen states.
+7. tests/units/agents/test_agent_complex_rule_builder.py — tool + engine
+   surfacing tests (single/multi/none).
+8. tests/units/api/test_complex_rule_assistant_chat.py — options passthrough.
+9. tests/units/front/test_business_rules_list_ui.py — JS/CSS contract for the
+   clickable options.
+
+Note: propose_options is a prompt + tool change under CNS §3.5 — it adds to the
+deferred eval debt already tracked for agent_complex_rule_builder.
+
+Modified files:
+- src/agents/tools/context.py
+- src/agents/agent_complex_rule_builder/tools.py
+- src/agents/agent_complex_rule_builder/engine.py
+- src/api/routers/internal/ontology.py
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- tests/units/agents/test_agent_complex_rule_builder.py
+- tests/units/api/test_complex_rule_assistant_chat.py
+- tests/units/front/test_business_rules_list_ui.py
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" — 10196 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+
+
+================================================================================
+Graph / Inference — friendly provenance badge in the Inferred tab
+================================================================================
+
+Context:
+In Graph → Inference, the Inferred tab showed each inferred triple's raw
+provenance in a badge (e.g. "if_then:LoyalCustomer"). The "if_then" prefix is
+internal wording; the rest of the UI calls that rule family "Simple" (and
+SPARQL rules "Complex"). The badge now uses the same friendly labels.
+
+Changes:
+1. src/front/static/query/js/query-reasoning.js — new _PROVENANCE_LABELS map +
+   _provenanceLabel() helper that rewrites the provenance prefix
+   (if_then->Simple, sparql->Complex, graph->Graph, owlrl->T-Box) while keeping
+   the ":<ruleName>" suffix; the Inferred-tab badge renders through it instead
+   of the raw provenance string.
+2. tests/units/front/test_reasoning_inferred_badge.py — contract test asserting
+   if_then maps to Simple and the badge uses the helper.
+
+Modified files:
+- src/front/static/query/js/query-reasoning.js
+- tests/units/front/test_reasoning_inferred_badge.py
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" — 10198 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+
+
+================================================================================
+Graph — rename the "Inference" sub-menu to "Business rules"
+================================================================================
+
+Context:
+The Graph section's "Inference" sub-menu is renamed to "Business rules". The
+sub-menu label, the section page header, and the user-facing cross-references
+to "Graph → Inference" are updated to match. The help-center workflow copy is
+kept in sync (its menu-sync regression test asserts every Graph menu label
+appears in the workflow doc).
+
+Changes:
+1. src/front/config/menu_config.json — digitaltwin "reasoning" item label
+   "Inference" -> "Business rules".
+2. src/front/templates/partials/dtwin/_query_reasoning.html — section header
+   <h4> "Inference" -> "Business rules".
+3. src/front/templates/partials/layout/help_modal.html — Knowledge Graph
+   workflow list item and the "Graph → Inference" cross-reference updated to
+   "Business rules".
+4. src/front/templates/partials/simulation/_sim_workbench.html — "Same phases
+   as Graph → Inference" -> "Graph → Business rules".
+
+Note: the generic "Inference" background-task wording (FAQ) and the internal
+reasoning/provenance identifiers are unchanged — only the menu/section naming.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" — 10198 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+
+
+Rule links in the phase tree (Graph → Business rules and Simulation → Reasoning)
+
+Context: rule names in the Graph → Business rules tree and the Simulation →
+Reasoning tree were plain text. Users wanted to open a rule and edit it without
+leaving the page. The rule editors (IF-THEN graph editor for Simple rules, SPARQL
+editor for Complex rules) live on the Ontology page, which loads ontology-core.js
+and runs page-level setup. That script cannot run on Graph or Simulation, so the
+editor scripts are loaded on demand instead. The editor partial is included
+server-side in a hidden #if-then-section on both pages. Editing follows the
+Ontology rules: only users with ontology edit rights can save; others see the
+rule read-only. After Save, the list refreshes in place, ticked rules stay
+ticked, and the editor closes. No OWL regeneration is needed.
+
+Changes:
+1. src/front/static/global/js/phase-tree.js
+   Rule titles render as links (`ob-tree-rule-link`) when the item has `link`.
+   `fromNamedRules` sets `link: true`. A click emits `ob:rule-open` with
+   `{key, value}` and does not toggle the checkbox.
+2. src/front/static/ontology/js/ontology-if-then.js
+   Editor DOM bindings moved into `IfThenModule.bindEditorDom()` (idempotent).
+   New `IfThenModule.initStandalone()` for use outside the Ontology page.
+   `saveRule` dispatches `ob:rules-saved` with `{key: 'if_then'}`.
+3. src/front/static/ontology/js/ontology-business-rules.js
+   New `BusinessRulesModule.initStandalone()`. `sparqlOpenEditor(index, {readOnly})`
+   opens the Complex editor read-only (fields, assistant and validate disabled,
+   Save hidden). The editor is re-enabled on close. `_saveRule` dispatches
+   `ob:rules-saved` with `{key: ruleType}`.
+4. src/front/static/global/js/rule-editor-loader.js (new)
+   `RuleEditorLoader`: loads the editor CSS and JS once, in order, then runs the
+   standalone init. `open(key, name, {canEdit})` opens the right editor. If the
+   rule no longer exists, it shows a warning and refreshes the list. `attach(tree,
+   root)` wires a PhaseTree to `ob:rule-open` and `ob:rules-saved`, and refreshes
+   the list while keeping the selection. The asset version comes from the
+   `data-asset-version` attribute on the script tag (no inline script, per the
+   page contract tests).
+5. src/front/templates/dtwin.html
+   Hidden `#if-then-section` wrapper with the business-rules editor partial,
+   inside the reasoning section. `rule-editor-loader.js` added after `phase-tree.js`.
+6. src/front/templates/simulation.html
+   Same wrapper inside the Reasoning workbench, and the loader script added before
+   `simulation-rules.js`.
+7. src/front/static/query/js/query-reasoning.js
+   Calls `RuleEditorLoader.attach(this._tree, root)` after creating the tree.
+8. src/front/static/simulation/js/simulation-rules.js
+   Calls `RuleEditorLoader.attach(this._tree, root)` after creating the tree.
+9. tests/units/front/test_rule_links_contract.py (new)
+   Contract tests: link rendering and event, standalone init and idempotent
+   binding, read-only Complex editor, `ob:rules-saved` on both save paths, loader
+   asset list (no ontology-core.js), page wiring and script order, and no ID
+   clashes between the editor partial and the Inference / Simulation pages.
+10. docs/user-guide.md
+    Graph → Business rules and Simulation → Reasoning sections: rule links,
+    read-only behaviour, and refresh after save.
+11. docs/superpowers/specs/2026-11-10-rule-links-in-phase-tree-design.md and
+    docs/superpowers/plans/2026-11-10-rule-links-in-phase-tree.md (new)
+    Design and implementation plan for this change.
+
+Modified files:
+- src/front/static/global/js/phase-tree.js
+- src/front/static/global/js/rule-editor-loader.js (new)
+- src/front/static/ontology/js/ontology-if-then.js
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/query/js/query-reasoning.js
+- src/front/static/simulation/js/simulation-rules.js
+- src/front/templates/dtwin.html
+- src/front/templates/simulation.html
+- tests/units/front/test_rule_links_contract.py (new)
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-10-rule-links-in-phase-tree-design.md (new)
+- docs/superpowers/plans/2026-11-10-rule-links-in-phase-tree.md (new)
+
+Test result:
+- node --check on all changed JS files: OK.
+- uv run --frozen pytest -q tests/units/front/ — 1780 passed.
+- uv run --frozen pytest -q -m "not scenario" — 10209 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+- Browser verification (plan Task 8): not run in this session. Pending: desktop,
+  mobile, keyboard and console/network checks on a domain with Simple and
+  Complex rules.
+
+
+Rule links: fix editor modals hidden in the Graph / Simulation pages
+
+Context: browser checks on the rule links found two issues. (1) The editor
+modals were 0x0 because they sat inside the hidden `#if-then-section.d-none`
+wrapper, so clicking a rule did nothing visible. (2) Long rule names overflowed
+their tree row at 390 px.
+
+Changes:
+1. src/front/templates/dtwin.html, src/front/templates/simulation.html
+   The `#if-then-section` wrapper uses class `rule-editor-host` instead of
+   `d-none`. The modals stay in layout, and the list markup inside is hidden by CSS.
+2. src/front/static/query/css/query-reasoning.css
+   `#if-then-section.rule-editor-host > .content-section { display: none; }`.
+   `.ob-tree-title` gets `min-width: 0`, `overflow: hidden` and ellipsis.
+3. src/front/static/global/js/rule-editor-loader.js
+   Comment update only.
+4. tests/units/front/test_rule_links_contract.py
+   Two tests: the host keeps modals in layout (no d-none), and tree titles can shrink.
+
+Browser verification (Playwright, dev server, domain cust360auto, viewer role):
+Simple and Complex editors open at about 1425x900 with the rule loaded; Complex
+fields and assistant are read-only with Save hidden; keyboard Tab + Enter opens
+the editor and Escape closes it; Simulation → Reasoning opens the Simple editor;
+at 390 px the rule rows have 0 px horizontal overflow; no feature-related console
+or /static, /ontology network errors. Not verified: the editor-role Save path
+(needs an editor on a DRAFT version without an edit lock).
+
+Modified files:
+- src/front/templates/dtwin.html
+- src/front/templates/simulation.html
+- src/front/static/query/css/query-reasoning.css
+- src/front/static/global/js/rule-editor-loader.js
+- tests/units/front/test_rule_links_contract.py
+
+Test result:
+- uv run --frozen pytest -q tests/units/front/ tests/units/api/test_ui_rendering.py — 1906 passed.
+
+
+Rules export / import, separate from the OWL
+
+Context: Simple (IF-THEN) rules were written into the generated OWL as
+ontobricks:IfThenRule annotations, so moving rules between domains meant moving
+OWL. Rules are now managed as their own versioned JSON file: one export with all
+Simple and Complex rules, one import with upsert by name and per-rule validation.
+The generated OWL no longer contains Simple rules. OWL import still reads rules
+from files that carry the old annotations. No OWL regeneration is involved.
+
+Changes:
+1. src/back/core/w3c/owl/OntologyGenerator.py
+   Removed the IF-THEN emission loop and `_add_if_then_rule`. The `if_then_rules`
+   constructor argument is kept, so callers are unchanged.
+2. src/api/routers/internal/ontology.py
+   - `save_if_then_rule` uses `Rules.validate_if_then_rule` (one validator for the
+     save route and the import route); errors are joined with "; ".
+   - New `GET /ontology/rules/export`: attachment `<domain>_rules.json`.
+   - New `POST /ontology/rules/import`: parses the body (non-JSON gives a 4xx),
+     applies the package, saves the domain, records change-audit events with the
+     same actions as the single-rule routes (if_then_added/updated,
+     sparql_rules_added/updated), and returns added / replaced / rejected.
+3. src/back/objects/ontology/RulesPackage.py (new)
+   Pure functions: `build_package`, `apply_package` (header check, upsert by name,
+   per-rule validation: Simple via `Rules.validate_if_then_rule`, enabled Complex
+   via `SPARQLRuleEngine.validate_rule`). Disabled Complex rules are not compiled,
+   so a legacy rule can still be exported and re-imported.
+4. src/back/objects/ontology/ImportResult.py (new)
+   Dataclass with the merged lists, added / replaced / rejected and the change tuples.
+   Its own file, one public class per file (architecture rule). Re-exported from
+   `back/objects/ontology/__init__.py`.
+5. src/front/templates/partials/ontology/_ontology_business_rules.html
+   Header controls before "Add Rule": "Export rules" (link), "Import rules"
+   (button, class ontology-edit-btn) and a hidden file input.
+6. src/front/static/ontology/js/ontology-business-rules.js
+   `importRulesFile` (JSON parse, not-a-rules-file checks, confirmation, POST,
+   refresh of both lists and badges), `_showImportSummary` (Added / Replaced /
+   Rejected modal), and the import action and file-change listener in
+   `_bindBrStaticUiOnce`.
+7. tests/units/ontology/test_owl_generator.py, test_workflow_owl_roundtrip.py
+   Assert that Simple rules are no longer written to the OWL (the round-trip now
+   asserts an empty rule list on regeneration).
+8. tests/units/ontology/test_owl_parser.py
+   Regression guard: old OWL with IfThenRule annotations still yields its rules.
+9. tests/units/ontology/test_if_then_save_validation.py (new)
+   The shared validator reports each missing field and accepts a complete rule.
+10. tests/units/ontology/test_rules_package.py (new)
+    Export shape, header and version checks, upsert in place, per-rule rejects.
+11. tests/units/api/test_rules_package_routes.py (new)
+    Export attachment, import round trip (idempotent), wrong format, non-JSON
+    body, and partial import with rejects.
+12. tests/units/front/test_rules_export_import_ui.py (new)
+    Header order and controls, import flow contract, and no ID clash with the
+    Graph and Simulation pages.
+13. docs/user-guide.md, docs/api.md
+    Export and import in the Business rules section; the two endpoints with
+    request and response shapes; the note that Simple rules are no longer in the OWL.
+
+Known pre-existing issue (not changed here): `back.core.w3c` / `back.objects`
+import cycle. Collecting `tests/units/ontology/test_business_rules.py` or
+`test_owl_parser.py` on their own fails with a circular ImportError; the full
+suite is unaffected because other modules load the app first. Reproduced on a
+clean checkout of HEAD.
+
+Modified files:
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/api/routers/internal/ontology.py
+- src/back/objects/ontology/__init__.py
+- src/back/objects/ontology/RulesPackage.py (new)
+- src/back/objects/ontology/ImportResult.py (new)
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- tests/units/ontology/test_owl_generator.py
+- tests/units/ontology/test_workflow_owl_roundtrip.py
+- tests/units/ontology/test_owl_parser.py
+- tests/units/ontology/test_if_then_save_validation.py (new)
+- tests/units/ontology/test_rules_package.py (new)
+- tests/units/api/test_rules_package_routes.py (new)
+- tests/units/front/test_rules_export_import_ui.py (new)
+- docs/user-guide.md
+- docs/api.md
+
+Test result:
+- uv run --frozen pytest -q tests/units/ontology/test_rules_package.py tests/units/api/test_rules_package_routes.py tests/units/front/test_rules_export_import_ui.py — pass.
+- Browser (Playwright, dev server, cust360auto, read-only version): export downloads
+  Cust360Auto_rules.json with the documented shape; invalid JSON and non-rules files
+  show a notification and send no request; the confirm / cancel flow works; with the
+  import POST mocked in the page, the Import summary lists Added, Replaced and
+  Rejected correctly. The import button is hidden on read-only versions (as designed).
+  Not verified: a real import on an editable DRAFT version.
+- Full suite: see the final line below.
+- Full suite (uv run --frozen pytest -q -m "not scenario"): 10231 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on agent_dtwin_chat/engine.py::run_agent).
+
+
+Fix circular import between back.core.w3c and back.objects
+
+Context: collecting tests/units/ontology/test_owl_parser.py or
+test_business_rules.py alone failed with
+`ImportError: cannot import name 'OntologyGenerator' from partially initialized
+module 'back.core.w3c'`. Reproduced on a clean checkout of HEAD. The cycle was:
+SPARQLRuleEngine → back.core.w3c barrel → OntologyGenerator/OntologyParser →
+ClassModel → back.objects → Owl → back.core.w3c (still loading). DomainQueryService
+had the same pattern via resolve_domain_slice.
+
+Changes:
+1. src/back/core/w3c/owl/OntologyGenerator.py
+   Moved the ClassModel import into a module-level `_normalize_datasets` helper
+   so the module no longer pulls back.objects at import time.
+2. src/back/core/w3c/owl/OntologyParser.py
+   Same deferred ClassModel import via `_normalize_datasets`.
+3. src/back/core/w3c/sparql/DomainQueryService.py
+   Deferred `resolve_domain_slice` to the methods that need it.
+4. src/back/objects/ontology/Owl.py
+   Imports OntologyGenerator/OntologyParser from `back.core.w3c.owl` instead of
+   the unfinished package barrel.
+5. tests/units/architecture/test_w3c_import_cycle.py (new)
+   Clean-subprocess regression: import reasoning, w3c, and Owl without a cycle.
+
+Modified files:
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/w3c/sparql/DomainQueryService.py
+- src/back/objects/ontology/Owl.py
+- tests/units/architecture/test_w3c_import_cycle.py (new)
+
+Test result:
+- Isolated imports of test_owl_parser / test_business_rules: pass (was ImportError).
+- Full suite (uv run --frozen pytest -q -m "not scenario"): 10232 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on agent_dtwin_chat/engine.py::run_agent).
+
+
+More tests for Simple and Complex rules
+
+Context: expand coverage around the rules package, the export/import routes,
+the shared IF-THEN validator, the OWL non-emission of Simple rules, and the
+front contracts for rule links and import UI.
+
+Changes:
+1. tests/units/ontology/test_rules_package.py
+   Version 0/1 accepted; bad versions rejected; missing lists treated as empty;
+   non-list collections rejected; Complex upsert by name; mixed Simple+Complex
+   import; non-object entries rejected; Complex missing name/query rejected;
+   build_package copies rules; empty import is a no-op.
+2. tests/units/api/test_rules_package_routes.py
+   Export contains both rule types; Complex add/reject/disabled-legacy import;
+   replace Simple and Complex by name; IF-THEN save uses shared validation
+   messages; Complex save rejects enabled bad queries and allows disabled ones.
+3. tests/units/ontology/test_if_then_save_validation.py
+   Partial missing fields; falsy name.
+4. tests/units/ontology/test_owl_generator.py
+   Multiple Simple rules leave no IfThenRule / antecedent / consequent in OWL.
+5. tests/units/front/test_rules_export_import_ui.py
+   Import summary sections; invalid JSON / non-object handling; confirm copy;
+   refresh of both lists after import.
+6. tests/units/front/test_rule_links_contract.py
+   Loader opens Simple and Complex by key; list refresh after save; Complex
+   read-only mode disables fields and hides Save.
+
+Modified files:
+- tests/units/ontology/test_rules_package.py
+- tests/units/api/test_rules_package_routes.py
+- tests/units/ontology/test_if_then_save_validation.py
+- tests/units/ontology/test_owl_generator.py
+- tests/units/front/test_rules_export_import_ui.py
+- tests/units/front/test_rule_links_contract.py
+
+Test result:
+- Targeted Simple/Complex rule tests: 58 passed.
+
+
+Shrink Graph Chat run_agent under the size budget
+
+Context: test_no_function_grows_beyond_budget failed because
+agents/agent_dtwin_chat/engine.py::run_agent grew from 198 to 200 lines
+(pre-existing, not from the rules work). Extract the history replay and the
+tool-call batch so the function shrinks instead of raising the baseline.
+
+Changes:
+1. src/agents/agent_dtwin_chat/engine.py
+   Extracted `_append_history` and `_dispatch_tool_calls`. `run_agent` is 140
+   lines (was 200). Behaviour is unchanged.
+2. tests/units/architecture/baseline.json
+   Oversized-function budget for `run_agent` 198 -> 140.
+
+Modified files:
+- src/agents/agent_dtwin_chat/engine.py
+- tests/units/architecture/baseline.json
+
+Test result:
+- uv run --frozen pytest -q tests/units/architecture/test_size_budget.py
+  tests/units/agents/test_agent_dtwin_chat_engine.py — 21 passed (with
+  test_class_per_file).
+## Port Graph Chat max_tokens fix (PR #223) to 0.10.0
+================================================================================
+
+Context: PR #223 (squash 2024650d) landed on 0.9.3. The same hardcoded
+`max_tokens=2048` existed on 0.10.0, so Graph Chat still hit the
+"I couldn't display that answer" fallback on reasoning models. This entry
+ports the change to 0.10.0 by cherry-picking the squash commit.
+
+Conflict resolution (0.10.0 already had `endpoint_kind` on `run_agent`):
+- `run_agent()` keeps `endpoint_kind` and adds `max_tokens` after it.
+- Test file keeps the existing `test_run_agent_forwards_domain_endpoint_kind`
+  and adds the `max_tokens` tests.
+- `baseline.json`: kept 0.10.0 values, bumped `run_agent` 198->201 and the
+  two chat routes by +1 for the new parameter.
+
+Changes:
+
+1. src/shared/config/constants.py
+   New `DTWIN_CHAT_MAX_TOKENS = 8192` (single source of truth).
+2. src/shared/config/settings.py
+   `dtwin_chat_max_tokens` setting (alias `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS`),
+   default 8192, bounded `ge=1, le=8192`.
+3. src/agents/agent_dtwin_chat/engine.py
+   `run_agent()` takes `max_tokens` (default `DEFAULT_MAX_TOKENS = 8192`)
+   instead of the hardcoded 2048.
+4. src/api/routers/internal/dtwin.py
+   Blocking and streaming chat routes pass `settings.dtwin_chat_max_tokens`.
+5. app.yaml.template
+   Exposes `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS` for deployed apps.
+6. docs/getting-started.md
+   New "Graph Chat (Digital Twin Assistant)" env var table + `.env` example.
+7. tests/units/agents/test_agent_dtwin_chat_engine.py
+   Engine default matches Settings default; configured max_tokens reaches
+   `call_serving_endpoint`.
+8. tests/units/settings/test_app_yaml_template.py
+   Template value matches Settings default; out-of-bounds values rejected.
+9. tests/units/architecture/baseline.json
+   Size budget bumps for the new parameter.
+10. changelogs/v0.10.0/diegoantonelli_2026-11-06.log
+    changelogs/v0.10.0/diegoantonelli_2026-11-09.log
+    Moved from changelogs/v0.9.3/ to the 0.10.0 release folder.
+
+Modified files:
+- app.yaml.template
+- docs/getting-started.md
+- src/agents/agent_dtwin_chat/engine.py
+- src/api/routers/internal/dtwin.py
+- src/shared/config/constants.py
+- src/shared/config/settings.py
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- tests/units/settings/test_app_yaml_template.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/diegoantonelli_2026-11-06.log (moved)
+- changelogs/v0.10.0/diegoantonelli_2026-11-09.log (moved)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log (new)
+
+Tests: uv run --frozen pytest -q -m 'not scenario' -> 10148 passed, 325 skipped,
+8 deselected (full suite, exit 0). Architecture guardrails: 33 passed (scoped run,
+incl. settings template tests).
+Note: an isolated run of test_agent_dtwin_chat_engine.py hits a pre-existing
+circular import (back.core.w3c <-> back.objects.ontology) when collected first;
+it passes inside the full suite.
+
+
+Merge origin/0.10.0 into feature/swrl-to-shacl-rules
+================================================================================
+
+Context: 0.10.0 gained 6afb9943 (Graph Chat max_tokens setting), which also
+touches agents/agent_dtwin_chat/engine.py::run_agent. Merging it into the
+feature branch to open a conflict-free PR against 0.10.0.
+
+Conflict resolution:
+1. changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+   Kept both sections (this branch's entries and the 0.10.0 max_tokens entry).
+2. tests/units/architecture/baseline.json
+   Kept the complex_rule_builder entry from this branch. Set
+   agents/agent_dtwin_chat/engine.py::run_agent to 143: the measured size of
+   the merged function (our extraction at 140 plus 3 lines for max_tokens).
+   Base 0.10.0 had 203.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+- tests/units/architecture/baseline.json
+
+Test result:
+- uv run --frozen pytest -q tests/units/architecture -> 11 passed.
+- uv run --frozen pytest -q -m "not scenario" -> 10265 passed, 325 skipped,
+  8 deselected, 0 failed.
+
+
+Graph → Query: GraphQL / SPARQL tabs use the standard OntoBricks tab style
+================================================================================
+
+Context: the GraphQL / SPARQL language tabs in Graph → Query used the compact
+`ob-tabs--compact` density and had no icons, unlike the other Graph and
+Ontology tab rails. Align them with the standard `ob-tabs` treatment while
+keeping the free-standing rail above the playgrounds (visual-only change).
+
+Changes:
+1. src/front/templates/partials/dtwin/_query_query.html
+   `#queryLanguageTabs` drops `ob-tabs--compact` (standard density). Each tab
+   gets a leading Bootstrap icon: GraphQL `bi-diagram-3`, SPARQL `bi-braces`.
+   Ids, `data-bs-*` wiring, the `query-language-tabs` hook and the pane markup
+   are unchanged.
+2. tests/units/front/test_query_language_tabs_style.py (new)
+   Contract: standard `ob-tabs` density without `ob-tabs--compact`; each tab
+   starts with its icon; Bootstrap pane wiring is preserved.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_query.html
+- tests/units/front/test_query_language_tabs_style.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q tests/units/front/test_query_language_tabs_style.py
+  tests/units/front/test_kg_graph_source.py
+  tests/units/front/test_sparql_playground_contract.py
+  tests/units/front/test_kg_section_headers.py
+  tests/units/front/test_kg_readiness_indicator.py
+  tests/units/front/test_help_center_menu_sync.py -> 74 passed.
+- Browser check (web-devloop-tester, local app): desktop 1440x900 and mobile
+  390x844. Standard tab metrics (14.4px font, 8px/14px padding), focus outline
+  2px, SPARQL/GraphQL switching works, labels single-line, no page overflow.
+  The GraphiQL CDN failure in the sandbox is environmental.
+
+
+Graph → Query tabs match Data Quality card-integrated style
+===========================================================
+
+Context: Graph → Query GraphQL / SPARQL tabs still sat as a free-standing rail
+above the playgrounds, while Graph → Data Quality uses the card-integrated
+`ob-tabs nav-fill` pattern (section header `mb-4`, full-height card, padded
+panes). Align Query to that same header and tab treatment.
+
+Changes:
+1. src/front/templates/partials/dtwin/_query_query.html
+   Section header spacing uses `mb-4`. GraphQL / SPARQL rail and panes move
+   into a full-height `query-card-fill` card with
+   `nav nav-tabs ob-tabs nav-fill flex-shrink-0`, matching Data Quality.
+2. src/front/static/query/css/query-sparql.css
+   Stretch rules for `#graphql-section .query-card-fill` mirror
+   `#dataquality-section .dq-card-fill` so the card fills below the header.
+3. tests/units/front/test_query_language_tabs_style.py
+   Contract extended: header spacing, card-integrated markup, and fill CSS.
+4. tests/units/front/test_sidebar_content_stretch_contract.py
+   Asserts the new Query card fill chain beside the SPARQL playground chain.
+5. tests/e2e/navigation/test_sidebar_bottom_alignment.py
+   KG Query primary pane selector targets `#graphql-section > .query-card-fill`.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_query.html
+- src/front/static/query/css/query-sparql.css
+- tests/units/front/test_query_language_tabs_style.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10271 passed, 325 skipped, 8 deselected, 0 failed in 46.89s
+
+
+Fix empty compare-graph image in Simulation Evaluate report
+===========================================================
+
+Context: Simulation → Compare → Evaluate report showed the comparison
+graph as an empty warm square. Sigma.js WebGL layers use
+``preserveDrawingBuffer: false``, and the report opened from the Evaluate
+tab while the Graphs pane was ``display:none``, so a live canvas composite
+read a cleared buffer.
+
+Changes:
+1. src/front/static/simulation/js/simulation-compare.js
+   Snapshot the layered canvases into ``lastGraphPng`` in the same turn as
+   ``renderer.refresh()`` (and on resize). Clear the snapshot on teardown /
+   failed compare.
+2. src/front/static/simulation/js/simulation-evaluate.js
+   Report graph image uses ``SimulationCompare.lastGraphPng`` instead of
+   re-reading hidden WebGL canvases.
+3. tests/units/front/test_simulation_page_contract.py
+   Contract: snapshot after refresh; evaluate report consumes the cache.
+
+Modified files:
+- src/front/static/simulation/js/simulation-compare.js
+- src/front/static/simulation/js/simulation-evaluate.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10272 passed, 325 skipped, 8 deselected, 0 failed in 45.25s
+
+
+Move OWL preview from Domain to Ontology → General (Informations | OWL tabs)
+===========================================================================
+
+Context: The generated OWL preview lived under Domain → W3C Standards → OWL,
+while the Ontology page already carried an orphaned OWL pane (no menu entry).
+Ontology → General now hosts both views as tabs: "Informations" (the former
+General content) and "OWL" (the Turtle preview, regenerated on open).
+
+Changes:
+1. src/front/config/menu_config.json
+   Removed the `owl-content` item from the Domain `domain-w3c` group (R2RML stays).
+2. src/front/templates/domain.html
+   Removed the `owl-content-section` block and the `domain-owl-content.js` include.
+3. src/front/static/domain/js/domain.js
+   Removed the `owl-content` section-change branch.
+4. src/front/templates/partials/domain/_domain_owl_content.html (deleted)
+5. src/front/static/domain/js/domain-owl-content.js (deleted)
+   Domain OWL partial and its loader (`/ontology/export-owl`) retired; the
+   Ontology OWL module now drives the preview from the live ontology state.
+6. src/front/templates/ontology.html
+   Removed the orphaned `owl-section` pane (its content moved into General).
+7. src/front/templates/partials/ontology/_ontology_information.html
+   General section is now a card with `ob-tabs` (Informations | OWL) using the
+   Business Rules / Data Quality tab pattern. Informations keeps the same fields
+   and IDs; Reset moved into the Informations pane.
+8. src/front/templates/partials/ontology/_ontology_owl_content.html
+   Converted to the OWL tab-pane body (toolbar, status alert, textarea); no
+   longer a standalone sidebar section.
+9. src/front/static/ontology/js/ontology-owl-content.js
+   Regenerates the OWL preview when the OWL tab is shown (`shown.bs.tab`).
+10. src/front/static/ontology/js/ontology-init.js
+   Removed the dead `owl` section branch.
+11. src/front/static/global/css/ontology.css
+   Replaced `#owl-section .card` with flex rules for the General tab content so
+   the OWL textarea fills the card.
+12. Tests: tests/units/api/test_ui_rendering.py,
+   tests/units/front/test_sidebar_content_stretch_contract.py (section inventory
+   and stretch partial list), tests/e2e/domain/test_domain_flows.py,
+   tests/e2e/ontology/test_owl_export_flows.py (opens the OWL tab), tests/e2e/README.md.
+13. Docs: docs/development.md (sidebar inventory), docs/user-guide.md
+   ("Preview OWL Output" now points to Ontology → General → OWL).
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/domain.html
+- src/front/static/domain/js/domain.js
+- src/front/templates/partials/domain/_domain_owl_content.html (deleted)
+- src/front/static/domain/js/domain-owl-content.js (deleted)
+- src/front/templates/ontology.html
+- src/front/templates/partials/ontology/_ontology_information.html
+- src/front/templates/partials/ontology/_ontology_owl_content.html
+- src/front/static/ontology/js/ontology-owl-content.js
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/global/css/ontology.css
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/e2e/domain/test_domain_flows.py
+- tests/e2e/ontology/test_owl_export_flows.py
+- tests/e2e/README.md
+- docs/development.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10265 passed, 324 skipped, 8 deselected, 0 failed in 48.73s
+- Manual check (Playwright, dev server): Ontology → General shows Informations and OWL tabs; OWL tab renders the Turtle preview and Regenerate works; Domain sidebar has no OWL item.
+- e2e suites (tests/e2e/domain, tests/e2e/ontology) updated but not executed (opt-in).
+
+
+Fix compare-graph report image still blank (hidden-pane overwrite)
+==================================================================
+
+Context: the cached compare-graph snapshot was still an empty square. Sigma
+renders a hidden container at 1x1 (``allowInvalidContainer``); switching to
+the Evaluate tab fired the ResizeObserver, which re-snapshotted the 1x1 blank
+over the good image. Reproduced headless: same-turn snapshot after refresh
+has the graph, a later read has labels only, a hidden read is 1x1.
+
+Changes:
+1. src/front/static/simulation/js/simulation-compare.js
+   ``_snapshotGraphPng`` skips (keeps the last snapshot) when the canvas
+   container is smaller than 2px, runs a synchronous ``renderer.refresh()``
+   right before the WebGL read, and ignores 1x1 layers.
+2. tests/units/front/test_simulation_page_contract.py
+   Contract: hidden-pane guard, refresh-before-drawImage, 1x1 filter.
+
+Modified files:
+- src/front/static/simulation/js/simulation-compare.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- Headless check with the real simulation-compare.js: snapshot keeps 600x400
+  with graph pixels after the pane is hidden.
+- uv run --frozen pytest -q -m "not scenario" → 10265 passed, 324 skipped, 8 deselected, 0 failed in 45.87s
+
+
+Move Ontology → General Reset button back to the section header
+==============================================================
+
+Context: After nesting General into Informations | OWL tabs, Reset lived
+inside the Informations pane. Move it back to the section header top-right
+(next to Discuss), outside the tab card.
+
+Changes:
+1. src/front/templates/partials/ontology/_ontology_information.html
+   `#resetOntology` moved from `#general-pane-informations` into the
+   `.section-header` action group beside the discuss button.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_information.html
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- Playwright: `#resetOntology` is inside `.section-header`, not the Informations pane.
+- uv run --frozen pytest -q -m "not scenario" → 10265 passed, 324 skipped, 8 deselected, 0 failed in 53.12s
+
+
+Move R2RML preview from Domain to Mapping → General (Informations | R2RML tabs)
+===============================================================================
+
+Context: Mirror the OWL relocation. Generated R2RML lived under Domain → W3C
+Standards → R2RML, while Mapping kept an orphaned R2RML pane with no menu
+entry. Mapping → General now hosts both views as tabs: "Informations" (the
+former General summary) and "R2RML" (Turtle preview). The Domain W3C group is
+removed entirely (it had only R2RML left after the OWL move).
+
+Changes:
+1. src/front/config/menu_config.json
+   Removed the Domain `domain-w3c` group (R2RML was its last item).
+2. src/front/templates/domain.html
+   Removed the `r2rml-section` block and the `domain-r2rml.js` include.
+3. src/front/static/domain/js/domain.js
+   Removed the `r2rml` section-change branch.
+4. src/front/templates/partials/domain/_domain_r2rml.html (deleted)
+5. src/front/static/domain/js/domain-r2rml.js (deleted)
+6. src/front/templates/mapping.html
+   Removed the orphaned `r2rml-section` pane (content moved into General).
+7. src/front/templates/partials/mapping/_mapping_information.html
+   General section is now a card with `ob-tabs` (Informations | R2RML).
+   Unmap all and Discuss stay in the section header outside the tabs.
+8. src/front/templates/partials/mapping/_mapping_r2rml.html
+   Converted to the R2RML tab-pane body (toolbar, status, textarea).
+9. src/front/static/mapping/js/mapping-r2rml.js
+   Regenerates the preview when the R2RML tab is shown; dropped the old
+   full-section loading overlay.
+10. src/front/static/mapping/js/mapping-init.js
+    Removed the dead `r2rml` section branches.
+11. src/front/static/global/css/mapping.css
+    Flex rules so the General tab card and `#r2rmlPreview` fill the pane.
+12. Tests: stretch inventory, UI rendering Domain sidebar, e2e Domain flows,
+    e2e README, scenario lifecycle (opens Mapping → General → R2RML).
+13. Docs: docs/development.md, docs/user-guide.md ("R2RML Output").
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/domain.html
+- src/front/static/domain/js/domain.js
+- src/front/templates/partials/domain/_domain_r2rml.html (deleted)
+- src/front/static/domain/js/domain-r2rml.js (deleted)
+- src/front/templates/mapping.html
+- src/front/templates/partials/mapping/_mapping_information.html
+- src/front/templates/partials/mapping/_mapping_r2rml.html
+- src/front/static/mapping/js/mapping-r2rml.js
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/global/css/mapping.css
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/domain/test_domain_flows.py
+- tests/e2e/scenarios/test_full_lifecycle.py
+- tests/e2e/README.md
+- docs/development.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- Playwright: Domain has no R2RML item; Mapping → General shows Informations | R2RML; R2RML tab renders Turtle and Unmap all stays in the header.
+- uv run --frozen pytest -q -m "not scenario" → 10258 passed, 323 skipped, 8 deselected, 0 failed in 52.86s
+- e2e/scenario suites updated but not executed (opt-in).
+
+Rename Domain tab to Configuration, move Cockpit to a first "General" tab, drop the KPI band
+===========================================================================================
+
+Context: The domain sub-navigation had "Domain" as its first tab with the Cockpit
+(validation readiness) page nested in its Management group. The tab is renamed
+"Configuration", the Cockpit becomes its own first tab labelled "General" (new
+compass icon, Configuration icon changed to bi-sliders2), and the KPI band
+(Entities, Relationships, Mappings, Status, Version) at the top of the General
+(information) section is removed. User-facing "Domain → …" menu paths now read
+"Configuration → …".
+
+Changes:
+1. src/front/config/menu_config.json
+   New `cockpit` menu (label "General", icon bi-compass, item `validation`) placed
+   before `domain`. `domain` relabelled "Configuration" with icon bi-sliders2 (group
+   icon updated too). Cockpit removed from the Management group (Audit trail stays).
+2. src/front/templates/base.html
+   Level-2 subnav renders the General tab before the Configuration dropdown. The
+   dropdown label and title come from menu_config instead of a hardcoded "Domain".
+3. src/front/static/global/js/navbar.js
+   `initSubnavActiveState`: section-pinned links (`data-subnav-section`) are active
+   only when `?section=` matches, and the unpinned Configuration tab yields on the
+   General page.
+4. src/front/routes/domain.py
+   Passes the `section` query parameter to the template as `initial_section`.
+5. src/front/templates/domain.html
+   Page title "Configuration". The sidebar uses the `cockpit` menu when
+   `section=validation`, and the `domain` menu otherwise.
+6. src/front/templates/partials/domain/_domain_information.html
+   Removed the KPI band markup.
+7. src/front/static/domain/js/domain-information.js
+   Removed the KPI band loader (IIFE with `loadDomainKpis`), now unused.
+8. src/front/static/global/css/components.css
+   Removed the now-unused `.ob-kpi-band` grid rules.
+9. src/front/templates/partials/domain/_domain_validation.html
+   Cockpit heading renamed "General" with the bi-compass icon.
+10. src/front/static/domain/js/domain-review.js
+    "Open Cockpit" link renamed "Open General" with the bi-compass icon.
+11. User-visible copy "Domain → General/…" → "Configuration → General/…":
+    src/front/templates/partials/layout/help_modal.html (workflow step, tab names;
+    the Cockpit bullet became a General paragraph), .../ontology/_ontology_information.html,
+    .../ontology/_ontology_wizard.html, src/front/templates/settings.html,
+    .../settings/_settings_github.html, src/front/static/global/js/utils.js (New Domain
+    dialog), .../global/js/ontology-core.js, .../global/js/permissions.js,
+    src/back/core/helpers/DatabricksHelpers.py, src/back/core/graphdb/GraphDBFactory.py
+    (log), src/back/fastapi/graphql_routes.py, src/api/routers/digitaltwin.py,
+    src/api/routers/internal/simulation.py (API messages).
+12. Tests updated to the new contract: tests/units/api/test_ui_rendering.py (title,
+    sidebar links, General sidebar and tab order, KPI band absent),
+    tests/units/front/test_workspace_map_modal.py (domain icon),
+    tests/units/front/test_mobile_subnav_contract.py (8 subnav labels),
+    tests/units/front/test_no_llm_ui_gate.py, tests/units/core/test_domain_llm_guard.py,
+    tests/units/api/test_dtwin_assistant_chat.py, tests/units/front/test_no_backend_ui.py,
+    tests/units/front/test_ontology_generate_wizard_staged.py,
+    tests/e2e/navigation/test_navigation_flows.py (opt-in suite, not executed).
+13. Docs: README.md (two menu paths), docs/user-guide.md (Cockpit section now "General tab").
+
+Intentionally not changed: src/agents/tools/documents.py message (agent tool output,
+falls under the AI feature gate), code comments and docstrings, the
+.cursor/11-frontend-design.mdc example, and the remaining "Domain → …" menu paths in
+docs/ (about 80 lines across 11 files, to be swept separately).
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/routes/domain.py
+- src/front/templates/domain.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- src/front/static/global/css/components.css
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/static/domain/js/domain-review.js
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/ontology/_ontology_information.html
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/templates/settings.html
+- src/front/templates/partials/settings/_settings_github.html
+- src/front/static/global/js/utils.js
+- src/front/static/global/js/ontology-core.js
+- src/front/static/global/js/permissions.js
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/simulation.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/core/test_domain_llm_guard.py
+- tests/units/api/test_dtwin_assistant_chat.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_ontology_generate_wizard_staged.py
+- tests/e2e/navigation/test_navigation_flows.py
+- README.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Browser check of the subnav and General page not performed in this session.
+
+Swap labels: Cockpit page is "General", former General page is "Configuration"
+===========================================================================
+
+Context: The Cockpit (validation readiness) page is the top "General" tab. The
+page previously called "General" (the domain information section under the
+Configuration tab) is renamed "Configuration", so the Configuration dropdown and
+its sidebar start with "Configuration". The inner tabs are Global, AI, Backend
+and MCP, so paths now read "Configuration → AI" and "Configuration → Backend"
+instead of "Configuration → General → …" (the old "Knowledge Graph" tab is
+labelled "Backend" in the UI).
+
+Changes:
+1. src/front/config/menu_config.json
+   Domain menu `information` item label "General" → "Configuration".
+2. src/front/templates/partials/domain/_domain_information.html
+   Section header "General" → "Configuration".
+3. src/front/templates/domain.html
+   Template comment updated (no behaviour change).
+4. Paths and messages "Configuration → General → X" → "Configuration → X" or
+   "Configuration → Backend": help_modal.html (Configuration item, load and FAQ
+   text), _ontology_information.html, settings.html, utils.js (New Domain dialog),
+   ontology-core.js, permissions.js, DatabricksHelpers.py, GraphDBFactory.py (log),
+   graphql_routes.py, api/routers/digitaltwin.py, api/routers/internal/simulation.py.
+5. Tests: test_domain_llm_guard.py, test_dtwin_assistant_chat.py,
+   test_no_llm_ui_gate.py, test_no_backend_ui.py, test_ui_rendering.py (docstring).
+6. README.md: load and AI path wording.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/domain.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/ontology/_ontology_information.html
+- src/front/templates/settings.html
+- src/front/static/global/js/utils.js
+- src/front/static/global/js/ontology-core.js
+- src/front/static/global/js/permissions.js
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/simulation.py
+- tests/units/core/test_domain_llm_guard.py
+- tests/units/api/test_dtwin_assistant_chat.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/api/test_ui_rendering.py
+- README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Rendered Domain page checked through the test client: subnav "General, Configuration"; Configuration dropdown and sidebar start with "Configuration".
+
+Move General (Cockpit) under the Domain menu, before Configuration
+===========================================================================
+
+Context: The General (Cockpit validation) page was a separate top-level subnav
+tab. It moves back into the Domain menu as its first item, ahead of
+Configuration, so the subnav keeps only the Domain dropdown. The temporary
+top-level menu and its plumbing are removed.
+
+Changes:
+1. src/front/config/menu_config.json
+   Removed the `cockpit` menu. Added the `validation` item (label "General",
+   icon bi-compass) as the first item of the Domain `domain-main` group.
+2. src/front/templates/base.html
+   Removed the standalone General subnav tab and its lookup.
+3. src/front/static/global/js/navbar.js
+   Restored `initSubnavActiveState` to its original route-prefix behaviour.
+4. src/front/routes/domain.py
+   Removed the `initial_section` template variable.
+5. src/front/templates/domain.html
+   Sidebar uses the `domain` menu again.
+6. src/front/templates/partials/layout/help_modal.html
+   The Domain menu list has General (overall readiness dashboard) first.
+7. docs/user-guide.md
+   Cockpit section points to Configuration → General.
+8. Tests: test_ui_rendering.py (validation back in the sidebar section list;
+   General precedes Configuration in the Domain dropdown), test_mobile_subnav_contract.py
+   (back to 7 subnav labels).
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/routes/domain.py
+- src/front/templates/domain.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_mobile_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Rendered Domain page: Domain dropdown and sidebar read General, Configuration, Versions, Publication, ...; top bar shows only Configuration.
+
+Rename the top menu's first item to Context
+===========================================================================
+
+Context: The first item of the top sub-navigation (the Domain menu, previously
+labelled Configuration) is renamed Context. Its inner items keep their names.
+
+Changes:
+1. src/front/config/menu_config.json
+   Domain menu `label` "Configuration" → "Context". The inner Configuration page
+   item is unchanged.
+2. src/front/templates/partials/layout/help_modal.html
+   Workflow step 2 title "Configuration" → "Context" (menu card and accordion header).
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/help_modal.html
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Rendered Domain page: top bar reads "Context"; dropdown reads General, Configuration, Versions, ...
+
+## Top menu icon restored to the cube
+
+Context: the top-bar Domain/Context entry had been switched to `bi-sliders2`. The user asked to restore the original cube icon.
+
+Changes:
+1. src/front/config/menu_config.json
+   Domain menu `icon` "bi-sliders2" → "bi-box" (top bar). The dropdown group icon (`domain-main`) is unchanged.
+2. src/front/templates/partials/layout/help_modal.html
+   Workflow step 2 accordion icon "bi-sliders2" → "bi-box", matching the top menu.
+3. tests/units/front/test_workspace_map_modal.py
+   `_COLUMN_ICONS["domain"]` "bi-sliders2" → "bi-box", to match the menu config.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_workspace_map_modal.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Rendered Domain page: top item shows `bi-box` with the label "Context".
+
+## Context menu: Management group moved before Metadata
+
+Context: in the Context (Domain) dropdown, the Management group (Audit trail) was rendered last. The user asked to move it before Metadata.
+
+Changes:
+1. src/front/config/menu_config.json
+   Group `domain-management` moved from the end of the Context menu's `groups` to the position right after `domain-main` and before `domain-metadata`. Resulting group order: domain-main, domain-management, domain-metadata, domain-collaboration. Group and item definitions are unchanged.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- menu_config.json parses as valid JSON; Context group order verified.
+
+## Context menu: Publication moved into Management
+
+Context: the Publication item (`review`) sat in the `domain-main` group of the Context menu. The user asked to move it inside the Management group.
+
+Changes:
+1. src/front/config/menu_config.json
+   Item `review` (label "Publication", icon bi-patch-check) removed from `domain-main` and appended to `domain-management` after `audit` (Audit trail). Item id, icon, and requirements are unchanged, so routes (`/domain/?section=review`) keep working.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- menu_config.json parses as valid JSON; resulting groups: domain-main [validation, information, versions]; domain-management [audit, review].
+
+## Context menu: Management renamed Governance, Publication above Audit trail
+
+Context: the Context menu group `domain-management` was titled "Management" and listed Audit trail before Publication. The user asked to rename the group to Governance and put Publication above Audit trail.
+
+Changes:
+1. src/front/config/menu_config.json
+   Group `domain-management` title "Management" → "Governance" (the Context menu only; `digitaltwin-management` in the Graph menu is unchanged).
+2. src/front/config/menu_config.json
+   Items in `domain-management` reordered to [review (Publication), audit (Audit trail)].
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- menu_config.json parses as valid JSON; Context groups: domain-main [General, Configuration, Versions]; domain-management "Governance" [Publication, Audit trail]; domain-metadata "Metadata" [Data Assets, Knowledge Store]; domain-collaboration "Collaboration" [My Tasks, Discussions].
+
+## Context menu: General icon aligned with Ontology
+
+Context: the General entry (first item of the Context menu, `validation`) used bi-compass. The user asked for the same icon as the General entry in the Ontology menu.
+
+Changes:
+1. src/front/config/menu_config.json
+   Context menu item `validation` (label "General") icon "bi-compass" → "bi-info-circle", matching the Ontology menu's General item (`information`). The General page heading and the "Open General" link in domain-review.js keep bi-compass (not in scope).
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+
+## Ontology menu: Sanity Checks moved to the end of Ontology Design
+
+Context: the Sanity Checks item (`designchecks`) sat in the Ontology "Advanced" group. The user asked to move it to the end of the "Ontology Design" section.
+
+Changes:
+1. src/front/config/menu_config.json
+   Item `designchecks` ("Sanity Checks", bi-clipboard2-check) removed from group `ontology-advanced` and appended after `relationships` in group `ontology-editor` (Ontology Design). Advanced now lists Data Quality, Business Rules, Expr. & Axioms.
+2. src/front/templates/partials/layout/help_modal.html
+   Help Center: the Sanity Checks bullet moved from the "Advanced features" list to the Ontology "Additional sidebar sections" list.
+3. docs/user-guide.md
+   Sanity Checks section notes it is the last entry of the Ontology Design sidebar group.
+4. docs/development.md
+   Ontology sidebar inventory updated (Sanity Checks in Ontology Editor, removed from Advanced).
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/development.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Ontology groups verified from menu_config.json: Ontology Design [General, Import, Generate, Studio, Entities, Relationships, Sanity Checks]; Advanced [Data Quality, Business Rules, Expr. & Axioms].
+- Note: two tests failed in a subset run (test_settings_runs_page::test_both_tables_name_a_domain_column fails on the baseline too; test_domain_versions_cards delete test was flaky) and both pass in the full run.
+
+## Ontology menu: section "Ontology Design" renamed "Design"
+
+Context: the first group of the Ontology menu was titled "Ontology Design". The user asked to rename it to "Design".
+
+Changes:
+1. src/front/config/menu_config.json
+   Group `ontology-editor` title "Ontology Design" → "Design" (menu label only; the page `<title>` in ontology.html is unchanged).
+2. docs/user-guide.md
+   Sanity Checks section now refers to the **Design** sidebar group.
+
+Modified files:
+- src/front/config/menu_config.json
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- menu_config.json verified: Ontology groups → 'Design' [General, Import, Generate, Studio, Entities, Relationships, Sanity Checks]; 'Advanced' [Data Quality, Business Rules, Expr. & Axioms].
+
+## Global rename: user-facing "Domain" → "Context"
+
+Context: the Domain menu is now called Context. The user asked to rename "Domain" to "Context" across the app. Scope: user-visible text only. Code identifiers (`Domain` class, `domain_name` fields, `/domain/` routes, file names), persisted formats (GitHub `domains/<Domain>/` layout, Lakebase schema), the public API surface (OpenAPI tags and descriptions, `domain_name` params, Query API reference page), agent prompts and MCP tools (AI feature gate), and log lines are unchanged.
+
+Changes:
+1. src/front/templates/** (HTML labels, headings, buttons, titles, comments): "Domain" → "Context", "Domains" → "Contexts" (e.g. "New Domain" → "New Context", "All Domains" → "All Contexts", "Domain Name" → "Context Name", "Domain Publication Workflow" → "Context Publication Workflow"). Excluded: partials/settings/_settings_github.html (GitHub path formats) and partials/dtwin/_query_api.html (public Query API reference).
+2. src/front/static/**/*.js and *.css (toasts, dialog titles, table headers, labels, `[Context]` console prefix, comments): same rule. Notable: navbar.js (New/Close/Load/Save Context), domain.js ("Context info saved successfully!", "Context loaded successfully!"), registry.js ("Delete Context", "Load Context"), utils.js (New Context dialog), runs-render.js and settings-runs.js (Context column/filter). Excluded: a CDISC-related comment is untouched; `Domain.py` file reference in query-cohorts.js comment kept.
+3. src/api/routers/internal/domain.py: UI-facing success and error messages ("Context saved", "Context info saved", "Context not saved to the registry", etc.).
+4. src/back/objects/domain/Domain.py: UI-facing messages ("Context name must be CamelCase alphanumeric only", "Context imported", "Context loaded: ..."). Logger lines and identifiers unchanged.
+5. src/back/objects/domain/settings/{RegistryDomainSettings,ScheduleSettings,PermissionSettings,ObxSettings}.py, src/back/objects/registry/PermissionService.py, src/back/objects/registry/schedule/{TaskContext,BuildScheduler}.py, src/back/objects/registry/store/lakebase/{Catalog,Simulations,ChangeEvents,ReviewEvents}.py, src/back/core/helpers/SQLHelpers.py, src/back/objects/digitaltwin/build/TwinGraphBuild.py, src/back/objects/session/DomainSession.py: UI-facing validation and status messages ("Context name is required", "Context permissions saved", "Context '<x>' not found", etc.).
+6. Tests updated to the new user-facing strings: tests/units/domain/test_domain_neo4j_connection_picker.py, tests/units/front/test_domain_versions_cards.py, tests/units/front/test_settings_runs_page.py, tests/units/registry/test_v090_lakebase_audit.py, tests/units/registry/test_v090_lakebase_catalog.py, tests/units/settings/test_settings_domain_permissions.py, tests/units/settings/test_v090_settings_obx.py, tests/units/settings/test_v090_settings_permissions.py, tests/units/settings/test_v090_settings_registry_domains.py, tests/units/settings/test_v090_settings_schedule.py, tests/units/ui/test_home_and_explorer_contracts.py, tests/e2e/navigation/test_navigation_flows.py (e2e opt-in, not run).
+
+Modified files (this change):
+- src/front/templates/: base.html, domain.html, home.html, settings.html, partials/domain/{_domain_audit,_domain_documents,_domain_information,_domain_review,_domain_runs,_domain_validation}.html, partials/dtwin/_query_insights.html, partials/layout/{_workspace_map_modal,help_modal}.html, partials/ontology/{_ontology_import,_ontology_information}.html, partials/registry/{_export_obx_modal,_import_obx_modal,_registry_configuration,_registry_domains}.html, partials/settings/{_settings_locks,_settings_runs,_settings_schedule}.html
+- src/front/static/: config/js/{schedule,settings-locks,settings-runs,settings}.js; domain/css/{domain-audit,domain-collaboration,domain-information,domain-review}.css; domain/js/{domain-audit,domain-collaboration,domain-review,domain-validation,domain-versions,domain}.js; global/css/{main,permissions,review-modals}.css; global/js/{navbar,ontology-core,runs-render,uc-location-widget,utils,version-check}.js; home/css/home.css; home/js/{home-tasks,home}.js; mapping/js/mapping-shared.js; ontology/js/{ontology-import,ontology-information,ontology-shared-panels}.js; query/js/{query-sigmagraph,query-sync}.js; registry/css/{registry,registry-teams}.css; registry/js/registry.js
+- src/api/routers/internal/domain.py
+- src/back/: core/helpers/SQLHelpers.py, objects/digitaltwin/build/TwinGraphBuild.py, objects/domain/Domain.py, objects/domain/settings/{ObxSettings,PermissionSettings,RegistryDomainSettings,ScheduleSettings}.py, objects/registry/PermissionService.py, objects/registry/schedule/{BuildScheduler,TaskContext}.py, objects/registry/store/lakebase/{Catalog,ChangeEvents,ReviewEvents,Simulations}.py, objects/session/DomainSession.py
+- tests/ (12 files listed above)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed (after updating 14 expected-string assertions to the new labels).
+- Residual: whole-word "Domain" remains only in intentional places (Postgres naming comment in settings.js, `Domain.py` filename in query-cohorts.js comment) and in excluded surfaces listed above.
+- Not done: docs/ (Sphinx, user guide, README) still say "Domain"; the public API/OpenAPI tags and agent/MCP prompts were kept as-is (AI feature gate requires an eval before prompt changes).
+
+================================================================================
+Studio: collapse group circle at clicked entity
+================================================================================
+
+Context:
+Collapsing an ontology group on the Studio canvas always placed the colored
+group circle on the first member of the group definition. Users expect the
+circle where they clicked (the entity whose − badge they used).
+
+Changes:
+1. src/front/static/ontology/js/ontology-map.js
+   Track a per-group collapse anchor (`_studioGroupAnchors`); pass the clicked
+   entity into `collapseStudioGroup`; resolve group-node position via
+   `_resolveStudioGroupAnchor`; keep drag sync on that same anchor; clear on
+   expand / stale group reload.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Contract asserts the click passes `d.name` and stores the anchor.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10258 passed, 323 skipped, 8 deselected; 1 pre-existing unrelated failure (docs/user-guide.md stale TOC). Contract suite test_studio_views_groups_contract.py → 10 passed.
+
+================================================================================
+Studio: group click lists member entities in the right pane
+================================================================================
+
+Context:
+Clicking an ontology group super-node on the Studio canvas did nothing. Users
+want the right-hand detail pane to list every entity in the group.
+
+Changes:
+1. src/front/static/ontology/js/ontology-map.js
+   Group node click now clears the entity selection and calls the new
+   openStudioGroupPanel(groupName); drag-end clicks still do nothing.
+   New openStudioGroupPanel() renders the group header, an "Entities" section
+   with count, and one passive row per member; a row click selects that
+   entity on the canvas (opens its entity panel).
+2. src/front/static/ontology/css/ontology-shared-panels.css
+   .panel-group-member: button reset for the member rows, primary tint on hover/focus.
+3. tests/units/front/test_studio_views_groups_contract.py
+   Contract test for the group click wiring, the member rows and the CSS hook.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected; 1 pre-existing unrelated failure (docs/user-guide.md stale TOC). Contract suite test_studio_views_groups_contract.py → 11 passed.
+
+Documentation & Sphinx: Aligned user guides and docs with Context navigation
+================================================================================
+
+Context:
+Following the restructuring of the top menu (Context) and sub-navigation (General,
+Configuration, Governance, Metadata, Collaboration), the product documentation
+(docs/ and README.md) and in-app online help center still referenced "Domain → General",
+"Domain → Metadata", and legacy path patterns. The user asked to update the docs
+and online documentation accordingly.
+
+Changes:
+1. README.md
+   Updated quickstart table and setup sections: "Domain > Metadata" → "Context > Data Assets",
+   "Run a domain without an LLM" → "Run a context without an LLM", and load behavior
+   referencing Context.
+2. docs/README.md
+   Updated overview table and navigation targets: "Domain → General" → "Context → Configuration",
+   and added Context General (cockpit) description.
+3. docs/user-guide.md
+   - Replaced all obsolete "Domain → General → *" paths with "Context → Configuration → *" (AI, Knowledge Graph, Backend, Global, MCP).
+   - Replaced "Domain → Metadata" with "Context → Data Assets".
+   - Replaced "Domain → Audit trail" with "Context → Governance → Audit trail".
+   - Replaced "Domain → Validation" with "Context → General" (Cockpit overview) or "Context → Governance → Publication" (Review workflow).
+   - Replaced "Domain → Versions" with "Context → Versions".
+   - Replaced "Domain → Knowledge Store" with "Context → Knowledge Store".
+   - Updated headings and body text: "## Context Management & Version Control", "### Context Structure", "### Context → Configuration (Global Tab)", "### General page (Cockpit)", "### Context Save/Load", "### Enabling Contexts for MCP".
+   - Updated the Feature inventory section to reflect the new Context menu and page names.
+   - Regenerated Table of Contents via `make docs-toc`.
+4. docs/getting-started.md
+   Updated guided tutorial steps: "Context → Knowledge Store", "Context → Data Assets",
+   navbar "Load Context", and version branching.
+5. docs/deployment.md
+   Updated AI Gateway model service selection paths and Graph DB engine selection paths
+   to "Context → Configuration → AI" and "Context → Configuration → Knowledge Graph".
+6. docs/backend.md
+   Updated Graph DB engine configuration and search cache settings paths to
+   "Context → Configuration → Knowledge Graph" and "Context → Configuration → Backend → Search cache".
+7. docs/architecture.md
+   Updated backend engine selection and MCP policy paths to "Context → Configuration → *".
+8. docs/mcp.md
+   Updated per-domain MCP policy path to "Context → Configuration → MCP" and version management
+   to "Context → Versions".
+9. docs/product.md
+   Updated overview pipeline table: "Context > Data Assets".
+10. docs/api.md
+    Updated MCP policy and auto-assign icon documentation paths to "Context → Configuration → *".
+11. docs/sphinx/changelog.rst
+    Updated cross-reference from "Domain → Metadata" to "Context → Data Assets".
+12. ci/build_docs.sh
+    Verified clean Sphinx documentation build.
+
+Modified files:
+- README.md
+- docs/README.md
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/deployment.md
+- docs/backend.md
+- docs/architecture.md
+- docs/mcp.md
+- docs/product.md
+- docs/api.md
+- docs/sphinx/changelog.rst
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- `uv run --frozen pytest -q -m "not scenario"` → 10260 passed, 323 skipped, 8 deselected, 0 failed.
+- `./ci/build_docs.sh clean && ./ci/build_docs.sh` → Sphinx build succeeded without errors.
+
+================================================================================
+Studio: Edit group link on the group detail pane
+================================================================================
+
+Context:
+The Studio group right pane listed members but had no way to open the existing
+Edit Group modal. Add an Edit group action for editors.
+
+Changes:
+1. src/front/static/ontology/js/ontology-groups.js
+   Extract _showEditModal; add editGroupByName(name) for Studio callers.
+2. src/front/static/ontology/js/ontology-map.js
+   openStudioGroupPanel shows an "Edit group" button (editors only) that calls
+   OntologyGroups.editGroupByName.
+3. src/front/static/ontology/css/ontology-shared-panels.css
+   Full-width spacing for .panel-group-edit.
+4. tests/units/front/test_studio_views_groups_contract.py
+   Contract asserts the edit button and editGroupByName wiring.
+
+Modified files:
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q tests/units/front/test_studio_views_groups_contract.py → 11 passed.
+
+================================================================================
+Edit Group: hide checkboxes for entities already in another group
+================================================================================
+
+Context:
+The Edit Group modal still offered checkboxes for entities that already
+belonged to another group (with a confirm-to-move dialog). Exclusive
+membership should make those entities non-selectable: listed, no checkbox.
+
+Changes:
+1. src/front/static/ontology/js/ontology-groups.js
+   Other-group members render as .group-member-locked rows (badge + no
+   checkbox). Removed _wireExclusiveMemberChecks / move-confirm flow.
+2. src/front/templates/partials/ontology/_ontology_groups.html
+   Copy updated: other-group entities appear without a checkbox.
+3. src/front/static/ontology/css/ontology-groups.css
+   Styles for .group-member-locked muted rows.
+4. tests/units/front/test_studio_views_groups_contract.py
+   Contract asserts locked rows and the removed confirm helper.
+
+Modified files:
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/templates/partials/ontology/_ontology_groups.html
+- src/front/static/ontology/css/ontology-groups.css
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10260 passed, 323 skipped, 8 deselected.
+
+================================================================================
+Menu: rename Simulation menu to Intelligence, Sandbox group to Simulation
+================================================================================
+
+Context:
+The Level 2 navigation showed a "Simulation" menu whose first sub-menu group
+was titled "Sandbox". Renamed the top menu to "Intelligence" and the group to
+"Simulation" so the group matches the feature name. Routes, ids and API paths
+are unchanged.
+
+Changes:
+1. src/front/config/menu_config.json
+   Menu `simulation` label "Simulation" → "Intelligence".
+   Group `simulation-scenarios` title "Sandbox" → "Simulation".
+
+Modified files:
+- src/front/config/menu_config.json
+
+Tests: uv run --frozen pytest -q tests/units/front tests/units/config → 1794 passed.
+
+================================================================================
+Intelligence Community: detect preview then materialize clusters
+================================================================================
+
+Context:
+Cluster detection lived in Explorer View (algorithm, resolution, Detect,
+client Louvain). Intelligence now owns configuration and detection; Explorer
+only visualizes a materialized partition (colour / collapse). Flow matches
+Cohorts: Detect previews in memory, Materialize writes Cluster + inCluster
+triples and replaces the previous partition. No Unity Catalog table in this
+slice.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Intelligence group `simulation-community` (Community / Detect) first.
+2. src/front/templates/simulation.html
+   Page title Intelligence; `#communities-section` and communities script.
+3. src/front/templates/partials/simulation/_sim_communities.html
+   Algorithm, resolution, Detect preview, Materialize, Clear, current partition.
+4. src/front/static/simulation/js/simulation-communities.js
+   POST detect / materialize, GET/DELETE current; Builder edit gate.
+5. src/front/static/simulation/css/simulation.css
+   Scrollable preview and materialized tables.
+6. src/back/core/graph_analysis/CommunityVocabulary.py
+   Cluster, inCluster, fromAlgorithm, clusterSize URI helpers.
+7. src/back/core/graph_analysis/CommunityMaterializer.py
+   Replace-or-clear partition; load_current for Explorer.
+8. src/back/core/graph_analysis/__init__.py
+   Export vocabulary and materializer.
+9. src/back/core/graphdb/interfaces/TraversalMixin.py
+   `delete_community_triples` (same prefix/predicate shape as cohorts).
+10. src/back/core/graphdb/neo4j/Store.py
+    Neo4j alias for community triple delete.
+11. src/back/objects/digitaltwin/TwinAnalytics.py
+    materialize_clusters / load_current_clusters / clear_clusters.
+12. src/back/objects/digitaltwin/DigitalTwin.py
+    Thin delegators for the new analytics methods.
+13. src/api/routers/internal/dtwin.py
+    GET/DELETE `/dtwin/clusters/current`, POST `/dtwin/clusters/materialize`.
+14. src/front/templates/partials/dtwin/_query_sigmagraph.html
+    Data Clusters: colour/collapse only; empty state points to Intelligence.
+15. src/front/static/query/js/query-sigmagraph.js
+    Hydrate `_clusterAssignments` from GET current; strip detect APIs.
+16. src/front/templates/partials/layout/help_modal.html
+    Intelligence step 6; Detect first; Explorer visualization copy.
+17. docs/architecture.md, docs/user-guide.md, docs/product.md, README.md
+    Preview-then-materialize; Explorer visualization only.
+18. tests/units/core/test_community_vocabulary.py
+    Stable cluster URIs and hash-base join.
+19. tests/units/core/test_community_materializer.py
+    Insert, replace, clear, empty load.
+20. tests/units/front/test_explorer_clusters_readonly.py
+    No Detect controls; hydrate from `/dtwin/clusters/current`.
+21. tests/units/front/test_simulation_page_contract.py
+    Community section, Detect/Materialize, menu group order.
+22. tests/units/front/test_help_center_menu_sync.py
+    Intelligence pipeline label.
+23. tests/units/front/test_sidebar_content_stretch_contract.py
+    `communities` section id.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- src/back/core/graph_analysis/CommunityVocabulary.py
+- src/back/core/graph_analysis/CommunityMaterializer.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/core/graphdb/interfaces/TraversalMixin.py
+- src/back/core/graphdb/neo4j/Store.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/architecture.md
+- docs/user-guide.md
+- docs/product.md
+- README.md
+- tests/units/core/test_community_vocabulary.py
+- tests/units/core/test_community_materializer.py
+- tests/units/front/test_explorer_clusters_readonly.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10270 passed, 323 skipped, 8 deselected in 52.98s
+
+================================================================================
+Community Detect: light Sigma preview instead of cluster table
+================================================================================
+
+Context:
+Intelligence → Community showed Detect results as a member-sample table.
+Users need a light explorer of the partition before Materialize. Detect now
+returns a capped entity graph; the preview panel renders it with Sigma
+(coloured by cluster), matching the Compare pattern. Materialize still sends
+clusters + stats only.
+
+Changes:
+
+1. src/back/core/graph_analysis/CommunityDetector.py
+   Build capped preview graph (nodes with cluster, edges) after detection.
+2. src/back/core/graph_analysis/models.py
+   DetectionResult.preview optional field.
+3. src/back/objects/digitaltwin/TwinAnalytics.py
+   Include `graph` in detect_clusters API payload.
+4. src/front/templates/partials/simulation/_sim_communities.html
+   Preview canvas + cluster chips; drop preview table body.
+5. src/front/static/simulation/js/simulation-communities.js
+   Light Sigma explorer for detect preview; keep materialized as table.
+6. src/front/static/simulation/css/simulation.css
+   Preview canvas / chip styles with `--db-*` tokens.
+7. docs/architecture.md, docs/user-guide.md
+   Document capped light preview graph.
+8. tests/units/core/test_community_detector.py
+   Preview covers nodes; cap truncates large partitions.
+9. tests/units/dtwin/test_v090_twin_analytics.py
+   Detect contract includes empty graph fallback.
+10. tests/units/front/test_simulation_page_contract.py
+    Preview canvas contract; no `commPreviewBody`.
+
+Modified files:
+- src/back/core/graph_analysis/CommunityDetector.py
+- src/back/core/graph_analysis/models.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- docs/architecture.md
+- docs/user-guide.md
+- tests/units/core/test_community_detector.py
+- tests/units/dtwin/test_v090_twin_analytics.py
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10272 passed, 323 skipped, 8 deselected in 55.36s
+
+================================================================================
+Community preview: graph only, drop stats and cluster chips
+================================================================================
+
+Context:
+The Detect preview showed a stats line and a 73-chip cluster list above the
+Sigma canvas. The stats were not useful for judging a partition. The preview
+is now the graph alone, coloured by cluster. The materialized table (what
+Explorer loads) is unchanged. Browser check: the Detect flow with the real
+partial and the real detect payload draws 1,500 nodes in 73 cluster colours
+with no console errors.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_communities.html
+   Removed the preview stats line and the cluster chip container; empty-state
+   copy now "Run Detect to draw the community graph."
+2. src/front/static/simulation/js/simulation-communities.js
+   Removed `_renderClusterChips` and the preview stats update; detect passes
+   `graph` straight to `_renderPreviewGraph`.
+3. src/front/static/simulation/css/simulation.css
+   Removed `.comm-preview-clusters` and `.comm-cluster-*` rules.
+4. tests/units/front/test_simulation_page_contract.py
+   Asserts the preview has no stats or cluster chip containers.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10272 passed, 323 skipped, 8 deselected in 46.48s
+
+================================================================================
+Community: Detect top-right, Explorer link, size statistics
+================================================================================
+
+Context:
+Community detection needed clearer primary actions and useful partition
+metrics. Detect moves to the section header (top right). An Explorer link
+opens Graph → Explorer once a partition is materialized. Preview and
+Materialized panels show KPI tiles: clusters, nodes, edges, size
+min/max/avg/median, and modularity.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_communities.html
+   Detect in header actions; Explorer button + Open in Explorer link;
+   preview/materialized stats hosts; algorithm card no longer has Detect.
+2. src/front/static/simulation/js/simulation-communities.js
+   `_sizeStats` / `_renderStats` KPI strip; Explorer enabled when
+   materialized clusters exist.
+3. src/front/static/simulation/css/simulation.css
+   Compact community KPI sizing; disabled Explorer button opacity.
+4. tests/units/front/test_simulation_page_contract.py
+   Header Detect placement, Explorer link, size-stat labels.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10273 passed, 323 skipped, 8 deselected in 60.97s
+
+================================================================================
+Community preview: click cluster node to list entities
+================================================================================
+
+Context:
+The Detect preview graph showed coloured communities but offered no way to
+inspect who belongs to a cluster. Clicking a node now highlights that
+cluster and lists all of its entities in a side panel (full partition
+membership, not only the capped preview nodes). Clicking the canvas clears
+the selection.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_communities.html
+   Preview layout: Sigma canvas + `#commPreviewDetails` aside.
+2. src/front/static/simulation/js/simulation-communities.js
+   `clickNode` selects the node's cluster, dims other clusters, and renders
+   the member list; `clickStage` resets.
+3. src/front/static/simulation/css/simulation.css
+   Preview split layout, details pane, member list / focus styles.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract for details panel and `_selectCluster` / `clickNode`.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10273 passed, 323 skipped, 8 deselected in 59.23s

@@ -3,22 +3,11 @@
  * Styles for the Project Validation dashboard
  */
 
-/* ── Section wrapper & loading overlay ────────── */
-.validation-section-wrapper {
-    position: relative;
-}
-.validation-loading-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.95);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 10;
+/* ── Health banner loading state ─────────────────── */
+.validation-health-banner.health-loading {
+    background: var(--db-canvas-warm, #f8f8f8);
+    border: 1px solid var(--db-border, #eceae6);
+    color: var(--db-text-secondary, #6b6864);
 }
 
 /* ── Health banner ───────────────────────────── */

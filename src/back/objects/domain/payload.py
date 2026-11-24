@@ -9,6 +9,31 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Key under which domains saved before the IF-THEN rename keep their rules.
+LEGACY_IF_THEN_RULES_KEY = "swrl_rules"
+
+
+def read_if_then_rules(doc: Mapping[str, Any], default: Any = None) -> Any:
+    """Return the IF-THEN rules stored in *doc*, accepting pre-rename documents.
+
+    Returns *default* (or ``[]``) when neither the current nor the legacy key is set.
+    """
+    if "if_then_rules" in doc:
+        return doc["if_then_rules"]
+    if LEGACY_IF_THEN_RULES_KEY in doc:
+        return doc[LEGACY_IF_THEN_RULES_KEY]
+    return [] if default is None else default
+
+
+def migrate_legacy_if_then_key(container: Dict[str, Any]) -> None:
+    """Move the legacy rules key to ``if_then_rules`` in *container*, in place.
+
+    An existing non-empty ``if_then_rules`` value wins over the legacy one.
+    """
+    legacy = container.pop(LEGACY_IF_THEN_RULES_KEY, None)
+    if legacy and not container.get("if_then_rules"):
+        container["if_then_rules"] = legacy
+
 
 def coerce_version_key(value: Any) -> str:
     """Return a canonical version string, or ``""`` when *value* is unset."""
@@ -76,7 +101,7 @@ def resolve_domain_slice(domain_data: Dict[str, Any]) -> Dict[str, Any]:
     :func:`get_domain_info`). For legacy documents, reads top-level keys.
 
     Returns:
-        Dict with keys: ``version``, ``ontology``, ``assignment``, ``constraints``, ``swrl_rules``.
+        Dict with keys: ``version``, ``ontology``, ``assignment``, ``constraints``, ``if_then_rules``.
     """
     info = domain_data.get("info", {})
     version_key: str
@@ -91,26 +116,26 @@ def resolve_domain_slice(domain_data: Dict[str, Any]) -> Dict[str, Any]:
             ontology = vd.get("ontology", {})
             assignment = vd.get("assignment", vd.get("mapping", {}))
             constraints = vd.get("constraints", domain_data.get("constraints", []))
-            swrl_rules = vd.get("swrl_rules", domain_data.get("swrl_rules", []))
+            if_then_rules = read_if_then_rules(vd, read_if_then_rules(domain_data))
         else:
             version_key = "1"
             ontology = {}
             assignment = {}
             constraints = domain_data.get("constraints", [])
-            swrl_rules = domain_data.get("swrl_rules", [])
+            if_then_rules = read_if_then_rules(domain_data)
     else:
         version_key = str(info.get("version", "1"))
         ontology = domain_data.get("ontology", {})
         assignment = domain_data.get("assignment", domain_data.get("mapping", {}))
         constraints = domain_data.get("constraints", [])
-        swrl_rules = domain_data.get("swrl_rules", [])
+        if_then_rules = read_if_then_rules(domain_data)
 
     return {
         "version": version_key,
         "ontology": ontology,
         "assignment": assignment,
         "constraints": constraints,
-        "swrl_rules": swrl_rules,
+        "if_then_rules": if_then_rules,
     }
 
 

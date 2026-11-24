@@ -212,6 +212,13 @@ async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain, init
     var pendingQueryTab = initialQueryTab;
 
     SidebarNav.init({
+        onBeforeSectionChange: async function(section) {
+            if (window.MappingPageHooks
+                && typeof window.MappingPageHooks.onBeforeSectionChange === 'function') {
+                return await window.MappingPageHooks.onBeforeSectionChange(section);
+            }
+            return true;
+        },
         onSectionChange: async function(section, targetSection, nav) {
             if (section === 'sigmagraph') {
                 if (typeof SigmaGraph !== 'undefined') {
@@ -239,11 +246,6 @@ async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain, init
             if (section === 'insight') {
                 if (typeof loadInsights === 'function' && !(window._obInsights || {}).loaded) {
                     loadInsights();
-                }
-            }
-            if (section === 'analytics') {
-                if (typeof window.analyticsLoadTypes === 'function') {
-                    window.analyticsLoadTypes();
                 }
             }
         }
@@ -285,17 +287,17 @@ async function _switchDomainForBridge(domainName, focusUri) {
             } else if (typeof fetchCachedInvalidate === 'function') {
                 fetchCachedInvalidate('/navbar/state');
             }
-            console.log('[Bridge] Switched to domain:', domainName);
+            console.log('[Bridge] Switched to context:', domainName);
             var target = '/dtwin/?section=sigmagraph';
             if (focusUri) target += '&focus=' + encodeURIComponent(focusUri);
             window.location.replace(target);
         } else {
             if (typeof hideDomainLoading === 'function') hideDomainLoading();
-            console.warn('[Bridge] Failed to switch domain:', data.message || data);
+            console.warn('[Bridge] Failed to switch context:', data.message || data);
         }
     } catch (err) {
         if (typeof hideDomainLoading === 'function') hideDomainLoading();
-        console.error('[Bridge] Error switching domain:', err);
+        console.error('[Bridge] Error switching context:', err);
     }
 }
 

@@ -121,15 +121,17 @@ env:
   # MLflow — ensure traces are persisted to the workspace tracking server.
   - name: MLFLOW_TRACKING_URI
     value: "${APP_MLFLOW_TRACKING_URI}"
+  # ── Graph Chat (Digital Twin assistant) ───────────────────────
+  # Output-token budget per LLM call, including the model's reasoning.
+  # Mirrors the default in src/shared/config/settings.py, which is also the
+  # maximum (Foundation Model output ceiling); lower it to cut latency.
+  - name: ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS
+    value: "8192"
   # ── Knowledge-graph analytics ─────────────────────────────────
   # These mirror the defaults in src/shared/config/settings.py. They are
   # spelled out here so an admin can retune a deployed app without a code
   # change; edit the value, then re-run `make deploy`.
   #
-  # In-memory triple cap for community detection (POST /clusters/detect).
-  # Graph analytics does not read this — it always runs in the job.
-  - name: ONTOBRICKS_ANALYTICS_MAX_TRIPLES
-    value: "500000"
   # Top-ranked nodes per metric returned by the job.
   # This is what keeps the persisted payload bounded on a graph of any
   # size; the Analytics page "Top N" selector is capped well below it.
@@ -176,6 +178,16 @@ env:
     value: "${APP_REALTIME_LAKEBASE_SECRET}"
   - name: ONTOBRICKS_REALTIME_CHECKPOINT_ROOT  # optional
     value: "${APP_REALTIME_CHECKPOINT_ROOT}"
+  # Deployed name of the community-detection job (Intelligence -> Community).
+  # Leave empty to derive "<app>-community-detection", matching the bundle.
+  # Gated by the same ONTOBRICKS_ANALYTICS_JOB_ENABLED toggle.
+  - name: ONTOBRICKS_COMMUNITY_JOB_NAME
+    value: ""
+  # Deployed name of the pattern-detection job (Intelligence -> Patterns).
+  # Leave empty to derive "<app>-pattern-detection", matching the bundle.
+  # Gated by the same ONTOBRICKS_ANALYTICS_JOB_ENABLED toggle.
+  - name: ONTOBRICKS_PATTERN_JOB_NAME
+    value: ""
   # PageRank power iterations. 20 fixes the top-N ordering; raise it only
   # if you need converged absolute scores rather than a ranking.
   - name: ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS

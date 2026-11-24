@@ -1,0 +1,452 @@
+
+
+=========================================================================
+Studio: create Group_ Business View when a group is created
+================================================================================
+
+Context:
+Creating an ontology group did not produce a matching Business View. On new
+group create only, Studio now snapshots a view named Group_<groupName>
+(suffix if taken) with the group's members and internal links, without
+switching the canvas away from the current view. Edits and deletes leave
+existing views alone.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   createBusinessViewFromGroup reuses _createMapBusinessView with
+   applyAfter: false; the helper restores the previous named view after save.
+2. src/front/static/ontology/js/ontology-groups.js
+   After a successful create (_editIndex < 0), call createBusinessViewFromGroup.
+3. tests/units/front/test_studio_views_groups_contract.py
+   Contract that create (not edit) wires Group_ view creation.
+4. tests/units/front/test_ontology_map_multi_select.py
+   Shared-helper contract includes the group builder and extra switch restore.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/js/ontology-groups.js
+- tests/units/front/test_studio_views_groups_contract.py
+- tests/units/front/test_ontology_map_multi_select.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 55.95s
+
+
+================================================================================
+Lakehouse Access type: rename options to "Virtual Graph (no copy)" / "Materialized Graph"
+================================================================================
+
+Context:
+The Lakehouse "Access type" picker used the labels "Views only — no data copy"
+and "Materialized - Faster but needs refresh". Both options are renamed to the
+shorter product names "Virtual Graph (no copy)" and "Materialized Graph". The
+stored values (`view` / `table`) and the behaviour are unchanged.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_information.html
+   Option labels renamed; the helper text and the alert under the picker now
+   use the same names.
+2. src/front/static/query/js/query-databricks-build.js
+   Build page status text for the view mode names "Virtual Graph (no copy)".
+3. tests/units/front/test_lakehouse_materialization_ui.py
+   Section contract asserts the new option labels.
+4. tests/units/domain/test_domain_session.py
+   Docstring updated to the new default name (no behaviour change).
+5. tests/units/dtwin/test_databricks_build_info_materialization.py
+   Docstring updated to the new default name (no behaviour change).
+6. docs/user-guide.md
+   Access type row, materialization modes table, search cache and backend
+   tables use the new names.
+7. docs/architecture.md
+   Capability table column headers use the new names.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/query/js/query-databricks-build.js
+- tests/units/front/test_lakehouse_materialization_ui.py
+- tests/units/domain/test_domain_session.py
+- tests/units/dtwin/test_databricks_build_info_materialization.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 47.37s
+
+
+================================================================================
+Studio toolbar: expand/collapse all ontology groups
+================================================================================
+
+Context:
+Studio already collapsed and expanded a group from the + / − badges on the
+canvas. There was no toolbar control to collapse or expand every group in one
+click.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_map.html
+   Added #studioToggleAllGroupsBtn next to the Groups dropdown.
+2. src/front/static/ontology/js/ontology-map.js
+   Toggle collapses every group, or expands them all when they are already
+   collapsed; one persist + rebuild. Disabled when the ontology has no groups.
+3. tests/units/front/test_studio_views_groups_contract.py
+   Toolbar id, APIs, and single persist/rebuild contract.
+4. docs/user-guide.md
+   Studio groups paragraph mentions the toolbar toggle.
+5. src/front/templates/partials/layout/help_modal.html
+   Studio help line mentions expand/collapse all from the toolbar.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+- docs/user-guide.md
+- src/front/templates/partials/layout/help_modal.html
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 49.90s
+
+
+================================================================================
+Replace update_to_0.9.0.md with update_to_0.10.0.sh
+================================================================================
+
+Context:
+The 0.9 markdown upgrade guide is replaced by an executable 0.10.0 in-place
+upgrade script. Operators run one command that backs up deploy.config / live
+app JSON, warns when sample DEFAULT_INSTANCE_ID=10x would create a parallel
+install, then delegates to scripts/update-deployed-app.sh. No new 0.9→0.10
+registry DDL is required.
+
+Changes:
+
+1. update_to_0.10.0.sh
+   New 0.9.x→0.10.0 upgrade script (preflight, backups, instance-id guard,
+   delegate to update-deployed-app.sh, post-upgrade notes).
+2. update_to_0.9.0.md
+   Removed; superseded by update_to_0.10.0.sh.
+3. docs/deployment.md
+   Updating section points at ./update_to_0.10.0.sh for 0.9→0.10.
+4. docs/contributing.md
+   Release operator link retargeted to update_to_0.10.0.sh.
+5. .gitignore
+   Ignore local .upgrade-backup-0.10/ snapshots created by the script.
+
+Modified files:
+- update_to_0.10.0.sh
+- update_to_0.9.0.md
+- docs/deployment.md
+- docs/contributing.md
+- .gitignore
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 49.88s
+
+
+================================================================================
+Document 0.10 upgrade as Markdown (not a shell script)
+================================================================================
+
+Context:
+Operators need a process guide for 0.9.x → 0.10.0, not a separate upgrade
+binary. Schema/grant updates stay automatic in make deploy /
+scripts/update-deployed-app.sh. Replace the short-lived update_to_0.10.0.sh
+with update_to_0.10.0.md (same role as the former update_to_0.9.0.md).
+
+Changes:
+
+1. update_to_0.10.0.md
+   Fresh-install and in-place upgrade guide for 0.10.0; points at
+   update-deployed-app.sh / make deploy for the automatic migration step.
+2. update_to_0.10.0.sh
+   Removed; upgrade automation stays in the deployment scripts.
+3. docs/deployment.md
+   Updating section retargeted to update_to_0.10.0.md.
+4. docs/contributing.md
+   Operator link retargeted to update_to_0.10.0.md.
+5. .gitignore
+   Dropped .upgrade-backup-0.10/ entries that only served the removed script.
+
+Modified files:
+- update_to_0.10.0.md
+- update_to_0.10.0.sh
+- docs/deployment.md
+- docs/contributing.md
+- .gitignore
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 53.87s
+
+## Remove undocumented registry_transfer CLI from docs (issue #227)
+
+Context: docs/advanced_features.md described scripts/registry_transfer.sh and
+src/cli/registry_transfer.py as a shipped CLI Import/Export tool, but those
+files were never present in the repository (docs-only since Apr 2026). GitHub
+issue #227 reported the gap. Correct docs for 0.10.0 to describe only the
+shipped OBX UI and GitHub mirror paths, and point inventory / large-registry
+workarounds at Registry → Browse domain organisation.
+
+Changes:
+
+1. docs/advanced_features.md
+   Drop the fake CLI section; document Registry → Browse as domain inventory
+   (domain organisation), large-registry batch/GitHub workarounds, and a
+   two-column OBX vs GitHub comparison. Regenerate TOC.
+2. docs/README.md
+   Advanced features blurb now says OBX / GitHub mirror (not registry_transfer.sh).
+3. README.md
+   Lifecycle blurb links OBX / GitHub mirror instead of a non-existent CLI.
+4. tests/units/api/test_help_api.py
+   Assert advanced-features help content mentions Registry → Browse instead of
+   registry_transfer.
+
+Modified files:
+- docs/advanced_features.md
+- docs/README.md
+- README.md
+- tests/units/api/test_help_api.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10278 passed, 323 skipped, 8 deselected in 53.99s
+
+## Add opt-in hierarchy instance IRI scope (issue #228)
+
+Context: A parent class and a subclass mapped with the same business id produced
+two unlinked Knowledge Graph nodes, because instance URIs embed the mapped class
+name ({base}{Class}/{id}) and inherited relations (#43) stay on the declaring
+class URI. A new domain setting mints root-class URIs so both mappings land on one
+node carrying every type and relationship.
+
+Changes:
+
+1. src/back/core/w3c/r2rml/InstanceIdentity.py
+   New pure helper: scope normalization, root-class segment map, sibling collision detection.
+2. src/back/core/w3c/r2rml/__init__.py
+   Re-export InstanceIdentity.
+3. src/back/core/w3c/r2rml/R2RMLGenerator.py
+   Entity and relationship templates use the root-class segment in hierarchy scope.
+4. src/back/objects/digitaltwin/query/TwinMapping.py
+   Fallback URI templates follow the same root-class segment.
+5. src/back/objects/domain/Domain.py
+   Save identity_scope on the ontology, reset generated R2RML, expose it to UI.
+6. src/back/objects/session/DomainSession.py
+   Export identity_scope with the ontology.
+7. src/back/objects/mapping/Mapping.py
+   Diagnostics warn when unrelated mapped classes share a root.
+8. src/front/templates/partials/domain/_domain_information.html, src/front/static/domain/js/domain.js,
+   src/front/static/global/js/navbar.js, src/front/static/domain/js/domain-information.js
+   Instance IRI scope selector, save payload and refresh.
+9. src/front/static/query/js/query-loaders.js, src/front/static/query/js/query-d3graph.js
+   Explorer keeps the most specific rdf:type of multi-typed nodes.
+10. docs/user-guide.md, docs/architecture.md, docs/advanced_features.md
+    Document the instance IRI scope.
+11. tests/units/mapping/test_instance_identity.py, tests/units/mapping/test_r2rml_generator.py,
+    tests/units/dtwin/test_v090_twin_mapping.py, tests/units/domain/test_domain_service.py,
+    tests/units/domain/test_domain_session.py, tests/units/mapping/test_mapping_service.py,
+    tests/units/front/test_identity_scope_ui.py
+    Unit coverage for root minting, persistence, diagnostics, and UI contracts.
+
+Modified files:
+- src/back/core/w3c/r2rml/InstanceIdentity.py
+- src/back/core/w3c/r2rml/__init__.py
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- src/back/objects/digitaltwin/query/TwinMapping.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/mapping/Mapping.py
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain.js
+- src/front/static/global/js/navbar.js
+- src/front/static/domain/js/domain-information.js
+- src/front/static/query/js/query-loaders.js
+- src/front/static/query/js/query-d3graph.js
+- docs/user-guide.md
+- docs/architecture.md
+- docs/advanced_features.md
+- tests/units/mapping/test_instance_identity.py
+- tests/units/mapping/test_r2rml_generator.py
+- tests/units/dtwin/test_v090_twin_mapping.py
+- tests/units/domain/test_domain_service.py
+- tests/units/domain/test_domain_session.py
+- tests/units/mapping/test_mapping_service.py
+- tests/units/front/test_identity_scope_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: 10323 passed, 323 skipped, 8 deselected, 39 warnings in 48.86s
+
+================================================================================
+Community detection at scale: label propagation on a Databricks job
+================================================================================
+
+Context:
+Intelligence → Community → Detect failed or returned nothing on large domains
+(e.g. Customers100M). Detection loaded every triple into the app and ran
+NetworkX in memory inside a synchronous request: the triple guard only fired
+after the full load, the request hit the Databricks Apps proxy timeout, and
+detect / materialize / current all moved unbounded member lists between the
+browser and the server. Detection now runs as semi-synchronous label
+propagation in Spark SQL on a dedicated serverless Lakeflow job; the app reads
+back bounded results, materializes server-side, and every heavy step is a
+background task.
+
+Changes:
+1. src/jobs/graph_analytics_job.py — new `CommunitySQL` builder and
+   `run_communities` stage runner (`--task communities`): portable LPA
+   (md5-parity half updates, self vote, smallest-label tie break, stop after
+   two quiet rounds or `--lp-iterations`), SQL modularity, and the outputs
+   `graph_communities_<slug>`, `…_sizes`, `…_preview_nodes`,
+   `…_preview_edges` (≤ 1,500 nodes / 5,000 edges) and `…_summary`.
+2. resources/community_detection.job.yml — new bundle job
+   `<app>-community-detection` (same script, max_concurrent_runs 1).
+3. scripts/bootstrap/app-permissions.sh — grants CAN_MANAGE_RUN on both
+   analytics jobs.
+4. src/back/core/graph_analysis/LakeflowRunner.py — `submit_params`,
+   `run_params_and_wait` and a configurable running label.
+5. src/back/core/graph_analysis/JobCommunities.py (new) — triggers the job and
+   reads its outputs with bounded queries (summary, top clusters ≤ 200,
+   preview, member pages ≤ 500, keyset batches).
+6. src/back/core/graph_analysis/CommunityMaterializer.py — rewritten:
+   `INSERT … SELECT` from the job output on Delta, 50k keyset batches on other
+   stores, clear on failure; bounded `load_current(limit)`,
+   `assignments(uris)` (≤ 5,000) and `members(cluster_id, offset, limit)`.
+7. src/back/core/graphdb/delta/MaterializedStore.py — new
+   `insert_triples_from_select` writing into the inferred companion table.
+8. src/back/core/graph_analysis/preflight.py, helpers/DatabricksHelpers.py —
+   `community_job_status` / `community_job_configured` and
+   `resolve_community_job_name`.
+9. src/back/objects/digitaltwin/TwinAnalytics.py — job wiring
+   (`build_job_communities`, shared `analytics_output_schema`), detect on the
+   analytics snapshot, latest / members / summary reads, materialize and
+   bounded materialized reads.
+10. src/back/objects/digitaltwin/TwinBackgroundTasks.py — `run_community_task`
+    and `run_community_materialize_task`; task failures keep the error detail
+    (job run URL).
+11. src/api/routers/internal/dtwin.py — detect and materialize return a
+    task_id (preflight / "Run Detect first" → 400); new
+    `GET /clusters/latest`, `GET /clusters/{id}/members`,
+    `POST /clusters/assignments`; `GET /clusters/current` is top-N without
+    members.
+12. Removed `CommunityDetector`, `graph_analysis/GraphBuilder.py`,
+    `ClusterRequest` / `ClusterResult` / `DetectionResult` / `DetectionStats`,
+    the `analytics_max_triples` setting and `ONTOBRICKS_ANALYTICS_MAX_TRIPLES`;
+    added `ONTOBRICKS_COMMUNITY_JOB_NAME`. The DigitalTwin cluster delegators
+    were dropped (routes call TwinAnalytics / TwinBackgroundTasks directly).
+13. src/front/static/simulation/js/simulation-communities.js,
+    _sim_communities.html, simulation.css — Detect / Materialize run as
+    tracked tasks (resumed on section open), single "Label propagation
+    (Databricks)" algorithm, entity-type scope, inline preflight reason,
+    run status line (rounds, convergence, Databricks run link), members paged
+    on demand, Materialized panel rows expand to paged members.
+14. src/front/static/query/js/query-sigmagraph.js — Explorer reads totals from
+    `/clusters/current` and looks up assignments for drawn nodes only.
+15. tests/units/architecture/baseline.json — ratchet tightened; manual entry
+    for `jobs/graph_analytics_job.py` (2 classes: the job script must stay a
+    single standalone file on the Spark driver).
+16. Docs — README, getting-started (env vars), user-guide, architecture
+    (new "Detect on Databricks, then materialize" section), product,
+    development, Sphinx graph_analysis page, help modal.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- resources/community_detection.job.yml (new)
+- scripts/bootstrap/app-permissions.sh
+- app.yaml.template
+- src/shared/config/settings.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/back/core/graph_analysis/LakeflowRunner.py
+- src/back/core/graph_analysis/preflight.py
+- src/back/core/graph_analysis/JobCommunities.py (new)
+- src/back/core/graph_analysis/CommunityMaterializer.py
+- src/back/core/graph_analysis/CommunityDetector.py (deleted)
+- src/back/core/graph_analysis/GraphBuilder.py (deleted)
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/core/graphdb/delta/MaterializedStore.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/query/js/query-sigmagraph.js
+- README.md
+- docs/getting-started.md
+- docs/user-guide.md
+- docs/architecture.md
+- docs/product.md
+- docs/development.md
+- docs/sphinx/api/app.core.graph_analysis.rst
+- tests/units/core/test_community_job_sql.py (new)
+- tests/units/core/test_job_communities.py (new)
+- tests/units/core/test_community_materializer.py
+- tests/units/core/test_community_detector.py (deleted)
+- tests/units/api/test_dtwin_clusters.py (new)
+- tests/units/dtwin/test_v090_twin_analytics.py
+- tests/units/settings/test_bundle_job_resource.py
+- tests/units/settings/test_app_yaml_template.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_explorer_clusters_readonly.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: 10360 passed, 323 skipped, 8 deselected, 39 warnings in 44.60s
+
+--------------------------------------------------------------------------------
+Community tasks follow-up: task tracker links
+--------------------------------------------------------------------------------
+
+Context:
+Community detection and materialization already run as TaskManager tasks, so
+they appear in the task dropdown and notification centre like the other async
+tasks. Their "Open task" and notification links had no entry in the tracker's
+task-type map, so clicking them did nothing. They now deep-link to
+Intelligence → Community, as graph analytics links to its page.
+
+Changes:
+1. src/front/static/global/js/task-tracker.js — `TASK_TYPE_URLS` maps
+   `community_detection` and `community_materialize` to
+   `/simulation/?section=communities`.
+2. tests/units/front/test_simulation_page_contract.py — new
+   `test_community_tasks_have_an_open_task_link` pins the mapping and the
+   `communities` sidebar key.
+
+Modified files:
+- src/front/static/global/js/task-tracker.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: 10361 passed, 323 skipped, 8 deselected, 39 warnings in 48.24s
+
+--------------------------------------------------------------------------------
+Community job name: fall back from the analytics job name
+--------------------------------------------------------------------------------
+
+Context:
+Locally, `.env` pins `ONTOBRICKS_ANALYTICS_JOB_NAME` because
+`DATABRICKS_APP_NAME` is absent outside Apps. Community detection had no
+matching pin and no app name to derive from, so preflight reported
+"No Databricks job name could be determined" even though analytics was
+configured. The community resolver now derives from the analytics job name
+when both the explicit community setting and the app name are empty.
+
+Changes:
+1. src/back/core/helpers/DatabricksHelpers.py —
+   `resolve_community_job_name` falls back by replacing `-graph-analytics`
+   with `-community-detection` on the resolved analytics job name.
+2. .env — `ONTOBRICKS_COMMUNITY_JOB_NAME=ontobricks-07x-community-detection`
+   (local pin, parallel to the analytics job).
+3. tests/units/core/test_helpers.py — `TestResolveCommunityJobName` covers
+   explicit, app-name, analytics-fallback, and bundle-name drift.
+4. docs/getting-started.md — documents the analytics-name fallback.
+
+Modified files:
+- src/back/core/helpers/DatabricksHelpers.py
+- tests/units/core/test_helpers.py
+- docs/getting-started.md
+- .env
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: TestResolveCommunityJobName + TestResolveAnalyticsJobName — 13 passed

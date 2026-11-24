@@ -31,9 +31,9 @@ class TestReasoningModels:
             rule_name="test_rule",
             subject="http://ex.org/X",
             message="failed",
-            check_type="swrl",
+            check_type="if_then",
         )
-        assert v.check_type == "swrl"
+        assert v.check_type == "if_then"
 
     def test_reasoning_result_merge(self):
         r1 = ReasoningResult(
@@ -44,10 +44,10 @@ class TestReasoningModels:
         )
         r2 = ReasoningResult(
             inferred_triples=[
-                InferredTriple("s2", "p2", "o2", "swrl"),
+                InferredTriple("s2", "p2", "o2", "if_then"),
             ],
             violations=[
-                RuleViolation("r", "s", "m", "swrl"),
+                RuleViolation("r", "s", "m", "if_then"),
             ],
             stats={"count": 2},
         )
@@ -62,7 +62,7 @@ class TestReasoningModels:
                 InferredTriple("s1", "p1", "o1", "owlrl", "rule1"),
             ],
             violations=[
-                RuleViolation("r1", "s1", "msg", "swrl"),
+                RuleViolation("r1", "s1", "msg", "if_then"),
             ],
             stats={"duration": 1.2},
         )

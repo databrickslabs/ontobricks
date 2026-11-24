@@ -69,7 +69,7 @@ class TestGetOntologyStats:
             "classes": 0,
             "properties": 0,
             "constraints": 0,
-            "swrl_rules": 0,
+            "if_then_rules": 0,
             "axioms": 0,
             "expressions": 0,
         }
@@ -79,7 +79,7 @@ class TestGetOntologyStats:
             "classes": [{"name": "A"}, {"name": "B"}],
             "properties": [{"name": "p"}],
             "constraints": [{"type": "functional"}],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "axioms": [{"type": "equivalentClass"}],
         }
         stats = Ontology.get_ontology_stats(config)
@@ -276,7 +276,7 @@ class TestParseOwl:
 <http://test.org/ontology> a owl:Ontology ; rdfs:label "Test" .
 :Foo a owl:Class ; rdfs:label "Foo" .
 """
-        info, classes, props, constraints, swrl, axioms, expressions, groups = (
+        info, classes, props, constraints, if_then, axioms, expressions, groups = (
             Ontology.parse_owl(owl)
         )
         assert info["label"] == "Test"
@@ -876,7 +876,7 @@ class TestImportIndustryOntology:
             "classes": [],
             "properties": [],
             "constraints": [],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "axioms": [],
             "expressions": [],
             "message": "Imported",
@@ -994,17 +994,17 @@ class TestAgentOntologyContext:
         assert len(ctx["relationships"]) == 1
 
 
-class TestValidateSwrlRule:
+class TestValidateIfThenRule:
     def test_valid(self):
         assert (
-            Ontology.validate_swrl_rule(
+            Ontology.validate_if_then_rule(
                 {"name": "r", "antecedent": "A", "consequent": "B"}
             )
             == []
         )
 
     def test_missing_fields(self):
-        errors = Ontology.validate_swrl_rule({})
+        errors = Ontology.validate_if_then_rule({})
         assert len(errors) == 3
 
 

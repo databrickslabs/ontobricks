@@ -1,5 +1,5 @@
 // =====================================================
-// KNOWLEDGE STORE — Upload, parse, view & purge documents
+// DOCUMENTS — Upload, parse, view & purge documents
 // =====================================================
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // Keep in sync with DocumentParseService.MAX_UPLOAD_BYTES

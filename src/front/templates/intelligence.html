@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}{{ brand_page_title('Intelligence') }}{% endblock %}
+
+{% block page_id %}intelligence{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='intelligence/css/intelligence.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-cohorts.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-reasoning.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-analytics.css') }}?v={{ asset_version }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="sidebar-layout">
+        <div class="sidebar-nav">
+            {% set sidebar_menu = get_menu('intelligence') %}
+            {% include "partials/layout/_sidebar_nav.html" %}
+        </div>
+
+        <div class="sidebar-content">
+            <div id="home-section" class="sidebar-section active">
+                {% set workspace_home_menu = get_menu('intelligence') %}
+                {% include "partials/layout/_workspace_home.html" %}
+            </div>
+
+            <div id="analytics-section" class="sidebar-section">
+                {% include "partials/intelligence/_intel_analytics.html" %}
+            </div>
+
+            <div id="communities-section" class="sidebar-section">
+                {% include "partials/intelligence/_intel_communities.html" %}
+            </div>
+
+            <div id="cohorts-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_cohorts.html" %}
+            </div>
+
+            <div id="patterns-section" class="sidebar-section">
+                <div id="patPatternsList" class="content-section">
+                    {% include "partials/intelligence/_intel_patterns_saved.html" %}
+                </div>
+                <div id="patPatternsDetails" class="content-section d-none">
+                    {% include "partials/intelligence/_intel_patterns.html" %}
+                </div>
+            </div>
+            {# Detect / members modals live outside the details pane so they work from list or details. #}
+            {% include "partials/intelligence/_intel_patterns_detect_modal.html" %}
+            {% include "partials/intelligence/_intel_patterns_members_modal.html" %}
+
+            <div id="scenarios-section" class="sidebar-section">
+                <div id="simScenariosList" class="content-section">
+                    {% include "partials/intelligence/_sim_scenarios.html" %}
+                </div>
+                <div id="simScenariosEditor" class="content-section d-none">
+                    {% include "partials/intelligence/_sim_workbench.html" %}
+                    <!-- Rule editors opened in place from the rule list (see rule-editor-loader.js) -->
+                    <div id="if-then-section" class="rule-editor-host">
+                        {% include "partials/ontology/_ontology_business_rules.html" %}
+                    </div>
+                </div>
+            </div>
+
+            <div id="compare-section" class="sidebar-section">
+                {% include "partials/intelligence/_sim_compare.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include "partials/_cohort_modals.html" %}
+{% include "partials/intelligence/_sim_fact_wizard.html" %}
+{% include "partials/intelligence/_sim_insights_report_modal.html" %}
+
+<!-- Analytics run details (page level so the modal works from a tab pane) -->
+<div class="modal fade" id="analyticsRunDetailsModal" tabindex="-1" aria-labelledby="analyticsRunDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="analyticsRunDetailsModalLabel">
+                    <i class="bi bi-graph-up-arrow me-2"></i>Analytics run details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="analyticsRunDetailsBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="simulation-config" type="application/json">{{ simulation_ctx|tojson }}</script>
+<script id="triplestore-config" type="application/json">
+{
+    "view_table": "{{ view_table|default('', true) }}",
+    "graph_name": "{{ graph_name|default('', true) }}",
+    "data_table": "{{ data_table|default('', true) }}",
+    "graph_engine": "{{ graph_engine|default('lakebase', true) }}",
+    "triple_store_backend": "{{ triple_store_backend|default('lakebase', true) }}",
+    "cache": {{ triplestore_cache|default({})|tojson }}
+}
+</script>
+
+<script defer src="{{ url_for('static', filename='intelligence/js/simulation.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='intelligence/js/intelligence-communities.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='intelligence/js/intelligence-patterns.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='global/js/phase-tree.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='global/js/rule-editor-loader.js') }}?v={{ asset_version }}" data-asset-version="{{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='intelligence/js/simulation-rules.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='intelligence/js/simulation-workbench.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='intelligence/js/simulation-fact-wizard.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='intelligence/js/simulation-results.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='intelligence/js/simulation-compare.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='intelligence/js/simulation-evaluate.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-sync.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-cohorts.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-purge-inferences.js') }}?v={{ asset_version }}"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script defer src="{{ url_for('static', filename='global/js/runs-render.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='global/js/list-filter.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='domain/js/domain-runs.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-analytics.js') }}?v={{ asset_version }}"></script>
+{% endblock %}

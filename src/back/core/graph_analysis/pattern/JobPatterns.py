@@ -1,0 +1,581 @@
+"""Pattern discovery, computed by the Databricks pattern-detection job.
+
+The job (``src/jobs/graph_analytics_job.py --task patterns``) builds egocentric
+neighbourhood signatures over the ``…_data`` snapshot and writes five tables:
+
+* ``<out>``                one row per surviving anchor: ``pattern_id``, type, label
+* ``<out>_shapes``         one row per pattern (support, shape_json, …)
+* ``<out>_shape_edges``    per pattern: typed edges for the diagram
+* ``<out>_preview_nodes``  the capped sample the Patterns page draws
+* ``<out>_preview_edges``  edges among the preview nodes
+* ``<out>_summary``        counts, hops, bins, refine flag, run timestamp
+
+This module triggers the run and reads those tables back. Every read is
+bounded — top-N patterns, one page of members, keyset batches.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import time
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence
+
+from back.core.errors import InfrastructureError
+from back.core.helpers import sql_literal
+from back.core.graph_analysis.pattern.pattern_diagram import (
+    MAX_DIAGRAM_EDGES,
+    build_pattern_diagram,
+)
+from back.core.graph_analysis.pattern.pattern_diagram import (
+    local_label as _local_label,
+)
+from back.core.graph_analysis.preflight import names_a_missing_object
+from back.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+TOP_PATTERNS_MAX = 200
+MEMBERS_PAGE_MAX = 500
+DEFAULT_TOP_PATTERNS = 50
+DEFAULT_MEMBERS_PAGE = 100
+
+
+def _domain_slug(domain: Any, graph_name: str) -> str:
+    folder = str(getattr(domain, "uc_domain_folder", "") or "") or graph_name
+    version = str(getattr(domain, "current_version", "") or "")
+    slug = re.sub(r"[^A-Za-z0-9_]+", "_", f"{folder}_{version}").strip("_").lower()
+    return slug or "default"
+
+
+def pattern_output_table(output_schema: str, domain: Any, graph_name: str) -> str:
+    """Per-domain-version output table name for the pattern job."""
+    return f"{output_schema}.graph_patterns_{_domain_slug(domain, graph_name)}"
+
+
+def saved_pattern_table(output_schema: str, domain: Any, graph_name: str) -> str:
+    """Per-domain-version table holding the patterns saved from the output."""
+    return f"{output_schema}.graph_pattern_saved_{_domain_slug(domain, graph_name)}"
+
+
+def _bounded(value: Any, default: int, upper: int) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        n = default
+    return max(1, min(n, upper))
+
+
+def summary_query(out: str) -> str:
+    return f"SELECT * FROM {out}_summary"
+
+
+def covered_count_query(out: str) -> str:
+    """Anchors that belong to a kept pattern.
+
+    In the egocentric-signature algorithm every anchor has exactly one
+    signature, so each anchor is in at most one kept pattern — the sum of per
+    pattern ``support`` is the distinct count of anchors that follow a pattern.
+    """
+    return f"SELECT SUM(support) AS covered FROM {out}_shapes"
+
+
+def top_patterns_query(out: str, limit: int) -> str:
+    return (
+        "SELECT pattern_id, support, hop_count, seed_label, refined, "
+        "near_duplicate_count, shape_json "
+        f"FROM {out}_shapes ORDER BY support DESC, pattern_id "
+        f"LIMIT {int(limit)}"
+    )
+
+
+def preview_nodes_query(out: str) -> str:
+    return (
+        "SELECT node_uri, pattern_id, label, type_uri "
+        f"FROM {out}_preview_nodes ORDER BY pattern_id, node_uri"
+    )
+
+
+def preview_edges_query(out: str) -> str:
+    return f"SELECT src, dst FROM {out}_preview_edges"
+
+
+def pattern_support_query(out: str, pattern_id: str) -> str:
+    return (
+        f"SELECT support FROM {out}_shapes "
+        f"WHERE pattern_id = {sql_literal(pattern_id)}"
+    )
+
+
+def members_query(out: str, pattern_id: str, offset: int, limit: int) -> str:
+    return (
+        "SELECT anchor_uri, label, type_uri "
+        f"FROM {out} WHERE pattern_id = {sql_literal(pattern_id)} "
+        "ORDER BY anchor_uri "
+        f"LIMIT {int(limit)} OFFSET {max(0, int(offset))}"
+    )
+
+
+def shape_query(out: str, pattern_id: str) -> str:
+    return (
+        "SELECT pattern_id, support, hop_count, shape_json, seed_label, "
+        "refined, near_duplicate_count "
+        f"FROM {out}_shapes WHERE pattern_id = {sql_literal(pattern_id)}"
+    )
+
+
+def _edge_cols(legacy: bool, stats: bool) -> str:
+    base = (
+        "hop, parent_type, via, child_type, member_count, edge_total"
+        if legacy
+        else "hop, parent_via, parent_type, via, child_type, member_count, edge_total"
+    )
+    # Per-member min/max neighbour counts, absent on tables written before they
+    # were added: read defensively and fall back to the base column set.
+    return f"{base}, edge_min, edge_max" if stats else base
+
+
+def shape_edges_query(
+    out: str, pattern_id: str, *, legacy: bool = False, stats: bool = True
+) -> str:
+    """Typed edges for one pattern's diagram.
+
+    ``legacy=True`` reads Detect tables written before ``parent_via`` existed
+    (those runs still have ``direction``). Callers should prefer the default
+    query and fall back via :func:`fetch_shape_edges`.
+    """
+    cols = _edge_cols(legacy, stats)
+    return (
+        f"SELECT {cols} FROM {out}_shape_edges "
+        f"WHERE pattern_id = {sql_literal(pattern_id)} "
+        f"ORDER BY hop, member_count DESC, via LIMIT {MAX_DIAGRAM_EDGES + 1}"
+    )
+
+
+def _missing_named_column(exc: Exception, name: str) -> bool:
+    lowered = str(exc).lower()
+    if name not in lowered:
+        return False
+    return (
+        "unresolved_column" in lowered
+        or "no such column" in lowered
+        or "cannot be resolved" in lowered
+        or "does not exist" in lowered
+    )
+
+
+def _missing_parent_via_column(exc: Exception) -> bool:
+    return _missing_named_column(exc, "parent_via")
+
+
+def _missing_edge_stats_column(exc: Exception) -> bool:
+    return _missing_named_column(exc, "edge_min") or _missing_named_column(
+        exc, "edge_max"
+    )
+
+
+def shapes_bulk_query(out: str, pattern_ids: Sequence[str]) -> str:
+    """Shape rows (tokens, seed label, KPIs) for several patterns at once."""
+    ids = ", ".join(sql_literal(pid) for pid in pattern_ids)
+    return (
+        "SELECT pattern_id, support, hop_count, shape_json, seed_label "
+        f"FROM {out}_shapes WHERE pattern_id IN ({ids})"
+    )
+
+
+def shape_edges_bulk_query(
+    out: str, pattern_ids: Sequence[str], *, legacy: bool = False, stats: bool = True
+) -> str:
+    """Typed edges for several patterns, capped per pattern like the single query."""
+    cols = _edge_cols(legacy, stats)
+    ids = ", ".join(sql_literal(pid) for pid in pattern_ids)
+    return (
+        f"SELECT pattern_id, {cols} FROM ("
+        f"SELECT pattern_id, {cols}, ROW_NUMBER() OVER ("
+        "PARTITION BY pattern_id ORDER BY hop, member_count DESC, via) AS rk "
+        f"FROM {out}_shape_edges WHERE pattern_id IN ({ids})"
+        f") e WHERE rk <= {MAX_DIAGRAM_EDGES + 1} "
+        "ORDER BY pattern_id, hop, member_count DESC, via"
+    )
+
+
+def _edge_rows_with_fallback(
+    query: Callable[[str], Any],
+    build: Callable[[bool, bool], str],
+    what: str,
+) -> list[dict[str, Any]] | None:
+    """Run an edge query, degrading on tables that predate newer columns.
+
+    Retry ladder: full → without per-member min/max stats → without
+    ``parent_via`` (legacy layout). A missing object aborts (returns ``None``).
+    """
+    def _run(legacy: bool, stats: bool) -> list[dict[str, Any]] | None:
+        try:
+            return list(query(build(legacy, stats)) or [])
+        except Exception as exc:  # noqa: BLE001
+            if names_a_missing_object(exc):
+                return None
+            raise
+
+    try:
+        raw = _run(False, True)
+    except Exception as exc:  # noqa: BLE001
+        if _missing_edge_stats_column(exc):
+            logger.info("shape_edges for %s lack min/max stats; omitting them", what)
+            try:
+                raw = _run(False, False)
+            except Exception as no_pv_exc:  # noqa: BLE001
+                if not _missing_parent_via_column(no_pv_exc):
+                    raise
+                logger.info("shape_edges for %s lack parent_via; using legacy", what)
+                raw = _run(True, False)
+        elif _missing_parent_via_column(exc):
+            logger.info("shape_edges for %s lack parent_via; using legacy layout", what)
+            raw = _run(True, False)
+        else:
+            raise
+    if raw is None:
+        return None
+    return [{**dict(row), "parent_via": str(row.get("parent_via") or "")} for row in raw]
+
+
+def fetch_shape_edges(
+    query: Callable[[str], Any], out: str, pattern_id: str
+) -> list[dict[str, Any]] | None:
+    """Load shape-edge rows, tolerating Detect tables without ``parent_via``.
+
+    Returns ``None`` when the edges table is missing, otherwise a list (possibly
+    empty). Legacy rows get ``parent_via=""`` so the diagram still draws every
+    hop; hop-2+ chains may splice until the pattern job is redeployed.
+    """
+    return _edge_rows_with_fallback(
+        query,
+        lambda legacy, stats: shape_edges_query(
+            out, pattern_id, legacy=legacy, stats=stats
+        ),
+        pattern_id,
+    )
+
+
+def fetch_shape_edges_for(
+    query: Callable[[str], Any], out: str, pattern_ids: Sequence[str]
+) -> dict[str, list[dict[str, Any]]] | None:
+    """Edge rows of several patterns in one query, grouped by ``pattern_id``.
+
+    Same contract as :func:`fetch_shape_edges` (``None`` = edges table missing).
+    """
+    ids = [str(pid) for pid in pattern_ids if pid]
+    if not ids:
+        return {}
+    rows = _edge_rows_with_fallback(
+        query,
+        lambda legacy, stats: shape_edges_bulk_query(
+            out, ids, legacy=legacy, stats=stats
+        ),
+        f"{len(ids)} patterns",
+    )
+    if rows is None:
+        return None
+    grouped: dict[str, list[dict[str, Any]]] = {pid: [] for pid in ids}
+    for row in rows:
+        grouped.setdefault(str(row.get("pattern_id") or ""), []).append(row)
+    return grouped
+
+
+def membership_batch_query(out: str, pattern_id: str, after_uri: str, limit: int) -> str:
+    return (
+        f"SELECT anchor_uri, pattern_id FROM {out} "
+        f"WHERE pattern_id = {sql_literal(pattern_id)} "
+        f"AND anchor_uri > {sql_literal(after_uri)} "
+        f"ORDER BY anchor_uri LIMIT {int(limit)}"
+    )
+
+
+class JobPatterns:
+    """Run the pattern job and read its output with bounded queries."""
+
+    def __init__(
+        self,
+        source_table: str,
+        *,
+        runner: Any,
+        query: Callable[[str], List[Dict[str, Any]]],
+        output_table: str,
+    ) -> None:
+        self._source_table = source_table
+        self._runner = runner
+        self._query = query
+        self._out = output_table
+
+    @property
+    def output_table(self) -> str:
+        return self._out
+
+    def run(
+        self,
+        *,
+        class_filter: str,
+        hops: int = 3,
+        bins: int = 8,
+        min_support: int = 3,
+        refine_top: int = 0,
+        exclude_predicates: Optional[List[str]] = None,
+        on_progress: Optional[Callable[[int, str], None]] = None,
+    ) -> Dict[str, Any]:
+        """Trigger the job, wait, and return the run summary."""
+        if not (class_filter or "").strip():
+            raise ValueError("class_filter is required")
+        t0 = time.time()
+        outcome = self._runner.run_params_and_wait(
+            {
+                "source_table": self._source_table,
+                "output_table": self._out,
+                "exclude_predicates": ",".join(exclude_predicates or []),
+                "class_filter": class_filter.strip(),
+                "pattern_hops": str(int(hops)),
+                "pattern_bins": str(int(bins)),
+                "pattern_min_support": str(int(min_support)),
+                "pattern_frontier": "50000",
+                "pattern_hub_degree": "5000",
+                "refine_top": str(int(refine_top)),
+                "computed_at": datetime.now(timezone.utc).isoformat(),
+            },
+            on_progress=on_progress,
+        )
+        if not outcome.get("success"):
+            detail = (
+                f"{outcome.get('life_cycle_state', '')} "
+                f"{outcome.get('result_state', '')} "
+                f"{outcome.get('message', '')}"
+            ).strip()
+            if outcome.get("run_page_url"):
+                detail += f" — {outcome['run_page_url']}"
+            raise InfrastructureError(
+                "The pattern detection job did not complete successfully",
+                detail=detail,
+            )
+        if on_progress:
+            on_progress(90, "Reading patterns back")
+        stats = self.summary() or {}
+        stats["run_page_url"] = outcome.get("run_page_url", "")
+        if stats.get("elapsed_ms") is None:
+            stats["elapsed_ms"] = int((time.time() - t0) * 1000)
+        return stats
+
+    def _safe_rows(self, sql: str) -> Optional[List[Dict[str, Any]]]:
+        try:
+            return self._query(sql) or []
+        except Exception as exc:  # noqa: BLE001
+            if names_a_missing_object(exc):
+                return None
+            raise
+
+    def summary(self) -> Optional[Dict[str, Any]]:
+        rows = self._safe_rows(summary_query(self._out))
+        if not rows:
+            return None
+        row = rows[0]
+        elapsed_raw = row.get("elapsed_ms")
+        try:
+            elapsed_ms = int(elapsed_raw) if elapsed_raw is not None else None
+        except (TypeError, ValueError):
+            elapsed_ms = None
+        covered_rows = self._safe_rows(covered_count_query(self._out)) or []
+        covered = int((covered_rows[0] or {}).get("covered", 0) or 0) if covered_rows else 0
+        return {
+            "anchor_type": str(row.get("anchor_type") or ""),
+            "anchor_count": int(row.get("anchor_count", 0) or 0),
+            "population_count": int(row.get("population_count", 0) or 0),
+            "covered_count": covered,
+            "pattern_count": int(row.get("pattern_count", 0) or 0),
+            "hop_count": int(row.get("hop_count", 0) or 0),
+            "bins": int(row.get("bins", 0) or 0),
+            "refined": int(row.get("refined", 0) or 0),
+            "min_support": int(row.get("min_support", 0) or 0),
+            "detail_level": str(row.get("detail_level") or "full"),
+            "algorithm": str(row.get("algorithm") or "egocentric_signature"),
+            "class_filter": [
+                c for c in str(row.get("class_filter") or "").split(",") if c
+            ],
+            "computed_at": str(row.get("computed_at") or ""),
+            "elapsed_ms": elapsed_ms,
+            "hub_degree": int(row.get("hub_degree", 0) or 0),
+            "hub_count": int(row.get("hub_count", 0) or 0),
+        }
+
+    def top_patterns(self, limit: int = DEFAULT_TOP_PATTERNS) -> List[Dict[str, Any]]:
+        k = _bounded(limit, DEFAULT_TOP_PATTERNS, TOP_PATTERNS_MAX)
+        rows = self._safe_rows(top_patterns_query(self._out, k)) or []
+        out = []
+        for row in rows:
+            pid = str(row.get("pattern_id") or "")
+            out.append(
+                {
+                    "id": pid,
+                    "support": int(row.get("support", 0) or 0),
+                    "hop_count": int(row.get("hop_count", 0) or 0),
+                    "label": str(row.get("seed_label") or "") or pid[:8],
+                    "refined": int(row.get("refined", 0) or 0),
+                    "near_duplicate_count": int(
+                        row.get("near_duplicate_count", 1) or 1
+                    ),
+                    "shape_json": str(row.get("shape_json") or "[]"),
+                }
+            )
+        return out
+
+    def preview(self, node_total: int = 0, edge_total: int = 0) -> Dict[str, Any]:
+        node_rows = self._safe_rows(preview_nodes_query(self._out)) or []
+        edge_rows = self._safe_rows(preview_edges_query(self._out)) or []
+        nodes = []
+        for row in node_rows:
+            uri = str(row.get("node_uri") or "")
+            type_uri = str(row.get("type_uri") or "")
+            nodes.append(
+                {
+                    "id": uri,
+                    "label": str(row.get("label") or "") or _local_label(uri),
+                    "type": type_uri,
+                    "type_label": _local_label(type_uri),
+                    "pattern": str(row.get("pattern_id") or ""),
+                }
+            )
+        edges = [
+            {"id": f"{r['src']}|{r['dst']}", "source": r["src"], "target": r["dst"]}
+            for r in edge_rows
+            if r.get("src") and r.get("dst")
+        ]
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "capped": node_total > len(nodes),
+            "node_total": node_total,
+            "edge_total": edge_total,
+        }
+
+    def latest(self, top_n: int = DEFAULT_TOP_PATTERNS) -> Dict[str, Any]:
+        stats = self.summary()
+        if stats is None:
+            return {
+                "patterns": [],
+                "stats": None,
+                "graph": {
+                    "nodes": [],
+                    "edges": [],
+                    "capped": False,
+                    "node_total": 0,
+                    "edge_total": 0,
+                },
+            }
+        return {
+            "patterns": self.top_patterns(top_n),
+            "stats": stats,
+            "graph": self.preview(stats["anchor_count"], 0),
+        }
+
+    def members(
+        self,
+        pattern_id: str,
+        offset: int = 0,
+        limit: int = DEFAULT_MEMBERS_PAGE,
+    ) -> Dict[str, Any]:
+        page = _bounded(limit, DEFAULT_MEMBERS_PAGE, MEMBERS_PAGE_MAX)
+        start = max(0, int(offset or 0))
+        size_rows = self._safe_rows(pattern_support_query(self._out, pattern_id)) or []
+        size = int(size_rows[0].get("support", 0) or 0) if size_rows else 0
+        rows = self._safe_rows(members_query(self._out, pattern_id, start, page)) or []
+        members = []
+        for row in rows:
+            uri = str(row.get("anchor_uri") or "")
+            type_uri = str(row.get("type_uri") or "")
+            members.append(
+                {
+                    "uri": uri,
+                    "label": str(row.get("label") or "") or _local_label(uri),
+                    "type": type_uri,
+                    "type_label": _local_label(type_uri),
+                }
+            )
+        return {
+            "pattern_id": pattern_id,
+            "total": size,
+            "offset": start,
+            "limit": page,
+            "members": members,
+            "has_more": start + len(members) < size,
+        }
+
+    def shape(
+        self, pattern_id: str, *, with_diagram: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        rows = self._safe_rows(shape_query(self._out, pattern_id)) or []
+        if not rows:
+            return None
+        row = rows[0]
+        raw = str(row.get("shape_json") or "[]")
+        try:
+            tokens = json.loads(raw)
+        except json.JSONDecodeError:
+            tokens = []
+        if not isinstance(tokens, list):
+            tokens = []
+        support = int(row.get("support", 0) or 0)
+        return {
+            "pattern_id": str(row.get("pattern_id") or pattern_id),
+            "support": support,
+            "hop_count": int(row.get("hop_count", 0) or 0),
+            "seed_label": str(row.get("seed_label") or ""),
+            "refined": int(row.get("refined", 0) or 0),
+            "near_duplicate_count": int(row.get("near_duplicate_count", 1) or 1),
+            "shape": tokens,
+            "shape_json": raw,
+            "diagram": (
+                self._diagram(pattern_id, support, tokens) if with_diagram else None
+            ),
+        }
+
+    def _diagram(
+        self, pattern_id: str, support: int, tokens: List[Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Layered diagram, or ``None`` for runs older than the edges table."""
+        edge_rows = fetch_shape_edges(self._query, self._out, pattern_id)
+        if edge_rows is None:
+            return None
+        stats = self.summary() or {}
+        return build_pattern_diagram(
+            anchor_type=str(stats.get("anchor_type") or ""),
+            support=support,
+            edge_rows=edge_rows,
+            tokens=[str(t) for t in tokens],
+            bins=int(stats.get("bins") or 0),
+        )
+
+    def iter_memberships(
+        self, pattern_id: str, batch_size: int = 50_000
+    ) -> Iterator[List[Dict[str, str]]]:
+        """Yield ``{uri, pattern_id}`` batches in URI order (keyset paging)."""
+        last = ""
+        while True:
+            rows = (
+                self._query(
+                    membership_batch_query(self._out, pattern_id, last, batch_size)
+                )
+                or []
+            )
+            if not rows:
+                return
+            batch = [
+                {
+                    "uri": str(r.get("anchor_uri") or ""),
+                    "pattern_id": str(r.get("pattern_id") or pattern_id),
+                }
+                for r in rows
+                if r.get("anchor_uri")
+            ]
+            if not batch:
+                return
+            yield batch
+            last = batch[-1]["uri"]
+            if len(rows) < batch_size:
+                return

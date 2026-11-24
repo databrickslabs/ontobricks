@@ -238,13 +238,13 @@ def test_designer_insets_match_the_explorer():
         explorer_wrapper, "padding"
     ) == "0"
 
-    # The shell owns vertical spacing; both canvases add only the remaining
-    # horizontal inset so neither sits deeper than the other.
+    # Both canvases reuse the shared white page-panel inset so neither sits
+    # deeper than the other.
     section = _block(designer, "#map-section.active")
-    assert _declaration(section, "padding") == "0 0.5rem"
+    assert _declaration(section, "padding") == "var(--ob-page-padding)"
 
     explorer_section = _block(explorer, "#sigmagraph-section.active")
-    assert _declaration(explorer_section, "padding") == "0 0.5rem"
+    assert _declaration(explorer_section, "padding") == "var(--ob-page-padding)"
 
 
 def test_designer_entities_and_relationships_use_the_shared_flex_height():
@@ -317,10 +317,10 @@ def test_empty_panel_title_is_select_item():
     assert "Select Item" in body
     assert "title.textContent = 'Details'" not in body
     heading = re.search(
-        r"heading\.innerHTML\s*=\s*'([^']+)'",
+        r"setSharedPanelHeader\(\s*target,\s*'([^']+)'",
         body,
     )
-    assert heading, "renderPanelPlaceholder must reset sharedPanelTitle"
+    assert heading, "renderPanelPlaceholder must reset sharedPanelTitle via setSharedPanelHeader"
     assert "Select Item" in heading.group(1)
     assert "<i " not in heading.group(1)
     assert re.search(
@@ -338,17 +338,17 @@ def test_empty_panel_title_is_select_item():
 def test_selected_entity_and_relationship_titles_have_no_pencil():
     js = _read(PANELS_JS)
     entity = re.search(
-        r"openEntityPanelForEdit[\s\S]*?"
-        r"sharedPanelTitle'\)\.innerHTML\s*=\s*`([^`]+)`",
+        r"async function openEntityPanelForEdit[\s\S]*?"
+        r"setSharedPanelHeader\(\s*panel,\s*`([^`]+)`",
         js,
     )
     relationship = re.search(
-        r"openRelationshipPanelForEdit[\s\S]*?"
-        r"sharedPanelTitle'\)\.innerHTML\s*=\s*`([^`]+)`",
+        r"async function openRelationshipPanelForEdit[\s\S]*?"
+        r"setSharedPanelHeader\(\s*panel,\s*`([^`]+)`",
         js,
     )
-    assert entity, "openEntityPanelForEdit must set sharedPanelTitle"
-    assert relationship, "openRelationshipPanelForEdit must set sharedPanelTitle"
+    assert entity, "openEntityPanelForEdit must set sharedPanelTitle via setSharedPanelHeader"
+    assert relationship, "openRelationshipPanelForEdit must set sharedPanelTitle via setSharedPanelHeader"
     assert "bi-pencil" not in entity.group(1)
     assert "bi-pencil" not in relationship.group(1)
     assert "sharedPanelItemName" in entity.group(1)
@@ -374,4 +374,4 @@ def test_form_tabs_inside_the_right_panel_use_the_shared_compact_rail():
         components, ".nav-tabs.ob-tabs.ob-tabs--compact .nav-link"
     )
     assert _declaration(compact_link, "font-size") == "0.75rem"
-    assert _declaration(compact_link, "padding") == "0.35rem 0.6rem"
+    assert _declaration(compact_link, "padding") == "0.35rem 0"

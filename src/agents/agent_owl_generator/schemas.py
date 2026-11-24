@@ -140,17 +140,30 @@ def _strip_fences(text: str) -> str:
 # (`databricks-claude-sonnet-5`, and the user's own
 # `benoit_cayla.ontobricks-todrop.monclaudesonnetamoi`) intermittently
 # return a JSON-schema-constrained value ENCODED AS A STRING rather than the
-# raw JSON value the schema demands — e.g. a list-typed field comes back as
-# `"[{...}]"` instead of `[{...}]`, or the entire payload comes back as a
-# JSON string holding the real object as its value (`content =
-# "{\"attributes\": [...]}"`). This is an endpoint/transport quirk, not a
-# free-text/prose answer, so the tolerance below is narrow and
-# deterministic: exactly ONE extra `json.loads` is attempted on a `str`
-# value, and its result is used ONLY if it is already the expected type.
-# No loop, no regex/prose extraction — anything else (not a `str` to begin
-# with, a second decode that raises, or a second decode that still isn't
-# `expected`) falls through unchanged and is rejected by the caller's own
-# existing type check, exactly as before this fix.
+# raw JSON value the schema demands. Observed shapes:
+#   * whole payload is a JSON string of the object
+#     (`content = "{\"attributes\": [...]}"`);
+#   * a list-typed field is a JSON string of the bare array
+#     (`{"attributes": "[{...}]"}`);
+#   * a list-typed field is a JSON string of the *whole page object*
+#     (`{"attributes": "{\"attributes\": [...], \"has_more\": false}"}`)
+#     — this last shape used to raise ``output must contain a 'attributes'
+#     list`` because only the bare-array unwrap was accepted.
+#   * a list-typed field arrives as a plain or JSON-encoded **dict** whose
+#     values are lists grouped by kind
+#     (`{"axioms": "{\"subClassOf\": [...], \"disjointWith\": [...]}"}``
+#     or the same as a real dict) — observed on the axioms substage,
+#     whose prompt enumerates three axiom kinds; this used to raise
+#     ``output must contain a 'axioms' list`` because only `str` values
+#     were unwrapped, never a plain dict.
+# This is an endpoint/transport quirk, not a free-text/prose answer, so the
+# tolerance below is narrow and deterministic: exactly ONE extra
+# `json.loads` is attempted on a `str` value, and its result is used ONLY
+# if it is already the expected type (or, for list fields, a dict that
+# carries that same key as a list, or a dict whose values are all lists —
+# the grouped-by-kind shape). A plain dict value is coerced the same way.
+# No loop, no regex/prose extraction — anything else falls through
+# unchanged and is rejected by the caller's existing type check.
 # ---------------------------------------------------------------------------
 
 
@@ -331,6 +344,19 @@ def _closed_id_enum(closed_ids: Iterable[str]) -> Dict[str, Any]:
     return {"type": "string", "enum": sorted({str(i) for i in closed_ids})}
 
 
+def _has_more_property() -> Dict[str, Any]:
+    """The pagination flag every completion page must carry.
+
+    Paged completion (issue #173): a substage's full answer can exceed the
+    endpoint's ~8k-token output budget (a 360-column table's attributes, a
+    40-entity draft's relations). The model therefore emits one bounded page
+    at a time and sets ``has_more`` when items remain; ``staged.py`` keeps
+    asking for the next page until it is false. The field is REQUIRED on an
+    honoured strict schema so the page boundary is explicit, never implied.
+    """
+    return {"type": "boolean"}
+
+
 def build_relations_response_format(closed_ids: Iterable[str]) -> Dict[str, Any]:
     """Strict ``json_schema`` for Stage-3 relations: ``domain``/``range`` are
     each constrained to the exact closed entity id set — see module note
@@ -357,9 +383,10 @@ def build_relations_response_format(closed_ids: Iterable[str]) -> Dict[str, Any]
                             "required": ["label", "domain", "range", "evidence"],
                             "additionalProperties": False,
                         },
-                    }
+                    },
+                    "has_more": _has_more_property(),
                 },
-                "required": ["relations"],
+                "required": ["relations", "has_more"],
                 "additionalProperties": False,
             },
         },
@@ -392,9 +419,10 @@ def build_attributes_response_format(closed_ids: Iterable[str]) -> Dict[str, Any
                             "required": ["label", "domain", "datatype", "evidence"],
                             "additionalProperties": False,
                         },
-                    }
+                    },
+                    "has_more": _has_more_property(),
                 },
-                "required": ["attributes"],
+                "required": ["attributes", "has_more"],
                 "additionalProperties": False,
             },
         },
@@ -427,9 +455,10 @@ def build_axioms_response_format(closed_ids: Iterable[str]) -> Dict[str, Any]:
                             "required": ["kind", "subject", "object"],
                             "additionalProperties": False,
                         },
-                    }
+                    },
+                    "has_more": _has_more_property(),
                 },
-                "required": ["axioms"],
+                "required": ["axioms", "has_more"],
                 "additionalProperties": False,
             },
         },
@@ -441,15 +470,73 @@ def build_axioms_response_format(closed_ids: Iterable[str]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _dict_to_list(obj: Dict[str, Any], key: str, data: Dict[str, Any]) -> Any:
+    """Coerce a dict field value into a list, or return it unchanged.
+
+    Two recognised shapes (the same transport quirk that double-encodes list
+    fields, now arriving as a *plain* dict instead of a JSON string):
+
+    * **page-object re-wrap** — ``{"<key>": [...], "has_more": false}``: the
+      real list sits under the same key; the pagination flag is promoted to
+      the page when only the inner object carried it.
+    * **grouped-by-kind** — ``{"subClassOf": [...], "disjointWith": [...]}``
+      (observed on the axioms substage, whose prompt lists three kinds):
+      every non-``has_more`` value is a list of items, so they are flattened
+      into one list in iteration order.
+
+    Anything else is returned unchanged so the caller rejects it (a dict
+    that is neither shape is not silently reinterpreted).
+    """
+    inner = obj.get(key)
+    if isinstance(inner, list):
+        if "has_more" in obj and "has_more" not in data:
+            data["has_more"] = obj["has_more"]
+        return inner
+    non_flag = {k: v for k, v in obj.items() if k != "has_more"}
+    if non_flag:
+        groups = {k: v for k, v in non_flag.items() if isinstance(v, list)}
+        if groups and len(groups) == len(non_flag):
+            if "has_more" in obj and "has_more" not in data:
+                data["has_more"] = obj["has_more"]
+            return [item for lst in groups.values() for item in lst]
+    return obj
+
+
 def _require_list(data: Dict[str, Any], key: str) -> List[Dict[str, Any]]:
     raw = data.get(key)
     if isinstance(raw, str):
-        # Field-level double-encoding quirk (see module note above): the
-        # list-typed field came back as a JSON string holding the real
-        # array as its value. One extra decode; accepted only if it
-        # yields a list.
-        raw = _unwrap_double_encoded(raw, expected=list)
+        # Field-level double-encoding quirk (see module note above). Shapes
+        # after ONE extra json.loads of the field string:
+        #   (a) a bare array — ``{"attributes": "[{...}]"}``
+        #   (b) the whole page object re-wrapped — ``{"attributes":
+        #       "{\"attributes\": [...], \"has_more\": false}"}``
+        #   (c) a grouped-by-kind object — ``{"axioms":
+        #       "{\"subClassOf\": [...], \"disjointWith\": [...]}"}``
+        # Shapes (b)/(c) are what produced live ``output must contain a
+        # '... list`` rejects when only (a) was tolerated.
+        as_list = _unwrap_double_encoded(raw, expected=list)
+        if isinstance(as_list, list):
+            raw = as_list
+        else:
+            as_obj = _unwrap_double_encoded(raw, expected=dict)
+            if isinstance(as_obj, dict):
+                raw = _dict_to_list(as_obj, key, data)
+    if isinstance(raw, dict):
+        # Plain (non-string) dict value: the same page-object re-wrap or
+        # grouped-by-kind shapes arriving as a real dict rather than a
+        # JSON-encoded string. Coerce or leave unchanged (then reject).
+        raw = _dict_to_list(raw, key, data)
     if not isinstance(raw, list):
+        # Diagnostic: the live failure ``output must contain a 'axioms'
+        # list`` is transport-level, so log the observed shape to make the
+        # next residual quirk self-diagnosing from the server log instead
+        # of a bare reject message.
+        logger.info(
+            "completion field %r rejected: top-level keys=%s value_type=%s",
+            key,
+            list(data.keys()),
+            type(data.get(key)).__name__,
+        )
         raise SchemaValidationError(f"output must contain a '{key}' list")
     for item in raw:
         if not isinstance(item, dict):
@@ -464,6 +551,21 @@ def _require_fields(item: Dict[str, Any], fields: Sequence[str], kind: str) -> N
             raise SchemaValidationError(f"{kind} is missing required '{field_name}'")
 
 
+def _coerce_has_more(raw: Any) -> bool:
+    """Read the ``has_more`` pagination flag (paged completion, issue #173).
+
+    Tolerant by design: a missing field means "no more pages" (single-page
+    back-compat), and a stray ``"true"``/``"false"`` string is coerced —
+    endpoints under ``response_format`` occasionally stringify bools the same
+    way they double-encode lists (see ``_unwrap_double_encoded``).
+    """
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        return raw.strip().casefold() == "true"
+    return False
+
+
 def drop_inverse_relations(
     relations: List[Dict[str, Any]],
     existing: Sequence[Dict[str, Any]] = (),
@@ -475,7 +577,7 @@ def drop_inverse_relations(
 def parse_relations_payload(
     text: str, existing: Sequence[Dict[str, Any]] = ()
 ) -> Dict[str, Any]:
-    """Parse a Stage-3 relations answer: ``{"relations": [{label, domain, range}]}``.
+    """Parse a Stage-3 relations page: ``{"relations": [...], "has_more": bool}``.
 
     Paraphrases, inverses, and restatements of ``existing`` relations are
     dropped; distinct predicates on the same entity pair are kept.
@@ -484,16 +586,22 @@ def parse_relations_payload(
     relations = _require_list(data, "relations")
     for rel in relations:
         _require_fields(rel, ("label", "domain", "range"), "relation")
-    return {"relations": drop_inverse_relations(relations, existing)}
+    return {
+        "relations": drop_inverse_relations(relations, existing),
+        "has_more": _coerce_has_more(data.get("has_more")),
+    }
 
 
 def parse_attributes_payload(text: str) -> Dict[str, Any]:
-    """Parse a Stage-3 attributes answer: ``{"attributes": [{label, domain, datatype}]}``."""
+    """Parse a Stage-3 attributes page: ``{"attributes": [...], "has_more": bool}``."""
     data = parse_json_object(text)
     attributes = _require_list(data, "attributes")
     for attr in attributes:
         _require_fields(attr, ("label", "domain", "datatype"), "attribute")
-    return {"attributes": attributes}
+    return {
+        "attributes": attributes,
+        "has_more": _coerce_has_more(data.get("has_more")),
+    }
 
 
 def drop_multi_parent_subclass_axioms(
@@ -546,7 +654,8 @@ def parse_axioms_payload(
     for axiom in axioms:
         _require_fields(axiom, ("kind", "subject", "object"), "axiom")
     return {
-        "axioms": drop_multi_parent_subclass_axioms(axioms, existing_parents)
+        "axioms": drop_multi_parent_subclass_axioms(axioms, existing_parents),
+        "has_more": _coerce_has_more(data.get("has_more")),
     }
 
 

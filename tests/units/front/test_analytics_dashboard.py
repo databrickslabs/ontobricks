@@ -29,8 +29,8 @@ def _fn(source: str, name: str) -> str:
 pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-PANEL = REPO_ROOT / "src/front/templates/partials/dtwin/_query_analytics.html"
-DTWIN = REPO_ROOT / "src/front/templates/dtwin.html"
+PANEL = REPO_ROOT / "src/front/templates/partials/intelligence/_intel_analytics.html"
+DTWIN = REPO_ROOT / "src/front/templates/intelligence.html"
 CSS = REPO_ROOT / "src/front/static/query/css/query-analytics.css"
 JS = REPO_ROOT / "src/front/static/query/js/query-analytics.js"
 
@@ -73,7 +73,7 @@ class TestAssetsAreSplitOut:
             assert literal in html
 
     def test_cross_file_globals_keep_their_names(self, js):
-        """query.js and query-sigmagraph.js call these by name."""
+        """Inline handlers in the partial and sidebar activation call these by name."""
         for name in (
             "window.analyticsLoadTypes",
             "window.analyticsCompute",
@@ -86,6 +86,7 @@ class TestAssetsAreSplitOut:
             "window._showMetricInfo",
         ):
             assert name in js, f"{name} must survive the move"
+        assert "sidebarSectionChanged" in js
 
     def test_the_metric_explanation_modal_stays_in_the_partial(self, panel):
         assert 'id="analyticsMetricModal"' in panel

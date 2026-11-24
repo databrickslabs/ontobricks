@@ -7,12 +7,10 @@ while the core tool-calling logic remains unchanged.
 
 Usage (local / in-process)::
 
-    agent = OntologyAssistantResponsesAgent()
+    agent = OntologyAssistantResponsesAgent(host="https://...", token="dapi...")
     response = agent.predict({
         "input": [{"role": "user", "content": "Add an entity called Vehicle"}],
         "custom_inputs": {
-            "host": "https://...",
-            "token": "dapi...",
             "endpoint_name": "databricks-meta-llama...",
             "classes": [...],
             "properties": [...],
@@ -32,11 +30,11 @@ Usage (log to MLflow)::
 
 import json
 import copy
-from typing import Generator, Optional
+import os
+from typing import Generator, Optional, Tuple
 from uuid import uuid4
 
 import mlflow
-from mlflow.entities import SpanType
 from mlflow.pyfunc import ResponsesAgent
 from mlflow.types.responses import (
     ResponsesAgentRequest,
@@ -48,6 +46,7 @@ from back.core.logging import get_logger
 from agents.agent_ontology_assistant.tools import TOOL_DEFINITIONS, TOOL_HANDLERS
 from agents.tools.context import ToolContext
 from agents.engine_base import call_serving_endpoint, dispatch_tool
+from agents.tracing import trace_tool
 
 logger = get_logger(__name__)
 
@@ -59,10 +58,24 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
     """MLflow ResponsesAgent that delegates to the OntoBricks ontology-editing
     agentic loop.
 
-    The caller supplies domain context (classes, properties, Databricks
-    credentials) via ``custom_inputs``.  The mutated ontology is returned
-    in ``custom_outputs``.
+    The caller supplies domain context (classes, properties, endpoint) via
+    ``custom_inputs``; the mutated ontology is returned in ``custom_outputs``.
+
+    Databricks credentials come from the constructor (in-process) or from
+    ``DATABRICKS_HOST`` / ``DATABRICKS_TOKEN`` (Model Serving), never from
+    ``custom_inputs``: MLflow auto-traces ``predict`` / ``predict_stream``
+    and records the whole request as span inputs.
     """
+
+    def __init__(self, host: str = "", token: str = "") -> None:
+        super().__init__()
+        self._host = host
+        self._token = token
+
+    def _credentials(self) -> Tuple[str, str]:
+        host = self._host or os.getenv("DATABRICKS_HOST", "")
+        token = self._token or os.getenv("DATABRICKS_TOKEN", "")
+        return host.rstrip("/"), token
 
     # ------------------------------------------------------------------
     # ResponsesAgent interface
@@ -87,8 +100,7 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
         self, request: ResponsesAgentRequest
     ) -> Generator[ResponsesAgentStreamEvent, None, None]:
         ci = request.custom_inputs or {}
-        host = ci.get("host", "")
-        token = ci.get("token", "")
+        host, token = self._credentials()
         endpoint_name = ci.get("endpoint_name", "")
         endpoint_kind = ci.get("endpoint_kind", "")
         classes = copy.deepcopy(ci.get("classes", []))
@@ -102,14 +114,15 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
             yield self._error_event("No user message provided.")
             return
 
-        if not host or not token or not endpoint_name:
-            yield self._error_event(
-                "Missing host, token, or endpoint_name in custom_inputs."
-            )
+        if not host or not token:
+            yield self._error_event("Missing Databricks host or token.")
+            return
+        if not endpoint_name:
+            yield self._error_event("Missing endpoint_name in custom_inputs.")
             return
 
         ctx = ToolContext(
-            host=host.rstrip("/"),
+            host=host,
             token=token,
             ontology_classes=classes,
             ontology_properties=properties,
@@ -211,9 +224,10 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
         from agents.agent_ontology_assistant.engine import run_agent
 
         user_message = self._extract_user_message(request)
+        host, token = self._credentials()
         result = run_agent(
-            host=ci.get("host", ""),
-            token=ci.get("token", ""),
+            host=host,
+            token=token,
             endpoint_name=ci.get("endpoint_name", ""),
             endpoint_kind=ci.get("endpoint_kind", ""),
             classes=copy.deepcopy(ci.get("classes", [])),
@@ -229,7 +243,6 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
             "properties": result.properties,
         }
 
-    @mlflow.trace(span_type=SpanType.LLM)
     def _call_llm(
         self,
         host: str,
@@ -259,8 +272,9 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
             logger.exception("ResponsesAgent _call_llm failed: %s", exc)
             return None
 
-    @mlflow.trace(span_type=SpanType.TOOL)
-    def _execute_tool(self, ctx: ToolContext, tool_name: str, arguments: dict) -> str:
+    @staticmethod
+    @trace_tool("responses_agent:tool")
+    def _execute_tool(ctx: ToolContext, tool_name: str, arguments: dict) -> str:
         return dispatch_tool(
             TOOL_HANDLERS,
             ctx,

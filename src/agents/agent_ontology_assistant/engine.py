@@ -24,6 +24,7 @@ from agents.engine_base import (
     accumulate_usage,
 )
 from agents.tracing import trace_agent
+from agents.llm_utils import llm_failure_message
 
 logger = get_logger(__name__)
 
@@ -185,7 +186,7 @@ def run_agent(
                 endpoint_kind=endpoint_kind,
             )
         except Exception as exc:
-            error_msg = f"LLM request failed: {exc}"
+            error_msg = llm_failure_message(exc)
             logger.error(
                 "ontology_assistant: %s at iteration %d", error_msg, iteration + 1
             )

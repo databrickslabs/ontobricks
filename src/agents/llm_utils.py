@@ -19,6 +19,26 @@ _RATE_LIMIT_BASE_DELAY = 5  # seconds
 _RATE_LIMIT_MAX_DELAY = 60  # cap so we never sleep longer than this
 
 
+def llm_failure_message(exc: BaseException) -> str:
+    """Client-safe summary of a failed LLM call.
+
+    The raw exception carries the serving URL and the upstream response body;
+    those stay in the server log. Only the HTTP status (or the transport
+    failure kind) is surfaced to the user.
+    """
+    response = getattr(exc, "response", None)
+    status = getattr(response, "status_code", None)
+    if status == 404:
+        return "LLM request failed: endpoint not found (HTTP 404)."
+    if isinstance(status, int):
+        return f"LLM request failed (HTTP {status})."
+    if isinstance(exc, requests.exceptions.Timeout):
+        return "LLM request failed: the endpoint timed out."
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        return "LLM request failed: could not reach the endpoint."
+    return "LLM request failed."
+
+
 def _get_retry_delay(attempt: int, response: requests.Response = None) -> float:
     """Compute backoff delay, honouring the Retry-After header when present."""
     backoff = min(_RATE_LIMIT_BASE_DELAY * (2 ** (attempt - 1)), _RATE_LIMIT_MAX_DELAY)

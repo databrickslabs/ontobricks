@@ -81,8 +81,8 @@
             </div>
 
             <div class="d-flex gap-2 flex-wrap">
-                <button type="button" class="btn btn-outline-primary btn-sm" id="importOwlLocalBtn">
-                    <i class="bi bi-hdd"></i> From Local File
+                <button type="button" class="btn btn-sm btn-primary" id="importOwlLocalBtn">
+                    <i class="bi bi-download"></i> Import
                 </button>
             </div>
         </div>
@@ -109,8 +109,8 @@
             </div>
 
             <div class="d-flex gap-2 flex-wrap">
-                <button type="button" class="btn btn-outline-info btn-sm" id="importRdfsLocalBtn">
-                    <i class="bi bi-hdd"></i> From Local File
+                <button type="button" class="btn btn-sm btn-primary" id="importRdfsLocalBtn">
+                    <i class="bi bi-download"></i> Import
                 </button>
             </div>
         </div>
@@ -127,16 +127,16 @@
                 for financial services, published by the
                 <a href="https://edmcouncil.org/" target="_blank" rel="noopener">EDM Council</a>.
                 It covers entities, instruments, products, and processes across the
-                financial domain.
+                financial context.
             </p>
             <p class="text-muted small mb-3">
-                Select the domain modules you need below. <strong>Foundations (FND)</strong>
-                is always included as it provides core concepts used by all other domains.
+                Select the context modules you need below. <strong>Foundations (FND)</strong>
+                is always included as it provides core concepts used by all other contexts.
                 Modules are fetched directly from the FIBO specification server and merged
                 automatically.
             </p>
 
-            <!-- Domain checkboxes -->
+            <!-- Context checkboxes -->
             <div class="row g-2 mb-3" id="fiboDomainCheckboxes">
                 <div class="col-12">
                     <div class="form-check">
@@ -195,8 +195,8 @@
             </div>
 
             <!-- Import button -->
-            <button type="button" class="btn btn-outline-warning btn-sm" id="importFiboBtn">
-                <i class="bi bi-download"></i> Import Selected Domains
+            <button type="button" class="btn btn-sm btn-primary" id="importFiboBtn">
+                <i class="bi bi-download"></i> Import
             </button>
 
             <!-- Progress indicator -->
@@ -234,7 +234,7 @@
                 Modules are fetched directly from GitHub and merged automatically.
             </p>
 
-            <!-- Domain checkboxes -->
+            <!-- Context checkboxes -->
             <div class="row g-2 mb-3" id="cdiscDomainCheckboxes">
                 <div class="col-12">
                     <div class="form-check">
@@ -284,8 +284,8 @@
             </div>
 
             <!-- Import button -->
-            <button type="button" class="btn btn-outline-danger btn-sm" id="importCdiscBtn">
-                <i class="bi bi-download"></i> Import Selected Standards
+            <button type="button" class="btn btn-sm btn-primary" id="importCdiscBtn">
+                <i class="bi bi-download"></i> Import
             </button>
 
             <!-- Progress indicator -->
@@ -318,15 +318,15 @@
                 maintenance, supply chain, and more.
             </p>
             <p class="text-muted small mb-3">
-                Select the domain modules you need below. <strong>Core</strong>
+                Select the context modules you need below. <strong>Core</strong>
                 is always included as it provides foundational concepts (agents, processes,
-                capabilities, organizations) used by all other domains.
+                capabilities, organizations) used by all other contexts.
                 Modules are fetched directly from
                 <a href="https://github.com/iofoundry/ontology" target="_blank" rel="noopener">GitHub</a>
                 and merged automatically.
             </p>
 
-            <!-- Domain checkboxes -->
+            <!-- Context checkboxes -->
             <div class="row g-2 mb-3" id="iofDomainCheckboxes">
                 <div class="col-12">
                     <div class="form-check">
@@ -358,8 +358,8 @@
             </div>
 
             <!-- Import button -->
-            <button type="button" class="btn btn-outline-primary btn-sm" id="importIofBtn">
-                <i class="bi bi-download"></i> Import Selected Domains
+            <button type="button" class="btn btn-sm btn-primary" id="importIofBtn">
+                <i class="bi bi-download"></i> Import
             </button>
 
             <!-- Progress indicator -->
@@ -392,7 +392,7 @@
                 workflow, and financial healthcare concepts.
             </p>
             <p class="text-muted small mb-3">
-                Select the resource domains you need below. <strong>Foundation</strong>
+                Select the resource contexts you need below. <strong>Foundation</strong>
                 is always included as it provides the base Resource and DomainResource types.
                 The ontology is fetched directly from hl7.org as a single Turtle file (~3 MB).
             </p>
@@ -409,7 +409,7 @@
                 </select>
             </div>
 
-            <!-- Domain checkboxes -->
+            <!-- Context checkboxes -->
             <div class="row g-2 mb-3" id="fhirDomainCheckboxes">
                 <div class="col-12">
                     <div class="form-check">
@@ -468,8 +468,8 @@
             </div>
 
             <!-- Import button -->
-            <button type="button" class="btn btn-outline-danger btn-sm" id="importFhirBtn">
-                <i class="bi bi-download"></i> Import Selected Domains
+            <button type="button" class="btn btn-sm btn-primary" id="importFhirBtn">
+                <i class="bi bi-download"></i> Import
             </button>
 
             <!-- Progress indicator -->
@@ -533,7 +533,7 @@
                         <thead class="table-dark sticky-top">
                             <tr>
                                 <th>Type</th>
-                                <th>Name</th>
+                                <th>ID</th>
                                 <th>Conflict</th>
                                 <th>Existing definition</th>
                                 <th style="min-width:180px">Resolution</th>

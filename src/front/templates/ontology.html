@@ -5,17 +5,19 @@
 {% block extra_css %}
 <!-- Ontology page specific styles -->
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/ontology.css') }}?v={{ asset_version }}">
-<!-- OntoViz library styles for Design section -->
-<link rel="stylesheet" href="{{ url_for('static', filename='global/ontoviz/css/ontoviz.css') }}?v={{ asset_version }}">
 <!-- Ontology module styles (extracted from partials) -->
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-map.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-shared-panels.css') }}?v={{ asset_version }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-swrl.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-if-then.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-business-rules.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-dataquality.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-design-checks.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-wizard.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-pages.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-groups.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-assistant.css') }}?v={{ asset_version }}">
+<!-- Graph-chat look & feel, reused by the Complex rule assistant modal -->
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-chat.css') }}?v={{ asset_version }}">
 {% endblock %}
 
 {% block content %}
@@ -39,8 +41,13 @@
                 {% include "partials/ontology/_ontology_wizard.html" %}
             </div>
             
-            <!-- General section (id remains information) — default view -->
-            <div id="information-section" class="sidebar-section active">
+            <div id="home-section" class="sidebar-section active">
+                {% set workspace_home_menu = get_menu('ontology') %}
+                {% include "partials/layout/_workspace_home.html" %}
+            </div>
+
+            <!-- General section (id remains information) -->
+            <div id="information-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_information.html" %}
             </div>
             
@@ -49,12 +56,7 @@
                 {% include "partials/ontology/_ontology_import.html" %}
             </div>
             
-            <!-- Design Section (OntoViz Visual Editor) -->
-            <div id="design-section" class="sidebar-section">
-                {% include "partials/ontology/_ontology_design.html" %}
-            </div>
-            
-            <!-- Model Section (D3.js Force-Directed Graph) -->
+            <!-- Studio Section (D3.js Force-Directed Graph + Business View filter) -->
             <div id="map-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_map.html" %}
             </div>
@@ -69,18 +71,18 @@
                 {% include "partials/ontology/_ontology_relationships.html" %}
             </div>
             
-            <!-- Groups Section (Entity Groups for expand/collapse in DT) -->
-            <div id="groups-section" class="sidebar-section">
-                {% include "partials/ontology/_ontology_groups.html" %}
-            </div>
-            
             <!-- Data Quality (SHACL) Section -->
             <div id="dataquality-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_dataquality.html" %}
             </div>
+
+            <!-- Sanity Checks (ontology design lint) -->
+            <div id="designchecks-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_design_checks.html" %}
+            </div>
             
-            <!-- Business Rules Section (SWRL + Decision Tables + SPARQL + Aggregate + SHACL) -->
-            <div id="swrl-section" class="sidebar-section">
+            <!-- Business Rules Section (Simple IF/THEN + Complex SPARQL CONSTRUCT) -->
+            <div id="if-then-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_business_rules.html" %}
             </div>
 
@@ -89,11 +91,6 @@
                 {% include "partials/ontology/_ontology_axioms.html" %}
             </div>
             
-            <!-- OWL Content Section -->
-            <div id="owl-section" class="sidebar-section">
-                {% include "partials/ontology/_ontology_owl_content.html" %}
-            </div>
-
             <!-- Shared Edit Panels (Entity & Relationship) - positioned within sidebar-content -->
             {% include "partials/ontology/_ontology_shared_panels.html" %}
         </div>
@@ -101,12 +98,10 @@
 </div>
 
 {% include "partials/ontology/_ontology_entity_import_modal.html" %}
+{% include "partials/ontology/_ontology_groups.html" %}
 
-<!-- OntoViz library for Design section -->
-<script src="{{ url_for('static', filename='global/ontoviz/ontoviz.js') }}?v={{ asset_version }}"></script>
-
-<!-- Ontology Design module (extracted from _ontology_design.html partial) -->
-<script src="{{ url_for('static', filename='global/js/ontology-design.js') }}?v={{ asset_version }}"></script>
+<!-- Ontology session / registry persistence (unload beacons, dirty flag) -->
+<script src="{{ url_for('static', filename='global/js/ontology-persistence.js') }}?v={{ asset_version }}"></script>
 
 <!-- Ontology modules (extracted from partials) -->
 <script src="{{ url_for('static', filename='ontology/js/ontology-map.js') }}?v={{ asset_version }}"></script>
@@ -116,8 +111,9 @@
 <script src="{{ url_for('static', filename='ontology/js/ontology-relationships.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-conditions.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-dataquality.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-design-checks.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-axioms.js') }}?v={{ asset_version }}"></script>
-<script src="{{ url_for('static', filename='ontology/js/ontology-swrl.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-if-then.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-business-rules.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-owl-content.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-information.js') }}?v={{ asset_version }}"></script>

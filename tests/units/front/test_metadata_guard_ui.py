@@ -196,7 +196,7 @@ class TestSaveIsGatedOnTheDiff:
         """Discarding must leave the UI showing what is actually persisted."""
         body = self._monitor()
         gate = body.index("confirmMetadataDiff(diff)")
-        assert "loadMetadataStatus()" in body[gate : body.index("/domain/metadata/save")]
+        assert "loadMetadataStatus(" in body[gate : body.index("/domain/metadata/save")]
 
     def test_confirming_still_persists_via_the_save_endpoint(self):
         body = self._monitor()

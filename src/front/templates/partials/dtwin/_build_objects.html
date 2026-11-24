@@ -1,0 +1,50 @@
+{# Graph → Build → Objects: physical objects of the current context version.
+   Work-list template (.ob-filter-bar + .ob-runs-table), like Build → Runs.
+   Read-only for everyone; the Drop buttons are rendered by query-build-objects.js
+   only when GET /dtwin/build/objects reports can_drop (app admins). #}
+<div class="ob-filter-bar">
+    <div class="ob-filter-search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" class="form-control form-control-sm" id="buildObjectsFilter"
+               placeholder="Filter objects" aria-label="Filter objects">
+    </div>
+    <span class="ob-runs-count" id="buildObjectsCount" aria-live="polite"></span>
+    <div class="d-flex align-items-center gap-2 ms-auto">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Group objects by">
+            <input type="radio" class="btn-check" name="buildObjectsGroupBy" id="buildObjectsGroupByUsage"
+                   value="usage" autocomplete="off" checked>
+            <label class="btn btn-outline-secondary" for="buildObjectsGroupByUsage">By usage</label>
+            <input type="radio" class="btn-check" name="buildObjectsGroupBy" id="buildObjectsGroupBySource"
+                   value="source" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="buildObjectsGroupBySource">By source</label>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-danger d-none"
+                id="buildObjectsDeleteAllBtn"
+                title="Drop every object listed below (admins only)">
+            <i class="bi bi-trash3 me-1"></i>Delete all
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                id="buildObjectsReloadBtn" title="Reload the object list">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<div id="buildObjectsLoading" class="text-center py-5 d-none">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="text-muted mt-2 small">Loading objects&hellip;</p>
+</div>
+
+<div id="buildObjectsNotice" class="alert alert-secondary m-3 d-none" role="status">
+    <i class="bi bi-info-circle me-1"></i>
+    <span id="buildObjectsNoticeMessage">Nothing built yet.</span>
+</div>
+
+<div id="buildObjectsError" class="alert alert-warning m-3 d-none" role="alert">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    <span id="buildObjectsErrorMessage"></span>
+</div>
+
+<div id="buildObjectsContent" class="d-none"></div>

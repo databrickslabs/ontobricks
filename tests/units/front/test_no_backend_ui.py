@@ -258,14 +258,13 @@ class TestTheMcpTabRehydratesUnderTheConstraint:
 
 
 class TestTheNavbarDisablesGraphFeatures:
-    def test_the_mapping_and_kg_subnav_tabs_are_marked(self):
+    def test_the_kg_app_switcher_tile_is_marked(self):
         html = _read(BASE_HTML)
-        mapping = html[html.index('id="subnavMappingDropdown"') - 300 :
-                       html.index('id="subnavMappingDropdown"')]
-        kg = html[html.index('id="subnavKgDropdown"') - 300 :
-                  html.index('id="subnavKgDropdown"')]
-        assert "nav-requires-graph" in mapping
-        assert "nav-requires-graph" in kg
+        menu = html[html.index("ob-app-switcher-list") : html.index("userMenuDropdown")]
+        assert 'class="ob-app-switcher-item nav-requires-graph"' in menu
+        assert "kg_m.v.route" in menu
+        assert 'id="subnavMappingDropdown"' not in html
+        assert 'id="subnavKgDropdown"' not in html
 
     def test_the_navbar_defines_and_calls_the_gate(self):
         js = _read(NAVBAR_JS)
@@ -304,7 +303,7 @@ class TestTheAddDomainDialogDefaultsToLakehouse:
 
     def test_the_dialog_explains_the_choices_and_where_to_change_them(self):
         dialog = self._dialog()
-        assert "Domain → General" in dialog
+        assert "<strong>Configuration</strong>" in dialog
         for choice in ("Lakehouse", "Lakebase", "Neo4j", "No Backend"):
             assert choice in dialog
 
@@ -321,4 +320,4 @@ class TestThePagesRedirectAGraphlessDomain:
         src = _read(route)
         assert "is_graphless_backend" in src
         assert "RedirectResponse" in src
-        assert "/domain/?section=information" in src
+        assert "/domain/?section=home" in src

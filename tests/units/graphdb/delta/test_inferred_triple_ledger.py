@@ -138,7 +138,7 @@ class TestTheWritersListBeforeTheyWrite:
         store.insert_triples.assert_not_called()
 
     def test_cohorts(self):
-        from back.core.graph_analysis.CohortBuilder import CohortBuilder
+        from back.core.graph_analysis.cohort.CohortBuilder import CohortBuilder
 
         order: list = []
         store = self._store(order)

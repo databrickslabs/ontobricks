@@ -662,7 +662,7 @@ def run(ctx: TaskContext) -> RunOutcome:
     start = time.time()
     domain_name = ctx.domain_name
 
-    ctx.progress(5, "Loading domain from registry...")
+    ctx.progress(5, "Loading context from registry...")
     domain = ctx.domain
     version = ctx.loaded_version
 
@@ -686,7 +686,7 @@ def run(ctx: TaskContext) -> RunOutcome:
                 getattr(domain, "ontology", {}),
                 getattr(domain, "assignment", {}),
                 constraints=getattr(domain, "constraints", None),
-                swrl_rules=getattr(domain, "swrl_rules", None),
+                if_then_rules=getattr(domain, "if_then_rules", None),
                 axioms=getattr(domain, "axioms", None),
                 shacl_shapes=getattr(domain, "shacl_shapes", None),
             ),
@@ -740,7 +740,7 @@ def run(ctx: TaskContext) -> RunOutcome:
     )
     _close_tick_facts(ctx, tick, store, src)
 
-    ctx.progress(95, "Saving domain metadata...")
+    ctx.progress(95, "Saving context metadata...")
     _persist_domain_metadata(
         ctx.registry_service, domain, version, ctx.run_ts, domain_name
     )

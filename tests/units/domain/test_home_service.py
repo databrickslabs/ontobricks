@@ -53,6 +53,7 @@ def _make_domain(
     domain.assignment_changed = False
     domain._data = {"domain": {"metadata": {}}}
     domain.last_update = None
+    domain.groups = []
 
     from back.objects.session.DomainSession import DomainSession
 
@@ -176,3 +177,35 @@ class TestGetDetailedValidation:
         assert "ontology" in result
         assert "mapping" in result
         assert "design" in result
+        assert "design_checks" in result
+        assert set(result["design_checks"]) == {"error", "warning", "info"}
+        assert set(result["parts"]) == {"overview", "documents", "graph"}
+        assert "dtwin" in result
+        assert "document_count" in result
+
+    def test_overview_skips_live_io(self):
+        """overview part must not touch graph status, existence, or documents."""
+        domain = _make_domain(classes=[{"uri": "http://test/A", "name": "A"}])
+        settings = MagicMock()
+        with (
+            patch.object(
+                DigitalTwin, "get_or_fetch_graph_status", AsyncMock()
+            ) as graph_status,
+            patch.object(
+                DigitalTwin, "get_or_fetch_dt_existence", AsyncMock()
+            ) as dt_exist,
+            patch.object(DomainOps, "count_documents", MagicMock()) as count_docs,
+        ):
+            result = _run_async(
+                HomeService.get_detailed_validation(
+                    domain, settings, warehouse_id="wh", parts="overview"
+                )
+            )
+        assert result["success"] is True
+        assert result["parts"] == ["overview"]
+        assert "ontology_valid" in result
+        assert "dtwin" not in result
+        assert "document_count" not in result
+        graph_status.assert_not_called()
+        dt_exist.assert_not_called()
+        count_docs.assert_not_called()

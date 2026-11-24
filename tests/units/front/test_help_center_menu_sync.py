@@ -22,12 +22,10 @@ _EXPLORER = Path("src/front/templates/partials/dtwin/_query_sigmagraph.html")
 _QUERY_SHELL = Path("src/front/templates/partials/dtwin/_query_query.html")
 _GRAPHQL = Path("src/front/templates/partials/dtwin/_query_graphql.html")
 _SIGMA_JS = Path("src/front/static/query/js/query-sigmagraph.js")
-_BUILD_LAKEBASE = Path("src/front/templates/partials/dtwin/_query_sync.html")
-_BUILD_LAKEHOUSE = Path("src/front/templates/partials/dtwin/_query_databricks_build.html")
+_BUILD_SHELL = Path("src/front/templates/partials/dtwin/_query_build.html")
 _SYNC_JS = Path("src/front/static/query/js/query-sync.js")
 _ONTOLOGY_DESIGNER = Path("src/front/templates/partials/ontology/_ontology_map.html")
 _MAPPING_DESIGNER = Path("src/front/templates/partials/mapping/_mapping_design.html")
-_BUSINESS_VIEWS = Path("src/front/templates/partials/ontology/_ontology_design.html")
 _ONTOLOGY_ENTITIES = Path("src/front/templates/partials/ontology/_ontology_entities.html")
 
 
@@ -60,15 +58,17 @@ def test_knowledge_graph_workflow_uses_current_item_labels():
     assert all_items["sigmagraph"] == "Explorer"
     assert all_items["graphql"] == "Query"
 
-    hw5_start = html.index('id="hw5"')
-    hw5_end = html.index("</div>\n                                </div>", hw5_start)
-    hw5_body = html[hw5_start:hw5_end]
+    hw4_start = html.index('id="hw4"')
+    hw4_end = html.index("</div>\n                                </div>", hw4_start)
+    hw4_body = html[hw4_start:hw4_end]
 
-    assert "<strong>Explorer</strong>" in hw5_body
-    assert "<strong>Query</strong>" in hw5_body
+    assert "<strong>Explorer</strong>" in hw4_body
+    assert "<strong>Query</strong>" in hw4_body
     # Every real digitaltwin item must be mentioned so the guide can't silently drift again.
-    for label in all_items.values():
-        assert label in hw5_body, f"Knowledge Graph workflow doc is missing '{label}'"
+    for item_id, label in all_items.items():
+        if item_id == "home":
+            continue
+        assert label in hw4_body, f"Knowledge Graph workflow doc is missing '{label}'"
 
 
 def test_explorer_uses_share_icon_consistently():
@@ -109,19 +109,35 @@ def test_kg_viewer_buttons_use_menu_icons():
     assert "data-query-action=\"ontology\"" not in graphql_html
 
 
-def test_build_uses_fast_forward_icon_consistently():
+def test_graph_management_order_is_build_overview_runs():
+    digitaltwin = _menus()["digitaltwin"]
+    management = next(
+        group for group in digitaltwin["groups"] if group["id"] == "digitaltwin-management"
+    )
+    assert [(i["id"], i["label"]) for i in management["items"]] == [
+        ("sync", "Build"),
+        ("design", "Mapping"),
+        ("insight", "Overview"),
+    ]
+    assert not any(g["id"] == "digitaltwin-insight" for g in digitaltwin["groups"])
+    discovery = next(
+        g for g in _menus()["intelligence"]["groups"] if g["id"] == "intelligence-discovery"
+    )
+    assert discovery["items"][0]["id"] == "analytics"
+
+
+def test_build_uses_hammer_icon_consistently():
     digitaltwin = _menus()["digitaltwin"]
     management = next(
         group for group in digitaltwin["groups"] if group["id"] == "digitaltwin-management"
     )
     build = next(item for item in management["items"] if item["id"] == "sync")
 
-    assert build["icon"] == "bi-fast-forward"
-    for template_path in (_BUILD_LAKEBASE, _BUILD_LAKEHOUSE):
-        template = template_path.read_text(encoding="utf-8")
-        assert '<i class="bi bi-fast-forward me-2"></i>' in template
-        assert '<i class="bi bi-fast-forward me-1"></i>Build' in template
-    assert '<i class="bi bi-fast-forward me-1"></i>Go to Build' in _SYNC_JS.read_text(
+    assert build["icon"] == "bi-hammer"
+    template = _BUILD_SHELL.read_text(encoding="utf-8")
+    assert '<i class="bi bi-hammer me-2"></i>' in template
+    assert '<i class="bi bi-hammer me-1"></i>Build' in template
+    assert '<i class="bi bi-hammer me-1"></i>Go to Build' in _SYNC_JS.read_text(
         encoding="utf-8"
     )
 
@@ -136,13 +152,13 @@ def test_ontology_and_mapping_designers_use_pencil_icon():
     )
     mapping_designer = next(
         item
-        for group in menus["assignment"]["groups"]
+        for group in menus["digitaltwin"]["groups"]
         for item in group["items"]
         if item["id"] == "design"
     )
 
     assert ontology_designer["label"] == "Studio"
-    assert mapping_designer["label"] == "Studio"
+    assert mapping_designer["label"] == "Mapping"
     assert ontology_designer["icon"] == "bi-pencil"
     assert mapping_designer["icon"] == "bi-pencil"
     assert '<i class="bi bi-pencil me-2"></i>Ontology Studio' in _ONTOLOGY_DESIGNER.read_text(
@@ -154,18 +170,23 @@ def test_ontology_and_mapping_designers_use_pencil_icon():
     )
 
 
-def test_business_views_uses_yelp_icon():
-    business_views = next(
+def test_studio_has_view_filter_dropdown():
+    studio = next(
         item
         for group in _menus()["ontology"]["groups"]
         for item in group["items"]
-        if item["id"] == "design"
+        if item["id"] == "map"
     )
-    assert business_views["label"] == "Business Views"
-    assert business_views["icon"] == "bi-yelp"
-    assert (
-        '<i class="bi bi-yelp me-2"></i>Visual Ontology Designer - Business Views'
-        in _BUSINESS_VIEWS.read_text(encoding="utf-8")
+    assert studio["label"] == "Studio"
+    assert studio["icon"] == "bi-pencil"
+    map_html = _ONTOLOGY_DESIGNER.read_text(encoding="utf-8")
+    assert 'id="studioViewBtn"' in map_html
+    assert "Ontology Studio" in map_html
+    # Business Views is no longer a separate sidebar section.
+    assert not any(
+        item["id"] == "design"
+        for group in _menus()["ontology"]["groups"]
+        for item in group["items"]
     )
 
 
@@ -184,18 +205,48 @@ def test_ontology_entities_uses_list_nested_icon():
     )
 
 
+def test_intelligence_pipeline_uses_menu_label():
+    assert _menus()["intelligence"]["label"] == "Intelligence"
+    html = _help_html()
+    assert "<strong>Intelligence</strong>" in html
+    assert "<strong>5. Intelligence</strong>" in html
+
+
+def test_starter_guide_covers_intelligence_capabilities():
+    html = _help_html()
+    starter_start = html.index('id="help-starter"')
+    starter_end = html.index('id="help-workflow"')
+    starter = html[starter_start:starter_end]
+    for label in ("Analytics", "Communities", "Patterns", "Cohorts", "Scenarios", "Compare"):
+        assert f"<strong>{label}</strong>" in starter, label
+    assert "data-help-doc=\"intelligence\"" in starter
+    assert "Coverage" in starter
+
+
+def test_glossary_defines_intelligence_terms():
+    html = _help_html()
+    for term in ("Intelligence", "Analytics", "Scenario", "Compare"):
+        assert f"<dt>{term}</dt>" in html, term
+
+
 def test_simulation_workflow_follows_menu_order():
     page = _help_html()
     labels = [
         item["label"]
-        for group in _menus()["simulation"]["groups"]
+        for group in _menus()["intelligence"]["groups"]
         for item in group["items"]
+        if item["id"] != "home"
     ]
     hw6_start = page.index('id="hw6"')
     hw6_end = page.index("</div>\n                                </div>", hw6_start)
     hw6_body = page[hw6_start:hw6_end]
-    positions = [hw6_body.index(f"<strong>{html.escape(label)}</strong>") for label in labels]
-    assert positions == sorted(positions)
+    # Advance the cursor so duplicate labels across groups must appear in
+    # menu order, not as the same hit twice.
+    cursor = 0
+    for label in labels:
+        needle = f"<strong>{html.escape(label)}</strong>"
+        pos = hw6_body.index(needle, cursor)
+        cursor = pos + len(needle)
 
 
 def test_ontology_advanced_list_matches_menu_items():
@@ -227,18 +278,25 @@ def _menu_item_ids(menu_id: str) -> set[str]:
 def test_owl_and_r2rml_are_designer_exports_not_sidebar_items():
     """OWL and Mapping R2RML live on Studio toolbars, not as sidebar sections."""
     ontology_ids = _menu_item_ids("ontology")
-    mapping_ids = _menu_item_ids("assignment")
+    mapping_ids = {
+        item["id"]
+        for group in _menus()["digitaltwin"]["groups"]
+        if group["id"] == "digitaltwin-management"
+        for item in group["items"]
+    }
     ontology_group_ids = {g["id"] for g in _menus()["ontology"]["groups"]}
 
     assert "owl" not in ontology_ids
     assert "ontology-w3c" not in ontology_group_ids
     assert "r2rml" not in mapping_ids
-    assert "sparksql" in mapping_ids
+    assert "sparksql" not in mapping_ids
+    assert "information" not in _menu_item_ids("digitaltwin")
+    assert "design" in mapping_ids
 
     ontology_designer = _ONTOLOGY_DESIGNER.read_text(encoding="utf-8")
     mapping_designer = _MAPPING_DESIGNER.read_text(encoding="utf-8")
-    assert 'id="mapDownloadOwl"' in ontology_designer
-    assert "aria-label=\"Export OWL\"" in ontology_designer
+    assert 'id="mapDownloadOwl"' not in ontology_designer
+    assert "aria-label=\"Export OWL\"" not in ontology_designer
     assert 'id="mappingExportR2RMLBtn"' in mapping_designer
     assert "aria-label=\"Export R2RML\"" in mapping_designer
 
@@ -253,7 +311,7 @@ def test_help_registry_copy_is_lakebase_not_uc_volume():
     html = _help_html()
     assert "stored in your Unity Catalog Volume" not in html
     assert "folder structure in your Unity Catalog Volume" not in html
-    assert "A UC Volume for the domain registry" not in html
+    assert "A UC Volume for the context registry" not in html
     assert "stored in Lakebase Postgres" in html
     assert "Knowledge Store" in html
     assert "Stage 1 detects" in html

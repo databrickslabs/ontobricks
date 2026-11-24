@@ -30,18 +30,18 @@ import argparse
 import json
 import logging
 import re
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, Iterator, List, Optional
 
 logger = logging.getLogger("ontobricks.jobs.graph_analytics")
 
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 
-#: Predicates that never form an entity-entity edge. Mirrors
-#: ``back.core.graph_analysis.GraphBuilder._DEFAULT_EXCLUDED_PREDICATES``;
-#: duplicated because this file must run standalone on the Spark driver, and
-#: the app passes its own list through ``--exclude-predicates`` anyway.
+#: Predicates that never form an entity-entity edge. Kept here because this
+#: file must run standalone on the Spark driver.
 DEFAULT_EXCLUDED_PREDICATES = (
     RDF_TYPE,
     RDFS_LABEL,
@@ -87,8 +87,12 @@ _IDENTIFIER_RE = re.compile(
 
 
 def sql_escape(value: str) -> str:
-    """Escape single quotes for a SQL string literal."""
-    return (value or "").replace("'", "''")
+    """Escape a value for a Spark ``'...'`` literal.
+
+    Spark treats a backslash as an escape character, so it is doubled before
+    quotes; otherwise ``\\'`` closes the literal early.
+    """
+    return (value or "").replace("\\", "\\\\").replace("'", "''")
 
 
 def validate_identifier(name: str, label: str) -> str:
@@ -1053,6 +1057,1261 @@ def _run_pivot_centrality(
     return pivot_count, bfs_complete
 
 
+# ---------------------------------------------------------------------------
+# Community detection (``--task communities``)
+# ---------------------------------------------------------------------------
+
+COMMUNITY_ALGORITHM = "label_propagation"
+
+#: Hard cap on label-propagation rounds. Two rounds make one full parity
+#: cycle, so this allows 15 complete passes over every node.
+DEFAULT_LP_ITERATIONS = 30
+
+#: A round counts as quiet when at most this fraction of nodes changed label.
+#: Two quiet rounds in a row (one full parity cycle) stop the loop. The exact
+#: fixed point is not worth chasing on a 100M-node graph: the last few
+#: thousand flips do not move the partition the UI shows.
+DEFAULT_LP_MIN_CHANGE_RATIO = 0.001
+
+#: Bounds of the preview graph the Community page draws.
+PREVIEW_COMMUNITIES = 20
+PREVIEW_MAX_NODES = 1_500
+PREVIEW_MAX_EDGES = 5_000
+
+#: First hex digit of ``md5(node)`` for the half of the nodes updated on even
+#: rounds; the other half updates on odd rounds.
+_EVEN_HALF = ", ".join(f"'{c}'" for c in "01234567")
+
+
+@dataclass
+class CommunitySQL(GraphAnalyticsSQL):
+    """SQL for semi-synchronous label propagation and its outputs.
+
+    Reuses the edge list, the bidirectional table and the degree table of
+    :class:`GraphAnalyticsSQL`, so both tasks agree on what an edge is.
+
+    Each round updates only the half of the nodes selected by the parity of
+    ``md5(node)``. Fully synchronous propagation flips forever between two
+    labellings on bipartite graphs, which is the usual shape of a knowledge
+    graph (Customer -> Order -> Product); updating one half at a time breaks
+    that two-cycle. A node's own label counts as one vote, and ties go to the
+    smallest label, so a re-run on the same data yields the same partition.
+    """
+
+    @property
+    def sizes_table(self) -> str:
+        return f"{self.output_table}_sizes"
+
+    @property
+    def preview_nodes_table(self) -> str:
+        return f"{self.output_table}_preview_nodes"
+
+    @property
+    def preview_edges_table(self) -> str:
+        return f"{self.output_table}_preview_edges"
+
+    def lp_table(self, slot: str) -> str:
+        return f"{self.work_prefix}_lp_{slot}"
+
+    def work_tables(self) -> List[str]:
+        return [
+            self.edges,
+            self.bi,
+            self.deg,
+            self.lp_table("a"),
+            self.lp_table("b"),
+        ]
+
+    def lp_init(self) -> List[str]:
+        return self._recreate(
+            self.lp_table("a"), f"SELECT n, n AS label FROM {self.deg}"
+        )
+
+    def lp_iteration(self, read_slot: str, write_slot: str, parity: int) -> List[str]:
+        """One round: the selected half adopts its neighbourhood's majority label."""
+        src = self.lp_table(read_slot)
+        dst = self.lp_table(write_slot)
+        half = "IN" if parity % 2 == 0 else "NOT IN"
+        return self._recreate(
+            dst,
+            f"SELECT cur.n AS n,\n"
+            f"       CASE WHEN substr(md5(cur.n), 1, 1) {half} ({_EVEN_HALF})\n"
+            f"            THEN best.label ELSE cur.label END AS label\n"
+            f"FROM {src} cur\n"
+            f"JOIN (\n"
+            f"  SELECT n, label FROM (\n"
+            f"    SELECT n, label,\n"
+            f"           ROW_NUMBER() OVER (PARTITION BY n ORDER BY c DESC, label) AS rk\n"
+            f"    FROM (\n"
+            f"      SELECT n, label, SUM(c) AS c FROM (\n"
+            f"        SELECT b.u AS n, nb.label AS label, 1 AS c\n"
+            f"        FROM {self.bi} b\n"
+            f"        JOIN {src} nb ON nb.n = b.v\n"
+            f"        UNION ALL\n"
+            f"        SELECT n, label, 1 AS c FROM {src}\n"
+            f"      ) v\n"
+            f"      GROUP BY n, label\n"
+            f"    ) agg\n"
+            f"  ) ranked\n"
+            f"  WHERE rk = 1\n"
+            f") best ON best.n = cur.n",
+        )
+
+    def lp_changed_query(self, read_slot: str, write_slot: str) -> str:
+        return (
+            f"SELECT COUNT(*) AS changed\n"
+            f"FROM {self.lp_table(read_slot)} a\n"
+            f"JOIN {self.lp_table(write_slot)} b ON b.n = a.n\n"
+            f"WHERE a.label <> b.label"
+        )
+
+    def write_sizes(self, slot: str) -> List[str]:
+        """One row per community, ranked by size desc then seed URI.
+
+        ``community_rank`` is the cluster id everywhere downstream; ranking
+        by size makes cluster 0 the largest, matching the in-memory ordering
+        this replaced.
+        """
+        return self._recreate(
+            self.sizes_table,
+            f"SELECT s.community_rank AS community_rank,\n"
+            f"       s.size AS size,\n"
+            f"       s.seed_uri AS seed_uri,\n"
+            f"       lb.label AS seed_label\n"
+            f"FROM (\n"
+            f"  SELECT label AS seed_uri, size,\n"
+            f"         ROW_NUMBER() OVER (ORDER BY size DESC, label) - 1 AS community_rank\n"
+            f"  FROM (\n"
+            f"    SELECT label, COUNT(*) AS size FROM {self.lp_table(slot)} GROUP BY label\n"
+            f"  ) c\n"
+            f") s\n"
+            f"LEFT JOIN ({self.node_label_select()}) lb ON lb.n = s.seed_uri",
+        )
+
+    def write_community_output(self, slot: str) -> List[str]:
+        return self._recreate(
+            self.output_table,
+            f"SELECT l.n AS node_uri,\n"
+            f"       s.community_rank AS community_rank,\n"
+            f"       d.d AS degree_raw,\n"
+            f"       ty.type_uri AS type_uri,\n"
+            f"       lb.label AS label\n"
+            f"FROM {self.lp_table(slot)} l\n"
+            f"JOIN {self.sizes_table} s ON s.seed_uri = l.label\n"
+            f"JOIN {self.deg} d ON d.n = l.n\n"
+            f"LEFT JOIN ({self.node_type_select()}) ty ON ty.n = l.n\n"
+            f"LEFT JOIN ({self.node_label_select()}) lb ON lb.n = l.n",
+        )
+
+    def community_count_query(self) -> str:
+        return f"SELECT COUNT(*) AS n FROM {self.sizes_table}"
+
+    def intra_edges_query(self) -> str:
+        """Edges whose two endpoints share a community (``sum L_c``)."""
+        return (
+            f"SELECT COUNT(*) AS n\n"
+            f"FROM {self.edges} e\n"
+            f"JOIN {self.output_table} a ON a.node_uri = e.src\n"
+            f"JOIN {self.output_table} b ON b.node_uri = e.dst\n"
+            f"WHERE a.community_rank = b.community_rank"
+        )
+
+    def degree_square_sum_query(self) -> str:
+        """``sum D_c^2`` over communities, in DOUBLE to stay clear of overflow."""
+        return (
+            f"SELECT SUM(CAST(ds AS DOUBLE) * ds) AS n FROM (\n"
+            f"  SELECT SUM(degree_raw) AS ds FROM {self.output_table}\n"
+            f"  GROUP BY community_rank\n"
+            f") q"
+        )
+
+    def write_preview(self) -> List[str]:
+        """Highest-degree members of the largest communities, plus their edges."""
+        per_community = -(-PREVIEW_MAX_NODES // PREVIEW_COMMUNITIES)
+        statements = self._recreate(
+            self.preview_nodes_table,
+            f"SELECT node_uri, community_rank, label, type_uri FROM (\n"
+            f"  SELECT node_uri, community_rank, label, type_uri,\n"
+            f"         ROW_NUMBER() OVER (\n"
+            f"           PARTITION BY community_rank ORDER BY degree_raw DESC, node_uri\n"
+            f"         ) AS rk\n"
+            f"  FROM {self.output_table}\n"
+            f"  WHERE community_rank < {PREVIEW_COMMUNITIES}\n"
+            f") q\n"
+            f"WHERE rk <= {per_community}",
+        )
+        statements += self._recreate(
+            self.preview_edges_table,
+            f"SELECT e.src AS src, e.dst AS dst\n"
+            f"FROM {self.edges} e\n"
+            f"JOIN {self.preview_nodes_table} a ON a.node_uri = e.src\n"
+            f"JOIN {self.preview_nodes_table} b ON b.node_uri = e.dst\n"
+            f"ORDER BY e.src, e.dst\n"
+            f"LIMIT {PREVIEW_MAX_EDGES}",
+        )
+        return statements
+
+    def write_community_summary(self, stats: Dict[str, object]) -> List[str]:
+        columns = [
+            f"{int(stats['node_count'])} AS node_count",
+            f"{int(stats['edge_count'])} AS edge_count",
+            f"{int(stats['community_count'])} AS community_count",
+            f"{float(stats['modularity'])} AS modularity",
+            f"{int(stats['iterations'])} AS iterations",
+            f"{'true' if stats['converged'] else 'false'} AS converged",
+            f"'{sql_escape(str(stats['algorithm']))}' AS algorithm",
+            f"'{sql_escape(','.join(self.class_filter))}' AS class_filter",
+            f"'{sql_escape(str(stats['source_table']))}' AS source_table",
+            f"'{sql_escape(str(stats.get('computed_at', '') or ''))}' AS computed_at",
+            f"{int(stats.get('elapsed_ms', 0) or 0)} AS elapsed_ms",
+        ]
+        return self._recreate(
+            self.summary_table, "SELECT " + ",\n       ".join(columns)
+        )
+
+
+def modularity_from_sums(intra_edges: float, degree_square_sum: float, edge_count: int) -> float:
+    """Newman modularity ``sum(L_c)/m - sum(D_c^2)/(4 m^2)`` (resolution 1)."""
+    if edge_count <= 0:
+        return 0.0
+    m = float(edge_count)
+    return float(intra_edges) / m - float(degree_square_sum) / (4.0 * m * m)
+
+
+# ---------------------------------------------------------------------------
+# Pattern detection (``--task patterns``)
+# ---------------------------------------------------------------------------
+
+PATTERN_ALGORITHM = "egocentric_signature"
+
+DEFAULT_PATTERN_HOPS = 3
+DEFAULT_PATTERN_BINS = 8
+DEFAULT_PATTERN_MIN_SUPPORT = 3
+DEFAULT_PATTERN_FRONTIER = 50_000
+DEFAULT_PATTERN_REFINE_TOP = 0
+#: Do not expand *through* a node whose directed out-degree exceeds this.
+#: The hub itself still contributes structural / attribute tokens. ``0`` disables.
+DEFAULT_PATTERN_HUB_DEGREE = 5_000
+#: A categorical attribute with more distinct values than this is identifier-like
+#: (email, phone, id, free text): it can never be shared by ``min_support``
+#: anchors, so it is left out of the signature instead of being binned.
+CATEGORICAL_MAX_VALUES = 20
+#: Signature detail levels, finest first. Hashing every token of a rich
+#: neighbourhood makes almost every anchor unique, so discovery walks down this
+#: list and keeps the first level whose patterns explain enough of the anchors.
+PATTERN_LEVELS = ("full", "neighbour", "own", "structure")
+#: Share of the anchors a level's patterns must cover to be accepted.
+DEFAULT_PATTERN_COVERAGE = 0.5
+
+PREVIEW_PATTERNS = 20
+# Preview caps reuse the community constants when available; keep local aliases
+# so this block stays readable next to the community preview helpers.
+PATTERN_PREVIEW_MAX_NODES = PREVIEW_MAX_NODES
+PATTERN_PREVIEW_MAX_EDGES = PREVIEW_MAX_EDGES
+
+
+def _portable_is_numeric_sql(column: str) -> str:
+    """True when *column* is a plain decimal: optional leading ``-``, one ``.``.
+
+    Spark serverless runs in ANSI mode, where ``CAST('2026-11-13' AS DOUBLE)``
+    or ``CAST('1.2.3' AS DOUBLE)`` raises ``CAST_INVALID_INPUT`` instead of
+    returning NULL. Matching only the *alphabet* (digits, ``.``, ``-``) is not
+    enough, so this also requires at most one ``.``, a ``-`` only in first
+    position, and at least one digit.
+
+    Built from ``replace`` / ``substr`` / ``length`` so the same SQL runs on
+    Spark and SQLite (no ``RLIKE`` / ``GLOB``).
+    """
+    stripped = column
+    for ch in "0123456789":
+        stripped = f"replace({stripped}, '{ch}', '')"
+    stripped = f"replace(replace({stripped}, '.', ''), '-', '')"
+    tail = f"substr({column}, 2)"
+    return (
+        f"({column} <> '' AND {column} <> '-' AND {column} <> '.' "
+        f"AND {column} <> '-.' AND {stripped} = '' "
+        f"AND length({column}) - length(replace({column}, '.', '')) <= 1 "
+        f"AND replace({tail}, '-', '') = {tail})"
+    )
+
+
+@dataclass
+class PatternSQL(GraphAnalyticsSQL):
+    """SQL for egocentric neighbourhood signatures and optional motif refine.
+
+    ``class_filter`` selects **anchor** nodes only; hop expansion walks the
+    forward edge set (subject -> object) so neighbours of other types still
+    appear in the signature. Inbound relations are never walked. ``via`` is
+    the full predicate URI (the UI local-names it).
+    """
+
+    hops: int = DEFAULT_PATTERN_HOPS
+    bins: int = DEFAULT_PATTERN_BINS
+    min_support: int = DEFAULT_PATTERN_MIN_SUPPORT
+    frontier_cap: int = DEFAULT_PATTERN_FRONTIER
+    refine_top: int = DEFAULT_PATTERN_REFINE_TOP
+    hub_degree: int = DEFAULT_PATTERN_HUB_DEGREE
+    categorical_max_values: int = CATEGORICAL_MAX_VALUES
+    min_coverage: float = DEFAULT_PATTERN_COVERAGE
+
+    def effective_hub_degree(self) -> int:
+        """Non-negative hub threshold; negatives are treated as ``0`` (off)."""
+        return max(0, int(self.hub_degree))
+
+    @property
+    def directed(self) -> str:
+        return f"{self.work_prefix}_dir"
+
+    @property
+    def hubs(self) -> str:
+        return f"{self.work_prefix}_hubs"
+
+    @property
+    def literals(self) -> str:
+        return f"{self.work_prefix}_lit"
+
+    @property
+    def anchors(self) -> str:
+        return f"{self.work_prefix}_anchors"
+
+    @property
+    def bins_table(self) -> str:
+        return f"{self.work_prefix}_bins"
+
+    @property
+    def tokens(self) -> str:
+        return f"{self.work_prefix}_tokens"
+
+    @property
+    def signatures(self) -> str:
+        return f"{self.work_prefix}_sigs"
+
+    @property
+    def refine_map(self) -> str:
+        return f"{self.work_prefix}_refine"
+
+    @property
+    def node_types(self) -> str:
+        return f"{self.work_prefix}_ntypes"
+
+    @property
+    def typed_edges(self) -> str:
+        """Per anchor: (hop, parent type, via, child type) + count."""
+        return f"{self.work_prefix}_tedges"
+
+    @property
+    def reps(self) -> str:
+        """One representative anchor per pattern (``MIN(anchor_uri)``)."""
+        return f"{self.work_prefix}_reps"
+
+    @property
+    def shapes_table(self) -> str:
+        return f"{self.output_table}_shapes"
+
+    @property
+    def shape_edges_table(self) -> str:
+        return f"{self.output_table}_shape_edges"
+
+    @property
+    def preview_nodes_table(self) -> str:
+        return f"{self.output_table}_preview_nodes"
+
+    @property
+    def preview_edges_table(self) -> str:
+        return f"{self.output_table}_preview_edges"
+
+    def frontier(self, hop: int) -> str:
+        return f"{self.work_prefix}_frontier_{int(hop)}"
+
+    def work_tables(self) -> List[str]:
+        tables = [
+            self.directed,
+            self.literals,
+            self.anchors,
+            self.bins_table,
+            self.tokens,
+            self.signatures,
+            self.refine_map,
+            self.node_types,
+            self.typed_edges,
+            self.reps,
+            self.hubs,
+        ]
+        for h in range(max(0, int(self.hops)) + 1):
+            tables.append(self.frontier(h))
+        return tables
+
+    def node_type_select_all(self) -> str:
+        """One ``rdf:type`` per node, ignoring the anchor ``class_filter``."""
+        return (
+            f"SELECT subject AS n, MIN(object) AS type_uri\n"
+            f"FROM {self.source_table}\n"
+            f"WHERE predicate = '{sql_escape(RDF_TYPE)}' AND object <> ''\n"
+            f"GROUP BY subject"
+        )
+
+    def build_node_types(self) -> List[str]:
+        """Materialise :meth:`node_type_select_all` once for every hop."""
+        return self._recreate(self.node_types, self.node_type_select_all())
+
+    def build_hubs(self) -> List[str]:
+        """Nodes whose out-degree exceeds ``hub_degree`` (empty when off)."""
+        thr = self.effective_hub_degree()
+        if thr <= 0:
+            return self._recreate(
+                self.hubs,
+                "SELECT CAST(NULL AS VARCHAR(1024)) AS n, "
+                "CAST(NULL AS BIGINT) AS degree WHERE 1 = 0",
+            )
+        return self._recreate(
+            self.hubs,
+            f"SELECT src AS n, COUNT(*) AS degree\n"
+            f"FROM {self.directed}\n"
+            f"GROUP BY src\n"
+            f"HAVING COUNT(*) > {thr}",
+        )
+
+    def build_directed_edges(self) -> List[str]:
+        """Forward URI edges only (subject -> object), endpoint types denormalised.
+
+        Pattern walks follow relationships in their asserted direction; an
+        inbound relation (object -> subject) is never traversed. Each triple
+        is one row, so the table is half the size of a two-way edge list.
+
+        ``src_type`` / ``dst_type`` are joined once from ``node_types`` so each
+        hop can emit tokens without re-joining types on the exploded frontier.
+        Requires :meth:`build_node_types` to have run first.
+        """
+        src = self.source_table
+        excl = _in_list(self.excluded_predicates)
+        uri = "(object LIKE 'http://%' OR object LIKE 'https://%')"
+        return self._recreate(
+            self.directed,
+            f"SELECT e.src AS src, e.dst AS dst, e.via AS via,\n"
+            f"       coalesce(st.type_uri, '') AS src_type,\n"
+            f"       coalesce(dt.type_uri, '') AS dst_type\n"
+            f"FROM (\n"
+            f"  SELECT subject AS src, object AS dst, predicate AS via\n"
+            f"  FROM {src}\n"
+            f"  WHERE subject <> '' AND object <> '' AND subject <> object\n"
+            f"    AND {uri}\n"
+            f"    AND predicate NOT IN ({excl})\n"
+            f") e\n"
+            f"LEFT JOIN {self.node_types} st ON st.n = e.src\n"
+            f"LEFT JOIN {self.node_types} dt ON dt.n = e.dst",
+        )
+
+    def build_literals(self) -> List[str]:
+        src = self.source_table
+        excl = _in_list(self.excluded_predicates)
+        return self._recreate(
+            self.literals,
+            f"SELECT subject AS n, predicate AS prop, object AS value\n"
+            f"FROM {src}\n"
+            f"WHERE subject <> '' AND object <> ''\n"
+            f"  AND object NOT LIKE 'http://%'\n"
+            f"  AND object NOT LIKE 'https://%'\n"
+            f"  AND predicate NOT IN ({excl})",
+        )
+
+    def build_anchors(self) -> List[str]:
+        return self._recreate(
+            self.anchors,
+            f"SELECT a.n AS n, a.type_uri AS type_uri, lb.label AS label\n"
+            f"FROM ({self.typed_nodes_select()}) t\n"
+            f"JOIN ({self.node_type_select()}) a ON a.n = t.n\n"
+            f"LEFT JOIN ({self.node_label_select()}) lb ON lb.n = t.n",
+        )
+
+    def build_bins(self) -> List[str]:
+        """Per-(node, property) bin labels for anchors and hop neighbours."""
+        is_num = _portable_is_numeric_sql("value")
+        max_values = max(1, int(self.categorical_max_values))
+        bins = max(1, int(self.bins))
+        return self._recreate(
+            self.bins_table,
+            f"WITH typed AS (\n"
+            f"  SELECT n, prop, value,\n"
+            f"         CASE WHEN {is_num} THEN 1 ELSE 0 END AS is_num\n"
+            f"  FROM {self.literals}\n"
+            f"),\n"
+            f"prop_kind AS (\n"
+            f"  SELECT prop,\n"
+            f"         CASE WHEN MIN(is_num) = 1 THEN 'num' ELSE 'cat' END AS pkind\n"
+            f"  FROM typed GROUP BY prop\n"
+            f"),\n"
+            f"numeric AS (\n"
+            f"  SELECT t.n AS n, t.prop AS prop,\n"
+            f"         'q' || CAST(\n"
+            f"           CASE\n"
+            f"             WHEN vr.n_vals <= 1 THEN 0\n"
+            f"             WHEN CAST(((vr.vrk - 1) * {bins}) / vr.n_vals AS INT) "
+            f">= {bins} THEN {bins - 1}\n"
+            f"             ELSE CAST(((vr.vrk - 1) * {bins}) / vr.n_vals AS INT)\n"
+            f"           END AS VARCHAR(16)\n"
+            f"         ) AS bin_label\n"
+            f"  FROM typed t\n"
+            f"  JOIN prop_kind pk ON pk.prop = t.prop AND pk.pkind = 'num'\n"
+            f"  JOIN (\n"
+            f"    SELECT prop, value,\n"
+            f"           ROW_NUMBER() OVER (\n"
+            f"             PARTITION BY prop ORDER BY CAST(value AS DOUBLE), value\n"
+            f"           ) AS vrk,\n"
+            f"           COUNT(*) OVER (PARTITION BY prop) AS n_vals\n"
+            f"    FROM (\n"
+            f"      SELECT DISTINCT d.prop AS prop, d.value AS value\n"
+            f"      FROM typed d\n"
+            f"      JOIN prop_kind k ON k.prop = d.prop AND k.pkind = 'num'\n"
+            f"    ) dv\n"
+            f"  ) vr ON vr.prop = t.prop AND vr.value = t.value\n"
+            f"),\n"
+            f"categorical AS (\n"
+            f"  SELECT t.n AS n, t.prop AS prop, t.value AS bin_label\n"
+            f"  FROM typed t\n"
+            f"  JOIN prop_kind pk ON pk.prop = t.prop AND pk.pkind = 'cat'\n"
+            f"  JOIN (\n"
+            f"    SELECT prop FROM typed\n"
+            f"    GROUP BY prop HAVING COUNT(DISTINCT value) <= {max_values}\n"
+            f"  ) lc ON lc.prop = t.prop\n"
+            f")\n"
+            f"SELECT n, prop, bin_label FROM numeric\n"
+            f"UNION ALL\n"
+            f"SELECT n, prop, bin_label FROM categorical",
+        )
+
+    def build_frontier_0(self) -> List[str]:
+        # The anchor was reached by no predicate: its incoming via is ''.
+        return self._recreate(
+            self.frontier(0),
+            f"SELECT n AS anchor, n AS node, '' AS via FROM {self.anchors}",
+        )
+
+    def build_hop(self, hop: int) -> List[str]:
+        """Expand one hop and emit structural + neighbour-attribute tokens.
+
+        The frontier holds ``(anchor, node, via)``: ``via`` is the predicate
+        that reached the node. A node reached through two predicates appears
+        twice, so each typed edge is attributed to the path it really hangs
+        off (``parent_via``). Tokens are de-duplicated per parent node, so the
+        token multiset (and therefore every pattern signature) is unchanged.
+        """
+        prev = self.frontier(hop - 1)
+        cur = self.frontier(hop)
+        cap = max(1, int(self.frontier_cap))
+        hop_lit = str(int(hop))
+        # Shortest-distance shells: hop k only keeps nodes not already seen at
+        # hop k-1 or k-2. Edges are forward-only, so this only bites on cycles
+        # (a walk that loops back to an earlier node adds nothing new).
+        seen = [prev] + ([self.frontier(hop - 2)] if hop >= 2 else [])
+        unseen = "".join(
+            f"    AND NOT EXISTS (SELECT 1 FROM {t} s{i} "
+            f"WHERE s{i}.anchor = f.anchor AND s{i}.node = e.dst)\n"
+            for i, t in enumerate(seen)
+        )
+        # Ranked expansion carries types from ``_dir`` (joined once upstream).
+        expanded = f"{self.work_prefix}_exp_{int(hop)}"
+        statements = self._recreate(
+            expanded,
+            f"SELECT anchor, parent, parent_via, node, via, parent_type, node_type "
+            f"FROM (\n"
+            f"  SELECT f.anchor AS anchor, f.node AS parent, f.via AS parent_via,\n"
+            f"         e.dst AS node, e.via AS via,\n"
+            f"         e.src_type AS parent_type, e.dst_type AS node_type,\n"
+            f"         ROW_NUMBER() OVER (\n"
+            f"           PARTITION BY f.anchor ORDER BY e.via, e.dst\n"
+            f"         ) AS rk\n"
+            f"  FROM {prev} f\n"
+            f"  JOIN {self.directed} e ON e.src = f.node\n"
+            f"  WHERE 1 = 1\n"
+            f"{unseen}"
+            f") q\n"
+            f"WHERE rk <= {cap}",
+        )
+        # Hubs still emit tokens (expanded is unfiltered) but are not walked
+        # through: they never become the next frontier.
+        statements += self._recreate(
+            cur,
+            f"SELECT DISTINCT e.anchor AS anchor, e.node AS node, e.via AS via\n"
+            f"FROM {expanded} e\n"
+            f"WHERE NOT EXISTS (\n"
+            f"  SELECT 1 FROM {self.hubs} h WHERE h.n = e.node\n"
+            f")",
+        )
+        # One row per (anchor, parent, edge): the same edge seen through two
+        # incoming predicates of its parent must emit its tokens only once.
+        edges = (
+            f"(SELECT DISTINCT anchor, parent, node, via, node_type "
+            f"FROM {expanded})"
+        )
+        # Structural + neighbour-attribute tokens in one Delta commit.
+        statements.append(
+            f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
+            f"SELECT d.anchor,\n"
+            f"       '{hop_lit}|' || d.via || '|' || d.node_type,\n"
+            f"       's',\n"
+            f"       {hop_lit}\n"
+            f"FROM {edges} d\n"
+            f"UNION ALL\n"
+            f"SELECT d.anchor,\n"
+            f"       '{hop_lit}|' || d.via || '|' || d.node_type "
+            f"|| '|' || b.prop || '|' || b.bin_label,\n"
+            f"       'na',\n"
+            f"       {hop_lit}\n"
+            f"FROM {edges} d\n"
+            f"JOIN {self.bins_table} b ON b.n = d.node"
+        )
+        # Typed edges (parent node -> child node) for the pattern diagram.
+        statements.append(
+            f"INSERT INTO {self.typed_edges} "
+            f"(anchor, hop, parent_via, parent_type, via, child_type, cnt)\n"
+            f"SELECT e.anchor, {hop_lit}, e.parent_via, e.parent_type, e.via,\n"
+            f"       e.node_type, COUNT(*)\n"
+            f"FROM {expanded} e\n"
+            f"GROUP BY e.anchor, e.parent_via, e.parent_type, e.via, e.node_type"
+        )
+        statements.append(f"DROP TABLE IF EXISTS {expanded}")
+        return statements
+
+    def init_tokens(self) -> List[str]:
+        """Create the tokens table and seed hop-0 attribute tokens."""
+        statements = [
+            f"DROP TABLE IF EXISTS {self.tokens}",
+            f"CREATE TABLE {self.tokens} (anchor VARCHAR(1024), token VARCHAR(4096), "
+            f"kind VARCHAR(8), hop INT)",
+            f"DROP TABLE IF EXISTS {self.typed_edges}",
+            f"CREATE TABLE {self.typed_edges} (anchor VARCHAR(1024), hop INT, "
+            f"parent_via VARCHAR(1024), parent_type VARCHAR(1024), "
+            f"via VARCHAR(1024), child_type VARCHAR(1024), cnt BIGINT)",
+        ]
+        statements.append(
+            f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
+            f"SELECT a.n,\n"
+            f"       '0||' || coalesce(a.type_uri, '') || '|self|' || b.prop "
+            f"|| '|' || b.bin_label,\n"
+            f"       'a0',\n"
+            f"       0\n"
+            f"FROM {self.anchors} a\n"
+            f"JOIN {self.bins_table} b ON b.n = a.n"
+        )
+        # Anchors with no attributes still need a type token so empty
+        # neighbourhoods are distinguishable by type.
+        statements.append(
+            f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
+            f"SELECT a.n,\n"
+            f"       '0||' || coalesce(a.type_uri, '') || '|self||',\n"
+            f"       'a0',\n"
+            f"       0\n"
+            f"FROM {self.anchors} a\n"
+            f"WHERE NOT EXISTS (\n"
+            f"  SELECT 1 FROM {self.bins_table} b WHERE b.n = a.n\n"
+            f")"
+        )
+        return statements
+
+    @staticmethod
+    def level_filter(level: str, alias: str = "t") -> str:
+        """Token predicate for one signature detail level (see ``PATTERN_LEVELS``)."""
+        if level == "structure":
+            return f"{alias}.kind = 's'"
+        if level == "own":
+            return f"{alias}.kind IN ('s', 'a0')"
+        if level == "neighbour":
+            return (
+                f"({alias}.kind IN ('s', 'a0') "
+                f"OR ({alias}.kind = 'na' AND {alias}.hop <= 1))"
+            )
+        return "1 = 1"
+
+    @staticmethod
+    def sig_column(level: str) -> str:
+        """Column on ``_sigs`` that holds the hash for *level*."""
+        mapping = {
+            "full": "sig_full",
+            "neighbour": "sig_neighbour",
+            "own": "sig_own",
+            "structure": "sig_structure",
+        }
+        if level not in mapping:
+            raise ValueError(f"unknown pattern level: {level}")
+        return mapping[level]
+
+    def build_signatures(self) -> List[str]:
+        """One row per anchor with a hash for every detail level.
+
+        ``full`` hashes the exact multiset (``collect_list``); coarser levels
+        hash the set (``collect_set``), so "has 2 orders" and "has 5 orders"
+        share a signature. ``collect_set`` / ``collect_list`` skip NULLs, so an
+        anchor with no token at a level hashes the empty set.
+        """
+        return self._recreate(
+            self.signatures,
+            f"SELECT a.n AS anchor_uri,\n"
+            f"  md5(concat_ws('|', sort_array(collect_list(t.token)))) "
+            f"AS sig_full,\n"
+            f"  md5(concat_ws('|', sort_array(collect_set(\n"
+            f"    CASE WHEN {self.level_filter('neighbour')} "
+            f"THEN t.token END)))) AS sig_neighbour,\n"
+            f"  md5(concat_ws('|', sort_array(collect_set(\n"
+            f"    CASE WHEN {self.level_filter('own')} "
+            f"THEN t.token END)))) AS sig_own,\n"
+            f"  md5(concat_ws('|', sort_array(collect_set(\n"
+            f"    CASE WHEN {self.level_filter('structure')} "
+            f"THEN t.token END)))) AS sig_structure\n"
+            f"FROM {self.anchors} a\n"
+            f"LEFT JOIN {self.tokens} t ON t.anchor = a.n\n"
+            f"GROUP BY a.n",
+        )
+
+    def coverage_query(self, level: str) -> str:
+        """Anchors covered by patterns of size ``>= min_support`` at *level*."""
+        col = self.sig_column(level)
+        support = max(1, int(self.min_support))
+        return (
+            f"SELECT COALESCE(SUM(c), 0) AS n FROM (\n"
+            f"  SELECT COUNT(*) AS c FROM {self.signatures}\n"
+            f"  GROUP BY {col} HAVING COUNT(*) >= {support}\n"
+            f")"
+        )
+
+    def write_pattern_output(self, level: str) -> List[str]:
+        """Anchors whose *level* signature meets ``min_support``."""
+        col = self.sig_column(level)
+        support = max(1, int(self.min_support))
+        return self._recreate(
+            self.output_table,
+            f"SELECT s.anchor_uri AS anchor_uri,\n"
+            f"       s.{col} AS pattern_id,\n"
+            f"       a.type_uri AS type_uri,\n"
+            f"       a.label AS label\n"
+            f"FROM {self.signatures} s\n"
+            f"JOIN {self.anchors} a ON a.n = s.anchor_uri\n"
+            f"JOIN (\n"
+            f"  SELECT {col} AS pattern_id FROM {self.signatures}\n"
+            f"  GROUP BY {col} HAVING COUNT(*) >= {support}\n"
+            f") ok ON ok.pattern_id = s.{col}",
+        )
+
+    def build_reps(self) -> List[str]:
+        """One ``MIN(anchor_uri)`` representative per pattern for shape tokens."""
+        return self._recreate(
+            self.reps,
+            f"SELECT pattern_id, MIN(anchor_uri) AS anchor\n"
+            f"FROM {self.output_table}\n"
+            f"GROUP BY pattern_id",
+        )
+
+    def write_shapes(self, *, refined: bool, level: str = "full") -> List[str]:
+        """One row per pattern; the shape lists only tokens kept at *level*.
+
+        Non-refined runs read tokens from one representative member per pattern
+        (identical by construction). Refined runs keep the member-union join
+        because multiplicity-stripped members can still differ on attributes.
+        """
+        refined_i = 1 if refined else 0
+        keep = self.level_filter(level)
+        if refined:
+            hop_src = (
+                f"SELECT o.pattern_id AS pattern_id,\n"
+                f"         MAX(t.hop) AS hop_count\n"
+                f"  FROM {self.output_table} o\n"
+                f"  JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
+                f"  WHERE {keep}\n"
+                f"  GROUP BY o.pattern_id"
+            )
+            shape_inner = (
+                f"SELECT DISTINCT o.pattern_id AS pattern_id,\n"
+                f"           '\"' || t.token || '\"' AS qtok\n"
+                f"    FROM {self.output_table} o\n"
+                f"    JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
+                f"    WHERE {keep}"
+            )
+        else:
+            hop_src = (
+                f"SELECT r.pattern_id AS pattern_id,\n"
+                f"         MAX(t.hop) AS hop_count\n"
+                f"  FROM {self.reps} r\n"
+                f"  JOIN {self.tokens} t ON t.anchor = r.anchor\n"
+                f"  WHERE {keep}\n"
+                f"  GROUP BY r.pattern_id"
+            )
+            shape_inner = (
+                f"SELECT DISTINCT r.pattern_id AS pattern_id,\n"
+                f"           '\"' || t.token || '\"' AS qtok\n"
+                f"    FROM {self.reps} r\n"
+                f"    JOIN {self.tokens} t ON t.anchor = r.anchor\n"
+                f"    WHERE {keep}"
+            )
+        return self._recreate(
+            self.shapes_table,
+            f"SELECT p.pattern_id AS pattern_id,\n"
+            f"       p.support AS support,\n"
+            f"       coalesce(h.hop_count, 0) AS hop_count,\n"
+            f"       coalesce(sh.shape_json, '[]') AS shape_json,\n"
+            f"       p.seed_label AS seed_label,\n"
+            f"       {refined_i} AS refined,\n"
+            f"       coalesce(nd.near_duplicate_count, 1) AS near_duplicate_count\n"
+            f"FROM (\n"
+            f"  SELECT pattern_id, COUNT(*) AS support,\n"
+            f"         MIN(label) AS seed_label\n"
+            f"  FROM {self.output_table}\n"
+            f"  GROUP BY pattern_id\n"
+            f") p\n"
+            f"LEFT JOIN (\n"
+            f"  {hop_src}\n"
+            f") h ON h.pattern_id = p.pattern_id\n"
+            f"LEFT JOIN (\n"
+            f"  SELECT pattern_id,\n"
+            f"         '[' || concat_ws(',', sort_array(collect_list(qtok))) "
+            f"|| ']' AS shape_json\n"
+            f"  FROM (\n"
+            f"    {shape_inner}\n"
+            f"  ) d\n"
+            f"  GROUP BY pattern_id\n"
+            f") sh ON sh.pattern_id = p.pattern_id\n"
+            f"LEFT JOIN (\n"
+            f"  SELECT new_id AS pattern_id, COUNT(*) AS near_duplicate_count\n"
+            f"  FROM {self.refine_map}\n"
+            f"  GROUP BY new_id\n"
+            f") nd ON nd.pattern_id = p.pattern_id",
+        )
+
+    def write_shape_edges(self) -> List[str]:
+        """Per pattern: typed edges with how many members have them, and how often."""
+        return self._recreate(
+            self.shape_edges_table,
+            f"SELECT o.pattern_id AS pattern_id, t.hop AS hop,\n"
+            f"       t.parent_via AS parent_via, t.parent_type AS parent_type,\n"
+            f"       t.via AS via, t.child_type AS child_type,\n"
+            f"       COUNT(*) AS member_count, SUM(t.cnt) AS edge_total,\n"
+            f"       MIN(t.cnt) AS edge_min, MAX(t.cnt) AS edge_max\n"
+            f"FROM {self.output_table} o\n"
+            f"JOIN {self.typed_edges} t ON t.anchor = o.anchor_uri\n"
+            f"GROUP BY o.pattern_id, t.hop, t.parent_via, t.parent_type,\n"
+            f"         t.via, t.child_type",
+        )
+
+    def write_pattern_preview(self) -> List[str]:
+        per = -(-PATTERN_PREVIEW_MAX_NODES // PREVIEW_PATTERNS)
+        statements = self._recreate(
+            self.preview_nodes_table,
+            f"SELECT node_uri, pattern_id, label, type_uri FROM (\n"
+            f"  SELECT o.anchor_uri AS node_uri, o.pattern_id AS pattern_id,\n"
+            f"         o.label AS label, o.type_uri AS type_uri,\n"
+            f"         ROW_NUMBER() OVER (\n"
+            f"           PARTITION BY o.pattern_id ORDER BY o.anchor_uri\n"
+            f"         ) AS rk,\n"
+            f"         dense_rank() OVER (ORDER BY s.support DESC, o.pattern_id) "
+            f"AS prank\n"
+            f"  FROM {self.output_table} o\n"
+            f"  JOIN (\n"
+            f"    SELECT pattern_id, COUNT(*) AS support\n"
+            f"    FROM {self.output_table} GROUP BY pattern_id\n"
+            f"  ) s ON s.pattern_id = o.pattern_id\n"
+            f") q\n"
+            f"WHERE prank <= {PREVIEW_PATTERNS} AND rk <= {per}",
+        )
+        statements += self._recreate(
+            self.preview_edges_table,
+            f"SELECT e.src AS src, e.dst AS dst\n"
+            f"FROM {self.directed} e\n"
+            f"JOIN {self.preview_nodes_table} a ON a.node_uri = e.src\n"
+            f"JOIN {self.preview_nodes_table} b ON b.node_uri = e.dst\n"
+            f"ORDER BY e.src, e.dst\n"
+            f"LIMIT {PATTERN_PREVIEW_MAX_EDGES}",
+        )
+        return statements
+
+    def write_pattern_summary(self, stats: Dict[str, object]) -> List[str]:
+        stage_ms = stats.get("stage_ms") or {}
+        if not isinstance(stage_ms, str):
+            stage_ms = json.dumps(stage_ms, sort_keys=True)
+        columns = [
+            f"'{sql_escape(str(stats.get('anchor_type', '') or ''))}' AS anchor_type",
+            f"{int(stats['anchor_count'])} AS anchor_count",
+            f"{int(stats.get('population_count', stats['anchor_count']) or 0)} "
+            "AS population_count",
+            f"{int(stats['pattern_count'])} AS pattern_count",
+            f"{int(stats['hop_count'])} AS hop_count",
+            f"{int(stats['bins'])} AS bins",
+            f"{int(stats['refined'])} AS refined",
+            f"{int(stats['min_support'])} AS min_support",
+            f"'{sql_escape(str(stats.get('detail_level', 'full')))}' AS detail_level",
+            f"'{sql_escape(str(stats['algorithm']))}' AS algorithm",
+            f"'{sql_escape(','.join(self.class_filter))}' AS class_filter",
+            f"'{sql_escape(str(stats['source_table']))}' AS source_table",
+            f"'{sql_escape(str(stats.get('computed_at', '') or ''))}' AS computed_at",
+            f"{int(stats.get('elapsed_ms', 0) or 0)} AS elapsed_ms",
+            f"'{sql_escape(str(stage_ms))}' AS stage_ms",
+            f"{int(stats.get('hub_degree', 0) or 0)} AS hub_degree",
+            f"{int(stats.get('hub_count', 0) or 0)} AS hub_count",
+        ]
+        return self._recreate(
+            self.summary_table, "SELECT " + ",\n       ".join(columns)
+        )
+
+    def empty_refine_map(self) -> List[str]:
+        return self._recreate(
+            self.refine_map,
+            "SELECT CAST(NULL AS VARCHAR(64)) AS old_id, "
+            "CAST(NULL AS VARCHAR(64)) AS new_id WHERE 1 = 0",
+        )
+
+    def build_refine_map(self) -> List[str]:
+        """Map exact pattern_ids in the top-N to multiplicity-stripped ids.
+
+        Only members of the top-N patterns by support are hashed; that is
+        enough for the remapping and avoids scanning every output anchor.
+        """
+        top = max(0, int(self.refine_top))
+        topn = f"{self.work_prefix}_topn"
+        stripped = f"{self.work_prefix}_stripped"
+        statements = self._recreate(
+            topn,
+            f"SELECT pattern_id FROM (\n"
+            f"  SELECT pattern_id, COUNT(*) AS support,\n"
+            f"         ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, pattern_id) "
+            f"AS rk\n"
+            f"  FROM {self.output_table}\n"
+            f"  GROUP BY pattern_id\n"
+            f") ranked WHERE rk <= {top}",
+        )
+        # Stripped tokens: hop-0 attributes + distinct structural keys only.
+        statements += self._recreate(
+            stripped,
+            f"SELECT DISTINCT o.anchor_uri AS anchor, t.token AS token\n"
+            f"FROM {self.output_table} o\n"
+            f"JOIN {topn} tn ON tn.pattern_id = o.pattern_id\n"
+            f"JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
+            f"WHERE t.kind IN ('a0', 's')",
+        )
+        refined_sigs = f"{self.work_prefix}_refined_sigs"
+        statements += self._recreate(
+            refined_sigs,
+            f"SELECT anchor AS anchor_uri,\n"
+            f"       md5(concat_ws('|', sort_array(collect_list(token)))) "
+            f"AS refined_id\n"
+            f"FROM {stripped}\n"
+            f"GROUP BY anchor",
+        )
+        statements += self._recreate(
+            self.refine_map,
+            f"SELECT DISTINCT o.pattern_id AS old_id, r.refined_id AS new_id\n"
+            f"FROM {self.output_table} o\n"
+            f"JOIN {topn} tn ON tn.pattern_id = o.pattern_id\n"
+            f"JOIN {refined_sigs} r ON r.anchor_uri = o.anchor_uri",
+        )
+        statements.append(f"DROP TABLE IF EXISTS {topn}")
+        statements.append(f"DROP TABLE IF EXISTS {stripped}")
+        statements.append(f"DROP TABLE IF EXISTS {refined_sigs}")
+        return statements
+
+    def apply_refine_map(self) -> List[str]:
+        """Rewrite ``pattern_id`` for anchors covered by the refine map.
+
+        Writes through a temp table because ``_recreate`` drops the target
+        before the ``SELECT``, so the output cannot be read from itself.
+        """
+        tmp = f"{self.work_prefix}_out_refined"
+        statements = self._recreate(
+            tmp,
+            f"SELECT o.anchor_uri AS anchor_uri,\n"
+            f"       coalesce(m.new_id, o.pattern_id) AS pattern_id,\n"
+            f"       o.type_uri AS type_uri,\n"
+            f"       o.label AS label\n"
+            f"FROM {self.output_table} o\n"
+            f"LEFT JOIN {self.refine_map} m ON m.old_id = o.pattern_id",
+        )
+        statements += self._recreate(self.output_table, f"SELECT * FROM {tmp}")
+        statements.append(f"DROP TABLE IF EXISTS {tmp}")
+        return statements
+
+    def pattern_count_query(self) -> str:
+        return f"SELECT COUNT(DISTINCT pattern_id) AS n FROM {self.output_table}"
+
+    def anchor_count_query(self) -> str:
+        return f"SELECT COUNT(*) AS n FROM {self.anchors}"
+
+    def output_anchor_count_query(self) -> str:
+        return f"SELECT COUNT(*) AS n FROM {self.output_table}"
+
+
+def run_patterns(
+    execute,
+    scalar,
+    builder: PatternSQL,
+    *,
+    computed_at: str = "",
+    cleanup: bool = True,
+) -> Dict[str, object]:
+    """Run egocentric signature discovery and write pattern outputs."""
+    try:
+        return _run_pattern_stages(execute, scalar, builder, computed_at=computed_at)
+    finally:
+        if cleanup:
+            _drop_work_tables(execute, builder)
+
+
+@contextmanager
+def _pattern_stage(stage_ms: Dict[str, int], name: str) -> Iterator[None]:
+    """Record wall time for one pattern-job stage into *stage_ms*."""
+    t0 = time.time()
+    try:
+        yield
+    finally:
+        stage_ms[name] = int((time.time() - t0) * 1000)
+
+
+def _safe_count(scalar, query: str) -> Optional[int]:
+    """``COUNT(*)`` for instrumentation; never fails the run."""
+    try:
+        return int(scalar(query) or 0)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("pattern stage count failed: %s", exc)
+        return None
+
+
+def _expand_neighbourhoods(execute, scalar, builder: PatternSQL, stage_ms: Dict[str, int]) -> None:
+    """Stage everything the signatures hash: edges, bins, hop-by-hop tokens."""
+    with _pattern_stage(stage_ms, "prep"):
+        # node_types before directed: ``_dir`` denormalises endpoint types.
+        for stmt in builder.build_node_types():
+            execute(stmt)
+        for stmt in builder.build_directed_edges():
+            execute(stmt)
+        for stmt in builder.build_hubs():
+            execute(stmt)
+        for stmt in builder.build_literals():
+            execute(stmt)
+        for stmt in builder.build_anchors():
+            execute(stmt)
+    with _pattern_stage(stage_ms, "bins"):
+        for stmt in builder.build_bins():
+            execute(stmt)
+    with _pattern_stage(stage_ms, "tokens_init"):
+        for stmt in builder.init_tokens():
+            execute(stmt)
+        for stmt in builder.build_frontier_0():
+            execute(stmt)
+    for h in range(1, max(0, int(builder.hops)) + 1):
+        stage = f"hop_{h}"
+        with _pattern_stage(stage_ms, stage):
+            for stmt in builder.build_hop(h):
+                execute(stmt)
+        n = _safe_count(scalar, f"SELECT COUNT(*) AS n FROM {builder.frontier(h)}")
+        if n is not None:
+            logger.info(
+                "pattern stage %s: %sms, rows(frontier)=%s",
+                stage,
+                stage_ms[stage],
+                n,
+            )
+        else:
+            logger.info("pattern stage %s: %sms", stage, stage_ms[stage])
+
+
+def _choose_detail_level(execute, scalar, builder: PatternSQL) -> str:
+    """Pick the finest detail level that covers enough anchors.
+
+    Assumes ``builder.build_signatures()`` has already populated ``_sigs``.
+    Writes the pattern output once from the winning level. The coarsest level
+    is the floor and is always accepted.
+    """
+    total = int(scalar(builder.anchor_count_query()) or 0)
+    for level in PATTERN_LEVELS:
+        covered = int(scalar(builder.coverage_query(level)) or 0)
+        logger.info("pattern level %s covers %d of %d anchors", level, covered, total)
+        if covered and covered >= builder.min_coverage * total:
+            for stmt in builder.write_pattern_output(level):
+                execute(stmt)
+            return level
+    floor = PATTERN_LEVELS[-1]
+    for stmt in builder.write_pattern_output(floor):
+        execute(stmt)
+    return floor
+
+
+def _run_pattern_stages(
+    execute,
+    scalar,
+    builder: PatternSQL,
+    *,
+    computed_at: str,
+) -> Dict[str, object]:
+    if not builder.class_filter:
+        raise ValueError("class_filter is required for pattern detection")
+
+    t0 = time.time()
+    stage_ms: Dict[str, int] = {}
+    _expand_neighbourhoods(execute, scalar, builder, stage_ms)
+
+    with _pattern_stage(stage_ms, "signatures"):
+        for stmt in builder.build_signatures():
+            execute(stmt)
+    with _pattern_stage(stage_ms, "output"):
+        level = _choose_detail_level(execute, scalar, builder)
+
+    # Refine merges multiplicity near-duplicates, which only exist when the
+    # signature kept exact counts, i.e. at the finest level.
+    refined = 0
+    with _pattern_stage(stage_ms, "refine"):
+        if int(builder.refine_top) > 0 and level == PATTERN_LEVELS[0]:
+            for stmt in builder.build_refine_map():
+                execute(stmt)
+            for stmt in builder.apply_refine_map():
+                execute(stmt)
+            refined = 1
+        else:
+            for stmt in builder.empty_refine_map():
+                execute(stmt)
+
+    for stmt in builder.build_reps():
+        execute(stmt)
+
+    with _pattern_stage(stage_ms, "shapes"):
+        for stmt in builder.write_shapes(refined=bool(refined), level=level):
+            execute(stmt)
+    with _pattern_stage(stage_ms, "shape_edges"):
+        for stmt in builder.write_shape_edges():
+            execute(stmt)
+    with _pattern_stage(stage_ms, "preview"):
+        for stmt in builder.write_pattern_preview():
+            execute(stmt)
+
+    pattern_count = int(scalar(builder.pattern_count_query()) or 0)
+    # Whole population of the anchor type (every entity of this type that
+    # entered the computation), independent of pattern coverage. This is the
+    # denominator for the Coverage KPI (covered / population).
+    population_count = int(scalar(builder.anchor_count_query()) or 0)
+    # With patterns: the anchors they cover. Without: the whole population.
+    anchor_count = int(
+        scalar(builder.output_anchor_count_query()) or 0
+    ) if pattern_count else population_count
+
+    stats: Dict[str, object] = {
+        "anchor_type": builder.class_filter[0],
+        "anchor_count": anchor_count,
+        "population_count": population_count,
+        "pattern_count": pattern_count,
+        "hop_count": max(0, int(builder.hops)),
+        "bins": int(builder.bins),
+        "refined": refined,
+        "min_support": int(builder.min_support),
+        "detail_level": level,
+        "algorithm": PATTERN_ALGORITHM,
+        "source_table": builder.source_table,
+        "computed_at": computed_at,
+        "elapsed_ms": int((time.time() - t0) * 1000),
+        "stage_ms": stage_ms,
+        "hub_degree": builder.effective_hub_degree(),
+        "hub_count": int(
+            _safe_count(scalar, f"SELECT COUNT(*) AS n FROM {builder.hubs}") or 0
+        ),
+    }
+    for stmt in builder.write_pattern_summary(stats):
+        execute(stmt)
+    return stats
+
+
+def run_communities(
+    execute,
+    scalar,
+    builder: CommunitySQL,
+    *,
+    lp_iterations: int = DEFAULT_LP_ITERATIONS,
+    min_change_ratio: float = DEFAULT_LP_MIN_CHANGE_RATIO,
+    computed_at: str = "",
+    cleanup: bool = True,
+) -> Dict[str, object]:
+    """Run label propagation and write the community outputs.
+
+    Same engine-agnostic contract as :func:`run_analysis`: *execute* runs a
+    statement, *scalar* returns the first column of the first row. Work tables
+    are dropped on the way out, failure included, unless *cleanup* is False.
+    """
+    try:
+        return _run_community_stages(
+            execute,
+            scalar,
+            builder,
+            lp_iterations=lp_iterations,
+            min_change_ratio=min_change_ratio,
+            computed_at=computed_at,
+        )
+    finally:
+        if cleanup:
+            _drop_work_tables(execute, builder)
+
+
+def _run_community_stages(
+    execute,
+    scalar,
+    builder: CommunitySQL,
+    *,
+    lp_iterations: int,
+    min_change_ratio: float,
+    computed_at: str,
+) -> Dict[str, object]:
+    t0 = time.time()
+    for stmt in builder.build_edges():
+        execute(stmt)
+    node_count = int(scalar(builder.node_count_query()) or 0)
+    edge_count = int(scalar(builder.edge_count_query()) or 0)
+    logger.info("communities: %d nodes, %d edges", node_count, edge_count)
+
+    for stmt in builder.lp_init():
+        execute(stmt)
+    slot = "a"
+    iterations = 0
+    converged = node_count == 0
+    quiet_rounds = 0
+    min_change = max(0, int(node_count * max(0.0, min_change_ratio)))
+    for i in range(max(1, lp_iterations) if node_count else 0):
+        nxt = "b" if slot == "a" else "a"
+        for stmt in builder.lp_iteration(slot, nxt, parity=i):
+            execute(stmt)
+        changed = int(scalar(builder.lp_changed_query(slot, nxt)) or 0)
+        slot = nxt
+        iterations += 1
+        logger.info("label propagation round %d: %d labels changed", iterations, changed)
+        quiet_rounds = quiet_rounds + 1 if changed <= min_change else 0
+        if quiet_rounds >= 2:
+            converged = True
+            break
+    if not converged:
+        logger.warning(
+            "label propagation did not settle in %d rounds — the partition is "
+            "reported as unconverged",
+            iterations,
+        )
+
+    for stmt in builder.write_sizes(slot) + builder.write_community_output(slot):
+        execute(stmt)
+    community_count = int(scalar(builder.community_count_query()) or 0)
+    modularity = modularity_from_sums(
+        float(scalar(builder.intra_edges_query()) or 0),
+        float(scalar(builder.degree_square_sum_query()) or 0),
+        edge_count,
+    )
+    for stmt in builder.write_preview():
+        execute(stmt)
+
+    stats: Dict[str, object] = {
+        "node_count": node_count,
+        "edge_count": edge_count,
+        "community_count": community_count,
+        "modularity": round(modularity, 6),
+        "iterations": iterations,
+        "converged": converged,
+        "algorithm": COMMUNITY_ALGORITHM,
+        "source_table": builder.source_table,
+        "computed_at": computed_at,
+        "elapsed_ms": int((time.time() - t0) * 1000),
+    }
+    for stmt in builder.write_community_summary(stats):
+        execute(stmt)
+    return stats
+
+
 def merge_excluded_predicates(raw: Optional[str]) -> List[str]:
     """Combine the caller's ``--exclude-predicates`` with the defaults.
 
@@ -1070,6 +2329,15 @@ def merge_excluded_predicates(raw: Optional[str]) -> List[str]:
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Compute iterative graph metrics for an OntoBricks knowledge graph"
+    )
+    parser.add_argument(
+        "--task",
+        choices=("metrics", "communities", "patterns"),
+        default="metrics",
+        help=(
+            "metrics: centrality and structure; communities: label propagation; "
+            "patterns: egocentric neighbourhood signatures"
+        ),
     )
     parser.add_argument(
         "--source-table",
@@ -1118,11 +2386,123 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH)
     parser.add_argument("--damping", type=float, default=DEFAULT_DAMPING)
     parser.add_argument(
+        "--lp-iterations", type=int, default=DEFAULT_LP_ITERATIONS,
+        help="Cap on label-propagation rounds (communities task)",
+    )
+    parser.add_argument(
+        "--pattern-hops", type=int, default=DEFAULT_PATTERN_HOPS,
+        help="Neighbourhood depth for pattern signatures",
+    )
+    parser.add_argument(
+        "--pattern-bins", type=int, default=DEFAULT_PATTERN_BINS,
+        help="Quantile buckets for numeric attribute bins",
+    )
+    parser.add_argument(
+        "--pattern-min-support", type=int, default=DEFAULT_PATTERN_MIN_SUPPORT,
+        help="Drop patterns with fewer anchors than this",
+    )
+    parser.add_argument(
+        "--pattern-frontier", type=int, default=DEFAULT_PATTERN_FRONTIER,
+        help="Max neighbours kept per anchor per hop",
+    )
+    parser.add_argument(
+        "--pattern-hub-degree", type=int, default=DEFAULT_PATTERN_HUB_DEGREE,
+        help=(
+            "Do not expand through nodes with out-degree above this "
+            "(0=off; hub tokens are still emitted)"
+        ),
+    )
+    parser.add_argument(
+        "--refine-top", type=int, default=DEFAULT_PATTERN_REFINE_TOP,
+        help="Collapse multiplicity near-duplicates among the top-N patterns (0=off)",
+    )
+    parser.add_argument(
+        "--computed-at", default="",
+        help="Run timestamp recorded in the community/pattern summary",
+    )
+    parser.add_argument(
         "--keep-work-tables",
         action="store_true",
         help="Leave intermediate tables in place for debugging",
     )
     return parser.parse_args(argv)
+
+
+def _run_selected_task(args, execute, scalar, *, excluded, class_filter, work_prefix) -> int:
+    """Dispatch ``--task`` to patterns, communities, or graph metrics."""
+    if args.task == "patterns":
+        builder = PatternSQL(
+            source_table=args.source_table,
+            work_prefix=work_prefix,
+            output_table=args.output_table,
+            excluded_predicates=excluded,
+            class_filter=class_filter,
+            hops=args.pattern_hops,
+            bins=args.pattern_bins,
+            min_support=args.pattern_min_support,
+            frontier_cap=args.pattern_frontier,
+            refine_top=args.refine_top,
+            hub_degree=args.pattern_hub_degree,
+        )
+        stats = run_patterns(
+            execute,
+            scalar,
+            builder,
+            computed_at=args.computed_at,
+            cleanup=not args.keep_work_tables,
+        )
+        print("ONTOBRICKS_PATTERN_SUMMARY " + json.dumps(stats, default=str))
+        logger.info(
+            "wrote %s (%s patterns)", args.output_table, stats["pattern_count"]
+        )
+        return 0
+
+    if args.task == "communities":
+        builder = CommunitySQL(
+            source_table=args.source_table,
+            work_prefix=work_prefix,
+            output_table=args.output_table,
+            excluded_predicates=excluded,
+            damping=args.damping,
+            class_filter=class_filter,
+        )
+        stats = run_communities(
+            execute,
+            scalar,
+            builder,
+            lp_iterations=args.lp_iterations,
+            computed_at=args.computed_at,
+            cleanup=not args.keep_work_tables,
+        )
+        print("ONTOBRICKS_COMMUNITY_SUMMARY " + json.dumps(stats, default=str))
+        logger.info(
+            "wrote %s (%s communities)", args.output_table, stats["community_count"]
+        )
+        return 0
+
+    builder = GraphAnalyticsSQL(
+        source_table=args.source_table,
+        work_prefix=work_prefix,
+        output_table=args.output_table,
+        excluded_predicates=excluded,
+        damping=args.damping,
+        class_filter=class_filter,
+    )
+    stats = run_analysis(
+        execute,
+        scalar,
+        builder,
+        pagerank_iterations=args.pagerank_iterations,
+        component_iterations=args.component_iterations,
+        pivots=args.pivots,
+        max_depth=args.max_depth,
+        cleanup=not args.keep_work_tables,
+    )
+    # Printed so the run output carries the summary even if the caller only
+    # reads the driver log rather than the summary table.
+    print("ONTOBRICKS_GRAPH_ANALYTICS_SUMMARY " + json.dumps(stats, default=str))
+    logger.info("wrote %s (%s nodes)", args.output_table, stats["node_count"])
+    return 0
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -1137,11 +2517,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     spark = SparkSession.builder.getOrCreate()
 
     excluded = merge_excluded_predicates(args.exclude_predicates)
-
     class_filter = [
         v.strip() for v in (args.class_filter or "").split(",") if v.strip()
     ]
-
     work_prefix = args.work_prefix or f"{args.output_table}_work"
     validate_identifier(args.source_table, "--source-table")
     validate_identifier(args.output_table, "--output-table")
@@ -1149,15 +2527,6 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if class_filter:
         logger.info("class filter: %d type(s) — %s", len(class_filter), ", ".join(class_filter))
-
-    builder = GraphAnalyticsSQL(
-        source_table=args.source_table,
-        work_prefix=work_prefix,
-        output_table=args.output_table,
-        excluded_predicates=excluded,
-        damping=args.damping,
-        class_filter=class_filter,
-    )
 
     def execute(stmt: str) -> None:
         logger.debug("executing: %s", stmt)
@@ -1167,22 +2536,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         row = spark.sql(query).head()
         return row[0] if row is not None else None
 
-    stats = run_analysis(
-        execute,
-        scalar,
-        builder,
-        pagerank_iterations=args.pagerank_iterations,
-        component_iterations=args.component_iterations,
-        pivots=args.pivots,
-        max_depth=args.max_depth,
-        cleanup=not args.keep_work_tables,
+    return _run_selected_task(
+        args, execute, scalar,
+        excluded=excluded, class_filter=class_filter, work_prefix=work_prefix,
     )
-
-    # Printed so the run output carries the summary even if the caller only
-    # reads the driver log rather than the summary table.
-    print("ONTOBRICKS_GRAPH_ANALYTICS_SUMMARY " + json.dumps(stats, default=str))
-    logger.info("wrote %s (%s nodes)", args.output_table, stats["node_count"])
-    return 0
 
 
 def run_cli(argv: Optional[List[str]] = None) -> None:

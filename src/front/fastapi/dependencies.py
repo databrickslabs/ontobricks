@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 import os
 import random
+import re
 import time as _time
 
 from back.core.logging import get_logger
@@ -41,7 +42,7 @@ if (
     and _partials_dir not in templates.env.loader.searchpath
 ):
     templates.env.loader.searchpath.append(_partials_dir)
-    for _sub in ("layout", "ontology", "mapping", "dtwin", "simulation", "domain", "registry"):
+    for _sub in ("layout", "ontology", "mapping", "dtwin", "intelligence", "domain", "registry"):
         _sub_dir = os.path.join(_partials_dir, _sub)
         if os.path.isdir(_sub_dir) and _sub_dir not in templates.env.loader.searchpath:
             templates.env.loader.searchpath.append(_sub_dir)
@@ -94,6 +95,20 @@ def get_user_email(context: dict) -> str:
     if request and hasattr(request.state, "user_email"):
         return request.state.user_email
     return ""
+
+
+@pass_context
+def get_user_display_name(context: dict) -> str:
+    """Return a human display name derived from the current user's email.
+
+    ``first.last@x`` / ``first_last@x`` become ``First Last``; an email
+    without a usable local part falls back to the raw email.
+    """
+    email = get_user_email(context)
+    parts = [p for p in re.split(r"[._\-]+", email.split("@")[0]) if p]
+    if not parts:
+        return email
+    return " ".join(p.capitalize() for p in parts)
 
 
 @pass_context
@@ -152,6 +167,7 @@ def ui_branding_css_vars(context: dict) -> str:
 templates.env.globals["url_for"] = url_for
 templates.env.globals["range"] = range_filter
 templates.env.globals["get_user_email"] = get_user_email
+templates.env.globals["get_user_display_name"] = get_user_display_name
 templates.env.globals["get_user_role"] = get_user_role
 templates.env.globals["get_user_domain_role"] = get_user_domain_role
 templates.env.globals["is_app_mode"] = is_app_mode

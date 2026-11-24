@@ -1,16 +1,16 @@
 /**
  * OntoBricks - mapping-import.js
- * Import section for the Mapping page - R2RML file import (local + Unity Catalog)
+ * R2RML import from the Mapping Studio toolbar ("Import" button → local .ttl / .rdf file).
  */
 
 document.addEventListener('DOMContentLoaded', function() {
-    // --- R2RML Import: Local file ---
-    document.getElementById('importR2rmlLocalBtn')?.addEventListener('click', function() {
-        document.getElementById('importR2rmlFileInput')?.click();
+    // --- R2RML Import: Local file (Studio toolbar) ---
+    document.getElementById('mappingImportR2RMLBtn')?.addEventListener('click', function() {
+        document.getElementById('mappingStudioImportR2rmlFileInput')?.click();
     });
 
-    // --- R2RML Import: file input change handler ---
-    document.getElementById('importR2rmlFileInput')?.addEventListener('change', async function(e) {
+    // --- R2RML Import: file input change handler (Studio) ---
+    document.getElementById('mappingStudioImportR2rmlFileInput')?.addEventListener('change', async function(e) {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -56,20 +56,26 @@ async function importR2rmlContent(content, filename) {
                 }
             }
 
-            // Show inline result summary
-            const resultDiv = document.getElementById('r2rmlImportResult');
-            const resultText = document.getElementById('r2rmlImportResultText');
-            if (resultDiv && resultText) {
-                resultText.textContent =
-                    `Imported from ${filename}: ${entityCount} entity mapping(s), ${relCount} relationship mapping(s).`;
-                resultDiv.classList.remove('d-none');
-            }
-
             if (typeof updateMappingCompletionStatus === 'function') {
                 updateMappingCompletionStatus();
             }
+            if (typeof updateTaxonomyStatus === 'function') {
+                updateTaxonomyStatus();
+            }
+            if (typeof refreshMappingDesign === 'function') {
+                refreshMappingDesign();
+            }
+            if (typeof ManualModule !== 'undefined' && typeof ManualModule.init === 'function') {
+                try { ManualModule.init(); } catch (_) { /* noop */ }
+            }
             if (typeof window.refreshOntologyStatus === 'function') {
                 window.refreshOntologyStatus();
+            }
+            // Keep the cached Turtle in sync with the imported mappings.
+            if (result.r2rml && typeof MappingState !== 'undefined') {
+                MappingState.r2rmlContent = result.r2rml;
+            } else if (typeof forceRegenerateR2RML === 'function') {
+                await forceRegenerateR2RML();
             }
 
             showNotification(

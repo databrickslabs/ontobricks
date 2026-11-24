@@ -27,7 +27,7 @@ EXISTING_ONT = {
         _prop("http://ex.org/hasB", "hasB", range_="http://ex.org/B"),
     ],
     "constraints": [],
-    "swrl_rules": [],
+    "if_then_rules": [],
     "axioms": [],
     "expressions": [],
     "groups": [],
@@ -45,7 +45,7 @@ class TestConflictDetectorClasses:
     def test_new_class_detected(self):
         incoming = {
             "classes": [_cls("http://ex.org/C", "C")],
-            "properties": [], "constraints": [], "swrl_rules": [],
+            "properties": [], "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = self.det.analyze(EXISTING_ONT, incoming)
@@ -56,7 +56,7 @@ class TestConflictDetectorClasses:
     def test_duplicate_class_skipped(self):
         incoming = {
             "classes": [_cls("http://ex.org/A", "A")],
-            "properties": [], "constraints": [], "swrl_rules": [],
+            "properties": [], "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = self.det.analyze(EXISTING_ONT, incoming)
@@ -66,7 +66,7 @@ class TestConflictDetectorClasses:
     def test_uri_conflict_different_name(self):
         incoming = {
             "classes": [_cls("http://ex.org/A", "Renamed_A")],
-            "properties": [], "constraints": [], "swrl_rules": [],
+            "properties": [], "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = self.det.analyze(EXISTING_ONT, incoming)
@@ -76,7 +76,7 @@ class TestConflictDetectorClasses:
     def test_name_conflict_different_uri(self):
         incoming = {
             "classes": [_cls("http://other.org/A", "A")],
-            "properties": [], "constraints": [], "swrl_rules": [],
+            "properties": [], "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = self.det.analyze(EXISTING_ONT, incoming)
@@ -86,7 +86,7 @@ class TestConflictDetectorClasses:
     def test_no_conflicts_flag(self):
         incoming = {
             "classes": [_cls("http://ex.org/C", "C")],
-            "properties": [], "constraints": [], "swrl_rules": [],
+            "properties": [], "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = self.det.analyze(EXISTING_ONT, incoming)
@@ -95,7 +95,7 @@ class TestConflictDetectorClasses:
     def test_has_conflicts_flag(self):
         incoming = {
             "classes": [_cls("http://ex.org/A", "Renamed_A")],
-            "properties": [], "constraints": [], "swrl_rules": [],
+            "properties": [], "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = self.det.analyze(EXISTING_ONT, incoming)
@@ -110,7 +110,7 @@ class TestConflictDetectorProperties:
         incoming = {
             "classes": [],
             "properties": [_prop("http://ex.org/hasC", "hasC")],
-            "constraints": [], "swrl_rules": [],
+            "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = self.det.analyze(EXISTING_ONT, incoming)
@@ -121,7 +121,7 @@ class TestConflictDetectorProperties:
         incoming = {
             "classes": [],
             "properties": [_prop("http://ex.org/hasB", "hasB", range_="http://ex.org/B")],
-            "constraints": [], "swrl_rules": [],
+            "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = self.det.analyze(EXISTING_ONT, incoming)
@@ -132,7 +132,7 @@ class TestConflictDetectorProperties:
         incoming = {
             "classes": [],
             "properties": [_prop("http://ex.org/hasB", "hasB", range_="http://ex.org/C")],
-            "constraints": [], "swrl_rules": [],
+            "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = self.det.analyze(EXISTING_ONT, incoming)
@@ -150,7 +150,7 @@ class TestConflictReportToDict:
         det = OntologyConflictDetector()
         incoming = {
             "classes": [_cls("http://ex.org/C", "C"), _cls("http://ex.org/A", "A")],
-            "properties": [], "constraints": [], "swrl_rules": [],
+            "properties": [], "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = det.analyze(EXISTING_ONT, incoming)
@@ -166,7 +166,7 @@ class TestConflictReportToDict:
         det = OntologyConflictDetector()
         incoming = {
             "classes": [_cls("http://ex.org/A", "Renamed_A")],
-            "properties": [], "constraints": [], "swrl_rules": [],
+            "properties": [], "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = det.analyze(EXISTING_ONT, incoming)
@@ -186,7 +186,7 @@ class TestApplyResolutions:
         det = OntologyConflictDetector()
         existing_ont = {
             "classes": [_cls("http://ex.org/A", "A")],
-            "properties": [], "constraints": [], "swrl_rules": [],
+            "properties": [], "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         incoming = {
@@ -194,7 +194,7 @@ class TestApplyResolutions:
                 _cls("http://ex.org/B", "B"),              # new
                 _cls("http://ex.org/A", "A_renamed"),       # uri_conflict
             ],
-            "properties": [], "constraints": [], "swrl_rules": [],
+            "properties": [], "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         self.report   = det.analyze(existing_ont, incoming)
@@ -248,7 +248,7 @@ class TestMixedScenario:
         existing = {
             "classes": [_cls("http://ex.org/X", "X")],
             "properties": [_prop("http://ex.org/p1", "p1")],
-            "constraints": [], "swrl_rules": [],
+            "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         incoming = {
@@ -261,7 +261,7 @@ class TestMixedScenario:
                 _prop("http://ex.org/p1", "p1"),        # duplicate
                 _prop("http://ex.org/p2", "p2"),        # new
             ],
-            "constraints": [], "swrl_rules": [],
+            "constraints": [], "if_then_rules": [],
             "axioms": [], "expressions": [], "groups": [],
         }
         report = det.analyze(existing, incoming)

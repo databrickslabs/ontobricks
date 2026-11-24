@@ -24,16 +24,94 @@
 }
 
 .ob-workspace-map .modal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
     border-bottom: 1px solid var(--db-border);
+}
+
+.ob-workspace-map .modal-title {
+    margin-right: auto;
 }
 
 .ob-workspace-map .modal-title > i {
     color: var(--db-primary);
 }
 
+/* Save / Close — top-right of the map, above the version switch strip. */
+.ob-workspace-map-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+}
+
+.ob-workspace-map-header-actions .btn-close {
+    margin: 0;
+}
+
+/* Switch Version strip — former dedicated popup, now under the map header. */
+.ob-workspace-map-versions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--db-border);
+    background: var(--db-canvas-warm);
+}
+
+.ob-workspace-map-versions-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    min-width: 0;
+    flex: 1 1 18rem;
+}
+
+.ob-workspace-map-versions-main .form-label {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--db-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ob-workspace-map-versions-main #switchVersionSelect {
+    width: auto;
+    min-width: 12rem;
+    max-width: 100%;
+}
+
+.ob-workspace-map-versions-main .form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.ob-workspace-map-versions-main .form-check-label {
+    font-size: 0.82rem;
+    color: var(--db-text-secondary);
+}
+
+.ob-workspace-map-versions-main .form-text {
+    flex: 1 1 100%;
+    font-size: 0.72rem;
+}
+
+.ob-workspace-map-versions-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .ob-workspace-map-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .ob-workspace-map-col {
@@ -79,7 +157,7 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.3rem 0.5rem;
-    border-radius: calc(var(--db-radius-control) - 1px);
+    border-radius: var(--db-radius-control);
     color: var(--db-text);
     font-size: 0.82rem;
     line-height: 1.25;
@@ -159,6 +237,76 @@
     background-image: url("/static/global/img/neo4j-icon.svg");
 }
 
+.ob-icon-genie {
+    background-image: url("/static/global/img/genie-icon.svg");
+}
+
+.ob-icon-unity-catalog {
+    background-image: url("/static/global/img/unity-catalog-icon.svg");
+}
+
+/* Knowledge Graph readiness indicator (next to each sub-page title) */
+.kg-status-indicator .badge {
+    font-size: 0.72rem;
+    vertical-align: middle;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.35;
+    padding: 0.25em 0.55em;
+    font-weight: 500;
+}
+
+.kg-status-indicator .badge i.bi {
+    font-size: 0.78rem;
+    vertical-align: -0.05rem;
+}
+
+.kg-status-indicator .badge .ob-brand-icon {
+    width: 0.95em;
+    height: 0.95em;
+    vertical-align: -0.12em;
+    margin-left: 0.2rem;
+    margin-right: 0.2rem;
+}
+
+.kg-status-indicator .kg-status-spinner {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-width: 0.12em;
+    vertical-align: -0.05rem;
+}
+
+.kg-status-indicator .kg-go-build-btn {
+    font-size: 0.72rem;
+    line-height: 1.4;
+}
+
+/* Blocking empty-state when the Knowledge Graph is not built yet */
+.kg-gate-card .kg-gate-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.kg-gate-card .kg-gate-copy {
+    max-width: 32rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.kg-gate-hidden {
+    display: none !important;
+}
+
+/* Section-header actions stay visible but inert while the page is gated
+   (discuss / help icons remain usable). */
+.kg-gate-blocked > .section-header .btn:not(.onto-discuss-btn),
+.kg-gate-blocked > .section-header select,
+.kg-gate-blocked > .section-header input,
+.kg-gate-blocked > .section-header .btn-group {
+    pointer-events: none;
+    opacity: 0.45;
+}
+
 /* Display utilities */
 .d-hidden {
     display: none;
@@ -224,7 +372,7 @@
     height: 100%;
     min-height: 500px;
     border: 1px solid #e0e0e0;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     flex: 1;
 }
 
@@ -268,13 +416,39 @@
    Button Overrides - Clarity hierarchy
    ========================================================================== */
 
-/* Base neutral button styling */
+/* Base button — Databricks Du Bois md geometry (Catalog Create/Share).
+   Colour variants below paint Create / Share; size is shared so page CTAs
+   match the navbar chrome. */
 .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    box-sizing: border-box;
+    height: var(--db-btn-height);
+    min-height: var(--db-btn-height);
+    padding: 0 var(--db-btn-padding-x);
+    font-size: var(--db-btn-font-size);
+    font-weight: var(--db-btn-font-weight);
+    line-height: 1;
     border-color: var(--db-border);
     color: var(--db-text);
     background-color: var(--db-surface-warm);
-    border-radius: var(--db-radius-control);
+    border-radius: var(--db-btn-radius);
     transition: var(--db-transition-fast);
+}
+
+/* Bootstrap's -sm / -lg ramps override padding/font/radius; pin them back to
+   Du Bois md so `btn-sm` (used on almost every page CTA) still looks right. */
+.btn-sm,
+.btn-lg {
+    height: var(--db-btn-height);
+    min-height: var(--db-btn-height);
+    padding: 0 var(--db-btn-padding-x);
+    font-size: var(--db-btn-font-size);
+    font-weight: var(--db-btn-font-weight);
+    line-height: 1;
+    border-radius: var(--db-btn-radius);
 }
 
 .btn:hover {
@@ -288,110 +462,86 @@
 }
 
 /* Primary is the only filled action variant */
+/* Create — the filled primary action (Databricks Catalog "Create"). Solid fill,
+   no gradient and no resting shadow: elevation is for floating surfaces only. */
 .btn-primary {
-    background: var(--db-gradient-primary);
-    border-color: var(--db-primary);
-    color: var(--db-on-primary);
-    box-shadow: var(--db-shadow-primary);
+    background: var(--db-btn-primary);
+    border-color: var(--db-btn-primary);
+    color: var(--db-btn-primary-on);
+    box-shadow: none;
 }
 
 .btn-primary:hover {
-    background: var(--db-primary-dark);
-    border-color: var(--db-primary-dark);
-    color: var(--db-on-primary);
+    background: var(--db-btn-primary-hover);
+    border-color: var(--db-btn-primary-hover);
+    color: var(--db-btn-primary-on);
 }
 
 .btn-primary:focus {
-    background: var(--db-primary-dark);
-    border-color: var(--db-primary-dark);
-    color: var(--db-on-primary);
+    background: var(--db-btn-primary-hover);
+    border-color: var(--db-btn-primary-hover);
+    color: var(--db-btn-primary-on);
     box-shadow: var(--db-focus-ring);
 }
 
 .btn-primary:active,
 .btn-primary.active,
 .show > .btn-primary.dropdown-toggle {
-    background-color: var(--db-primary-darker) !important;
-    border-color: var(--db-primary-darker) !important;
-    color: var(--db-on-primary) !important;
+    background-color: var(--db-btn-primary-hover) !important;
+    border-color: var(--db-btn-primary-hover) !important;
+    color: var(--db-btn-primary-on) !important;
 }
 
-/* Keep secondary/semantic solid variants neutral and unfilled */
+/* Share — the outlined secondary action (Databricks Catalog "Share").
+   Every non-Create Bootstrap action variant uses this style so the app has
+   only two button looks: Create (filled) and Share (outlined). Settings →
+   UI → Theme → Secondary button drives the colours. Semantic names
+   (success, warning, info, outline-primary, …) keep their class for
+   intent/JS, but share the same paint. */
 .btn-secondary,
+.btn-outline-secondary,
 .btn-success,
-.btn-danger,
 .btn-warning,
 .btn-info,
 .btn-light,
-.btn-dark {
-    background-color: transparent;
-    border-color: var(--db-border);
-    color: var(--db-text-secondary);
-}
-
-.btn-secondary:hover,
-.btn-success:hover,
-.btn-danger:hover,
-.btn-warning:hover,
-.btn-info:hover,
-.btn-light:hover,
-.btn-dark:hover {
-    background-color: var(--db-hover-warm);
-    border-color: var(--db-border);
-    color: var(--db-text);
-}
-
-.btn-secondary:active,
-.btn-success:active,
-.btn-danger:active,
-.btn-warning:active,
-.btn-info:active,
-.btn-light:active,
-.btn-dark:active {
-    background-color: var(--db-line-soft) !important;
-    border-color: var(--db-border) !important;
-    color: var(--db-text) !important;
-}
-
-/* Outline buttons stay unfilled */
+.btn-dark,
 .btn-outline-primary,
-.btn-outline-secondary,
 .btn-outline-success,
-.btn-outline-danger,
 .btn-outline-warning,
 .btn-outline-info,
 .btn-outline-light,
 .btn-outline-dark {
-    background-color: transparent;
-    border-color: var(--db-border);
-    color: var(--db-text-secondary);
+    background-color: var(--db-surface-warm);
+    border-color: var(--db-btn-secondary-border);
+    color: var(--db-btn-secondary);
 }
 
-.btn-outline-primary:hover,
+.btn-secondary:hover,
 .btn-outline-secondary:hover,
+.btn-success:hover,
+.btn-warning:hover,
+.btn-info:hover,
+.btn-light:hover,
+.btn-dark:hover,
+.btn-outline-primary:hover,
 .btn-outline-success:hover,
-.btn-outline-danger:hover,
 .btn-outline-warning:hover,
 .btn-outline-info:hover,
 .btn-outline-light:hover,
 .btn-outline-dark:hover {
-    background-color: var(--db-hover-warm);
-    border-color: var(--db-border);
-    color: var(--db-text);
+    background-color: var(--db-btn-secondary-hover);
+    border-color: var(--db-btn-secondary-border);
+    color: var(--db-btn-secondary);
 }
 
-/* Bootstrap's own `:focus-visible` repaints a button with its *hover* palette,
-   which for these variants is the solid fill we deliberately dropped — so a
-   focused outline button turned solid grey / blue / red. Pin the resting
-   palette and let the ring alone carry the focus. Both `:focus` and
-   `:focus-visible` are listed because Bootstrap uses the latter, and matching
-   its specificity is what makes these win. */
+/* Bootstrap's `:focus-visible` repaints with the hover palette; pin the
+   resting Share surface so focus is carried by the ring alone. */
 .btn-secondary:focus,
 .btn-secondary:focus-visible,
+.btn-outline-secondary:focus,
+.btn-outline-secondary:focus-visible,
 .btn-success:focus,
 .btn-success:focus-visible,
-.btn-danger:focus,
-.btn-danger:focus-visible,
 .btn-warning:focus,
 .btn-warning:focus-visible,
 .btn-info:focus,
@@ -402,12 +552,8 @@
 .btn-dark:focus-visible,
 .btn-outline-primary:focus,
 .btn-outline-primary:focus-visible,
-.btn-outline-secondary:focus,
-.btn-outline-secondary:focus-visible,
 .btn-outline-success:focus,
 .btn-outline-success:focus-visible,
-.btn-outline-danger:focus,
-.btn-outline-danger:focus-visible,
 .btn-outline-warning:focus,
 .btn-outline-warning:focus-visible,
 .btn-outline-info:focus,
@@ -416,18 +562,36 @@
 .btn-outline-light:focus-visible,
 .btn-outline-dark:focus,
 .btn-outline-dark:focus-visible {
-    background-color: transparent;
-    border-color: var(--db-border);
-    color: var(--db-text-secondary);
+    background-color: var(--db-surface-warm);
+    border-color: var(--db-btn-secondary-border);
+    color: var(--db-btn-secondary);
     box-shadow: var(--db-focus-ring);
 }
 
-.btn-outline-primary:active,
-.btn-outline-primary.active,
-.show > .btn-outline-primary.dropdown-toggle,
+.btn-secondary:active,
+.btn-secondary.active,
+.show > .btn-secondary.dropdown-toggle,
 .btn-outline-secondary:active,
 .btn-outline-secondary.active,
 .show > .btn-outline-secondary.dropdown-toggle,
+.btn-success:active,
+.btn-success.active,
+.show > .btn-success.dropdown-toggle,
+.btn-warning:active,
+.btn-warning.active,
+.show > .btn-warning.dropdown-toggle,
+.btn-info:active,
+.btn-info.active,
+.show > .btn-info.dropdown-toggle,
+.btn-light:active,
+.btn-light.active,
+.show > .btn-light.dropdown-toggle,
+.btn-dark:active,
+.btn-dark.active,
+.show > .btn-dark.dropdown-toggle,
+.btn-outline-primary:active,
+.btn-outline-primary.active,
+.show > .btn-outline-primary.dropdown-toggle,
 .btn-outline-success:active,
 .btn-outline-success.active,
 .show > .btn-outline-success.dropdown-toggle,
@@ -443,33 +607,43 @@
 .btn-outline-dark:active,
 .btn-outline-dark.active,
 .show > .btn-outline-dark.dropdown-toggle {
-    background-color: transparent !important;
-    border-color: var(--db-border) !important;
-    color: var(--db-text-secondary) !important;
+    background-color: var(--db-btn-secondary-hover) !important;
+    border-color: var(--db-btn-secondary-border) !important;
+    color: var(--db-btn-secondary) !important;
 }
 
+/* Destructive — Share structure with danger colours (the only semantic paint). */
+.btn-danger,
 .btn-outline-danger {
-    color: var(--db-status-danger);
+    background-color: var(--db-surface-warm);
     border-color: rgba(220, 38, 38, 0.35);
+    color: var(--db-status-danger);
 }
 
+.btn-danger:hover,
 .btn-outline-danger:hover {
     color: var(--db-status-danger);
     border-color: var(--db-status-danger);
     background-color: var(--db-status-danger-soft-bg);
 }
 
-/* Danger keeps its red lettering when focused, unlike the neutral variants. */
+.btn-danger:focus,
+.btn-danger:focus-visible,
 .btn-outline-danger:focus,
 .btn-outline-danger:focus-visible {
+    background-color: var(--db-surface-warm);
     color: var(--db-status-danger);
     border-color: rgba(220, 38, 38, 0.35);
+    box-shadow: var(--db-focus-ring);
 }
 
+.btn-danger:active,
+.btn-danger.active,
+.show > .btn-danger.dropdown-toggle,
 .btn-outline-danger:active,
 .btn-outline-danger.active,
 .show > .btn-outline-danger.dropdown-toggle {
-    background-color: transparent !important;
+    background-color: var(--db-status-danger-soft-bg) !important;
     border-color: var(--db-status-danger) !important;
     color: var(--db-status-danger) !important;
 }
@@ -480,8 +654,14 @@
     color: inherit;
 }
 
-/* Button close - keep default Bootstrap styling */
+/* Button close - keep default Bootstrap styling (not a Du Bois action).
+   Keep Bootstrap's 1em box: the button has no content, so `height: auto`
+   collapsed it to its padding (7px), shrinking the X and pinning it to the
+   top of its row (toasts, modal headers). */
 .btn-close {
+    height: 1em;
+    min-height: 0;
+    padding: 0.25em;
     background-color: transparent;
     border: none;
 }
@@ -498,14 +678,24 @@
 
 .btn-primary:disabled,
 .btn-primary.disabled {
-    background-color: var(--db-primary);
-    border-color: var(--db-primary);
-    color: #fff;
+    background-color: var(--db-btn-primary);
+    border-color: var(--db-btn-primary);
+    color: var(--db-btn-primary-on);
     opacity: 0.55;
 }
 
-/* Button link variant - text only */
-.btn-link {
+/* Button link variant - text only; not a Du Bois action button. */
+.btn-link,
+.btn-link.btn-sm,
+.btn-link.btn-lg {
+    display: inline;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    font-size: inherit;
+    font-weight: 400;
+    line-height: inherit;
+    border-radius: 0;
     color: var(--db-text-secondary);
     background-color: transparent;
     border-color: transparent;
@@ -537,7 +727,7 @@
     align-items: center;
     gap: 0.2rem;
     padding: 0.75rem 0.5rem;
-    border-radius: 0.5rem;
+    border-radius: var(--db-radius-control);
     border: 1px solid #dee2e6;
     background: #fff;
     text-align: center;
@@ -547,7 +737,7 @@
 .ob-kpi-tile-icon {
     width: 2rem;
     height: 2rem;
-    border-radius: 0.4rem;
+    border-radius: var(--db-radius-control);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -597,29 +787,6 @@
 .ob-kpi-tile.tile-accent-success { border-bottom: 3px solid #198754; }
 .ob-kpi-tile.tile-accent-warning { border-bottom: 3px solid #ffc107; }
 .ob-kpi-tile.tile-accent-danger  { border-bottom: 3px solid #dc3545; }
-
-/* KPI / health band — responsive tile grid. Shared by the Home page and
-   Domain → General (the "Current Domain" band). */
-.ob-kpi-band {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 1rem;
-}
-
-@media (max-width: 992px) {
-    .ob-kpi-band { grid-template-columns: repeat(3, 1fr); }
-}
-
-@media (max-width: 576px) {
-    .ob-kpi-band { grid-template-columns: repeat(2, 1fr); }
-}
-
-/* The status / version tiles carry a badge in place of a numeric value. */
-.ob-kpi-band .ob-kpi-tile-value .badge {
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
 
 /* ==========================================================================
    Home Page Workflow Steps
@@ -727,7 +894,7 @@
     margin-top: 0.75rem;
     font-size: 0.7rem;
     padding: 0.2rem 0.6rem;
-    border-radius: 10px;
+    border-radius: var(--db-radius-control);
     white-space: nowrap;
     display: inline-block;
 }
@@ -787,30 +954,43 @@
    Task Tracker
    ========================================================================== */
 
-.task-tracker-dropdown {
+.activity-center-dropdown {
     width: 480px;
-    max-height: 500px;
+    max-height: 560px;
     overflow-y: auto;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(0, 0, 0, 0.1);
     z-index: 9999 !important;
     background: white !important;
     color: #212529;
-    border-radius: 0.375rem;
+    border-radius: var(--db-radius-control);
 }
 
-.navbar .dropdown-menu.task-tracker-dropdown .dropdown-item,
-.task-tracker-dropdown .fw-semibold,
-.task-tracker-dropdown .text-muted {
+.navbar .dropdown-menu.activity-center-dropdown .dropdown-item,
+.activity-center-dropdown .fw-semibold,
+.activity-center-dropdown .text-muted {
     color: inherit;
 }
 
-.task-tracker-dropdown .border-bottom {
+.activity-center-dropdown .border-bottom,
+.activity-center-dropdown .border-top {
     border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
-.task-tracker-dropdown.show {
+.activity-center-dropdown.show {
     display: block !important;
+}
+
+.activity-center-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem 0.25rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--db-text-muted);
 }
 
 .task-item {
@@ -849,17 +1029,24 @@
     to { transform: rotate(360deg); }
 }
 
-/* Task tracker toggle button */
-#taskTrackerToggle,
-#notifCenterToggle {
+/* Activity center toggle button */
+#activityCenterToggle {
     position: relative;
 }
 
-#taskTrackerBadge,
-#notifCenterBadge {
+/* Round count bubbles. ID selectors + !important beat Bootstrap's
+   `.rounded-pill` (which is pinned to the 2px pill token app-wide). */
+#activityCenterBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 0.6rem;
-    padding: 0.2em 0.45em;
+    line-height: 1;
+    padding: 0 0.25em;
     min-width: 16px;
+    height: 16px;
+    aspect-ratio: 1 / 1;
+    border-radius: 50% !important;
     transform: translate(-50%, 20%) !important;
 }
 
@@ -875,14 +1062,15 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.95);
+    /* Opaque so the previous form/screen never shows through while a task runs. */
+    background: var(--db-surface-warm);
     display: flex;
     justify-content: center;
     align-items: flex-start;
     overflow-y: auto;
     padding: 2rem 1rem;
     z-index: 100;
-    border-radius: 0.375rem;
+    border-radius: var(--db-radius-control);
 }
 
 .task-step-log-panel,
@@ -901,7 +1089,7 @@
     padding: 0.5rem 0.75rem;
     background: rgba(248, 250, 252, 0.9);
     border: 1px solid var(--bs-border-color, #dee2e6);
-    border-radius: 0.375rem;
+    border-radius: var(--db-radius-control);
 }
 
 .task-activity-row:last-child,
@@ -973,7 +1161,7 @@
 
 .ob-shortcut-card {
     background: var(--bs-body-bg, #fff);
-    border-radius: 0.5rem;
+    border-radius: var(--db-radius-card);
     padding: 1.25rem 1.5rem;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
     min-width: 320px;
@@ -982,7 +1170,7 @@
 .ob-shortcut-card kbd {
     background: #ffffff;
     border: 1px solid var(--bs-border-color, #dee2e6);
-    border-radius: 3px;
+    border-radius: 2px;
     padding: 0.1rem 0.4rem;
     font-size: 0.8rem;
 }
@@ -994,21 +1182,22 @@
    Add `ob-tabs--compact` only in constrained panels. The component preserves
    Bootstrap tab behaviour while owning the complete visual contract.
 
-   The rail and its content are independent surfaces. The rail therefore has
-   no filled container or rounded outer frame, and the selected item remains
-   transparent with a 2px primary underline. Horizontal overflow keeps labels
-   on one line in narrow panels and on mobile.
+   The rail and its content are independent surfaces with no global borders.
+   The rail has no filled container, rounded frame, or global baseline border:
+   only the selected item draws a 3px primary underline. Horizontal overflow
+   keeps labels on one line in narrow panels and on mobile.
    ========================================================================== */
 .nav-tabs.ob-tabs {
     display: flex;
     flex-wrap: nowrap;
     min-width: 0;
+    width: 100%;
     background: transparent;
     border: 0;
-    border-bottom: 1px solid var(--db-border, #dee2e6);
+    border-bottom: 1px solid var(--db-border);
     border-radius: 0;
-    margin-right: 12px;
-    gap: 0;
+    margin-right: 0;
+    gap: 1.5rem;
     padding: 0;
     overflow-x: auto;
     overflow-y: hidden;
@@ -1026,35 +1215,54 @@
     margin-right: 0;
 }
 
+/* Databricks style: enclosing workspace cards inside the page panel have no
+   borders or card frames under the section header. */
+.sidebar-section > .content-section > .card,
+.sidebar-section > .content-section > form.card,
+.sidebar-section > .content-section > .card:has(.ob-tabs-wrap),
+.sidebar-section > .content-section > .card:has(.nav-tabs.ob-tabs),
+.sidebar-section > .content-section > form.card.ob-tabs-wrap,
+.sidebar-section > .content-section > .card.ob-tabs-wrap,
+.sidebar-section > .card:has(.nav-tabs.ob-tabs),
+.sidebar-section > .card.query-card-fill,
+.sidebar-section > .card.graph-chat-container,
+.card:has(> .card-body.ob-tabs-wrap),
+.card:has(> .card-body > .ob-tabs-wrap) {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
 .nav-tabs.ob-tabs .nav-item {
     flex: 0 0 auto;
-    margin-bottom: -1px;
+    margin-bottom: 0;
 }
 
 .nav-tabs.ob-tabs .nav-link {
     background: transparent !important;
     border: none !important;
-    border-bottom: 2px solid transparent !important;
+    border-bottom: 3px solid transparent !important;
     border-radius: 0 !important;
     color: var(--db-text-secondary, #6c757d) !important;
-    font-size: 0.9rem;
+    font-size: 0.8125rem;
     font-weight: 500;
-    padding: 0.5rem 0.875rem;
+    line-height: 1.25rem;
+    padding: 0.5rem 0;
     margin: 0;
-    transition: color 0.15s ease, background-color 0.15s ease,
-        border-color 0.15s ease;
+    margin-bottom: -1px;
+    transition: color 0.15s ease, border-color 0.15s ease;
     white-space: nowrap;
 }
 
 .nav-tabs.ob-tabs .nav-link:hover:not(.active):not(.disabled) {
-    color: var(--db-text, #1e293b) !important;
-    background: var(--db-hover-indigo, var(--db-hover-warm, rgba(0, 0, 0, 0.03))) !important;
+    color: var(--db-primary) !important;
+    background: transparent !important;
     border-bottom-color: transparent !important;
 }
 
 .nav-tabs.ob-tabs .nav-link.active,
 .nav-tabs.ob-tabs .nav-item.show .nav-link {
-    color: var(--db-primary-darker, #3730A3) !important;
+    color: var(--db-text, #1e293b) !important;
     background: transparent !important;
     border-bottom-color: var(--db-primary) !important;
     border-radius: 0 !important;
@@ -1063,13 +1271,17 @@
 
 .nav-tabs.ob-tabs .nav-link:focus-visible {
     outline: 2px solid var(--db-primary);
-    outline-offset: -3px;
+    outline-offset: 2px;
     box-shadow: none;
+}
+
+.nav-tabs.ob-tabs.ob-tabs--compact {
+    gap: 1rem;
 }
 
 .nav-tabs.ob-tabs.ob-tabs--compact .nav-link {
     font-size: 0.75rem;
-    padding: 0.35rem 0.6rem;
+    padding: 0.35rem 0;
 }
 
 /* Standalone full-height pattern: the rail stays pinned while its independent
@@ -1114,10 +1326,6 @@
     line-height: 1;
 }
 
-.ob-warehouse-status-icon {
-    color: var(--bs-secondary);
-}
-
 .ob-navbar-count-badge {
     top: 4px;
 }
@@ -1137,11 +1345,6 @@
     font-size: 12px;
 }
 
-.ob-sparksql-console {
-    min-height: 400px;
-    background: #1e1e1e;
-}
-
 .ob-autoassign-progress-bar {
     width: 0%;
 }
@@ -1149,13 +1352,6 @@
 /* Non-!important hide — JS may override via element.style.display */
 .ob-hidden {
     display: none;
-}
-
-.ob-home-brand-version {
-    font-size: 0.4em;
-    font-weight: 300;
-    opacity: 0.6;
-    vertical-align: middle;
 }
 
 /* ==========================================================================
@@ -1196,4 +1392,295 @@
         transition: none;
         opacity: 0.55;
     }
+}
+
+/* ==========================================================================
+   Run lists — Databricks Jobs → Runs style
+   Shared by Graph → Build → Runs, Intelligence → Analytics → Runs and
+   Settings → Automation → Runs (rows rendered by global/js/runs-render.js).
+   Flat list: transparent header, hairline rows, start-time link first,
+   icon + word status, ghost details control.
+   ========================================================================== */
+.ob-runs-count {
+    font-size: 0.8125rem;
+    color: var(--db-text-secondary);
+}
+
+/* ---- Filter bar (Databricks Query History style) ----------------------
+   Search + filter dropdown buttons above a flat list. Shared by every
+   work list: My Tasks, Build / Analytics runs, etc.
+   Markup: .ob-filter-bar > .ob-filter-search | .dropdown > .ob-filter-btn
+           + .ob-runs-count (row count on the right).                      */
+.ob-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.ob-filter-search {
+    position: relative;
+    flex: 0 1 18rem;
+    min-width: 12rem;
+}
+
+.ob-filter-search > .bi {
+    position: absolute;
+    top: 50%;
+    left: 0.6rem;
+    transform: translateY(-50%);
+    font-size: 0.8125rem;
+    color: var(--db-text-muted);
+    pointer-events: none;
+}
+
+.ob-filter-search > .form-control {
+    padding-left: 1.85rem;
+    font-size: 0.8125rem;
+}
+
+.ob-filter-btn {
+    font-size: 0.8125rem;
+    color: var(--db-text);
+    background: transparent;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+}
+
+.ob-filter-btn:hover,
+.ob-filter-btn.show {
+    background: var(--db-hover);
+    color: var(--db-text);
+    border-color: var(--db-border);
+}
+
+.ob-filter-btn.is-active {
+    color: var(--db-link);
+    border-color: var(--db-link);
+    background: var(--db-primary-soft);
+}
+
+.ob-filter-btn:focus-visible {
+    outline: 2px solid transparent;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-runs-table {
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: var(--db-hover);
+    --bs-table-border-color: var(--db-border-light);
+    margin-bottom: 0;
+    font-size: 0.8125rem;
+    background-color: transparent;
+}
+
+.ob-runs-table > thead > tr > th {
+    background: transparent;
+    color: var(--db-text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 0.35rem 0.75rem;
+    border-bottom: 1px solid var(--db-border);
+}
+
+.ob-runs-table > tbody > tr > td {
+    padding: 0.3rem 0.75rem;
+    line-height: 1.3;
+    color: var(--db-text);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--db-border-light);
+}
+
+.ob-runs-table > tbody > tr:last-child > td {
+    border-bottom: 0;
+}
+
+/* Row buttons must not force taller rows. */
+.ob-runs-table .btn-sm {
+    padding-top: 0.05rem;
+    padding-bottom: 0.05rem;
+    line-height: 1.4;
+}
+
+.ob-run-link {
+    color: var(--db-link);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.ob-run-link:hover,
+.ob-run-link:focus {
+    color: var(--db-link-hover);
+    text-decoration: underline;
+}
+
+.ob-run-link:focus-visible,
+.ob-run-details-btn:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-run-version {
+    color: var(--db-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.ob-run-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--db-text);
+}
+
+.ob-run-status > .bi {
+    font-size: 0.875rem;
+    line-height: 1;
+    color: var(--db-text-muted);
+}
+
+.ob-run-status.is-success > .bi {
+    color: var(--db-status-success);
+}
+
+.ob-run-status.is-failed > .bi {
+    color: var(--db-status-danger);
+}
+
+.ob-run-status.is-running > .bi {
+    color: var(--db-status-info);
+}
+
+.ob-run-status.is-pending > .bi,
+.ob-run-status.is-canceled > .bi {
+    color: var(--db-text-muted);
+}
+
+.ob-run-outcome {
+    max-width: 18rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ob-run-details-btn {
+    background: transparent;
+    border: 0;
+    color: var(--db-text-secondary);
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--db-radius-control);
+    line-height: 1;
+}
+
+.ob-run-details-btn:hover {
+    background: var(--db-hover);
+    color: var(--db-text);
+}
+
+/* ==========================================================================
+   Databricks Du Bois kebab menu (`.ob-dbx-menu`)
+   Borderless ⋮ toggle + icon/label action dropdown. Place the toggle left of
+   the section primary CTA. Reference consumer:
+   partials/dtwin/_build_more_actions.html. Contract: .cursor/11 § Kebab.
+   ========================================================================== */
+.ob-dbx-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    color: var(--db-text-muted);
+    background-color: transparent;
+    border: 0;
+    border-radius: var(--db-radius-control);
+    box-shadow: none;
+    line-height: 1;
+}
+
+.ob-dbx-menu-toggle:hover,
+.ob-dbx-menu-toggle:focus,
+.ob-dbx-menu-toggle[aria-expanded="true"] {
+    color: var(--db-text);
+    background-color: var(--db-hover-indigo);
+}
+
+.ob-dbx-menu-toggle .bi {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.ob-dbx-menu {
+    min-width: 13.5rem;
+    padding: 0.25rem;
+    margin-top: 0.25rem;
+    background-color: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    box-shadow: var(--db-shadow-md);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    --bs-dropdown-link-hover-bg: var(--db-hover-indigo);
+    --bs-dropdown-link-hover-color: var(--db-text);
+    --bs-dropdown-link-active-bg: var(--db-hover-indigo);
+    --bs-dropdown-link-active-color: var(--db-text);
+}
+
+.ob-dbx-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.4rem 0.65rem;
+    margin: 0;
+    border-radius: var(--db-radius-control);
+    color: var(--db-text);
+    font-size: 0.8125rem;
+    font-weight: 400;
+    line-height: 1.25rem;
+    white-space: nowrap;
+}
+
+.ob-dbx-menu .dropdown-item:hover,
+.ob-dbx-menu .dropdown-item:focus {
+    background-color: var(--db-hover-indigo);
+    color: var(--db-text);
+}
+
+.ob-dbx-menu .dropdown-item:active,
+.ob-dbx-menu .dropdown-item.active {
+    background-color: var(--db-hover-indigo);
+    color: var(--db-text);
+}
+
+.ob-dbx-menu .dropdown-item.disabled,
+.ob-dbx-menu .dropdown-item:disabled {
+    color: var(--db-text-muted);
+    background-color: transparent;
+    opacity: 0.65;
+}
+
+.ob-dbx-menu .ob-dbx-menu-icon {
+    flex: 0 0 1rem;
+    width: 1rem;
+    height: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--db-text-muted);
+}
+
+.ob-dbx-menu .ob-dbx-menu-icon .bi {
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.ob-dbx-menu .dropdown-item:hover .ob-dbx-menu-icon,
+.ob-dbx-menu .dropdown-item:focus .ob-dbx-menu-icon {
+    color: var(--db-text-secondary);
+}
+
+.ob-dbx-menu .ob-dbx-menu-label {
+    flex: 1 1 auto;
+    min-width: 0;
 }

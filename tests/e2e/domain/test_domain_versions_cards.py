@@ -2,7 +2,10 @@
 
 import json
 
+import pytest
 from playwright.sync_api import expect
+
+pytestmark = pytest.mark.needs_domain
 
 DESKTOP = {"width": 1600, "height": 1000}
 MOBILE = {"width": 390, "height": 844}

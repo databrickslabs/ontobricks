@@ -26,6 +26,7 @@ from back.core.errors import (
 from back.core.helpers import (
     get_databricks_client,
     resolve_warehouse_id,
+    run_blocking,
 )
 from back.core.logging import get_logger
 from back.core.task_manager import get_task_manager
@@ -43,7 +44,7 @@ from api.routers.internal._permissions import (
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/domain", tags=["Domain"])
+router = APIRouter(prefix="/domain", tags=["Context"])
 
 
 # ===========================================
@@ -59,13 +60,15 @@ async def get_domain_info(session_mgr: SessionManager = Depends(get_session_mana
 
 @router.post("/info")
 async def save_domain_info(
-    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
 ):
     """Save domain information."""
     data = await request.json()
     domain = get_domain(session_mgr)
-    response_info = Domain(domain).save_domain_info(data)
-    return {"success": True, "info": response_info, "message": "Domain info saved"}
+    response_info = Domain(domain, settings).save_domain_info(data)
+    return {"success": True, "info": response_info, "message": "Context info saved"}
 
 
 # ===========================================
@@ -128,7 +131,7 @@ async def check_domain_name(
     except Exception as exc:
         logger.exception("check_domain_name: registry lookup failed for '%s'", name)
         raise InfrastructureError(
-            "Could not verify domain name availability",
+            "Could not verify context name availability",
         ) from exc
 
 
@@ -216,7 +219,7 @@ async def reset_domain(session_mgr: SessionManager = Depends(get_session_manager
     domain = get_domain(session_mgr)
     domain.reset()
     domain.clear_uc_metadata()
-    return {"success": True, "message": "Domain reset"}
+    return {"success": True, "message": "Context reset"}
 
 
 @router.post("/clear")
@@ -245,7 +248,7 @@ async def close_domain(
     domain = get_domain(session_mgr)
     domain.reset()
     domain.clear_uc_metadata()
-    return {"success": True, "message": "Domain closed"}
+    return {"success": True, "message": "Context closed"}
 
 
 # ===========================================
@@ -326,7 +329,7 @@ async def save_domain_config(
     Note: warehouse_id is no longer stored per-project (it is instance-global).
     Catalog/schema are NOT stored -- they are selected dynamically when needed.
     """
-    return {"success": True, "message": "Domain configuration saved"}
+    return {"success": True, "message": "Context configuration saved"}
 
 
 # ===========================================
@@ -440,13 +443,17 @@ async def list_domains(
     Non-admin users only see the domains they have a role on
     (viewer / editor / builder). Admins see everything.
     """
-    domain = get_domain(session_mgr)
-    svc = Domain(domain, settings).build_registry_service()
-    result = Domain.list_domains_result(svc)
-    result["domains"] = filter_visible_domains(
-        request, session_mgr, settings, result.get("domains", [])
-    )
-    return result
+    def _work():
+        domain = get_domain(session_mgr)
+        svc = Domain(domain, settings).build_registry_service()
+        result = Domain.list_domains_result(svc)
+        result["domains"] = filter_visible_domains(
+            request, session_mgr, settings, result.get("domains", [])
+        )
+        return result
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.get("/list-versions")
@@ -511,7 +518,8 @@ async def load_domain_from_uc(
     # Opening a different domain closes the currently-open one first (releases
     # its edit-lock before the new load). Same-domain version switches defer to
     # on_domain_loaded below.
-    switching = EditLockService.release_prev_on_switch(
+    switching = await run_blocking(
+        EditLockService.release_prev_on_switch,
         request,
         session_mgr,
         settings,
@@ -522,20 +530,26 @@ async def load_domain_from_uc(
 
     p = Domain(domain, settings)
     try:
-        result = p.load_domain_from_uc(
-            p.build_registry_service(), domain_name, version
+        # load_domain_from_uc is sync Lakebase I/O — keep the event loop free.
+        result = await run_blocking(
+            p.load_domain_from_uc,
+            p.build_registry_service(),
+            domain_name,
+            version,
         )
     except Exception:
         # Load raised after we freed the previous lock — restore it so a failed
         # switch does not orphan the user's lock on the domain they came from.
         if switching:
-            EditLockService.reacquire(
-                request, session_mgr, settings, prev_folder, prev_version
+            await run_blocking(
+                EditLockService.reacquire,
+                request, session_mgr, settings, prev_folder, prev_version,
             )
         raise
 
     if isinstance(result, dict) and result.get("success"):
-        result["lock"] = EditLockService.on_domain_loaded(
+        result["lock"] = await run_blocking(
+            EditLockService.on_domain_loaded,
             request,
             session_mgr,
             settings,
@@ -546,8 +560,9 @@ async def load_domain_from_uc(
         )
     elif switching:
         # Load returned a failure envelope — restore the previous lock too.
-        EditLockService.reacquire(
-            request, session_mgr, settings, prev_folder, prev_version
+        await run_blocking(
+            EditLockService.reacquire,
+            request, session_mgr, settings, prev_folder, prev_version,
         )
     return result
 
@@ -574,7 +589,8 @@ async def get_version_status(
     Results are cached server-side for a short TTL.
     Pass ``?refresh=true`` to force a fresh UC lookup.
     """
-    return Domain(get_domain(session_mgr), settings).get_version_status(refresh=refresh)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(Domain(get_domain(session_mgr), settings).get_version_status, refresh=refresh)
 
 
 @router.get("/versions-list")
@@ -584,18 +600,22 @@ async def list_version_details(
     settings: Settings = Depends(get_settings),
 ):
     """List all versions with card metadata and allowed actions."""
-    from back.objects.registry.gitsync.GitHubConfig import GitHubConfig
+    def _work():
+        from back.objects.registry.gitsync.GitHubConfig import GitHubConfig
 
-    domain = get_domain(session_mgr)
-    p = Domain(domain, settings)
-    svc = p.build_registry_service()
-    result = p.list_version_details(
-        svc,
-        user_role=getattr(request.state, "user_role", "") or "",
-        user_domain_role=getattr(request.state, "user_domain_role", "") or "",
-    )
-    result["github_enabled"] = GitHubConfig.ready_for(svc.store)
-    return result
+        domain = get_domain(session_mgr)
+        p = Domain(domain, settings)
+        svc = p.build_registry_service()
+        result = p.list_version_details(
+            svc,
+            user_role=getattr(request.state, "user_role", "") or "",
+            user_domain_role=getattr(request.state, "user_domain_role", "") or "",
+        )
+        result["github_enabled"] = GitHubConfig.ready_for(svc.store)
+        return result
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.delete("/versions/{version}")
@@ -613,7 +633,7 @@ async def delete_domain_version(
     # unrelated saved domain from an unsaved same-name session.
     folder = (domain.domain_folder or "").strip()
     if not folder:
-        raise ValidationError("Domain not saved to the registry")
+        raise ValidationError("Context not saved to the registry")
     return SettingsService.delete_registry_version_result(
         folder,
         version,
@@ -721,7 +741,8 @@ async def get_edit_lock(
     """
     from back.objects.registry.collab import EditLockService
 
-    return EditLockService.status(request, session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(EditLockService.status, request, session_mgr, settings)
 
 
 @router.post("/edit-lock/acquire")
@@ -752,7 +773,8 @@ async def release_edit_lock(
     """Release the current user's lock (the "Close" button)."""
     from back.objects.registry.collab import EditLockService
 
-    return EditLockService.release(request, session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(EditLockService.release, request, session_mgr, settings)
 
 
 @router.post("/edit-lock/renew")
@@ -768,7 +790,8 @@ async def renew_edit_lock(
     """
     from back.objects.registry.collab import EditLockService
 
-    return EditLockService.renew(request, session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(EditLockService.renew, request, session_mgr, settings)
 
 
 # ===========================================
@@ -780,6 +803,21 @@ async def renew_edit_lock(
 async def get_metadata(session_mgr: SessionManager = Depends(get_session_manager)):
     """Get stored Unity Catalog metadata from session."""
     return Domain(get_domain(session_mgr)).get_metadata_response()
+
+
+@router.post("/metadata/check-select")
+async def check_metadata_select_permissions(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Probe SELECT rights for loaded data assets (background Rights column).
+
+    The asset list is painted from ``GET /domain/metadata`` first; the UI then
+    calls this endpoint to fill the Rights column without blocking first paint.
+    """
+    from back.objects.domain._metadata_select import check_select_permissions
+
+    return await check_select_permissions(get_domain(session_mgr), settings)
 
 
 @router.post("/metadata/list-tables")
@@ -1032,29 +1070,33 @@ async def list_documents(
     settings: Settings = Depends(get_settings),
 ):
     """List the domain's Knowledge Store documents (metadata only, no text)."""
-    try:
-        domain = get_domain(session_mgr)
-        folder, version = _resolve_document_scope(domain)
-        if not folder:
-            raise ValidationError("Domain not saved to the registry")
+    def _work():
+        try:
+            domain = get_domain(session_mgr)
+            folder, version = _resolve_document_scope(domain)
+            if not folder:
+                raise ValidationError("Context not saved to the registry")
 
-        parse_service = _make_document_parse_service(domain, settings)
-        rows = parse_service.list_documents(folder, version)
-        # Backward-compatible aliases (``name``/``size``) for the current UI.
-        files = [
-            {**row, "name": row.get("filename"), "size": row.get("size_bytes", 0)}
-            for row in rows
-        ]
-        return {
-            "success": True,
-            "files": files,
-            "message": f"{len(files)} file(s)",
-        }
-    except (ValidationError, InfrastructureError, NotFoundError):
-        raise
-    except Exception as e:
-        logger.exception("List documents failed: %s", e)
-        raise InfrastructureError("Failed to list documents", detail=str(e))
+            parse_service = _make_document_parse_service(domain, settings)
+            rows = parse_service.list_documents(folder, version)
+            # Backward-compatible aliases (``name``/``size``) for the current UI.
+            files = [
+                {**row, "name": row.get("filename"), "size": row.get("size_bytes", 0)}
+                for row in rows
+            ]
+            return {
+                "success": True,
+                "files": files,
+                "message": f"{len(files)} file(s)",
+            }
+        except (ValidationError, InfrastructureError, NotFoundError):
+            raise
+        except Exception as e:
+            logger.exception("List documents failed: %s", e)
+            raise InfrastructureError("Failed to list documents", detail=str(e))
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.post("/documents/upload")
@@ -1072,7 +1114,7 @@ async def upload_documents(
         domain = get_domain(session_mgr)
         folder, version = _resolve_document_scope(domain)
         if not folder:
-            raise ValidationError("Domain not saved to the registry")
+            raise ValidationError("Context not saved to the registry")
 
         parse_service = _make_document_parse_service(domain, settings)
 
@@ -1179,7 +1221,7 @@ async def retry_document_parse(
         domain = get_domain(session_mgr)
         folder, version = _resolve_document_scope(domain)
         if not folder:
-            raise ValidationError("Domain not saved to the registry")
+            raise ValidationError("Context not saved to the registry")
         parse_service = _make_document_parse_service(domain, settings)
         try:
             submission = parse_service.retry(folder, version, filename)
@@ -1234,7 +1276,7 @@ async def delete_document(
         domain = get_domain(session_mgr)
         folder, version = _resolve_document_scope(domain)
         if not folder:
-            raise ValidationError("Domain not saved to the registry")
+            raise ValidationError("Context not saved to the registry")
 
         parse_service = _make_document_parse_service(domain, settings)
         try:
@@ -1272,7 +1314,7 @@ async def preview_document(
         domain = get_domain(session_mgr)
         folder, version = _resolve_document_scope(domain)
         if not folder:
-            raise ValidationError("Domain not saved to the registry")
+            raise ValidationError("Context not saved to the registry")
 
         parse_service = _make_document_parse_service(domain, settings)
         doc = parse_service.read_document(folder, version, filename)
@@ -1297,3 +1339,133 @@ async def preview_document(
     except Exception as e:
         logger.exception("Preview document failed: %s", e)
         raise InfrastructureError("Preview document failed", detail=str(e))
+
+
+# ===========================================
+# UC Knowledge Pages (Context → Pages)
+# ===========================================
+
+
+def _knowledge_page_service(domain: Any, settings: Settings):
+    """Build a KnowledgePageService from the domain's Databricks client."""
+    client = get_databricks_client(domain, settings)
+    if client is None:
+        raise InfrastructureError(
+            "Databricks client is not configured — cannot list Knowledge Pages"
+        )
+    return client.knowledge_pages
+
+
+def _knowledge_pages_payload(
+    svc: Any,
+    *,
+    page_size: int,
+    page_token: Optional[str],
+    filter_str: Optional[str],
+    include_domains: bool,
+) -> Dict[str, Any]:
+    """Synchronous body of :func:`list_knowledge_pages`."""
+    result = svc.list_pages(
+        page_size=page_size,
+        page_token=page_token,
+        filter_str=filter_str,
+    )
+    payload: Dict[str, Any] = {
+        "success": True,
+        "pages": result.get("pages") or [],
+        "next_page_token": result.get("next_page_token"),
+    }
+    if include_domains:
+        try:
+            payload["domains"] = svc.list_domains()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Domains list for Pages filter failed: %s", exc)
+            payload["domains"] = []
+            payload["domains_error"] = str(exc)
+    return payload
+
+
+@router.get("/pages/list")
+async def list_knowledge_pages(
+    page_size: int = Query(50, ge=1, le=100),
+    page_token: Optional[str] = Query(None),
+    filter: Optional[str] = Query(None, alias="filter"),
+    include_domains: bool = Query(False),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Proxy Databricks Knowledge Pages list (account-visible, filterable)."""
+    domain = get_domain(session_mgr)
+    try:
+        # Blocking REST calls (the Domains pagination alone can take >10 s on
+        # large workspaces): keep them off the event loop so they never stall
+        # concurrent requests such as /navbar/state.
+        return await run_blocking(
+            _knowledge_pages_payload,
+            _knowledge_page_service(domain, settings),
+            page_size=page_size,
+            page_token=page_token,
+            filter_str=filter,
+            include_domains=include_domains,
+        )
+    except InfrastructureError:
+        raise
+    except Exception as e:
+        logger.exception("List Knowledge Pages failed: %s", e)
+        raise InfrastructureError(
+            "List Knowledge Pages failed",
+            detail=str(e),
+        )
+
+
+@router.get("/pages/preview")
+async def preview_knowledge_page(
+    name: str = Query(..., min_length=1),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Fetch a full Knowledge Page (including body) for preview."""
+    domain = get_domain(session_mgr)
+    try:
+        svc = _knowledge_page_service(domain, settings)
+        page = svc.get_page(name)
+        return {"success": True, "page": page}
+    except ValueError as e:
+        raise ValidationError(str(e))
+    except InfrastructureError:
+        raise
+    except Exception as e:
+        logger.exception("Preview Knowledge Page failed: %s", e)
+        raise InfrastructureError(
+            "Preview Knowledge Page failed",
+            detail=str(e),
+        )
+
+
+@router.get("/pages/selection")
+async def get_knowledge_pages_selection(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Return the curated Knowledge Pages selection for the loaded domain."""
+    pages = Domain(get_domain(session_mgr)).get_knowledge_pages_selection()
+    return {"success": True, "pages": pages}
+
+
+@router.post("/pages/selection")
+async def save_knowledge_pages_selection(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Replace the curated Knowledge Pages selection (snapshots, no body)."""
+    data = await request.json()
+    raw = data.get("pages") if isinstance(data, dict) else None
+    if raw is None and isinstance(data, list):
+        raw = data
+    if raw is None:
+        raise ValidationError("Request body must include a 'pages' array")
+    pages = Domain(get_domain(session_mgr)).save_knowledge_pages_selection(raw)
+    return {
+        "success": True,
+        "pages": pages,
+        "message": "Knowledge Pages selection saved",
+    }

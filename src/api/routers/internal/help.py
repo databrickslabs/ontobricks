@@ -61,6 +61,11 @@ _DOC_CATEGORIES: List[Dict] = [
         "docs": [
             {"slug": "user-guide", "file": "user-guide.md", "title": "User Guide"},
             {
+                "slug": "intelligence",
+                "file": "intelligence.md",
+                "title": "Intelligence",
+            },
+            {
                 "slug": "advanced-features",
                 "file": "advanced_features.md",
                 "title": "Advanced features",

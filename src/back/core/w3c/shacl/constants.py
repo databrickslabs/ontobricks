@@ -43,20 +43,15 @@ QUALITY_CATEGORIES = (
 #: A data quality run also executes rule families that are not SHACL shapes.
 #: Their results are filed under these dimensions, so a run must honour the
 #: same dimension selection the shapes do.
-SWRL_CATEGORY = "structural"
-BUSINESS_RULE_CATEGORY = "conformance"
+IF_THEN_CATEGORY = "structural"
 
 #: Non-SHACL rules have no shape id, so a run addresses them by a synthetic
 #: one. The list endpoint, the run selection and the reported result must all
 #: derive it the same way or a rule becomes unselectable.
-SWRL_ID_PREFIX = "swrl"
-DECISION_TABLE_ID_PREFIX = "dt"
-AGGREGATE_ID_PREFIX = "agg"
+IF_THEN_ID_PREFIX = "if_then"
 
 RULE_FAMILY_CATEGORIES = {
-    SWRL_ID_PREFIX: SWRL_CATEGORY,
-    DECISION_TABLE_ID_PREFIX: BUSINESS_RULE_CATEGORY,
-    AGGREGATE_ID_PREFIX: BUSINESS_RULE_CATEGORY,
+    IF_THEN_ID_PREFIX: IF_THEN_CATEGORY,
 }
 
 

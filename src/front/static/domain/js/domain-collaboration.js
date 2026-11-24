@@ -1,5 +1,5 @@
 /**
- * Domain → Collaboration
+ * Context → Collaboration
  *
  * Two sections that concentrate every collaborative signal for the loaded
  * domain in one place:
@@ -20,6 +20,7 @@
     let discussionsLoaded = false;
     let domainCtx = null;          // { folder, version, hasRegistry }
     let allComments = [];          // cached raw comments for re-render
+    let allTaskRows = [];          // normalised My Tasks rows (assigned + review)
     const selectedTags = new Set(); // active tag-filter keys (multi-select)
 
     document.addEventListener('DOMContentLoaded', init);
@@ -36,6 +37,7 @@
         if (initial === 'discussions') loadDiscussions();
 
         on('btnRefreshDomainTasks', 'click', () => { tasksLoaded = false; loadTasks(); });
+        initTaskFilters();
         on('btnRefreshDomainDiscussions', 'click', () => {
             discussionsLoaded = false;
             loadDiscussions();
@@ -92,7 +94,7 @@
         if (diff < 60) return 'just now';
         if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
         if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-        return d.toLocaleDateString();
+        return formatDateTime(iso);
     }
 
     function dayKey(iso) {
@@ -103,9 +105,7 @@
         yest.setDate(today.getDate() - 1);
         if (d.toDateString() === today.toDateString()) return 'Today';
         if (d.toDateString() === yest.toDateString()) return 'Yesterday';
-        return d.toLocaleDateString(undefined, {
-            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-        });
+        return formatDateOnly(iso);
     }
 
     function parsedTags(cm) {
@@ -142,17 +142,89 @@
     }
 
     function renderTasks(reviewTasks, assigned) {
+        allTaskRows = assigned.map(assignedRow).concat(reviewTasks.map(reviewRow));
+        allTaskRows.sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || '')));
+        applyTaskFilters();
+    }
+
+    function assignedRow(t) {
+        return {
+            kind: 'assigned',
+            title: t.title || '',
+            folder: t.folder || '',
+            version: t.version || '',
+            from: t.created_by || '',
+            status: String(t.status || 'open').toLowerCase(),
+            updated: t.updated_at || t.created_at || '',
+            due: t.due_date || '',
+            task: t,
+        };
+    }
+
+    function reviewRow(t) {
+        const labels = (t.actions || []).map((a) => a.label).filter(Boolean);
+        return {
+            kind: 'review',
+            title: labels.join(' · ') || 'Review',
+            folder: t.domain || '',
+            version: t.version || '',
+            from: '',
+            status: String(t.status || 'DRAFT').toLowerCase(),
+            updated: t.last_activity || '',
+            due: '',
+            approvals: esc(t.approvals) + ' / ' + esc(t.required),
+        };
+    }
+
+    function filterValue(id) {
+        const b = document.getElementById(id);
+        return b ? (b.dataset.value || '') : '';
+    }
+
+    function applyTaskFilters() {
         const c = document.getElementById('domainMyTasksContainer');
         if (!c) return;
+        const q = ((document.getElementById('domainTasksSearch') || {}).value || '')
+            .trim().toLowerCase();
+        const kind = filterValue('domainTasksTypeFilter');
+        const status = filterValue('domainTasksStatusFilter');
 
-        if (!reviewTasks.length && !assigned.length) {
+        const rows = allTaskRows.filter((r) =>
+            (!kind || r.kind === kind) &&
+            (!status || r.status === status) &&
+            (!q || [r.title, r.folder, r.from].some((v) => String(v).toLowerCase().includes(q))));
+
+        const count = document.getElementById('domainTasksCount');
+        if (count) {
+            const n = allTaskRows.length;
+            count.textContent = rows.length === n
+                ? n + (n === 1 ? ' task' : ' tasks')
+                : rows.length + ' of ' + n + ' tasks';
+        }
+
+        if (!allTaskRows.length) {
             c.innerHTML =
                 '<div class="text-center text-muted py-5">' +
                 '<i class="bi bi-check2-circle d-block mb-2" style="font-size:1.8rem;"></i>' +
                 "You're all caught up &mdash; no pending tasks.</div>";
             return;
         }
-        c.innerHTML = assignedHtml(assigned) + reviewHtml(reviewTasks);
+        if (!rows.length) {
+            c.innerHTML =
+                '<div class="text-center text-muted py-5">' +
+                '<i class="bi bi-funnel d-block mb-2" style="font-size:1.8rem;"></i>' +
+                'No tasks match the current filters.</div>';
+            return;
+        }
+
+        c.innerHTML =
+            '<div class="table-responsive">' +
+            '<table class="table table-hover align-middle ob-runs-table ob-tasks-table">' +
+            '<thead><tr><th>Status</th><th>Task</th><th>Context</th><th>Type</th>' +
+            '<th>From</th><th>Updated</th><th>Due</th>' +
+            '<th class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>' +
+            '<tbody>' + rows.map(taskRowHtml).join('') + '</tbody></table></div>';
+
         c.querySelectorAll('button[data-task-status]').forEach((b) => {
             b.addEventListener('click', () => onTaskStatus(b));
         });
@@ -161,63 +233,72 @@
         });
     }
 
-    function assignedHtml(tasks) {
-        if (!tasks.length) return '';
-        const rows = tasks.map((t) =>
-            '<tr>' +
-            '<td class="fw-medium">' + esc(t.title) + '</td>' +
-            '<td>' + esc(t.folder) + ' v' + esc(t.version) + '</td>' +
-            '<td>' + esc(t.created_by) + '</td>' +
-            '<td>' + taskStatusBadge(t.status) + '</td>' +
-            '<td>' + (t.due_date ? esc(t.due_date) : '<span class="text-muted small">&mdash;</span>') + '</td>' +
-            '<td class="text-end">' + taskActions(t) + '</td>' +
-            '</tr>'
-        ).join('');
-        return '<div class="mb-2 fw-medium small text-uppercase text-muted">' +
-            '<i class="bi bi-person-check me-1"></i>Assigned to me</div>' +
-            '<div class="table-responsive mb-4"><table class="table table-sm align-middle mb-0">' +
-            '<thead><tr><th>Task</th><th>Domain</th><th>From</th><th>Status</th>' +
-            '<th>Due</th><th class="text-end">Action</th></tr></thead>' +
-            '<tbody>' + rows + '</tbody></table></div>';
+    function taskRowHtml(r) {
+        const dash = '<span class="text-muted">&mdash;</span>';
+        const title = r.kind === 'review'
+            ? '<button type="button" class="btn btn-link p-0 ob-run-link ob-tasks-title" ' +
+              'data-open-review="1" data-domain="' + escAttr(r.folder) + '" ' +
+              'data-version="' + escAttr(r.version) + '" title="' + escAttr(r.title) + '">' +
+              esc(r.title) + '</button>' +
+              '<span class="ob-tasks-meta ms-2">' + r.approvals + ' approvals</span>'
+            : '<span class="ob-tasks-title fw-medium" title="' + escAttr(r.title) + '">' +
+              esc(r.title) + '</span>';
+        const type = r.kind === 'review'
+            ? '<i class="bi bi-patch-check me-1" aria-hidden="true"></i>Review'
+            : '<i class="bi bi-person-check me-1" aria-hidden="true"></i>Assigned';
+        return '<tr>' +
+            '<td>' + taskStatus(r.status) + '</td>' +
+            '<td class="ob-tasks-title-cell">' + title + '</td>' +
+            '<td>' + esc(r.folder) + ' <span class="ob-run-version">v' + esc(r.version) + '</span></td>' +
+            '<td class="text-muted">' + type + '</td>' +
+            '<td>' + (r.from ? esc(r.from) : dash) + '</td>' +
+            '<td class="text-muted">' + (r.updated ? esc(relativeTime(r.updated)) : dash) + '</td>' +
+            '<td>' + (r.due ? esc(r.due) : dash) + '</td>' +
+            '<td class="text-end">' + taskActions(r) + '</td>' +
+            '</tr>';
     }
 
-    function reviewHtml(tasks) {
-        if (!tasks.length) return '';
-        const rows = tasks.map((t) =>
-            '<tr>' +
-            '<td class="fw-medium">' + esc(t.domain) + '</td>' +
-            '<td>v' + esc(t.version) + '</td>' +
-            '<td>' + statusBadge(t.status) + '</td>' +
-            '<td><span class="text-muted small">' + esc(t.approvals) + ' / ' + esc(t.required) + '</span></td>' +
-            '<td><span class="text-muted small">' + esc(relativeTime(t.last_activity)) + '</span></td>' +
-            '<td class="text-end">' +
-            '<button type="button" class="btn btn-sm btn-primary" data-open-review="1" ' +
-            'data-domain="' + escAttr(t.domain) + '" data-version="' + escAttr(t.version) + '">' +
-            '<i class="bi bi-patch-check me-1"></i>Review</button></td>' +
-            '</tr>'
-        ).join('');
-        return '<div class="mb-2 fw-medium small text-uppercase text-muted">' +
-            '<i class="bi bi-ui-checks me-1"></i>Review worklist</div>' +
-            '<div class="table-responsive mb-2"><table class="table table-sm align-middle mb-0">' +
-            '<thead><tr><th>Domain</th><th>Version</th><th>Status</th>' +
-            '<th>Approvals</th><th>Last activity</th><th class="text-end">Your action</th></tr></thead>' +
-            '<tbody>' + rows + '</tbody></table></div>';
-    }
-
-    function taskActions(t) {
-        const start = t.status === 'open'
+    function taskActions(r) {
+        if (r.kind === 'review') {
+            return '<button type="button" class="btn btn-sm btn-outline-secondary" data-open-review="1" ' +
+                'data-domain="' + escAttr(r.folder) + '" data-version="' + escAttr(r.version) + '">' +
+                'Open</button>';
+        }
+        const t = r.task;
+        const attrs = 'data-folder="' + escAttr(t.folder) + '" ' +
+            'data-version="' + escAttr(t.version) + '" data-task-id="' + escAttr(t.id) + '"';
+        const start = r.status === 'open'
             ? '<button type="button" class="btn btn-sm btn-outline-secondary ms-1" ' +
-              'data-task-status="in_progress" data-folder="' + escAttr(t.folder) + '" ' +
-              'data-version="' + escAttr(t.version) + '" data-task-id="' + escAttr(t.id) + '">' +
+              'data-task-status="in_progress" ' + attrs + '>' +
               '<i class="bi bi-play me-1"></i>Start</button>'
             : '';
-        const done = (t.status !== 'done' && t.status !== 'cancelled')
-            ? '<button type="button" class="btn btn-sm btn-success ms-1" ' +
-              'data-task-status="done" data-folder="' + escAttr(t.folder) + '" ' +
-              'data-version="' + escAttr(t.version) + '" data-task-id="' + escAttr(t.id) + '">' +
+        const done = (r.status !== 'done' && r.status !== 'cancelled')
+            ? '<button type="button" class="btn btn-sm btn-outline-secondary ms-1" ' +
+              'data-task-status="done" ' + attrs + '>' +
               '<i class="bi bi-check2 me-1"></i>Done</button>'
             : '';
-        return start + ' ' + done;
+        return start + done;
+    }
+
+    function initTaskFilters() {
+        on('domainTasksSearch', 'input', applyTaskFilters);
+        ['domainTasksTypeFilter', 'domainTasksStatusFilter'].forEach((id) => {
+            const btn = document.getElementById(id);
+            const menu = btn && btn.parentElement.querySelector('.dropdown-menu');
+            if (!menu) return;
+            menu.querySelectorAll('.dropdown-item').forEach((item) => {
+                item.addEventListener('click', () => {
+                    const value = item.dataset.value || '';
+                    btn.dataset.value = value;
+                    btn.classList.toggle('is-active', !!value);
+                    btn.querySelector('.ob-filter-value').textContent =
+                        value ? ': ' + item.textContent : '';
+                    menu.querySelectorAll('.dropdown-item')
+                        .forEach((i) => i.classList.toggle('active', i === item));
+                    applyTaskFilters();
+                });
+            });
+        });
     }
 
     async function onTaskStatus(btn) {
@@ -259,36 +340,29 @@
             });
             const data = await resp.json();
             if (!data.success) {
-                note('Error: ' + (data.message || 'Failed to load domain'), 'error');
+                note('Error: ' + (data.message || 'Failed to load context'), 'error');
                 return;
             }
             window.location.href = '/domain/?section=review';
         } catch (err) {
-            note('Error loading domain: ' + err.message, 'error');
+            note('Error loading context: ' + err.message, 'error');
         }
     }
 
-    function taskStatusBadge(status) {
-        const map = {
-            open: 'bg-secondary-subtle text-dark border',
-            in_progress: 'bg-info-subtle text-dark border-info',
-            done: 'bg-success-subtle text-dark border-success',
-            cancelled: 'bg-light text-muted border',
-        };
-        const cls = map[status] || map.open;
-        return '<span class="badge ' + cls + '">' + esc((status || 'open').replace('_', ' ')) + '</span>';
-    }
+    const TASK_STATUS = {
+        open: ['is-pending', 'bi-circle', 'Open'],
+        in_progress: ['is-running', 'bi-arrow-repeat', 'In progress'],
+        done: ['is-success', 'bi-check-circle-fill', 'Done'],
+        cancelled: ['is-canceled', 'bi-slash-circle', 'Cancelled'],
+        draft: ['is-pending', 'bi-pencil', 'Draft'],
+        'in-review': ['is-running', 'bi-hourglass-split', 'In review'],
+        published: ['is-success', 'bi-check-circle-fill', 'Published'],
+    };
 
-    function statusBadge(status) {
-        const map = {
-            'DRAFT': 'bg-warning-subtle text-dark border-warning',
-            'IN-REVIEW': 'bg-info-subtle text-dark border-info',
-            'PUBLISHED': 'bg-success-subtle text-dark border-success',
-        };
-        const cls = map[status] || map['DRAFT'];
-        const label = status === 'IN-REVIEW' ? 'In Review'
-            : ((status || 'DRAFT').charAt(0) + (status || 'DRAFT').slice(1).toLowerCase());
-        return '<span class="badge border ' + cls + '">' + esc(label) + '</span>';
+    function taskStatus(status) {
+        const s = TASK_STATUS[status] || TASK_STATUS.open;
+        return '<span class="ob-run-status ' + s[0] + '">' +
+            '<i class="bi ' + s[1] + '" aria-hidden="true"></i>' + esc(s[2]) + '</span>';
     }
 
     // ========================================================================
@@ -303,7 +377,7 @@
         if (!dc.folder || !dc.hasRegistry) {
             c.innerHTML =
                 '<div class="alert alert-info small mb-0">' +
-                'Save this domain to the registry to start collaborating.</div>';
+                'Save this context to the registry to start collaborating.</div>';
             return;
         }
         try {
@@ -495,7 +569,7 @@
                 if (panelEl) {
                     panelEl.innerHTML =
                         '<div class="alert alert-warning small mb-0">' +
-                        'Save this domain to the registry to start a discussion.</div>';
+                        'Save this context to the registry to start a discussion.</div>';
                 }
                 return;
             }

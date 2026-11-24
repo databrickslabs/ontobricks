@@ -227,7 +227,7 @@ class CommentService:
         del request  # identity not needed; same list for any member
         CommentService._require_member(user_role, user_domain_role)
         if not folder:
-            raise ValidationError("domain is required")
+            raise ValidationError("context is required")
         try:
             from back.core.helpers import get_databricks_host_and_token
 
@@ -395,7 +395,7 @@ class CommentService:
     ) -> Tuple[RegistryService, str]:
         """Resolve the registry service + the version lifecycle status."""
         if not folder or not version:
-            raise ValidationError("domain and version are required")
+            raise ValidationError("context and version are required")
         domain = get_domain(session_mgr)
         svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
@@ -463,7 +463,7 @@ class CommentService:
         ) >= role_level(ROLE_VIEWER)
         if not is_member:
             raise AuthorizationError(
-                "You need a role on this domain to view or discuss it"
+                "You need a role on this context to view or discuss it"
             )
 
     @staticmethod

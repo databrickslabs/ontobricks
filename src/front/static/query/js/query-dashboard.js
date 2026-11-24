@@ -254,62 +254,69 @@ async function _loadDatasetPreviewRows(entityUri) {
         if (!data.success) {
             return `<div class="alert alert-warning mb-0">${escapeHtml(data.message || 'Could not retrieve dataset context.')}</div>`;
         }
-        const dataset = data.dataset;
-        if (!dataset) {
+        const datasets = Array.isArray(data.datasets) && data.datasets.length
+            ? data.datasets
+            : (data.dataset ? [data.dataset] : []);
+        if (!datasets.length) {
             if (!data.class_name) {
                 return '<div class="alert alert-warning mb-0">Could not resolve the ontology class for this entity URI.</div>';
             }
             return '<div class="alert alert-info mb-0">No linked dataset for this entity type.</div>';
         }
-        if (dataset.key_column_missing) {
-            return '<div class="alert alert-warning mb-0">Key column is not configured on this dataset — row preview is unavailable.</div>';
-        }
 
-        const metaParts = [];
-        if (dataset.fullName) {
-            metaParts.push(`<div class="mb-1"><span class="text-muted">Table</span> <code>${escapeHtml(dataset.fullName)}</code></div>`);
-        }
-        if (dataset.key_column) {
-            metaParts.push(`<div class="mb-1"><span class="text-muted">Key</span> <code>${escapeHtml(dataset.key_column)}</code></div>`);
-        }
-        if (dataset.description) {
-            metaParts.push(`<div class="mb-2"><span class="text-muted">Description</span> ${escapeHtml(dataset.description)}</div>`);
-        }
-
-        const rows = Array.isArray(dataset.rows) ? dataset.rows : [];
-        if (rows.length === 0) {
-            if (data.message) {
-                return metaParts.join('') +
-                    `<div class="alert alert-warning mb-0">Failed to load rows: ${escapeHtml(data.message)}</div>`;
+        function renderOneDataset(dataset) {
+            const kind = String(dataset.type || '').toUpperCase();
+            const kindLabel = kind === 'METRIC_VIEW' ? 'Metric View'
+                : (kind === 'VIEW' ? 'View' : 'Table');
+            if (dataset.key_column_missing) {
+                return `<div class="alert alert-warning mb-2">Key column is not configured on `
+                    + `<code>${escapeHtml(dataset.fullName || '')}</code> — row preview is unavailable.</div>`;
             }
-            return metaParts.join('') +
-                '<div class="alert alert-info mb-0">No matching rows for this entity.</div>';
+            const metaParts = [];
+            if (dataset.fullName) {
+                metaParts.push(`<div class="mb-1"><span class="text-muted">${kindLabel}</span> <code>${escapeHtml(dataset.fullName)}</code></div>`);
+            }
+            if (dataset.key_column) {
+                metaParts.push(`<div class="mb-1"><span class="text-muted">Key</span> <code>${escapeHtml(dataset.key_column)}</code></div>`);
+            }
+            if (dataset.description) {
+                metaParts.push(`<div class="mb-2"><span class="text-muted">Description</span> ${escapeHtml(dataset.description)}</div>`);
+            }
+            const rows = Array.isArray(dataset.rows) ? dataset.rows : [];
+            if (rows.length === 0) {
+                return metaParts.join('') +
+                    '<div class="alert alert-info mb-2">No matching rows for this entity.</div>';
+            }
+            const columns = [];
+            const seen = new Set();
+            rows.forEach(function (row) {
+                Object.keys(row || {}).forEach(function (col) {
+                    if (!seen.has(col)) {
+                        seen.add(col);
+                        columns.push(col);
+                    }
+                });
+            });
+            let table = '<div class="table-responsive mb-3"><table class="table table-sm table-striped table-bordered mb-0">';
+            table += '<thead class="table-light"><tr>' +
+                columns.map(function (c) { return `<th>${escapeHtml(c)}</th>`; }).join('') +
+                '</tr></thead><tbody>';
+            rows.forEach(function (row) {
+                table += '<tr>' + columns.map(function (c) {
+                    const val = row[c];
+                    const text = (val === null || val === undefined) ? '' : String(val);
+                    return `<td>${escapeHtml(text)}</td>`;
+                }).join('') + '</tr>';
+            });
+            table += '</tbody></table></div>';
+            return metaParts.join('') + table;
         }
 
-        const columns = [];
-        const seen = new Set();
-        rows.forEach(function (row) {
-            Object.keys(row || {}).forEach(function (col) {
-                if (!seen.has(col)) {
-                    seen.add(col);
-                    columns.push(col);
-                }
-            });
-        });
-
-        let table = '<div class="table-responsive"><table class="table table-sm table-striped table-bordered mb-0">';
-        table += '<thead class="table-light"><tr>' +
-            columns.map(function (c) { return `<th>${escapeHtml(c)}</th>`; }).join('') +
-            '</tr></thead><tbody>';
-        rows.forEach(function (row) {
-            table += '<tr>' + columns.map(function (c) {
-                const val = row[c];
-                const text = (val === null || val === undefined) ? '' : String(val);
-                return `<td>${escapeHtml(text)}</td>`;
-            }).join('') + '</tr>';
-        });
-        table += '</tbody></table></div>';
-        return metaParts.join('') + table;
+        let html = datasets.map(renderOneDataset).join('');
+        if (data.message) {
+            html += `<div class="alert alert-warning mb-0">Partial fetch: ${escapeHtml(data.message)}</div>`;
+        }
+        return html;
     } catch (err) {
         console.error('[Dataset] Preview failed:', err);
         return '<div class="alert alert-danger mb-0">Failed to load dataset preview.</div>';

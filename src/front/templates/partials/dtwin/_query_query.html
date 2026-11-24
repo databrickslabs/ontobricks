@@ -1,4 +1,4 @@
-<div class="section-header d-flex justify-content-between align-items-center mb-2">
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="mb-1">
             <i class="bi bi-braces-asterisk me-2"></i>Query
@@ -27,43 +27,50 @@
     </div>
 </div>
 
-<ul class="nav nav-tabs ob-tabs ob-tabs--compact query-language-tabs"
-    id="queryLanguageTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active"
-                id="queryGraphqlTab"
-                data-bs-toggle="tab"
-                data-bs-target="#queryGraphqlPane"
-                type="button" role="tab"
-                aria-controls="queryGraphqlPane"
-                aria-selected="true">
-            GraphQL
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link"
-                id="querySparqlTab"
-                data-bs-toggle="tab"
-                data-bs-target="#querySparqlPane"
-                type="button" role="tab"
-                aria-controls="querySparqlPane"
-                aria-selected="false">
-            SPARQL
-        </button>
-    </li>
-</ul>
+<div class="card query-card-fill">
+    <div class="card-body d-flex flex-column p-0">
 
-<div class="tab-content query-language-content">
-    <div class="tab-pane fade show active"
-         id="queryGraphqlPane"
-         role="tabpanel"
-         aria-labelledby="queryGraphqlTab">
-        {% include "partials/dtwin/_query_graphql.html" %}
-    </div>
-    <div class="tab-pane fade"
-         id="querySparqlPane"
-         role="tabpanel"
-         aria-labelledby="querySparqlTab">
-        {% include "partials/dtwin/_query_sparql.html" %}
+        <ul class="nav nav-tabs ob-tabs nav-fill flex-shrink-0 query-language-tabs"
+            id="queryLanguageTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active"
+                        id="queryGraphqlTab"
+                        data-bs-toggle="tab"
+                        data-bs-target="#queryGraphqlPane"
+                        type="button" role="tab"
+                        aria-controls="queryGraphqlPane"
+                        aria-selected="true">
+                    <i class="bi bi-diagram-3 me-1"></i>GraphQL
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link"
+                        id="querySparqlTab"
+                        data-bs-toggle="tab"
+                        data-bs-target="#querySparqlPane"
+                        type="button" role="tab"
+                        aria-controls="querySparqlPane"
+                        aria-selected="false">
+                    <i class="bi bi-braces me-1"></i>SPARQL
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content flex-grow-1 overflow-auto query-language-content"
+             id="queryLanguagePanes">
+            <div class="tab-pane fade show active p-3"
+                 id="queryGraphqlPane"
+                 role="tabpanel"
+                 aria-labelledby="queryGraphqlTab">
+                {% include "partials/dtwin/_query_graphql.html" %}
+            </div>
+            <div class="tab-pane fade p-3"
+                 id="querySparqlPane"
+                 role="tabpanel"
+                 aria-labelledby="querySparqlTab">
+                {% include "partials/dtwin/_query_sparql.html" %}
+            </div>
+        </div>
+
     </div>
 </div>

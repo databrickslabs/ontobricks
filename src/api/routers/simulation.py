@@ -14,7 +14,7 @@ from back.core.helpers import run_blocking
 from back.core.logging import get_logger
 from back.objects.digitaltwin import DigitalTwin
 from back.objects.session import SessionManager, get_session_manager
-from back.objects.simulation import Simulation
+from back.objects.intelligence import Simulation
 from shared.config.settings import Settings, get_settings
 
 from api.routers.digitaltwin import TaskProgressResponse, _poll_task, assert_public_graph_read, assert_public_graph_write
@@ -245,4 +245,23 @@ async def get_simulation_diff(
 ):
     sim = _resolve_sim(request, session_mgr, settings, write=False, **domain_q)
     data = await run_blocking(sim.diff_page, sim_id, kind, page, page_size, search)
+    return {"success": True, **data}
+
+
+@router.get("/{sim_id}/compare", summary="Compare the sandbox with the live graph")
+async def compare_simulation_to_live(
+    sim_id: str,
+    request: Request,
+    include_inferred: bool = Query(
+        True, description="Live graph with inferred triples (true) or asserted only"
+    ),
+    domain_q: dict = Depends(_domain_q),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Nodes, edges and counts of the sandbox vs the current live graph (same scope)."""
+    sim = _resolve_sim(request, session_mgr, settings, write=False, **domain_q)
+    data = await run_blocking(
+        sim.compare_to_live, sim_id, include_inferred=include_inferred
+    )
     return {"success": True, **data}

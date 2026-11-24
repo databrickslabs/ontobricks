@@ -1,4 +1,23 @@
-/* Domain → Collaboration: discussions activity timeline */
+/* Context → Collaboration: My Tasks list (rows use the shared .ob-runs-table
+   and filter bar from components.css). */
+
+.ob-tasks-title {
+    display: inline-block;
+    max-width: 20rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    font-size: inherit;
+    text-align: left;
+}
+
+.ob-tasks-meta {
+    font-size: 0.75rem;
+    color: var(--db-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Context → Collaboration: discussions activity timeline */
 
 .oc-timeline {
     position: relative;

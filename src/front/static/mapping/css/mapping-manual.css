@@ -168,13 +168,27 @@
 .manual-status-badge {
     font-size: 0.7rem;
     padding: 2px 6px;
-    border-radius: 10px;
+    border-radius: var(--db-radius-control);
     flex-shrink: 0;
 }
 
 .manual-status-badge.assigned {
     background: #d1e7dd;
     color: #0f5132;
+}
+
+.manual-status-badge.partial {
+    background: #fff3cd;
+    color: #664d03;
+}
+
+.manual-tree-node.item-node.live-mapped > .manual-tree-node-content {
+    animation: manual-live-mapped 2.5s ease-out;
+}
+
+@keyframes manual-live-mapped {
+    0%   { background-color: rgba(25, 135, 84, 0.35); }
+    100% { background-color: transparent; }
 }
 
 .manual-status-badge.not-assigned {
@@ -217,7 +231,7 @@
 .manual-count-badge {
     font-size: 0.75rem;
     padding: 2px 8px;
-    border-radius: 10px;
+    border-radius: var(--db-radius-control);
     background: #ffffff;
     color: #495057;
     margin-left: 8px;

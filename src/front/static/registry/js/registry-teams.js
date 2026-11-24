@@ -62,10 +62,11 @@
         const container = document.getElementById('teamsMatrixContainer');
         if (!container) return;
 
+        container.classList.add('is-loading');
         container.innerHTML =
-            '<div class="text-center text-muted small py-4">' +
-            '<span class="spinner-border spinner-border-sm me-1"></span>' +
-            ' Loading teams matrix...</div>';
+            '<div class="d-flex align-items-center justify-content-center gap-2 py-4 text-muted small">' +
+            '<span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>' +
+            '<span>Loading teams matrix…</span></div>';
 
         dirty.clear();
         updateDirtyBadge();
@@ -77,6 +78,7 @@
             const data = await resp.json();
 
             if (!resp.ok || !data.success) {
+                container.classList.remove('is-loading');
                 container.innerHTML =
                     '<div class="alert alert-danger small mb-0">' +
                     escapeHtml(data.error || 'Failed to load teams matrix') +
@@ -102,6 +104,7 @@
             matrixLoaded = true;
         } catch (err) {
             console.error('loadMatrix error:', err);
+            container.classList.remove('is-loading');
             container.innerHTML =
                 '<div class="alert alert-danger small mb-0">Network error: ' +
                 escapeHtml(String(err)) + '</div>';
@@ -111,12 +114,13 @@
     function renderMatrix() {
         const container = document.getElementById('teamsMatrixContainer');
         if (!container) return;
+        container.classList.remove('is-loading');
 
         if (state.domains.length === 0) {
             container.innerHTML =
                 '<div class="empty-state">' +
                 '<i class="bi bi-folder-x me-1"></i>' +
-                ' No domains found in the registry.' +
+                ' No contexts found in the registry.' +
                 '</div>';
             return;
         }

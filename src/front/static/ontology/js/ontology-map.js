@@ -21,6 +21,755 @@ let mapSelectedEntityNames    = new Set();
 let mapSelectMode             = false;
 let _mapCanvasClickSuppressUntil = 0;  // performance.now() deadline; 0 = not armed
 
+// Studio Business View filter (null = All)
+let _studioActiveView = null;
+let _studioViewLayout = null;
+let _studioViewWired = false;
+let _studioCollapsedHydrated = false;  // All-view collapsedGroups loaded from map-layout once
+
+// Ontology Groups collapse/expand on the Studio canvas
+let _studioGroupsDefs = [];
+let _studioCollapsedGroups = new Set();
+let _studioMemberToGroup = {};  // entityName → groupName
+// groupName → entityName clicked to collapse (anchors the group circle).
+let _studioGroupAnchors = new Map();
+// Live entity positions (name → {x,y,fx,fy}). Survives collapse/expand rebuilds
+// so members reappear at the exact coordinates they had before collapse.
+let _studioEntityPositions = new Map();
+
+/**
+ * Rebuild the Studio View dropdown (#studioViewMenu) from GET /domain/design-views.
+ * Each view row has a pick item (switch view) and a pencil (rename).
+ */
+async function refreshStudioViewSelect() {
+    const menu = document.getElementById('studioViewMenu');
+    const nameEl = document.getElementById('studioViewName');
+    const deleteBtn = document.getElementById('studioDeleteViewBtn');
+    if (!menu) return;
+
+    let views = [];
+    try {
+        const resp = await fetch('/domain/design-views', { credentials: 'same-origin' });
+        if (resp.ok) {
+            const data = await resp.json();
+            views = data.views || [];
+        }
+    } catch (err) {
+        console.warn('[Studio] Could not load design views:', err);
+    }
+
+    const current = (_studioActiveView && views.includes(_studioActiveView))
+        ? _studioActiveView
+        : '__all__';
+
+    // Keep the "All" item; replace every view row and the empty/divider state.
+    menu.querySelectorAll('.studio-view-row').forEach(li => li.remove());
+    const allItem = menu.querySelector('[data-view="__all__"]');
+    if (allItem) allItem.classList.toggle('is-current', current === '__all__');
+
+    const divider = document.getElementById('studioViewDivider');
+    const empty = document.getElementById('studioViewEmpty');
+    if (divider) divider.hidden = views.length === 0;
+    if (empty) empty.classList.toggle('d-none', views.length > 0);
+
+    views.forEach(name => {
+        const li = document.createElement('li');
+        li.className = 'studio-view-row';
+
+        const pick = document.createElement('button');
+        pick.type = 'button';
+        pick.className = 'dropdown-item studio-view-row-pick flex-grow-1';
+        pick.dataset.view = name;
+        pick.classList.toggle('is-current', name === current);
+        const check = document.createElement('i');
+        check.className = 'bi bi-check2 studio-view-check me-1';
+        pick.appendChild(check);
+        pick.appendChild(document.createTextNode(name));
+
+        const rename = document.createElement('button');
+        rename.type = 'button';
+        rename.className = 'btn btn-link btn-sm text-muted studio-view-rename me-2';
+        rename.dataset.view = name;
+        rename.title = 'Rename view';
+        rename.setAttribute('aria-label', `Rename Business View ${name}`);
+        rename.innerHTML = '<i class="bi bi-pencil me-2"></i>';
+
+        li.appendChild(pick);
+        li.appendChild(rename);
+        menu.appendChild(li);
+    });
+
+    if (nameEl) nameEl.textContent = current === '__all__' ? 'All' : current;
+    if (deleteBtn) {
+        deleteBtn.disabled = current === '__all__';
+    }
+}
+
+/**
+ * Rename a Business View via a small modal. Backend enforces uniqueness;
+ * the client checks first so the user gets an inline message.
+ * @param {string} oldName
+ */
+function renameStudioView(oldName) {
+    const modalId = 'studioRenameViewModal';
+    document.getElementById(modalId)?.remove();
+
+    const modalHtml = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content" id="${modalId}Form" novalidate>
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Rename Business View</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label for="${modalId}Input" class="form-label">New name</label>
+                        <input type="text" class="form-control" id="${modalId}Input" maxlength="120" required>
+                        <div class="invalid-feedback" id="${modalId}Error"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="${modalId}Save">Rename</button>
+                    </div>
+                </form>
+            </div>
+        </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const modalEl = document.getElementById(modalId);
+    const form = document.getElementById(`${modalId}Form`);
+    const input = document.getElementById(`${modalId}Input`);
+    const errEl = document.getElementById(`${modalId}Error`);
+    const saveBtn = document.getElementById(`${modalId}Save`);
+    input.value = oldName;
+
+    const showError = (msg) => {
+        input.classList.add('is-invalid');
+        errEl.textContent = msg;
+    };
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const newName = input.value.trim();
+        if (!newName) return showError('Enter a name.');
+        if (newName === oldName) { modal.hide(); return; }
+
+        const resp0 = await fetch('/domain/design-views', { credentials: 'same-origin' });
+        const existing = resp0.ok ? ((await resp0.json()).views || []) : [];
+        if (existing.includes(newName)) return showError(`"${newName}" already exists.`);
+
+        saveBtn.disabled = true;
+        try {
+            const resp = await fetch('/domain/design-views/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ old_name: oldName, new_name: newName }),
+                credentials: 'same-origin',
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(err.detail || `Rename failed (${resp.status})`);
+            }
+            if (_studioActiveView === oldName) _studioActiveView = newName;
+            modal.hide();
+            await refreshStudioViewSelect();
+            if (typeof showNotification === 'function') {
+                showNotification(`Business View renamed to "${newName}"`, 'success');
+            }
+        } catch (err) {
+            console.error('[Studio] rename view failed:', err);
+            showError(err.message || 'Rename failed.');
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', () => {
+        setTimeout(() => modalEl.remove(), 100);
+    }, { once: true });
+
+    const modal = showStackedModal(modalEl);
+    modalEl.addEventListener('shown.bs.modal', () => {
+        input.focus();
+        input.select();
+    }, { once: true });
+}
+
+/**
+ * Switch the Studio canvas to a Business View (or All) and re-render.
+ * @param {string|null} viewNameOrAll
+ */
+async function applyStudioView(viewNameOrAll) {
+    if (!viewNameOrAll || viewNameOrAll === '__all__') {
+        _studioActiveView = null;
+        _studioViewLayout = null;
+        // Restore collapsed groups from the All map layout when available.
+        try {
+            const layout = await loadMapLayout();
+            const known = new Set(_studioGroupsDefs.map(g => g.name));
+            if (Array.isArray(layout?.collapsedGroups)) {
+                _studioCollapsedGroups = new Set(
+                    layout.collapsedGroups.filter(name => !known.size || known.has(name))
+                );
+            }
+            _studioCollapsedHydrated = true;
+        } catch (_) { /* keep current collapsed set */ }
+        await initOntologyMap();
+        await refreshStudioViewSelect();
+        return;
+    }
+
+    try {
+        const switchResp = await fetch('/domain/design-views/switch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: viewNameOrAll }),
+            credentials: 'same-origin',
+        });
+        if (!switchResp.ok) {
+            const err = await switchResp.json().catch(() => ({}));
+            throw new Error(err.detail || `Switch view failed (${switchResp.status})`);
+        }
+
+        const curResp = await fetch('/domain/design-views/current', { credentials: 'same-origin' });
+        if (!curResp.ok) {
+            throw new Error(`Get current view failed (${curResp.status})`);
+        }
+        const curData = await curResp.json();
+        _studioViewLayout = curData.layout || {};
+        _studioActiveView = viewNameOrAll;
+
+        const collapsed = _studioViewLayout?.visibility?.collapsedGroups;
+        if (Array.isArray(collapsed)) {
+            _studioCollapsedGroups = new Set(collapsed);
+        }
+
+        await initOntologyMap();
+        await refreshStudioViewSelect();
+    } catch (err) {
+        console.error('[Studio] applyStudioView failed:', err);
+        if (typeof showNotification === 'function') {
+            showNotification(`Could not switch view: ${err.message}`, 'danger');
+        }
+    }
+}
+
+/**
+ * Wire the Studio view dropdown and delete button once.
+ */
+function wireStudioViewControls() {
+    if (_studioViewWired) return;
+    const menu = document.getElementById('studioViewMenu');
+    const deleteBtn = document.getElementById('studioDeleteViewBtn');
+    if (!menu) return;
+    _studioViewWired = true;
+
+    menu.addEventListener('click', (event) => {
+        const renameBtn = event.target.closest('.studio-view-rename');
+        if (renameBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const toggle = document.getElementById('studioViewBtn');
+            if (toggle && window.bootstrap?.Dropdown) {
+                bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
+            }
+            renameStudioView(renameBtn.dataset.view || '');
+            return;
+        }
+        const item = event.target.closest('[data-view]');
+        if (item) {
+            applyStudioView(item.dataset.view);
+        }
+    });
+
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+            if (!_studioActiveView) return;
+            const viewName = _studioActiveView;
+            const confirmed = typeof showConfirmDialog === 'function'
+                ? await showConfirmDialog({
+                    title: 'Delete Business View',
+                    message: `Delete Business View "${viewName}"? This cannot be undone.`,
+                    confirmText: 'Delete',
+                    confirmClass: 'btn-danger',
+                })
+                : window.confirm(`Delete Business View "${viewName}"?`);
+            if (!confirmed) return;
+
+            try {
+                const resp = await fetch('/domain/design-views/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: viewName }),
+                    credentials: 'same-origin',
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.detail || `Delete failed (${resp.status})`);
+                }
+                await applyStudioView('__all__');
+            } catch (err) {
+                console.error('[Studio] delete view failed:', err);
+                if (typeof showNotification === 'function') {
+                    showNotification(`Could not delete view: ${err.message}`, 'danger');
+                }
+            }
+        });
+    }
+}
+
+/**
+ * Resolve the ontology group name for a Group_<name>[_N] Business View.
+ * Prefers the longest matching group so Contract wins over Contract_Draft.
+ * @param {string} viewName
+ * @returns {string|null}
+ */
+function _studioGroupNameForView(viewName) {
+    if (!viewName || !String(viewName).startsWith('Group_')) return null;
+    const rest = String(viewName).slice('Group_'.length);
+    if (!rest) return null;
+    const names = (_studioGroupsDefs || [])
+        .map(g => g && g.name)
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length);
+    for (const name of names) {
+        if (rest === name) return name;
+        if (rest.startsWith(name + '_')) {
+            const suffix = rest.slice(name.length + 1);
+            if (/^\d+$/.test(suffix)) return name;
+        }
+    }
+    return null;
+}
+
+/**
+ * Visible entity names for the active Business View.
+ * Group_* views follow live group membership; other views whitelist
+ * layout.entities (minus hiddenEntities). Legacy layouts with an empty
+ * entities list fall back to blacklist-only (everything not hidden).
+ * @param {Object} layout
+ * @returns {Set<string>|null} null → blacklist-only fallback
+ */
+function _studioViewVisibleNames(layout) {
+    const visibility = (layout && layout.visibility) || {};
+    const hidden = new Set(visibility.hiddenEntities || []);
+
+    const groupName = _studioGroupNameForView(_studioActiveView);
+    if (groupName) {
+        const g = (_studioGroupsDefs || []).find(d => d && d.name === groupName);
+        if (g) {
+            return new Set((g.members || []).filter(Boolean));
+        }
+    }
+
+    const inView = new Set(
+        ((layout && layout.entities) || [])
+            .map(e => e && e.name)
+            .filter(Boolean)
+    );
+    if (inView.size > 0) {
+        return new Set([...inView].filter(name => !hidden.has(name)));
+    }
+    return null;
+}
+
+/**
+ * Flush current canvas node positions before an ontology save.
+ */
+async function flushStudioLayoutBeforeSave() {
+    if (ontologyMapNodes && ontologyMapNodes.length) {
+        await saveMapLayout(ontologyMapNodes);
+    }
+}
+window.flushStudioLayoutBeforeSave = flushStudioLayoutBeforeSave;
+
+/**
+ * Load ontology groups and rebuild the member → group map.
+ */
+async function loadStudioGroups() {
+    try {
+        const resp = await fetch('/ontology/groups/list', { credentials: 'same-origin' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        _studioGroupsDefs = data.groups || [];
+        _studioMemberToGroup = {};
+        const known = new Set();
+        _studioGroupsDefs.forEach(g => {
+            known.add(g.name);
+            (g.members || []).forEach(m => {
+                _studioMemberToGroup[m] = g.name;
+            });
+        });
+        // Drop collapsed entries for groups that no longer exist.
+        _studioCollapsedGroups = new Set(
+            [..._studioCollapsedGroups].filter(name => known.has(name))
+        );
+        for (const [gName, entityName] of [..._studioGroupAnchors.entries()]) {
+            if (!known.has(gName) || _studioMemberToGroup[entityName] !== gName) {
+                _studioGroupAnchors.delete(gName);
+            }
+        }
+        applyStudioGroupsToggle();
+    } catch (err) {
+        console.warn('[Studio] Could not load groups:', err);
+    }
+}
+
+/**
+ * Snapshot non-group node positions into the in-memory cache.
+ * Call before any collapse/expand so members keep their exact coords.
+ * @param {Array} [nodes]
+ */
+function _snapshotStudioEntityPositions(nodes) {
+    (nodes || ontologyMapNodes || []).forEach(node => {
+        if (!node || node.isGroup || !node.name) return;
+        const x = node.fx != null ? node.fx : node.x;
+        const y = node.fy != null ? node.fy : node.y;
+        if (x == null || y == null) return;
+        _studioEntityPositions.set(node.name, {
+            x: x,
+            y: y,
+            fx: node.fx != null ? node.fx : x,
+            fy: node.fy != null ? node.fy : y,
+        });
+    });
+}
+
+/**
+ * Apply cached (or saved) positions onto a freshly built entity node.
+ * @param {Object} node
+ * @param {Object|null} savedPos  from map-layout / BV layout
+ * @returns {Object}
+ */
+/**
+ * @returns {boolean} true when a concrete cached/saved position was applied
+ */
+function _applyStudioEntityPosition(node, savedPos) {
+    const cached = _studioEntityPositions.get(node.name);
+    if (cached) {
+        node.x = cached.x;
+        node.y = cached.y;
+        node.fx = cached.fx != null ? cached.fx : cached.x;
+        node.fy = cached.fy != null ? cached.fy : cached.y;
+        return true;
+    }
+    if (savedPos && savedPos.x != null && savedPos.y != null) {
+        node.x = savedPos.x;
+        node.y = savedPos.y;
+        node.fx = savedPos.fx != null ? savedPos.fx : savedPos.x;
+        node.fy = savedPos.fy != null ? savedPos.fy : savedPos.y;
+        _studioEntityPositions.set(node.name, {
+            x: node.x, y: node.y, fx: node.fx, fy: node.fy,
+        });
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Resolve which member positions the collapsed group circle.
+ * Prefers the entity clicked to collapse; falls back to the first visible member.
+ * @param {Object} g
+ * @param {Map} [nodeByName]
+ * @param {Array} [visibleMembers]
+ * @returns {string|null}
+ */
+function _resolveStudioGroupAnchor(g, nodeByName, visibleMembers) {
+    if (!g) return null;
+    const preferred = _studioGroupAnchors.get(g.name);
+    if (preferred) {
+        if (nodeByName ? nodeByName.has(preferred) : (g.members || []).includes(preferred)) {
+            return preferred;
+        }
+    }
+    if (nodeByName) {
+        return (g.members || []).find(m => nodeByName.has(m))
+            || (visibleMembers && visibleMembers[0] && visibleMembers[0].name)
+            || null;
+    }
+    return (g.members || []).find(m => _studioEntityPositions.has(m))
+        || (g.members || [])[0]
+        || null;
+}
+
+/**
+ * When a group super-node is dragged, keep the anchor member's cached
+ * position in sync so the circle stays coherent across collapse cycles.
+ * @param {Object} groupNode
+ */
+function _syncGroupAnchorPosition(groupNode) {
+    if (!groupNode || !groupNode.isGroup || !groupNode.groupName) return;
+    const g = _studioGroupsDefs.find(d => d.name === groupNode.groupName);
+    if (!g || !g.members || !g.members.length) return;
+    const anchorName = _resolveStudioGroupAnchor(g);
+    if (!anchorName) return;
+    const x = groupNode.fx != null ? groupNode.fx : groupNode.x;
+    const y = groupNode.fy != null ? groupNode.fy : groupNode.y;
+    if (x == null || y == null) return;
+    _studioEntityPositions.set(anchorName, { x: x, y: y, fx: x, fy: y });
+}
+
+function _studioGroupNames() {
+    return (_studioGroupsDefs || []).map(g => g && g.name).filter(Boolean);
+}
+
+function studioGroupsAllCollapsed() {
+    const names = _studioGroupNames();
+    return names.length > 0 && names.every(n => _studioCollapsedGroups.has(n));
+}
+
+/**
+ * Sync the expand/collapse-all toolbar button with the current group set.
+ */
+function applyStudioGroupsToggle() {
+    const btn = document.getElementById('studioToggleAllGroupsBtn');
+    if (!btn) return;
+    const names = _studioGroupNames();
+    const has = names.length > 0;
+    btn.disabled = !has;
+    const allCollapsed = has && studioGroupsAllCollapsed();
+    btn.classList.toggle('active', allCollapsed);
+    btn.setAttribute('aria-pressed', allCollapsed ? 'true' : 'false');
+    const icon = btn.querySelector('i');
+    if (allCollapsed) {
+        btn.title = 'Expand all groups';
+        if (icon) icon.className = 'bi bi-arrows-expand';
+    } else {
+        btn.title = 'Collapse all groups';
+        if (icon) icon.className = 'bi bi-arrows-collapse';
+    }
+    btn.setAttribute('aria-label', btn.title);
+}
+
+function initStudioGroupsToggle() {
+    const btn = document.getElementById('studioToggleAllGroupsBtn');
+    applyStudioGroupsToggle();
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.onclick = () => { toggleAllStudioGroups(); };
+}
+
+async function toggleAllStudioGroups() {
+    const names = _studioGroupNames();
+    if (!names.length) return;
+    _snapshotStudioEntityPositions(ontologyMapNodes);
+    if (studioGroupsAllCollapsed()) {
+        names.forEach(n => {
+            _studioCollapsedGroups.delete(n);
+            _studioGroupAnchors.delete(n);
+        });
+    } else {
+        names.forEach(n => _studioCollapsedGroups.add(n));
+    }
+    await persistStudioCollapsedGroups();
+    applyStudioGroupsToggle();
+    await initOntologyMap();
+}
+
+async function collapseStudioGroup(name, anchorEntityName) {
+    if (!name) return;
+    _snapshotStudioEntityPositions(ontologyMapNodes);
+    if (anchorEntityName && _studioMemberToGroup[anchorEntityName] === name) {
+        _studioGroupAnchors.set(name, anchorEntityName);
+    } else {
+        _studioGroupAnchors.delete(name);
+    }
+    _studioCollapsedGroups.add(name);
+    await persistStudioCollapsedGroups();
+    await initOntologyMap();
+}
+
+async function expandStudioGroup(name) {
+    if (!name) return;
+    // Snapshot first: non-group nodes keep their live coords; collapsed members
+    // already live in `_studioEntityPositions` from the last collapse/drag.
+    _snapshotStudioEntityPositions(ontologyMapNodes);
+    _studioCollapsedGroups.delete(name);
+    _studioGroupAnchors.delete(name);
+    await persistStudioCollapsedGroups();
+    await initOntologyMap();
+}
+
+/**
+ * Right pane for a Studio ontology group: lists every member entity.
+ * A member row selects that entity on the canvas, which opens its entity panel.
+ * @param {string} groupName
+ */
+async function openStudioGroupPanel(groupName) {
+    const g = _studioGroupsDefs.find(d => d.name === groupName);
+    if (!g) return;
+    await checkDirtyBeforeSwitch();
+    sharedPanelEditType = null;
+    sharedPanelEditIndex = -1;
+    sharedPanelOriginalName = null;
+    sharedPanelViewOnly = true;
+    sharedPanelOnSaveCallback = null;
+    sharedPanelDirty = false;
+    openSharedPanel();
+
+    const panel = sharedPanelCurrentSection?.querySelector('.shared-detail-panel');
+    if (!panel) return;
+
+    setSharedPanelHeader(
+        panel,
+        `${escapeHtml(g.icon || '📁')} <span id="sharedPanelItemName">${escapeHtml(g.label || g.name)}</span>`,
+        ''
+    );
+
+    const classByName = new Map((OntologyState.config.classes || []).map(c => [c.name, c]));
+    const members = g.members || [];
+    const rows = members.map(name => {
+        const cls = classByName.get(name);
+        const emoji = cls?.emoji || OntologyState.defaultClassEmoji || '📦';
+        return `
+            <button type="button" class="panel-item panel-group-member" data-group-member="${escapeHtml(name)}" data-panel-passive>
+                <div class="panel-item-head">
+                    <span class="panel-item-icon" aria-hidden="true">${escapeHtml(emoji)}</span>
+                    <div class="panel-item-text"><div class="panel-item-title">${escapeHtml(name)}</div></div>
+                </div>
+            </button>`;
+    }).join('');
+
+    const body = panel.querySelector('#sharedPanelBody');
+    if (!body) return;
+    const canEdit = typeof _canEditOntologyPanel === 'function'
+        ? _canEditOntologyPanel()
+        : (window.isActiveVersion !== false);
+    const editBtn = canEdit
+        ? `<button type="button" class="btn btn-sm btn-outline-secondary panel-group-edit" data-edit-group="${escapeHtml(g.name)}" data-panel-passive>
+                <i class="bi bi-pencil me-1"></i>Edit group
+           </button>`
+        : '';
+    body.innerHTML = `
+        ${editBtn}
+        ${panelSectionHeader({
+            targetId: 'studioGroupMembers',
+            icon: 'bi-collection',
+            title: 'Entities',
+            subtitle: 'Entities in this group. Click one to open it.',
+        })}
+        <div class="panel-group-members">
+            ${rows || panelEmptyState('No entities in this group yet.', '', '', true)}
+        </div>`;
+    _updatePanelSection('studioGroupMembers', { count: members.length });
+
+    body.querySelectorAll('[data-group-member]').forEach(btn => {
+        btn.addEventListener('click', () => _setMapSelection([btn.dataset.groupMember]));
+    });
+    const editEl = body.querySelector('[data-edit-group]');
+    if (editEl) {
+        editEl.addEventListener('click', () => {
+            if (window.OntologyGroups && typeof OntologyGroups.editGroupByName === 'function') {
+                OntologyGroups.editGroupByName(editEl.dataset.editGroup);
+            }
+        });
+    }
+}
+
+window.refreshStudioGroups = async function () {
+    _snapshotStudioEntityPositions(ontologyMapNodes);
+    await loadStudioGroups();
+    await initOntologyMap();
+};
+
+/**
+ * Persist collapsed group names: into the active BV visibility, or the All map layout.
+ */
+async function persistStudioCollapsedGroups() {
+    try {
+        // Prefer the position cache so collapsed members (absent from the live
+        // graph) are still written back into the saved layout.
+        const positions = {};
+        _studioEntityPositions.forEach((pos, name) => {
+            positions[name] = {
+                x: pos.x,
+                y: pos.y,
+                fx: pos.fx != null ? pos.fx : pos.x,
+                fy: pos.fy != null ? pos.fy : pos.y,
+            };
+        });
+        // Overlay any currently visible non-group nodes (most recent drag).
+        (ontologyMapNodes || []).forEach(node => {
+            if (!node || node.isGroup || !node.name) return;
+            const x = node.fx != null ? node.fx : node.x;
+            const y = node.fy != null ? node.fy : node.y;
+            if (x == null || y == null) return;
+            positions[node.name] = { x: x, y: y, fx: x, fy: y };
+        });
+
+        if (_studioActiveView && _studioViewLayout) {
+            const byPos = positions;
+            // Update positions for entities already in this BV only. Never grow
+            // the view from the All-map position cache (that leaked ungrouped
+            // entities into Group_* snapshots).
+            const entities = (_studioViewLayout.entities || []).map(e => {
+                const p = byPos[e.name];
+                if (!p) return e;
+                return { ...e, x: p.x, y: p.y };
+            });
+            const visibility = {
+                ...(_studioViewLayout.visibility || {}),
+                collapsedGroups: Array.from(_studioCollapsedGroups),
+            };
+            _studioViewLayout = { ..._studioViewLayout, entities, visibility };
+            await fetch('/domain/design-views/save-current', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(_studioViewLayout),
+                credentials: 'same-origin',
+            });
+            return;
+        }
+
+        await fetch('/domain/map-layout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                positions: positions,
+                collapsedGroups: Array.from(_studioCollapsedGroups),
+            }),
+            credentials: 'same-origin',
+        });
+    } catch (err) {
+        console.warn('[Studio] Could not persist collapsed groups:', err);
+    }
+}
+
+/**
+ * Save current node positions into the active Business View layout.
+ * @param {Array} nodes
+ */
+async function _saveStudioViewLayoutFromNodes(nodes) {
+    if (!_studioViewLayout) return;
+    _snapshotStudioEntityPositions(nodes);
+    const byName = new Map(
+        (nodes || []).filter(n => !n.isGroup).map(n => [n.name, n])
+    );
+    const entities = (_studioViewLayout.entities || []).map(e => {
+        const n = byName.get(e.name);
+        if (n) {
+            const x = n.fx != null ? n.fx : n.x;
+            const y = n.fy != null ? n.fy : n.y;
+            return { ...e, x: x, y: y };
+        }
+        const cached = _studioEntityPositions.get(e.name);
+        if (cached) return { ...e, x: cached.x, y: cached.y };
+        return e;
+    });
+    const visibility = {
+        ...(_studioViewLayout.visibility || {}),
+        collapsedGroups: Array.from(_studioCollapsedGroups),
+    };
+    const layout = { ..._studioViewLayout, entities, visibility };
+    _studioViewLayout = layout;
+    await fetch('/domain/design-views/save-current', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(layout),
+        credentials: 'same-origin',
+    });
+}
+
 /**
  * True for Ctrl/Cmd gestures and while the Studio Select toolbar is on.
  * @param {Event} event
@@ -128,7 +877,9 @@ function _resolveLinkEndpoint(endpoint) {
 }
 
 function _classHasExternalConfig(cls) {
-    return !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length);
+    const hasDatasets = (Array.isArray(cls.datasets) && cls.datasets.length)
+        || !!cls.dataset;
+    return !!(cls.dashboard || hasDatasets || (cls.actions || []).length || (cls.bridges || []).length);
 }
 
 function _appendMapExternalBadge(nodeSelection) {
@@ -155,7 +906,7 @@ function _getBrandPrimaryColor() {
     const value = getComputedStyle(document.documentElement)
         .getPropertyValue('--db-primary')
         .trim();
-    return value || '#4F46E5';
+    return value || '#737373';
 }
 
 /**
@@ -185,24 +936,41 @@ async function loadMapLayout() {
 }
 
 /**
- * Save map layout to domain session
+ * Save map layout to domain session (All view) or to the active Business View.
  */
 async function saveMapLayout(nodes) {
     try {
+        _snapshotStudioEntityPositions(nodes);
+        if (_studioActiveView) {
+            await _saveStudioViewLayoutFromNodes(nodes);
+            console.log('[Map] Business View layout saved');
+            return;
+        }
+        // Merge cache + live nodes so collapsed members keep their coords.
         const positions = {};
-        nodes.forEach(node => {
-            positions[node.id] = {
-                x: node.x,
-                y: node.y,
-                fx: node.fx,
-                fy: node.fy
+        _studioEntityPositions.forEach((pos, name) => {
+            positions[name] = {
+                x: pos.x,
+                y: pos.y,
+                fx: pos.fx != null ? pos.fx : pos.x,
+                fy: pos.fy != null ? pos.fy : pos.y,
             };
         });
-        
+        (nodes || []).forEach(node => {
+            if (!node || node.isGroup) return;
+            const x = node.fx != null ? node.fx : node.x;
+            const y = node.fy != null ? node.fy : node.y;
+            if (x == null || y == null) return;
+            positions[node.id || node.name] = { x: x, y: y, fx: x, fy: y };
+        });
+
         await fetch('/domain/map-layout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ positions }),
+            body: JSON.stringify({
+                positions,
+                collapsedGroups: Array.from(_studioCollapsedGroups),
+            }),
             credentials: 'same-origin'
         });
         console.log('[Map] Layout saved');
@@ -307,6 +1075,8 @@ async function initOntologyMap() {
 
     initMapGridToggle();
     initMapSelectToggle();
+    initStudioGroupsToggle();
+    wireStudioViewControls();
     showOntologyMapLoading(true);
     
     const container = document.getElementById('ontology-map-container');
@@ -340,6 +1110,16 @@ async function initOntologyMap() {
         return;
     }
 
+    await loadStudioGroups();
+    // Refresh the view dropdown without awaiting apply (options only).
+    refreshStudioViewSelect();
+
+    // If a newer init was triggered while we were loading groups, abort
+    if (thisGeneration !== _mapInitGeneration) {
+        console.log('[Map] Superseded by newer init call, aborting');
+        return;
+    }
+
     // Get ontology data
     const classes = OntologyState?.config?.classes || [];
     const properties = OntologyState?.config?.properties || [];
@@ -365,18 +1145,30 @@ async function initOntologyMap() {
     // Load saved layout
     const savedLayout = await loadMapLayout();
 
+    // Hydrate collapsed groups from the All map layout once (avoid races with
+    // in-memory collapse/expand that re-enter initOntologyMap).
+    if (!_studioActiveView && !_studioCollapsedHydrated
+            && Array.isArray(savedLayout?.collapsedGroups)) {
+        const known = new Set(_studioGroupsDefs.map(g => g.name));
+        _studioCollapsedGroups = new Set(
+            savedLayout.collapsedGroups.filter(name => known.has(name))
+        );
+        _studioCollapsedHydrated = true;
+    }
+
     // If a newer init was triggered while we were loading layout, abort
     if (thisGeneration !== _mapInitGeneration) {
         console.log('[Map] Superseded by newer init call, aborting');
         return;
     }
 
-    // Build nodes from classes
-    const nodes = classes.map((cls, idx) => {
+    // Build nodes from classes. Prefer the in-memory position cache (survives
+    // collapse/expand) over the persisted map layout, then fall back to a grid.
+    let nodes = classes.map((cls, idx) => {
         const savedPos = savedLayout?.positions?.[cls.name];
-        const x = savedPos?.x ?? (100 + (idx % 5) * 150);
-        const y = savedPos?.y ?? (100 + Math.floor(idx / 5) * 120);
-        return {
+        const fallbackX = 100 + (idx % 5) * 150;
+        const fallbackY = 100 + Math.floor(idx / 5) * 120;
+        const node = {
             id: cls.name,
             name: cls.name,
             label: cls.label || cls.name,
@@ -385,22 +1177,23 @@ async function initOntologyMap() {
             // Bridges configured (entity panel's Links / Behaviour / Model tabs).
             hasExternal: _classHasExternalConfig(cls),
             parent: cls.parent,
-            // Use saved position if available, fix positions to prevent animation
-            x: x,
-            y: y,
-            fx: savedPos ? x : null,
-            fy: savedPos ? y : null
+            x: fallbackX,
+            y: fallbackY,
+            fx: null,
+            fy: null,
         };
+        _applyStudioEntityPosition(node, savedPos || null);
+        return node;
     });
 
     // Build links from properties (relationships) and inheritance
-    const links = [];
-    
+    let links = [];
+
     // Create lookup maps for robust matching (handles case mismatches)
     const validNodeIds = new Set(nodes.map(n => n.id));
     const nodeNameLower = new Map();  // lowercase → actual name
     nodes.forEach(n => nodeNameLower.set(n.id.toLowerCase(), n.id));
-    
+
     function resolveNodeId(name) {
         if (!name) return undefined;
         if (validNodeIds.has(name)) return name;
@@ -493,6 +1286,121 @@ async function initOntologyMap() {
     });
 
     console.log(`[Map] Built ${links.length} valid links from ${properties.length} properties`);
+
+    // ── Business View filter ───────────────────────────────────────────────
+    // Whitelist layout.entities (and live members for Group_* views). A stale
+    // hiddenEntities blacklist alone lets post-snapshot entities leak in as
+    // isolated orphan-looking nodes. Group_* views show members only.
+    if (_studioActiveView && _studioViewLayout) {
+        const visibility = _studioViewLayout.visibility || {};
+        const hidden = new Set(visibility.hiddenEntities || []);
+        const isGroupView = !!_studioGroupNameForView(_studioActiveView);
+        const visibleNames = _studioViewVisibleNames(_studioViewLayout);
+        const posByName = new Map();
+        (_studioViewLayout.entities || []).forEach(e => {
+            if (e && e.name) posByName.set(e.name, e);
+        });
+
+        nodes = nodes.filter(n => {
+            // Whitelist is authoritative (incl. live Group_* members). Legacy
+            // views with an empty entities list fall back to blacklist-only.
+            if (visibleNames) return visibleNames.has(n.name);
+            return !hidden.has(n.name);
+        }).map(n => {
+            // Cache wins (exact pre-collapse coords); else BV layout entities.
+            const e = posByName.get(n.name);
+            const saved = (e && e.x != null && e.y != null)
+                ? { x: e.x, y: e.y, fx: e.x, fy: e.y }
+                : null;
+            const next = { ...n };
+            _applyStudioEntityPosition(next, saved);
+            return next;
+        });
+
+        const remainingIds = new Set(nodes.map(n => n.id));
+        const hiddenRels = visibility.hiddenRelationships || [];
+        const hiddenInhs = visibility.hiddenInheritances || [];
+
+        links = links.filter(l => {
+            if (!remainingIds.has(l.source) || !remainingIds.has(l.target)) return false;
+            // Group_* views ignore stale snapshot hide lists — live membership
+            // already defines what belongs on canvas.
+            if (isGroupView) return true;
+            if (l.type === 'inheritance') {
+                return !hiddenInhs.some(h =>
+                    (h.source === l.source && h.target === l.target)
+                    || (typeof h === 'string' && h === `${l.source}|${l.target}`)
+                );
+            }
+            return !hiddenRels.some(h => {
+                if (typeof h === 'string') return h === l.name;
+                return h.name === l.name && h.source === l.source && h.target === l.target;
+            });
+        });
+    }
+
+    // ── Ontology Groups collapse ───────────────────────────────────────────
+    if (_studioGroupsDefs.length && _studioCollapsedGroups.size) {
+        const nodeByName = new Map(nodes.map(n => [n.name, n]));
+        const collapsedMemberNames = new Set();
+        const groupNodes = [];
+
+        _studioGroupsDefs.forEach(g => {
+            if (!_studioCollapsedGroups.has(g.name)) return;
+            const visibleMembers = (g.members || [])
+                .map(m => nodeByName.get(m))
+                .filter(Boolean);
+            if (!visibleMembers.length) return;
+
+            visibleMembers.forEach(m => collapsedMemberNames.add(m.name));
+            // Prefer the entity clicked to collapse; else first visible member.
+            const anchorName = _resolveStudioGroupAnchor(g, nodeByName, visibleMembers)
+                || visibleMembers[0].name;
+            const anchor = nodeByName.get(anchorName) || visibleMembers[0];
+            const ax = anchor.fx != null ? anchor.fx : anchor.x;
+            const ay = anchor.fy != null ? anchor.fy : anchor.y;
+            groupNodes.push({
+                id: '__group__' + g.name,
+                name: g.name,
+                label: (g.icon || '📁') + ' ' + (g.label || g.name),
+                icon: g.icon || '📁',
+                isGroup: true,
+                groupName: g.name,
+                groupColor: g.color || '#4A90D9',
+                hasExternal: false,
+                x: ax,
+                y: ay,
+                fx: ax,
+                fy: ay,
+            });
+        });
+
+        if (collapsedMemberNames.size) {
+            nodes = nodes.filter(n => !collapsedMemberNames.has(n.name)).concat(groupNodes);
+
+            const memberToGroupId = {};
+            collapsedMemberNames.forEach(memberName => {
+                const gName = _studioMemberToGroup[memberName];
+                if (gName) memberToGroupId[memberName] = '__group__' + gName;
+            });
+
+            const seenLinkKeys = new Set();
+            links = links.map(l => {
+                const source = memberToGroupId[l.source] || l.source;
+                const target = memberToGroupId[l.target] || l.target;
+                return { ...l, source, target };
+            }).filter(l => {
+                // Drop edges that collapsed onto the same group super-node.
+                if (l.source === l.target && String(l.source).startsWith('__group__')) {
+                    return false;
+                }
+                const key = [l.type, l.name || '', l.source, l.target].join('|');
+                if (seenLinkKeys.has(key)) return false;
+                seenLinkKeys.add(key);
+                return true;
+            });
+        }
+    }
 
     // Expose to module scope so context-menu handlers can access them
     ontologyMapNodes = nodes;
@@ -659,6 +1567,11 @@ async function initOntologyMap() {
 
     function dragEnded(event, d) {
         mapDragStartPositions = new Map();
+        if (d && d.isGroup) {
+            _syncGroupAnchorPosition(d);
+        } else {
+            _snapshotStudioEntityPositions(ontologyMapNodes);
+        }
         scheduleMapAutoSave(nodes);
     }
 
@@ -761,13 +1674,13 @@ async function initOntologyMap() {
     // Track if we're dragging to prevent click after drag
     let isDragging = false;
     
-    // Draw nodes (icon only, no circles - matching Query visualization)
+    // Draw nodes (icon only for entities; filled circle for collapsed groups)
     const nodeElements = g.append('g')
         .selectAll('g')
         .data(nodes)
         .enter()
         .append('g')
-        .attr('class', 'map-node')
+        .attr('class', d => d.isGroup ? 'map-node map-group-node' : 'map-node')
         .call(d3.drag()
             .on('start', function(event, d) {
                 isDragging = false;
@@ -779,27 +1692,108 @@ async function initOntologyMap() {
             })
             .on('end', dragEnded));
 
+    const entityNodeElements = nodeElements.filter(d => !d.isGroup);
+    const groupNodeElements = nodeElements.filter(d => d.isGroup);
+
     // Invisible hitarea circle for better click detection
-    nodeElements.append('circle')
+    entityNodeElements.append('circle')
         .attr('class', 'map-node-hitarea')
         .attr('r', 25);
 
     // Emoji icon (centered via CSS dominant-baseline: central)
-    nodeElements.append('text')
+    entityNodeElements.append('text')
         .attr('class', 'map-node-icon')
         .text(d => d.icon);
 
     // Node label below the icon
-    nodeElements.append('text')
+    entityNodeElements.append('text')
         .attr('class', 'map-node-label')
         .attr('dy', 35)
         .text(d => d.label || d.name);
+
+    // Collapsed ontology-group super-nodes
+    groupNodeElements.append('circle')
+        .attr('class', 'map-group-circle')
+        .attr('r', 28)
+        .attr('fill', d => d.groupColor || '#4A90D9');
+
+    groupNodeElements.append('text')
+        .attr('class', 'map-node-icon')
+        .text(d => d.icon);
+
+    groupNodeElements.append('text')
+        .attr('class', 'map-node-label')
+        .attr('dy', 42)
+        .text(d => d.label || d.name);
+
+    // Collapse toggle (−) for entities that belong to an expanded group
+    entityNodeElements
+        .filter(d => {
+            const gName = _studioMemberToGroup[d.name];
+            return gName && !_studioCollapsedGroups.has(gName);
+        })
+        .each(function (d) {
+            const gName = _studioMemberToGroup[d.name];
+            const gDef = _studioGroupsDefs.find(g => g.name === gName);
+            const groupColor = (gDef && gDef.color) || '#4A90D9';
+            const toggle = d3.select(this).append('g')
+                .attr('class', 'studio-group-toggle studio-group-toggle-collapse')
+                .attr('transform', 'translate(-22, -22)')
+                .style('cursor', 'pointer');
+            toggle.append('circle')
+                .attr('r', 7)
+                .attr('class', 'studio-group-toggle-bg')
+                .attr('fill', groupColor);
+            toggle.append('text')
+                .attr('class', 'studio-group-toggle-icon')
+                .attr('x', 0)
+                .attr('y', 0)
+                .attr('dx', 0)
+                .attr('dy', 0)
+                .attr('text-anchor', 'middle')
+                .attr('dominant-baseline', 'central')
+                .attr('alignment-baseline', 'middle')
+                .text('\u2212');
+            toggle.on('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                collapseStudioGroup(gName, d.name);
+            });
+        });
+
+    // Expand toggle (+) on collapsed group super-nodes
+    groupNodeElements.each(function (d) {
+        const groupColor = d.groupColor || '#4A90D9';
+        const toggle = d3.select(this).append('g')
+            .attr('class', 'studio-group-toggle')
+            .attr('transform', 'translate(-22, -22)')
+            .style('cursor', 'pointer');
+        toggle.append('circle')
+            .attr('r', 7)
+            .attr('class', 'studio-group-toggle-bg')
+            .attr('fill', groupColor);
+        toggle.append('text')
+            .attr('class', 'studio-group-toggle-icon')
+            .attr('x', 0)
+            .attr('y', 0)
+            .attr('dx', 0)
+            .attr('dy', 0)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'central')
+            .attr('alignment-baseline', 'middle')
+            .text('+');
+        toggle.on('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            expandStudioGroup(d.groupName);
+        });
+    });
 
     // Small badge overlay signalling the class has Dashboard/Dataset/Actions/
     // Bridges configured (entity panel's Links / Behaviour / Model tabs). Purely visual — no
     // tooltip, no click handler — so it's rendered only for matching nodes
     // and marked pointer-events: none in CSS.
-    const externalBadgeNodes = nodeElements.filter(d => d.hasExternal);
+    const externalBadgeNodes = entityNodeElements.filter(d => d.hasExternal);
 
     _appendMapExternalBadge(externalBadgeNodes);
 
@@ -808,9 +1802,18 @@ async function initOntologyMap() {
         .text(d => d.label || d.name);
 
     // ── Neighborhood highlight helpers ──────────────────────────────────
-    function highlightNeighborhood(selectedName) {
-        // Resolve source/target: D3 forceLink replaces ids with node objects
-        const resolveName = n => (typeof n === 'object' ? n.name : n);
+    // selectedKey may be a node name (entities: id === name) or a group
+    // super-node id (__group__X) — group nodes keep id !== name.
+    function highlightNeighborhood(selectedKey) {
+        const endpointMatches = (endpoint, key) => {
+            if (endpoint && typeof endpoint === 'object') {
+                return endpoint.name === key || endpoint.id === key;
+            }
+            return endpoint === key;
+        };
+        const endpointName = (endpoint) => (
+            endpoint && typeof endpoint === 'object' ? endpoint.name : endpoint
+        );
 
         const connectedLinkSet = new Set();
         const neighborSet      = new Set();
@@ -821,18 +1824,20 @@ async function initOntologyMap() {
             ...selfLoopLinks,
         ];
         allLinks.forEach(l => {
-            const s = resolveName(l.source);
-            const t = resolveName(l.target);
-            if (s === selectedName || t === selectedName) {
+            const sMatch = endpointMatches(l.source, selectedKey);
+            const tMatch = endpointMatches(l.target, selectedKey);
+            if (sMatch || tMatch) {
                 connectedLinkSet.add(l);
-                if (s !== selectedName) neighborSet.add(s);
-                if (t !== selectedName) neighborSet.add(t);
+                if (!sMatch) neighborSet.add(endpointName(l.source));
+                if (!tMatch) neighborSet.add(endpointName(l.target));
             }
         });
 
+        const isFocus = (d) => d && (d.name === selectedKey || d.id === selectedKey);
+
         // Nodes
         d3.selectAll('.map-node')
-            .classed('dimmed',   d => d.name !== selectedName && !neighborSet.has(d.name))
+            .classed('dimmed',   d => !isFocus(d) && !neighborSet.has(d.name))
             .classed('neighbor', d => neighborSet.has(d.name));
 
         // Links (path elements)
@@ -883,6 +1888,24 @@ async function initOntologyMap() {
 
     // Click to edit entity (only if not dragging)
     nodeElements.on('click', function(event, d) {
+        // Group super-nodes: member pane + neighborhood highlight (same CSS as
+        // entity click). Keep groups out of mapSelectedEntityNames so we never
+        // call editClassByName on a group name.
+        if (d.isGroup) {
+            event.stopPropagation();
+            if (isDragging) {
+                isDragging = false;
+                return;
+            }
+            hideMapContextMenu();
+            hideMapRelationshipActions();
+            _clearMapSelection({ closePanel: false });
+            openStudioGroupPanel(d.groupName);
+            highlightNeighborhood(d.id);
+            d3.select(this).classed('selected', true);
+            return;
+        }
+
         // Handle connection mode - create relationship or inheritance
         if (mapConnectionMode) {
             event.preventDefault();
@@ -932,6 +1955,8 @@ async function initOntologyMap() {
     nodeElements.on('contextmenu', function(event, d) {
         event.preventDefault();
         event.stopPropagation();
+
+        if (d.isGroup) return;
 
         if (event.ctrlKey || event.metaKey) {
             _toggleMapEntitySelection(d.name);
@@ -1039,7 +2064,8 @@ async function initOntologyMap() {
             _suppressNextMapCanvasClick();
             if (cancelled || (!fromSelectMode && !_isMapSelectGesture(evt))) return;
             const namesInside = ontologyMapNodes
-                .filter(n => n.x >= minX && n.x <= maxX && n.y >= minY && n.y <= maxY)
+                .filter(n => !n.isGroup
+                    && n.x >= minX && n.x <= maxX && n.y >= minY && n.y <= maxY)
                 .map(n => n.name);
             if (namesInside.length) {
                 _setMapSelection(namesInside);
@@ -1485,8 +2511,8 @@ function focusMapEntity(name) {
 
 /**
  * Create, switch to and populate a Business View (design-view) from a set of
- * Studio entities, then navigate to Business Views. Shared by the single-entity
- * (1-hop) and multi-select (selected-only) entry points.
+ * Studio entities, then stay on Studio with that view selected. Shared by the
+ * single-entity (1-hop) and multi-select (selected-only) entry points.
  *
  * Everything outside `entityNames` is hidden in the saved view; the relationship
  * and inheritance arrays are exactly `relLinks` / `inhLinks`.
@@ -1500,9 +2526,13 @@ function focusMapEntity(name) {
  *        Placement for an entity, called as (index, cx, cy, radius): the
  *        entity's index in `entityNames`, the circle centre, and its radius.
  * @param {string}   spec.logLabel     Caller name for diagnostics.
+ * @param {boolean}  [spec.applyAfter=true] When false, persist the view but
+ *        leave the Studio canvas on the current view (dropdown still refreshes).
  */
 async function _createMapBusinessView(spec) {
     const { baseName, entityNames, relLinks, inhLinks, positionFor, logLabel } = spec;
+    const applyAfter = spec.applyAfter !== false;
+    const previousView = _studioActiveView;
     try {
         // ── 1. Unique view name ─────────────────────────────────────────────
         let viewName = baseName;
@@ -1533,7 +2563,7 @@ async function _createMapBusinessView(spec) {
         const entities = entityNames.map((name, i) => {
             const { x, y } = positionFor(i, cx, cy, radius);
             // Try to get properties from the node data already loaded in the map
-            const nodeData = ontologyMapNodes.find(n => n.name === name);
+            const nodeData = ontologyMapNodes.find(n => n.name === name && !n.isGroup);
             return {
                 id: entityIdMap.get(name),
                 name,
@@ -1567,18 +2597,17 @@ async function _createMapBusinessView(spec) {
             }));
 
         // ── 4. Visibility — hide everything outside the chosen entities ─────
-        // loadOntologyIntoDesigner always merges with the full ontology classes list;
-        // hiddenEntities / hiddenRelationships / hiddenInheritances control what is
-        // actually rendered, so we must populate them to restrict the view.
-        const hiddenEntities = ontologyMapNodes
-            .map(n => n.name)
-            .filter(name => !visibleNames.has(name));
+        // Use the full ontology class list so collapsed group members are still
+        // recorded as hidden when creating a view from a filtered canvas.
+        const allClassNames = (OntologyState?.config?.classes || []).map(c => c.name);
+        const hiddenEntities = allClassNames.filter(name => !visibleNames.has(name));
 
         const hiddenRelationships = [];
         const hiddenInheritances = [];
         ontologyMapLinks.forEach(link => {
             const s = _resolveLinkEndpoint(link.source);
             const t = _resolveLinkEndpoint(link.target);
+            if (String(s).startsWith('__group__') || String(t).startsWith('__group__')) return;
             if (!visibleNames.has(s) || !visibleNames.has(t)) {
                 if (link.type === 'inheritance') {
                     hiddenInheritances.push({ source: s, target: t });
@@ -1592,7 +2621,12 @@ async function _createMapBusinessView(spec) {
             entities,
             relationships,
             inheritances,
-            visibility: { hiddenEntities, hiddenRelationships, hiddenInheritances },
+            visibility: {
+                hiddenEntities,
+                hiddenRelationships,
+                hiddenInheritances,
+                collapsedGroups: Array.from(_studioCollapsedGroups),
+            },
         };
 
         // ── 5. Create → switch → save ────────────────────────────────────────
@@ -1626,18 +2660,24 @@ async function _createMapBusinessView(spec) {
             throw new Error(err.detail || `Save view failed (${saveResp.status})`);
         }
 
-        // ── 6. Navigate to Business Views (design) section ─────────────────
-        if (typeof SidebarNav !== 'undefined' && SidebarNav.switchTo) {
-            SidebarNav.switchTo('design');
+        // ── 6. Optionally switch the canvas to the new view ───────────────
+        if (applyAfter) {
+            _studioActiveView = viewName;
+            _studioViewLayout = layoutData;
+            await refreshStudioViewSelect();
+            await applyStudioView(viewName);
         } else {
-            const viewsTab = document.querySelector('.sidebar-nav .nav-link[data-section="design"]');
-            if (viewsTab) viewsTab.click();
-        }
-
-        // If the designer is already initialised, reload the view (initOntologyDesigner
-        // would skip the reload since the ontology itself hasn't changed).
-        if (typeof loadOntologyIntoDesigner === 'function') {
-            setTimeout(() => loadOntologyIntoDesigner(false), 150);
+            // save-current writes the new view; restore the previous named
+            // view as backend current so later saves do not overwrite it.
+            if (previousView) {
+                await fetch('/domain/design-views/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ name: previousView }),
+                });
+            }
+            await refreshStudioViewSelect();
         }
 
         console.log(`[Map] Business view "${viewName}" created with ${entities.length} entities.`);
@@ -1733,6 +2773,278 @@ async function createBusinessViewFromSelection(names) {
     });
 }
 
+/**
+ * Snapshot a Business View of an ontology group's members (create-only).
+ * Named Group_<groupName>. Does not switch the Studio canvas.
+ * @param {string} groupName
+ * @param {string[]} members
+ */
+async function createBusinessViewFromGroup(groupName, members) {
+    if (!groupName) return;
+    const entityNames = (members || []).filter(Boolean);
+    const visibleNames = new Set(entityNames);
+    const relLinks = [];
+    const inhLinks = [];
+
+    (ontologyMapLinks || []).forEach(link => {
+        const source = _resolveLinkEndpoint(link.source);
+        const target = _resolveLinkEndpoint(link.target);
+        if (!(visibleNames.has(source) && visibleNames.has(target))) return;
+        if (link.type === 'inheritance') {
+            inhLinks.push({ source, target });
+        } else {
+            relLinks.push({ name: link.name, source, target });
+        }
+    });
+
+    await _createMapBusinessView({
+        baseName: `Group_${groupName}`,
+        entityNames,
+        relLinks,
+        inhLinks,
+        positionFor: (i, cx, cy, radius) => {
+            const angle = entityNames.length === 1
+                ? 0
+                : (2 * Math.PI / Math.max(entityNames.length, 1)) * i;
+            return {
+                x: Math.round(cx + radius * Math.cos(angle)),
+                y: Math.round(cy + radius * Math.sin(angle)),
+            };
+        },
+        logLabel: 'createBusinessViewFromGroup',
+        applyAfter: false,
+    });
+}
+window.createBusinessViewFromGroup = createBusinessViewFromGroup;
+
+
+/**
+ * Assign (or clear) ontology-group membership for one or more entities.
+ * Membership is exclusive: adding to a group removes the entity from any other.
+ * @param {string[]} entityNames
+ * @param {string} groupName  empty string → remove from current group(s)
+ */
+async function assignEntitiesToStudioGroup(entityNames, groupName) {
+    const names = (entityNames || []).filter(Boolean);
+    if (!names.length) return;
+
+    try {
+        let lastGroups = null;
+        if (groupName) {
+            const resp = await fetch('/ontology/groups/members', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ name: groupName, add: names }),
+            });
+            const data = await resp.json();
+            if (!data.success) {
+                throw new Error(data.message || 'Failed to update group membership');
+            }
+            lastGroups = data.groups || null;
+            const label = (_studioGroupsDefs.find(g => g.name === groupName) || {}).label || groupName;
+            const msg = names.length === 1
+                ? `${names[0]} is now in group: ${label}`
+                : `${names.length} entities moved to group: ${label}`;
+            showNotification(msg, 'success');
+        } else {
+            const byGroup = {};
+            names.forEach(n => {
+                const g = _studioMemberToGroup[n];
+                if (!g) return;
+                if (!byGroup[g]) byGroup[g] = [];
+                byGroup[g].push(n);
+            });
+            const groupKeys = Object.keys(byGroup);
+            if (!groupKeys.length) {
+                showNotification('None of the selected entities belong to a group', 'info');
+                return;
+            }
+            for (const gName of groupKeys) {
+                const resp = await fetch('/ontology/groups/members', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ name: gName, remove: byGroup[gName] }),
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    throw new Error(data.message || 'Failed to update group membership');
+                }
+                lastGroups = data.groups || lastGroups;
+            }
+            const msg = names.length === 1
+                ? `${names[0]} removed from its group`
+                : `${names.length} entities removed from their groups`;
+            showNotification(msg, 'success');
+        }
+
+        if (lastGroups) {
+            _studioGroupsDefs = lastGroups;
+            _studioMemberToGroup = {};
+            _studioGroupsDefs.forEach(g => {
+                (g.members || []).forEach(m => { _studioMemberToGroup[m] = g.name; });
+            });
+        }
+        if (typeof window.refreshStudioGroups === 'function') {
+            await window.refreshStudioGroups();
+        }
+        if (typeof window.refreshSharedEntityGroupOptions === 'function') {
+            window.refreshSharedEntityGroupOptions(lastGroups || undefined);
+        }
+    } catch (err) {
+        console.error('[Studio] Group membership update failed:', err);
+        showNotification(err.message || 'Could not update group membership', 'error');
+    }
+}
+
+/**
+ * Build the "Add to group" flyout and a top-level "Remove from group" item
+ * (shown only when the selection already belongs to a group).
+ * An entity can belong to only one group — picking another group moves it.
+ * @param {HTMLElement} menu
+ * @param {() => string[]} getNames  live selection resolver
+ */
+function _wireStudioGroupMembershipMenu(menu, getNames) {
+    const groups = _studioGroupsDefs || [];
+    const initialNames = (typeof getNames === 'function' ? getNames() : []) || [];
+    const anyInGroup = initialNames.some(n => !!_studioMemberToGroup[n]);
+    const singleCurrent = initialNames.length === 1 ? (_studioMemberToGroup[initialNames[0]] || '') : '';
+
+    let subItems = '';
+    if (!groups.length) {
+        subItems = `
+            <div class="map-context-subitem map-context-subitem-disabled">
+                <span>No groups yet</span>
+            </div>
+            <div class="map-context-subitem" data-action="create-group">
+                <i class="bi bi-plus-lg"></i>
+                <span>New group…</span>
+            </div>`;
+    } else {
+        const esc = (typeof escapeHtml === 'function')
+            ? escapeHtml
+            : (t) => String(t == null ? '' : t)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        subItems = groups.map(g => {
+            const rawColor = g.color || '#4A90D9';
+            const color = /^#[0-9A-Fa-f]{3,8}$/.test(rawColor) ? rawColor : '#4A90D9';
+            const icon = esc(g.icon || '📁');
+            const label = esc(g.label || g.name);
+            const name = esc(g.name);
+            const isCurrent = singleCurrent && g.name === singleCurrent;
+            return `
+                <div class="map-context-subitem" data-group-name="${name}">
+                    <span class="map-context-group-dot" style="background:${color}"></span>
+                    <span class="map-context-group-icon">${icon}</span>
+                    <span class="map-context-group-label">${label}</span>
+                    ${isCurrent ? '<i class="bi bi-check2 ms-auto"></i>' : ''}
+                </div>`;
+        }).join('');
+    }
+
+    const section = document.createElement('div');
+    section.innerHTML = `
+        <div class="map-context-item map-context-has-submenu" data-action="add-to-group">
+            <i class="bi bi-collection"></i>
+            <span>Add to group</span>
+            <i class="bi bi-chevron-right map-context-chevron"></i>
+            <div class="map-context-submenu">
+                <div class="map-context-submenu-hint">One group per entity</div>
+                ${subItems}
+            </div>
+        </div>
+        ${anyInGroup ? `
+        <div class="map-context-item" data-action="remove-from-group">
+            <i class="bi bi-x-circle"></i>
+            <span>Remove from group</span>
+        </div>` : ''}
+    `;
+    const nodes = Array.from(section.children);
+    const insertBefore = menu.querySelector('[data-action="delete"]');
+    if (insertBefore) {
+        // Keep the existing divider that precedes Delete; only add one if missing.
+        const prev = insertBefore.previousElementSibling;
+        if (!prev || !prev.classList.contains('map-context-divider')) {
+            const divider = document.createElement('div');
+            divider.className = 'map-context-divider';
+            menu.insertBefore(divider, insertBefore);
+        }
+        nodes.forEach(node => menu.insertBefore(node, insertBefore));
+    } else {
+        nodes.forEach(node => menu.appendChild(node));
+    }
+
+    const host = menu.querySelector('[data-action="add-to-group"]');
+    const submenu = host && host.querySelector('.map-context-submenu');
+    if (host && submenu) {
+        /**
+         * Open the flyout on the side with room. The canvas
+         * (#ontology-map-container) clips overflow, and the right detail pane
+         * is a sibling — so window.innerWidth is the wrong bound.
+         */
+        const flipIfNeeded = () => {
+            submenu.classList.remove('map-context-submenu-left');
+            const hostRect = host.getBoundingClientRect();
+            const clipEl = document.getElementById('ontology-map-container');
+            const clipRect = clipEl
+                ? clipEl.getBoundingClientRect()
+                : { left: 0, right: window.innerWidth };
+            // min-width of .map-context-submenu; prefer measured width once visible
+            const needed = Math.max(submenu.offsetWidth || 0, 200) + 8;
+            const spaceRight = clipRect.right - hostRect.right;
+            const spaceLeft = hostRect.left - clipRect.left;
+            if (spaceRight < needed && spaceLeft > spaceRight) {
+                submenu.classList.add('map-context-submenu-left');
+            }
+            const chevron = host.querySelector('.map-context-chevron');
+            if (chevron) {
+                const openLeft = submenu.classList.contains('map-context-submenu-left');
+                chevron.classList.toggle('bi-chevron-left', openLeft);
+                chevron.classList.toggle('bi-chevron-right', !openLeft);
+            }
+        };
+        host.addEventListener('mouseenter', flipIfNeeded);
+        host.addEventListener('focusin', flipIfNeeded);
+    }
+
+    menu.querySelectorAll('[data-group-name]').forEach(item => {
+        item.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            hideMapContextMenu();
+            const names = (typeof getNames === 'function' ? getNames() : []) || [];
+            if (!names.length) return;
+            const target = item.getAttribute('data-group-name') || '';
+            await assignEntitiesToStudioGroup(names, target);
+        });
+    });
+
+    const removeBtn = menu.querySelector('[data-action="remove-from-group"]');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            hideMapContextMenu();
+            const names = (typeof getNames === 'function' ? getNames() : []) || [];
+            if (!names.length) return;
+            await assignEntitiesToStudioGroup(names, '');
+        });
+    }
+
+    const createBtn = menu.querySelector('[data-action="create-group"]');
+    if (createBtn) {
+        createBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            hideMapContextMenu();
+            if (window.OntologyGroups && typeof OntologyGroups.showCreateModal === 'function') {
+                OntologyGroups.showCreateModal();
+            }
+        });
+    }
+}
 
 function showMapMultiSelectContextMenu(event, names, container) {
     hideMapContextMenu();
@@ -1764,6 +3076,11 @@ function showMapMultiSelectContextMenu(event, names, container) {
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
     container.appendChild(menu);
+
+    _wireStudioGroupMembershipMenu(menu, () => {
+        const live = _liveMapSelectionNames();
+        return live.length >= 2 ? live : names.slice();
+    });
 
     const menuRect = menu.getBoundingClientRect();
     if (menuRect.right > containerRect.right) {
@@ -1861,6 +3178,8 @@ function showMapContextMenu(event, entityData, container) {
     menu.style.top = y + 'px';
     
     container.appendChild(menu);
+
+    _wireStudioGroupMembershipMenu(menu, () => [entityData.name]);
     
     // Adjust if menu goes off-screen
     const menuRect = menu.getBoundingClientRect();
@@ -2625,20 +3944,6 @@ const ICONS_TASK_KEY = 'ontobricks_icons_task';
 
 // Module-level guard so the monitor loop is started at most once per task.
 let _iconsCurrentTaskId = null;
-
-/**
- * Open the ontology designer discussion. Anchors to the whole ontology
- * diagram (domain/'ontology'); each comment can optionally be tagged with
- * one or more classes/relationships via the compose-box tag picker.
- */
-function openOntologyDiscussion() {
-    if (!window.OntoComments) return;
-    const cfg = (typeof OntologyState !== 'undefined' && OntologyState.config) || {};
-    OntoComments.openForSelection(
-        'domain', 'ontology', 'Whole ontology diagram',
-        OntoComments.taggableFromOntology(cfg)
-    );
-}
 
 /**
  * Restore button state (used after completion, failure, or resume).

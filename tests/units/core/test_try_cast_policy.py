@@ -6,7 +6,7 @@ aborts the whole statement on the first value that will not convert;
 
 Deliberately excluded (see the design doc's "Amendment" section):
 ``src/jobs/graph_analytics_job.py`` and
-``src/back/core/graph_analysis/JobMetrics.py`` — their SQL runs literally
+``src/back/core/graph_analysis/metrics/JobMetrics.py`` — their SQL runs literally
 against SQLite in tests and is parse-checked under Postgres, neither of which
 understands ``TRY_CAST``, and every cast there is on already-numeric data
 (counts, literals, typed NULLs), never raw triple-store strings.

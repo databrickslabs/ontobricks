@@ -47,6 +47,6 @@ def test_chat_rejects_empty_domain_llm_before_running_agent(client):
 
     assert response.status_code == 400
     assert response.json()["message"] == (
-        "No LLM selected. Select one in Domain → General → AI."
+        "No LLM selected. Select one in Configuration → AI."
     )
     run_chat_agent.assert_not_called()

@@ -6,6 +6,14 @@
 const SYNC_TASK_KEY = 'ontobricks_sync_task';
 const ADJ_REFRESH_TASK_KEY = 'ontobricks_adjacency_refresh_task';
 
+(function _bootstrapTriplestoreConfig() {
+    if (window.__TRIPLESTORE_CONFIG) return;
+    var el = document.getElementById('triplestore-config');
+    if (!el) return;
+    try { window.__TRIPLESTORE_CONFIG = JSON.parse(el.textContent || '{}'); }
+    catch (_) { window.__TRIPLESTORE_CONFIG = {}; }
+})();
+
 function _syncTripleStoreBackend() {
     try {
         const el = document.getElementById('triplestore-config');
@@ -153,8 +161,22 @@ function _applyReadiness(data) {
     var badgeEl = document.getElementById('syncMappingReadyBadge');
     if (badgeEl) {
         badgeEl.innerHTML = assignmentReady
-            ? '<span class="badge bg-success bg-opacity-10 text-success border border-success"><i class="bi bi-check-circle-fill me-1"></i>Ready</span>'
+            ? '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle"><i class="bi bi-check-circle-fill text-success me-1"></i>Ready</span>'
             : '<span class="badge bg-danger text-white border border-danger"><i class="bi bi-x-circle-fill me-1"></i>Not ready</span>';
+    }
+
+    var autoMapBtn = document.getElementById('syncAutoMapBtn');
+    if (autoMapBtn) {
+        var canOfferAutoMap = !(window.OB && typeof window.OB.canEditOntology === 'function'
+            && !window.OB.canEditOntology());
+        if (assignmentReady || !canOfferAutoMap) autoMapBtn.classList.add('d-none');
+        else autoMapBtn.classList.remove('d-none');
+    }
+
+    var mappingDiagBtn = document.getElementById('syncMappingDiagBtn');
+    if (mappingDiagBtn) {
+        if (assignmentReady) mappingDiagBtn.classList.add('d-none');
+        else mappingDiagBtn.classList.remove('d-none');
     }
 
     var alertEl = document.getElementById('syncNotReadyAlert');
@@ -243,6 +265,7 @@ function _setBackendBrandIcon(element, backend) {
 function _applyBuildGraphEngineUi(dtExist) {
     var dt = dtExist || {};
     var cfg = window.__TRIPLESTORE_CONFIG || {};
+    _setBackendBrandIcon(document.getElementById('buildBackendIcon'), _kgBackendKey());
     var eng = dt.graph_engine || cfg.graph_engine || 'lakebase';
     var pending = dt.pending === true;
     cfg.graph_engine = eng;
@@ -350,13 +373,13 @@ function _applyBuildGraphEngineUi(dtExist) {
         var tblExistsEl = document.getElementById('dtLakebaseTableExists');
         if (tblExistsEl) {
             if (dt.lakebase_table_exists === true) {
-                tblExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
+                tblExistsEl.innerHTML = '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size:.65rem;"><i class="bi bi-check-circle-fill text-success me-1"></i>Exists</span>';
             } else if (dt.lakebase_table_exists === false) {
-                tblExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                tblExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             } else if (pending) {
                 tblExistsEl.innerHTML = _archSpinnerBadge('Loading');
             } else {
-                tblExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+                tblExistsEl.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
                 var sp = tblExistsEl.querySelector('span');
                 if (sp) sp.title = dt.lakebase_check_error
                     ? String(dt.lakebase_check_error)
@@ -366,15 +389,15 @@ function _applyBuildGraphEngineUi(dtExist) {
         var ucExistsEl = document.getElementById('dtLakebaseSyncedUcExists');
         if (ucExistsEl) {
             if (dt.lakebase_synced_uc_exists === true) {
-                ucExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
+                ucExistsEl.innerHTML = '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size:.65rem;"><i class="bi bi-check-circle-fill text-success me-1"></i>Exists</span>';
             } else if (dt.lakebase_synced_uc_exists === false) {
-                ucExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                ucExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             } else if (pending) {
                 ucExistsEl.innerHTML = _archSpinnerBadge('Loading');
             } else if (hasUcName) {
-                ucExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+                ucExistsEl.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
             } else {
-                ucExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                ucExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             }
         }
 
@@ -400,10 +423,10 @@ function _applyDtExistence(data) {
     function _badge(flag, okText, failText, unknownText) {
         var s = 'style="font-size:.65rem;"';
         if (flag === true)
-            return '<span class="badge bg-success bg-opacity-10 text-success border border-success" ' + s + '><i class="bi bi-check-circle-fill me-1"></i>' + okText + '</span>';
+            return '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" ' + s + '><i class="bi bi-check-circle-fill text-success me-1"></i>' + okText + '</span>';
         if (flag === false)
-            return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + failText + '</span>';
-        return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
+            return '<span class="badge bg-secondary-subtle text-secondary-emphasis border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + failText + '</span>';
+        return '<span class="badge bg-secondary-subtle text-secondary-emphasis border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
     }
 
     var pending = data && data.pending === true;
@@ -480,8 +503,7 @@ function _applyDtExistence(data) {
     if (lastUpdateEl) {
         if (data.last_update) {
             try {
-                var dtu = new Date(data.last_update);
-                var fmtU = dtu.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                var fmtU = formatDateTime(data.last_update);
                 lastUpdateEl.innerHTML = '<i class="bi bi-info-circle-fill text-info me-1"></i>' + fmtU;
                 lastUpdateEl.className = '';
             } catch (_) { lastUpdateEl.textContent = data.last_update; lastUpdateEl.className = ''; }
@@ -494,14 +516,87 @@ function _applyDtExistence(data) {
     if (lastBuiltEl) {
         if (data.last_built) {
             try {
-                var dt = new Date(data.last_built);
-                var formatted = dt.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                var formatted = formatDateTime(data.last_built);
                 lastBuiltEl.innerHTML = '<i class="bi bi-check-circle-fill text-success me-1"></i>' + formatted;
                 lastBuiltEl.className = '';
             } catch (_) { lastBuiltEl.textContent = data.last_built; lastBuiltEl.className = ''; }
         } else {
             lastBuiltEl.innerHTML = '<span class="text-muted">Never built</span>';
         }
+    }
+}
+
+/**
+ * Paint Graph cache status on the Build tab (Activated / State / Last refresh).
+ * Accepts either domain_info.info fields or the richer graph_cache block from
+ * /dtwin/sync/stats.
+ */
+function renderBuildGraphCacheStatus(source) {
+    var activatedEl = document.getElementById('dtGraphCacheActivated');
+    var stateEl = document.getElementById('dtGraphCacheState');
+    var refreshedEl = document.getElementById('dtGraphCacheRefreshed');
+    if (!activatedEl || !stateEl || !refreshedEl) return;
+
+    var cache = source || {};
+    // domain_info uses graph_cache_*; stats uses graph_cache.{enabled,state,refreshed_at}
+    var supported = cache.supported;
+    if (supported === undefined) {
+        var backend = String(cache.graph_backend || cache.backend || '').toLowerCase();
+        supported = !backend || backend === 'lakebase' || backend === 'databricks';
+    }
+    var enabled = cache.enabled;
+    if (enabled === undefined) enabled = cache.graph_cache_enabled;
+    var state = cache.state || cache.graph_cache_state || '';
+    // Explicit refresh stamp, else the Build that created the companions.
+    var refreshedAt = cache.refreshed_at
+        || cache.graph_cache_refreshed_at
+        || cache.last_built
+        || cache.last_build
+        || '';
+
+    if (!supported) {
+        activatedEl.innerHTML = '<span class="text-muted">Not available</span>';
+        stateEl.innerHTML = '<span class="text-muted">—</span>';
+        refreshedEl.innerHTML = '<span class="text-muted">—</span>';
+        return;
+    }
+
+    if (enabled) {
+        activatedEl.innerHTML =
+            '<span class="badge bg-success bg-opacity-10 text-success border border-success">' +
+            '<i class="bi bi-check-circle me-1"></i>On</span>';
+    } else {
+        activatedEl.innerHTML =
+            '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">' +
+            '<i class="bi bi-slash-circle me-1"></i>Off</span>';
+    }
+
+    var stateKey = String(state || '').toLowerCase();
+    if (!enabled || stateKey === 'disabled') {
+        stateEl.innerHTML = '<span class="text-muted">Disabled</span>';
+    } else if (stateKey === 'ready') {
+        stateEl.innerHTML =
+            '<span class="badge bg-success bg-opacity-10 text-success border border-success">' +
+            '<i class="bi bi-check-circle me-1"></i>Ready</span>';
+    } else {
+        stateEl.innerHTML =
+            '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning">' +
+            '<i class="bi bi-exclamation-triangle me-1"></i>Refresh required</span>';
+    }
+
+    if (refreshedAt) {
+        try {
+            refreshedEl.innerHTML =
+                '<i class="bi bi-check-circle-fill text-success me-1"></i>' +
+                formatDateTime(refreshedAt);
+            refreshedEl.className = 'ms-1';
+        } catch (_) {
+            refreshedEl.textContent = refreshedAt;
+            refreshedEl.className = 'ms-1';
+        }
+    } else {
+        // No dedicated stamp and no Build yet — keep a dash.
+        refreshedEl.innerHTML = '<span class="text-muted">—</span>';
     }
 }
 
@@ -550,6 +645,11 @@ async function initSyncSection() {
                 cache: {},
             };
             window.__TRIPLESTORE_CONFIG = cfg;
+            var cacheSource = Object.assign({}, di.info);
+            if (payload && payload.dt_existence && payload.dt_existence.last_built) {
+                cacheSource.last_built = payload.dt_existence.last_built;
+            }
+            renderBuildGraphCacheStatus(cacheSource);
         }
 
         var tableEl = document.getElementById('syncTriplestoreTable');
@@ -698,7 +798,7 @@ function renderTripleStoreStatus(data) {
         if (reason.toLowerCase().includes('does not exist')) {
             msg = 'Knowledge Graph not built yet. Click <strong>Build</strong> to create the VIEW and graph.';
         } else if (reason.toLowerCase().includes('not configured')) {
-            msg = 'Knowledge Graph is not configured. Set it in <a href="/domain/#information">Domain Settings</a>.';
+            msg = 'Knowledge Graph is not configured. Set it in <a href="/domain/#information">Context Settings</a>.';
         } else {
             msg = 'Graph is empty. Run <strong>Synchronize</strong> to generate triples.';
         }
@@ -714,16 +814,26 @@ function _syncAdjacencyRefreshVisible(backend) {
 }
 
 function _updateSyncAdjacencyActionState() {
-    var btn = document.getElementById('syncAdjacencyRefreshBtn');
-    if (!btn) return;
     var backend = String(_syncTripleStoreBackend() || 'lakebase').toLowerCase();
     var visible = _syncAdjacencyRefreshVisible(backend);
-    btn.classList.toggle('d-none', !visible);
-    btn.disabled = !visible
+    var disabled = !visible
         || !syncIsReady
         || !tripleStoreHasData
         || syncIsRunning
         || adjacencyRefreshRunning;
+    var btn = document.getElementById('syncAdjacencyRefreshBtn');
+    if (btn) {
+        btn.classList.toggle('d-none', !visible);
+        btn.disabled = disabled;
+    }
+    // Header kebab item (Lakebase): keep enabled/disabled in sync; never hide —
+    // the parent action group is already backend-gated.
+    document.querySelectorAll(
+        '#sync-lakebase-actions .js-build-menu-refresh-cache'
+    ).forEach(function (item) {
+        item.disabled = disabled;
+        item.classList.toggle('disabled', disabled);
+    });
 }
 
 /**
@@ -774,13 +884,19 @@ function updateDataMenus() {
 
 /**
  * Populate every Knowledge Graph readiness indicator (the `[data-kg-status]`
- * spans injected next to each sub-page title via `_kg_status_indicator.html`).
+ * spans injected next to each sub-page title via `_kg_status_indicator.html`)
+ * and the blocking gate card for Graph / Intelligence pages that need a
+ * built graph.
  *
- * Three states, driven by the shared triple-store status:
+ * Badge states, driven by the shared triple-store status:
  *   - building  -> a "Building…" badge while a sync/build task is running;
  *   - ready     -> a green "Graph ready" badge once the graph has data;
  *   - not built -> a message + a "Go to Build" button that jumps to the
  *                  Build sub-page.
+ *
+ * When the graph is definitely not built, each KG sub-page also shows a
+ * blocking empty-state card and hides its body content (Explorer, Query,
+ * Chat, Data Quality, Business rules, and Intelligence menus).
  */
 /**
  * Friendly label for the triple-store backend / graph engine in use, from the
@@ -823,36 +939,135 @@ function updateKgReadyIndicators() {
     var backend = _kgBackendLabel();
     var html;
     if (syncIsRunning) {
-        html = '<span class="badge bg-warning-subtle text-warning border border-warning fw-normal">'
+        html = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-medium">'
             + '<span class="spinner-border spinner-border-sm me-1 kg-status-spinner"></span>Building…</span>';
     } else if (tripleStoreStatusPending) {
         // Status probe deferred off the first paint; confirming in background.
-        html = '<span class="badge bg-secondary-subtle text-secondary border fw-normal" '
+        html = '<span class="badge bg-secondary-subtle text-secondary-emphasis border fw-medium" '
             + 'title="Confirming the graph status in the background…">'
             + '<span class="spinner-border spinner-border-sm me-1 kg-status-spinner"></span>Checking…</span>';
     } else if (tripleStoreHasData) {
-        html = '<span class="badge bg-success bg-opacity-10 text-success border border-success fw-normal" '
+        html = '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle fw-medium" '
             + 'title="The Knowledge Graph is built and ready to use (backend: ' + backend + ').">'
-            + '<i class="bi bi-check-circle-fill me-1"></i>Graph ready'
-            + '<span class="opacity-75 ms-1">·' + _kgBackendIconMarkup() + backend + '</span></span>';
+            + '<i class="bi bi-check-circle-fill text-success me-1"></i>Graph ready'
+            + '<span class="ms-1">·' + _kgBackendIconMarkup() + backend + '</span></span>';
     } else if (tripleStoreStatusUnknown) {
         // The probe could not reach the engine, so we do not know either way.
         // Offering "Go to Build" here would invite a needless rebuild.
-        html = '<span class="badge bg-warning-subtle text-warning border border-warning fw-normal" '
+        html = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-medium" '
             + 'title="Could not reach the ' + backend + ' backend to check the graph. '
             + 'This is a connection problem, not a missing graph — retry in a moment.">'
             + '<i class="bi bi-question-circle me-1"></i>Status unavailable'
-            + '<span class="opacity-75 ms-1">·' + _kgBackendIconMarkup() + backend + '</span></span>';
+            + '<span class="ms-1">·' + _kgBackendIconMarkup() + backend + '</span></span>';
     } else {
         html = '<span class="kg-not-built d-inline-flex align-items-center gap-2">'
-            + '<span class="badge bg-secondary-subtle text-secondary border fw-normal">'
+            + '<span class="badge bg-secondary-subtle text-secondary-emphasis border fw-medium">'
             + '<i class="bi bi-slash-circle me-1"></i>Graph not built</span>'
             + '<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 kg-go-build-btn">'
-            + '<i class="bi bi-fast-forward me-1"></i>Go to Build</button>'
+            + '<i class="bi bi-hammer me-1"></i>Go to Build</button>'
             + '</span>';
     }
 
     els.forEach(function(el) { el.innerHTML = html; });
+    updateKgGates();
+}
+
+/**
+ * Whether KG pages that need triples should block interaction.
+ * Only a definite empty graph blocks — building / checking / unreachable
+ * keep the page usable (the title badge already covers those states).
+ */
+function _kgShouldBlockPage() {
+    return !syncIsRunning
+        && !tripleStoreStatusPending
+        && !tripleStoreHasData
+        && !tripleStoreStatusUnknown;
+}
+
+function _kgGateRoot(badge) {
+    return badge.closest('.content-section') || badge.closest('.sidebar-section');
+}
+
+function _ensureKgGate(header) {
+    var el = header.nextElementSibling;
+    while (el) {
+        if (el.hasAttribute && el.hasAttribute('data-kg-gate')) return el;
+        el = el.nextElementSibling;
+    }
+    var gate = document.createElement('div');
+    gate.setAttribute('data-kg-gate', '');
+    gate.className = 'card kg-gate-card mb-3 d-none';
+    gate.setAttribute('role', 'status');
+    gate.setAttribute('aria-live', 'polite');
+    header.insertAdjacentElement('afterend', gate);
+    return gate;
+}
+
+function _kgGateBodyHtml() {
+    return ''
+        + '<div class="card-body text-center py-5 px-4">'
+        +   '<i class="bi bi-exclamation-triangle text-warning kg-gate-icon d-block mb-3" aria-hidden="true"></i>'
+        +   '<h5 class="fw-semibold mb-2">Knowledge Graph not ready</h5>'
+        +   '<p class="text-muted mb-3 kg-gate-copy">'
+        +     'This page needs a built Knowledge Graph. Run <strong>Build</strong> to '
+        +     'materialise mapped triples, then return here.'
+        +   '</p>'
+        +   '<button type="button" class="btn btn-sm btn-primary kg-go-build-btn">'
+        +     '<i class="bi bi-hammer me-1"></i>Go to Build'
+        +   '</button>'
+        + '</div>';
+}
+
+/**
+ * Show / hide the blocking empty-state card on every KG sub-page that
+ * carries a readiness badge. Body siblings after the section header are
+ * hidden while blocked; Bootstrap modals stay in the DOM (not hidden) so
+ * they keep working once the graph is ready.
+ */
+function updateKgGates() {
+    var blocked = _kgShouldBlockPage();
+    var seen = [];
+    document.querySelectorAll('[data-kg-status]').forEach(function(badge) {
+        var root = _kgGateRoot(badge);
+        if (!root || seen.indexOf(root) !== -1) return;
+        seen.push(root);
+
+        var header = root.querySelector('.section-header');
+        if (!header) return;
+
+        var gate = _ensureKgGate(header);
+        root.classList.toggle('kg-gate-blocked', blocked);
+        if (blocked) {
+            gate.innerHTML = _kgGateBodyHtml();
+            gate.classList.remove('d-none');
+        } else {
+            gate.classList.add('d-none');
+            gate.innerHTML = '';
+        }
+
+        var sib = gate.nextElementSibling;
+        while (sib) {
+            // Keep Bootstrap modals mounted so they can open once the graph
+            // is ready (hiding an ancestor with d-none breaks show()).
+            if (!_kgSiblingIsModalHost(sib)) {
+                // Dedicated class — do not reuse Bootstrap `d-none`, which
+                // page scripts already toggle for their own empty/loading panes.
+                sib.classList.toggle('kg-gate-hidden', blocked);
+                if (blocked) sib.setAttribute('aria-hidden', 'true');
+                else sib.removeAttribute('aria-hidden');
+            }
+            sib = sib.nextElementSibling;
+        }
+    });
+}
+
+function _kgSiblingIsModalHost(sib) {
+    if (!sib || !sib.classList) return false;
+    if (sib.classList.contains('modal')) return true;
+    return !!(sib.children
+        && sib.children.length === 1
+        && sib.children[0].classList
+        && sib.children[0].classList.contains('modal'));
 }
 
 // One-time delegated handler: any "Go to Build" button jumps to the Build
@@ -864,7 +1079,11 @@ if (!window.__kgGoBuildWired) {
         if (!btn) return;
         e.preventDefault();
         var link = document.querySelector('[data-section="sync"]');
-        if (link) link.click();
+        if (link) {
+            link.click();
+            return;
+        }
+        window.location.href = '/dtwin/?section=sync';
     });
 }
 
@@ -986,6 +1205,9 @@ async function monitorAdjacencyRefreshTask(taskId) {
                 _loadDtExistence();
                 if (typeof refreshDigitalTwinStatus === 'function') refreshDigitalTwinStatus();
                 if (typeof refreshTasks === 'function') refreshTasks();
+                if (window.BuildCacheModule && typeof window.BuildCacheModule.load === 'function') {
+                    window.BuildCacheModule.load();
+                }
                 updateDataMenus();
                 break;
             }
@@ -1090,7 +1312,7 @@ async function startTripleStoreSync() {
     if (window.OB && typeof window.OB.canRefreshGraph === 'function'
             && !window.OB.canRefreshGraph()) {
         showNotification(
-            'Build is unavailable — builder access and an unlocked domain are required.',
+            'Build is unavailable — builder access and an unlocked context are required.',
             'warning'
         );
         return;
@@ -1104,7 +1326,7 @@ async function startTripleStoreSync() {
     const triplestoreTable = tableEl ? tableEl.value.trim() : '';
 
     if (!triplestoreTable) {
-        showNotification('Triple store table not configured. Please set it in Domain Settings.', 'warning');
+        showNotification('Triple store table not configured. Please set it in Context Settings.', 'warning');
         return;
     }
 
@@ -1390,7 +1612,7 @@ async function loadTripleStore(options = {}) {
     }
 
     if (!triplestoreTable) {
-        if (!silent) showNotification('Triple store table not configured. Please set it in Domain Settings.', 'warning');
+        if (!silent) showNotification('Triple store table not configured. Please set it in Context Settings.', 'warning');
         return;
     }
 
@@ -1522,6 +1744,133 @@ let _insightsRelMax = 1;
 /**
  * Build the insights UI from the stats data.
  */
+function _insightKpiHtml(cards, colClass) {
+    var cols = colClass || 'col-md-4 col-lg-2';
+    return (cards || []).map(function (c) {
+        var hint = c.hint
+            ? '<div class="small text-muted">' + c.hint + '</div>'
+            : '';
+        return '<div class="' + cols + '">' +
+            '  <div class="ob-kpi-tile">' +
+            '    <div class="ob-kpi-tile-icon text-' + (c.color || 'secondary') + '"><i class="bi ' + c.icon + '"></i></div>' +
+            '    <div class="ob-kpi-tile-value">' + c.value + '</div>' +
+            '    <div class="ob-kpi-tile-label">' + c.label + '</div>' +
+            hint +
+            '  </div>' +
+            '</div>';
+    }).join('');
+}
+
+function _insightCacheStateLabel(cache) {
+    if (!cache || !cache.supported) {
+        return 'Search cache is only available for Lakehouse and Lakebase.';
+    }
+    var refreshed = '';
+    if (cache.refreshed_at) {
+        try {
+            refreshed = ' Last refresh: ' + formatDateTime(cache.refreshed_at) + '.';
+        } catch (_) {
+            refreshed = ' Last refresh: ' + cache.refreshed_at + '.';
+        }
+    }
+    if (!cache.enabled) {
+        return 'Off — live reads (adjacency, properties, and entity-search companions are not used).' + refreshed;
+    }
+    if (cache.state === 'ready') {
+        return 'On — using cached indexes (adjacency in/out, properties, entity search).' + refreshed;
+    }
+    return 'On — rebuild or Refresh cache required (live reads until then).' + refreshed;
+}
+
+function _companionCount(companions, key) {
+    var items = companions || [];
+    for (var i = 0; i < items.length; i++) {
+        if (items[i].key === key) return items[i];
+    }
+    return null;
+}
+
+function _companionValue(item) {
+    if (!item) return '—';
+    if (!item.ready) return 'Missing';
+    if (item.row_count == null) return '—';
+    return Number(item.row_count).toLocaleString();
+}
+
+function _renderInsightsCache(data) {
+    var block = document.getElementById('insightsCacheBlock');
+    var status = document.getElementById('insightsCacheStatus');
+    var row = document.getElementById('insightsCacheRow');
+    var cache = data.graph_cache || {};
+    renderBuildGraphCacheStatus(cache);
+    if (status) status.textContent = _insightCacheStateLabel(cache);
+    if (!row) return;
+    if (!cache.supported) {
+        if (block) block.classList.remove('d-none');
+        row.innerHTML = '';
+        return;
+    }
+    var companions = cache.companions || [];
+    var specs = [
+        { key: 'adj_out', label: 'Adjacency out', icon: 'bi-box-arrow-right', color: 'primary' },
+        { key: 'adj_in', label: 'Adjacency in', icon: 'bi-box-arrow-in-left', color: 'info' },
+        { key: 'props', label: 'Properties', icon: 'bi-list-ul', color: 'success' },
+        { key: 'entity_search', label: 'Entity search', icon: 'bi-search', color: 'warning' },
+        { key: 'entity_search_asserted', label: 'Entity search (asserted)', icon: 'bi-funnel', color: 'secondary' },
+    ];
+    var cards = specs.map(function (spec) {
+        var item = _companionCount(companions, spec.key);
+        return {
+            label: spec.label,
+            value: _companionValue(item),
+            icon: spec.icon,
+            color: spec.color,
+            hint: item && item.table ? item.table : '',
+        };
+    });
+    row.innerHTML = _insightKpiHtml(cards, 'col-md-4 col-lg');
+}
+
+function _renderInsightsMaterialized(data) {
+    var row = document.getElementById('insightsMaterializedRow');
+    if (!row) return;
+    var intel = data.intelligence || {};
+    var communities = intel.communities || {};
+    var inferred = intel.inferred_triples;
+    if (inferred == null) inferred = data.inferred_triples;
+    var inferredLabel = inferred == null ? '—' : Number(inferred).toLocaleString();
+    var clusterCount = communities.ready
+        ? Number(communities.cluster_count || 0).toLocaleString()
+        : 'None';
+    var memberCount = communities.ready
+        ? Number(communities.node_count || 0).toLocaleString()
+        : '—';
+    var algo = communities.algorithm || '';
+    row.innerHTML = _insightKpiHtml([
+        {
+            label: 'Inferred triples',
+            value: inferredLabel,
+            icon: 'bi-lightbulb',
+            color: 'warning',
+            hint: 'Reasoning / IF-THEN writes',
+        },
+        {
+            label: 'Communities',
+            value: clusterCount,
+            icon: 'bi-people',
+            color: 'info',
+            hint: algo ? algo.replace(/_/g, ' ') : 'Intelligence → Communities',
+        },
+        {
+            label: 'Community members',
+            value: memberCount,
+            icon: 'bi-diagram-3',
+            color: 'primary',
+            hint: 'Nodes assigned to a cluster',
+        },
+    ], 'col-md-4');
+}
+
 function renderInsights(data) {
     const summaryRow = document.getElementById('insightsSummaryRow');
     if (summaryRow) {
@@ -1533,16 +1882,10 @@ function renderInsights(data) {
             { label: 'Type Assertions', value: (data.type_assertion_count || 0).toLocaleString(), icon: 'bi-tag', color: 'secondary' },
             { label: 'Labels', value: (data.label_count || 0).toLocaleString(), icon: 'bi-fonts', color: 'dark' },
         ];
-        summaryRow.innerHTML = cards.map(c =>
-            '<div class="col-md-4 col-lg-2">' +
-            '  <div class="ob-kpi-tile">' +
-            '    <div class="ob-kpi-tile-icon text-' + c.color + '"><i class="bi ' + c.icon + '"></i></div>' +
-            '    <div class="ob-kpi-tile-value">' + c.value + '</div>' +
-            '    <div class="ob-kpi-tile-label">' + c.label + '</div>' +
-            '  </div>' +
-            '</div>'
-        ).join('');
+        summaryRow.innerHTML = _insightKpiHtml(cards);
     }
+    _renderInsightsCache(data);
+    _renderInsightsMaterialized(data);
 
     _insightsEntityData = data.entity_types || [];
     _insightsEntityTotal = _insightsEntityData.reduce((s, t) => s + t.count, 0);
@@ -1739,8 +2082,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             var btn = e.target.closest('[data-sync-action]');
             if (!btn || !syncRoot.contains(btn)) return;
             var act = btn.getAttribute('data-sync-action');
-            if (act === 'refresh-triple-store') checkTripleStoreStatus(true);
-            else if (act === 'start-triple-store-sync') startTripleStoreSync();
+            if (act === 'start-triple-store-sync') startTripleStoreSync();
             else if (act === 'refresh-adjacency-only') startSyncAdjacencyRefresh();
         });
     }
@@ -1782,5 +2124,11 @@ document.addEventListener('DOMContentLoaded', async function() {
                 initSyncSection();
             }
         }
+    } else if (document.querySelector('[data-kg-status]')) {
+        // Intelligence (and any other page with the Graph-ready badge) has no
+        // Build section, so probe status and fill the indicators directly.
+        tripleStoreStatusPending = true;
+        updateKgReadyIndicators();
+        checkTripleStoreStatus();
     }
 });

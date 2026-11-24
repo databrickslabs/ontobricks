@@ -535,9 +535,7 @@
 
     function formatTime(iso) {
         if (!iso) return '';
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return '';
-        return esc(d.toLocaleString());
+        return esc(formatDateTime(iso));
     }
 
     function cssEsc(s) {
@@ -600,7 +598,7 @@
             if (list) {
                 list.innerHTML =
                     '<div class="alert alert-warning small mb-0">' +
-                    'Save this domain to the registry to start a discussion.</div>';
+                    'Save this context to the registry to start a discussion.</div>';
             }
             return;
         }
@@ -618,5 +616,14 @@
         showLoadingPanel: showLoadingPanel,
         taggableFromOntology: taggableFromOntology,
         parseBody: parseBody,
+    };
+
+    /**
+     * Shared entry for "Discuss" buttons on Ontology / Intelligence / etc.
+     * Discussions are domain-wide; the panel lives on every page via base.html,
+     * so this must not depend on ontology-map.js (OntologyState).
+     */
+    window.openOntologyDiscussion = function openOntologyDiscussion() {
+        return openForSelection();
     };
 })();

@@ -7,36 +7,52 @@
    CSS Custom Properties (Variables)
    ========================================================================== */
 :root {
-    /* Clarity accent */
-    --db-primary: #4F46E5;
-    --db-primary-dark: #4338CA;
-    --db-primary-darker: #3730A3;
-    --db-primary-light: rgba(79, 70, 229, 0.1);
-    /* Softer filled wells (L2 Domain badge): darker than --db-primary-light,
+    /* Brand primary (factory neutral gray; runtime override via #uiBrandingTokens) */
+    --db-primary: #737373;
+    --db-primary-dark: #626262;
+    --db-primary-darker: #515151;
+    --db-primary-light: rgba(115, 115, 115, 0.1);
+    /* Softer filled wells (L2 Context badge): darker than --db-primary-light,
        so the control can drop its hard primary outline. Tracks brand RGB. */
     --db-primary-soft: rgba(var(--db-primary-rgb), 0.18);
     --db-primary-soft-hover: rgba(var(--db-primary-rgb), 0.28);
-    --db-primary-rgb: 79, 70, 229;
+    --db-primary-rgb: 115, 115, 115;
     --db-on-primary: #FFFFFF;
-    --db-primary-selected-text: #3730A3;
-    --db-hover: rgba(79, 70, 229, 0.06);
-    --db-focus: rgba(79, 70, 229, 0.18);
+    --db-primary-selected-text: #686868;
+    --db-hover: rgba(115, 115, 115, 0.06);
+    --db-focus: rgba(115, 115, 115, 0.18);
 
     /* Aurora accent + derived cinematic tokens (Aurora Pro).
        Server-rendered #uiBrandingTokens overrides the hex/rgb values below
        per request; the linear-gradient()/radial-gradient() compositions
        stay static here and simply re-read whichever hex is currently in
        scope via var(). */
-    --db-aurora: #22A7C8;
-    --db-aurora-rgb: 34, 167, 200;
-    --db-aurora-dark: #1D8EAA;
-    --db-gradient-end: #3A79E2;
+    --db-aurora: #6B6B6B;
+    --db-aurora-rgb: 107, 107, 107;
+    --db-aurora-dark: #5B5B5B;
+    --db-gradient-end: #6F6F6F;
     --db-gradient-primary: linear-gradient(120deg, var(--db-primary), var(--db-gradient-end));
     --db-gradient-rail: linear-gradient(180deg, var(--db-primary), var(--db-aurora));
     --db-halo: radial-gradient(circle at 30% 20%, rgba(var(--db-aurora-rgb), 0.35), transparent 60%);
 
+    /* Databricks button styles (Settings → UI → Theme, admin-configurable).
+       Create = filled primary; Share = outlined secondary. Defaults match the
+       Databricks Catalog browse page; the server injects the saved values. */
+    --db-btn-primary: #2272B4;
+    --db-btn-primary-hover: #1D619C;
+    --db-btn-primary-on: #FFFFFF;
+    --db-btn-secondary: #11171C;
+    --db-btn-secondary-border: #C6C9D1;
+    --db-btn-secondary-hover: #F0F1F3;
+    /* Du Bois md geometry — matches Catalog Create/Share (and the navbar chrome). */
+    --db-btn-height: 2rem;
+    --db-btn-radius: 0.25rem;
+    --db-btn-font-size: 0.8125rem;
+    --db-btn-font-weight: 500;
+    --db-btn-padding-x: 0.75rem;
+
     /* Warm neutral surfaces */
-    --db-canvas-warm: #F6F6FE; /* derived: Primary at 5% alpha on white (Aurora Pro) */
+    --db-canvas-warm: #F8F8F8; /* derived: Primary at 5% alpha on white (Aurora Pro) */
     --db-surface-warm: #FFFFFF;
     --db-line-soft: #F4F2EF;
     --db-hover-warm: #F3F2F0;
@@ -53,6 +69,9 @@
     --db-bg-secondary: var(--db-surface-warm);
     --db-border: #ECEAE6;
     --db-border-light: #F4F2EF;
+    /* Visible outline for secondary buttons (Du Bois chrome). --db-border is a
+       hairline divider and disappears on white; controls need a stronger edge. */
+    --db-border-control: #C9C5BF;
 
     /* Chrome hierarchy (structure unchanged) */
     --db-navbar-bg: #FFFFFF;
@@ -81,8 +100,14 @@
     --db-status-danger-soft-bg: #FDECEC;
     --db-status-info: #2563EB;
     --db-status-info-soft-bg: #EAF0FE;
+    /* Current-user avatar (Databricks workspace user icon). */
+    --db-user-avatar-bg: rgb(67, 74, 147);
     --db-status-draft: #7C3AED;
     --db-status-draft-soft-bg: #F3EDFE;
+
+    /* Databricks text links (run lists, inline navigation) */
+    --db-link: #2272B4;
+    --db-link-hover: #0E538B;
 
     /* Backward-compatible aliases */
     --db-success: var(--db-status-success);
@@ -93,13 +118,31 @@
     --db-warning: var(--db-status-warning);
     --db-info: var(--db-status-info);
 
-    /* Shared radii */
-    --db-radius-sm: 10px;
-    --db-radius-md: 14px;
-    --db-radius-lg: 999px;
+    /* Shared radii - reduced to minimum (almost a square) */
+    --db-radius-sm: 2px;
+    --db-radius-md: 2px;
+    --db-radius-lg: 2px;
     --db-radius-control: var(--db-radius-sm);
     --db-radius-card: var(--db-radius-md);
-    --db-radius-chip: var(--db-radius-lg);
+    --db-radius-chip: var(--db-radius-sm);
+
+    /* Bootstrap radius overrides - align all standard components to almost-square */
+    --bs-border-radius: 2px;
+    --bs-border-radius-sm: 2px;
+    --bs-border-radius-lg: 2px;
+    --bs-border-radius-xl: 2px;
+    --bs-border-radius-xxl: 2px;
+    --bs-border-radius-2xl: var(--bs-border-radius-xxl);
+    --bs-border-radius-pill: 2px;
+    --bs-card-border-radius: 2px;
+    --bs-modal-border-radius: 2px;
+    --bs-dropdown-border-radius: 2px;
+    --bs-btn-border-radius: 2px;
+    --bs-btn-border-radius-sm: 2px;
+    --bs-btn-border-radius-lg: 2px;
+    --bs-nav-pills-border-radius: 2px;
+    --bs-alert-border-radius: 2px;
+    --bs-pagination-border-radius: 2px;
 
     /* Focus ring */
     --db-focus-ring: 0 0 0 0.2rem rgba(var(--db-primary-rgb), 0.18);
@@ -166,7 +209,7 @@ body {
     font-size: 0.82rem;
     padding: 0.35rem 0.65rem;
     margin: 0;
-    border-radius: 9px;
+    border-radius: var(--db-radius-control);
     transition: all 0.2s ease;
 }
 
@@ -230,21 +273,81 @@ body {
     margin: 0.35rem 0.45rem;
 }
 
-/* Current-user menu — read-only identity card, so no interactive item styling */
+/* Current-user menu — Databricks-style initials avatar + identity + utility links */
+.navbar .nav-link.ob-user-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.4rem;
+}
+
+.ob-user-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    flex-shrink: 0;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: var(--db-user-avatar-bg);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    text-transform: uppercase;
+    user-select: none;
+}
+
+/* Beat `.ob-subnav .dropdown-menu { min-width: 200px }` so the email stays
+   on one line next to the avatar. */
+.ob-subnav .dropdown-menu.ob-user-menu,
 .ob-user-menu {
-    min-width: 200px;
+    min-width: 18rem;
+    width: max-content;
+    max-width: min(22rem, calc(100vw - 1.5rem));
 }
 
 .ob-user-menu .ob-user-menu-identity {
-    padding: 0.2rem 0.65rem;
+    padding: 0.4rem 0.75rem 0.5rem;
     cursor: default;
+}
+
+.ob-user-menu .ob-user-menu-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.ob-user-avatar.ob-user-avatar-lg {
+    width: 2.25rem;
+    height: 2.25rem;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    font-size: 0.8rem;
+}
+
+.ob-user-menu .ob-user-menu-who {
+    min-width: 0;
+}
+
+.ob-user-menu .ob-user-menu-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--db-text);
+    line-height: 1.25;
+    white-space: nowrap;
 }
 
 .ob-user-menu .ob-user-menu-email {
     font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--db-text);
-    word-break: break-all;
+    font-weight: 400;
+    color: var(--db-text-muted);
+    white-space: nowrap;
+    line-height: 1.3;
 }
 
 .ob-user-menu .ob-user-menu-badges {
@@ -450,21 +553,27 @@ body {
 }
 
 /* ==========================================================================
-   Level-2 contextual sub-navigation (.ob-subnav)
-   Sits directly below the main navbar and provides Ontology / Mapping /
-   Knowledge Graph tabs plus the Domain dropdown.
+   Unified app chrome (.ob-subnav / #obSubnav)
+   Single top bar: left = sidebar toggle + brand; right = Context, Close/Save,
+   app switcher, Activity, User. Former L1+L2 are merged here.
    ========================================================================== */
-.ob-subnav {
-    background: transparent;
-    border-bottom: 0;
+.ob-subnav,
+.ob-subnav.navbar {
+    /* Match former L2: canvas grey (--db-canvas-warm on body) shows through;
+       no white L1 surface and no bottom divider. */
+    background: transparent !important;
+    background-color: transparent !important;
+    border-bottom: 0 !important;
     padding: 0;
     position: relative;
-    z-index: 1040;
+    z-index: 1050; /* Above OntoViz elements */
+    min-height: 0;
+    box-shadow: none;
 }
 
 #obSubnav .container-fluid {
-    padding-left: 0.5rem !important;
-    padding-right: 1rem !important;
+    padding-left: 0.25rem !important;
+    padding-right: 0.5rem !important;
 }
 
 .ob-subnav-nav {
@@ -472,136 +581,63 @@ body {
     align-items: center;
     list-style: none;
     margin: 0;
-    /* Match the shell gutter below the rail. The shell owns the lower 0.25rem,
-       so L1 -> L2 and L2 -> page content remain visually equal. */
-    padding: 0.25rem 0 0;
-    --ob-subnav-rail-height: 3rem;
+    padding: 0.15rem 0;
+    --ob-subnav-rail-height: 2.25rem;
+    /* Shared hover square for every navbar icon (Save, Close, Activity, switcher). */
+    --ob-subnav-icon-hit: 2rem;
+    --ob-subnav-icon-radius: var(--db-btn-radius);
+    /* Du Bois md button: same hit as the icon square (chrome Close / Save / Resume). */
+    --ob-subnav-btn-height: var(--ob-subnav-icon-hit);
+    --ob-subnav-btn-radius: var(--ob-subnav-icon-radius);
     gap: 0;
+    width: 100%;
 }
 
-.ob-subnav-workspaces {
-    display: flex;
-    align-items: center;
+.ob-subnav-brand-item .navbar-brand {
+    font-size: 1.05rem;
+    font-weight: 500;
+    padding: 0.15rem 0.35rem 0.15rem 0.15rem;
+    margin: 0;
+    line-height: 1.2;
 }
 
-.ob-subnav-context {
-    display: flex;
-    align-items: center;
-    margin-right: 0.5rem;
+.ob-subnav-brand-item .navbar-brand img {
+    flex-shrink: 0;
 }
 
-.ob-subnav-context-trigger {
+.ob-subnav-utility-link {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    position: relative;
-    width: 200px;
-    min-width: 200px;
-    max-width: 200px;
-    padding-top: 0.28rem;
-    padding-bottom: 0.28rem;
-    padding-left: 1.75rem;
-    padding-right: 0.55rem;
-    background: var(--db-primary-soft);
-    border: 0;
-    border-radius: var(--db-radius-control);
-    color: var(--db-primary-darker);
+    box-sizing: border-box;
+    width: var(--ob-subnav-icon-hit);
+    min-width: var(--ob-subnav-icon-hit);
+    height: var(--ob-subnav-icon-hit);
+    min-height: var(--ob-subnav-icon-hit);
+    padding: 0;
+    color: var(--db-text-secondary);
     text-decoration: none;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    border-radius: var(--ob-subnav-icon-radius);
+    line-height: 1;
+    transition: color 0.15s ease, background-color 0.15s ease;
 }
 
-.ob-subnav-context-trigger > .bi {
-    position: absolute;
-    left: 0.65rem;
-    top: 50%;
-    transform: translateY(-50%);
-}
-
-.ob-subnav-context-trigger:hover {
-    background: var(--db-primary-soft-hover);
-    color: var(--db-primary-darker);
+.ob-subnav-utility-link:hover,
+.ob-subnav-utility-link:focus {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
     text-decoration: none;
 }
 
-.ob-subnav-context-trigger:focus-visible {
+.ob-subnav-utility-link:focus-visible {
     outline: 2px solid transparent;
     outline-offset: 2px;
     box-shadow: var(--db-focus-ring);
 }
 
-.ob-subnav-context-copy {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    row-gap: 0.12rem;
-    column-gap: 0.4rem;
-    align-items: center;
-    justify-items: center;
-    width: 100%;
-    /* Required so the nested domain-name label can actually ellipsize. */
-    min-width: 0;
-    line-height: 1.15;
-}
-
-.ob-subnav-context-copy .domain-status-badge {
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: center;
-    margin-left: 0 !important;
-}
-
-.ob-subnav-context-name {
-    grid-column: 1;
-    grid-row: 2;
-    min-width: 0;
-    width: 100%;
-    max-width: 100%;
-    text-align: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--db-text);
-}
-
-.ob-subnav-context-version {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    align-self: center;
-    justify-self: center;
-    font-size: 0.88rem;
-    font-weight: 700;
-    color: var(--db-on-primary);
-    background: var(--db-primary-darker);
-    border-radius: var(--db-radius-control);
-    padding: 0.12rem 0.45rem;
-    white-space: nowrap;
-}
-
-.ob-subnav-workspace-list {
-    display: flex;
-    align-items: center;
-    list-style: none;
-    margin: 0;
-    padding: 0.2rem;
-    gap: 0.125rem;
-    background: var(--db-surface-warm);
-    border: 1px solid var(--db-border);
-    border-radius: var(--db-radius-control);
-}
-
-.ob-subnav-context-trigger,
-.ob-subnav-workspace-list {
-    min-height: var(--ob-subnav-rail-height);
-    height: var(--ob-subnav-rail-height);
-    box-sizing: border-box;
-    border-radius: var(--db-radius-control);
-}
-
-.ob-subnav-workspace-list > .ob-subnav-item,
-.ob-subnav-workspace-list > .ob-subnav-item > .ob-subnav-link {
-    height: 100%;
+.ob-subnav-utility-link.ob-user-menu-toggle {
+    /* Same icon-hit square as Activity / Save / Close. */
+    padding: 0;
 }
 
 .ob-subnav-item {
@@ -609,95 +645,31 @@ body {
     align-items: center;
 }
 
-.ob-subnav-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.3rem 0.7rem;
-    font-size: 0.8125rem;
-    color: var(--db-text-secondary);
-    text-decoration: none;
-    border: 0;
-    border-radius: calc(var(--db-radius-control) - 2px);
-    white-space: nowrap;
-    transition: color 0.15s ease, background-color 0.15s ease;
-}
-
-.ob-subnav-link .bi {
-    font-size: 0.85rem;
-}
-
-.ob-subnav-ordinal {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.05rem;
-    height: 1.05rem;
-    padding: 0 0.25rem;
-    border: 1px solid var(--db-border);
-    border-radius: 999px;
-    color: var(--db-text-muted);
-    font-size: 0.62rem;
-    font-weight: 700;
-    line-height: 1;
-}
-
-.ob-subnav-link:hover {
-    color: var(--db-text);
-    background: var(--db-hover-indigo);
-    text-decoration: none;
-}
-
-.ob-subnav-link:focus-visible {
-    color: var(--db-text);
-    outline: 2px solid transparent;
-    outline-offset: 2px;
-    box-shadow: var(--db-focus-ring);
-}
-
-.ob-subnav-link.active {
-    color: var(--db-on-primary);
-    font-weight: 700;
-    background: var(--db-gradient-primary);
-    border-radius: calc(var(--db-radius-control) - 2px);
-}
-
-.ob-subnav-link.active .ob-subnav-ordinal {
-    border-color: var(--db-on-primary);
-    background: var(--db-on-primary);
-    color: var(--db-primary);
-}
-
-.ob-subnav-link.nav-disabled {
-    opacity: 0.4;
-    pointer-events: none;
-    cursor: not-allowed;
-}
-
 .ob-subnav-settings-return-link {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    text-align: left;
     gap: 0.35rem;
-    width: 200px;
-    min-width: 200px;
-    max-width: 200px;
-    padding: 0.35rem 0.75rem;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    white-space: nowrap;
+    padding: 0.2rem 0.55rem;
     color: var(--db-text);
-    background: var(--db-surface-warm);
-    border: 1px solid var(--db-border);
+    background: transparent;
+    border: 0;
     border-radius: var(--db-radius-control);
     box-shadow: none;
     text-decoration: none;
     font-size: 0.8125rem;
     font-weight: 500;
-    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .ob-subnav-settings-return-link:hover {
     color: var(--db-text);
     background: var(--db-hover-indigo);
-    border-color: var(--db-primary);
     text-decoration: none;
 }
 
@@ -707,12 +679,13 @@ body {
     box-shadow: var(--db-focus-ring);
 }
 
-/* Dropdown toggle arrow */
-.ob-subnav-link.dropdown-toggle::after {
-    margin-left: 0.2rem;
+/* "Back to {context} V{n}" label is never truncated: the link takes its
+   natural width and the full name stays visible. */
+.ob-subnav-settings-return-link > span {
+    white-space: nowrap;
 }
 
-/* L2 dropdowns mirror the left sidebar panel (indigo-soft hover + fill). */
+/* L2 dropdowns (app switcher) mirror the left sidebar panel. */
 .ob-subnav .dropdown-menu {
     z-index: 1051;
     background-color: var(--db-surface-warm);
@@ -732,17 +705,24 @@ body {
     font-size: 0.82rem;
     padding: 0.35rem 0.65rem;
     margin: 0;
-    border-radius: 9px;
+    border-radius: var(--db-radius-control);
     transition: all 0.2s ease;
 }
 
-.ob-subnav .dropdown-menu .dropdown-item .bi {
+.ob-subnav .dropdown-menu .dropdown-item .bi,
+.ob-subnav .dropdown-menu .dropdown-item .ob-brand-icon {
     font-size: 0.95rem;
     width: 20px;
     min-width: 20px;
     text-align: center;
     opacity: 1;
     margin-right: 0;
+}
+
+/* Brand marks share the same 20px column as Bootstrap Icons so labels align. */
+.ob-subnav .dropdown-menu .dropdown-item .ob-brand-icon {
+    height: 0.95rem;
+    flex-shrink: 0;
 }
 
 .ob-subnav .dropdown-menu .dropdown-item:hover,
@@ -783,64 +763,241 @@ body {
     margin: 0.5rem 0.45rem;
 }
 
-.ob-subnav-link.active.dropdown-toggle::after {
-    display: none;
-}
-
-/* Separator between Domain context and the remaining workspace targets. */
-.ob-subnav-divider {
-    width: 1px;
-    height: 1rem;
-    background-color: var(--db-border);
-    margin: 0 0.3rem;
-    align-self: center;
-}
-
-/* Resume Editing button — L2 subnav, left of Save, when the edit lease expired */
-.ob-subnav-resume-btn {
+/* Chrome actions (Close / Save / Resume) — Genie Code-inspired chip:
+   bordered, icon-first, Du Bois md geometry. Hover matches Activity
+   (`--db-hover-indigo`); never a gradient. */
+.ob-subnav-action {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    justify-content: center;
+    gap: 0;
+    box-sizing: border-box;
+    width: var(--ob-subnav-btn-height);
+    min-width: var(--ob-subnav-btn-height);
+    height: var(--ob-subnav-btn-height);
+    min-height: var(--ob-subnav-btn-height);
     margin: 0;
-    padding: 0.25rem 0.7rem;
-    font-size: 0.8rem;
-    color: #664d03;
-    background-color: #fff3cd;
-    border: 1px solid #ffe69c;
-    border-radius: 0.3rem;
+    padding: 0;
+    font-family: inherit;
+    font-size: var(--db-btn-font-size);
+    font-weight: var(--db-btn-font-weight);
+    line-height: 1;
+    color: var(--db-text-secondary);
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--ob-subnav-btn-radius);
+    text-decoration: none;
     white-space: nowrap;
     cursor: pointer;
+    appearance: none;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.ob-subnav-resume-btn:hover {
-    background-color: #ffc107;
-    color: #664d03;
-    border-color: #ffda6a;
+.ob-subnav-action:hover {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
+    border-color: var(--db-border);
+    text-decoration: none;
 }
 
-/* Save Domain button — last action in the L2 order */
-.ob-subnav-save-btn {
+.ob-subnav-action:focus {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
+    border-color: var(--db-border);
+    text-decoration: none;
+    box-shadow: var(--db-focus-ring);
+    outline: 2px solid transparent;
+}
+
+.ob-subnav-action .bi {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+/* Resume — same chip, text-only label (no icon). */
+.ob-subnav-resume-btn {
+    width: auto;
+    min-width: var(--ob-subnav-btn-height);
+    padding: 0 0.75rem;
+    color: var(--db-status-warning);
+}
+
+.ob-subnav-resume-btn:hover {
+    color: var(--db-status-warning);
+    background: var(--db-hover-indigo);
+    border-color: var(--db-border);
+}
+
+.ob-subnav-resume-btn:focus {
+    color: var(--db-status-warning);
+    background: var(--db-hover-indigo);
+    border-color: var(--db-border);
+}
+
+/* Save and Close: bare icons at rest (no fill, no border). Hover shows the
+   same rounded square as Activity / the feature switcher. */
+.ob-subnav-save-btn,
+.ob-subnav-close-btn {
+    position: relative;
+    color: var(--db-text-secondary);
+    background: transparent;
+    border: 0;
+    border-radius: var(--ob-subnav-icon-radius);
+    text-decoration: none;
+}
+
+.ob-subnav-save-btn:hover,
+.ob-subnav-close-btn:hover {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
+    border: 0;
+    text-decoration: none;
+}
+
+.ob-subnav-save-btn:focus,
+.ob-subnav-close-btn:focus {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
+    border: 0;
+    text-decoration: none;
+    box-shadow: var(--db-focus-ring);
+    outline: 2px solid transparent;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---- Level-2 "C" direction: quiet crumbs, grey track, Close / Save ---- */
+.ob-subnav-context {
+    display: flex;
+    align-items: center;
+    margin-right: 0.25rem;
+}
+
+/* Fixed L2 sidebar collapse control — left of Context / Settings return. */
+/* Left edge lines up with the sidebar nav icon column (~19px from the shell
+   edge: 0.25rem shell + 0.25rem link margin + 3px border + 0.5rem padding). */
+.ob-subnav-sidebar-toggle-item {
+    display: flex;
+    align-items: center;
+    margin-left: 0.25rem;
+    margin-right: 0.1rem;
+}
+
+.ob-subnav-sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: calc(0.5rem + 3px);
+    padding-right: 0.5rem;
+    height: var(--ob-subnav-rail-height);
+    border: none;
+    background: transparent;
+    color: var(--db-text-muted);
+    border-radius: var(--db-radius-control);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+/* When the sidebar is collapsed, match the 32px centered icon rail of .nav-link */
+html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+    border-left: 3px solid transparent;
+}
+
+/* Same glyph size and column width as `.sidebar-nav .nav-link i` so the icons read as one set. */
+.ob-subnav-sidebar-toggle i {
+    font-size: 0.95rem;
+    width: 20px;
+    min-width: 20px;
+    text-align: center;
+    line-height: 1;
+}
+
+.ob-subnav-sidebar-toggle:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+/* Context ▾ / vN ▾ crumbs — text on transparent, soft hover well */
+.ob-subnav-crumb {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    padding: 0.25rem 0.7rem;
-    font-size: 0.8rem;
-    color: var(--db-on-primary);
-    background: var(--db-gradient-primary);
-    border: 1px solid var(--db-primary);
-    border-radius: var(--db-radius-control);
-    box-shadow: var(--db-shadow-primary);
+    height: var(--ob-subnav-rail-height);
+    padding: 0 0.45rem;
+    color: var(--db-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
     text-decoration: none;
+    border-radius: var(--db-radius-control);
     white-space: nowrap;
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.ob-subnav-save-btn:hover {
-    background: var(--db-primary-dark);
-    border-color: var(--db-primary-dark);
-    color: var(--db-on-primary);
+.ob-subnav-crumb:hover {
+    background: var(--db-hover-indigo);
+    color: var(--db-primary-darker);
     text-decoration: none;
+}
+
+.ob-subnav-crumb:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-subnav-context-trigger {
+    min-width: 0;
+    max-width: 18rem;
+}
+
+.ob-subnav-context-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.ob-subnav-context-name {
+    min-width: 0;
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Version badge next to the context name (replaces the former vN ▾ crumb). */
+.domain-version-badge {
+    flex: 0 0 auto;
+    font-size: 0.6rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 0.15em 0.4em;
+    line-height: 1.2;
+    color: var(--db-text-secondary);
+    background: var(--db-surface-warm);
+    border-color: var(--db-border) !important;
+}
+
+.ob-subnav-context-copy .domain-status-badge {
+    margin-left: 0 !important;
+}
+
+.ob-subnav-caret {
+    font-size: 0.6rem;
+    color: var(--db-text-muted);
 }
 
 .ob-subnav-save-btn.is-saving {
@@ -860,57 +1017,190 @@ body {
     pointer-events: none;
 }
 
-/* Switch Version button — first in the L2 action cluster */
-.ob-subnav-switch-btn {
+/* Unsaved registry writes: warning dot on the icon chip */
+.ob-subnav-save-dirty {
+    display: none;
+    position: absolute;
+    top: 0.2rem;
+    right: 0.2rem;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: var(--db-status-warning);
+}
+
+.ob-subnav-save-btn.is-dirty .ob-subnav-save-dirty {
+    display: inline-block;
+}
+
+/* Databricks-style app switcher (9-dot nav-icon) — left of Close */
+.ob-subnav-app-switcher {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    margin: 0;
-    padding: 0.25rem 0.7rem;
-    font-size: 0.8rem;
+    justify-content: center;
+    box-sizing: border-box;
+    width: var(--ob-subnav-icon-hit);
+    min-width: var(--ob-subnav-icon-hit);
+    height: var(--ob-subnav-icon-hit);
+    min-height: var(--ob-subnav-icon-hit);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--db-text-secondary);
+    border-radius: var(--ob-subnav-icon-radius);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+.ob-subnav-app-switcher:hover,
+.ob-subnav-app-switcher[aria-expanded="true"] {
+    background: var(--db-hover-indigo);
     color: var(--db-text);
-    background-color: var(--db-surface-warm);
-    border: 1px solid var(--db-navbar-border);
-    border-radius: var(--db-radius-control);
+}
+
+.ob-subnav-app-switcher:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+/* 3×3 dots — mirrors Databricks ``nav-icon`` app switcher affordance */
+.ob-nav-icon {
+    display: grid;
+    grid-template-columns: repeat(3, 3px);
+    grid-template-rows: repeat(3, 3px);
+    gap: 2px;
+    width: 13px;
+    height: 13px;
+}
+
+.ob-nav-icon > span {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+/* Databricks app-switcher popover: rounded boxes for menu, items and icon chips. */
+.ob-app-switcher-menu {
+    min-width: 22rem;
+    max-width: 30rem;
+    padding: 0.5rem;
+    border: 1px solid var(--db-border);
+    border-radius: 0.5rem;
+    background: var(--db-surface-warm);
+    box-shadow: var(--db-shadow-md);
+}
+
+.ob-app-switcher-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.ob-app-switcher-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
     text-decoration: none;
-    white-space: nowrap;
+    color: var(--db-text);
+    border-radius: 0.5rem;
+    border: 0;
+    background: transparent;
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.ob-subnav-switch-btn:hover {
-    background-color: var(--db-hover-indigo);
+.ob-app-switcher-item:hover,
+.ob-app-switcher-item:focus-visible {
+    background: var(--db-hover-indigo);
     color: var(--db-text);
     text-decoration: none;
 }
 
-.ob-subnav-switch-btn.disabled,
-.ob-subnav-switch-btn.btn-requires-domain.disabled {
-    opacity: 0.45;
+.ob-app-switcher-item:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-app-switcher-item.is-current {
+    background: var(--db-primary-light);
+    color: var(--db-primary-darker);
+    font-weight: 600;
+}
+
+.ob-app-switcher-item.nav-disabled {
+    opacity: 0.4;
     pointer-events: none;
+    cursor: not-allowed;
 }
 
-/* Close Domain button — between Versions and Save */
-.ob-subnav-close-btn {
+.ob-app-switcher-item-icon {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    margin: 0;
-    padding: 0.25rem 0.7rem;
-    font-size: 0.8rem;
-    color: var(--db-status-danger);
-    background-color: var(--db-surface-warm);
-    border: 1px solid var(--db-navbar-border);
-    border-radius: var(--db-radius-control);
-    text-decoration: none;
-    white-space: nowrap;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 auto;
+    align-self: center;
+    border-radius: 0.5rem;
+    background: var(--db-canvas-warm);
+    border: 1px solid var(--db-border);
+    color: var(--db-text-secondary);
+    font-size: 1.05rem;
 }
 
-.ob-subnav-close-btn:hover {
-    background-color: var(--db-status-danger-soft-bg);
-    border-color: var(--db-status-danger);
-    color: var(--db-status-danger);
-    text-decoration: none;
+.ob-app-switcher-item.is-current .ob-app-switcher-item-icon {
+    color: var(--db-primary-darker);
+    background: var(--db-surface-warm);
+    border-color: var(--db-primary);
+}
+
+.ob-app-switcher-item-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ob-app-switcher-item-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ob-app-switcher-item-desc {
+    font-size: 0.72rem;
+    font-weight: 400;
+    line-height: 1.3;
+    color: var(--db-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ob-app-switcher-item.is-current .ob-app-switcher-item-label {
+    font-weight: 650;
+}
+
+/* Checkmark only on the current workspace (Databricks app-switcher pattern). */
+.ob-app-switcher-item-check {
+    flex: 0 0 auto;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: var(--db-primary-darker);
+    opacity: 0;
+    visibility: hidden;
+}
+
+.ob-app-switcher-item.is-current .ob-app-switcher-item-check {
+    opacity: 1;
+    visibility: visible;
 }
 
 .ob-subnav-close-btn.disabled,
@@ -919,58 +1209,49 @@ body {
     pointer-events: none;
 }
 
-/* Inline breadcrumb inside the subnav row */
+/* Spacer pushes the right chrome group to the edge */
 .ob-subnav-flex-spacer {
     flex: 1;
 }
 
-.ob-subnav-breadcrumb-wrap {
-    display: flex;
-    align-items: center;
-    padding: 0 0.75rem;
-    border-left: 1px solid var(--db-subnav-border);
-}
-.ob-subnav-breadcrumb-wrap .breadcrumb {
-    font-size: 0.65rem;
-    font-style: italic;
-    white-space: nowrap;
-    flex-wrap: nowrap;
-    gap: 0;
-}
-.ob-subnav-breadcrumb-wrap .breadcrumb-item,
-.ob-subnav-breadcrumb-wrap .breadcrumb-item a {
-    color: var(--db-text-muted, #6c757d);
-    text-decoration: none;
-}
-.ob-subnav-breadcrumb-wrap .breadcrumb-item a:hover {
-    color: var(--db-primary, #1b3a6b);
-}
-.ob-subnav-breadcrumb-wrap .breadcrumb-item.active {
-    color: var(--db-text, #1b3a6b);
-    font-weight: 500;
-}
-.ob-subnav-breadcrumb-wrap .breadcrumb-item + .breadcrumb-item::before {
-    font-size: 0.65rem;
-    color: var(--db-subnav-border);
+/* Extra breathing room between right-side chrome controls
+   (Context → Close/Save → switcher → Activity → User). */
+.ob-subnav-flex-spacer ~ .ob-subnav-item {
+    margin-inline-start: 0.35rem;
 }
 
-/* Save/switch/close actions share one spacing wrapper for stable ordering. */
+/* Activity sits next to User; the notification bubble overflows to the right
+   of the Activity hit square, so leave extra room before the avatar. */
+.ob-subnav-nav .ob-subnav-item:has(#activityCenterToggle) + .ob-subnav-item {
+    margin-inline-start: 0.85rem;
+}
+
+/* Home page: Activity button is not necessary on the landing page */
+body[data-page="home"] #activityCenterNavItem,
+body[data-page="home"] .ob-subnav-item:has(#activityCenterToggle) {
+    display: none !important;
+}
+
+body[data-page="home"] .ob-subnav-nav .ob-subnav-item:has(#activityCenterToggle) + .ob-subnav-item {
+    margin-inline-start: 0.35rem;
+}
+
 .ob-subnav-nav .ob-subnav-item:has(.ob-subnav-save-btn) {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding-right: 0.25rem;
+    gap: 0.55rem;
+    padding-right: 0.15rem;
+}
+
+.ob-subnav-nav .ob-subnav-item:has(.ob-subnav-app-switcher) {
+    display: flex;
+    align-items: center;
+    margin-right: 0.1rem;
 }
 
 @media (max-width: 1199.98px) {
-    #obBreadcrumbWrap {
-        display: none !important;
-    }
-
-    .ob-subnav-resume-btn .ob-subnav-label,
-    .ob-subnav-switch-btn .ob-subnav-label,
-    .ob-subnav-close-btn .ob-subnav-label,
-    .ob-subnav-save-btn .ob-subnav-label {
+    /* Save/Close are icon-only; only Resume still has a label and must stay readable. */
+    .ob-subnav-action:not(.ob-subnav-resume-btn) .ob-subnav-label {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -988,20 +1269,28 @@ body {
    ========================================================================== */
 
 /* ==========================================================================
-   Cards
+   Cards & Modals
    ========================================================================== */
 .card {
     border: 1px solid var(--db-border);
     border-radius: var(--db-radius-card);
-    box-shadow: var(--db-shadow-sm);
+    box-shadow: none;
     background: var(--db-surface-warm);
+}
+
+.modal-content {
+    border-radius: var(--db-radius-card);
 }
 
 .card-header {
     background-color: var(--db-surface-warm);
     border-bottom: 1px solid var(--db-border);
     font-weight: 600;
-    padding: 1rem 1.25rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.card-body {
+    padding: 0.75rem;
 }
 
 /* ==========================================================================
@@ -1036,18 +1325,23 @@ body {
 .form-select-sm,
 .input-group-sm > .form-control,
 .input-group-sm > .form-select,
-.input-group-sm > .input-group-text,
-.input-group-sm > .btn {
+.input-group-sm > .input-group-text {
     border-radius: var(--db-radius-control);
+}
+
+.input-group-sm > .btn,
+.input-group-lg > .btn,
+.btn-group-sm > .btn,
+.btn-group-lg > .btn {
+    border-radius: var(--db-btn-radius);
 }
 
 .form-control-lg,
 .form-select-lg,
 .input-group-lg > .form-control,
 .input-group-lg > .form-select,
-.input-group-lg > .input-group-text,
-.input-group-lg > .btn {
-    border-radius: var(--db-radius-card);
+.input-group-lg > .input-group-text {
+    border-radius: var(--db-radius-control);
 }
 
 /* ==========================================================================
@@ -1086,36 +1380,40 @@ body {
     display: flex;
     flex-wrap: nowrap;
     min-width: 0;
+    width: 100%;
     background: transparent;
     border: 0;
     border-bottom: 1px solid var(--db-border);
     border-radius: 0;
-    margin-right: 12px;
+    margin-right: 0;
+    gap: 1.5rem;
     overflow-x: auto;
     overflow-y: hidden;
 }
 
 .nav-tabs .nav-link {
-    color: var(--db-gray-600);
+    color: var(--db-text-secondary);
     background: transparent;
     border: none;
-    border-bottom: 2px solid transparent;
+    border-bottom: 3px solid transparent;
     border-radius: 0;
-    font-size: 0.9rem;
-    padding: 0.5rem 0.875rem;
+    margin-bottom: -1px;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    padding: 0.5rem 0;
     font-weight: 500;
     transition: var(--db-transition);
 }
 
 .nav-tabs .nav-link:hover {
-    color: var(--db-text);
-    background: var(--db-hover-indigo, var(--db-hover-warm));
+    color: var(--db-primary);
+    background: transparent;
     border-bottom-color: transparent;
 }
 
 .nav-tabs .nav-link.active {
     background-color: transparent !important;
-    color: var(--db-primary-darker) !important;
+    color: var(--db-text) !important;
     border: none !important;
     border-bottom-color: var(--db-primary) !important;
     border-radius: 0;
@@ -1134,7 +1432,7 @@ body {
     background: var(--db-surface-warm);
     border: 1px solid var(--db-border);
     border-radius: var(--db-radius-card);
-    padding: 1.25rem;
+    padding: 0.75rem;
     margin-right: 12px;
 }
 
@@ -1149,16 +1447,51 @@ body {
    Page Layout
    ========================================================================== */
 .content-wrapper {
-    padding: 2rem;
+    padding: 0.75rem 1rem;
     max-width: 1400px;
     margin: 0 auto;
 }
 
 .section-header {
-    /* Same as the header's bottom margin (subtitle → content), so the
-       title block has equal space above and below. */
-    padding-top: 0.5rem;
-    padding-right: 12px;
+    /* The white page panel owns the space above the title. */
+    padding-top: 0;
+    margin-bottom: 0.75rem;
+    padding-right: 8px;
+}
+
+.section-header.mb-4,
+.section-header.mb-3,
+.section-header.mb-2 {
+    margin-bottom: 0.75rem !important;
+}
+
+/* Databricks page title: 22px semibold, tight 28px line. */
+.section-header h1,
+.section-header h2,
+.section-header h3,
+.section-header h4 {
+    font-size: 1.375rem;
+    font-weight: 600;
+    line-height: 1.75rem;
+    letter-spacing: -0.01em;
+    color: var(--db-text);
+    margin-bottom: 0.25rem;
+}
+
+.section-header h1 > .bi,
+.section-header h2 > .bi,
+.section-header h3 > .bi,
+.section-header h4 > .bi {
+    font-size: 0.85em;
+    color: var(--db-text-secondary);
+}
+
+/* Databricks page description: 13px secondary text. */
+.section-header p {
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    color: var(--db-text-secondary);
+    margin-bottom: 0;
 }
 
 /* Section headers pair a title with a cluster of controls through
@@ -1181,12 +1514,10 @@ body {
 }
 
 @media (max-width: 767.98px) {
-    /* The desktop L2 row is intentionally one line, but its four workspace
-       links, breadcrumb and domain actions total about 883px. On a phone the
-       breadcrumb repeats the active L2 state, so remove it and its spacer;
-       keep every navigation/action target as a compact, titled icon. This
-       avoids horizontal scrolling, which would clip Bootstrap dropdowns. */
-    .ob-subnav-breadcrumb-wrap,
+    /* The desktop L2 row is intentionally one line, but its workspace links and
+       domain actions are wide. On a phone, drop the spacer and keep every
+       navigation/action target as a compact, titled icon. This avoids
+       horizontal scrolling, which would clip Bootstrap dropdowns. */
     .ob-subnav-flex-spacer {
         display: none !important;
     }
@@ -1197,9 +1528,7 @@ body {
 
     .ob-subnav,
     #obSubnav .container-fluid,
-    .ob-subnav-nav,
-    .ob-subnav-workspaces,
-    .ob-subnav-workspace-list {
+    .ob-subnav-nav {
         overflow: visible;
     }
 
@@ -1225,21 +1554,18 @@ body {
         transform: none;
     }
 
-    .ob-subnav-ordinal {
-        display: none;
-    }
-
-    .ob-subnav-link,
-    .ob-subnav-resume-btn,
-    .ob-subnav-save-btn,
-    .ob-subnav-switch-btn,
-    .ob-subnav-close-btn {
+    .ob-subnav-action {
         justify-content: center;
-        padding-inline: 0.5rem;
+        min-width: var(--ob-subnav-btn-height);
     }
 
-    .ob-subnav-label {
+    .ob-subnav-action:not(.ob-subnav-resume-btn) .ob-subnav-label {
         display: none;
+    }
+
+    .ob-subnav-resume-btn {
+        width: auto;
+        padding-inline: 0.6rem;
     }
 
     .ob-subnav-settings-return-link {
@@ -1262,20 +1588,20 @@ body {
     .section-header .btn-group > .btn {
         flex: 0 0 auto;
         white-space: nowrap;
-        border-radius: var(--db-radius-control);
+        border-radius: var(--db-btn-radius);
         margin-left: 0;
     }
 }
 
 .page-header {
-    margin-bottom: 2rem;
-    padding-top: 0.5rem;
-    padding-bottom: 1rem;
+    margin-bottom: 0.75rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.5rem;
     border-bottom: 2px solid var(--db-border);
 }
 
 .page-header h1 {
-    font-size: 2rem;
+    font-size: 1.75rem;
     font-weight: 700;
     letter-spacing: -0.02em;
     color: var(--db-text);
@@ -1284,7 +1610,7 @@ body {
 
 .page-header p {
     color: var(--db-text-secondary);
-    margin: 0.5rem 0 0 0;
+    margin: 0.25rem 0 0 0;
 }
 
 /* ==========================================================================
@@ -1308,7 +1634,7 @@ pre {
     background-color: var(--db-gray);
     color: #F8F8F2;
     padding: 1rem;
-    border-radius: 4px;
+    border-radius: 2px;
     overflow-x: auto;
 }
 
@@ -1316,7 +1642,7 @@ code {
     background-color: #ffffff;
     color: #495057;
     padding: 0.2rem 0.4rem;
-    border-radius: 3px;
+    border-radius: 2px;
     font-size: 0.875em;
 }
 
@@ -1350,85 +1676,6 @@ code {
 }
 
 /* ==========================================================================
-   OntoViz Read-Only Mode - Hide edit controls
-   ========================================================================== */
-body:is(.read-only-version, .role-viewer) .ovz-toolbar {
-    display: none !important;
-}
-
-body:is(.read-only-version, .role-viewer) .ovz-entity-actions {
-    display: none !important;
-}
-
-body:is(.read-only-version, .role-viewer) .ovz-property-actions {
-    display: none !important;
-}
-
-body:is(.read-only-version, .role-viewer) .ovz-rel-delete,
-body:is(.read-only-version, .role-viewer) .ovz-rel-add-prop,
-body:is(.read-only-version, .role-viewer) .ovz-rel-direction {
-    display: none !important;
-}
-
-body:is(.read-only-version, .role-viewer) .ovz-rel-prop-delete {
-    display: none !important;
-}
-
-body:is(.read-only-version, .role-viewer) .ovz-entity-name input,
-body:is(.read-only-version, .role-viewer) .ovz-entity-title input,
-body:is(.read-only-version, .role-viewer) .ovz-property-name input,
-body:is(.read-only-version, .role-viewer) .ovz-rel-name-input,
-body:is(.read-only-version, .role-viewer) .ovz-rel-prop-name {
-    pointer-events: none !important;
-    background: transparent !important;
-    border-color: transparent !important;
-    cursor: default !important;
-    user-select: none !important;
-}
-
-/* Also disable all inputs in OntoViz entities */
-body:is(.read-only-version, .role-viewer) .ovz-entity input,
-body:is(.read-only-version, .role-viewer) .ovz-relationship-label input {
-    pointer-events: none !important;
-    background: transparent !important;
-    border-color: transparent !important;
-    cursor: default !important;
-    user-select: none !important;
-}
-
-body:is(.read-only-version, .role-viewer) .ovz-context-menu {
-    display: none !important;
-}
-
-body:is(.read-only-version, .role-viewer) .ovz-entity {
-    cursor: default !important;
-}
-
-body:is(.read-only-version, .role-viewer) .ovz-connector {
-    display: none !important;
-}
-
-body:is(.read-only-version, .role-viewer) .ovz-rel-direction-label {
-    pointer-events: none !important;
-    cursor: default !important;
-}
-
-/* Hide entity buttons container */
-body:is(.read-only-version, .role-viewer) .ovz-entity-btn {
-    display: none !important;
-}
-
-/* Hide property buttons */
-body:is(.read-only-version, .role-viewer) .ovz-property-btn {
-    display: none !important;
-}
-
-/* Hide Add Property button at bottom of entity boxes */
-body:is(.read-only-version, .role-viewer) .ovz-add-property {
-    display: none !important;
-}
-
-/* ==========================================================================
    Read-Only Mode - Disable form inputs on ontology/mapping pages
    ========================================================================== */
 body:is(.read-only-version, .role-viewer) #ontologyName,
@@ -1449,4 +1696,212 @@ body:is(.read-only-version, .role-viewer) #domainVersionSelect {
     opacity: 1 !important;
     cursor: pointer !important;
 }
+
+/* Shared list cards (Data Quality, Business Rules, Simulation scenarios). */
+.ob-rule-card {
+    border: 1px solid var(--db-border, var(--bs-border-color));
+    border-radius: var(--db-radius-control, 0.375rem);
+    padding: 0.625rem 0.75rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ob-rule-card:hover {
+    border-color: var(--db-primary, var(--bs-primary));
+    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), 0.1);
+}
+
+/* Workspace home (Context / Ontology / Graph / Intelligence landing).
+   Tiles follow the Databricks MCP server cards: icon chip + semibold title on
+   one row, secondary description below, light border; on hover the border
+   turns primary with a faint ring (same as .ob-rule-card list cards). The
+   cards sit directly on the white page panel (no enclosing card frame). */
+.ob-workspace-home {
+    --ob-home-card-radius: 0.5rem;
+}
+
+.ob-workspace-home > .card {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+.ob-workspace-home-group + .ob-workspace-home-group {
+    margin-top: 1.5rem;
+}
+
+.ob-workspace-home-group-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.375rem;
+    color: var(--db-text);
+}
+
+.ob-workspace-home-group-title > i {
+    font-size: 0.95rem;
+    color: var(--db-text-secondary);
+}
+
+.ob-workspace-home-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.ob-workspace-home-tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 6.5rem;
+    padding: 1rem;
+    text-decoration: none;
+    color: var(--db-text);
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--ob-home-card-radius);
+    transition: border-color var(--db-transition), box-shadow var(--db-transition);
+}
+
+.ob-workspace-home-tile:hover {
+    border-color: var(--db-primary, var(--bs-primary));
+    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), 0.1);
+    color: var(--db-text);
+}
+
+.ob-workspace-home-tile:focus-visible {
+    outline: none;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-workspace-home-tile-head {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-width: 0;
+    padding-right: 1.75rem;
+}
+
+.ob-workspace-home-tile-icon {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    color: var(--db-primary);
+    font-size: 1rem;
+    background: var(--db-canvas-warm);
+    border: 1px solid var(--db-border);
+    border-radius: 0.375rem;
+}
+
+.ob-workspace-home-tile-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ob-workspace-home-tile-desc {
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    color: var(--db-text-secondary);
+}
+
+.ob-workspace-home-tile-help {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--db-text-secondary);
+    border-radius: 0.25rem;
+}
+
+.ob-workspace-home-tile-help:hover {
+    color: var(--db-primary);
+    background: var(--db-hover-indigo, var(--db-primary-light));
+}
+
+/* Card body fills the card so the resources row sticks to the page bottom. */
+.ob-workspace-home > .card > .card-body {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+.ob-workspace-home-resources {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: auto;
+    padding-top: 1.5rem;
+}
+
+.ob-workspace-home-resource {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    color: var(--db-text);
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--ob-home-card-radius);
+    transition: border-color var(--db-transition), box-shadow var(--db-transition);
+}
+
+.ob-workspace-home-resource:hover {
+    border-color: var(--db-primary, var(--bs-primary));
+    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), 0.1);
+}
+
+.ob-workspace-home-resource > i {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    color: var(--db-primary);
+    font-size: 1rem;
+    background: var(--db-canvas-warm);
+    border: 1px solid var(--db-border);
+    border-radius: 0.375rem;
+}
+
+.ob-workspace-home-resource-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+}
+
+.ob-workspace-home-resource-desc {
+    display: block;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    color: var(--db-text-secondary);
+}
+
+@media (max-width: 991.98px) {
+    .ob-workspace-home-tiles,
+    .ob-workspace-home-resources {
+        grid-template-columns: 1fr;
+    }
+}
+
 

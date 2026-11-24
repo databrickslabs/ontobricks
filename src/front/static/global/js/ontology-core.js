@@ -38,8 +38,8 @@ const OntologyState = {
 // =====================================================
 
 /**
- * Load base URI from domain session (managed on the Domain page)
- * Base URI is no longer auto-generated — it is managed on Domain → General.
+ * Load base URI from domain session (managed on the Context page)
+ * Base URI is no longer auto-generated — it is managed on Context → General.
  */
 function generateBaseUri() {
     // This function is kept for backward compatibility but no longer auto-generates
@@ -62,7 +62,7 @@ async function loadBaseUriFromDomain() {
             OntologyState.config.base_uri = result.info.base_uri;
         }
     } catch (error) {
-        console.log('Could not load base URI from domain session');
+        console.log('Could not load base URI from context session');
     }
 }
 
@@ -77,7 +77,7 @@ async function loadBaseUriDomain() {
             OntologyState.baseUriDomain = result.base_uri;
         }
     } catch (error) {
-        console.log('Using default base URI domain');
+        console.log('Using default base URI context');
     }
     // Load base URI from domain session instead of generating
     loadBaseUriFromDomain();
@@ -112,7 +112,7 @@ async function saveConfigToSession(options = {}) {
         // Strip sub-collections managed by their own dedicated endpoints
         // so we don't overwrite them with stale frontend state.
         var payload = Object.assign({}, OntologyState.config);
-        delete payload.swrl_rules;
+        delete payload.if_then_rules;
         delete payload.constraints;
         delete payload.axioms;
         delete payload.expressions;
@@ -129,12 +129,48 @@ async function saveConfigToSession(options = {}) {
             console.error('[AUTO-SAVE] Failed:', result.message);
         } else {
             console.log('[AUTO-SAVE] Config saved to session');
+            applyStoredUris(result);
         }
         return result.success;
     } catch (error) {
         console.error('[AUTO-SAVE] Error:', error);
         return false;
     }
+}
+
+/**
+ * Adopt the URIs the backend re-derived on rename.
+ *
+ * The backend gives a renamed class or relationship a URI built from its new
+ * name. The editor must hold that URI, otherwise the next save sends the old
+ * one and the backend no longer recognises the item.
+ *
+ * @param {Object} result Response of /ontology/save
+ */
+function applyStoredUris(result) {
+    const config = (typeof OntologyState !== 'undefined') ? OntologyState.config : null;
+    if (!config || !result) return;
+
+    const renames = result.uri_renames || {};
+    const classes = config.classes || [];
+    const properties = config.properties || [];
+
+    const remap = (items, map) => {
+        if (!map) return;
+        items.forEach(item => {
+            if (item.uri && map[item.uri]) item.uri = map[item.uri];
+        });
+    };
+    remap(classes, renames.classes);
+    remap(properties, renames.properties);
+
+    // Attributes are matched by position: several classes may own an attribute
+    // with the same name, so their URIs cannot be keyed by value.
+    (result.attribute_uris || []).forEach((uris, i) => {
+        const attrs = classes[i]?.dataProperties || [];
+        if (!Array.isArray(uris) || uris.length !== attrs.length) return;
+        attrs.forEach((attr, j) => { if (uris[j]) attr.uri = uris[j]; });
+    });
 }
 
 // Make it globally available
@@ -282,7 +318,7 @@ async function autoGenerateOwl() {
     if (!name) {
         issues.push('Ontology name is required');
     } else if (name === 'myontology' || name === 'newproject' || name === 'newdomain') {
-        warnings.push('Ontology name is still set to the default. Set a Domain Name in Domain → General.');
+        warnings.push('Ontology name is still set to the default. Set a Context Name in Configuration.');
     }
     
     if (!baseUri) {
@@ -311,7 +347,7 @@ async function autoGenerateOwl() {
         const propsWithoutDomain = objectProperties.filter(p => !p.domain);
         if (propsWithoutDomain.length > 0) {
             const names = propsWithoutDomain.map(p => p.label || p.name || '(unnamed)').join(', ');
-            warnings.push(`${propsWithoutDomain.length} relationship(s) without domain (source entity): ${names}`);
+            warnings.push(`${propsWithoutDomain.length} relationship(s) without context (source entity): ${names}`);
         }
         
         const propsWithoutRange = objectProperties.filter(p => !p.range);

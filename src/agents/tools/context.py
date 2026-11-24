@@ -6,7 +6,7 @@ default values.
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
     from agents.agent_mapping_pge.contracts import EvalReport, SourceModel
@@ -39,6 +39,9 @@ class ToolContext:
     documents: list = field(
         default_factory=list
     )  # Pre-loaded doc content: [{"name": str, "content": str}]
+    # Called as on_mapping("entity" | "relationship", mapping) after each
+    # accepted submit, so a running batch can stream per-item results.
+    on_mapping: Optional[Callable[[str, dict], None]] = None
 
     # Auto-icon-assign fields
     icon_results: dict = field(default_factory=dict)
@@ -46,8 +49,18 @@ class ToolContext:
     # Ontology assistant fields – mutable references to the live ontology lists
     ontology_classes: list = field(default_factory=list)
     ontology_properties: list = field(default_factory=list)
+    ontology_groups: list = field(default_factory=list)
     ontology_base_uri: str = ""
     ontology_dirty: bool = False
+
+    # Complex rule builder fields (``agent_complex_rule_builder``) – the live
+    # CONSTRUCT draft written through ``update_draft`` and surfaced to the UI.
+    rule_draft: Optional[dict] = None  # {name, description, query}
+    rule_draft_ready: bool = False
+    rule_options: Optional[dict] = None  # {question, options: [str], multi}
+
+    # Design fixer (Sanity Checks Auto-fix) – terminal submit_fix_plan output
+    submitted_fix_plan: Optional[dict] = None
 
     # Graph Chat agent fields (``agent_dtwin_chat``) – loopback REST caller
     dtwin_base_url: str = ""

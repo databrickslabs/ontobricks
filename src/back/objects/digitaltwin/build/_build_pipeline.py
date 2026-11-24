@@ -61,7 +61,7 @@ def collect_domain_stats(
     assignment: Optional[Dict[str, Any]],
     *,
     constraints=None,
-    swrl_rules=None,
+    if_then_rules=None,
     axioms=None,
     shacl_shapes=None,
 ) -> Dict[str, Any]:
@@ -96,7 +96,7 @@ def collect_domain_stats(
                 "object_properties": len(obj_props),
                 "attributes": len(attr_props),
                 "constraints": len(cons or []),
-                "swrl_rules": len(swrl_rules or []),
+                "if_then_rules": len(if_then_rules or []),
                 "axioms": len(axioms or []),
                 "shacl_shapes": len(shacl_shapes or []),
             },

@@ -91,6 +91,7 @@ def test_simulation_api_section_lists_scenario_endpoints():
         "/api/v1/simulations/{sim_id}/abort",
         "/api/v1/simulations/{sim_id}/purge",
         "/api/v1/simulations/{sim_id}/diff",
+        "/api/v1/simulations/{sim_id}/compare",
         "/api/v1/simulations/runs",
     ):
         assert f">{path}</code>" in section

@@ -1,0 +1,408 @@
+## Home page becomes the Registry + Context menu status badge removed
+
+Context: The Home page showed the "All Contexts" card grid and the navbar
+Registry icon opened a Browse / Bridges popup. Both now live on Home in one
+card with three tabs (Browse · Bridges · My tasks). The Registry popup and its
+navbar icon are removed. Separately, the lifecycle status badge (Draft, In
+Review, Published) was removed from the Context dropdown header in the L2
+navbar. Design: docs/superpowers/specs/2026-11-18-home-registry-design.md
+
+Changes:
+1. src/front/templates/home.html: hero keeps logo + "OntoBricks" title + tagline
+   (version badge removed). "All Contexts" grid removed. New card with tabs
+   Browse (default), Bridges, My tasks (`#homeTabs`, `data-home-section`), with
+   Registry partials and Export/Import modals included.
+2. src/front/templates/partials/home/_home_my_tasks.html (new): My tasks pane.
+3. src/front/templates/partials/registry/_registry_domains.html: Create button
+   id renamed `btnRegistryModalNewDomain` -> `btnHomeNewDomain`.
+4. src/front/templates/partials/layout/registry_modal.html: deleted (popup).
+5. src/front/templates/base.html: removed registry modal include, its script and
+   stylesheet, and the navbar branch for `navbar_modal`.
+6. src/front/config/menu_config.json: registry menu `navbar_hidden: true`,
+   `navbar_modal` removed, route `/`.
+7. src/front/static/global/js/registry-modal.js, src/front/static/global/css/registry-modal.css: deleted.
+8. src/front/static/home/js/home.js: gateway code removed. Now wires tabs to
+   `?section=` URL state, dispatches `sidebarSectionChanged` (source `home`), and
+   the Create button calls `window.domainNew()`.
+9. src/front/static/home/js/home-tasks.js: always visible; empty state and error
+   state; reloads when the My tasks tab is shown.
+10. src/front/static/home/css/home.css: gateway grid styles replaced by Registry
+    card and Bridges sizing rules (modal layout rules dropped).
+11. src/front/static/registry/js/registry.js: removed `source === 'registry-modal'`
+    branch (Bridges load driven by `section === 'bridges'`); comments updated.
+12. src/front/routes/registry.py: legacy `/registry/` redirects to
+    `/?section=domains`.
+13. src/front/static/global/css/pages.css: removed unused `.workflow-section`.
+14. src/front/static/global/css/components.css: removed unused `.ob-home-brand-version`.
+15. src/front/static/global/css/permissions.css: removed dead
+    `.ob-domain-empty-cta` admin rules.
+16. src/front/static/global/js/navbar.js: removed the lifecycle status badge
+    from the Context dropdown header (`#domainSectionName` in
+    `#subnavDomainDropdownMenu`). The L2 trigger and workspace map badges are
+    unchanged.
+17. src/front/templates/partials/layout/help_modal.html: Registry popup and
+    Registry -> Bridges wording updated to Home tabs.
+18. .cursor/11-frontend-design.mdc: tab catalogue example updated.
+19. docs/development.md, docs/user-guide.md, docs/architecture.md: Home contract,
+    `/registry/` redirect, popup references updated.
+20. docs/superpowers/specs/2026-11-18-home-registry-design.md (new): design spec.
+21. Tests updated for the new structure: tests/units/front/test_clarity_design_contract.py,
+    tests/units/api/test_ui_rendering.py, tests/units/front/test_registry_modal_loading.py,
+    tests/units/front/test_registry_operational_status.py,
+    tests/units/front/test_admin_only_domain_create.py,
+    tests/units/front/test_registry_stacked_obx_modals.py,
+    tests/units/front/test_domain_load_redirect.py,
+    tests/units/ui/test_home_and_explorer_contracts.py,
+    tests/e2e/registry/test_registry_flows.py (rewritten; modal stacking test dropped),
+    tests/e2e/navigation/test_navigation_flows.py (opt-in, not run).
+
+Modified files:
+- src/front/templates/home.html
+- src/front/templates/partials/home/_home_my_tasks.html (new)
+- src/front/templates/partials/registry/_registry_domains.html
+- src/front/templates/partials/layout/registry_modal.html (deleted)
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/base.html
+- src/front/config/menu_config.json
+- src/front/routes/registry.py
+- src/front/static/home/js/home.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/home/css/home.css
+- src/front/static/registry/js/registry.js
+- src/front/static/global/js/registry-modal.js (deleted)
+- src/front/static/global/css/registry-modal.css (deleted)
+- src/front/static/global/css/pages.css
+- src/front/static/global/css/components.css
+- src/front/static/global/css/permissions.css
+- src/front/static/global/js/navbar.js
+- .cursor/11-frontend-design.mdc
+- docs/development.md
+- docs/user-guide.md
+- docs/architecture.md
+- docs/superpowers/specs/2026-11-18-home-registry-design.md (new)
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_registry_modal_loading.py
+- tests/units/front/test_registry_operational_status.py
+- tests/units/front/test_admin_only_domain_create.py
+- tests/units/front/test_registry_stacked_obx_modals.py
+- tests/units/front/test_domain_load_redirect.py
+- tests/units/ui/test_home_and_explorer_contracts.py
+- tests/e2e/registry/test_registry_flows.py
+- tests/e2e/navigation/test_navigation_flows.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10860 passed, 334 skipped, 8 deselected.
+- `node --check` passes on home.js, home-tasks.js, registry.js, navbar.js.
+- Browser check of the Home tabs and the navbar badge removal not yet done.
+
+## Home navigation: launch tiles with illustrations and live counts
+
+Context: On Home, the Browse / Bridges / My tasks tab rail is replaced by three
+large launch tiles (Contexts, Bridges, My tasks). Each tile has an inline SVG
+illustration and a live count. The selected panel renders below the tiles.
+Only the Home page changes; other pages keep their tab rails.
+
+Changes:
+1. src/front/templates/home.html: tab rail replaced by `.home-nav-tiles`
+   (`#homeTabs`, three `.home-nav-tile` buttons with inline SVG art, count
+   spans `#homeCountContexts` / `#homeCountBridges` / `#homeCountTasks`, title
+   and description). Panel card no longer uses `ob-tabs-wrap`.
+2. src/front/static/home/css/home.css: launch tile styles (grid, hover, active,
+   focus-visible, count, art sizing, responsive stacking below 768px).
+3. src/front/static/home/js/home.js: loads the Contexts count from
+   `/domain/list-projects` on init.
+4. src/front/static/home/js/home-tasks.js: sets the My tasks count from the
+   same `/review/my-tasks` response it already renders; `—` on error.
+5. src/front/static/registry/js/registry.js: sets the Bridges count when bridge
+   data loads (lazy: `—` until the Bridges tile/tab is first opened).
+6. docs/superpowers/specs/2026-11-18-home-registry-design.md: navigation section
+   revised to launch tiles.
+7. docs/development.md: Home page contract row updated.
+8. tests/units/front/test_clarity_design_contract.py,
+   tests/units/api/test_ui_rendering.py,
+   tests/units/front/test_registry_operational_status.py: assertions moved from
+   the tab rail to the launch tiles.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/home/css/home.css
+- src/front/static/home/js/home.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/registry/js/registry.js
+- docs/superpowers/specs/2026-11-18-home-registry-design.md
+- docs/development.md
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_registry_operational_status.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10860 passed, 334 skipped, 8 deselected.
+- `node --check` passes on home.js, home-tasks.js, registry.js.
+- Not verified in a browser yet (tile layout, hover, mobile stacking, SVG sizing).
+
+## Home launch tiles open an 80% Registry modal
+
+Context: The Contexts / Bridges / My tasks content no longer renders under the
+launch tiles. Clicking a tile opens an 80% viewport modal with that section.
+A compact switcher in the modal header lets you move between sections without
+closing. Deep links ``?section=…`` auto-open the modal.
+
+Changes:
+1. src/front/templates/home.html: panel card removed; content moved into
+   ``#homeRegistryModal`` (80% dialog). Header carries title, section switcher
+   (Contexts / Bridges / My tasks), ``#registryStatus``, and close.
+2. src/front/static/home/js/home.js: tile click → open modal + activate
+   section; header switcher uses Bootstrap tabs; ``?section=`` opens modal;
+   closing clears the URL section; Bridges re-dispatched on ``shown.bs.modal``
+   for graph layout.
+3. src/front/static/home/css/home.css: 80vw/80vh modal layout; Bridges flex
+   fill restored for the modal body; launch tiles unchanged.
+4. tests/units/api/test_ui_rendering.py,
+   tests/units/front/test_clarity_design_contract.py,
+   tests/units/front/test_registry_modal_loading.py,
+   tests/e2e/registry/test_registry_flows.py: assert modal + tiles contract.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/home/js/home.js
+- src/front/static/home/css/home.css
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_registry_modal_loading.py
+- tests/e2e/registry/test_registry_flows.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10860 passed, 334 skipped, 8 deselected.
+- `node --check` passes on home.js.
+
+## Home hides L2 workspace rail; shows Back to context (like Settings)
+
+Context: With a context open, Home still showed the L2 Context / Ontology /
+Graph / Intelligence rail. Home now matches Settings: that rail is hidden and
+the shared "Back to context" control is shown instead.
+
+Changes:
+1. src/front/templates/home.html: `{% block page_id %}home{% endblock %}` so
+   ``<body data-page="home">``.
+2. src/front/static/global/js/navbar.js: ``updateDomainMenuVisibility`` treats
+   ``settings`` and ``home`` as context-return pages (``isContextReturnPage``);
+   workspace rail stays off, ``#settingsDomainReturnNav`` shows when a domain
+   is loaded.
+3. tests/units/front/test_settings_subnav_hidden.py: contracts updated for the
+   shared Settings/Home return pattern.
+4. tests/units/api/test_ui_rendering.py: asserts ``data-page="home"``.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_settings_subnav_hidden.py
+- tests/units/api/test_ui_rendering.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10862 passed, 334 skipped, 8 deselected.
+
+## Fix Home Illegal invocation (Bootstrap Tab on btn-group)
+
+Context: Clicking a Home launch tile threw ``Uncaught TypeError: Illegal
+invocation`` inside Bootstrap Tab (``SelectorEngine.find``). The modal header
+switcher is a ``btn-group`` (``role="group"``), not a Tab parent (``.nav`` /
+``role="tablist"``), so ``_parent`` was null.
+
+Changes:
+1. src/front/static/home/js/home.js: stop using ``bootstrap.Tab``; toggle panes
+   and switcher state manually.
+2. src/front/templates/home.html: remove ``data-bs-toggle="tab"`` /
+   ``data-bs-target`` from the header switcher buttons.
+
+Modified files:
+- src/front/static/home/js/home.js
+- src/front/templates/home.html
+
+Tests:
+- Playwright against local Home: no page errors; tiles + switcher open panes.
+- Related unit tests: 174 passed.
+
+## Home tiles richer copy + Help / Website / GitHub resources
+
+Context: Home launch tiles needed fuller descriptions, plus clear links to the
+in-app Help Center, ontobricks.org, and the GitHub repo.
+
+Changes:
+1. src/front/templates/home.html: longer tile blurbs and three bullet points
+   per tile; new ``.home-resources`` strip with Help Center button, website
+   link, and GitHub link.
+2. src/front/static/home/css/home.css: styles for tile point lists and the
+   resources grid (hover, icon well, responsive stack).
+3. src/front/static/home/js/home.js: ``#homeOpenHelp`` opens
+   ``HelpCenter.open('welcome')`` (falls back to navbar toggle).
+4. tests/units/ui/test_home_and_explorer_contracts.py: pins resources strip
+   and HelpCenter wiring.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/home/css/home.css
+- src/front/static/home/js/home.js
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10863 passed, 334 skipped, 8 deselected.
+
+## Home Bridges tile shows its count on load
+
+Context: The Bridges tile showed a dash until the Bridges section was opened,
+because bridge data loaded lazily.
+
+Changes:
+1. src/front/static/registry/js/registry.js: on Home (``#homeCountBridges``
+   present) or when ``?section=bridges``, bridges load on page load. The
+   existing request dedup makes the tab reuse this load.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+
+Tests:
+- Playwright on local Home: Bridges tile shows the count, no page errors.
+- `uv run --frozen pytest -q -m "not scenario"`: 10,863 passed, 334 skipped, 8 deselected.
+
+## Prefetch Contexts on Home so the popup opens warm
+
+Context: Opening Contexts from Home felt slow because the table waited on
+the heavy GET /settings/registry call and competed with bridges +
+list-projects. Goal A: first open feels instant.
+
+Changes:
+1. src/front/static/registry/js/registry.js
+   Prefetch domains on Home ungated by registry config; set
+   #homeCountContexts from that response; defer bridges until domains settle.
+2. src/front/static/home/js/home.js
+   Drop loadContextCount() and its GET /domain/list-projects call.
+3. tests/units/front/test_registry_modal_loading.py
+   Contract tests for Home prefetch order and no list-projects in home.js.
+4. docs/superpowers/specs/2026-11-18-home-contexts-instant-open-design.md
+   Design for the instant-open change.
+5. docs/superpowers/plans/2026-11-18-home-contexts-instant-open.md
+   Implementation plan.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+- src/front/static/home/js/home.js
+- tests/units/front/test_registry_modal_loading.py
+- docs/superpowers/specs/2026-11-18-home-contexts-instant-open-design.md
+- docs/superpowers/plans/2026-11-18-home-contexts-instant-open.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10865 passed, 334 skipped, 8 deselected, 44 warnings in 54.95s
+
+## Align Graph Chat panel with shared card surface
+
+Context: Graph Chat (`/dtwin/?section=chat`) used a custom
+`.graph-chat-container` chrome — 3px top accent stripe ending in
+`--db-status-info` (blue), harder border `#e4e8ef`, 16px radius, and a soft
+shadow — that diverged from every other sidebar section's Bootstrap `.card`
+(`.cursor/11` §Section Body Surface). Align the panel with the shared card
+tokens and drop the accent stripe.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_chat.html
+   Add `.card` to the chat body container; use canonical `mb-4` on the
+   section header.
+2. src/front/static/query/css/query-chat.css
+   Remove the `::before` top stripe and stop overriding card border /
+   radius / shadow / fill; keep flex + overflow layout only.
+3. tests/units/front/test_section_content_white_panel.py
+   Include `_query_chat.html` in the white-panel partials contract.
+4. tests/units/front/test_button_design_contract.py
+   Add contract that the chat panel carries `.card`, has no `::before`
+   stripe / `--db-status-info`, and does not redeclare card chrome.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/static/query/css/query-chat.css
+- tests/units/front/test_section_content_white_panel.py
+- tests/units/front/test_button_design_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10867 passed, 334 skipped, 8 deselected, 44 warnings in 49.77s
+
+## Home tagline wording
+
+Context: The Home subtitle now opens with "Build" to state the product's
+creation role alongside exploration and governance.
+
+Changes:
+1. src/front/templates/home.html
+   Hero tagline: "Explore and govern…" → "Build, explore and govern…".
+
+Modified files:
+- src/front/templates/home.html
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10867 passed, 334 skipped, 8 deselected, 44 warnings in 52.48s
+
+## Show app version next to Home title
+
+Context: The Home hero showed only the logo and title. The version was
+removed earlier with the Registry move; it is restored next to the title
+so the running release is visible on the landing page.
+
+Changes:
+1. src/front/templates/home.html
+   Render "v{{ app_version }}" after the brand title inside the hero h1.
+2. src/front/static/global/css/pages.css
+   Add .home-hero-version (smaller, muted, aligned with the title).
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   Contract test: version span sits inside the hero h1 and is styled.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/global/css/pages.css
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10868 passed, 334 skipped, 8 deselected, 44 warnings in 49.84s
+
+## Home bottom credit: Databricks Labs project
+
+Context: The Home page had no attribution for the project's home on
+Databricks Labs. A centered credit line at the bottom links to the
+databrickslabs GitHub organisation.
+
+Changes:
+1. src/front/templates/home.html
+   Add a centered "OntoBricks is a Databricks Labs project." line with a link
+   to https://github.com/databrickslabs, placed after the resources strip.
+2. src/front/static/home/css/home.css
+   Add .home-labs-credit and link styles (centered, muted text, primary link).
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   Contract test: credit line sits after the resources strip, before the modals,
+   and links to the databrickslabs organisation.
+
+Modified files:
+- src/front/templates/home.html
+- src/front/static/home/css/home.css
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10869 passed, 334 skipped, 8 deselected, 44 warnings in 50.14s
+
+## GitHub issues navbar icon and 100% powered by Databricks credit
+
+Context: Users can now file issues directly on the GitHub tracker from
+the top navbar. The bottom attribution now highlights that the solution
+is 100% powered by Databricks with a link to databricks.com.
+
+Changes:
+1. src/front/templates/base.html
+   Add a #navReportIssue icon button in the navbar right items (<i class="bi bi-bug"></i>)
+   linking to https://github.com/databrickslabs/ontobricks/issues (target _blank).
+2. src/front/templates/home.html
+   Update the bottom credit line to: "OntoBricks is a Databricks Labs project &mdash;
+   the solution is 100% powered by Databricks." with links to https://github.com/databrickslabs
+   and https://www.databricks.com.
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   Contract tests for #navReportIssue navbar placement and the enhanced
+   home credit text and links.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/templates/home.html
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10870 passed, 334 skipped, 8 deselected, 44 warnings in 50.41s

@@ -9,9 +9,9 @@ This is the **workflow** guide. Deep dives live next to it:
 | Dependencies, full test campaign, permissions / SDK | [development.md](development.md) |
 | Code map, layering, logging, error hierarchy | [development.md — Code map](development.md#code-map) |
 | Long-form coding rules and Fowler catalog | [src/.coding_rules.md](../src/.coding_rules.md) |
-| Reviewer pass (numbered gates) | [PR_REVIEW_CHECKLIST.md](../.github/PR_REVIEW_CHECKLIST.md) |
-| Deploy / Databricks Apps | [deployment.md](deployment.md), [Deployment checklist](deployment.md#deployment-checklist) |
-| First-run operator setup | [getting-started.md](getting-started.md) |
+| Reviewer pass (numbered gates) | [PR_REVIEW_CHECKLIST.md](PR_REVIEW_CHECKLIST.md) |
+| Deploy / [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) | [deployment.md](deployment.md), [DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md) |
+| First-run operator setup | [get-started.md](get-started.md) |
 | Changelog format | [changelogs/README.md](../changelogs/README.md) |
 
 GitHub also looks at the repo-root [CONTRIBUTING.md](../CONTRIBUTING.md), which points here.
@@ -111,7 +111,7 @@ uv sync --frozen --extra lakebase
 make install
 ```
 
-Always pass **`--frozen`**. A bare `uv run` / `uv sync` re-resolves against the internal PyPI proxy, rewrites `uv.lock` artifact URLs, and **breaks the next Databricks Apps deploy**. After any `uv` command, `git status` must show `uv.lock` clean unless you intentionally re-locked. See [development.md](development.md) and `.cursor/09-package-management.mdc`.
+Always pass **`--frozen`**. A bare `uv run` / `uv sync` re-resolves against the internal PyPI proxy, rewrites `uv.lock` artifact URLs, and **breaks the next [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) deploy**. After any `uv` command, `git status` must show `uv.lock` clean unless you intentionally re-locked. See [development.md](development.md) and `.cursor/09-package-management.mdc`.
 
 ### Environment
 
@@ -121,7 +121,7 @@ cp .env.example .env
 
 If the workspace blocks PAT generation, leave `DATABRICKS_TOKEN` empty and use CLI auth (`databricks auth login`). The app reads `~/.databrickscfg`; set `DATABRICKS_CONFIG_PROFILE` for a non-default profile.
 
-Operator-facing Databricks, Lakebase, warehouse, and volume setup is in [getting-started.md](getting-started.md).
+Operator-facing Databricks, [Lakebase](https://docs.databricks.com/aws/en/oltp/), warehouse, and volume setup is in [get-started.md](get-started.md).
 
 ### Run locally
 
@@ -269,7 +269,7 @@ Mutating live e2e: `ONTOBRICKS_LIVE_ALLOW_MUTATING=1` — the int workspace is s
 
 ## 10. AI / agent features
 
-Any change under `src/agents/**`, a new MLflow-traced LLM call, or an MCP tool wrapping an agent follows `.cursor/12-ai-feature-lifecycle.mdc`.
+Any change under `src/agents/**`, a new [MLflow](https://docs.databricks.com/aws/en/mlflow/)-traced LLM call, or an MCP tool wrapping an agent follows `.cursor/12-ai-feature-lifecycle.mdc`.
 
 **Required in the PR**
 
@@ -277,7 +277,7 @@ Any change under `src/agents/**`, a new MLflow-traced LLM call, or an MCP tool w
 2. Linked **MLflow eval run URI** in the PR body.
 3. Passing eval (judge ≥ baseline + delta) **or** an explicit reviewer waiver.
 
-SPEC.md and PLAN.md live under gitignored `.planning/` (local author drafts). No new agent without a local SPEC and a committed eval dataset. No prompt/tool tweak without an eval delta. Trace every Foundation Model API path (`@trace_agent` / `@trace_llm` / `@trace_tool` in `src/agents/tracing.py`). Judge model must not be the same endpoint as the agent.
+SPEC.md and PLAN.md live under gitignored `.planning/` (local author drafts). No new agent without a local SPEC and a committed eval dataset. No prompt/tool tweak without an eval delta. Trace every [Foundation Model API](https://docs.databricks.com/aws/en/machine-learning/foundation-model-apis/) path (`@trace_agent` / `@trace_llm` / `@trace_tool` in `src/agents/tracing.py`). Judge model must not be the same endpoint as the agent.
 
 ---
 
@@ -418,7 +418,7 @@ Typical release flow:
 3. Release notes from `changelogs/vX.X.X/` using `releases/ReleaseNotes_V0.2.0.md` as template → `releases/ReleaseNotes_Vx.x.x.md`.
 4. Tag `vX.X.X`, GitHub Release, then deploy (`make deploy` / DAB — [deployment.md](deployment.md)).
 
-Operators on 0.8.x → 0.9: [update_to_0.9.0.md](../update_to_0.9.0.md). Patch notes: [Release notes V0.9.1](../releases/ReleaseNotes_V0.9.1.md).
+Operators on 0.9.x → 0.10: [update_to_0.10.0.md](../update_to_0.10.0.md).
 
 ---
 

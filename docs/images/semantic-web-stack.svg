@@ -8,7 +8,7 @@
       <stop offset="0%" style="stop-color:#3498DB;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#2980B9;stop-opacity:1" />
     </linearGradient>
-    <linearGradient id="swrlGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+    <linearGradient id="ifThenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" style="stop-color:#E74C3C;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#C0392B;stop-opacity:1" />
     </linearGradient>
@@ -69,16 +69,16 @@
     <text x="540" y="238" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Column -> Property</text>
   </g>
   
-  <!-- Arrow R2RML -> SWRL -->
+  <!-- Arrow R2RML -> IF-THEN -->
   <path d="M350 265 L350 280" stroke="#95a5a6" stroke-width="2"/>
   <polygon points="345,275 355,275 350,285" fill="#95a5a6"/>
   
-  <!-- SWRL / Reasoning Layer -->
+  <!-- IF-THEN / Reasoning Layer -->
   <g filter="url(#shadow)">
-    <rect x="50" y="285" width="600" height="100" rx="6" fill="url(#swrlGrad)"/>
-    <text x="350" y="308" text-anchor="middle" font-size="14" font-weight="bold" fill="white">SWRL / OWL 2 RL Reasoning Layer</text>
+    <rect x="50" y="285" width="600" height="100" rx="6" fill="url(#ifThenGrad)"/>
+    <text x="350" y="308" text-anchor="middle" font-size="14" font-weight="bold" fill="white">IF-THEN / OWL 2 RL Reasoning Layer</text>
     <rect x="70" y="316" width="180" height="45" rx="4" fill="white" fill-opacity="0.15"/>
-    <text x="160" y="334" text-anchor="middle" font-size="10" font-weight="600" fill="white">SWRL Rules</text>
+    <text x="160" y="334" text-anchor="middle" font-size="10" font-weight="600" fill="white">IF-THEN Rules</text>
     <text x="160" y="349" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">IF-THEN inference</text>
     
     <rect x="260" y="316" width="180" height="45" rx="4" fill="white" fill-opacity="0.15"/>
@@ -92,7 +92,7 @@
     <text x="350" y="378" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.8)">Automatic inference — rules executed on graph or translated to SQL/Cypher</text>
   </g>
   
-  <!-- Arrow SWRL -> OWL -->
+  <!-- Arrow IF-THEN -> OWL -->
   <path d="M350 385 L350 400" stroke="#95a5a6" stroke-width="2"/>
   <polygon points="345,395 355,395 350,405" fill="#95a5a6"/>
   

@@ -172,9 +172,13 @@ def _get_class_actions(ctx: ToolContext) -> dict:
             uri = item.get("uri") or ""
             if not uri:
                 continue
+            datasets = item.get("datasets") or (
+                [item["dataset"]] if item.get("dataset") else []
+            )
             out[uri] = {
                 "name": item.get("name", ""),
-                "dataset": item.get("dataset"),
+                "datasets": datasets,
+                "dataset": datasets[0] if datasets else None,
                 "bridges": item.get("bridges") or [],
                 "actions": item.get("actions") or [],
             }
@@ -240,9 +244,15 @@ def tool_list_entity_types(ctx: ToolContext, **_kwargs) -> str:
             lines.append(f"  - {name}  ({count:,} instances)")
             lines.append(f"    URI: {uri}")
             actions = class_actions.get(uri) or {}
-            dataset = actions.get("dataset") or {}
-            if dataset.get("fullName"):
-                lines.append(f"    Dataset: {dataset['fullName']}")
+            datasets = actions.get("datasets") or (
+                [actions["dataset"]] if actions.get("dataset") else []
+            )
+            for dataset in datasets:
+                if not dataset.get("fullName"):
+                    continue
+                kind = (dataset.get("type") or "").strip()
+                kind_suffix = f" [{kind}]" if kind else ""
+                lines.append(f"    Dataset: {dataset['fullName']}{kind_suffix}")
                 desc = (dataset.get("description") or "").strip()
                 if desc:
                     lines.append(f"    Description: {desc}")

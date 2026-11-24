@@ -55,7 +55,8 @@ async def get_current_config(
     settings: Settings = Depends(get_settings),
 ):
     """Get current Databricks configuration."""
-    return config_service.build_current_config(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.build_current_config, session_mgr, settings)
 
 
 @router.post("/save")
@@ -370,15 +371,19 @@ async def list_registry_domains(
 
     Non-admin users only see domains they have a role on; admins see all.
     """
-    result = config_service.list_registry_domains_result(
-        session_mgr,
-        settings,
-        user_role=getattr(request.state, "user_role", "") or "",
-    )
-    result["domains"] = filter_visible_domains(
-        request, session_mgr, settings, result.get("domains", [])
-    )
-    return result
+    def _work():
+        result = config_service.list_registry_domains_result(
+            session_mgr,
+            settings,
+            user_role=getattr(request.state, "user_role", "") or "",
+        )
+        result["domains"] = filter_visible_domains(
+            request, session_mgr, settings, result.get("domains", [])
+        )
+        return result
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.get("/registry/bridges")
@@ -387,7 +392,8 @@ async def list_registry_bridges(
     settings: Settings = Depends(get_settings),
 ):
     """List all bridges across every domain in the registry."""
-    return config_service.list_registry_bridges_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.list_registry_bridges_result, session_mgr, settings)
 
 
 @router.delete("/registry/domains/{domain_name}")
@@ -525,8 +531,10 @@ async def import_registry_obx(
     * ``from_github`` -- ``1`` to rebuild and import from the GitHub
       repository (no file; blobs are read at confirm time).
     * ``decisions`` -- JSON string ``[{"name": <folder>,
-      "action": "skip"|"overwrite"|"rename", "new_name": <str>}]``.
-      Missing entries default to ``"skip"``.
+      "action": "skip"|"overwrite"|"add_missing"|"rename",
+      "new_name": <str>}]``. ``overwrite`` and ``add_missing`` both write
+      only versions that do not exist locally. Missing entries default
+      to ``"skip"``.
     """
     form = await request.form()
     from_github = str(form.get("from_github") or "").lower() in ("1", "true", "yes")
@@ -646,8 +654,12 @@ async def get_default_emoji(
     settings: Settings = Depends(get_settings),
 ):
     """Get default emoji setting (instance-global)."""
-    domain = get_domain(session_mgr)
-    return {"success": True, "emoji": resolve_default_emoji(domain, settings)}
+    def _work():
+        domain = get_domain(session_mgr)
+        return {"success": True, "emoji": resolve_default_emoji(domain, settings)}
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.post("/set-default-emoji")
@@ -722,6 +734,8 @@ async def save_ui_branding(
     app_title: str = Form(""),
     primary_color: str = Form(""),
     aurora_color: str = Form(""),
+    button_primary_color: str = Form(""),
+    button_secondary_color: str = Form(""),
     reset_logo: bool = Form(False),
     logo_file: UploadFile | None = File(None),
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -744,6 +758,8 @@ async def save_ui_branding(
         app_title=app_title,
         primary_color=primary_color,
         aurora_color=aurora_color,
+        button_primary_color=button_primary_color,
+        button_secondary_color=button_secondary_color,
         logo_content=logo_content,
         logo_mime=logo_mime,
         reset_logo=reset_logo,
@@ -932,7 +948,8 @@ async def get_analytics_job_enabled(
     settings: Settings = Depends(get_settings),
 ):
     """Get whether oversized graphs may use the serverless analytics job."""
-    return config_service.get_analytics_job_enabled_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.get_analytics_job_enabled_result, session_mgr, settings)
 
 
 @router.post("/save-analytics-job-enabled")
@@ -1136,7 +1153,8 @@ async def teams_matrix(
     settings: Settings = Depends(get_settings),
 ):
     """Return the Teams matrix payload: domains, principals, and assignments."""
-    return config_service.build_teams_matrix_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.build_teams_matrix_result, session_mgr, settings)
 
 
 @router.post(
@@ -1170,7 +1188,8 @@ async def get_delta_warehouse(
     settings: Settings = Depends(get_settings),
 ):
     """Return the Delta SQL-warehouse selection + registry location."""
-    return config_service.get_delta_warehouse_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.get_delta_warehouse_result, session_mgr, settings)
 
 
 @router.get("/triple-store/databricks-health")
@@ -1203,7 +1222,8 @@ async def get_graph_engine_config(
     settings: Settings = Depends(get_settings),
 ):
     """Return the engine-specific JSON configuration."""
-    return config_service.get_graph_engine_config_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.get_graph_engine_config_result, session_mgr, settings)
 
 
 @router.get("/graph-engine/lakebase-health")
@@ -1327,7 +1347,10 @@ async def get_graph_engine_neo4j_health(
         )
 
 
-@router.post("/graph-engine/neo4j-drop-label")
+@router.post(
+    "/graph-engine/neo4j-drop-label",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def post_graph_engine_neo4j_drop_label(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -1456,7 +1479,10 @@ async def get_graph_engine_lakebase_sync_objects(
         )
 
 
-@router.post("/graph-engine/drop-uc-object")
+@router.post(
+    "/graph-engine/drop-uc-object",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def post_graph_engine_drop_uc_object(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -1475,7 +1501,10 @@ async def post_graph_engine_drop_uc_object(
         )
 
 
-@router.post("/graph-engine/lakebase-drop-object")
+@router.post(
+    "/graph-engine/lakebase-drop-object",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def post_graph_engine_lakebase_drop_object(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -1584,7 +1613,8 @@ async def list_schedules(
     settings: Settings = Depends(get_settings),
 ):
     """Return every schedule, of every task type, plus the type catalogue."""
-    return config_service.list_schedules_result(session_mgr, settings)
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(config_service.list_schedules_result, session_mgr, settings)
 
 
 @router.post("/schedules")
@@ -1692,6 +1722,76 @@ async def get_all_analytics_runs(
     """
     return config_service.get_all_analytics_runs_result(
         session_mgr, settings, folder=domain or None, limit=limit, offset=offset
+    )
+
+
+@router.get("/runs/community")
+async def get_all_community_runs(
+    domain: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of community-detection runs across every domain (newest-first).
+
+    Backs the Community tab of Settings → Automation → Runs. Only Detect runs
+    are recorded (completed or failed); spans every version.
+    """
+    return config_service._all_runs_result(
+        "community",
+        session_mgr,
+        settings,
+        folder=domain or None,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/runs/patterns")
+async def get_all_pattern_runs(
+    domain: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of pattern-detection runs across every domain (newest-first).
+
+    Backs the Patterns tab of Settings → Automation → Runs. Only Detect runs
+    are recorded (completed or failed); spans every version.
+    """
+    return config_service._all_runs_result(
+        "pattern",
+        session_mgr,
+        settings,
+        folder=domain or None,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/runs/simulation")
+async def get_all_simulation_runs(
+    domain: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of simulation runs across every domain (newest-first).
+
+    Backs the Simulation tab of Settings → Automation → Runs (moved from
+    Intelligence → Simulation → Runs). Spans every version; ``domain`` is
+    optional.
+    """
+    return config_service._all_runs_result(
+        "simulation",
+        session_mgr,
+        settings,
+        folder=domain or None,
+        limit=limit,
+        offset=offset,
     )
 
 

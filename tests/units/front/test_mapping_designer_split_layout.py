@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 MAPPING_DESIGN_TEMPLATE = (
     REPO_ROOT / "src/front/templates/partials/mapping/_mapping_design.html"
 )
-MAPPING_PAGE_TEMPLATE = REPO_ROOT / "src/front/templates/mapping.html"
+MAPPING_PAGE_TEMPLATE = REPO_ROOT / "src/front/templates/dtwin.html"
 SHARED_PANELS_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-shared-panels.css"
 MAPPING_CSS = REPO_ROOT / "src/front/static/global/css/mapping.css"
 MAPPING_DESIGN_CSS = REPO_ROOT / "src/front/static/mapping/css/mapping-design.css"
@@ -45,9 +45,10 @@ def test_mapping_designer_template_uses_column_split_shell():
         r'<div[^>]*class="[^"]*\bob-split-shell\b[^"]*\bob-split-shell--column\b[^"]*"[^>]*id="mappingDesignerContainer"',
         html,
     )
+    # Top content pane is the Visual|List host — not the nested canvas wrapper.
     assert re.search(
-        r'<div[^>]*id="mappingMapCard"[^>]*class="[^"]*\bob-split-pane\b|'
-        r'<div[^>]*class="[^"]*\bob-split-pane\b[^"]*"[^>]*id="mappingMapCard"',
+        r'<div[^>]*id="mappingStudioMainPane"[^>]*class="[^"]*\bob-split-pane\b|'
+        r'<div[^>]*class="[^"]*\bob-split-pane\b[^"]*"[^>]*id="mappingStudioMainPane"',
         html,
     )
     assert re.search(
@@ -59,6 +60,27 @@ def test_mapping_designer_template_uses_column_split_shell():
         r'<div[^>]*id="mappingRightPanel"[^>]*class="[^"]*\bmapping-right-panel\b[^"]*\bob-split-pane\b|'
         r'<div[^>]*class="[^"]*\bmapping-right-panel\b[^"]*\bob-split-pane\b[^"]*"[^>]*id="mappingRightPanel"',
         html,
+    )
+
+
+def test_studio_main_pane_flex_fills_above_bottom_panel():
+    """Visual and List share one bottom pane pinned to the shell bottom."""
+    css = _read(MAPPING_DESIGN_CSS)
+    main = _block(css, "#mappingStudioMainPane")
+    assert _declaration(main, "flex") in {"1", "1 1 0", "1 1 0%", "1 1 auto"} or (
+        _declaration(main, "flex-grow") == "1"
+    )
+    assert _declaration(main, "min-height") == "0"
+    assert _declaration(main, "display") == "flex"
+    assert _declaration(main, "flex-direction") == "column"
+
+    active = _block(css, "#mappingStudioTabContent > .tab-pane.active")
+    assert _declaration(active, "display") == "flex !important" or (
+        _declaration(active, "display") == "flex"
+    )
+    assert _declaration(active, "flex-direction") == "column"
+    assert _declaration(active, "flex") in {"1", "1 1 0", "1 1 0%", "1 1 auto"} or (
+        _declaration(active, "flex-grow") == "1"
     )
 
 

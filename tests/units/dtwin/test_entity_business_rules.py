@@ -1,4 +1,4 @@
-"""Entity business rules: SWRL rules referenced from a class and triggered on one entity."""
+"""Entity business rules: IF-THEN rules referenced from a class and triggered on one entity."""
 
 import sys
 from types import SimpleNamespace
@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from back.core.errors import NotFoundError, ValidationError
-from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
+from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import ShaclFlatSqlBackend
 from back.core.w3c.owl.OntologyGenerator import OntologyGenerator
 from back.core.w3c.owl.OntologyParser import OntologyParser
 from back.objects.digitaltwin import NodeBusinessRuleService, NodeContextService
@@ -24,9 +24,15 @@ VIP_RULE = {
     "antecedent": "Customer(?c) ^ hasOrder(?c, ?o) ^ Order(?o)",
     "consequent": "VIP(?c)",
 }
+POINTS_RULE = {
+    "name": "ActiveContract100Points",
+    "description": "Active contract grants 100 loyalty points",
+    "antecedent": "Customer(?c)",
+    "consequent": "loyaltypoints(?c, 100)",
+}
 ORDER_RULE = {
     "name": "FlagOrder",
-    "antecedent": "Order(?o) ^ amount(?o, ?a) ^ swrlb:greaterThan(?a, 100)",
+    "antecedent": "Order(?o) ^ amount(?o, ?a) ^ builtin:greaterThan(?a, 100)",
     "consequent": "BigOrder(?o)",
 }
 PERSON_RULE = {
@@ -41,7 +47,11 @@ CLASSES = [
         "name": "Customer",
         "uri": "https://example.com/Customer",
         "parent": "Person",
-        "business_rules": [{"name": "VipCustomer"}, {"name": "Gone"}],
+        "business_rules": [
+            {"name": "VipCustomer"},
+            {"name": "ActiveContract100Points"},
+            {"name": "Gone"},
+        ],
     },
     {"name": "Order", "uri": "https://example.com/Order"},
 ]
@@ -51,9 +61,9 @@ CLASSES = [
 # Rule <-> class matching
 
 
-def test_swrl_rule_classes_lists_unary_unprefixed_atoms():
-    assert Rules.swrl_rule_classes(VIP_RULE) == {"customer", "order", "vip"}
-    assert Rules.swrl_rule_classes(ORDER_RULE) == {"order", "bigorder"}
+def test_if_then_rule_classes_lists_unary_unprefixed_atoms():
+    assert Rules.if_then_rule_classes(VIP_RULE) == {"customer", "order", "vip"}
+    assert Rules.if_then_rule_classes(ORDER_RULE) == {"order", "bigorder"}
 
 
 def test_rules_for_class_includes_ancestor_rules():
@@ -68,9 +78,9 @@ def test_rules_for_class_matches_consequent_only_class():
 
 
 def test_focus_variables_follow_lineage():
-    assert Rules.swrl_focus_variables(VIP_RULE, ["Customer", "Person"]) == ["?c"]
-    assert Rules.swrl_focus_variables(PERSON_RULE, ["Customer", "Person"]) == ["?p"]
-    assert Rules.swrl_focus_variables(ORDER_RULE, ["Customer"]) == []
+    assert Rules.if_then_focus_variables(VIP_RULE, ["Customer", "Person"]) == ["?c"]
+    assert Rules.if_then_focus_variables(PERSON_RULE, ["Customer", "Person"]) == ["?p"]
+    assert Rules.if_then_focus_variables(ORDER_RULE, ["Customer"]) == []
 
 
 # ---------------------------------------------------------------------------
@@ -116,14 +126,14 @@ def _params(**extra):
 
 
 def test_inference_sql_unchanged_without_focus():
-    tr = SWRLSQLTranslator()
+    tr = ShaclFlatSqlBackend()
     assert tr.build_inference_sql("t", _params()) == tr.build_inference_sql(
         "t", _params(focus=None)
     )
 
 
 def test_inference_sql_adds_escaped_focus_predicate():
-    sql = SWRLSQLTranslator().build_inference_sql(
+    sql = ShaclFlatSqlBackend().build_inference_sql(
         "t", _params(focus={"vars": ["?c"], "uri": "https://x/C'1"})
     )
     assert "(a1.subject = 'https://x/C''1')" in sql
@@ -137,13 +147,13 @@ def test_inference_sql_ors_multiple_focus_vars():
         "base_uri": BASE,
         "focus": {"vars": ["?a", "?b"], "uri": "u"},
     }
-    sql = SWRLSQLTranslator().build_inference_sql("t", rule)
+    sql = ShaclFlatSqlBackend().build_inference_sql("t", rule)
     assert "(a1.subject = 'u' OR a3.subject = 'u')" in sql
 
 
 def test_inference_sql_none_when_focus_var_unbound():
     assert (
-        SWRLSQLTranslator().build_inference_sql(
+        ShaclFlatSqlBackend().build_inference_sql(
             "t", _params(focus={"vars": ["?zz"], "uri": "u"})
         )
         is None
@@ -161,7 +171,11 @@ def _domain(rules=None):
         domain_folder="c360",
         current_version="1",
         ontology={"base_uri": BASE, "classes": CLASSES},
-        swrl_rules=rules if rules is not None else [VIP_RULE, PERSON_RULE],
+        if_then_rules=(
+            rules
+            if rules is not None
+            else [VIP_RULE, POINTS_RULE, PERSON_RULE]
+        ),
         get_classes=lambda: CLASSES,
     )
 
@@ -215,6 +229,7 @@ class _FakeStore:
         self.rows = rows
         self.queries = []
         self.inserted = []
+        self.deleted_pairs = []
 
     def sql_table_reference(self, table_name):
         return "g"
@@ -226,6 +241,10 @@ class _FakeStore:
     def insert_triples(self, table_name, triples):
         self.inserted.extend(triples)
         return len(triples)
+
+    def delete_subject_predicate(self, table_name, pairs):
+        self.deleted_pairs.extend(pairs)
+        return len(pairs)
 
 
 async def test_run_business_rule_scopes_inference_and_materialises(monkeypatch):
@@ -273,6 +292,35 @@ async def test_run_business_rule_without_new_facts_writes_nothing(monkeypatch):
     assert store.inserted == []
 
 
+async def test_run_business_rule_materialises_literal_set_attribute(monkeypatch):
+    """Set-attribute consequents (literal objects) must be written, not URI-filtered away."""
+    rows = [
+        {
+            "subject": ENTITY,
+            "predicate": BASE + "loyaltypoints",
+            "object": "100",
+        }
+    ]
+    store = _FakeStore(rows)
+    _patch_store(monkeypatch, store)
+
+    result = await NodeContextService.run_business_rule(
+        _domain(),
+        object(),
+        entity_uri=ENTITY,
+        rule_name="ActiveContract100Points",
+    )
+
+    assert result["inferred_count"] == 1
+    assert result["materialized_count"] == 1
+    assert store.inserted == rows
+    # Replace semantics: clear prior (s, p, *) before inserting the new literal.
+    assert store.deleted_pairs == [
+        {"subject": ENTITY, "predicate": BASE + "loyaltypoints"}
+    ]
+    assert result["triples"][0]["object"] == "100"
+
+
 async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
     live = _FakeStore([])
     sandbox_store = _FakeStore(
@@ -295,7 +343,7 @@ async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
             self.store = sandbox_store
             self.table = "g__sim_sim1"
 
-        def seed_focus_for_swrl(self, uri, hops=2):
+        def seed_focus_for_if_then(self, uri, hops=2):
             seeded.append((uri, hops))
 
         def ensure_explorer_views(self, live_union):
@@ -315,7 +363,7 @@ async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
             assert table == "g__sim_sim1"
             self._store = store
 
-        def run_swrl_rules(self, rule_names=None, focus=None):
+        def run_if_then_rules(self, rule_names=None, focus=None):
             assert focus["uri"] == ENTITY
             return SimpleNamespace(
                 inferred_triples=[
@@ -334,10 +382,10 @@ async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
             self._store.insert_triples("g__sim_sim1", rows)
             return len(rows)
 
-    monkeypatch.setattr("back.objects.simulation.Simulation", FakeSim)
-    monkeypatch.setattr("back.objects.simulation.Sandbox", FakeSandbox)
+    monkeypatch.setattr("back.objects.intelligence.Simulation", FakeSim)
+    monkeypatch.setattr("back.objects.intelligence.Sandbox", FakeSandbox)
     monkeypatch.setattr(
-        "back.objects.simulation.Reasoning",
+        "back.objects.intelligence.Reasoning",
         FakeSimReasoning,
     )
     monkeypatch.setattr(

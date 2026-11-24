@@ -227,6 +227,7 @@ class FindResponse(BaseModel):
 
 class NodeContextDataset(BaseModel):
     fullName: str
+    type: Optional[str] = None
     key_column: Optional[str] = None
     key_column_missing: Optional[bool] = None
     description: Optional[str] = None
@@ -259,7 +260,7 @@ class NodeContextAction(BaseModel):
 
 
 class NodeContextBusinessRule(BaseModel):
-    """A SWRL rule declared on the node's ontology class, runnable on the node."""
+    """A IF-THEN rule declared on the node's ontology class, runnable on the node."""
 
     name: str
     description: Optional[str] = None
@@ -296,6 +297,7 @@ class NodeContextResponse(BaseModel):
     entity_uri: str = ""
     entity_local_id: str = ""
     class_name: Optional[str] = None
+    datasets: Optional[List[NodeContextDataset]] = None
     dataset: Optional[NodeContextDataset] = None
     bridges: Optional[List[NodeContextBridge]] = None
     actions: Optional[List[NodeContextAction]] = None
@@ -311,8 +313,8 @@ class NodeActionRequest(BaseModel):
         ...,
         description="UC function FQN (catalog.schema.function) or job:<job_id>",
     )
-    domain_name: Optional[str] = Field(None, description="Domain name in the registry")
-    domain_version: Optional[str] = Field(None, description="Domain version to load")
+    domain_name: Optional[str] = Field(None, description="Context name in the registry")
+    domain_version: Optional[str] = Field(None, description="Context version to load")
     registry_catalog: Optional[str] = None
     registry_schema: Optional[str] = None
     registry_volume: Optional[str] = None
@@ -336,9 +338,9 @@ class NodeActionResponse(BaseModel):
 
 class NodeBusinessRuleRequest(BaseModel):
     entity_uri: str = Field(..., description="Instance URI of the node to apply the rule to")
-    rule: str = Field(..., description="Name of a SWRL business rule declared on the class")
-    domain_name: Optional[str] = Field(None, description="Domain name in the registry")
-    domain_version: Optional[str] = Field(None, description="Domain version to load")
+    rule: str = Field(..., description="Name of an IF-THEN business rule declared on the class")
+    domain_name: Optional[str] = Field(None, description="Context name in the registry")
+    domain_version: Optional[str] = Field(None, description="Context version to load")
     registry_catalog: Optional[str] = None
     registry_schema: Optional[str] = None
     registry_volume: Optional[str] = None
@@ -387,17 +389,11 @@ class DataQualityStartedResponse(BaseModel):
 
 class InferenceRequest(BaseModel):
     tbox: bool = Field(True, description="Run T-Box (OWL 2 RL) inference")
-    swrl: bool = Field(True, description="Run SWRL rule execution")
+    if_then: bool = Field(True, description="Run IF-THEN rule execution")
     graph: bool = Field(True, description="Run graph-structural reasoning")
     constraints: bool = Field(True, description="Run constraint checks")
-    decision_tables: bool = Field(
-        False, description="Run DMN-style decision table rules"
-    )
     sparql_rules: bool = Field(
         False, description="Run SPARQL CONSTRUCT inference rules"
-    )
-    aggregate_rules: bool = Field(
-        False, description="Run aggregate (GROUP BY/HAVING) rules"
     )
     append_graph: bool = Field(
         False,
@@ -434,7 +430,7 @@ class InferenceResultResponse(BaseModel):
 @router.get(
     "/registry",
     summary="Get registry configuration",
-    description="Return the domain registry location (catalog.schema.volume). "
+    description="Return the context registry location (catalog.schema.volume). "
     "Reads from the current session if available, otherwise from "
     "environment variables (REGISTRY_CATALOG, REGISTRY_SCHEMA, REGISTRY_VOLUME).",
 )
@@ -469,12 +465,12 @@ async def dt_status(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -576,12 +572,12 @@ async def dt_stats(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -691,12 +687,12 @@ async def dt_build(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -812,8 +808,8 @@ async def dt_build_progress(task_id: str):
     description="Search for entities by type and/or label text, then traverse "
     "their relationships up to N levels deep (BFS graph walk). "
     "Returns all triples discovered during traversal. "
-    "Query param ``cache`` (true/false) overrides the domain Search cache "
-    "switch; omitted uses the domain policy.",
+    "Query param ``cache`` (true/false) overrides the context Search cache "
+    "switch; omitted uses the context policy.",
 )
 async def dt_triples_find(
     request: Request,
@@ -825,17 +821,17 @@ async def dt_triples_find(
     cache: Optional[str] = Query(
         None,
         description="true/false: force search companions on or off. "
-        "Omitted uses Domain → General → Backend Search cache.",
+        "Omitted uses Configuration → Backend → Search cache.",
     ),
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -974,12 +970,12 @@ async def dt_triples(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1081,12 +1077,12 @@ async def dt_dataquality_start(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1118,17 +1114,17 @@ async def dt_dataquality_start(
         shapes = [s for s in shapes if s.get("category") == body.category]
     shapes = [s for s in shapes if s.get("enabled", True)]
 
-    swrl_rules = domain.swrl_rules or []
+    if_then_rules = domain.if_then_rules or []
     ontology_dict = getattr(domain, "ontology", None)
     if not isinstance(ontology_dict, dict):
         ontology_dict = (
             domain._data.get("ontology", {}) if hasattr(domain, "_data") else {}
         )
 
-    if not shapes and not swrl_rules:
+    if not shapes and not if_then_rules:
         return DataQualityStartedResponse(
             success=False,
-            message="No enabled shapes or SWRL rules to check"
+            message="No enabled shapes or IF-THEN rules to check"
             + (f" (category={body.category})" if body.category else ""),
         )
 
@@ -1138,7 +1134,7 @@ async def dt_dataquality_start(
             "The triple-store VIEW is not available. Build the Knowledge Graph first."
         )
 
-    total = len(shapes) + len(swrl_rules)
+    total = len(shapes) + len(if_then_rules)
     domain_snap = DigitalTwin.make_snapshot(domain)
 
     tm = get_task_manager()
@@ -1157,7 +1153,7 @@ async def dt_dataquality_start(
             shapes,
             triplestore_table,
             total,
-            swrl_rules=swrl_rules,
+            if_then_rules=if_then_rules,
             ontology_dict=ontology_dict,
             use_exception_message_on_failure=True,
         )
@@ -1197,9 +1193,9 @@ async def dt_dataquality_progress(task_id: str):
     "/inference/start",
     response_model=InferenceStartedResponse,
     summary="Run inference",
-    description="Start OWL 2 RL inference, SWRL rule execution, graph reasoning, "
-    "constraint checking, SHACL inference rules, decision tables, "
-    "SPARQL CONSTRUCT rules, and aggregate rules as an asynchronous task. "
+    description="Start OWL 2 RL inference, Simple (IF/THEN, SHACL-AF) rules, "
+    "graph reasoning, constraint checking, and Complex (SPARQL CONSTRUCT) "
+    "rules as an asynchronous task. "
     "Each phase can be toggled on or off. Optionally append inferred "
     "triples to the knowledge graph via ``append_graph``. "
     "Returns a task_id to poll.",
@@ -1209,12 +1205,12 @@ async def dt_inference_start(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1245,12 +1241,10 @@ async def dt_inference_start(
 
     options = {
         "tbox": body.tbox,
-        "swrl": body.swrl,
+        "if_then": body.if_then,
         "graph": body.graph,
         "constraints": body.constraints,
-        "decision_tables": body.decision_tables,
         "sparql_rules": body.sparql_rules,
-        "aggregate_rules": body.aggregate_rules,
         "append_graph": body.append_graph,
         "materialize": body.materialize,
         "materialize_table": (body.materialize_table or "").strip(),
@@ -1275,7 +1269,7 @@ async def dt_inference_start(
 
     threading.Thread(target=_run, daemon=True).start()
 
-    enabled = [k for k in ("tbox", "swrl", "graph", "constraints") if options.get(k)]
+    enabled = [k for k in ("tbox", "if_then", "graph", "constraints") if options.get(k)]
     return InferenceStartedResponse(
         success=True,
         task_id=task.id,
@@ -1292,19 +1286,19 @@ async def dt_inference_start(
     "/inference/results",
     response_model=InferenceResultResponse,
     summary="Get inference results (stub)",
-    description="Inference results are not persisted in the domain session. "
+    description="Inference results are not persisted in the context session. "
     "Poll ``GET /digitaltwin/inference/{task_id}`` for the completed run payload.",
 )
 async def dt_inference_results(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1533,7 +1527,7 @@ def _resolve_cohort_context(
     "/cohorts/rules",
     response_model=CohortRulesResponse,
     summary="List saved cohort rules",
-    description="Return every cohort rule saved on the active domain. "
+    description="Return every cohort rule saved on the active context. "
     "Each entry includes the full rule payload so callers can re-run, "
     "preview, or materialise without a second round-trip.",
     tags=["Cohort"],
@@ -1542,12 +1536,12 @@ async def dt_cohort_list_rules(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1602,12 +1596,12 @@ async def dt_cohort_get_rule(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1656,12 +1650,12 @@ async def dt_cohort_dry_run(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1715,12 +1709,12 @@ async def dt_cohort_materialize(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_version", "project_version"),
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -1801,7 +1795,7 @@ async def dt_cohort_materialize(
     summary="Complete node context (dataset + bridges + virtual attributes)",
     description="Resolve the ontology class for an entity URI and return linked "
     "dataset metadata (with optional row retrieval), bridge definitions "
-    "(with optional cross-domain entity traversal) and the virtual attributes "
+    "(with optional cross-context entity traversal) and the virtual attributes "
     "declared on the class (with optional on-demand computation).",
 )
 async def dt_nodes_context(
@@ -1810,17 +1804,17 @@ async def dt_nodes_context(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry",
+        description="Context name in the registry",
     ),
     domain_version: Optional[str] = Query(None),
     fetch_dataset_rows: bool = Query(False, description="Fetch rows from the linked UC table/view"),
     dataset_row_limit: int = Query(5, ge=1, le=20, description="Max rows to return (1–20)"),
-    follow_bridges: bool = Query(False, description="Traverse bridge target domains"),
+    follow_bridges: bool = Query(False, description="Traverse bridge target contexts"),
     bridge_depth: int = Query(
         1,
         ge=1,
         le=5,
-        description="Bridge traversal depth (BFS hops in the target domain graph)",
+        description="Bridge traversal depth (BFS hops in the target context graph)",
     ),
     compute_virtual_attributes: bool = Query(
         False,
@@ -1903,10 +1897,10 @@ async def dt_nodes_action(
     "/nodes/business-rule",
     response_model=NodeBusinessRuleResponse,
     response_model_exclude_none=True,
-    summary="Trigger a SWRL business rule on a node",
-    description="Run one of the SWRL business rules declared on the node's "
+    summary="Trigger an IF-THEN business rule on a node",
+    description="Run one of the IF-THEN business rules declared on the node's "
     "ontology class, restricted to that node, and write the inferred triples "
-    "to the graph. Requires the Builder role on the domain. Only rules "
+    "to the graph. Requires the Builder role on the context. Only rules "
     "declared on the resolved class may be triggered.",
 )
 async def dt_nodes_business_rule(
@@ -1945,7 +1939,7 @@ async def dt_nodes_business_rule(
     "class, one of its ancestors, or no class, against that entity only. "
     "Each facet reports pass, fail, not_applicable, not_evaluated or error, "
     "with the values the entity carries on the constrained property. "
-    "Read-only; shapes are always read from the domain.",
+    "Read-only; shapes are always read from the context.",
 )
 async def dt_nodes_shacl(
     request: Request,
@@ -1953,7 +1947,7 @@ async def dt_nodes_shacl(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry",
+        description="Context name in the registry",
     ),
     domain_version: Optional[str] = Query(None),
     registry_catalog: Optional[str] = Query(None),
@@ -2007,7 +2001,7 @@ async def dt_nodes_virtual_attributes(
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
-        description="Domain name in the registry",
+        description="Context name in the registry",
     ),
     domain_version: Optional[str] = Query(None),
     registry_catalog: Optional[str] = Query(None),

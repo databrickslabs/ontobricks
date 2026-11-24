@@ -106,13 +106,13 @@ class TestGetOntologyInfo:
                 "properties": [{"name": "p"}],
             },
             "constraints": [{"type": "c"}],
-            "swrl_rules": [{"rule": "r"}],
+            "if_then_rules": [{"rule": "r"}],
         }
         info = get_ontology_info(data)
         assert info["statistics"]["class_count"] == 1
         assert info["statistics"]["property_count"] == 1
         assert len(info["constraints"]) == 1
-        assert len(info["swrl_rules"]) == 1
+        assert len(info["if_then_rules"]) == 1
 
     def test_empty(self):
         info = get_ontology_info({})

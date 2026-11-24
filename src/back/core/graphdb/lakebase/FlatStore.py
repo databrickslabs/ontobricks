@@ -24,6 +24,7 @@ from itertools import islice
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from back.core.graphdb.adjacency import expand_and_fetch_sql
+from back.core.graphdb.lakebase.InferredBreakdownMixin import InferredBreakdownMixin
 from back.core.errors import InfrastructureError, ValidationError
 from back.core.graphdb.lakebase import _adjacency_ddl
 from back.core.graphdb.lakebase import _companion_ddl
@@ -101,7 +102,7 @@ def _reraise_lakebase_index_limit(
     ) from exc
 
 
-class FlatStore(Base):
+class FlatStore(InferredBreakdownMixin, Base):
     """Flat-model triple store on Lakebase Postgres.
 
     In ``app_managed`` mode, one physical table per logical graph name lives

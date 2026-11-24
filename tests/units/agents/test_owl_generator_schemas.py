@@ -505,9 +505,40 @@ class TestFieldLevelDoubleEncodingTolerance:
         result = schemas.parse_attributes_payload(payload)
         assert result["attributes"][0]["label"] == "orderDate"
 
+    def test_attributes_field_double_encoded_page_object_is_unwrapped(self):
+        # Live residual shape (Claude under response_format): the list field
+        # holds a JSON *string* of the whole page object, not a bare array.
+        # This is exactly the ``output must contain a 'attributes' list``
+        # failure seen on Ontology Generate complete.
+        page = {
+            "attributes": [
+                {"label": "orderDate", "domain": "cand-6", "datatype": "xsd:date"}
+            ],
+            "has_more": True,
+        }
+        payload = json.dumps({"attributes": json.dumps(page)})
+        result = schemas.parse_attributes_payload(payload)
+        assert result["attributes"][0]["label"] == "orderDate"
+        assert result["has_more"] is True
+
     def test_relations_field_double_encoded_string_is_unwrapped(self):
         inner = [{"label": "placesOrder", "domain": "cls-Customer-a1", "range": "cand-6"}]
         payload = json.dumps({"relations": json.dumps(inner)})
+        result = schemas.parse_relations_payload(payload)
+        assert result["relations"][0]["label"] == "placesOrder"
+
+    def test_relations_field_double_encoded_page_object_is_unwrapped(self):
+        page = {
+            "relations": [
+                {
+                    "label": "placesOrder",
+                    "domain": "cls-Customer-a1",
+                    "range": "cand-6",
+                }
+            ],
+            "has_more": False,
+        }
+        payload = json.dumps({"relations": json.dumps(page)})
         result = schemas.parse_relations_payload(payload)
         assert result["relations"][0]["label"] == "placesOrder"
 
@@ -516,6 +547,117 @@ class TestFieldLevelDoubleEncodingTolerance:
         payload = json.dumps({"axioms": json.dumps(inner)})
         result = schemas.parse_axioms_payload(payload)
         assert result["axioms"][0]["kind"] == "subClassOf"
+
+    def test_axioms_field_double_encoded_page_object_is_unwrapped(self):
+        page = {
+            "axioms": [
+                {
+                    "kind": "subClassOf",
+                    "subject": "cand-6",
+                    "object": "cls-Customer-a1",
+                }
+            ],
+            "has_more": False,
+        }
+        payload = json.dumps({"axioms": json.dumps(page)})
+        result = schemas.parse_axioms_payload(payload)
+        assert result["axioms"][0]["kind"] == "subClassOf"
+
+    def test_axioms_grouped_by_kind_dict_is_flattened(self):
+        # Live residual shape on the axioms substage (prompt lists three
+        # kinds): the ``axioms`` field arrives as a dict whose values are
+        # lists grouped by kind, not a single list. This is the
+        # ``output must contain a 'axioms' list`` failure seen on Ontology
+        # Generate complete.
+        grouped = {
+            "subClassOf": [
+                {"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}
+            ],
+            "disjointWith": [
+                {"kind": "disjointWith", "subject": "cand-6", "object": "cand-7"}
+            ],
+        }
+        payload = json.dumps({"axioms": grouped})
+        result = schemas.parse_axioms_payload(payload)
+        kinds = {a["kind"] for a in result["axioms"]}
+        assert kinds == {"subClassOf", "disjointWith"}
+
+    def test_axioms_grouped_by_kind_dict_promotes_has_more(self):
+        grouped = {
+            "subClassOf": [
+                {"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}
+            ],
+            "has_more": True,
+        }
+        payload = json.dumps({"axioms": grouped})
+        result = schemas.parse_axioms_payload(payload)
+        assert result["axioms"][0]["kind"] == "subClassOf"
+        assert result["has_more"] is True
+
+    def test_axioms_grouped_by_kind_as_json_string_is_flattened(self):
+        # Same grouped-by-kind shape but the field is a JSON-encoded
+        # string (the double-encoding quirk on top of the grouping).
+        grouped = {
+            "subClassOf": [
+                {"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}
+            ],
+            "disjointWith": [
+                {"kind": "disjointWith", "subject": "cand-6", "object": "cand-7"}
+            ],
+        }
+        payload = json.dumps({"axioms": json.dumps(grouped)})
+        result = schemas.parse_axioms_payload(payload)
+        kinds = {a["kind"] for a in result["axioms"]}
+        assert kinds == {"subClassOf", "disjointWith"}
+
+    def test_relations_grouped_by_kind_dict_is_flattened(self):
+        grouped = {
+            "objectProperties": [
+                {"label": "placesOrder", "domain": "cls-Customer-a1", "range": "cand-6"}
+            ],
+            "dataProperties": [
+                {"label": "hasName", "domain": "cls-Customer-a1", "range": "cand-6"}
+            ],
+        }
+        payload = json.dumps({"relations": grouped})
+        result = schemas.parse_relations_payload(payload)
+        labels = {r["label"] for r in result["relations"]}
+        assert labels == {"placesOrder", "hasName"}
+
+    def test_attributes_grouped_by_kind_dict_is_flattened(self):
+        grouped = {
+            "dates": [
+                {"label": "orderDate", "domain": "cand-6", "datatype": "xsd:date"}
+            ],
+            "strings": [
+                {"label": "name", "domain": "cand-6", "datatype": "xsd:string"}
+            ],
+        }
+        payload = json.dumps({"attributes": grouped})
+        result = schemas.parse_attributes_payload(payload)
+        labels = {a["label"] for a in result["attributes"]}
+        assert labels == {"orderDate", "name"}
+
+    def test_axioms_plain_dict_page_rewrap_is_unwrapped(self):
+        # Page-object re-wrap arriving as a real (non-string) dict.
+        page = {
+            "axioms": [
+                {"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}
+            ],
+            "has_more": False,
+        }
+        payload = json.dumps({"axioms": page})
+        result = schemas.parse_axioms_payload(payload)
+        assert result["axioms"][0]["kind"] == "subClassOf"
+
+    def test_axioms_non_grouped_dict_is_still_rejected(self):
+        # A dict whose values are NOT all lists (e.g. a single axiom object
+        # passed as the field value) is not silently reinterpreted — the
+        # diagnostic log fires and the caller rejects it.
+        single = {"kind": "subClassOf", "subject": "cand-6", "object": "cls-Customer-a1"}
+        payload = json.dumps({"axioms": single})
+        with pytest.raises(schemas.SchemaValidationError):
+            schemas.parse_axioms_payload(payload)
 
     def test_detection_candidate_entities_field_double_encoded_string_is_unwrapped(self):
         inner = [{"canonical_label": "Carrier"}]
@@ -594,6 +736,87 @@ class TestAttributesResponseFormat:
         assert item["properties"]["domain"]["enum"] == ["cand-6", "cls-Customer-a1"]
         assert item["additionalProperties"] is False
         assert set(item["required"]) == {"label", "domain", "datatype", "evidence"}
+
+
+class TestCompletionHasMoreFlag:
+    """Paged Stage-3 completion (issue #173): every page must carry
+    ``has_more`` so the orchestrator can stop without implying a boundary.
+    """
+
+    @pytest.mark.parametrize(
+        "builder",
+        [
+            schemas.build_relations_response_format,
+            schemas.build_attributes_response_format,
+            schemas.build_axioms_response_format,
+        ],
+    )
+    def test_response_format_requires_boolean_has_more(self, builder):
+        schema = builder({"cand-6"})["json_schema"]["schema"]
+        assert schema["properties"]["has_more"] == {"type": "boolean"}
+        assert "has_more" in schema["required"]
+
+    def test_parse_attributes_reads_native_bool(self):
+        payload = json.dumps(
+            {
+                "attributes": [
+                    {"label": "x", "domain": "cand-6", "datatype": "xsd:string"}
+                ],
+                "has_more": True,
+            }
+        )
+        assert schemas.parse_attributes_payload(payload)["has_more"] is True
+
+    def test_parse_attributes_coerces_stringified_bool(self):
+        # Endpoints under response_format occasionally stringify booleans
+        # the same way they double-encode lists.
+        payload = json.dumps(
+            {
+                "attributes": [
+                    {"label": "x", "domain": "cand-6", "datatype": "xsd:string"}
+                ],
+                "has_more": "true",
+            }
+        )
+        assert schemas.parse_attributes_payload(payload)["has_more"] is True
+        payload_false = json.dumps(
+            {
+                "attributes": [
+                    {"label": "x", "domain": "cand-6", "datatype": "xsd:string"}
+                ],
+                "has_more": "FALSE",
+            }
+        )
+        assert schemas.parse_attributes_payload(payload_false)["has_more"] is False
+
+    def test_parse_missing_has_more_is_single_page(self):
+        payload = json.dumps(
+            {
+                "relations": [
+                    {
+                        "label": "handles",
+                        "domain": "cand-6",
+                        "range": "cls-Customer-a1",
+                    }
+                ]
+            }
+        )
+        assert schemas.parse_relations_payload(payload)["has_more"] is False
+
+    def test_parse_axioms_returns_has_more(self):
+        payload = json.dumps(
+            {
+                "axioms": [
+                    {
+                        "kind": "subClassOf",
+                        "subject": "cand-6",
+                        "object": "cls-Customer-a1",
+                    }
+                ],
+                "has_more": False,
+            }
+        )
+        assert schemas.parse_axioms_payload(payload)["has_more"] is False
 
 
 class TestAxiomsResponseFormat:

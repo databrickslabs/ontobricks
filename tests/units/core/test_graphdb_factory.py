@@ -54,8 +54,10 @@ class TestGraphBackend:
 
     def test_get_query_translator_default(self):
         translator = _concrete_backend().get_query_translator()
-        from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
-        assert isinstance(translator, SWRLSQLTranslator)
+        from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import (
+            ShaclFlatSqlBackend,
+        )
+        assert isinstance(translator, ShaclFlatSqlBackend)
 
 
 class TestGraphDBFactory:

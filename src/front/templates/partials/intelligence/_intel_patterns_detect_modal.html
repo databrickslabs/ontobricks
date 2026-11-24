@@ -1,0 +1,86 @@
+<div class="modal fade" id="patDetectModal" tabindex="-1" aria-labelledby="patDetectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="patDetectForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="patDetectModalLabel">
+                        <i class="bi bi-search me-2"></i>Detect patterns
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="patClassFilter">Entity</label>
+                        <select class="form-select" id="patClassFilter" required>
+                            <option value="" selected>Select an entity type…</option>
+                        </select>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label d-flex align-items-center" for="patHops">
+                                Hops
+                                <i class="bi bi-info-circle ms-1 pat-form-info"
+                                   role="button"
+                                   tabindex="0"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="top"
+                                   title="Maximum graph traversal distance (1–5) from the anchor entity across relationships."
+                                   aria-label="Hops info"></i>
+                            </label>
+                            <input type="number" class="form-control" id="patHops" min="1" max="5" value="3">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label d-flex align-items-center" for="patBins">
+                                Numeric bins
+                                <i class="bi bi-info-circle ms-1 pat-form-info"
+                                   role="button"
+                                   tabindex="0"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="top"
+                                   title="Number of quantile buckets (2–32) used to discretize continuous numbers into ranges (e.g. bin 1/8 to 8/8). Enables discovering patterns over numeric properties like amount or age."
+                                   aria-label="Numeric bins info"></i>
+                            </label>
+                            <input type="number" class="form-control" id="patBins" min="2" max="32" value="8">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label d-flex align-items-center" for="patMinSupport">
+                                Min support
+                                <i class="bi bi-info-circle ms-1 pat-form-info"
+                                   role="button"
+                                   tabindex="0"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="top"
+                                   title="Minimum number of entities that must share this exact neighbourhood shape for it to be counted as a pattern. Lower values find rare structures; higher values keep only dominant ones."
+                                   aria-label="Min support info"></i>
+                            </label>
+                            <input type="number" class="form-control" id="patMinSupport" min="1" value="3">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label d-flex align-items-center" for="patRefineTop">
+                                Refine top-N
+                                <i class="bi bi-info-circle ms-1 pat-form-info"
+                                   role="button"
+                                   tabindex="0"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="top"
+                                   title="Post-processing consolidation (0 = disabled). Collapses near-duplicate shapes among the top N candidates into unified motif templates."
+                                   aria-label="Refine top-N info"></i>
+                            </label>
+                            <input type="number" class="form-control" id="patRefineTop" min="0" value="0">
+                        </div>
+                    </div>
+                    <p class="form-text small mb-0 mt-3 text-muted">
+                        Discovery runs on Databricks. Save keeps a snapshot of the matching entities in Unity Catalog; the graph is not changed.
+                    </p>
+                    <div id="patJobStatus" class="alert alert-warning small py-2 px-2 mt-2 mb-0 d-none" role="status"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="patDetectRunBtn">
+                        <i class="bi bi-search me-1"></i>Detect
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

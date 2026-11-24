@@ -28,11 +28,13 @@ from back.objects.digitaltwin.node.NodeBusinessRuleService import (
     BUSINESS_RULES_FEATURE,
     NodeBusinessRuleService,
 )
+from back.objects.digitaltwin.node.NodeDatasetService import NodeDatasetService
 from back.objects.digitaltwin.node.NodeShaclService import NodeShaclService
 from back.objects.digitaltwin.node.VirtualAttributeService import (
     VIRTUAL_ATTRIBUTES_FEATURE,
     VirtualAttributeService,
 )
+from back.objects.ontology.ClassModel import ClassModel
 
 logger = get_logger(__name__)
 
@@ -383,7 +385,7 @@ class NodeContextService:
 
         disabled = NodeContextService.context_feature_disabled
         class_name = matched_cls.get("name", "")
-        raw_dataset = matched_cls.get("dataset") or None
+        raw_datasets = ClassModel.normalize_datasets(matched_cls)
         raw_bridges = matched_cls.get("bridges") or []
         actions_out = (
             []
@@ -394,7 +396,7 @@ class NodeContextService:
             []
             if disabled(context_policy, BUSINESS_RULES_FEATURE)
             else NodeBusinessRuleService.class_entries(
-                matched_cls, NodeBusinessRuleService.domain_swrl_rules(domain)
+                matched_cls, NodeBusinessRuleService.domain_if_then_rules(domain)
             )
         )
 
@@ -412,13 +414,13 @@ class NodeContextService:
             else:
                 virtual_out = VirtualAttributeService.class_entries(matched_cls)
 
-        dataset_out: Optional[Dict[str, Any]] = None
+        datasets_out: List[Dict[str, Any]] = []
         fetch_error: Optional[str] = None
         if not disabled(context_policy, "dataset"):
-            dataset_out, fetch_error = await NodeContextService._resolve_dataset(
+            datasets_out, fetch_error = await NodeDatasetService.resolve_datasets(
                 domain,
                 settings,
-                raw_dataset=raw_dataset,
+                raw_datasets=raw_datasets,
                 local_id=local_id,
                 entity_uri=entity_uri,
                 fetch_dataset_rows=fetch_dataset_rows,
@@ -441,23 +443,19 @@ class NodeContextService:
             )
 
         logger.info(
-            "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d "
+            "nodes/context: entity=%s class=%s domain=%s datasets=%d bridges=%d "
             "actions=%d business_rules=%d virtual=%d computed=%s",
-            local_id, class_name, dname,
-            bool(dataset_out),
-            len(bridges_out),
-            len(actions_out),
-            len(business_rules_out),
-            len(virtual_out),
+            local_id, class_name, dname, len(datasets_out), len(bridges_out),
+            len(actions_out), len(business_rules_out), len(virtual_out),
             compute_virtual_attributes,
         )
-
         return {
             "success": True,
             "entity_uri": entity_uri,
             "entity_local_id": local_id,
             "class_name": class_name,
-            "dataset": dataset_out,
+            "datasets": datasets_out or None,
+            "dataset": datasets_out[0] if datasets_out else None,  # back-compat
             "bridges": bridges_out or None,
             "actions": actions_out or None,
             "business_rules": business_rules_out or None,
@@ -493,7 +491,7 @@ class NodeContextService:
             context_policy, VIRTUAL_ATTRIBUTES_FEATURE
         ):
             raise ValidationError(
-                "Virtual attributes are disabled for this domain by its MCP policy"
+                "Virtual attributes are disabled for this context by its MCP policy"
             )
 
         local_id = DigitalTwin.extract_local_id(entity_uri)
@@ -541,7 +539,7 @@ class NodeContextService:
         """
         if NodeContextService.context_feature_disabled(context_policy, "actions"):
             raise ValidationError(
-                "Actions are disabled for this domain by its MCP policy"
+                "Actions are disabled for this context by its MCP policy"
             )
 
         local_id = DigitalTwin.extract_local_id(entity_uri)
@@ -614,7 +612,7 @@ class NodeContextService:
             context_policy, BUSINESS_RULES_FEATURE
         ):
             raise ValidationError(
-                "Business rules are disabled for this domain by its MCP policy"
+                "Business rules are disabled for this context by its MCP policy"
             )
         matched_cls = NodeContextService.match_ontology_class(
             entity_uri, domain.get_classes() or []
@@ -626,7 +624,7 @@ class NodeContextService:
             (
                 e
                 for e in NodeBusinessRuleService.class_entries(
-                    matched_cls, NodeBusinessRuleService.domain_swrl_rules(domain)
+                    matched_cls, NodeBusinessRuleService.domain_if_then_rules(domain)
                 )
                 if e["name"] == requested
             ),
@@ -649,7 +647,7 @@ class NodeContextService:
         context_policy: Optional[Dict[str, str]] = None,
         simulation_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Trigger a class-declared SWRL business rule on *entity_uri*.
+        """Trigger a class-declared IF-THEN business rule on *entity_uri*.
 
         A domain that disabled the ``business_rules`` context element refuses
         every execution, independently of whether the
@@ -678,70 +676,6 @@ class NodeContextService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def _resolve_dataset(
-        domain: Any,
-        settings: Any,
-        *,
-        raw_dataset: Optional[Dict[str, Any]],
-        local_id: str,
-        entity_uri: str,
-        fetch_dataset_rows: bool,
-        dataset_row_limit: int,
-    ) -> Any:
-        if not raw_dataset or not raw_dataset.get("fullName"):
-            return None, None
-
-        full_name = raw_dataset.get("fullName", "")
-        if not full_name or not _SAFE_SQL_IDENT.match(full_name):
-            raise ValidationError(
-                f"Invalid dataset fullName in class config: {full_name!r}"
-            )
-
-        key_col = raw_dataset.get("key_column")
-        if key_col and not _SAFE_COL_IDENT.match(key_col):
-            raise ValidationError(
-                f"Invalid key_column in class config: {key_col!r}"
-            )
-
-        rows = None
-        key_col_missing = None
-        fetch_error: Optional[str] = None
-
-        if fetch_dataset_rows:
-            if not key_col:
-                key_col_missing = True
-            else:
-                try:
-                    client_db = get_data_plane_client(domain, settings)
-                    if client_db is None:
-                        fetch_error = "Databricks client is not configured"
-                        rows = []
-                    else:
-                        sql = (
-                            f"SELECT * FROM {raw_dataset['fullName']} "
-                            f"WHERE {key_col} = '{sql_escape(local_id)}' "
-                            f"LIMIT {dataset_row_limit}"
-                        )
-                        result = await run_blocking(client_db.execute_query, sql)
-                        rows = result if isinstance(result, list) else []
-                except Exception as exc:
-                    fetch_error = str(exc)
-                    rows = []
-                    logger.warning(
-                        "nodes/context: dataset row fetch failed for %s: %s",
-                        entity_uri,
-                        exc,
-                    )
-
-        dataset_out = {
-            "fullName": raw_dataset["fullName"],
-            "key_column": key_col,
-            "key_column_missing": key_col_missing,
-            "description": (raw_dataset.get("description") or "").strip() or None,
-            "rows": rows,
-        }
-        return dataset_out, fetch_error
-
     @staticmethod
     async def _resolve_bridges(
         *,

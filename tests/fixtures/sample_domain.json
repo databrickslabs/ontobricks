@@ -18,7 +18,7 @@
           {"uri": "http://test.org/ontology#hasOrder", "name": "hasOrder", "label": "has Order", "type": "ObjectProperty", "domain": "Customer", "range": "Order"}
         ],
         "constraints": [],
-        "swrl_rules": [],
+        "if_then_rules": [],
         "axioms": [],
         "expressions": []
       },

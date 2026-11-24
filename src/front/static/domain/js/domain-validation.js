@@ -1,43 +1,158 @@
 /**
  * OntoBricks - domain-validation.js
  * Populates the Project Validation dashboard.
+ *
+ * Context → General loads in three parallel slices (overview / documents /
+ * graph) so ontology and mapping paint immediately while the slower UC and
+ * Lakebase checks keep their own section spinners.
  */
 
-function hideValidationLoadingOverlay() {
-    const overlay = document.getElementById('validationLoadingOverlay');
-    if (overlay) overlay.style.display = 'none';
+var _validationState = {};
+
+function _toggleBoxLoading(spinnerId, contentId, badgeId, isLoading) {
+    const sp = document.getElementById(spinnerId);
+    const ct = document.getElementById(contentId);
+    const bg = document.getElementById(badgeId);
+    if (sp) sp.classList.toggle('d-none', !isLoading);
+    if (ct) ct.classList.toggle('d-none', isLoading);
+    if (bg && isLoading) {
+        bg.className = 'badge bg-secondary';
+        bg.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;" role="status" aria-hidden="true"></span>';
+    }
+}
+
+function showValidationSectionSpinners() {
+    const banner = document.getElementById('domainHealthBanner');
+    if (banner) {
+        banner.className = 'validation-health-banner mb-4 health-loading';
+        banner.innerHTML =
+            '<span id="domainHealthBannerSpinner" class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>' +
+            '<div>Checking context health…</div>';
+    }
+
+    // Top tiles: inline spinner inside each tile's status container
+    [
+        'metadataTileStatus',
+        'documentsTileStatus',
+        'versionsTileStatus',
+        'currentVersionTileStatus',
+        'activeVersionTileStatus'
+    ].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.innerHTML = '<span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>';
+        }
+    });
+
+    // Middle detail cards: spinner inside each card body + badge
+    _toggleBoxLoading('ontologyEntitiesSpinner', 'ontologyEntitiesContent', 'ontologyValidationBadge', true);
+    _toggleBoxLoading('ontologyRelSpinner', 'ontologyRelContent', 'ontologyRelValidationBadge', true);
+    _toggleBoxLoading('mappingEntitiesSpinner', 'mappingEntitiesContent', 'mappingValidationBadge', true);
+    _toggleBoxLoading('mappingRelSpinner', 'mappingRelContent', 'mappingRelValidationBadge', true);
+    _toggleBoxLoading('mappingCompletionSpinner', 'mappingCompletionContent', 'mappingCompletionBadge', true);
+
+    // Knowledge Graph card: spinner inside card body + badge
+    _toggleBoxLoading('dtwinValidationSpinner', 'dtwinValidationContent', 'dtwinValidationBadge', true);
+}
+
+async function fetchValidationPart(part) {
+    const response = await fetch(
+        '/validate/detailed?parts=' + encodeURIComponent(part),
+        { credentials: 'same-origin' }
+    );
+    const data = await response.json();
+    if (!response.ok || data.success === false) {
+        throw new Error((data && (data.detail || data.error || data.message)) || ('HTTP ' + response.status));
+    }
+    return data;
+}
+
+function applyValidationOverview(data) {
+    Object.assign(_validationState, data);
+
+    // Reveal card contents before drawing gauges so dimensions are valid
+    _toggleBoxLoading('ontologyEntitiesSpinner', 'ontologyEntitiesContent', null, false);
+    _toggleBoxLoading('ontologyRelSpinner', 'ontologyRelContent', null, false);
+    _toggleBoxLoading('mappingEntitiesSpinner', 'mappingEntitiesContent', null, false);
+    _toggleBoxLoading('mappingRelSpinner', 'mappingRelContent', null, false);
+    _toggleBoxLoading('mappingCompletionSpinner', 'mappingCompletionContent', null, false);
+
+    updateWarehouseTile(data);
+    updateOntologyTile(data);
+    updateMappingTile(data);
+    updateMetadataTile(data);
+    updateVersionTiles(data);
+    updateOntologyCard(data);
+    updateMappingCard(data);
+    updateMissingItems(data);
+
+    // Health still waits for the graph slice when present; otherwise paint now.
+    if (_validationState.dtwin) {
+        updateHealthBanner(_validationState);
+    }
+}
+
+function applyValidationDocuments(data) {
+    Object.assign(_validationState, data);
+    updateDocumentsTile(data);
+}
+
+function applyValidationGraph(data) {
+    Object.assign(_validationState, data);
+    _toggleBoxLoading('dtwinValidationSpinner', 'dtwinValidationContent', null, false);
+    updateDtwinTile(data);
+    updateDtwinCard(data);
+    if (_validationState.ontology_valid !== undefined) {
+        updateHealthBanner(_validationState);
+    }
 }
 
 async function loadValidationDetails() {
-    try {
-        const response = await fetch('/validate/detailed', { credentials: 'same-origin' });
-        const data = await response.json();
-
-        updateHealthBanner(data);
-        updateWarehouseTile(data);
-        updateOntologyTile(data);
-        updateMappingTile(data);
-        updateDtwinTile(data);
-        updateMetadataTile(data);
-        updateDocumentsTile(data);
-        updateVersionTiles(data);
-        updateOntologyCard(data);
-        updateMappingCard(data);
-        updateDtwinCard(data);
-        updateMissingItems(data);
-        loadGraphMetricsSummary();
-        loadMaterializedInferenceCount();
-    } catch (error) {
-        console.error('Error loading validation:', error);
-        const banner = document.getElementById('domainHealthBanner');
-        if (banner) {
-            banner.style.display = '';
-            banner.className = 'validation-health-banner health-error mb-4';
-            banner.innerHTML = '<i class="bi bi-exclamation-triangle health-icon"></i><div>Error loading validation status: ' + error.message + '</div>';
-        }
-    } finally {
-        hideValidationLoadingOverlay();
-    }
+    _validationState = {};
+    showValidationSectionSpinners();
+    const tasks = [
+        fetchValidationPart('overview')
+            .then(applyValidationOverview)
+            .catch(function (error) {
+                console.error('Error loading validation overview:', error);
+                _toggleBoxLoading('ontologyEntitiesSpinner', 'ontologyEntitiesContent', null, false);
+                _toggleBoxLoading('ontologyRelSpinner', 'ontologyRelContent', null, false);
+                _toggleBoxLoading('mappingEntitiesSpinner', 'mappingEntitiesContent', null, false);
+                _toggleBoxLoading('mappingRelSpinner', 'mappingRelContent', null, false);
+                _toggleBoxLoading('mappingCompletionSpinner', 'mappingCompletionContent', null, false);
+                const banner = document.getElementById('domainHealthBanner');
+                if (banner) {
+                    banner.className = 'validation-health-banner health-error mb-4';
+                    banner.innerHTML =
+                        '<i class="bi bi-exclamation-triangle health-icon"></i>' +
+                        '<div>Error loading validation status: ' + error.message + '</div>';
+                }
+            }),
+        fetchValidationPart('documents')
+            .then(applyValidationDocuments)
+            .catch(function (error) {
+                console.error('Error loading documents tile:', error);
+                setTile('documentsTile', 'muted', 'Unavailable');
+            }),
+        fetchValidationPart('graph')
+            .then(applyValidationGraph)
+            .catch(function (error) {
+                console.error('Error loading graph validation:', error);
+                _toggleBoxLoading('dtwinValidationSpinner', 'dtwinValidationContent', null, false);
+                setTile('dtwinTile', 'danger', 'Unavailable');
+                const badge = document.getElementById('dtwinValidationBadge');
+                if (badge) {
+                    badge.className = 'badge bg-danger';
+                    badge.textContent = 'Error';
+                }
+                if (_validationState.ontology_valid !== undefined) {
+                    updateHealthBanner(_validationState);
+                }
+            }),
+    ];
+    await Promise.all(tasks);
+    loadGraphMetricsSummary();
+    loadMaterializedInferenceCount();
 }
 
 async function loadMaterializedInferenceCount() {
@@ -126,7 +241,7 @@ function updateHealthBanner(data) {
     if (ready && dtwin.indicator === 'green' && hasWarehouse) {
         banner.className = 'validation-health-banner health-ready mb-4';
         banner.innerHTML = '<i class="bi bi-check-circle-fill health-icon"></i>' +
-            '<div><strong>Domain fully operational</strong> — Ontology, Mapping, Warehouse and Knowledge Graph are all healthy.</div>';
+            '<div><strong>Context fully operational</strong> — Ontology, Mapping, Warehouse and Knowledge Graph are all healthy.</div>';
         return;
     }
 
@@ -429,18 +544,15 @@ function updateMappingCard(data) {
 function _dtBadge(flag, okText, failText, unknownText) {
     var s = 'style="font-size:.65rem;"';
     if (flag === true)
-        return '<span class="badge bg-success bg-opacity-10 text-success border border-success" ' + s + '><i class="bi bi-check-circle-fill me-1"></i>' + okText + '</span>';
+        return '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" ' + s + '><i class="bi bi-check-circle-fill text-success me-1"></i>' + okText + '</span>';
     if (flag === false)
-        return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + failText + '</span>';
-    return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
+        return '<span class="badge bg-secondary-subtle text-secondary-emphasis border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + failText + '</span>';
+    return '<span class="badge bg-secondary-subtle text-secondary-emphasis border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
 }
 
 function _formatTimestamp(iso) {
     if (!iso) return null;
-    try {
-        var d = new Date(iso);
-        return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch (_) { return iso; }
+    return formatDateTime(iso);
 }
 
 function updateDtwinCard(data) {
@@ -613,12 +725,12 @@ function updateDtwinCard(data) {
         var psTblExistsEl = document.getElementById('psDtLakebaseTableExists');
         if (psTblExistsEl) {
             if (dt.lakebase_table_exists === true) {
-                psTblExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
+                psTblExistsEl.innerHTML = '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size:.65rem;"><i class="bi bi-check-circle-fill text-success me-1"></i>Exists</span>';
             } else if (dt.lakebase_table_exists === false) {
-                psTblExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                psTblExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             } else {
                 // null/undefined → live probe could not reach Lakebase
-                psTblExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+                psTblExistsEl.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
                 var psSp = psTblExistsEl.querySelector('span');
                 if (psSp) psSp.title = dt.lakebase_check_error
                     ? String(dt.lakebase_check_error)
@@ -628,14 +740,14 @@ function updateDtwinCard(data) {
         var psUcExistsEl = document.getElementById('psDtLakebaseSyncedUcExists');
         if (psUcExistsEl) {
             if (dt.lakebase_synced_uc_exists === true) {
-                psUcExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
+                psUcExistsEl.innerHTML = '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size:.65rem;"><i class="bi bi-check-circle-fill text-success me-1"></i>Exists</span>';
             } else if (dt.lakebase_synced_uc_exists === false) {
-                psUcExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                psUcExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             } else if (hasUcName) {
                 // name is configured but existence probe didn't return yet / failed
-                psUcExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+                psUcExistsEl.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
             } else {
-                psUcExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+                psUcExistsEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary-emphasis border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
             }
         }
     }
@@ -672,13 +784,13 @@ function updateMissingItems(data) {
 
     entitiesList.innerHTML = unmappedEntities.length > 0
         ? unmappedEntities.map(function(e) {
-            return '<li class="list-group-item d-flex justify-content-between align-items-center py-1"><span><i class="bi bi-box text-muted me-1"></i> ' + (e.label || e.name) + '</span><a href="/mapping/" class="btn btn-outline-primary btn-sm py-0">Assign</a></li>';
+            return '<li class="list-group-item d-flex justify-content-between align-items-center py-1"><span><i class="bi bi-box text-muted me-1"></i> ' + (e.label || e.name) + '</span><a href="/dtwin/?section=design" class="btn btn-outline-primary btn-sm py-0">Assign</a></li>';
         }).join('')
         : '<li class="list-group-item text-success py-1"><i class="bi bi-check me-1"></i> All entities assigned</li>';
 
     relationshipsList.innerHTML = unmappedRelationships.length > 0
         ? unmappedRelationships.map(function(r) {
-            return '<li class="list-group-item d-flex justify-content-between align-items-center py-1"><span><i class="bi bi-arrow-left-right text-muted me-1"></i> ' + (r.label || r.name) + '</span><a href="/mapping/" class="btn btn-outline-primary btn-sm py-0">Assign</a></li>';
+            return '<li class="list-group-item d-flex justify-content-between align-items-center py-1"><span><i class="bi bi-arrow-left-right text-muted me-1"></i> ' + (r.label || r.name) + '</span><a href="/dtwin/?section=design" class="btn btn-outline-primary btn-sm py-0">Assign</a></li>';
         }).join('')
         : '<li class="list-group-item text-success py-1"><i class="bi bi-check me-1"></i> All relationships assigned</li>';
 }

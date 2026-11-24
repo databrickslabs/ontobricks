@@ -1,11 +1,11 @@
 # Examples
 
-These walkthroughs take you from raw tables to an explorable graph viewer. Each one can be completed in 15–30 minutes.
+These walkthroughs take you from raw tables to an explorable graph viewer, then to Intelligence. Each one can be completed in 15–30 minutes.
 
 | Example | Difficulty | What you'll learn |
 |---------|-----------|-------------------|
-| [Family Tree](#example-family-tree-ontology-mapping) | Beginner | One entity, two relationships — the simplest end-to-end flow |
-| [Customer Journey](#example-customer-journey-ontology-energy-provider) | Intermediate | 10 tables, complex relationships, visual Studio, advanced SPARQL |
+| [Family Tree](#example-family-tree-ontology-mapping) | Beginner | One entity, two relationships — the simplest end-to-end flow, then Communities / a Scenario |
+| [Customer Journey](#example-customer-journey-ontology-energy-provider) | Intermediate | 10 tables, visual Studio, SPARQL, then Analytics, Communities, Patterns, Scenarios |
 
 <!-- toc -->
 **Contents**
@@ -28,6 +28,7 @@ These walkthroughs take you from raw tables to an explorable graph viewer. Each 
   - [Step 2: Map Data Assets](#step-2-map-data-assets)
   - [Step 3: Explore the Data (Knowledge Graph)](#step-3-explore-the-data-knowledge-graph)
   - [Graph Viewer](#graph-viewer)
+  - [Intelligence (after the graph is built)](#intelligence-after-the-graph-is-built)
   - [Reference](#reference)
 <!-- /toc -->
 
@@ -115,7 +116,7 @@ foaf:gender a rdfs:Property .
    Catalog: main
    Schema: default
    ```
-3. Click "Add assets"
+3. Click **Add Data Asset**, pick the catalog and schema in the dialog, check the table and click **Add 1 asset**
 4. You should see `person` in the table list
 
 #### Step 3: Create Entity Mapping
@@ -406,6 +407,10 @@ unzip d2rq-0.8.1.zip
 3. **Include lifecycle events**: births, marriages, deaths
 4. **Connect to other ontologies**: Use FOAF, Schema.org
 5. **Build a visualization**: Create a family tree visualization from the RDF data
+6. **Intelligence**: After Build, open Intelligence **Home**, run
+   **Communities** on `Person` (family clusters), optionally **Patterns**
+   (Hops 1–2), or a **Scenario** that **Sets** a parent link — see
+   [Intelligence](intelligence.md)
 
 ### Summary
 
@@ -414,7 +419,8 @@ This example demonstrated:
 - Creating class mappings for ontology classes
 - Defining relationship mappings for object properties
 - Generating W3C-compliant R2RML
-- Exploring the resulting graph viewer through the Knowledge Graph Graph Viewer
+- Exploring the resulting graph viewer through Graph → Explorer
+- Optional Intelligence: Communities on `Person`, or a parent-link Scenario
 
 The same approach can be applied to any relational database schema and target ontology.
 
@@ -533,7 +539,7 @@ Click **Auto Layout** to organize the diagram, then **Center** to fit the view.
 
 #### Entity Mappings
 
-Go to **Mapping → Map** and click on each entity to map:
+Go to **Graph → Management → Mapping** and click on each entity to map:
 
 ##### Customer Entity
 
@@ -587,7 +593,7 @@ WHERE status = 'active'
 
 #### Relationship Mappings
 
-In **Mapping → Map**, click on each relationship to map:
+In **Graph → Management → Mapping**, click on each relationship to map:
 
 ##### hasContract
 
@@ -678,6 +684,28 @@ After synchronization, switch to the **Graph Viewer** tab to see an interactive 
 - **Click**: Select a node to see all its attributes, values, and relationships in the detail panel
 - **Find**: Search for specific entities by name or URI
 - **Filters**: Narrow down the graph by entity type, field, and relationship depth
+
+### Intelligence (after the graph is built)
+
+With the customer-journey graph built, open **Intelligence** (full guide:
+[Intelligence](intelligence.md)):
+
+1. **Home** — tiles for Configuration, Discovery and Simulation; Starter Guide
+   in the resources strip.
+2. **Analytics** — Run Analysis scoped to *Customer*. PageRank should surface
+   high-volume customers; betweenness may highlight customers that sit between
+   call-centre and contract clusters.
+3. **Communities** — Detect, then Materialize. Explorer **View** can colour
+   customers by cluster (for example a “high-touch” neighbourhood of callers
+   and claims).
+4. **Patterns** — New → Entity *Customer*, Hops 2. Read **Coverage**, the
+   bar chart, then a residential vs business neighbourhood diagram and
+   **Matching entities**.
+5. **Cohorts** — optional: an explainable *business customers on this
+   substation* rule, then Preview / Materialise.
+6. **Scenarios** — From Explorer, **Simulate from here** on one Customer.
+   **Set** a contract tariff and Run. **Compare → Evaluate** asks the same
+   question to live vs sandbox (for example *which rebate applies?*).
 
 ---
 

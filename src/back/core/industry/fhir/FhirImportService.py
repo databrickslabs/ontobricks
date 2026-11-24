@@ -674,7 +674,7 @@ class FhirImportService:
 
         Returns:
             dict with keys: success, message, ontology_info, classes, properties,
-            constraints, swrl_rules, axioms, expressions, stats, failed.
+            constraints, if_then_rules, axioms, expressions, stats, failed.
         """
         if not domain_keys:
             raise ValidationError("No FHIR domains selected.")
@@ -728,7 +728,7 @@ class FhirImportService:
             "classes": mapped["classes"],
             "properties": mapped["properties"],
             "constraints": [],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "axioms": [],
             "expressions": [],
             "stats": {**stats, "modules_fetched": 1, "modules_failed": 0},

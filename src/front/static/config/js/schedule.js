@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('scheduleDomain').disabled = false;
         const ruleSel = document.getElementById('scheduleCohortRule');
         ruleSel.disabled = true;
-        ruleSel.innerHTML = '<option value="">Select a domain first</option>';
+        ruleSel.innerHTML = '<option value="">Select a context first</option>';
         rulesById = {};
         document.getElementById('scheduleIntervalValue').value = '1';
         document.getElementById('scheduleIntervalUnit').value = 'hours';
@@ -264,7 +264,7 @@ document.addEventListener('DOMContentLoaded', function () {
             resetVersionSelect();
             const ruleSel = document.getElementById('scheduleCohortRule');
             ruleSel.disabled = true;
-            ruleSel.innerHTML = '<option value="">Select a domain first</option>';
+            ruleSel.innerHTML = '<option value="">Select a context first</option>';
         }
     });
 
@@ -308,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function resetReasoningFields() {
         TYPES.reasoning.applyConfig({
-            phases: { tbox: true, swrl: true, graph: true },
+            phases: { tbox: true, if_then: true, graph: true },
             materialize_graph: true,
             materialize_delta: false,
             materialize_table: '',
@@ -384,7 +384,7 @@ document.addEventListener('DOMContentLoaded', function () {
             let html = '<div class="table-responsive">' +
                 '<table class="table table-sm table-hover align-middle mb-0">' +
                 '<thead><tr>' +
-                    '<th class="ps-3" style="width:22%;">Domain</th>' +
+                    '<th class="ps-3" style="width:22%;">Context</th>' +
                     '<th style="width:18%;">Type</th>' +
                     '<th>Details</th>' +
                     '<th style="width:11rem;">Frequency</th>' +
@@ -595,7 +595,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function loadDomainsForModal() {
         const select = document.getElementById('scheduleDomain');
-        select.innerHTML = '<option value="">Loading domains...</option>';
+        select.innerHTML = '<option value="">Loading contexts...</option>';
         try {
             const resp = await fetch('/settings/registry/domains', { credentials: 'same-origin' });
             const data = await resp.json();
@@ -624,7 +624,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const intervalMinutes = unitValueToMinutes();
 
         if (!domainName) {
-            showNotification('Please select a domain', 'warning');
+            showNotification('Please select a context', 'warning');
             return;
         }
         if (needsTarget(taskType) && !targetKey) {
@@ -855,16 +855,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function formatAbsoluteTime(isoStr) {
-        try {
-            const d = new Date(isoStr);
-            const pad = n => String(n).padStart(2, '0');
-            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
-            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
-                   pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) +
-                   ' (' + tz + ')';
-        } catch {
-            return isoStr;
-        }
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
+        return formatDateTime(isoStr) + ' (' + tz + ')';
     }
 
     function formatRelativeTime(isoStr) {

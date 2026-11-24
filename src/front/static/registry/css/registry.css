@@ -62,7 +62,7 @@
 
 .bridges-domain-card {
     border: 1px solid var(--bs-border-color);
-    border-radius: 0.5rem;
+    border-radius: var(--db-radius-card);
     margin-bottom: 1rem;
     overflow: hidden;
 }
@@ -133,7 +133,7 @@
     margin-bottom: 1rem;
     padding: 0.6rem 1rem;
     background: #ffffff;
-    border-radius: 0.5rem;
+    border-radius: var(--db-radius-card);
     font-size: 0.85rem;
 }
 
@@ -192,7 +192,7 @@
     flex: 1;
     min-height: 0;
     border: 1px solid var(--bs-border-color);
-    border-radius: 0.75rem;
+    border-radius: var(--db-radius-card);
     overflow: hidden;
     background:
         #ffffff;
@@ -204,7 +204,7 @@
     display: block;
 }
 
-/* Domain group bubbles */
+/* Context group bubbles */
 
 .bridges-domain-group circle {
     pointer-events: none;

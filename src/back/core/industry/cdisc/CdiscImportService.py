@@ -688,7 +688,7 @@ class CdiscImportService:
             classes = mapped["classes"]
             properties = mapped["properties"]
             constraints: List[Dict] = []
-            swrl_rules: List[Dict] = []
+            if_then_rules: List[Dict] = []
             axioms: List[Dict] = []
             expressions: List[Dict] = []
 
@@ -718,7 +718,7 @@ class CdiscImportService:
                 classes,
                 properties,
                 constraints,
-                swrl_rules,
+                if_then_rules,
                 axioms,
                 expressions,
                 _groups,
@@ -767,7 +767,7 @@ class CdiscImportService:
             "classes": classes,
             "properties": properties,
             "constraints": constraints,
-            "swrl_rules": swrl_rules,
+            "if_then_rules": if_then_rules,
             "axioms": axioms,
             "expressions": expressions,
             "stats": stats,

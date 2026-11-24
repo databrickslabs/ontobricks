@@ -1,0 +1,443 @@
+"""Background execution of one simulation run (TaskManager thread body)."""
+
+from __future__ import annotations
+
+import datetime as _dt
+import time
+from typing import Any, Dict, Optional
+
+from back.core.errors import InfrastructureError, OntoBricksError
+from back.core.helpers import effective_graph_name, extract_local_name, is_uri
+from back.core.logging import get_logger
+from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+from back.objects.intelligence.Artifacts import Artifacts
+from back.objects.intelligence.Diff import Diff
+from back.objects.intelligence.Patch import Patch
+from back.objects.intelligence.Reasoning import Reasoning
+from back.objects.intelligence.Sandbox import Sandbox
+from back.objects.intelligence.Spec import Spec
+
+logger = get_logger(__name__)
+
+
+def _now_iso() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+
+class Runner:
+    """Scope → seed sandbox → apply patches → reason → diff → persist.
+
+    Everything except the initial scope read happens inside the sandbox
+    table; the live graph is never written.
+    """
+
+    def __init__(
+        self,
+        *,
+        tm: Any,
+        task_id: str,
+        settings: Any,
+        domain_snap: Any,
+        registry: Any,
+        folder: str,
+        version: str,
+        spec: Spec,
+        owner: str = "",
+        cohort_rule: Optional[Dict[str, Any]] = None,
+        get_store: Any = None,
+    ) -> None:
+        self._tm = tm
+        self._task_id = task_id
+        self._settings = settings
+        self._domain = domain_snap
+        self._registry = registry
+        self._folder = folder
+        self._version = version
+        self._spec = spec
+        self._owner = owner
+        self._cohort_rule = cohort_rule
+        self._get_store = get_store
+
+    def _entry(self, status: str, **extra: Any) -> Dict[str, Any]:
+        entry = {
+            "id": self._spec.id,
+            "label": self._spec.label,
+            "status": status,
+            "spec": self._spec.to_dict(),
+            "owner": self._owner,
+            "task_id": self._task_id,
+        }
+        entry.update(extra)
+        return entry
+
+    def _progress(self, pct: int, msg: str) -> None:
+        self._tm.update_progress(self._task_id, pct, msg)
+
+    def _is_current_run(self) -> bool:
+        row = self._registry.load_simulation(self._folder, self._version, self._spec.id)
+        return bool(row) and str(row.get("task_id") or "") == str(self._task_id)
+
+    def _live_store(self) -> Any:
+        if self._get_store is not None:
+            return self._get_store(self._domain, self._settings)
+        from back.core.graphdb import get_graphdb
+
+        return get_graphdb(self._domain, self._settings)
+
+    def _hypothesis_uris(self) -> list:
+        return list(
+            dict.fromkeys(
+                uri
+                for p in self._sandbox_patches()
+                for uri in (p.subject, p.object)
+                if uri and is_uri(uri)
+            )
+        )
+
+    def _sandbox_patches(self) -> list[Patch]:
+        """Resolve ontology predicate URIs to the R2RML data namespace.
+
+        The fact picker supplies ontology URIs (normally ``...#hascontract``),
+        while mapped triples use ``.../hascontract``. Applying the raw URI
+        creates a disconnected sandbox edge that IF-THEN cannot join.
+
+        Bare local ids on object properties (``ECON00018``) are expanded to
+        ``{data_ns}{Range}/{id}`` so the link is a real entity, not a literal.
+        """
+        aliases, ranges, data_ns = self._predicate_index()
+        return [
+            Patch(
+                op=patch.op,
+                subject=patch.subject,
+                predicate=aliases.get(patch.predicate.lower(), patch.predicate),
+                object=self._canonical_object(patch, ranges, data_ns),
+                datatype=patch.datatype,
+            )
+            for patch in self._spec.patches
+        ]
+
+    def _predicate_index(self) -> tuple[Dict[str, str], Dict[str, str], str]:
+        ontology = getattr(self._domain, "ontology", None) or {}
+        base_uri = str(ontology.get("base_uri") or "")
+        data_ns = base_uri.rstrip("#/") + "/" if base_uri else ""
+        aliases: Dict[str, str] = {}
+        ranges: Dict[str, str] = {}
+        for prop in ontology.get("properties") or []:
+            if not isinstance(prop, dict):
+                continue
+            name = str(prop.get("name") or prop.get("localName") or "").strip()
+            uri = str(prop.get("uri") or "").strip()
+            if not name and not uri:
+                continue
+            canonical = (
+                data_ns + extract_local_name(uri or name) if data_ns else (uri or name)
+            )
+            keys = [k for k in (name, uri, extract_local_name(uri) if uri else "") if k]
+            for key in keys:
+                aliases[key.lower()] = canonical
+            if not self._is_object_property(prop):
+                continue
+            rng = extract_local_name(str(prop.get("range") or "").strip())
+            if not rng:
+                continue
+            for key in keys:
+                ranges[key.lower()] = rng
+        return aliases, ranges, data_ns
+
+    @staticmethod
+    def _is_object_property(prop: Dict[str, Any]) -> bool:
+        kind = str(prop.get("type") or prop.get("kind") or "").replace("owl:", "").lower()
+        if "datatype" in kind:
+            return False
+        if "object" in kind:
+            return True
+        rng = str(prop.get("range") or "").lower()
+        return bool(rng) and not rng.startswith("xsd:")
+
+    def _canonical_object(
+        self, patch: Patch, ranges: Dict[str, str], data_ns: str
+    ) -> str:
+        obj = str(patch.object or "").strip()
+        if not obj or is_uri(obj) or not data_ns:
+            return patch.object
+        pred = str(patch.predicate or "")
+        rng = ranges.get(pred.lower()) or ranges.get(extract_local_name(pred).lower())
+        if rng:
+            return f"{data_ns}{rng}/{obj}"
+        stem = extract_local_name(pred).lower()
+        for other in self._spec.patches:
+            other_obj = str(other.object or "").strip()
+            if not is_uri(other_obj):
+                continue
+            if extract_local_name(other.predicate).lower() != stem:
+                continue
+            return f"{other_obj.rsplit('/', 1)[0]}/{obj}"
+        return patch.object
+
+    def _seed_hypothesis(self, sandbox: Any, skip: Any = None) -> None:
+        """Copy patched entities not already in the scope, plus one live hop.
+
+        Skip the scope slice (already copied). One hop plus a sandbox object
+        walk is enough for ``hasContract`` → ``hasMeter``; two hops from the
+        customer re-traverses the live graph and freezes the 30% progress bar.
+        """
+        ignored = set(skip or [])
+        uris = [u for u in self._hypothesis_uris() if u not in ignored]
+        if not uris:
+            return
+        self._progress(30, f"Seeding {len(uris)} hypothesis entities and neighbours")
+        seed_nb = getattr(sandbox, "seed_neighbourhood", None)
+        if callable(seed_nb):
+            seed_nb(uris, hops=1, inbound=False)
+        else:
+            sandbox.seed(uris)
+
+    def _require_if_then(self, stats: Dict[str, Any]) -> None:
+        """Fail the run when the IF-THEN phase was requested but did not execute."""
+        if not self._spec.phases.get("if_then", True):
+            return
+        if stats.get("if_then_error"):
+            raise InfrastructureError(f"IF-THEN failed: {stats['if_then_error']}")
+        if stats.get("if_then_skipped"):
+            reason = stats.get("if_then_reason") or "IF-THEN did not run"
+            raise InfrastructureError(f"IF-THEN did not run: {reason}")
+        errors = stats.get("if_then_errors") or 0
+        if not errors:
+            return
+        details = stats.get("if_then_error_details") or ""
+        suffix = f": {details}" if details else ""
+        raise InfrastructureError(f"IF-THEN failed on {errors} rule(s){suffix}")
+
+    def _relink_hypothesis(self, sandbox: Any) -> None:
+        """After patches, copy objects of new links only (not the patched subjects).
+
+        Re-seeding a patched subject from live would restore values that a
+        Set/Remove hypothesis just replaced.
+        """
+        subjects = {
+            p.subject for p in self._spec.patches if p.subject
+        }
+        uri_objects = getattr(sandbox, "uri_objects_of", None)
+        if not subjects or not callable(uri_objects):
+            return
+        extra = [
+            obj
+            for subject in subjects
+            for obj in uri_objects(subject)
+            if obj and obj not in subjects
+        ]
+        extra = list(dict.fromkeys(extra))
+        if not extra:
+            return
+        self._progress(42, f"Copying {len(extra)} linked entities for reasoning")
+        seed_nb = getattr(sandbox, "seed_neighbourhood", None)
+        if callable(seed_nb):
+            seed_nb(extra, hops=1, inbound=False)
+        else:
+            sandbox.seed(extra)
+
+    def _seed_focus_referrers(self, sandbox: Any) -> None:
+        """Copy live subjects that point at the scoped entity (e.g. claims).
+
+        Skip this for patched contracts — those inbound neighbours are
+        other customers in the live graph.
+        """
+        if self._spec.scope.type != "entity":
+            return
+        focus = self._spec.scope.focus
+        if not focus:
+            return
+        seed_ref = getattr(sandbox, "seed_referrers", None)
+        if not callable(seed_ref):
+            return
+        self._progress(44, "Copying entities that point at the scoped customer")
+        seed_ref([focus])
+
+    def run(self) -> None:
+        started_at = _now_iso()
+        t0 = time.time()
+        sim_id = self._spec.id
+        tm, task_id = self._tm, self._task_id
+        try:
+            tm.start_task(task_id, "Preparing simulation sandbox")
+            self._registry.save_simulation(
+                self._folder, self._version, self._entry("running")
+            )
+            result = self._execute()
+            if not self._is_current_run():
+                logger.warning(
+                    "Simulation %s run %s was aborted; dropping result",
+                    sim_id,
+                    task_id,
+                )
+                return
+            duration = round(time.time() - t0, 3)
+            summary = dict(result["summary"])
+            summary["duration_s"] = duration
+            self._registry.save_simulation(
+                self._folder,
+                self._version,
+                self._entry(
+                    "ready",
+                    diff_summary=summary,
+                    diff={},
+                    last_run_at=_now_iso(),
+                ),
+            )
+            self._registry.record_simulation_run(
+                self._folder,
+                self._version,
+                {
+                    "simulation_id": sim_id,
+                    "status": "success",
+                    "message": (
+                        f"+{summary['added_count']} / -{summary['removed_count']} triples"
+                    ),
+                    "task_id": task_id,
+                    "started_at": started_at,
+                    "finished_at": _now_iso(),
+                    "duration_s": duration,
+                    "stats": summary,
+                    "owner": self._owner,
+                },
+            )
+            tm.complete_task(
+                task_id,
+                result={"simulation_id": sim_id, "summary": summary},
+                message=(
+                    f"Simulation complete: +{summary['added_count']} / "
+                    f"-{summary['removed_count']} triples"
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            if not self._is_current_run():
+                logger.warning(
+                    "Simulation %s run %s was aborted during failure handling",
+                    sim_id,
+                    task_id,
+                )
+                return
+            message = (
+                exc.message
+                if isinstance(exc, OntoBricksError)
+                else "Simulation failed unexpectedly — check the application logs"
+            )
+            logger.error("Simulation %s failed: %s", sim_id, exc, exc_info=True)
+            try:
+                self._registry.save_simulation(
+                    self._folder,
+                    self._version,
+                    self._entry("failed", error=message[:2000], last_run_at=_now_iso()),
+                )
+            except Exception as save_exc:  # noqa: BLE001
+                logger.warning("Could not persist failed simulation %s: %s", sim_id, save_exc)
+            self._registry.record_simulation_run(
+                self._folder,
+                self._version,
+                {
+                    "simulation_id": sim_id,
+                    "status": "error",
+                    "error": message[:2000],
+                    "task_id": task_id,
+                    "started_at": started_at,
+                    "finished_at": _now_iso(),
+                    "duration_s": round(time.time() - t0, 3),
+                    "owner": self._owner,
+                },
+            )
+            tm.fail_task(task_id, message)
+
+    def _execute(self) -> Dict[str, Any]:
+        from back.objects.digitaltwin import CohortService
+
+        self._progress(5, "Opening graph backend")
+        live = self._live_store()
+        if live is None:
+            raise InfrastructureError("Graph backend is not configured")
+        graph_name = effective_graph_name(self._domain)
+
+        self._progress(10, "Resolving simulation scope")
+        entities = self._spec.scope.resolve_entities(
+            live,
+            graph_name,
+            cohort_service=CohortService(self._domain),
+            cohort_rule=self._cohort_rule,
+        )
+
+        sandbox = Sandbox(live, graph_name, self._spec.id)
+        self._progress(20, f"Seeding sandbox with {len(entities)} entities")
+        sandbox.reset()
+        sandbox.seed(entities)
+        self._seed_hypothesis(sandbox, skip=entities)
+        self._seed_focus_referrers(sandbox)
+        self._progress(38, "Recording the before-picture")
+        before = sandbox.triples()
+        persist_before = getattr(sandbox, "persist_before", None)
+        if callable(persist_before):
+            persist_before(before)
+
+        self._progress(40, f"Applying {len(self._spec.patches)} patches")
+        asserted = sandbox.apply(self._sandbox_patches())
+        self._relink_hypothesis(sandbox)
+
+        self._progress(50, "Running reasoning in the sandbox")
+        svc = Reasoning(self._domain, sandbox.store, sandbox.table)
+
+        def _if_then_progress(idx: int, total: int, rule_name: str) -> None:
+            self._progress(50 + int((idx / max(total, 1)) * 30), f"IF-THEN {idx + 1}/{total}: {rule_name}")
+
+        reasoning = svc.run_full_reasoning(
+            self._spec.reasoning_options(), progress_callback=_if_then_progress
+        )
+        self._require_if_then(reasoning.stats or {})
+        provenance = {
+            Diff.key(
+                {"subject": t.subject, "predicate": t.predicate, "object": t.object}
+            ): t.provenance
+            for t in reasoning.inferred_triples
+        }
+        self._progress(85, f"Materialising {len(reasoning.inferred_triples)} inferred triples")
+        svc.materialize_inferred(reasoning)
+        persist_origins = getattr(sandbox, "persist_origins", None)
+        if callable(persist_origins):
+            persist_origins(asserted, provenance)
+
+        self._progress(92, "Computing before/after diff")
+        diff = Diff.compute(
+            before,
+            sandbox.triples(),
+            patch_added=asserted,
+            provenance=provenance,
+            row_cap=None,
+        )
+        stats = reasoning.stats or {}
+        diff["summary"].update(
+            {
+                "entity_count": len(entities),
+                "patch_count": len(self._spec.patches),
+                "inferred_total": len(reasoning.inferred_triples),
+                "if_then_inferred_count": stats.get("if_then_inferred_count"),
+                "if_then_rules_count": stats.get("if_then_rules_count"),
+                "if_then_skipped": stats.get("if_then_skipped"),
+                "if_then_reason": stats.get("if_then_reason"),
+                "if_then_errors": stats.get("if_then_errors"),
+                "if_then_error_details": stats.get("if_then_error_details"),
+                "phase_errors": {
+                    k[: -len("_error")]: v for k, v in stats.items() if k.endswith("_error")
+                },
+                "sandbox_table": sandbox.table,
+            }
+        )
+        ensure = getattr(sandbox, "ensure_explorer_views", None)
+        if callable(ensure):
+            from back.core.helpers import effective_graph_query_table
+
+            live_union = effective_graph_query_table(
+                self._domain, self._settings, include_inferred=True, store=live
+            )
+            ensure(live_union)
+        backend = normalize_graph_backend(
+            (getattr(self._domain, "info", None) or {}).get("graph_backend")
+        )
+        diff["summary"]["artifacts"] = Artifacts.from_sandbox(sandbox, backend)
+        return diff

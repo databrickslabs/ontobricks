@@ -48,11 +48,11 @@ body.full-width-layout {
     display: flex;
     height: calc(100vh - var(--ob-chrome-height, 60px));
     max-height: calc(100vh - var(--ob-chrome-height, 60px));
-    gap: 0.5rem;
+    gap: 0.25rem;
     width: 100%;
     max-width: 100vw;
     margin: 0;
-    padding: 0.25rem 0.5rem 0.5rem;
+    padding: 0.15rem 0.25rem 0.25rem;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -60,19 +60,24 @@ body.full-width-layout {
 /* ==========================================================================
    Sidebar Navigation
    ========================================================================== */
+/* Sidebar column width shared with the chrome bar (#settingsDomainReturnNav
+   aligns to the content panel). Pages without a sidebar never read it. */
+html:has(.sidebar-layout) {
+    --ob-sidebar-width: 200px;
+}
+
 .sidebar-nav {
     width: 200px;
     min-width: 200px;
-    background: var(--db-surface-warm);
-    /* Framed card floating on the page, same language as the split-panel panes:
-       1px hairline, --db-radius-card on all four corners. The shell now owns
-       the 0.5rem outer gutter (padding + gap), so the nav aligns within it with
-       no margin of its own and simply fills the shell height. */
+    background: transparent;
+    /* Transparent rail with no outer border, matching the L2 second navbar (#obSubnav).
+       The shell owns the 0.25rem outer gutter (padding + gap), so the nav aligns
+       within it with no margin of its own and simply fills the shell height. */
     margin: 0;
     height: 100%;
-    border: 1px solid var(--db-border);
-    border-radius: var(--db-radius-card);
-    padding: 0.5rem 0;
+    border: none;
+    border-radius: 0;
+    padding: 0.25rem 0;
     flex-shrink: 0;
     overflow-y: auto;
     overflow-x: hidden;
@@ -82,7 +87,7 @@ body.full-width-layout {
 }
 
 .sidebar-nav .sidebar-title {
-    padding: 0.3rem 1rem 0.35rem;
+    padding: 0.2rem 0.75rem 0.2rem;
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -96,11 +101,11 @@ body.full-width-layout {
 .sidebar-nav .nav-link {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0.65rem;
-    margin: 0 0.35rem;
+    gap: 0.35rem;
+    padding: 0.25rem 0.5rem;
+    margin: 0 0.25rem;
     color: var(--db-text-secondary);
-    border-radius: 9px;
+    border-radius: var(--db-radius-control);
     border-left: 3px solid transparent;
     position: relative;
     transition: all 0.2s ease;
@@ -128,7 +133,7 @@ body.full-width-layout {
     top: 5px;
     bottom: 5px;
     width: 3px;
-    border-radius: 0 3px 3px 0;
+    border-radius: 0 2px 2px 0;
     background: var(--db-gradient-rail);
 }
 
@@ -165,52 +170,29 @@ body.full-width-layout {
 }
 
 /* ==========================================================================
-   Sidebar Toggle Button
-   ========================================================================== */
-.sidebar-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.45rem 0.6rem;
-    margin: 0 0.4rem 0.35rem;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    border-radius: 9px;
-    transition: background 0.15s ease;
-    width: calc(100% - 0.8rem);
-    overflow: hidden;
-}
-
-.sidebar-toggle:hover {
-    background: var(--db-hover-warm);
-}
-
-.sidebar-toggle i {
-    font-size: 1.1rem;
-    min-width: 20px;
-    text-align: center;
-    flex-shrink: 0;
-    color: var(--db-text-muted);
-}
-
-.sidebar-toggle .sidebar-toggle-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--db-text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    transition: opacity 0.2s ease;
-}
-
-/* ==========================================================================
    Sidebar Collapsed State
+   The collapse control lives in L2 (``#obSidebarToggle``), left of the
+   Context name — not inside the rail. ``html.ob-sidebar-collapsed`` is set
+   by sidebar-collapse-init.js before first paint so the rail never flashes
+   expanded→collapsed. ``.collapsed`` on the nav is kept in sync by
+   SidebarNav for the same visual rules. Until ``ob-sidebar-ready``, suppress
+   width transitions so preference restore cannot animate.
    ========================================================================== */
-.sidebar-nav.collapsed {
-    width: 48px;
-    min-width: 48px;
+html:not(.ob-sidebar-ready) .sidebar-nav {
+    transition: none;
 }
 
+html.ob-sidebar-collapsed .sidebar-nav,
+.sidebar-nav.collapsed {
+    width: 40px;
+    min-width: 40px;
+}
+
+html.ob-sidebar-collapsed:has(.sidebar-layout) {
+    --ob-sidebar-width: 40px;
+}
+
+html.ob-sidebar-collapsed .sidebar-nav .sidebar-title,
 .sidebar-nav.collapsed .sidebar-title {
     opacity: 0;
     height: 0;
@@ -220,28 +202,20 @@ body.full-width-layout {
     overflow: hidden;
 }
 
+html.ob-sidebar-collapsed .sidebar-nav .nav-link,
 .sidebar-nav.collapsed .nav-link {
     justify-content: center;
     padding: 0.45rem 0;
     gap: 0;
 }
 
+html.ob-sidebar-collapsed .sidebar-nav .nav-link .nav-label,
 .sidebar-nav.collapsed .nav-link .nav-label {
     display: none;
 }
 
+html.ob-sidebar-collapsed .sidebar-nav .nav-link .badge,
 .sidebar-nav.collapsed .nav-link .badge {
-    display: none;
-}
-
-.sidebar-nav.collapsed .sidebar-toggle {
-    justify-content: center;
-    padding: 0.45rem 0;
-    margin: 0 0 0.35rem;
-    width: 100%;
-}
-
-.sidebar-nav.collapsed .sidebar-toggle .sidebar-toggle-label {
     display: none;
 }
 
@@ -256,7 +230,7 @@ body.full-width-layout {
     min-height: 0;
     /* The shell owns the vertical gutter. Keeping only the horizontal inset
        aligns each page heading with the top edge of the sidebar card. */
-    padding: 0 0.5rem;
+    padding: 0 0.25rem;
     overflow-y: auto;
     overflow-x: hidden;
     transition: width 0.25s ease;
@@ -272,11 +246,25 @@ body.full-width-layout {
     position: relative;
 }
 
+/* Databricks-style page panel: title, subtitle and body share one white,
+   bordered surface beside the sidebar. Sections that override padding by ID
+   must reuse --ob-page-padding so every page keeps the same inset. */
+.sidebar-layout {
+    --ob-page-padding: 0.75rem 1rem;
+    --ob-page-panel-radius: 0.5rem;
+}
+
 .sidebar-section.active {
     display: flex;
     flex-direction: column;
     flex: 1 1 0;
     min-height: 0;
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    /* Databricks page panel: only the top-left corner is rounded. */
+    border-radius: var(--ob-page-panel-radius) 0 0 0;
+    padding: var(--ob-page-padding);
+    box-sizing: border-box;
 }
 
 .sidebar-section .card {
@@ -290,7 +278,7 @@ body.full-width-layout {
 .sidebar-content:has(#graphql-section.active),
 .sidebar-content:has(#dataquality-section.active) {
     overflow: hidden;
-    padding: 0 0.5rem;
+    padding: 0 0.25rem;
 }
 
 #sigmagraph-section.active,
@@ -306,7 +294,7 @@ body.full-width-layout {
 
 #logs-section.active {
     overflow: hidden;
-    padding: 0 1rem;
+    padding: var(--ob-page-padding);
     box-sizing: border-box;
 }
 
@@ -326,12 +314,16 @@ body.full-width-layout {
     overflow-x: hidden;
 }
 
-.sidebar-section > .content-section > .card {
+.sidebar-section > .content-section > .card,
+.sidebar-section > .content-section > form.card {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+    border: none;
+    background: transparent;
+    box-shadow: none;
 }
 
 .sidebar-section > .content-section > .card > .card-body {
@@ -348,7 +340,7 @@ body.full-width-layout {
 .sidebar-content:has(#results-section.active),
 .sidebar-content:has(#sql-section.active) {
     overflow: hidden;
-    padding: 0 0.5rem;
+    padding: 0 0.25rem;
     display: flex;
     flex-direction: column;
 }
@@ -366,14 +358,13 @@ body.full-width-layout {
 /* One shared title/subtitle-to-content rhythm for every sidebar page. This
    intentionally overrides template-level Bootstrap `mb-4` utilities. */
 .sidebar-layout .section-header {
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.75rem !important;
 }
 
-/* The space above the title equals the space below the subtitle
-   (``margin-bottom`` above), so the title block is vertically balanced. */
+/* The page panel padding owns the space above the title. */
 @media (min-width: 769px) {
     .sidebar-layout .section-header {
-        padding-top: 0.5rem;
+        padding-top: 0;
     }
 }
 

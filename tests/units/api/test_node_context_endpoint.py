@@ -271,10 +271,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.node.NodeContextService.get_data_plane_client",
+            "back.objects.digitaltwin.node.NodeDatasetService.get_data_plane_client",
             return_value=mock_client,
         ) as mock_get_client, patch(
-            "back.objects.digitaltwin.node.NodeContextService.run_blocking",
+            "back.objects.digitaltwin.node.NodeDatasetService.run_blocking",
             side_effect=lambda fn, *a, **kw: fn(*a, **kw),
         ):
             resp = client.get(
@@ -291,6 +291,7 @@ class TestNodeContextEndpoint:
         body = resp.json()
         assert body["success"] is True
         assert body["dataset"]["rows"] == [{"id": "CUST001", "name": "Ada"}]
+        assert body["datasets"][0]["rows"] == [{"id": "CUST001", "name": "Ada"}]
         mock_get_client.assert_called_once()
         args = mock_get_client.call_args[0]
         assert args[0] is mock_domain
@@ -305,10 +306,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.node.NodeContextService.get_data_plane_client",
+            "back.objects.digitaltwin.node.NodeDatasetService.get_data_plane_client",
             return_value=mock_client,
         ), patch(
-            "back.objects.digitaltwin.node.NodeContextService.run_blocking",
+            "back.objects.digitaltwin.node.NodeDatasetService.run_blocking",
             side_effect=lambda fn, *a, **kw: fn(*a, **kw),
         ):
             resp = client.get(
@@ -337,10 +338,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.node.NodeContextService.get_data_plane_client",
+            "back.objects.digitaltwin.node.NodeDatasetService.get_data_plane_client",
             return_value=mock_client,
         ), patch(
-            "back.objects.digitaltwin.node.NodeContextService.run_blocking",
+            "back.objects.digitaltwin.node.NodeDatasetService.run_blocking",
             side_effect=lambda fn, *a, **kw: fn(*a, **kw),
         ):
             resp = client.get(

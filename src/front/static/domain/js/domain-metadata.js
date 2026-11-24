@@ -7,10 +7,8 @@ let tableSelections = {}; // Track selected tables by name
 let currentEditingTableIndex = null; // Track which table is being edited in the modal
 let importTableSelections = {}; // Track tables selected for import in the modal
 let allAvailableTables = []; // All tables available in UC schema
-let loadMetadataModal = null; // Bootstrap modal instance
-let loadMetadataWidgetInitialized = false; // Track if widget is initialized
-let pendingLoadCatalog = ''; // Catalog selected in the load metadata modal
-let pendingLoadSchema = ''; // Schema selected in the load metadata modal
+let addDataAssetsModal = null; // Bootstrap instance of #addDataAssetsModal
+let addDataAssetsRequestId = 0; // Ignores stale list-tables responses
 let dataAssetsImportLimit = 40;
 
 // Visual metadata for a data-source object kind (table | view | metric_view).
@@ -121,34 +119,167 @@ async function initMetadataSection() {
     await loadMetadataStatus();
 }
 
-// Show the load metadata location modal
+// Open the single "Add Data Assets" dialog (catalog, schema, tables, import)
 async function showLoadMetadataModal() {
-    // Initialize modal if not already
-    if (!loadMetadataModal) {
-        loadMetadataModal = new bootstrap.Modal(document.getElementById('loadMetadataLocationModal'));
-    }
-    
-    // Initialize widget inside modal if not already done
-    if (!loadMetadataWidgetInitialized) {
-        await UCLocationWidget.init('loadMetadataLocationWidget', {
-            label: 'Catalog.Schema',
-            onSelect: (catalog, schema) => {
-                console.log('[Metadata] Location selected:', catalog, schema);
-            }
-        });
-        loadMetadataWidgetInitialized = true;
-    }
-    
-    loadMetadataModal.show();
+    addDataAssetsModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('addDataAssetsModal'));
+    resetAddDataAssetsListing();
+    const schemaSelect = document.getElementById('addDataAssetsSchema');
+    schemaSelect.innerHTML = '<option value="">Select catalog first</option>';
+    schemaSelect.disabled = true;
+    addDataAssetsModal.show();
+    await _populateAddDataAssetsCatalogs();
 }
 
-async function loadMetadataStatus() {
+// Fill the catalog <select>. Optionally keep the current value if it still exists.
+async function _populateAddDataAssetsCatalogs(preferredCatalog = '') {
+    const catalogSelect = document.getElementById('addDataAssetsCatalog');
+    catalogSelect.innerHTML = '<option value="">Loading catalogs...</option>';
+    const catalogs = await UCLocationWidget.loadCatalogs(true);
+    catalogSelect.innerHTML = catalogs.length > 0
+        ? '<option value="">Select catalog...</option>' + catalogs.map(_optionHtml).join('')
+        : '<option value="">No catalogs available</option>';
+    if (preferredCatalog && catalogs.includes(preferredCatalog)) {
+        catalogSelect.value = preferredCatalog;
+    }
+}
+
+function _optionHtml(value) {
+    const safe = escapeHtml(value);
+    return `<option value="${safe}">${safe}</option>`;
+}
+
+function getAddDataAssetsLocation() {
+    return {
+        catalog: document.getElementById('addDataAssetsCatalog')?.value || '',
+        schema: document.getElementById('addDataAssetsSchema')?.value || '',
+    };
+}
+
+// Show exactly one of: placeholder ('placeholder'), spinner ('listing') or table list ('list')
+function _showAddAssetsState(state, placeholderText) {
+    const placeholder = document.getElementById('addDataAssetsPlaceholder');
+    const listing = document.getElementById('addDataAssetsListing');
+    const list = document.getElementById('addDataAssetsList');
+    if (placeholder) {
+        placeholder.textContent = placeholderText || 'Choose a catalog and schema to list its tables.';
+        placeholder.classList.toggle('d-none', state !== 'placeholder');
+    }
+    if (listing) listing.classList.toggle('d-none', state !== 'listing');
+    if (list) list.classList.toggle('d-none', state !== 'list');
+}
+
+// Clear the table list and selection; invalidates any in-flight list-tables request
+function resetAddDataAssetsListing() {
+    addDataAssetsRequestId += 1;
+    allAvailableTables = [];
+    importTableSelections = {};
+    const tbody = document.getElementById('tableSelectionBody');
+    if (tbody) tbody.innerHTML = '';
+    const permBanner = document.getElementById('tableSelectionPermBanner');
+    if (permBanner) permBanner.classList.add('d-none');
+    const info = document.getElementById('tableSelectionInfo');
+    if (info) info.innerHTML = '';
+    const filter = document.getElementById('tableSearchFilter');
+    if (filter) filter.value = '';
+    _showAddAssetsState('placeholder');
+    updateImportSelectionCount();
+}
+
+// Catalog changed: reload its schemas and clear the table list
+async function onAddDataAssetsCatalogChange() {
+    const catalog = document.getElementById('addDataAssetsCatalog').value;
+    const schemaSelect = document.getElementById('addDataAssetsSchema');
+    resetAddDataAssetsListing();
+    schemaSelect.disabled = true;
+
+    if (!catalog) {
+        schemaSelect.innerHTML = '<option value="">Select catalog first</option>';
+        return;
+    }
+
+    schemaSelect.innerHTML = '<option value="">Loading schemas...</option>';
+    const schemas = await UCLocationWidget.loadSchemas(catalog);
+    // Ignore the answer if the user already picked another catalog
+    if (document.getElementById('addDataAssetsCatalog').value !== catalog) return;
+
+    if (schemas.length === 0) {
+        schemaSelect.innerHTML = '<option value="">No schemas available</option>';
+        return;
+    }
+    schemaSelect.innerHTML = '<option value="">Select schema...</option>' + schemas.map(_optionHtml).join('');
+    schemaSelect.disabled = false;
+}
+
+// Schema changed: list its tables inline
+function onAddDataAssetsSchemaChange() {
+    const { catalog, schema } = getAddDataAssetsLocation();
+    if (!catalog || !schema) {
+        resetAddDataAssetsListing();
+        return;
+    }
+    loadTablesForSelection(catalog, schema);
+}
+
+/**
+ * Refresh: clear the UC location cache, reload catalogs/schemas, and re-list
+ * tables for the currently selected location (if any).
+ */
+async function refreshAddDataAssets() {
+    const { catalog, schema } = getAddDataAssetsLocation();
+    const refreshBtn = document.getElementById('addDataAssetsRefreshBtn');
+    if (refreshBtn) refreshBtn.disabled = true;
+    try {
+        UCLocationWidget.clearCache();
+        await _populateAddDataAssetsCatalogs(catalog);
+        if (!catalog) {
+            const schemaSelect = document.getElementById('addDataAssetsSchema');
+            schemaSelect.innerHTML = '<option value="">Select catalog first</option>';
+            schemaSelect.disabled = true;
+            resetAddDataAssetsListing();
+            return;
+        }
+        await onAddDataAssetsCatalogChange();
+        if (schema) {
+            const schemaSelect = document.getElementById('addDataAssetsSchema');
+            if ([...schemaSelect.options].some(o => o.value === schema)) {
+                schemaSelect.value = schema;
+                loadTablesForSelection(catalog, schema);
+            }
+        }
+    } finally {
+        if (refreshBtn) refreshBtn.disabled = false;
+    }
+}
+
+function setMetadataListOverlay(visible, text) {
+    const overlay = document.getElementById('metadataListOverlay');
+    const label = document.getElementById('metadataListOverlayText');
+    if (label && text) label.textContent = text;
+    if (overlay) overlay.classList.toggle('d-none', !visible);
+}
+
+/**
+ * Paint the asset list from session metadata, then refresh Rights in the
+ * background so first paint is not blocked by warehouse SELECT probes.
+ * @param {{listOverlay?: boolean, overlayText?: string, refreshRights?: boolean}} [opts]
+ */
+async function loadMetadataStatus(opts = {}) {
+    const listOverlay = opts.listOverlay === true;
+    const refreshRights = opts.refreshRights !== false;
     const statusDiv = document.getElementById('metadataStatus');
     const statusText = document.getElementById('metadataStatusText');
     const previewDiv = document.getElementById('metadataPreview');
+
+    if (listOverlay) {
+        setMetadataListOverlay(true, opts.overlayText || 'Reloading assets…');
+        if (previewDiv) previewDiv.classList.remove('d-none');
+    }
     
-    statusDiv.className = 'alert alert-secondary mb-4';
-    statusText.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Loading data assets…';
+    if (statusDiv) statusDiv.className = 'mb-4';
+    if (statusText && !listOverlay) {
+        statusText.className = 'text-muted small d-flex align-items-center gap-2';
+        statusText.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span><span>Loading data assets…</span>';
+    }
     
     try {
         const response = await fetch('/domain/metadata', { credentials: 'same-origin' });
@@ -168,17 +299,19 @@ async function loadMetadataStatus() {
                 ? [...locations][0]
                 : locations.size > 1 ? `${locations.size} locations` : '';
             
-            statusDiv.className = 'alert alert-success mb-4';
-            statusText.innerHTML = `
-                <strong>Data assets loaded:</strong> 
-                ${locationDisplay ? `<strong>${locationDisplay}</strong> - ` : ''}
-                ${tableCount} table${tableCount !== 1 ? 's' : ''}
-            `;
+            if (statusDiv) statusDiv.className = 'mb-4';
+            if (statusText) {
+                statusText.className = 'small d-flex align-items-center gap-2';
+                statusText.innerHTML = `
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                    <span><strong>Data assets loaded:</strong> ${locationDisplay ? `<strong>${locationDisplay}</strong> — ` : ''}${tableCount} table${tableCount !== 1 ? 's' : ''}</span>
+                `;
+            }
             
-            // Initialize table selections (all selected by default)
+            // Initialize table selections (unchecked = keep; checked = mark for removal)
             tableSelections = {};
             (data.metadata.tables || []).forEach(table => {
-                tableSelections[table.name] = true;
+                tableSelections[table.name] = false;
             });
             
             // Show preview and Update Mappings button
@@ -187,11 +320,17 @@ async function loadMetadataStatus() {
             updateMetadataGauges(data.metadata);
             const updateMappingsBtn = document.getElementById('updateMappingsBtn');
             if (updateMappingsBtn) updateMappingsBtn.classList.remove('d-none');
+            if (refreshRights) {
+                refreshSelectPermissionsInBackground();
+            }
         } else {
             metadataCache = null;
             tableSelections = {};
-            statusDiv.className = 'alert alert-secondary mb-4';
-            statusText.innerHTML = '<i class="bi bi-info-circle"></i> No data assets loaded';
+            if (statusDiv) statusDiv.className = 'mb-4';
+            if (statusText) {
+                statusText.className = 'text-muted small d-flex align-items-center gap-2';
+                statusText.innerHTML = '<i class="bi bi-info-circle"></i><span>No data assets loaded</span>';
+            }
             previewDiv.classList.add('d-none');
             const warningEl = document.getElementById('metadataDescriptionWarning');
             if (warningEl) warningEl.style.display = 'none';
@@ -200,103 +339,136 @@ async function loadMetadataStatus() {
         }
     } catch (error) {
         console.error('Error loading metadata status:', error);
-        statusDiv.className = 'alert alert-warning mb-4';
-        statusText.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error loading data assets status';
+        if (statusDiv) statusDiv.className = 'mb-4';
+        if (statusText) {
+            statusText.className = 'text-danger small d-flex align-items-center gap-2';
+            statusText.innerHTML = '<i class="bi bi-exclamation-triangle"></i><span>Error loading data assets status</span>';
+        }
+    } finally {
+        if (listOverlay) setMetadataListOverlay(false);
     }
 }
 
-async function loadMetadataFromUC() {
-    // Get values from the modal's UC Location widget
-    const location = UCLocationWidget.getValue('loadMetadataLocationWidget');
-    const catalog = location.catalog;
-    const schema = location.schema;
-    
-    if (!catalog || !schema) {
-        showNotification('Please select catalog and schema first', 'warning');
-        return;
-    }
-    
-    // Store for later use in importSelectedTables
-    pendingLoadCatalog = catalog;
-    pendingLoadSchema = schema;
-    
-    // Close the location modal
-    if (loadMetadataModal) {
-        loadMetadataModal.hide();
-    }
-    
-    const loadBtn = document.getElementById('loadMetadataBtn');
-    const progressDiv = document.getElementById('metadataProgress');
-    const statusSpan = document.getElementById('metadataInitStatus');
-    
-    loadBtn.disabled = true;
-    progressDiv.classList.remove('d-none');
-    statusSpan.textContent = 'Fetching table list from Unity Catalog...';
-    
+let _rightsRefreshSeq = 0;
+
+/** Fill the Rights column via warehouse SELECT probes without blocking first paint. */
+async function refreshSelectPermissionsInBackground() {
+    const seq = ++_rightsRefreshSeq;
+    const cells = document.querySelectorAll('.dm-rights-cell');
+    cells.forEach(cell => {
+        cell.innerHTML = '<span class="spinner-border spinner-border-sm text-muted" role="status" aria-hidden="true" title="Checking SELECT…"></span>';
+    });
     try {
-        // Step 1: Get list of tables (lightweight)
+        const response = await fetch('/domain/metadata/check-select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+            credentials: 'same-origin',
+        });
+        const data = await response.json();
+        if (seq !== _rightsRefreshSeq) return;
+        if (!data.success) {
+            cells.forEach(cell => {
+                cell.innerHTML = renderSelectPermCell({});
+            });
+            return;
+        }
+        const byName = {};
+        (data.tables || []).forEach(row => { byName[row.name] = row; });
+        if (metadataCache && Array.isArray(metadataCache.tables)) {
+            metadataCache.tables.forEach(table => {
+                const row = byName[table.name];
+                if (!row) return;
+                table.can_select = row.can_select;
+                table.select_error = row.select_error;
+            });
+        }
+        document.querySelectorAll('.dm-rights-cell').forEach(cell => {
+            const name = cell.dataset.table;
+            const table = (metadataCache?.tables || []).find(t => t.name === name) || byName[name] || {};
+            cell.innerHTML = renderSelectPermCell(table);
+        });
+    } catch (error) {
+        if (seq !== _rightsRefreshSeq) return;
+        console.error('[Metadata] Rights refresh failed:', error);
+        document.querySelectorAll('.dm-rights-cell').forEach(cell => {
+            cell.innerHTML = '<span class="text-muted" title="Could not check SELECT"><i class="bi bi-dash-circle"></i></span>';
+        });
+    }
+}
+
+/**
+ * List the tables of catalog.schema inside the Add Data Assets dialog and
+ * pre-select the new ones (up to the import limit).
+ */
+async function loadTablesForSelection(catalog, schema) {
+    if (!catalog || !schema) return;
+
+    resetAddDataAssetsListing();
+    const requestId = ++addDataAssetsRequestId;
+    _showAddAssetsState('listing');
+
+    try {
+        // Lightweight list of table names, metadata is loaded on import
         const response = await fetch('/domain/metadata/list-tables', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ catalog, schema }),
             credentials: 'same-origin'
         });
-        
         const data = await response.json();
-        
-        progressDiv.classList.add('d-none');
-        loadBtn.disabled = false;
-        statusSpan.textContent = '';
-        
-        if (data.success) {
-            // Store available tables and permission info
-            allAvailableTables = data.tables || [];
-            if (typeof data.import_limit === 'number' && data.import_limit > 0) {
-                dataAssetsImportLimit = data.import_limit;
-            }
-            const perms = data.permissions || {};
+        if (requestId !== addDataAssetsRequestId) return; // superseded by a newer selection
 
-            if (allAvailableTables.length === 0) {
-                if (perms.permission_warning) {
-                    showNotification(
-                        `No tables visible in ${catalog}.${schema}. ` + perms.permission_warning,
-                        'error'
-                    );
-                } else {
-                    showNotification(`No tables found in ${catalog}.${schema}`, 'warning');
-                }
-                return;
-            }
-
-            // Non-blocking warning when SELECT is denied
-            if (perms.permission_warning) {
-                showNotification(perms.permission_warning, 'warning');
-            }
-
-            // Initialize import selections (select new tables up to the import limit)
-            importTableSelections = {};
-            let remaining = _remainingImportSlots();
-            allAvailableTables.forEach(table => {
-                const take = !table.already_loaded && remaining > 0;
-                importTableSelections[table.name] = take;
-                if (take) remaining -= 1;
-            });
-
-            // Show the selection modal, pass permissions for the status banner
-            showTableSelectionModal(catalog, schema, perms);
-        } else {
+        if (!data.success) {
+            _showAddAssetsState('placeholder', 'Could not list tables.');
             showNotification('Error: ' + (data.message || 'Failed to list tables'), 'error');
+            return;
         }
-        
+
+        allAvailableTables = data.tables || [];
+        if (typeof data.import_limit === 'number' && data.import_limit > 0) {
+            dataAssetsImportLimit = data.import_limit;
+        }
+        const perms = data.permissions || {};
+
+        if (allAvailableTables.length === 0) {
+            if (perms.permission_warning) {
+                const msg = `No tables visible in ${catalog}.${schema}. ` + perms.permission_warning;
+                showNotification(msg, 'error');
+                _showAddAssetsState('placeholder', msg);
+            } else {
+                const msg = `No tables found in ${catalog}.${schema}`;
+                showNotification(msg, 'warning');
+                _showAddAssetsState('placeholder', msg);
+            }
+            return;
+        }
+
+        // Non-blocking warning when SELECT is denied
+        if (perms.permission_warning) {
+            showNotification(perms.permission_warning, 'warning');
+        }
+
+        // Initialize import selections (select new tables up to the import limit)
+        importTableSelections = {};
+        let remaining = _remainingImportSlots();
+        allAvailableTables.forEach(table => {
+            const take = !table.already_loaded && remaining > 0;
+            importTableSelections[table.name] = take;
+            if (take) remaining -= 1;
+        });
+
+        renderImportTable(catalog, schema, perms);
+        _showAddAssetsState('list');
     } catch (error) {
-        progressDiv.classList.add('d-none');
-        loadBtn.disabled = false;
-        statusSpan.textContent = '';
+        if (requestId !== addDataAssetsRequestId) return;
+        _showAddAssetsState('placeholder', 'Could not list tables.');
         showNotification('Error: ' + error.message, 'error');
     }
 }
 
-function showTableSelectionModal(catalog, schema, perms) {
+// Render the info badges, permission banner and table rows of the Add Data Assets list
+function renderImportTable(catalog, schema, perms) {
     const tbody = document.getElementById('tableSelectionBody');
     const infoSpan = document.getElementById('tableSelectionInfo');
 
@@ -345,7 +517,7 @@ function showTableSelectionModal(catalog, schema, perms) {
         }
     }
     
-    // Build table rows
+    // Build table rows — already-loaded assets have no checkbox (cannot reload)
     let html = '';
     allAvailableTables.forEach(table => {
         const isSelected = importTableSelections[table.name] === true;
@@ -353,17 +525,20 @@ function showTableSelectionModal(catalog, schema, perms) {
             ? '<span class="badge bg-info">Already loaded</span>' 
             : '<span class="badge bg-success">New</span>';
         const kind = objectKindMeta(table.object_kind);
+        const checkboxCell = table.already_loaded
+            ? '<td></td>'
+            : `<td>
+                    <input type="checkbox" class="form-check-input import-table-checkbox"
+                           data-table="${escapeHtml(table.name)}"
+                           ${isSelected ? 'checked' : ''}>
+               </td>`;
         
         html += `
-            <tr class="import-table-row ${table.already_loaded ? 'table-light' : ''}" data-table="${table.name}">
-                <td>
-                    <input type="checkbox" class="form-check-input import-table-checkbox" 
-                           data-table="${table.name}" 
-                           ${isSelected ? 'checked' : ''}>
-                </td>
+            <tr class="import-table-row ${table.already_loaded ? 'table-light' : ''}" data-table="${escapeHtml(table.name)}">
+                ${checkboxCell}
                 <td>
                     <i class="bi ${kind.icon} ${kind.iconClass} me-1"></i>
-                    <strong>${table.name}</strong>
+                    <strong>${escapeHtml(table.name)}</strong>
                     ${kind.badge}
                 </td>
                 <td>${statusBadge}</td>
@@ -376,17 +551,46 @@ function showTableSelectionModal(catalog, schema, perms) {
     updateImportSelectionCount();
     updateSelectAllImportCheckbox();
     
-    // Show modal
-    const modal = new bootstrap.Modal(document.getElementById('tableSelectionModal'));
-    modal.show();
 }
 
 function _alreadyLoadedCount() {
+    if (metadataCache && Array.isArray(metadataCache.tables)) {
+        return metadataCache.tables.length;
+    }
     return allAvailableTables.filter(t => t.already_loaded).length;
 }
 
 function _remainingImportSlots() {
     return Math.max(0, dataAssetsImportLimit - _alreadyLoadedCount());
+}
+
+/**
+ * Decide which visible import rows to check. Already-loaded assets are never
+ * selected (they have no checkbox). The remaining-slot cap applies to new assets.
+ * @returns {{selections: Object<string, boolean>, skippedNew: number}}
+ */
+function computeSelectAllImportState(tables, visibleNames, isSelected, remainingSlots) {
+    const selections = {};
+    let remaining = remainingSlots;
+    let skippedNew = 0;
+    visibleNames.forEach(name => {
+        const table = tables.find(t => t.name === name);
+        if (table && table.already_loaded) {
+            selections[name] = false;
+            return;
+        }
+        let take = isSelected;
+        if (take) {
+            if (remaining <= 0) {
+                take = false;
+                skippedNew += 1;
+            } else {
+                remaining -= 1;
+            }
+        }
+        selections[name] = take;
+    });
+    return { selections, skippedNew };
 }
 
 function _selectedNewCount() {
@@ -413,23 +617,27 @@ function toggleImportTableSelection(tableName, isSelected) {
 }
 
 function selectAllImportTables(isSelected) {
-    // Only affect visible (non-filtered) rows; never exceed remaining slots.
     const visibleRows = document.querySelectorAll('.import-table-row:not(.d-none)');
-    let remaining = _remainingImportSlots();
+    const visibleNames = Array.from(visibleRows).map(r => r.dataset.table);
+    const { selections, skippedNew } = computeSelectAllImportState(
+        allAvailableTables,
+        visibleNames,
+        isSelected,
+        _remainingImportSlots()
+    );
     visibleRows.forEach(row => {
         const tableName = row.dataset.table;
-        const table = allAvailableTables.find(t => t.name === tableName);
-        let take = isSelected;
-        if (take && table && !table.already_loaded) {
-            if (remaining <= 0) take = false;
-            else remaining -= 1;
-        }
-        if (take && table && table.already_loaded) take = false;
+        const take = selections[tableName] === true;
         importTableSelections[tableName] = take;
         const checkbox = row.querySelector('.import-table-checkbox');
         if (checkbox) checkbox.checked = take;
     });
-    
+    if (isSelected && skippedNew > 0) {
+        showNotification(
+            `Import limit is ${dataAssetsImportLimit} data assets (Settings → Global). ${skippedNew} new asset(s) were left unselected.`,
+            'warning'
+        );
+    }
     updateImportSelectionCount();
     updateSelectAllImportCheckbox();
 }
@@ -468,13 +676,13 @@ function filterImportTables(filter) {
 
 function updateImportSelectionCount() {
     const selectedCount = Object.values(importTableSelections).filter(v => v).length;
-    const totalCount = allAvailableTables.length;
+    const selectableCount = allAvailableTables.filter(t => !t.already_loaded).length;
     
     const countSpan = document.getElementById('selectedCountInfo');
     const importBtn = document.getElementById('importSelectedBtn');
     
     if (countSpan) {
-        countSpan.textContent = `${selectedCount} of ${totalCount} tables selected`;
+        countSpan.textContent = `${selectedCount} of ${selectableCount} new table${selectableCount !== 1 ? 's' : ''} selected`;
     }
     
     if (importBtn) {
@@ -484,26 +692,35 @@ function updateImportSelectionCount() {
 }
 
 function updateSelectAllImportCheckbox() {
-    const visibleRows = document.querySelectorAll('.import-table-row:not(.d-none)');
-    const visibleTableNames = Array.from(visibleRows).map(r => r.dataset.table);
-    
-    const allSelected = visibleTableNames.every(name => importTableSelections[name] === true);
-    const someSelected = visibleTableNames.some(name => importTableSelections[name] === true);
+    // Only rows that still have a checkbox (new / not already loaded)
+    const visibleNames = Array.from(
+        document.querySelectorAll('.import-table-row:not(.d-none) .import-table-checkbox')
+    ).map(cb => cb.dataset.table);
     
     const checkbox = document.getElementById('selectAllImportCheckbox');
-    if (checkbox) {
-        checkbox.checked = allSelected;
-        checkbox.indeterminate = someSelected && !allSelected;
+    if (!checkbox) return;
+    if (visibleNames.length === 0) {
+        checkbox.checked = false;
+        checkbox.indeterminate = false;
+        return;
     }
+    const allSelected = visibleNames.every(name => importTableSelections[name] === true);
+    const someSelected = visibleNames.some(name => importTableSelections[name] === true);
+    checkbox.checked = allSelected;
+    checkbox.indeterminate = someSelected && !allSelected;
 }
 
 async function importSelectedTables() {
-    const selectedTables = Object.entries(importTableSelections)
-        .filter(([name, selected]) => selected)
-        .map(([name]) => name);
+    let selectedTables = Object.entries(importTableSelections)
+        .filter(([, selected]) => selected)
+        .map(([name]) => name)
+        .filter(name => {
+            const table = allAvailableTables.find(t => t.name === name);
+            return table && !table.already_loaded;
+        });
     
     if (selectedTables.length === 0) {
-        showNotification('No tables selected for import', 'warning');
+        showNotification('No new tables selected for import', 'warning');
         return;
     }
 
@@ -523,13 +740,14 @@ async function importSelectedTables() {
         return;
     }
     
-    // Use the catalog/schema stored when the load metadata modal was confirmed
-    const catalog = pendingLoadCatalog;
-    const schema = pendingLoadSchema;
+    // Catalog and schema chosen in the Add Data Assets dialog
+    const { catalog, schema } = getAddDataAssetsLocation();
     
-    // Close the modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('tableSelectionModal'));
-    modal.hide();
+    // Close the modal and show a spinner on the assets list while we import
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('addDataAssetsModal')).hide();
+    const previewDiv = document.getElementById('metadataPreview');
+    if (previewDiv) previewDiv.classList.remove('d-none');
+    setMetadataListOverlay(true, 'Importing assets…');
     
     const loadBtn = document.getElementById('loadMetadataBtn');
     const progressDiv = document.getElementById('metadataProgress');
@@ -557,6 +775,7 @@ async function importSelectedTables() {
         if (!startResult.success) {
             progressDiv.classList.add('d-none');
             loadBtn.disabled = false;
+            setMetadataListOverlay(false);
             showNotification('Error: ' + startResult.message, 'error');
             return;
         }
@@ -569,12 +788,13 @@ async function importSelectedTables() {
         // Trigger refresh of task tracker
         if (typeof refreshTasks === 'function') refreshTasks();
         
-        // Monitor the task
+        // Monitor the task (reload + rights happen on completion)
         await monitorMetadataTask(taskId, 'load', loadBtn, progressDiv, statusSpan);
         
     } catch (error) {
         progressDiv.classList.add('d-none');
         loadBtn.disabled = false;
+        setMetadataListOverlay(false);
         showNotification('Error: ' + error.message, 'error');
     }
 }
@@ -644,7 +864,7 @@ function confirmMetadataDiff(diff) {
         title: 'Review Metadata Changes',
         size: 'modal-lg',
         icon: 'arrow-repeat',
-        message: `
+        messageHtml: `
             Unity Catalog reports ${changeCount} column change(s) across
             ${tableCount} table(s).
             ${droppedCount > 0 ? `
@@ -697,7 +917,7 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
                 const diff = task.result?.diff || {};
                 if (Object.keys(diff).length && !await confirmMetadataDiff(diff)) {
                     showNotification('Metadata changes discarded', 'info');
-                    await loadMetadataStatus();
+                    await loadMetadataStatus({ listOverlay: true, overlayText: 'Reloading assets…' });
                     if (typeof refreshTasks === 'function') refreshTasks();
                     break;
                 }
@@ -723,8 +943,12 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
                 
                 showNotification(task.message || 'Data assets operation completed!', 'success');
                 
-                // Refresh metadata display
-                await loadMetadataStatus();
+                // Reload the assets list with a spinner, then rights in the background
+                await loadMetadataStatus({
+                    listOverlay: true,
+                    overlayText: 'Reloading assets…',
+                    refreshRights: true,
+                });
                 
                 // Refresh task tracker
                 if (typeof refreshTasks === 'function') refreshTasks();
@@ -735,6 +959,7 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
                 
                 if (progressDiv) progressDiv.classList.add('d-none');
                 if (btn) btn.disabled = false;
+                setMetadataListOverlay(false);
                 
                 showNotification('Failed: ' + (task.error || 'Unknown error'), 'error');
                 if (typeof refreshTasks === 'function') refreshTasks();
@@ -745,6 +970,7 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
                 
                 if (progressDiv) progressDiv.classList.add('d-none');
                 if (btn) btn.disabled = false;
+                setMetadataListOverlay(false);
                 
                 showNotification('Operation was cancelled', 'warning');
                 if (typeof refreshTasks === 'function') refreshTasks();
@@ -756,6 +982,7 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
             
             if (progressDiv) progressDiv.classList.add('d-none');
             if (btn) btn.disabled = false;
+            setMetadataListOverlay(false);
             
             showNotification('Error monitoring task', 'error');
             break;
@@ -809,7 +1036,7 @@ function displayMetadataPreview(metadata) {
                 <td class="meta-cursor-pointer" data-meta-action="table-details" data-table-index="${index}">
                     <span class="badge bg-secondary">${columnCount}</span>
                 </td>
-                <td class="text-center">${selectCell}</td>
+                <td class="text-center dm-rights-cell" data-table="${escapeHtml(table.name)}">${selectCell}</td>
                 <td class="table-comment-cell meta-cursor-pointer" data-meta-action="table-details" data-table-index="${index}">
                     <span class="table-comment-text" id="tableComment_${index}">${tableComment || '<span class="text-muted fst-italic">Click to add description...</span>'}</span>
                 </td>
@@ -825,9 +1052,9 @@ function displayMetadataPreview(metadata) {
 }
 
 function renderSelectPermCell(table) {
-    // can_select may be undefined for metadata loaded before this field existed
+    // can_select is filled asynchronously by refreshSelectPermissionsInBackground
     if (table.can_select === undefined || table.can_select === null) {
-        return '<span class="text-muted" title="Unknown — refresh with Update from UC">'
+        return '<span class="text-muted" title="SELECT rights not checked yet">'
             + '<i class="bi bi-dash-circle"></i></span>';
     }
     if (table.can_select) {
@@ -973,8 +1200,8 @@ async function confirmRemovalWithImpact(identifiers, plain) {
         size: 'modal-lg',
         headerClass: 'bg-danger text-white',
         icon: 'exclamation-triangle',
-        message: `
-            ${plain.message}
+        messageHtml: `
+            ${escapeHtml(plain.message)}
             <div class="alert alert-danger mt-3 mb-0">
                 <i class="bi bi-exclamation-triangle me-2"></i>
                 <strong>Warning:</strong> ${affectedTables} of these data asset(s)
@@ -1373,6 +1600,7 @@ async function updateMetadataFromUC() {
     const originalHtml = updateBtn.innerHTML;
     updateBtn.disabled = true;
     updateBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Updating...';
+    setMetadataListOverlay(true, 'Updating assets…');
     
     try {
         // Start async task
@@ -1388,6 +1616,7 @@ async function updateMetadataFromUC() {
         if (!startResult.success) {
             updateBtn.disabled = false;
             updateBtn.innerHTML = originalHtml;
+            setMetadataListOverlay(false);
             showNotification('Error: ' + startResult.message, 'error');
             return;
         }
@@ -1421,6 +1650,7 @@ async function updateMetadataFromUC() {
         console.error('[Metadata] Update error:', error);
         updateBtn.disabled = false;
         updateBtn.innerHTML = originalHtml;
+        setMetadataListOverlay(false);
         showNotification('Error: ' + error.message, 'error');
     }
 }
@@ -1450,7 +1680,7 @@ async function updateMetadataFromUC() {
             else if (act === 'import-new-only') selectNewTablesOnly();
             else if (act === 'import-selected') importSelectedTables();
             else if (act === 'save-table-details') saveTableDetails();
-            else if (act === 'load-from-uc') loadMetadataFromUC();
+            else if (act === 'add-assets-refresh') refreshAddDataAssets();
             else if (act === 'confirm-ds-change') confirmDataSourceChange();
             else if (act === 'table-details') showTableDetails(parseInt(t.getAttribute('data-table-index'), 10));
             else if (act === 'open-ds-modal') openChangeDataSourceModal(parseInt(t.getAttribute('data-table-index'), 10));
@@ -1459,7 +1689,9 @@ async function updateMetadataFromUC() {
         root.addEventListener('change', function (e) {
             const el = e.target;
             if (!root.contains(el)) return;
-            if (el.id === 'selectAllTablesCheckbox') toggleAllTables(el.checked);
+            if (el.id === 'addDataAssetsCatalog') onAddDataAssetsCatalogChange();
+            else if (el.id === 'addDataAssetsSchema') onAddDataAssetsSchemaChange();
+            else if (el.id === 'selectAllTablesCheckbox') toggleAllTables(el.checked);
             else if (el.id === 'selectAllImportCheckbox') selectAllImportTables(el.checked);
             else if (el.classList.contains('table-checkbox') && el.dataset.table) {
                 toggleTableSelection(el.dataset.table, el.checked);

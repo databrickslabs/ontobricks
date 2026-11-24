@@ -121,7 +121,7 @@ def tool_get_documents_context(ctx: ToolContext, **_kwargs) -> str:
         return json.dumps(
             {
                 "documents": [],
-                "message": "No documents were loaded. Upload documents in Domain → Knowledge Store to enrich mapping context.",
+                "message": "No documents were loaded. Upload documents in Context → Documents to enrich mapping context.",
             }
         )
     result = []

@@ -10,5 +10,5 @@ class RuleViolation:
     rule_name: str
     subject: str
     message: str
-    check_type: str  # "swrl", "cardinality", "value", etc.
-    rule_type: str = ""  # "swrl", "decision_table", "sparql", "aggregate"
+    check_type: str  # "if_then", "cardinality", "value", etc.
+    rule_type: str = ""  # "if_then", "sparql"

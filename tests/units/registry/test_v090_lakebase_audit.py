@@ -92,7 +92,7 @@ def test_record_review_event_unknown_domain_error_and_missing_table():
     db = FakeDB()
     assert make_store(db).record_review_event("ghost", "1", "", "") == (
         False,
-        "Domain 'ghost' not found",
+        "Context 'ghost' not found",
     )
     assert db.calls[0].params[1:7] == ("", "", "", "", "", "{}")
 
@@ -219,7 +219,7 @@ def test_record_change_events_unknown_domain_error_and_missing_table():
     db = FakeDB()
     assert make_store(db).record_change_events("ghost", "1", "u", [{"action": "a"}]) == (
         False,
-        "Domain 'ghost' not found",
+        "Context 'ghost' not found",
     )
     assert not db.sql_with("INSERT")
 

@@ -1,0 +1,363 @@
+"""Contracts for Studio Business View dropdown + ontology group collapse."""
+
+from pathlib import Path
+
+import pytest
+
+pytestmark = pytest.mark.unit
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+MAP_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-map.js"
+MAP_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-map.css"
+MAP_HTML = REPO_ROOT / "src/front/templates/partials/ontology/_ontology_map.html"
+ONTOLOGY_HTML = REPO_ROOT / "src/front/templates/ontology.html"
+GROUPS_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-groups.js"
+GROUPS_HTML = REPO_ROOT / "src/front/templates/partials/ontology/_ontology_groups.html"
+PANELS_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-shared-panels.js"
+MENU = REPO_ROOT / "src/front/config/menu_config.json"
+PERSISTENCE_JS = REPO_ROOT / "src/front/static/global/js/ontology-persistence.js"
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def test_ontoviz_and_design_section_are_gone():
+    html = _read(ONTOLOGY_HTML)
+    assert "ontoviz.js" not in html
+    assert "ontology-design.js" not in html
+    assert 'id="design-section"' not in html
+    assert "ontology-persistence.js" in html
+    assert not (REPO_ROOT / "src/front/static/global/ontoviz/ontoviz.js").exists()
+    assert not (REPO_ROOT / "src/front/static/global/js/ontology-design.js").exists()
+    assert not (
+        REPO_ROOT / "src/front/templates/partials/ontology/_ontology_design.html"
+    ).exists()
+
+
+def test_menu_has_no_business_views_or_groups_sidebar_entry():
+    import json
+
+    menus = {m["id"]: m for m in json.loads(_read(MENU))["menus"]}
+    ontology_ids = [
+        item["id"]
+        for group in menus["ontology"]["groups"]
+        for item in group["items"]
+    ]
+    assert "design" not in ontology_ids
+    assert "groups" not in ontology_ids
+    assert "map" in ontology_ids
+    labels = {
+        item.get("label")
+        for group in menus["ontology"]["groups"]
+        for item in group["items"]
+    }
+    assert "Business Views" not in labels
+    assert "Groups" not in labels
+
+
+def test_studio_toolbar_has_view_dropdown_and_groups_menu():
+    html = _read(MAP_HTML)
+    assert 'id="studioViewBtn"' in html
+    assert 'id="studioViewMenu"' in html
+    assert 'data-view="__all__"' in html
+    assert 'id="studioDeleteViewBtn"' in html
+    assert 'id="studioGroupsBtn"' in html
+    assert 'id="studioNewGroupBtn"' in html
+    assert 'id="studioToggleAllGroupsBtn"' in html
+    assert 'aria-pressed=' in html[html.index("studioToggleAllGroupsBtn") :]
+
+    # Groups dropdown and Expand/collapse toggle are stuck together in one btn-group
+    btn_group_start = html.rfind('<div class="btn-group', 0, html.index('id="studioGroupsBtn"'))
+    btn_group_end = html.index('</div>', html.index('id="studioToggleAllGroupsBtn"'))
+    group_html = html[btn_group_start:btn_group_end]
+    assert 'id="studioGroupsBtn"' in group_html
+    assert 'id="studioToggleAllGroupsBtn"' in group_html
+
+
+def test_groups_modal_has_delete_and_no_sidebar_section():
+    groups_html = _read(
+        REPO_ROOT / "src/front/templates/partials/ontology/_ontology_groups.html"
+    )
+    ontology_html = _read(ONTOLOGY_HTML)
+    groups_css = _read(
+        REPO_ROOT / "src/front/static/ontology/css/ontology-groups.css"
+    )
+    groups_js = _read(GROUPS_JS)
+    assert 'id="groupModal"' in groups_html
+    assert 'id="groupModalDeleteBtn"' in groups_html
+    assert 'id="groups-section"' not in ontology_html
+    assert 'id="groupsList"' not in groups_html
+    assert 'studio-group-menu-item' in groups_js
+    assert 'flex-nowrap' in groups_js
+    assert 'bi-pencil text-muted flex-shrink-0 ms-auto me-2' in groups_js
+    assert 'white-space: nowrap' in groups_css
+    assert '.studio-group-menu-item .bi-pencil' in groups_css
+    assert 'sharedEntityGroup' in _read(
+        REPO_ROOT / "src/front/static/ontology/js/ontology-shared-panels.js"
+    )
+
+
+def test_map_exposes_view_and_group_apis():
+    js = _read(MAP_JS)
+    for name in (
+        "refreshStudioViewSelect",
+        "applyStudioView",
+        "wireStudioViewControls",
+        "flushStudioLayoutBeforeSave",
+        "loadStudioGroups",
+        "collapseStudioGroup",
+        "expandStudioGroup",
+        "toggleAllStudioGroups",
+        "applyStudioGroupsToggle",
+        "initStudioGroupsToggle",
+        "refreshStudioGroups",
+        "_snapshotStudioEntityPositions",
+        "_applyStudioEntityPosition",
+        "_studioEntityPositions",
+        "_studioGroupAnchors",
+        "_resolveStudioGroupAnchor",
+    ):
+        assert name in js
+    assert "SidebarNav.switchTo('design')" not in js
+    assert "loadOntologyIntoDesigner" not in js
+    assert "collapsedGroups" in js
+    # Collapse/expand must await persist + rebuild so layout cannot race.
+    assert "await persistStudioCollapsedGroups()" in js
+    assert "await initOntologyMap()" in js
+    # Expand/collapse-all is one persist + rebuild, not a per-group loop.
+    toggle_start = js.index("async function toggleAllStudioGroups(")
+    toggle_end = js.index("async function collapseStudioGroup(", toggle_start + 1)
+    toggle = js[toggle_start:toggle_end]
+    assert "collapseStudioGroup(" not in toggle
+    assert "expandStudioGroup(" not in toggle
+    assert "await persistStudioCollapsedGroups()" in toggle
+    assert "await initOntologyMap()" in toggle
+    assert "initStudioGroupsToggle()" in js
+    # Group circle anchors on the entity whose − badge was clicked.
+    assert "collapseStudioGroup(gName, d.name)" in js
+    assert "_studioGroupAnchors.set(name, anchorEntityName)" in js
+
+
+def test_clicking_group_opens_member_list_in_right_pane():
+    """Clicking a group super-node lists all its entities in the detail pane."""
+    js = _read(MAP_JS)
+    assert "openStudioGroupPanel(d.groupName)" in js
+    assert "async function openStudioGroupPanel(" in js
+    assert "data-group-member=" in js
+    # Row click selects the member entity (opens its entity panel).
+    assert "_setMapSelection([btn.dataset.groupMember])" in js
+    # Member rows are passive so they never mark the panel dirty.
+    assert 'class="panel-item panel-group-member"' in js
+    assert "data-panel-passive" in js
+    # Edit group opens the existing group modal by name.
+    assert 'data-edit-group="' in js
+    assert "OntologyGroups.editGroupByName" in js
+    groups_js = _read(GROUPS_JS)
+    assert "editGroupByName:" in groups_js
+    css = _read(REPO_ROOT / "src/front/static/ontology/css/ontology-shared-panels.css")
+    assert ".panel-group-member" in css
+    assert ".panel-group-edit" in css
+
+
+def test_clicking_group_highlights_neighborhood_like_entity():
+    """Collapsed group click opens the member pane AND highlights incident edges."""
+    js = _read(MAP_JS)
+    assert "openStudioGroupPanel(d.groupName)" in js
+    assert "highlightNeighborhood(d.id)" in js
+    assert "no entity connections" not in js
+    # Group stays out of mapSelectedEntityNames (avoids editClassByName).
+    assert "d3.select(this).classed('selected', true)" in js
+
+
+def test_highlight_neighborhood_matches_endpoint_id_or_name():
+    """Group super-nodes use id=__group__X and name=X; highlight must match both."""
+    js = _read(MAP_JS)
+    start = js.index("function highlightNeighborhood(")
+    end = js.index("function clearHighlights(", start)
+    body = js[start:end]
+    assert "endpoint.id" in body
+    assert "endpoint.name" in body
+    assert "d.id === selectedKey" in body
+
+
+def test_selected_group_circle_has_visual_style():
+    css = _read(MAP_CSS)
+    assert ".map-group-node.selected .map-group-circle" in css
+    assert ".map-node.dimmed .map-group-circle" in css
+
+
+def test_group_toggle_css_exists():
+    css = _read(MAP_CSS)
+    assert ".studio-group-toggle" in css
+    assert ".map-group-circle" in css
+    assert ".studio-view-toggle" in css
+    assert ".studio-view-rename" in css
+    # + badge: white glyph centered on a group-colored circle (fill set in JS).
+    assert "dominant-baseline: central" in css
+    assert "text-anchor: middle" in css
+    js = _read(MAP_JS)
+    assert ".attr('fill', groupColor)" in js
+    assert "dominant-baseline', 'central'" in js
+    # Member badge shows a minus (collapse); the group circle keeps the plus (expand).
+    assert "studio-group-toggle-collapse" in js
+    assert ".text('\\u2212')" in js
+
+
+def test_business_view_rename_is_wired_from_dropdown():
+    """Rename uses the rich View dropdown's pencil and the existing rename endpoint."""
+    js = _read(MAP_JS)
+    assert "function renameStudioView(" in js
+    assert "/domain/design-views/rename" in js
+    assert "studio-view-rename" in js
+    assert "studioViewMenu" in js
+    # Client-side duplicate check gives an inline message before the POST.
+    assert "already exists" in js
+
+    perms = _read(REPO_ROOT / "src/front/static/global/css/permissions.css")
+    assert ".studio-view-rename" in perms
+
+    css = _read(MAP_CSS)
+    assert ".studio-view-rename" in css
+    assert ".studio-view-rename .bi-pencil" in css
+    assert "margin-right: 0.5rem" in css
+    assert 'bi-pencil me-2' in js
+    assert 'studio-view-rename me-2' in js
+
+
+def test_groups_crud_refreshes_studio():
+    js = _read(GROUPS_JS)
+    assert "refreshStudioGroups" in js
+
+
+def test_creating_group_creates_group_prefixed_business_view():
+    """New groups snapshot a Group_<name> Business View; edits do not."""
+    groups_js = _read(GROUPS_JS)
+    assert "var isNew = _editIndex < 0" in groups_js
+    assert "createBusinessViewFromGroup(name, group.members)" in groups_js
+    # Only after a successful save, and only when creating.
+    save = groups_js[groups_js.index("saveGroup:"): groups_js.index("deleteGroup:")]
+    assert "if (isNew" in save
+    assert "createBusinessViewFromGroup" in save
+
+    map_js = _read(MAP_JS)
+    assert "async function createBusinessViewFromGroup(" in map_js
+    assert "window.createBusinessViewFromGroup = createBusinessViewFromGroup" in map_js
+    block_start = map_js.index("async function createBusinessViewFromGroup(")
+    block_end = map_js.index("async function assignEntitiesToStudioGroup(", block_start)
+    block = map_js[block_start:block_end]
+    assert "baseName: `Group_${groupName}`" in block
+    assert "applyAfter: false" in block
+    assert "_createMapBusinessView(" in block
+
+    helper_start = map_js.index("async function _createMapBusinessView(")
+    helper_end = map_js.index("async function createBusinessViewFromEntity(", helper_start)
+    helper = map_js[helper_start:helper_end]
+    assert "spec.applyAfter !== false" in helper
+    assert "applyStudioView(viewName)" in helper
+
+
+def test_business_view_filter_whitelists_layout_entities():
+    """Studio BV filter must not rely on a stale hiddenEntities blacklist alone.
+
+    Otherwise entities added after a Group_<name> snapshot leak into the canvas
+    as isolated (orphan-looking) nodes that are not part of the group.
+    """
+    js = _read(MAP_JS)
+    assert "function _studioViewVisibleNames(" in js
+    assert "function _studioGroupNameForView(" in js
+
+    # Visible-name helper: layout.entities whitelist, Group_* live membership.
+    helper_start = js.index("function _studioViewVisibleNames(")
+    helper_end = js.index("async function flushStudioLayoutBeforeSave(", helper_start)
+    helper = js[helper_start:helper_end]
+    assert "hiddenEntities" in helper
+    assert "layout.entities" in helper or "_studioViewLayout.entities" in helper
+    assert "_studioGroupNameForView" in helper
+    assert "g.members" in helper
+
+    # Filter site uses the whitelist helper (not bare blacklist-only filter).
+    filter_start = js.index("// ── Business View filter")
+    filter_end = js.index("// ── Ontology Groups collapse", filter_start)
+    block = js[filter_start:filter_end]
+    assert "_studioViewVisibleNames(" in block
+    assert "visibleNames.has(n.name)" in block
+    assert "nodes.filter(n => !hidden.has(n.name))" not in block
+
+
+def test_bv_collapse_persist_does_not_grow_entities_from_cache():
+    """Collapsed-group persist must not copy All-map cache entries into a BV."""
+    js = _read(MAP_JS)
+    start = js.index("async function persistStudioCollapsedGroups(")
+    end = js.index("async function _saveStudioViewLayoutFromNodes(", start)
+    block = js[start:end]
+    assert "Object.keys(byPos).forEach" not in block
+    assert "entities.push(" not in block
+
+
+def test_group_business_view_shows_only_group_members():
+    """Group_* views show exactly the group's members, never other groups' entities.
+
+    Inheritance neighbours outside the group (e.g. a superclass in another group)
+    must not be pulled onto the canvas. Links between members, including
+    inheritance links, are kept; stale snapshot hide lists are ignored.
+    """
+    js = _read(MAP_JS)
+    assert "_studioExpandVisibleWithInheritance" not in js
+
+    filter_start = js.index("// ── Business View filter")
+    filter_end = js.index("// ── Ontology Groups collapse", filter_start)
+    block = js[filter_start:filter_end]
+    assert "isGroupView" in block
+    assert "visibleNames.has(n.name)" in block
+    # Group views ignore the snapshot hide lists for links.
+    assert "if (isGroupView) return true" in block
+
+
+def test_exclusive_group_membership_is_surfaced_in_ui():
+    """An entity can belong to only one group — modal, panel, and Studio menus say so."""
+    groups_js = _read(GROUPS_JS)
+    # Modal lists other-group members without a checkbox (not selectable).
+    assert "group-member-locked" in groups_js
+    assert "data-other-group" in groups_js
+    assert "_wireExclusiveMemberChecks" not in groups_js
+    assert "Exclusive membership" in groups_js
+
+    panels = _read(PANELS_JS)
+    assert "sharedEntityGroupExclusiveHint" in panels
+    assert "An entity can belong to only one group." in panels
+
+    groups_html = _read(GROUPS_HTML)
+    assert "An entity can belong to only one group" in groups_html
+    assert "groupMembersExclusiveHint" in groups_html
+    assert "without a checkbox" in groups_html
+
+    groups_css = _read(REPO_ROOT / "src/front/static/ontology/css/ontology-groups.css")
+    assert ".group-member-locked" in groups_css
+
+    css = _read(MAP_CSS)
+    assert ".map-context-submenu" in css
+    assert ".map-context-has-submenu" in css
+
+    map_js = _read(MAP_JS)
+    assert 'data-action="remove-from-group"' in map_js
+    assert "Remove from group" in map_js
+
+
+def test_persistence_module_marks_registry_dirty():
+    js = _read(PERSISTENCE_JS)
+    assert "setDomainDirty('ontology', true)" in js
+    assert "setDomainDirty('ontology', false)" in js
+    assert "function saveRegistryOnUnload" in js
+
+
+def test_studio_view_dropdown_toggle_left_aligned():
+    """Business View toggle aligns 'All' or the selected view to the left."""
+    css = _read(MAP_CSS)
+    assert ".studio-view-toggle" in css
+    assert "justify-content: space-between" in css
+    assert "text-align: left" in css
+
+    html = _read(MAP_HTML)
+    assert "studio-view-toggle" in html
+    assert "text-start" in html

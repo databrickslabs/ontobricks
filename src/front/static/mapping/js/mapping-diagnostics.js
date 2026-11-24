@@ -230,8 +230,35 @@
         }
     }
 
+    function openDiagnosticsModal() {
+        var modalEl = document.getElementById('mappingDiagnosticsModal');
+        if (!modalEl || typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+            if (typeof showNotification === 'function') {
+                showNotification('Diagnostics dialog is not available.', 'warning');
+            }
+            return;
+        }
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        runDiagnostics();
+    }
+
+    window.MappingDiagnostics = {
+        open: openDiagnosticsModal,
+        run: runDiagnostics
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
         var btn = document.getElementById('runDiagnosticsBtn');
         if (btn) btn.addEventListener('click', runDiagnostics);
+
+        var params = new URLSearchParams(window.location.search);
+        var autoOpen = params.get('open') === 'diagnostics'
+            || window.__OB_OPEN_MAPPING_DIAGNOSTICS === true
+            || window.location.hash === '#diagnostics'
+            || params.get('section') === 'diagnostics';
+        window.__OB_OPEN_MAPPING_DIAGNOSTICS = false;
+        if (autoOpen) {
+            setTimeout(openDiagnosticsModal, 300);
+        }
     });
 })();

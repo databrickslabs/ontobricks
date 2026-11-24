@@ -1,0 +1,1127 @@
+"""Static contract for the Simulation page (menu 5)."""
+
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+pytestmark = pytest.mark.unit
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+FRONT = REPO_ROOT / "src/front"
+PAGE = FRONT / "templates/intelligence.html"
+MENU_CONFIG = FRONT / "config/menu_config.json"
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def _menu() -> dict:
+    menus = json.loads(_read(MENU_CONFIG))["menus"]
+    return next(m for m in menus if m["id"] == "intelligence")
+
+
+def test_intelligence_menu_groups():
+    groups = _menu()["groups"]
+    assert [g["id"] for g in groups] == [
+        "intelligence-home",
+        "intelligence-configuration",
+        "intelligence-discovery",
+        "intelligence-simulation",
+    ]
+    assert [g["title"] for g in groups] == [
+        "",
+        "Configuration",
+        "Discovery",
+        "Simulation",
+    ]
+    by_id = {g["id"]: g for g in groups}
+    # Cohorts and Runs are one page with Design / Runs tabs.
+    assert [(i["id"], i["label"]) for i in by_id["intelligence-configuration"]["items"]] == [
+        ("cohorts", "Cohorts"),
+    ]
+    assert [(i["id"], i["label"]) for i in by_id["intelligence-discovery"]["items"]] == [
+        ("analytics", "Analytics"),
+        ("communities", "Communities"),
+        ("patterns", "Patterns"),
+    ]
+    assert [(i["id"], i["label"]) for i in by_id["intelligence-simulation"]["items"]] == [
+        ("scenarios", "Scenarios"),
+        ("compare", "Compare"),
+    ]
+    items = [i["id"] for g in groups for i in g["items"]]
+    assert "results" not in items
+    assert "patterns-saved" not in items
+    assert "patterns-discover" not in items
+    assert "runs" not in items
+    assert 'id="runs-section"' not in _read(PAGE)
+    assert "_sim_runs.html" not in _read(PAGE)
+
+
+def test_menu_follows_knowledge_graph():
+    ids = [m["id"] for m in json.loads(_read(MENU_CONFIG))["menus"]]
+    assert ids.index("intelligence") == ids.index("digitaltwin") + 1
+    assert _menu()["route"] == "/intelligence/"
+
+
+def test_workbench_is_not_a_sidebar_item():
+    items = [i["id"] for g in _menu()["groups"] for i in g["items"]]
+    assert "workbench" not in items
+    html = _read(PAGE)
+    assert 'id="workbench-section"' not in html
+    assert 'id="simScenariosList"' in html
+    assert 'id="simScenariosEditor"' in html
+    wb = _read(FRONT / "templates/partials/intelligence/_sim_workbench.html")
+    js = _read(FRONT / "static/intelligence/js/simulation-workbench.js")
+    assert 'id="simWbPurgeBtn"' in wb
+    assert 'id="simWbClearBtn"' not in wb
+    assert "</i>Purge" in wb
+    assert "simWbPurgeBtn" in js
+    assert "purgeScenario" in js
+    assert 'id="results-section"' not in html
+    nav = _read(FRONT / "static/global/js/sidebar-nav.js")
+    assert "_showSection: function" in nav
+    assert "getElementById(target + '-section')" in nav
+
+
+def test_every_menu_item_has_a_section_and_one_is_active():
+    html = _read(PAGE)
+    items = [i for g in _menu()["groups"] for i in g["items"]]
+    for item in items:
+        assert f'id="{item["id"]}-section"' in html, item["id"]
+    assert len(re.findall(r'class="sidebar-section active"', html)) == 1
+    default = next(i for i in items if i.get("default"))
+    assert f'id="{default["id"]}-section" class="sidebar-section active"' in html
+
+
+def test_partials_and_assets_exist():
+    html = _read(PAGE)
+    for partial in re.findall(r'include "(partials/intelligence/[^"]+)"', html):
+        assert (FRONT / "templates" / partial).is_file(), partial
+    for asset in re.findall(r"filename='(simulation/[^']+)'", html):
+        assert (FRONT / "static" / asset).is_file(), asset
+
+
+def test_community_size_stats_helpers():
+    js = _read(FRONT / "static/intelligence/js/intelligence-communities.js")
+    assert "Size min" in js
+    assert "Size max" in js
+    assert "Size avg" in js
+    assert "Size median" in js
+    assert "Clusters" in js
+    assert "size_median" in js
+
+
+def test_communities_section_owns_detection():
+    html = _read(PAGE)
+    assert 'id="communities-section"' in html
+    assert "intelligence-communities.js" in html
+    assert _menu()["label"] == "Intelligence"
+    comm = _read(FRONT / "templates/partials/intelligence/_intel_communities.html")
+    assert re.sub(r"<!--.*?-->", "", comm, flags=re.DOTALL).strip().startswith('<div class="content-section">')
+    assert 'class="comm-layout"' in comm
+    assert 'class="comm-rail"' in comm
+    assert 'class="comm-main"' in comm
+    assert 'id="commDetectBtn"' in comm
+    assert 'class="btn btn-sm btn-primary"' in comm
+    assert 'id="commMaterializeBtn"' in comm
+    assert 'btn btn-sm btn-secondary' in comm
+    assert 'id="commExplorerBtn"' in comm
+    assert 'href="/dtwin/?section=sigmagraph"' in comm
+    assert 'id="commPreviewCanvas"' in comm
+    assert 'id="commPreviewStats"' in comm
+    assert 'id="commPreviewDetails"' in comm
+    assert 'id="commPreviewLoading"' in comm
+    assert 'id="commPreviewLoadingTitle"' in comm
+    assert 'id="commCurrentLoading"' in comm
+    assert 'id="commPreviewBody"' not in comm
+    assert 'id="commPreviewClusters"' not in comm
+    assert 'id="commListTabs"' in comm
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in comm
+    assert 'id="commListPaneCommunities"' in comm
+    assert 'id="commListPaneHow"' in comm
+    assert "How it works" in comm
+    assert "Label propagation (semi-synchronous LPA)" in comm
+    assert "How this differs from Patterns" in comm
+    # Detect lives in the top-right header actions, not in the algorithm card.
+    header, _, rest = comm.partition('id="commDetectBtn"')
+    assert 'section-header' in header
+    assert 'id="commAlgorithm"' in rest
+    # Materialize lives in the algorithm card; Purge lives in the Materialized card.
+    assert 'id="commMaterializeBtn"' in rest
+    assert 'id="commClearBtn"' not in header
+    assert 'id="commClearBtn"' in rest
+    js = _read(FRONT / "static/intelligence/js/intelligence-communities.js")
+    assert "/dtwin/clusters/detect" in js
+    assert "/dtwin/clusters/materialize" in js
+    assert "_renderPreviewGraph" in js
+    assert "_renderStats" in js
+    assert "_selectCluster" in js
+    assert "_showClusterDetails" in js
+    assert "_memberInfo" in js
+    assert "_typeIcon" in js
+    assert "_erasePreview" in js
+    assert "_showPreviewLoading" in js
+    assert "_showCurrentLoading" in js
+    assert "_setBtnSpinner" in js
+    assert "ob-btn-spinner" in js
+    assert "_fmtElapsed" in js
+    assert "duration ${duration}" in js or "duration " in js
+    assert "elapsed_ms" in js
+    assert "clickNode" in js
+    assert "commPreviewCanvas" in js
+    assert "comm-member-type" in js
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".comm-current-loading" in css
+    assert "#commDetectBtn.is-busy" in css
+    assert "#commMaterializeBtn.is-busy" in css
+    assert ".comm-tabs-card" in css
+    assert "#commListPaneCommunities.active" in css
+    assert ".comm-how-it-works" in css
+
+
+def test_community_detection_runs_as_a_databricks_task():
+    """Detect and Materialize are background tasks; reads are bounded."""
+    comm = _read(FRONT / "templates/partials/intelligence/_intel_communities.html")
+    assert "Label propagation (Databricks)" in comm
+    assert 'id="commResolution"' not in comm
+    assert 'id="commClassFilter"' in comm
+    assert 'id="commJobStatus"' in comm
+    assert "Detection runs on Databricks" in comm
+    js = _read(FRONT / "static/intelligence/js/intelligence-communities.js")
+    assert "waitForTask" in js
+    assert "/dtwin/clusters/latest" in js
+    assert "community_detection" in js
+    assert "community_materialize" in js
+    assert "/members?" in js
+    assert "Load more" in js
+    assert "blocked_reason" in js
+    assert "JSON.stringify(this.preview)" not in js
+
+
+def test_no_inline_scripts_or_styles():
+    html = _read(PAGE)
+    # Analytics moved from Graph; it keeps the query-page onclick/style
+    # convention covered by test_analytics_dashboard.py.
+    for partial in (FRONT / "templates/partials/intelligence").glob("*.html"):
+        if partial.name == "_intel_analytics.html":
+            continue
+        html += _read(partial)
+    scripts = re.findall(r"<script\b([^>]*)>", html)
+    assert all("src=" in attrs or 'type="application/json"' in attrs for attrs in scripts)
+    assert "style=" not in html
+    assert "onclick=" not in html
+
+
+def test_js_uses_shared_notifications_not_alert():
+    for js in (FRONT / "static/intelligence/js").glob("*.js"):
+        src = _read(js)
+        assert "alert(" not in src and "confirm(" not in src.replace("showDeleteConfirm(", "")
+
+
+def test_run_registers_with_background_tasks():
+    js = _read(FRONT / "static/intelligence/js/simulation.js")
+    assert "refreshTasks()" in js
+    assert "applyScenarioView" in js
+    assert "syncScenarioUrl" in js
+    assert "ontobricks_simulation_open" in js
+    assert "switchTo('workbench')" not in js
+
+
+def test_run_progress_matches_build_bar_without_results_cta():
+    js = _read(FRONT / "static/intelligence/js/simulation.js")
+    html = _read(FRONT / "templates/partials/intelligence/_sim_workbench.html")
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert 'id="simWbViewResultsBtn"' not in html
+    assert "ob-progress-md" in html
+    assert "progress-bar-striped" in html
+    assert 'id="simWbProgressMsg"' in html
+    assert "#simWbProgress .progress.ob-progress-md" in css
+    assert "this.showResults(simId)" not in js
+    assert "tick()" in js
+
+
+def test_entity_panel_links_to_workbench():
+    js = _read(FRONT / "static/query/js/query-entity-details.js")
+    assert "/intelligence/?section=scenarios" in js
+    assert "entity=" in js
+    assert "&label=" in js
+    assert "Simulate from here" in js
+    assert "getDisplayLabel(entity)" in js
+
+
+def test_hypothetical_facts_show_id_type_and_predicate_kind():
+    wb = _read(FRONT / "static/intelligence/js/simulation-workbench.js")
+    page = _read(FRONT / "static/intelligence/js/simulation.js")
+    wizard = _read(FRONT / "static/intelligence/js/simulation-fact-wizard.js")
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    html = _read(FRONT / "templates/partials/intelligence/_sim_workbench.html")
+    assert "_termCell" in wb
+    assert "sim-term-caption" in wb
+    assert "(${esc(caption)})" in wb
+    assert "sim-term-kind" in css
+    assert "display: flex" in css.split(".sim-term {", 1)[1].split("}", 1)[0]
+    assert "justify-content: flex-start" in css.split(".sim-term {", 1)[1].split("}", 1)[0]
+    assert "margin-bottom: 0" in css.split(".sim-term-kind {", 1)[1].split("}", 1)[0]
+    assert "flex: 0 1 auto" in css.split(".sim-term-kind {", 1)[1].split("}", 1)[0]
+    assert "flex: 1" not in css.split(".sim-term-kind {", 1)[1].split("}", 1)[0]
+    assert "shortUri(uri)" in wb
+    assert "Relationship" in wb
+    assert "Attribute" in wb
+    assert "predicate_kind" in wb
+    assert "sim-term-emoji" in wb
+    assert "subject_type" in wb
+    assert 'id="simWbPatchesBody"' in html
+    assert "sim-patch-card" in wb
+    assert "col-lg-4" in wb
+    assert "sim-patch-fields" in wb
+    assert "align-items-center" in wb
+    assert "align-items-start" not in wb.split("sim-patch-card", 1)[1].split("_termCell", 1)[0]
+    assert "sim-term-field-label" not in wb
+    assert "sim-patches-list" in html
+    assert "gap-1" in html
+    assert "sim-patches-table" not in html
+    assert "table-sm" not in html.split('id="simWb-pane-facts"', 1)[1].split('id="simWb-pane-reasoning"', 1)[0]
+    assert "padding: 0.35rem 0.5rem" in css.split(".sim-patch-card .card-body", 1)[1].split("}", 1)[0]
+    assert "resolveEntitySeed" in page
+    assert "_lookupInput" not in wb
+    assert "_onPatchEdit" not in wb
+    assert 'data-field="op"' not in wb
+    assert "form-select" not in wb.split("renderPatches", 1)[1].split("_opIcon", 1)[0]
+    card = wb.split("sim-patch-card", 1)[1].split(").join('')", 1)[0]
+    assert 'data-edit="' in card
+    assert "data-remove=" in card
+    assert card.index("data-edit=") < card.index("data-remove=")
+    assert "bi-plus-circle" in wb
+    assert "bi-arrow-repeat" in wb
+    assert "bi-dash-circle" in wb
+    assert "bi-pencil" in wb
+    assert 'class="form-control sim-term-id"' not in wb
+    assert "on('simWbAddPatchBtn', 'click', () => this.openFactWizard())" in wb
+    assert wizard.count('text-muted">${SimulationPage.esc(s.uri)}</div>') == 0
+    assert "onclick=" not in html
+    assert "style=" not in html
+
+
+def test_hypothetical_facts_prompt_uses_agent():
+    html = _read(FRONT / "templates/partials/intelligence/_sim_workbench.html")
+    wb = _read(FRONT / "static/intelligence/js/simulation-workbench.js")
+    pane = html.split('id="simWb-pane-facts"', 1)[1].split('id="simWb-pane-reasoning"', 1)[0]
+    assert "simWbFactWizardBtn" not in pane
+    assert pane.index('id="simWbAddPatchBtn"') < pane.index('id="simWbFactPrompt"')
+    assert pane.index('id="simWbFactPrompt"') < pane.index('id="simWbFactPromptClearBtn"')
+    assert pane.index('id="simWbFactPromptClearBtn"') < pane.index('id="simWbFactPromptBtn"')
+    assert pane.index('id="simWbFactPromptBtn"') < pane.index('id="simWbPatchesBody"')
+    assert 'id="simWbPatchSelectAll"' in pane
+    assert 'id="simWbPatchRemoveSelectedBtn"' in pane
+    assert pane.index('id="simWbPatchSelectAll"') < pane.index('id="simWbAddPatchBtn"')
+    assert "data-select=" in wb
+    assert "_removeSelectedPatches" in wb
+    assert "simWbFactPromptClearBtn" in wb
+    assert "flex-sm-row" in pane
+    assert "justify-content-end mt-2" not in pane
+    assert "proposeFacts" in wb
+    propose = wb.split("proposeFacts", 1)[1].split("_persistLastFactPrompt", 1)[0]
+    assert "this.patches.push" not in propose
+    assert "_samePatchList" in wb
+    assert "this.patches = merged.map" in propose
+    assert "/simulation/facts/agent" in wb
+    assert "/simulation/facts/agent/stream" in wb
+    assert "simWbFactProgress" in pane
+    assert "simWbFactProgressSteps" in pane
+    assert "simWbFactProgressHide" in pane
+    assert pane.index("simWbFactProgressHide") < pane.index("simWbFactProgressSteps")
+    assert "_appendFactProgress" in wb
+    assert "_hideFactProgress" in wb
+    assert "simWbFactProgressHide" in wb
+    assert "_factReplyHtml" in wb
+    assert "renderMarkdown(" in wb
+    assert "class=\"oc-md\"" in wb or "class='oc-md'" in wb
+    pages_css = _read(FRONT / "static/global/css/pages.css")
+    assert ".success-toast-popup:has(.oc-md)" in pages_css
+    assert ".success-toast-popup .oc-md blockquote" in pages_css
+    sim_css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    steps_css = sim_css.split(".sim-fact-progress-steps {", 1)[1].split("}", 1)[0]
+    assert "overflow-y: auto" in steps_css
+    assert "max-height:" in steps_css
+    head_css = sim_css.split(".sim-fact-progress-head {", 1)[1].split("}", 1)[0]
+    assert "justify-content: flex-end" in head_css
+    utils_js = _read(FRONT / "static/global/js/utils.js")
+    assert "fade show d-flex align-items-start" in utils_js
+    # Legacy/Bootstrap callers pass 'danger'; must map to 'error' so the
+    # floating toast fires (TOAST_CONF has no 'danger' key).
+    assert "if (type === 'danger') type = 'error';" in utils_js
+    assert "description: this._val('simWbDescription')" not in wb.split("proposeFacts", 1)[1].split("_persistLastFactPrompt", 1)[0]
+    assert "this._set('simWbDescription', data.description)" not in wb
+    assert "fact_prompt: this._val('simWbFactPrompt')" in wb
+    assert "this._set('simWbFactPrompt', spec.fact_prompt || '')" in wb
+    assert "_persistLastFactPrompt" in wb
+    assert "onclick=" not in html
+    assert "style=" not in html
+
+
+def test_workbench_prefers_entity_label_over_local_id():
+    js = _read(FRONT / "static/intelligence/js/simulation-workbench.js")
+    assert "seedFromEntity" in js
+    assert "What if: ${SimulationPage.shortUri(entity)}" not in js
+    assert "_applyFocusLabel" in js
+    page = _read(FRONT / "static/intelligence/js/simulation.js")
+    assert "resolveEntityLabel" in page
+    assert "uriCell(s.focus, s.focus_label)" in page
+
+
+def test_scenarios_list_shows_spinner_while_loading():
+    html = _read(FRONT / "templates/partials/intelligence/_sim_scenarios.html")
+    js = _read(FRONT / "static/intelligence/js/simulation.js")
+    assert "spinner-border spinner-border-sm" in html
+    assert "Loading scenarios" in html
+    assert "_loadingBlock" in js
+    assert "Loading scenarios…" in js
+
+
+def test_scenarios_list_has_how_it_works_tab():
+    html = _read(FRONT / "templates/partials/intelligence/_sim_scenarios.html")
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert 'id="simListTabs"' in html
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in html
+    assert 'id="simListPaneScenarios"' in html
+    assert 'id="simListPaneHow"' in html
+    assert "How it works" in html
+    assert "Hypothetical facts (operations)" in html
+    assert "Compare with the live graph" in html
+    assert "Evaluate (same Compare page)" in html
+    assert "Entity neighbourhood" in html
+    assert ".sim-how-it-works" in css
+
+
+@pytest.mark.parametrize(
+    "partial,min_figures,phrases",
+    [
+        (
+            "_intel_patterns_saved.html",
+            2,
+            ["Patterns find entities that look alike", "Group the look-alikes"],
+        ),
+        (
+            "_intel_communities.html",
+            2,
+            ["Communities find clusters", "How the groups form", "Patterns or Communities?"],
+        ),
+        (
+            "_sim_scenarios.html",
+            3,
+            ["A scenario is a safe", "three kinds of facts", "Compare with the real (live) graph"],
+        ),
+    ],
+)
+def test_how_it_works_tabs_have_business_diagrams(partial, min_figures, phrases):
+    html = _read(FRONT / "templates/partials/intelligence" / partial)
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert html.count('<figure class="howto-figure">') >= min_figures
+    assert html.count('class="howto-svg"') >= min_figures
+    assert 'role="img"' in html
+    assert "Energy example." in html
+    assert '<details class="howto-tech">' in html
+    assert "<summary>Technical details</summary>" in html
+    assert html.count("<details") == html.count("</details>")
+    assert "style=" not in html
+    for phrase in phrases:
+        assert phrase in html
+    for selector in (".howto-figure", ".howto-svg", ".howto-example", ".howto-tech"):
+        assert selector in css
+
+
+def test_how_it_works_svg_ids_are_unique_across_intelligence():
+    ids = []
+    for name in ("_intel_patterns_saved.html", "_intel_communities.html", "_sim_scenarios.html"):
+        html = _read(FRONT / "templates/partials/intelligence" / name)
+        ids += re.findall(r'id="((?:pat|comm|sim)How[^"]+)"', html)
+    assert len(ids) == len(set(ids))
+
+
+def test_scenarios_list_uses_data_quality_card_style():
+    html = _read(FRONT / "templates/partials/intelligence/_sim_scenarios.html")
+    js = _read(FRONT / "static/intelligence/js/simulation.js")
+    css = _read(FRONT / "static/global/css/main.css")
+    assert 'id="simScenariosBody"' in html
+    assert 'id="simScenariosTable"' not in html
+    assert "sim-scenarios-list" in html
+    assert "_renderScenarioCard" in js
+    assert "ob-rule-card" in js
+    assert "sim-scenario-card" in js
+    assert "small fw-medium" in js
+    assert ".ob-rule-card" in css
+    assert "<table" not in html
+    assert "<tr>" not in js.split("renderScenarios()", 1)[1].split("openScenario(", 1)[0]
+
+
+def test_scenario_card_edit_action_uses_pencil_icon():
+    js = _read(FRONT / "static/intelligence/js/simulation.js")
+    card = js.split("_renderScenarioCard(s) {", 1)[1].split("openScenario(", 1)[0]
+    edit = card.split('data-action="open"', 1)[1].split("</button>", 1)[0]
+    assert 'title="Edit"' in edit
+    assert "bi-pencil" in edit
+
+
+def test_workbench_picks_individual_inference_rules():
+    html = _read(FRONT / "templates/partials/intelligence/_sim_workbench.html")
+    page = _read(PAGE)
+    js = _read(FRONT / "static/intelligence/js/simulation-rules.js")
+    wb = _read(FRONT / "static/intelligence/js/simulation-workbench.js")
+    assert 'tree_id="simWbPhases"' in html
+    assert "partials/layout/_inference_phase_tree.html" in html
+    assert "query-reasoning.css" in page
+    assert page.index("global/js/phase-tree.js") < page.index("intelligence/js/simulation-rules.js")
+    assert "new PhaseTree(" in js
+    assert "/ontology/if-then/list" in js
+    assert "rule_names" in wb
+    assert "collectRuleNames" in js
+    assert "onclick=" not in html
+
+
+def test_scenario_panes_use_direct_content_section_stretch():
+    page = _read(PAGE)
+    list_html = _read(FRONT / "templates/partials/intelligence/_sim_scenarios.html")
+    wb = _read(FRONT / "templates/partials/intelligence/_sim_workbench.html")
+    section = page.split('id="scenarios-section"', 1)[1]
+    assert re.search(
+        r'id="simScenariosList"\s+class="[^"]*\bcontent-section\b',
+        section,
+    )
+    assert re.search(
+        r'id="simScenariosEditor"\s+class="[^"]*\bcontent-section\b',
+        section,
+    )
+    assert not re.search(
+        r'id="simScenariosList"[^>]*>\s*<div class="content-section"',
+        section,
+    )
+    assert '<div class="content-section">' not in list_html
+    assert '<div class="content-section">' not in wb
+    assert 'class="card h-100"' in list_html
+    assert 'class="card h-100"' in wb
+    assert "ob-tabs-wrap" in wb
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".sidebar-section > .content-section > #simWbProgress" in css
+    assert "flex: 0 0 auto" in css.split(
+        ".sidebar-section > .content-section > #simWbProgress {", 1
+    )[1].split("}", 1)[0]
+
+
+def test_workbench_uses_four_ob_tabs():
+    html = _read(FRONT / "templates/partials/intelligence/_sim_workbench.html")
+    results = _read(FRONT / "templates/partials/intelligence/_sim_results.html")
+    js = _read(FRONT / "static/intelligence/js/simulation.js")
+    wb = _read(FRONT / "static/intelligence/js/simulation-workbench.js")
+    res = _read(FRONT / "static/intelligence/js/simulation-results.js")
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in html
+    assert 'id="simWbTabs"' in html
+    assert 'id="simWb-pane-general"' in html
+    assert 'id="simWb-pane-facts"' in html
+    assert 'id="simWb-pane-reasoning"' in html
+    assert 'id="simWb-pane-results"' in html
+    assert "Hypothetical facts" in html
+    assert "ob-tabs-wrap" in html
+    assert "simResultsPicker" not in results
+    assert "switchTo('results')" not in js
+    assert "showTab" in wb
+    assert "tab: 'results'" in js
+    assert 'id="simWbBackBtn"' in html
+    assert "Workbench.currentId" in res or "SimulationWorkbench.currentId" in res
+    assert "onclick=" not in html
+
+
+def test_workbench_tabs_show_loading_spinner():
+    html = _read(FRONT / "templates/partials/intelligence/_sim_workbench.html")
+    wb = _read(FRONT / "static/intelligence/js/simulation-workbench.js")
+    rules = _read(FRONT / "static/intelligence/js/simulation-rules.js")
+    res = _read(FRONT / "static/intelligence/js/simulation-results.js")
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    overlay = html.split('id="simWbTabLoading"', 1)[1]
+    assert 'class="sim-tab-loading d-none"' in html
+    assert "spinner-border" in overlay
+    assert 'id="simWbTabLoadingLabel"' in overlay
+    assert html.index('id="simWb-pane-general"') < html.index('id="simWbTabLoading"')
+    loading_css = css.split(".sim-tab-loading", 1)[1].split("}", 1)[0]
+    assert "z-index: 10" in loading_css
+    assert "setTabBusy" in wb
+    assert "setTabBusy('general'" in wb
+    assert "setTabBusy('facts'" in wb
+    assert "setTabBusy('reasoning'" in rules
+    assert "setTabBusy('results'" in res
+    assert ".sim-tab-loading" in css
+    assert "onclick=" not in html
+    assert "style=" not in html
+
+
+def test_workbench_general_tab_stacks_sections():
+    html = _read(FRONT / "templates/partials/intelligence/_sim_workbench.html")
+    js = _read(FRONT / "static/intelligence/js/simulation-workbench.js")
+    page = _read(FRONT / "static/intelligence/js/simulation.js")
+    assert 'id="simWbGeneralStack"' in html
+    assert "col-xl-4" not in html
+    assert html.index("Scenario") < html.index("Scope") < html.index("Sandbox objects")
+    assert "align-items-end" not in html
+    assert "align-items-start" in html
+    scope = html.split("Scope", 1)[1].split("Sandbox objects", 1)[0]
+    assert scope.index('id="simWbFocusGroup"') < scope.index('id="simWbFocusCaption"')
+    assert 'id="simWbArtifacts"' in html
+    assert "sim-artifact-table" in js
+    assert "paintArtifacts" in js
+    assert "refreshArtifacts" in js
+    assert "SimulationWorkbench.refreshArtifacts" in page
+    assert "sim-artifact-hint" in js
+    assert "sim-col-role" in js
+    assert "Live inferred graph UNION the sandbox" in js
+    assert "explorer_asserted" not in js
+    assert "Private copy of the in-scope triples" in js
+    assert "before_picture" in js
+    assert "Before picture" in js
+    assert "Private Neo4j graph of the in-scope triples" in js
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".sim-artifact-table.table-sm td" in css
+    assert "white-space: nowrap" in css.split(".sim-col-role", 1)[1].split("}", 1)[0]
+    assert "white-space: normal" in css.split(".sim-artifact-hint", 1)[1]
+    assert "sim-artifact-name-cell" in js
+
+
+def test_results_empty_rows_mention_rerun_when_listing_unavailable():
+    res = _read(FRONT / "static/intelligence/js/simulation-results.js")
+    assert "listing_unavailable" in res
+    assert "Re-run the scenario to list added and removed triples from the sandbox." in res
+
+
+def test_workbench_save_aborts_stale_run():
+    js = _read(FRONT / "static/intelligence/js/simulation-workbench.js")
+    assert "/abort" in js
+    assert "/is running/i.test" in js
+    assert "_stopPolling" in js
+
+
+def test_scenarios_list_has_purge_action():
+    js = _read(FRONT / "static/intelligence/js/simulation.js")
+    assert 'data-action="purge"' in js
+    assert "purgeScenario" in js
+    assert "/purge" in js
+    assert "bi-eraser" in js
+    assert "SimulationWorkbench.load" in js.split("async purgeScenario", 1)[1].split("async deleteScenario", 1)[0]
+
+
+def test_open_scenario_does_not_bounce_to_list():
+    js = _read(FRONT / "static/intelligence/js/simulation.js")
+    assert "e.preventDefault()" in js
+    assert 'href="#"' not in js
+    assert "section=scenarios&simulation=" in js
+    assert "if (section === 'scenarios' && !this._openingEditor) this.showList" not in js
+    assert 'data-section="scenarios"' in js
+
+
+def test_compare_section_is_a_scenarios_submenu_with_overlay_graph():
+    scenarios = next(g for g in _menu()["groups"] if g["id"] == "intelligence-simulation")
+    ids = [i["id"] for i in scenarios["items"]]
+    assert ids.index("scenarios") < ids.index("compare")
+    assert "runs" not in ids
+    html = _read(PAGE)
+    partial = _read(FRONT / "templates/partials/intelligence/_sim_compare.html")
+    js = _read(FRONT / "static/intelligence/js/simulation-compare.js")
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert 'id="compare-section" class="sidebar-section"' in html
+    assert "partials/intelligence/_sim_compare.html" in html
+    assert "intelligence/js/simulation-compare.js" in html
+    for element in (
+        "simCompareScenario",
+        "simCompareSource",
+        "simCompareRunBtn",
+        "simCompareCanvas",
+        "simCompareDetails",
+    ):
+        assert f'id="{element}"' in partial
+    assert 'value="inferred"' in partial and 'value="asserted"' in partial
+    assert "Refresh" in partial
+    assert "View difference" not in partial
+    assert "bi-arrow-clockwise" in partial
+    assert "/simulation/${encodeURIComponent(id)}/compare" in js
+    assert "include_inferred" in js
+    assert "sidebarSectionChanged" in js
+    # Ready scenario → auto-run overlay; empty state only when none are ready.
+    assert "this.run()" in js
+    assert "_showState('empty')" in js
+    assert "autoRun" not in js
+    assert "--db-status-success" in js and "--db-status-danger" in js
+    assert "query-sigmagraph" not in js
+    assert ".sim-compare-canvas" in css
+    assert "var(--db-status-success)" in css
+
+
+def test_compare_has_graphs_and_evaluate_ob_tabs():
+    partial = _read(FRONT / "templates/partials/intelligence/_sim_compare.html")
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in partial
+    assert 'class="card h-100"' in partial
+    assert "card-body p-0 ob-tabs-wrap" in partial
+    assert 'id="simCompareTabs"' in partial
+    for tab, pane in (
+        ("simCompare-tab-graphs", "simCompare-pane-graphs"),
+        ("simCompare-tab-evaluate", "simCompare-pane-evaluate"),
+    ):
+        assert f'id="{tab}"' in partial
+        assert f'id="{pane}"' in partial
+        assert f'data-bs-target="#{pane}"' in partial
+        assert f'aria-controls="{pane}"' in partial
+    assert 'class="bi bi-columns-gap me-1"' in partial
+    assert 'class="bi bi-chat-square-text me-1"' in partial
+    assert "ob-tabs-wrap" in partial
+
+
+def test_compare_evaluate_pane_has_prompt_and_two_side_by_side_outputs():
+    partial = _read(FRONT / "templates/partials/intelligence/_sim_compare.html")
+    for element in (
+        "simEvalPrompt",
+        "simEvalRunBtn",
+        "simEvalLiveOutput",
+        "simEvalSandboxOutput",
+        "simEvalLiveError",
+        "simEvalSandboxError",
+        "simEvalLiveSteps",
+        "simEvalSandboxSteps",
+        "simEvalLiveStatus",
+        "simEvalSandboxStatus",
+    ):
+        assert f'id="{element}"' in partial, element
+    assert partial.count('class="col-12 col-lg-6') == 2
+    # Answers are rendered Markdown (shared .oc-md), not raw text areas.
+    assert partial.count('class="oc-md sim-eval-answer"') == 3  # Live, Sandbox, Insights
+    assert 'id="simEvalLiveOutput"' in partial and "<textarea" not in partial.split('id="simEvalHint"')[1]
+    assert partial.count("Thinking process") == 3
+
+
+def test_compare_evaluate_has_business_insights_pane_below_both_answers():
+    partial = _read(FRONT / "templates/partials/intelligence/_sim_compare.html")
+    for element in (
+        "simEvalInsightsOutput",
+        "simEvalInsightsError",
+        "simEvalInsightsSteps",
+        "simEvalInsightsStatus",
+    ):
+        assert f'id="{element}"' in partial, element
+    # Full-width block after the Live | Sandbox row, not inside it.
+    assert partial.index('id="simEvalSandboxOutput"') < partial.index('id="simEvalInsights"')
+    assert "bi-lightbulb" in partial
+    assert partial.count('class="col-12 col-lg-6') == 2
+
+
+def test_compare_graph_sources_sit_above_the_tabs():
+    partial = _read(FRONT / "templates/partials/intelligence/_sim_compare.html")
+    above, tabs = partial.split('id="simCompareTabs"', 1)
+    for element in ("simCompareScenario", "simCompareSource"):
+        assert f'id="{element}"' in above, element
+        assert f'id="{element}"' not in tabs, element
+    assert 'class="sim-compare-sources' in above
+    # Live graph comes first, Scenario second.
+    assert above.index('id="simCompareSource"') < above.index('id="simCompareScenario"')
+    graphs = tabs.split('id="simCompare-pane-evaluate"')[0]
+    assert 'id="simCompareCanvas"' in graphs
+    assert 'id="simCompareRunBtn"' in graphs
+    assert "Comparison Setup" not in partial
+    # Compare action and details live in the right-hand pane beside the canvas.
+    assert "sim-compare-right-pane" in graphs
+    assert "sim-compare-bottom-pane" not in partial
+    assert graphs.index('id="simCompareCanvas"') < graphs.index('id="simCompareRunBtn"')
+
+
+def test_evaluate_asks_both_graphs_statelessly_via_graph_chat():
+    js = _read(FRONT / "static/intelligence/js/simulation-evaluate.js")
+    html = _read(PAGE)
+    assert "intelligence/js/simulation-evaluate.js" in html
+    assert "'/dtwin/assistant/chat/stream'" in js
+    assert "persist: false" in js
+    assert "history: []" in js
+    assert "include_inferred: includeInferred, simulation_id: ''" in js
+    assert "include_inferred: true, simulation_id: scenario.id" in js
+    assert "SimulationCompare._includeInferred()" in js
+    # Live agent steps are streamed; replies go through the sanitising renderer.
+    assert "event.type === 'step'" in js
+    assert "step_type === 'tool_call'" in js and "step_type === 'tool_result'" in js
+    assert "renderMarkdown(text)" in js
+    assert "innerHTML = text" not in js
+    # Titles name the live source and the scenario, not "Sandbox".
+    assert "_liveLabel()" in js and "scenario.label" in js
+    # Enter submits the prompt; Shift+Enter keeps a newline.
+    assert "e.key === 'Enter' && !e.shiftKey" in js
+    assert "SimulationEvaluate.refresh()" in _read(FRONT / "static/intelligence/js/simulation-compare.js")
+
+
+def test_evaluate_runs_insights_only_when_both_answers_succeed():
+    js = _read(FRONT / "static/intelligence/js/simulation-evaluate.js")
+    assert "'/dtwin/assistant/insights/stream'" in js
+    assert "live.ok && sandbox.ok" in js
+    assert "Insights need both answers." in js
+    # Insights reuse the SSE client and the shared step/finish renderers.
+    assert "this._sse(" in js
+    assert "this._step('insights', event)" in js
+    assert "this._finish('insights'" in js
+    # Ask both stays busy until the insights run settles.
+    assert "if (seq === this._seq) this._setBusy(false);" in js
+    assert "innerHTML = text" not in js
+
+
+def test_evaluate_report_modal_is_included_on_the_simulation_page():
+    html = _read(PAGE)
+    modal = _read(FRONT / "templates/partials/intelligence/_sim_insights_report_modal.html")
+    assert 'partials/intelligence/_sim_insights_report_modal.html' in html
+    assert 'id="simEvalReportModal"' in modal
+    assert 'id="simEvalReportBody"' in modal
+    assert 'id="simEvalReportPrintBtn"' in modal
+    assert 'data-bs-dismiss="modal"' in modal
+    assert 'modal-xl' in modal
+    assert 'bi-file-earmark-pdf' in modal
+
+
+def test_evaluate_opens_a_printable_report_after_insights_succeed():
+    partial = _read(FRONT / "templates/partials/intelligence/_sim_compare.html")
+    js = _read(FRONT / "static/intelligence/js/simulation-evaluate.js")
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert 'id="simEvalReportBtn"' in partial
+    assert "disabled" in partial.split('id="simEvalReportBtn"', 1)[1][:80]
+    assert "bootstrap.Modal.getOrCreateInstance" in js
+    assert "window.print()" in js
+    assert "/simulation/${encodeURIComponent(" in js
+    assert "SimulationCompare.data" in js
+    assert "sim-eval-report-printing" in css
+    assert "@media print" in css
+    assert "Hypothetical facts" in js
+    assert "Graph comparison" in js
+    assert "Analysis" in js
+
+
+def test_evaluate_report_uses_compare_graph_snapshot_cached_after_refresh():
+    """Sigma WebGL canvases clear after composite (preserveDrawingBuffer:false).
+
+    The report opens from the Evaluate tab while the Graphs pane is
+    ``display:none``, so a live ``drawImage`` of those canvases yields an
+    empty square. Capture a PNG in the same turn as ``renderer.refresh()``
+    while the Graphs pane is visible, then reuse that snapshot in the report.
+    """
+    compare = _read(FRONT / "static/intelligence/js/simulation-compare.js")
+    evaluate = _read(FRONT / "static/intelligence/js/simulation-evaluate.js")
+
+    assert "lastGraphPng:" in compare or "lastGraphPng =" in compare
+    assert "_snapshotGraphPng" in compare
+    assert "this.renderer.refresh()" in compare
+    assert "this._snapshotGraphPng()" in compare
+    assert "this.lastGraphPng = ''" in compare or 'this.lastGraphPng = ""' in compare
+
+    snapshot = compare.split("_snapshotGraphPng() {", 1)[1].split("\n    },", 1)[0]
+    # Hidden pane renders at 1x1 — must not overwrite the good snapshot.
+    assert "container.offsetWidth < 2" in snapshot
+    assert "container.offsetHeight < 2" in snapshot
+    assert "return this.lastGraphPng;" in snapshot
+    # Synchronous refresh in the same turn as the WebGL read.
+    assert snapshot.index("this.renderer.refresh()") < snapshot.index("drawImage")
+    assert "c.width > 1 && c.height > 1" in snapshot
+
+    assert "SimulationCompare.lastGraphPng" in evaluate
+    # Must not re-read hidden WebGL canvases as the primary source.
+    graph_png = evaluate.split("_graphPng()", 1)[1].split("_mdColumn", 1)[0]
+    assert "querySelectorAll('canvas')" not in graph_png
+    assert "lastGraphPng" in graph_png
+
+
+def test_evaluate_css_fills_the_tab_height():
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert "#simCompareTabContent > .tab-pane.active" in css
+    assert ".sim-eval-output" in css
+
+
+def test_community_tasks_have_an_open_task_link():
+    """Community tasks reach the tracker's "Open task" / notification links."""
+    tracker = _read(FRONT / "static/global/js/task-tracker.js")
+    for task_type in ("community_detection", "community_materialize"):
+        assert f"'{task_type}': '/intelligence/?section=communities'" in tracker
+    menu = _read(FRONT / "config/menu_config.json")
+    assert '"id": "communities"' in menu
+
+
+def test_patterns_section_owns_discovery():
+    html = _read(PAGE)
+    assert 'id="patterns-section"' in html
+    assert 'id="patPatternsList"' in html
+    assert 'id="patPatternsDetails"' in html
+    assert 'id="patterns-saved-section"' not in html
+    assert "intelligence-patterns.js" in html
+    assert _menu()["label"] == "Intelligence"
+    groups = {g["id"]: g for g in _menu()["groups"]}
+    assert [i["label"] for i in groups["intelligence-discovery"]["items"]] == [
+        "Analytics",
+        "Communities",
+        "Patterns",
+    ]
+    disc = _read(FRONT / "templates/partials/intelligence/_intel_patterns.html")
+    saved = _read(FRONT / "templates/partials/intelligence/_intel_patterns_saved.html")
+    assert 'class="pat-layout"' in disc
+    assert 'class="pat-rail"' not in disc
+    assert 'class="pat-main"' in disc
+    # The list header button opens the Detect dialog (labelled New, like New scenario);
+    # Save is automatic after Detect.
+    assert 'id="patDetectBtn"' in saved
+    assert 'id="patDetectBtn"' in saved and "bi-plus-lg me-1\"></i>New" in saved
+    assert "bi-search me-1\"></i>Detect" not in saved
+    assert 'id="patDetectBtn"' not in disc
+    assert 'id="patBackBtn"' in disc
+    assert 'id="patSaveBtn"' not in disc
+    assert 'id="patSaveModal"' not in html
+    assert "_intel_patterns_save_modal.html" not in html
+    detect_modal = _read(
+        FRONT / "templates/partials/intelligence/_intel_patterns_detect_modal.html"
+    )
+    assert 'id="patDetectModal"' in detect_modal
+    assert 'id="patDetectForm"' in detect_modal
+    assert 'id="patDetectRunBtn"' in detect_modal
+    assert 'id="patClassFilter"' in detect_modal
+    assert 'for="patClassFilter">Entity</label>' in detect_modal
+    assert "Anchor type" not in detect_modal
+    assert "{% include \"partials/intelligence/_intel_patterns_detect_modal.html\" %}" in html
+    js_patterns = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    assert "_autoSaveAfterDetect" not in js_patterns
+    assert "_autoSaveLabel" not in js_patterns
+    assert "task.result.saved_id" in js_patterns
+    assert "_restoreDiscoverPreview" in js_patterns
+    assert "openSavedById(savedId" in js_patterns
+    assert "openSaveModal" not in js_patterns
+    assert "task.result.saved_id" in js_patterns
+    # Detect failures must surface via showNotification — the old showToast
+    # helper was never defined, so Pattern Detect looked like a no-op.
+    assert "showToast" not in js_patterns
+    assert "showNotification(msg, type || 'info')" in js_patterns
+    # Diagram nodes must resolve ontology icons (same path as communities).
+    assert "await this._loadClasses()" in js_patterns
+    assert "_findOntologyClass" in js_patterns
+    assert "cls.emoji || cls.icon" in js_patterns
+    assert "structure: 'Structure only'" in js_patterns
+    assert 'id="patJobStatus"' in detect_modal
+    assert 'id="patDetails"' in disc
+    assert 'id="patPatternList"' not in disc
+    assert "Discovery runs on Databricks" in detect_modal
+    assert "pat-form-info" in detect_modal
+    assert 'for="patBins"' in detect_modal
+    assert 'for="patMinSupport"' in detect_modal
+    assert 'for="patRefineTop"' in detect_modal
+    assert "onclick=" not in disc
+    assert "onclick=" not in detect_modal
+    assert 'id="patSavedList"' in saved
+    assert 'id="patListTabs"' in saved
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in saved
+    assert 'id="patListPanePatterns"' in saved
+    assert 'id="patListPaneHow"' in saved
+    assert "How it works" in saved
+    assert "Adaptive detail levels" in saved
+    assert "onclick=" not in saved
+    assert "data-pat-pattern-id" in js_patterns
+    assert "openSaved" in js_patterns
+    assert "_toggleDetails" in js_patterns
+    assert "showList" in js_patterns
+    assert "syncPatternUrl" in js_patterns
+    assert "applyPatternView" in js_patterns
+    assert "_toggleSavedMembers" not in js_patterns
+    assert "ob-rule-card pat-saved-card" in js_patterns
+    assert "_savedCardHtml" in js_patterns
+    assert "pattern', 'patterns'))} found" in js_patterns
+    assert "Saved ${this._esc(this._fmtDate(p.saved_at))}" in js_patterns
+    assert "p.hop_count" in js_patterns
+    assert "p.pattern_count" in js_patterns
+    assert "member', 'members')" not in js_patterns
+    assert "type', 'types')" not in js_patterns
+    assert "relation', 'relations')" not in js_patterns
+    # KPI values stay on the card as data-* for the details open path.
+    assert "data-pat-types=" in js_patterns
+    assert "data-pat-relations=" in js_patterns
+    assert "data-pat-size=" in js_patterns
+    assert 'data-pat-open="' in js_patterns
+    assert 'title="Open"' in js_patterns
+    assert "_showPendingSaved" in js_patterns
+    assert "/dtwin/patterns/saved/" in js_patterns
+    assert "/shape`" in js_patterns
+    assert "/patterns`" in js_patterns
+    assert "patterns/saved/${encodeURIComponent(saved.id)}/patterns" in js_patterns
+    assert "pattern_id=${encodeURIComponent(patternId)}" in js_patterns
+    assert "_fromSaved" in js_patterns
+    assert "badge bg-success" in js_patterns
+    # An open snapshot must survive a reload of the latest run.
+    assert "if (this._viewingSavedId) {" in js_patterns
+    # Open shows the saved snapshot only (no `/latest` overlay).
+    assert "saved.pattern_id && this._patternOf(saved.pattern_id)" not in js_patterns
+    assert "await this._showPendingSaved()" in js_patterns
+    assert "_warmLatestForPicker" not in js_patterns
+    assert "_setDiscoverHeading" in js_patterns
+    assert "patDiscoverTitleText" in js_patterns
+    assert 'id="patDiscoverTitleText"' in disc
+    assert 'id="patDiscoverSubtitle"' in disc
+    assert "SidebarNav._showSection('patterns')" in js_patterns
+    # `SidebarNav` is a top-level const: `window.SidebarNav` is always undefined.
+    assert "window.SidebarNav" not in js_patterns
+    assert "typeof SidebarNav !== 'undefined'" in js_patterns
+    assert "section=patterns&amp;saved=" in js_patterns
+    perms = _read(FRONT / "static/global/css/permissions.css")
+    assert "button:not([data-pat-open])" in perms
+    assert "button[data-pat-delete]" in perms
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".pat-saved-card" in css
+    js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    # Details: compact pattern dropdown with in-control support badge + KPIs.
+    assert "_membersUrl" in js
+    assert "/members`" in js or "/members" in js
+    assert "/shape`" in js
+    assert "this._diagramSvg(shape.diagram)" in js
+    # Details: collapsible per-pattern bar chart (X=patterns, Y=matching entities).
+    assert "_patternsChartHtml" in js
+    assert "this._patternsChartHtml(" in js
+    assert "pat-chart-card" in js
+    assert "data-pat-chart-toggle" in js
+    assert "_toggleChart" in js
+    assert "pat-chart-axis-title" in js
+    assert "pat-chart-xlabel" in js
+    assert "pat-chart-ylabel" in js
+    assert "'Patterns'}</div>" in js
+    assert ">Matching entities</span>" in js
+    assert 'class="pat-dg-edge-name"' in js
+    assert "pat-dg-edge-badge" in js
+    assert 'width="100%"' in js
+    assert "pat-kpi-compact" in js
+    assert "pat-pattern-toggle" in js
+    assert "pat-support-badge" in js
+    assert "patPreviewStats" not in disc
+    assert "_renderStats" not in js
+    assert "this._kpiTile('Detail'" not in js
+    assert "this._kpiTile('Refined'" not in js
+    # KPIs: Entities (type population) + run-level Patterns count + Coverage %,
+    # no per-pattern Types/Relations.
+    assert "this._kpiTile('Entities'" in js
+    assert "this._kpiTile('Patterns'" in js
+    assert "this._kpiTile('Coverage'" in js
+    assert "this._kpiTile('Types'" not in js
+    assert "this._kpiTile('Relations'" not in js
+    assert "_entityCount" in js
+    assert "_patternCount" in js
+    assert "_coveragePct" in js
+    # Each bar also shows its share of the type population in parentheses.
+    assert "pat-chart-bar-pct" in js
+    # Certified patterns: per-pattern toggle (saved runs only), green/red bars,
+    # certified/not-certified gauge beside "Matching entities".
+    assert "data-pat-certify" in js
+    assert "/certification`" in js
+    assert "method: 'PUT'" in js
+    assert "_certGaugeHtml" in js
+    assert "_certStats" in js
+    assert "pat-chart-bar--certified" in js
+    assert "pat-chart-bar--uncertified" in js
+    assert js.index("data-pat-members") < js.index("${this._certGaugeHtml()}")
+    pat_css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".pat-cert-gauge" in pat_css
+    assert "--db-status-success" in pat_css.split(".pat-chart-bar--certified .pat-chart-bar-rect", 1)[1].split("}", 1)[0]
+    assert "--db-status-danger" in pat_css.split(".pat-chart-bar--uncertified .pat-chart-bar-rect", 1)[1].split("}", 1)[0]
+    assert ".pat-cert-btn" in _read(FRONT / "static/global/css/permissions.css")
+    # Group-by-certification switch: two bars + a detail canvas listing the group.
+    assert "data-pat-group-toggle" in js
+    assert "data-pat-group=" in js
+    assert "toggleGrouping" in js
+    assert "_groupBodyHtml" in js
+    assert "certified=${this._groupSel === 'certified'}" in js
+    assert ".pat-chart-group-switch" in pat_css
+    assert ".pat-group-table" in pat_css
+    # Outside bar: entities in no pattern, shown in both chart modes, not clickable.
+    assert "pat-chart-bar--outside" in js
+    assert "aria-label=\"${this._esc(aria)}\"" in js
+    assert "not in a pattern" in js
+    assert "population - covered" in js or "universe - covered" in js
+    assert ".pat-chart-bar.pat-chart-bar--outside" in pat_css
+    assert "Matching entities" in js
+    assert "data-pat-members" in js
+    assert "openMembersModal" in js
+    assert "_membersLoadingHtml" in js
+    assert "spinner-border" in js
+    assert "this._detailsHtml(shape, members)" not in js
+    assert "this._detailsHtml(shape)" in js
+    assert "/dtwin/?section=sigmagraph&focus=" in js
+    assert "pat-member-link" in js
+    assert "Re-run <strong>Detect</strong> to draw this pattern." in js
+    assert "pat-token" not in js
+    members_modal = _read(FRONT / "templates/partials/intelligence/_intel_patterns_members_modal.html")
+    assert 'id="patMembersModal"' in members_modal
+    assert 'id="patMembersModalBody"' in members_modal
+    assert "Matching entities" in members_modal
+    assert "spinner-border" in members_modal
+    intel = _read(FRONT / "templates/intelligence.html")
+    assert "_intel_patterns_members_modal.html" in intel
+    js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    assert "/dtwin/patterns/detect" in js
+    assert "/dtwin/patterns/latest" in js
+    assert "waitForTask" in js
+    assert "pattern_detection" in js
+    # Detect+save is one task; resume may still see a legacy pattern_save.
+    assert "pattern_save" in js
+    assert "showDeleteConfirm" in js
+    assert "is-deleting" in js
+    assert "alert(" not in js
+    assert "confirm(" not in js
+    assert "prompt(" not in js
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".pat-saved-card.is-deleting" in css
+    assert ".pat-layout" in css
+    assert ".pat-rail" not in css
+    assert ".pat-main" in css
+    assert ".pat-detail-body" in css
+    assert "max-height: min(32rem, 58vh)" not in css
+    assert ".pat-members-btn" in css
+    assert ".pat-chart-card" in css
+    assert ".pat-chart-bar" in css
+    assert ".pat-chart-bar-pct" in css
+    assert ".pat-form-info" in css
+    assert "height: var(--pat-chip-h" in css.split(".pat-members-btn", 1)[1].split("}", 1)[0]
+    assert 'class="pat-kpi-row pat-detail-kpis"' in js
+    assert "row g-2 pat-kpi-row" not in js
+    js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    assert "openDetectModal" in js
+    assert "this._detectModal.show()" in js
+    assert "this._membersModal.show()" in js
+    tracker = _read(FRONT / "static/global/js/task-tracker.js")
+    for task_type in ("pattern_detection", "pattern_save"):
+        assert f"'{task_type}': '/intelligence/?section=patterns'" in tracker
+
+
+def _toggle_certified_body() -> str:
+    js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    start = js.index("async toggleCertified()")
+    return js[start : js.index("\n    },\n", start)]
+
+
+def test_certify_button_shows_a_spinner_while_saving():
+    """Same in-button spinner as Save / Detect while the PUT runs."""
+    js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    body = _toggle_certified_body()
+    assert body.index("_setCertifyBusy(btn, true)") < body.index("/certification")
+    busy = js[js.index("_setCertifyBusy(btn, on)") :]
+    busy = busy[: busy.index("\n    },\n")]
+    assert "spinner-border spinner-border-sm ob-btn-spinner" in busy
+    assert "aria-busy" in busy
+    css = _read(FRONT / "static/intelligence/css/intelligence.css")
+    assert ".pat-cert-btn.is-busy" in css
+    # Same spinner size as the Patterns Save / Detect button (Bootstrap sm).
+    assert ".pat-cert-btn .ob-btn-spinner" not in css
+
+
+def test_certify_refreshes_the_chart_from_the_reloaded_catalog():
+    body = _toggle_certified_body()
+    assert body.index("_reloadSavedCatalog(savedId)") < body.index("_refreshCertUi()")
+    js = _read(FRONT / "static/intelligence/js/intelligence-patterns.js")
+    reload_fn = js[js.index("async _reloadSavedCatalog(savedId)") :]
+    reload_fn = reload_fn[: reload_fn.index("\n    },\n")]
+    assert "/patterns`" in reload_fn
+    refresh = js[js.index("_refreshCertUi() {") :]
+    assert "_patternsChartHtml(this.selectedId)" in refresh[: refresh.index("\n    },\n")]
+
+
+def test_certify_failure_restores_the_button():
+    body = _toggle_certified_body()
+    catch = body[body.index("} catch (err) {") :]
+    assert "_setCertifyBusy(btn, false)" in catch

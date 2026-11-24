@@ -177,6 +177,23 @@ class GraphAnalyticsRun(TypedDict, total=False):
     computed_at: str             # ISO timestamp
 
 
+# Detect run history (community / pattern). Plain-dict aliases rather than
+# TypedDict classes: this module is held to one public class per file by the
+# architecture ratchet. Field sets are documented here.
+#
+# CommunityRun: id, domain, version, status ('completed' | 'failed'),
+#   class_filter (list of entity-type URIs), node_count, cluster_count,
+#   converged, duration_ms, task_id, error, run_page_url, computed_at (ISO).
+# PatternRun: id, domain, version, status, anchor_type (anchor type URI),
+#   hop_count, min_support, detail_level, anchor_count, pattern_count,
+#   duration_ms, task_id, error, run_page_url, computed_at (ISO).
+#
+# ``id`` is 0 for stores without a serial PK; ``domain`` is only set by
+# cross-domain reads.
+CommunityRun = Dict[str, Any]
+PatternRun = Dict[str, Any]
+
+
 class ReviewEvent(TypedDict, total=False):
     """One row in the domain-version review / validation audit log.
 
@@ -217,7 +234,7 @@ class ChangeEvent(TypedDict, total=False):
     actor: str               # acting user email
     source: str              # 'user' | 'agent'
     action: str              # class_added|class_updated|mapping_entity_removed|...
-    entity_type: str         # class | property | shacl | swrl | mapping | ...
+    entity_type: str         # class | property | shacl | if_then | mapping | ...
     entity_ref: str          # uri or name of the affected entity
     summary: str
     meta: Dict[str, Any]
@@ -355,9 +372,17 @@ class RegistryStore(ABC):
 
     @abstractmethod
     def read_version(
-        self, folder: str, version: str
+        self,
+        folder: str,
+        version: str,
+        include_simulations: bool = True,
     ) -> Tuple[bool, Dict[str, Any], str]:
-        """Return the parsed domain document (``info``/``versions``/…)."""
+        """Return the parsed domain document (``info``/``versions``/…).
+
+        ``include_simulations`` attaches scenario specs and run history when
+        True (export / sync paths). Context open should pass False — the
+        session never imports those blobs and the attach is expensive.
+        """
 
     @abstractmethod
     def write_version(
@@ -387,7 +412,9 @@ class RegistryStore(ABC):
         denormalised ``status`` column should override with a cheap query.
         Must NOT raise on missing domain/version.
         """
-        ok, data, _ = self.read_version(folder, version)
+        ok, data, _ = self.read_version(
+            folder, version, include_simulations=False
+        )
         if not ok:
             return None
         return (data.get("info", {}) or {}).get("status")
@@ -578,6 +605,23 @@ class RegistryStore(ABC):
         """Newest-first simulation runs, optionally for one simulation."""
         return []
 
+    def load_all_simulation_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """One newest-first page of simulation runs across the registry.
+
+        The cross-domain counterpart of :meth:`load_simulation_runs`, with
+        the same ``(page_rows, total_matching_rows)`` contract as
+        :meth:`load_all_build_runs`. Spans every version; each row carries
+        ``domain``, ``version``, and a ``label`` when the scenario still
+        exists. Default is ``([], 0)`` for stores without simulation tables.
+        """
+        return [], 0
+
     def copy_simulations_to_version(
         self, folder: str, from_version: str, to_version: str
     ) -> Tuple[bool, str]:
@@ -665,6 +709,46 @@ class RegistryStore(ABC):
         folder scoping, and each row carries a ``domain`` key.
 
         Default is ``([], 0)`` for stores without a run-history table.
+        """
+        return [], 0
+
+    def record_community_run(
+        self, folder: str, version: str, entry: CommunityRun
+    ) -> None:
+        """Append a community-detection run row. Best-effort; must NOT raise.
+        Default is a no-op for stores without a run-history table.
+        """
+
+    def record_pattern_run(
+        self, folder: str, version: str, entry: PatternRun
+    ) -> None:
+        """Append a pattern-detection run row. Best-effort; must NOT raise.
+        Default is a no-op for stores without a run-history table.
+        """
+
+    def load_all_community_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[CommunityRun], int]:
+        """One newest-first page of community runs across the registry, with
+        the ``(page_rows, total_matching_rows)`` contract of
+        :meth:`load_all_graph_analytics_runs`. Default is ``([], 0)``.
+        """
+        return [], 0
+
+    def load_all_pattern_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[PatternRun], int]:
+        """One newest-first page of pattern runs across the registry, with
+        the ``(page_rows, total_matching_rows)`` contract of
+        :meth:`load_all_graph_analytics_runs`. Default is ``([], 0)``.
         """
         return [], 0
 

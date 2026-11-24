@@ -12,6 +12,7 @@ PAGE = ROOT / "src/front/templates/domain.html"
 CSS = ROOT / "src/front/static/domain/css/domain-versions.css"
 JS = ROOT / "src/front/static/domain/js/domain-versions.js"
 REGISTRY_JS = ROOT / "src/front/static/registry/js/registry.js"
+UTILS_JS = ROOT / "src/front/static/global/js/utils.js"
 
 
 def _run_renderer_assertions(assertions: str, script: Path = JS) -> None:
@@ -63,6 +64,13 @@ const document = {
     getElementById: () => null
 };
 const context = vm.createContext({document, window: {}, console});
+// utils.js is a global script in the app: load its date/time formatter block first.
+const utilsSrc = fs.readFileSync(process.argv[2], 'utf8');
+vm.runInContext(
+    utilsSrc.slice(utilsSrc.indexOf('// ========== DATE / TIME FORMATTING'),
+                   utilsSrc.indexOf('// ========== STRING UTILITIES')),
+    context
+);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
 
 function allElements(root) {
@@ -71,7 +79,7 @@ function allElements(root) {
 
 """ + textwrap.dedent(assertions)
     result = subprocess.run(
-        ["node", "-e", runner, str(script)],
+        ["node", "-e", runner, str(script), str(UTILS_JS)],
         check=False,
         capture_output=True,
         text=True,
@@ -104,6 +112,13 @@ def test_card_css_owns_full_height_scroll_and_mobile_reset():
     assert "height: auto" in mobile
 
 
+def test_versions_workspace_has_no_border():
+    css = CSS.read_text(encoding="utf-8")
+    workspace_rule = css.split(".dm-versions-workspace {")[1].split("}")[0]
+    assert "border: none" in workspace_rule
+    assert "background: transparent" in workspace_rule
+
+
 def test_disabled_action_wrapper_has_visible_keyboard_focus():
     css = CSS.read_text(encoding="utf-8")
     assert ".dm-version-action-blocked:focus-visible" in css
@@ -118,7 +133,7 @@ def test_js_renders_server_capabilities_and_new_endpoints():
     assert "/domain/set-version-status" in js
     assert "/domain/versions/" in js
     assert "deletes_domain" in js
-    assert "Delete last version and domain" in js
+    assert "Delete last version and context" in js
     assert "STATUS_MAP" in js
     assert "is_latest" not in js
     assert "status === 'DRAFT'" not in js
@@ -295,7 +310,7 @@ def test_domain_delete_confirmation_names_domain_version_and_knowledge_store():
             assert.equal(confirmation.message.includes('<img'), false);
             assert.equal(confirmation.message.includes('&lt;script'), true);
             assert.equal(confirmation.message.includes('&lt;img'), true);
-            assert.equal(confirmation.message.includes('Knowledge Store'), true);
+            assert.equal(confirmation.message.includes('Documents'), true);
             assert.equal(confirmation.message.includes('permanently'), true);
         })().catch((error) => {
             console.error(error);
@@ -375,7 +390,7 @@ def test_registry_uses_server_delete_capability():
     assert "v.can_delete" in js
     assert "v.delete_block_reason" in js
     assert "deletesDomain" in js
-    assert "Delete last version and domain" in js
+    assert "Delete last version and context" in js
     delete_section = js[
         js.index("function createRegistryVersionDeleteControl") :
         js.index("document.addEventListener")
@@ -406,7 +421,7 @@ def test_registry_delete_control_keeps_untrusted_values_in_dom_properties():
     )
 
 
-def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
+def test_registry_enabled_delete_confirmation_passes_untrusted_values_as_text():
     _run_renderer_assertions(
         r"""
         (async () => {
@@ -436,14 +451,13 @@ def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
                 button.dataset.version
             );
 
+            // showConfirmDialog escapes `message`; only `messageHtml` is raw.
             assert.equal(confirmation.title, 'Delete Version');
-            assert.equal(confirmation.message.includes('<script'), false);
-            assert.equal(confirmation.message.includes('<img'), false);
-            assert.equal(confirmation.message.includes('&lt;script'), true);
-            assert.equal(confirmation.message.includes('&lt;img'), true);
-            assert.equal(confirmation.message.includes(domain), false);
-            assert.equal(confirmation.message.includes(version), false);
-            assert.equal(confirmation.message.includes('Knowledge Store'), true);
+            assert.equal(confirmation.messageHtml, undefined);
+            assert.equal(confirmation.message.includes(domain), true);
+            assert.equal(confirmation.message.includes(version), true);
+            assert.equal(confirmation.message.includes('&lt;'), false);
+            assert.equal(confirmation.message.includes('Documents'), true);
             assert.equal(confirmation.message.includes('permanently'), true);
         })().catch((error) => {
             console.error(error);
@@ -454,14 +468,15 @@ def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
     )
 
 
-def test_registry_domain_delete_confirmation_escapes_name_and_names_knowledge_store():
+def test_registry_domain_delete_confirmation_uses_plain_text_and_names_documents():
     js = REGISTRY_JS.read_text(encoding="utf-8")
     delete_domain = js[
         js.index("async function deleteRegistryDomain") :
         js.index("document.addEventListener")
     ]
-    assert "escapeHtml(domainName)" in delete_domain
-    assert "Knowledge Store" in delete_domain
+    assert "message: 'Permanently delete context \"' + domainName" in delete_domain
+    assert "messageHtml" not in delete_domain
+    assert "Documents" in delete_domain
     assert "githubDomainDeleteExtras(registryGithubEnabled)" in delete_domain
     assert "deleteGithubQuery" in delete_domain
 
@@ -489,8 +504,8 @@ def test_registry_domain_delete_asks_github_when_mirror_enabled():
 
             await context.deleteRegistryDomain('acme');
 
-            assert.equal(confirmation.title, 'Delete Domain');
-            assert.equal(confirmation.checkboxLabel, 'Also delete this domain from GitHub');
+            assert.equal(confirmation.title, 'Delete Context');
+            assert.equal(confirmation.checkboxLabel, 'Also delete this context from GitHub');
             assert.equal(request.url, '/settings/registry/domains/acme?delete_github=1');
             assert.equal(request.options.method, 'DELETE');
         })().catch((error) => {
@@ -551,8 +566,8 @@ def test_last_version_delete_asks_github_when_mirror_enabled():
 
             await context.deleteVersionFromList('acme', '1', null, true);
 
-            assert.equal(confirmation.title, 'Delete last version and domain');
-            assert.equal(confirmation.checkboxLabel, 'Also delete this domain from GitHub');
+            assert.equal(confirmation.title, 'Delete last version and context');
+            assert.equal(confirmation.checkboxLabel, 'Also delete this context from GitHub');
             assert.equal(request.url, '/domain/versions/1?delete_github=1');
         })().catch((error) => {
             console.error(error);
@@ -586,7 +601,7 @@ def test_registry_last_version_delete_sends_github_query():
 
             await context.deleteRegistryVersion('acme', '1', () => {}, () => {}, true);
 
-            assert.equal(confirmation.checkboxLabel, 'Also delete this domain from GitHub');
+            assert.equal(confirmation.checkboxLabel, 'Also delete this context from GitHub');
             assert.equal(
                 request.url,
                 '/settings/registry/domains/acme/versions/1?delete_github=1'
@@ -676,3 +691,54 @@ def test_registry_delete_control_has_exactly_one_reachable_tab_stop():
         """,
         REGISTRY_JS,
     )
+
+
+def test_version_cards_use_patterns_list_style_and_status_colored_left_badge():
+    """Version cards must use Intelligence/Patterns ob-rule-card style with a big left status badge."""
+    _run_renderer_assertions(
+        r"""
+        ['DRAFT', 'IN-REVIEW', 'PUBLISHED'].forEach((status) => {
+            const card = context.renderVersionCard({
+                version: '4',
+                status: status,
+                description: 'Release 4',
+                transitions: [],
+                delete_control_visible: false
+            }, 'acme');
+
+            assert.ok(card.className.includes('ob-rule-card'), 'card must use ob-rule-card style');
+            assert.ok(card.className.includes('dm-version-card'), 'card must retain dm-version-card class');
+
+            // Left badge covering all the left part
+            const badge = card.children.find((c) => c.className.includes('dm-version-badge'));
+            assert.ok(badge, 'card must have a .dm-version-badge element covering the left part');
+            assert.equal(card.children[0], badge, 'the badge must be the first child on the left');
+
+            const expectedClass = 'status-' + status.toLowerCase();
+            assert.ok(
+                badge.className.includes(expectedClass),
+                `badge class should include ${expectedClass}, got: ${badge.className}`
+            );
+
+            // Version heading is inside the badge
+            const heading = badge.children.find((c) => c.tagName === 'H5');
+            assert.ok(heading, 'heading must be inside the left badge');
+            assert.equal(heading.textContent, 'v4');
+            assert.equal(card.attributes['aria-labelledby'], heading.id);
+        });
+        """
+    )
+
+
+def test_css_defines_big_colored_left_badge_and_patterns_card_style():
+    """CSS must define .dm-version-badge stretching full height with status-dependent background colors."""
+    css = CSS.read_text(encoding="utf-8")
+    assert ".dm-version-badge" in css
+    assert "align-self: stretch" in css
+    assert ".status-draft" in css
+    assert ".status-in-review" in css
+    assert ".status-published" in css
+    assert "var(--db-status-warning" in css or "--db-status-warning" in css
+    assert "var(--db-status-info" in css or "--db-status-info" in css
+    assert "var(--db-status-success" in css or "--db-status-success" in css
+

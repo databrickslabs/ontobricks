@@ -1,0 +1,641 @@
+================================================================================
+## Route AI Gateway models correctly when proposing hypothetical facts
+================================================================================
+
+Context: On the deployed app, Propose facts returned "Could not propose
+hypothetical facts". App logs showed a 404 ENDPOINT_NOT_FOUND against
+``/serving-endpoints/databricks-claude-opus-4-6/invocations``. That name is an
+AI Gateway Foundation Model, not a serving endpoint. The domain picker stores
+``llm_endpoint_kind=ai_gateway``, but the simulation-facts (and Graph Chat)
+agents dropped the kind and inferred serving from the name. Production also
+strips error detail, so the UI hid the 404.
+
+Changes:
+
+1. src/agents/agent_simulation_facts/engine.py
+   Accept ``endpoint_kind`` and pass it to ``call_serving_endpoint``.
+2. src/api/routers/internal/simulation.py
+   Forward the domain LLM kind; map missing-endpoint failures to a client-safe
+   message (detail is stripped in production).
+3. src/agents/agent_dtwin_chat/engine.py
+   Same ``endpoint_kind`` pass-through so Graph Chat uses the Gateway URL.
+4. src/api/routers/internal/dtwin.py
+   Forward the domain LLM kind on Graph Chat and Graph Chat stream.
+5. tests/units/agents/test_agent_simulation_facts.py
+   Assert the facts agent forwards ``endpoint_kind=ai_gateway``.
+6. tests/units/simulation/test_simulation_runner_api.py
+   Assert the route forwards kind and names a missing Gateway model.
+7. tests/units/agents/test_agent_dtwin_chat_engine.py
+   Assert Graph Chat forwards ``endpoint_kind``.
+
+Modified files:
+- src/agents/agent_simulation_facts/engine.py
+- src/api/routers/internal/simulation.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/api/routers/internal/dtwin.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9872 passed, 326 skipped, 8 deselected. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Stream propose-facts agent steps into the workbench spinner
+================================================================================
+
+Context: Propose facts showed a static "Proposing…" spinner with no hint of
+what the agent was doing (listing classes, searching the graph, validating
+patches). Users waited 15–30s on a blank overlay. Stream each agent step over
+SSE and render a live checklist under the prompt.
+
+Changes:
+
+1. src/agents/agent_simulation_facts/engine.py
+   Emit thinking / tool_call / tool_result / output events via ``on_event``.
+2. src/api/routers/internal/simulation.py
+   ``POST /simulation/facts/agent/stream`` SSE; human-readable step labels.
+3. src/front/templates/partials/simulation/_sim_workbench.html
+   Progress list under the fact prompt.
+4. src/front/static/simulation/js/simulation-workbench.js
+   Consume the SSE stream and append each step next to the spinner.
+5. src/front/static/simulation/css/simulation.css
+   Checklist styling with ``--db-*`` tokens.
+6. tests/units/agents/test_agent_simulation_facts.py
+   Assert ``on_event`` receives thinking, tools, and output.
+7. tests/units/simulation/test_simulation_runner_api.py
+   Cover step labels, stream SSE, and the builder guard.
+8. tests/units/front/test_simulation_page_contract.py
+   Require the progress DOM ids and the stream URL.
+
+Modified files:
+- src/agents/agent_simulation_facts/engine.py
+- src/api/routers/internal/simulation.py
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9872 passed, 326 skipped, 8 deselected. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Scroll propose-facts steps list capped at 10 items
+================================================================================
+
+Context: The live propose-facts progress list could grow arbitrarily long
+as the agent made multiple search and ontology tool calls, pushing the
+workbench layout down. Cap the visible height to approximately 10 rows
+with a vertical scrollbar, and auto-scroll to the newest step.
+
+Changes:
+
+1. src/front/static/simulation/css/simulation.css
+   Cap ``.sim-fact-progress-steps`` at ``max-height: 15rem`` with
+   ``overflow-y: auto``.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Scroll ``simWbFactProgressSteps`` to the bottom on new step additions.
+3. tests/units/front/test_simulation_page_contract.py
+   Assert ``overflow-y: auto`` and ``max-height`` in the progress steps CSS.
+
+Modified files:
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9872 passed, 326 skipped, 8 deselected, 39 warnings in 51.52s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Hide propose-facts steps; prompt from Describe the facts only
+================================================================================
+
+Context: The live steps box stays on screen for the whole generation. Users
+wanted a Hide control on the top right so they can dismiss it while the
+agent keeps running (next Propose shows it again). The facts agent also
+still ingested the General-tab scenario description; only the "Describe
+the facts" prompt should go to the LLM.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Add ``#simWbFactProgressHide`` in a header aligned to the top right.
+2. src/front/static/simulation/css/simulation.css
+   Flex-end header for the Hide control using ``--db-*`` tokens.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Hide the box on click; stop sending/applying the General-tab description.
+4. src/api/routers/internal/simulation.py
+   Drop CURRENT DESCRIPTION from the facts user message.
+5. src/agents/agent_simulation_facts/engine.py
+   System prompt no longer merges a General-tab description.
+6. src/agents/agent_simulation_facts/tools.py
+   ``propose_patches`` schema describes the new facts only.
+7. tests/units/front/test_simulation_page_contract.py
+   Require Hide id, handler, and header CSS.
+8. tests/units/simulation/test_simulation_runner_api.py
+   Assert the user message and fallback description omit the General tab.
+9. tests/units/agents/test_agent_simulation_facts.py
+   Assert the system prompt has no CURRENT DESCRIPTION.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-workbench.js
+- src/api/routers/internal/simulation.py
+- src/agents/agent_simulation_facts/engine.py
+- src/agents/agent_simulation_facts/tools.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/agents/test_agent_simulation_facts.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9872 passed, 326 skipped, 8 deselected, 39 warnings in 45.17s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Append propose-facts onto existing hypothetical facts
+================================================================================
+
+Context: Each Propose facts turn pushed agent patches onto the workbench
+list with no merge, so a second prompt duplicated triples or left two
+``set`` values on the same subject+predicate. Facts must accumulate in
+append mode: keep prior facts, skip duplicates, and reconcile conflicts.
+
+Changes:
+
+1. src/back/objects/simulation/Patch.py
+   ``Patch.append_all`` drops exact duplicates, lets the latest ``set``
+   win on a predicate, and cancels matching add/remove pairs.
+2. src/api/routers/internal/simulation.py
+   Return the merged patch list for ``/facts/agent`` and the SSE stream.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Replace the workbench list with the merged payload instead of pushing.
+4. src/agents/agent_simulation_facts/engine.py
+   System prompt: append mode, skip EXISTING FACTS, replace conflicting sets.
+5. src/agents/agent_simulation_facts/tools.py
+   ``propose_patches`` schema documents append / replace behaviour.
+6. tests/eval/datasets/agent_simulation_facts/regression.jsonl
+   Ten append-mode examples with expected ``merged`` lists.
+7. tests/eval/judges/simulation_facts.py
+   Dry-run judge checks ``Patch.append_all`` against ``expected.merged``.
+8. tests/units/simulation/test_simulation_core.py
+   Cover duplicate, replace, cancel, and batch-dedup merge cases.
+9. tests/units/simulation/test_simulation_runner_api.py
+   Assert the propose-facts route returns the merged list.
+10. tests/units/front/test_simulation_page_contract.py
+    Require replace-not-push in ``proposeFacts``.
+11. tests/units/agents/test_agent_simulation_facts.py
+    Assert APPEND MODE in the system prompt; regression file ≥ 10 rows.
+12. tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+    Add ``merged`` on skip-existing and enrich-desc-003.
+
+Modified files:
+- src/back/objects/simulation/Patch.py
+- src/api/routers/internal/simulation.py
+- src/front/static/simulation/js/simulation-workbench.js
+- src/agents/agent_simulation_facts/engine.py
+- src/agents/agent_simulation_facts/tools.py
+- tests/eval/datasets/agent_simulation_facts/regression.jsonl
+- tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+- tests/eval/judges/simulation_facts.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/agents/test_agent_simulation_facts.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9882 passed, 326 skipped, 8 deselected, 39 warnings in 45.48s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Workbench Purge, fact multi-select, and prompt Clear
+================================================================================
+
+Context: The workbench header Clear only closed the editor (Back already
+does that). Users need scenario Purge from the editor, bulk removal of
+hypothetical facts, and a way to empty Describe the facts without
+touching the scenario.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Replace Clear with Purge; add fact select-all / remove-selected;
+   stack Clear above Propose facts.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Purge via the list helper; checkbox selection; clear the fact prompt.
+3. src/front/static/simulation/js/simulation.js
+   Reload the open workbench after purge; disable Purge while a run is live.
+4. tests/units/front/test_simulation_page_contract.py
+   Require Purge, prompt Clear, and fact multi-select ids/handlers.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9882 passed, 326 skipped, 8 deselected, 39 warnings in 53.57s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Results tab reads sandbox before/after companions
+================================================================================
+
+Context: Results showed a capped registry snapshot of the last run's
+diff, which could diverge from the materialised sandbox and hid rows
+beyond 2000. Drive Added/Removed and KPIs from sandbox objects only.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Add ``__smb_`` before-picture and ``__smo_`` origin companions.
+2. src/back/core/graphdb/lakebase/SimulationStore.py
+   Create/drop companions with the sandbox; allow family writes.
+3. src/back/objects/simulation/overlay.py
+   ``before_relation`` / ``origin_relation`` helpers.
+4. src/back/objects/simulation/Sandbox.py
+   Persist/load before-picture and origin tags on every backend.
+5. src/back/objects/simulation/Runner.py
+   Write companions during the run; stop storing diff row lists.
+6. src/back/objects/simulation/Diff.py
+   Support unlimited row lists for the Results path.
+7. src/back/objects/simulation/Simulation.py
+   ``diff_page`` recomputes from sandbox companions.
+8. src/back/objects/simulation/Artifacts.py
+   Catalog before-picture and origin objects.
+9. src/front/static/simulation/js/simulation-workbench.js
+   Label the new artifact roles.
+10. Help / Results empty copy
+    Describe sandbox-backed Results.
+11. Unit tests for companions, runner persistence, and diff_page.
+
+Modified files:
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/SimulationStore.py
+- src/back/objects/simulation/overlay.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/objects/simulation/Runner.py
+- src/back/objects/simulation/Diff.py
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/Artifacts.py
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/partials/simulation/_sim_results.html
+- src/front/templates/partials/layout/help_modal.html
+- src/api/routers/internal/simulation.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_artifacts.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9884 passed, 326 skipped, 8 deselected, 39 warnings in 56.69s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Remove simulation Class population scope
+================================================================================
+
+Context: Simulation scope offered three modes (entity neighbourhood, cohort,
+class population). Class population (every instance of a class, hard-fail above
+the entity cap) is removed so scenarios only scope via an entity neighbourhood
+or a saved cohort rule.
+
+Changes:
+
+1. src/back/objects/simulation/Scope.py
+   Drop ``class`` from ``TYPES`` and remove ``_class_population`` resolution.
+2. src/back/objects/simulation/Simulation.py
+   Rename ``DEFAULT_CLASS_CAP`` to ``DEFAULT_ENTITY_CAP``.
+3. src/front/routes/simulation.py
+   Expose ``entity_cap`` (was ``class_cap``) in the workbench context.
+4. src/front/templates/partials/simulation/_sim_workbench.html
+   Remove the Class population option; bind the entity-cap field to ``entity_cap``.
+5. src/front/static/simulation/js/simulation-workbench.js
+   Drop class-scope UI labels/copy; coerce legacy ``class`` scopes to entity on load.
+6. src/front/static/simulation/js/simulation.js
+   Drop Class · list label for removed scope type.
+7. tests/units/simulation/test_simulation_core.py
+   Replace class-population tests with rejection of ``type=class``; keep empty-scope via cohort.
+8. tests/units/simulation/test_simulation_runner_api.py
+   Use a generic ValidationError message in the surfaced-error test.
+9. docs/user-guide.md
+   Document entity neighbourhood and cohort only.
+10. docs/architecture.md
+    Scope pipeline no longer mentions class population / find_subjects_by_type.
+
+Modified files:
+- src/back/objects/simulation/Scope.py
+- src/back/objects/simulation/Simulation.py
+- src/front/routes/simulation.py
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation.js
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9883 passed, 326 skipped, 8 deselected, 39 warnings in 46.60s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## List Results triples when the before-picture companion is missing
+================================================================================
+
+Context: The Results tab painted KPIs from the stored ``diff_summary`` but the
+Added/Removed table showed "Nothing here." ``GET /simulation/{id}/diff`` treated
+a missing ``__smb_`` companion as empty rows and still returned the last-run
+counts. Older runs never created that companion; probing it with
+``query_triples`` also hid a present empty table behind a full scan. Persist
+the before-picture with an in-database clone, and fall back to stored diff
+rows for scenarios that have not been re-run.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/SimulationStore.py
+   ``clone_sandbox_table`` copies ``__sim_`` into ``__smb_`` with INSERT…SELECT.
+2. src/back/objects/simulation/Sandbox.py
+   ``persist_before`` uses the SQL clone when the store supports it; existence
+   uses ``table_exists`` instead of loading every triple.
+3. src/back/objects/simulation/Simulation.py
+   If the companion is missing, page stored ``diff`` rows when present; otherwise
+   flag ``listing_unavailable`` instead of pairing KPIs with an empty table.
+4. src/front/static/simulation/js/simulation-results.js
+   Empty-state copy tells the user to re-run when the listing is unavailable.
+5. tests/units/simulation/test_simulation_core.py
+   Cover SQL clone, persist-before clone, and ``table_exists`` probe.
+6. tests/units/simulation/test_simulation_runner_api.py
+   Cover stored-row fallback and the unavailable-listing flag.
+7. tests/units/front/test_simulation_page_contract.py
+   Require the re-run empty-state copy.
+
+Modified files:
+- src/back/core/graphdb/lakebase/SimulationStore.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/objects/simulation/Simulation.py
+- src/front/static/simulation/js/simulation-results.js
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9889 passed, 326 skipped, 8 deselected, 39 warnings in 44.81s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+Simulation → Scenarios → Compare: sandbox vs live graph overlay
+================================================================================
+
+Context: Results only compares the sandbox before-picture with its own after-
+picture. Builders also need to see what a ready sandbox would change relative to
+the live graph as it is now, on the same scope, with the live side either
+inferred (union view) or asserted only. New "Compare" sidebar item under
+Simulation → Scenarios draws one colour-coded Sigma graph (unchanged / added
+(sandbox only) / removed (live only)) with exact KPIs and a details panel. The
+scope is the set of subjects materialised in the sandbox (resolved slice plus
+hypothetical entities), so both sides are read for exactly the same entities.
+
+Changes:
+
+1. src/back/objects/simulation/CompareGraph.py (new)
+   Projects a live-vs-sandbox triple diff (reusing ``Diff.compute``) into
+   ``{nodes, edges, summary}``. URI links become edges; ``rdf:type`` and
+   literals become node type / changed attributes. Payload capped at 400 nodes /
+   1500 edges (changed nodes first); summary counts stay exact.
+2. src/back/objects/simulation/Simulation.py
+   ``compare_to_live`` reads sandbox triples + origins, reads live triples of the
+   same subjects in batches (inferred or asserted-only relation), and returns the
+   projected graph; non-ready scenarios return an empty graph.
+3. src/back/objects/simulation/__init__.py
+   Export ``CompareGraph``.
+4. src/api/routers/internal/simulation.py, src/api/routers/simulation.py
+   ``GET /simulation/{id}/compare`` and ``GET /api/v1/simulations/{id}/compare``
+   (``include_inferred`` query flag; read-only / Viewer).
+5. src/front/config/menu_config.json, src/front/templates/simulation.html
+   New ``compare`` menu item and ``#compare-section``.
+6. src/front/templates/partials/simulation/_sim_compare.html (new)
+   Scenario / live-source pickers, KPI strip, legend, graph canvas, details panel.
+7. src/front/static/simulation/js/simulation-compare.js (new)
+   Lazy-loads graphology + Sigma, builds the overlay graph with ``--db-status-*``
+   tokens, deep link ``?section=compare&simulation=<id>&inferred=0|1``.
+8. src/front/static/simulation/css/simulation.css
+   Canvas, details panel and legend swatch styles (design tokens only).
+9. src/front/templates/partials/dtwin/_query_api.html,
+   src/front/templates/partials/layout/help_modal.html
+   OpenAPI card for the compare endpoint; Help Center lists Compare.
+10. docs/user-guide.md, docs/architecture.md, docs/development.md
+    Document the Compare section, endpoint, files and sidebar order.
+11. tests/units/simulation/test_simulation_compare.py (new)
+    ``CompareGraph`` projection (status, origin, node presence, cap) and
+    ``compare_to_live`` (not ready, inferred / asserted relation, sandbox error).
+12. tests/units/front/test_simulation_page_contract.py,
+    tests/units/front/test_sidebar_content_stretch_contract.py,
+    tests/units/front/test_settings_api_contract.py,
+    tests/units/simulation/test_simulation_runner_api.py
+    Contracts for the new section, menu order, OpenAPI card and read-only route.
+
+Modified files:
+- src/back/objects/simulation/CompareGraph.py (new)
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/__init__.py
+- src/api/routers/internal/simulation.py
+- src/api/routers/simulation.py
+- src/front/config/menu_config.json
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_compare.html (new)
+- src/front/templates/partials/dtwin/_query_api.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/simulation/js/simulation-compare.js (new)
+- src/front/static/simulation/css/simulation.css
+- docs/user-guide.md
+- docs/architecture.md
+- docs/development.md
+- tests/units/simulation/test_simulation_compare.py (new)
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_settings_api_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9902 passed, 326 skipped, 8 deselected, 39 warnings in 44.32s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+Simulation → Compare: color guide for nodes and links
+================================================================================
+
+Context: Users needed an explicit explanation of the colors used in the
+comparison graph, distinguishing node (entity) states from edge (relationship)
+states. Added an expandable color guide card and tooltip attributes to the
+legend bar, populated the Details panel with the color guide when no entity is
+selected, and expanded the user documentation.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_compare.html
+   Tooltips on legend swatches plus an expandable `#simCompareLegendHelp` guide
+   explaining grey, amber, green, and red for both nodes and links.
+2. src/front/static/simulation/js/simulation-compare.js
+   `_resetDetails` renders the color guide breakdown in the Details panel when
+   idle.
+3. docs/user-guide.md
+   Added explicit breakdown of node colors vs relationship colors in the Compare
+   documentation.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/static/simulation/js/simulation-compare.js
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9902 passed, 326 skipped, 8 deselected, 39 warnings in 51.11s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+Simulation → Compare: split-pane layout (left graph, right controls/KPIs/details)
+================================================================================
+
+Context: The vertical stack previously pushed the configuration controls
+(scenario picker, live source, compare trigger) off-screen when the graph
+canvas loaded. Converted the Compare screen into a split-panel layout following
+the OntoBricks Split-Panel Canvas Layout standard: the left pane hosts the full-
+height interactive Sigma graph comparison canvas with bottom legend, while the
+right pane permanently hosts all controls (Scenario, Live source, Compare/Explorer
+actions) along with compact KPI metrics and the interactive Details panel.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_compare.html
+   Restructured into `.sim-compare-layout` containing `.sim-compare-left-pane`
+   (alerts, overlay states, Sigma canvas, legend bar) and `.sim-compare-right-pane`
+   (permanent setup header/controls, compact 3x2 KPI tiles, selection details).
+2. src/front/static/simulation/css/simulation.css
+   Added split-pane flex rules, `.sim-compare-left-pane`, `.sim-compare-right-pane`,
+   `.sim-kpi-tile`, `.sim-compare-overlay`, and mobile responsive stack.
+3. src/front/static/simulation/js/simulation-compare.js
+   Toggles canvas visibility with `isBody` state and added `ResizeObserver` on
+   the canvas container for seamless dynamic resizing.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-compare.js
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9902 passed, 326 skipped, 8 deselected, 39 warnings in 46.87s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+## Rename Simulation sidebar group "Scenarios" to "Sandbox"
+
+### Context
+The first-level sidebar group under Simulation was titled "Scenarios", the same
+word as its first item. Renamed the group title to "Sandbox" so the group reads
+as the sandbox workspace (Scenarios, Compare, Runs). Item ids are unchanged, so
+routes and URLs are not affected.
+
+### Changes
+1. src/front/config/menu_config.json
+   Group `simulation-scenarios` title changed from "Scenarios" to "Sandbox".
+2. docs/user-guide.md
+   Compare menu path updated to "Simulation → Sandbox → Compare".
+
+### Modified files
+- src/front/config/menu_config.json
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+### Tests
+uv run --frozen pytest -q tests/units/front tests/units/simulation → 1852 passed.
+
+================================================================================
+## Rename cohort "Preview cohorts" button to "Preview"
+================================================================================
+
+Context: The Cohort page's run action was labelled "Preview cohorts". The
+shorter "Preview" label matches the surrounding action buttons. Helper text
+and docs that name the button are updated to match.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_cohorts.html
+   Button label now "Preview"; empty-state hint points to *Preview*.
+2. src/front/static/query/js/query-cohorts.js
+   Idle label of `cohortPreviewBtn` and the empty-preview hint now say "Preview".
+3. src/back/objects/digitaltwin/cohort/CohortService.py
+   Docstring reference updated to *Preview*.
+4. docs/advanced_features.md
+   Cohort action table row renamed to **Preview**.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_cohorts.html
+- src/front/static/query/js/query-cohorts.js
+- src/back/objects/digitaltwin/cohort/CohortService.py
+- docs/advanced_features.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9902 passed, 326 skipped, 8 deselected, 39 warnings in 50.08s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Group __smb_, __smo_, and _entity_search_asserted in Settings Lakebase & Lakehouse
+================================================================================
+
+Context: Settings → Lakebase and Settings → Lakehouse listed ``__smb_``
+(before-picture) and ``__smo_`` (origin) companions as separate domain cards
+instead of folding them under their simulation scenario. Similarly,
+``_entity_search_asserted`` tables (such as ``cust360auto_v5_entity_search_asserted``)
+were detached from their domain card because ``objectBase`` only stripped
+``_entity_search``.
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   Expand ``simulationSuffix`` to match ``__smb_`` and ``__smo_`` in addition to
+   ``__sim_``, ``__smu_``, ``__sms_``, and ``__smp_``. Add
+   ``_entity_search_asserted`` to ``domainSuffixes`` in ``objectBase`` ahead of
+   ``_entity_search`` to ensure longest-suffix matching.
+2. src/back/core/graphdb/delta/objects.py
+   Update ``_SIM_LEAF_RE`` to recognise ``smb`` and ``smo`` markers. In
+   ``_drop_sort_key``, order ``smb`` and ``smo`` companion tables to drop with
+   ``smp`` before the sandbox table. Update ``object_base`` docstring.
+3. tests/units/front/test_lakebase_object_grouping.py
+   Assert ``__(sim|smu|sms|smp|smb|smo)_`` pattern in ``settings.js``, verify all
+   marker suffixes match the simulation regex, and assert
+   ``_entity_search_asserted`` is recognized before ``_entity_search``.
+4. tests/units/settings/test_delta_objects.py
+   Add tests verifying ``object_base`` strips ``__smb_`` and ``__smo_`` and
+   ``group_triplestore_objects`` groups and sorts companions before the sandbox.
+5. docs/user-guide.md
+   Document ``__smb_<id>``, ``__smo_<id>``, and ``_entity_search_asserted`` in
+   the Lakebase physical objects reference.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- src/back/core/graphdb/delta/objects.py
+- tests/units/front/test_lakebase_object_grouping.py
+- tests/units/settings/test_delta_objects.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9904 passed, 326 skipped, 8 deselected, 39 warnings in 49.41s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Align test_each_app_declares_user_api_scopes_for_obo with sql-only scopes
+================================================================================
+
+Context: The only remaining failure in `uv run --frozen pytest -q -m "not scenario"`
+was `test_each_app_declares_user_api_scopes_for_obo`. It still required the
+identity scopes (`iam.current-user:read`, `iam.access-control:read`) that were
+intentionally removed from `databricks.yml` and `app.yaml.template` on
+2026-11-03: the Databricks Apps create API rejects them as explicit scopes
+(platform defaults). The test was stale, not the bundle.
+
+Changes:
+
+1. tests/units/settings/test_bundle_job_resource.py
+   `test_each_app_declares_user_api_scopes_for_obo` now requires `sql` and
+   asserts the identity scopes are NOT declared on either app.
+2. docs/deployment.md
+   MCP section: `user_api_scopes` lists only `sql`; identity scopes are
+   documented as platform defaults that must not be declared.
+
+Modified files:
+- tests/units/settings/test_bundle_job_resource.py
+- docs/deployment.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9905 passed, 326 skipped, 8 deselected, 39 warnings in 54.18s (0 failed).

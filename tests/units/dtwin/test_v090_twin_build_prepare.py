@@ -212,7 +212,7 @@ _GOOD = {
     "subject": "http://ex.org/s1",
     "predicate": "http://ex.org/p",
     "object": "http://ex.org/o1",
-    "provenance": "swrl:rule1",
+    "provenance": "if_then:rule1",
 }
 _LITERAL = {"subject": "http://ex.org/s2", "predicate": "http://ex.org/p", "object": "42"}
 
@@ -252,6 +252,10 @@ class TestInferredMaterialize:
     def test_uri_triples_drops_literal_objects(self):
         assert TwinInferredMaterialize.uri_triples([_GOOD, _LITERAL, {}]) == [_GOOD]
 
+    def test_writable_triples_keeps_literal_objects(self):
+        kept = TwinInferredMaterialize.writable_triples([_GOOD, _LITERAL, {}])
+        assert kept == [_GOOD, {**_LITERAL, "object": "42"}]
+
     def test_missing_task_id_is_rejected(self):
         with pytest.raises(ValidationError):
             TwinInferredMaterialize.run(
@@ -283,7 +287,7 @@ class TestInferredMaterialize:
         assert cls.call_args.args[1] is store
         rr = svc.materialize_inferred.call_args.args[0]
         assert [(t.subject, t.predicate, t.object, t.provenance) for t in rr.inferred_triples] == [
-            ("http://ex.org/s1", "http://ex.org/p", "http://ex.org/o1", "swrl:rule1")
+            ("http://ex.org/s1", "http://ex.org/p", "http://ex.org/o1", "if_then:rule1")
         ]
 
     def test_graph_write_opens_the_store_on_the_build_warehouse(self):
@@ -373,8 +377,16 @@ class TestGraphStats:
         cached = {
             "top_predicates": [{"uri": "p", "kind": "attribute"}],
             "analytics_job_blocked_reason": "",
+            "graph_cache": {"supported": True},
         }
         assert TwinGraphStats.cache_is_fresh(cached) is True
+
+    def test_cache_without_graph_cache_is_stale(self):
+        cached = {
+            "top_predicates": [{"uri": "p", "kind": "attribute"}],
+            "analytics_job_blocked_reason": "",
+        }
+        assert TwinGraphStats.cache_is_fresh(cached) is False
 
     def test_cache_with_types_but_zero_triples_is_stale(self):
         cached = {
@@ -420,6 +432,10 @@ class TestGraphStats:
         assert payload["analytics_job_available"] is False
         assert payload["analytics_job_blocked_reason"] == "not configured"
         assert payload["inferred_triples"] == 3
+        assert payload["graph_cache"]["supported"] is True
+        assert payload["graph_cache"]["backend"] == "lakebase"
+        assert payload["intelligence"]["inferred_triples"] == 3
+        assert payload["intelligence"]["communities"]["ready"] is False
 
     def test_relationship_count_never_goes_negative(self):
         with patch.object(DigitalTwin, "classify_predicates", return_value=[]):
@@ -435,3 +451,19 @@ class TestGraphStats:
                 job_blocked_reason="",
             )
         assert payload["relationship_count"] == 0
+
+    def test_graph_cache_refreshed_at_falls_back_to_last_build(self):
+        domain = _domain(last_build="2026-11-01T12:00:00+00:00")
+        block = TwinGraphStats._graph_cache_block(domain, [])
+        assert block["refreshed_at"] == "2026-11-01T12:00:00+00:00"
+
+    def test_graph_cache_refreshed_at_prefers_explicit_stamp(self):
+        domain = _domain(
+            last_build="2026-11-01T12:00:00+00:00",
+            info={
+                "name": "Sales",
+                "graph_cache_refreshed_at": "2026-11-20T09:30:00+00:00",
+            },
+        )
+        block = TwinGraphStats._graph_cache_block(domain, [])
+        assert block["refreshed_at"] == "2026-11-20T09:30:00+00:00"

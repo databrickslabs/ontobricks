@@ -227,7 +227,7 @@ class Simulations:
             )
             if cur.rowcount == 0:
                 raise InfrastructureError(
-                    "Domain is not registered — save it to the registry first",
+                    "Context is not registered — save it to the registry first",
                     detail=folder,
                 )
 
@@ -339,6 +339,74 @@ class Simulations:
         except Exception as exc:  # noqa: BLE001
             logger.debug("load_simulation_runs(%s) failed: %s", folder, exc)
             return []
+
+    def load_all_simulation_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        if not self._ensure_simulation_tables():
+            return [], 0
+        try:
+            _psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            where = "WHERE d.registry_id = %s"
+            params: List[Any] = [self._registry()]
+            if folder:
+                where += " AND d.folder = %s"
+                params.append(folder)
+            source = f"""
+                FROM {sch}.simulation_runs r
+                JOIN {sch}.domains d ON d.id = r.domain_id
+                LEFT JOIN {sch}.simulations s
+                    ON s.domain_id = r.domain_id
+                   AND s.version = r.version
+                   AND s.id = r.simulation_id
+                {where}
+            """
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(f"SELECT COUNT(*) AS total {source}", tuple(params))
+                total = self._scalar_total(cur.fetchone())
+                cur.execute(
+                    f"""
+                    SELECT r.id, d.folder AS domain, r.version, r.simulation_id,
+                           COALESCE(s.label, '') AS label,
+                           r.status, r.message, r.error, r.task_id,
+                           r.started_at, r.finished_at, r.duration_s,
+                           r.stats, r.owner
+                    {source}
+                    ORDER BY r.started_at DESC, r.id DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    tuple(params) + (int(limit), int(offset)),
+                )
+                rows = cur.fetchall()
+            return [
+                {
+                    "id": int(r["id"] or 0),
+                    "domain": r.get("domain") or "",
+                    "version": str(r.get("version") or ""),
+                    "simulation_id": r["simulation_id"],
+                    "label": r.get("label") or "",
+                    "status": r["status"],
+                    "message": r["message"] or "",
+                    "error": r["error"] or "",
+                    "task_id": r["task_id"] or "",
+                    "started_at": _iso(r.get("started_at")),
+                    "finished_at": _iso(r.get("finished_at")),
+                    "duration_s": float(r["duration_s"] or 0),
+                    "stats": dict(r["stats"] or {}),
+                    "owner": r["owner"] or "",
+                }
+                for r in rows
+            ], total
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "load_all_simulation_runs(folder=%s) failed: %s", folder, exc
+            )
+            return [], 0
 
     def copy_simulations_to_version(
         self, folder: str, from_version: str, to_version: str

@@ -193,6 +193,8 @@ class TestMarkStates:
         d = _domain(save=lambda: saved.append(1), graph_cache_state="pending_refresh")
         P.mark_graph_cache_ready(d)
         assert d.info["graph_cache_state"] == GRAPH_CACHE_STATE_READY
+        assert d.info["graph_cache_refreshed_at"]
+        assert "T" in d.info["graph_cache_refreshed_at"]
         assert saved == [1]
 
     def test_mark_ready_swallows_save_failure(self):

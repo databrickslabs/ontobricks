@@ -18,7 +18,7 @@ from back.core.errors import (
 )
 from api.routers.internal._guards import require
 from api.routers.internal._graph_access import assert_domain_graph_read
-from back.objects.registry import ROLE_ADMIN, ROLE_BUILDER
+from back.objects.registry import ROLE_ADMIN, ROLE_BUILDER, role_level
 from shared.config.constants import DEFAULT_BASE_URI
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
@@ -29,8 +29,11 @@ from back.core.graph_analysis import (
     MODE_JOB,
     analytics_job_configured,
     analytics_job_status,
+    community_job_status,
+    pattern_job_status,
 )
 from back.objects.digitaltwin import (
+    BuildObjects,
     CohortEngineContext,
     CohortService,
     DigitalTwin,
@@ -39,7 +42,10 @@ from back.objects.digitaltwin import (
     NodeBusinessRuleService,
     NodeContextService,
     NodeShaclService,
+    TwinAnalytics,
     TwinAssistantCache,
+    PatternBackgroundTasks,
+    TwinBackgroundTasks,
     TwinDataQualityRun,
     TwinGraphAccess,
     TwinGraphBuild,
@@ -363,50 +369,569 @@ async def load_triplestore(
 # ===========================================
 
 
+def _cluster_graph(domain, settings):
+    """Graph store and graph name for the clusters routes."""
+    store = _require_graph_store(domain, settings)
+    graph_name = _graph_query_table(domain, settings, store)
+    if not graph_name:
+        raise ValidationError("Graph name is not configured")
+    return store, graph_name
+
+
+def _string_list(value, field: str) -> Optional[list]:
+    if value in (None, "", []):
+        return None
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        raise ValidationError(f"{field} must be a list of strings")
+    return value
+
+
 @router.post("/clusters/detect")
 async def detect_clusters(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Run community detection on the full knowledge graph."""
+    """Start community detection on the Databricks job (background task).
+
+    Clients poll ``/tasks/{task_id}`` and then read ``/dtwin/clusters/latest``.
+    """
+    import threading
+
+    from back.core.task_manager import get_task_manager
+
     assert_domain_graph_read(request)
     try:
         data = await request.json()
-        algorithm = data.get("algorithm", "louvain")
-        resolution = float(data.get("resolution", 1.0))
-        predicate_filter = data.get("predicate_filter")
-        class_filter = data.get("class_filter")
-        max_triples = int(data.get("max_triples", settings.analytics_max_triples))
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    class_filter = _string_list(data.get("class_filter"), "class_filter")
+    predicate_filter = _string_list(data.get("predicate_filter"), "predicate_filter")
 
-        domain = get_domain(session_mgr)
-        store = _require_graph_store(domain, settings)
-        graph_name = _graph_query_table(domain, settings, store)
-        if not graph_name:
-            raise ValidationError("Graph name is not configured")
-
-        dt = DigitalTwin(domain)
-        result = await run_blocking(
-            dt.detect_clusters,
-            store,
-            graph_name,
-            algorithm=algorithm,
-            resolution=resolution,
-            predicate_filter=predicate_filter,
-            class_filter=class_filter,
-            max_triples=max_triples,
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    available, reason = community_job_status(domain, settings)
+    if not available:
+        raise ValidationError(
+            reason
+            or (
+                "Community detection runs on Databricks, which is not enabled "
+                "for this workspace. Enable 'Compute large-graph metrics on "
+                "Databricks' in Settings."
+            )
         )
 
-        return {"success": True, **result}
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Community Detection",
+        task_type="community_detection",
+        steps=[{"name": "detect", "description": "Detecting communities on Databricks"}],
+    )
 
-    except (ValidationError, InfrastructureError, NotFoundError):
-        raise
-    except ValueError as e:
-        logger.warning("Cluster detection rejected: %s", e)
-        raise ValidationError("Cluster detection parameters are invalid", detail=str(e))
-    except Exception as e:
-        logger.exception("Cluster detection failed: %s", e)
-        raise InfrastructureError("Cluster detection failed", detail=str(e))
+    def run():
+        TwinBackgroundTasks.run_community_task(
+            tm,
+            task.id,
+            domain,
+            settings,
+            graph_name,
+            class_filter=class_filter,
+            predicate_filter=predicate_filter,
+        )
+
+    threading.Thread(target=run, daemon=True).start()
+    return {
+        "success": True,
+        "task_id": task.id,
+        "message": "Community detection started (running on Databricks)",
+    }
+
+
+@router.get("/clusters/latest")
+async def latest_clusters(
+    request: Request,
+    top: int = Query(50, ge=1, le=200),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Summary, top clusters and preview of the last detection run."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    available, reason = community_job_status(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).latest_clusters, graph_name, settings, top
+    )
+    return {
+        "success": True,
+        **result,
+        "job_available": available,
+        "blocked_reason": "" if available else (reason or ""),
+    }
+
+
+@router.get("/clusters/current")
+async def current_clusters(
+    request: Request,
+    top: int = Query(50, ge=1, le=200),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Top materialized clusters and totals (no members), or empty clusters."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).load_current_clusters, store, graph_name, top
+    )
+    return {"success": True, **result}
+
+
+@router.get("/clusters/{cluster_id}/members")
+async def cluster_members(
+    request: Request,
+    cluster_id: int,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    source: str = Query("latest", pattern="^(latest|materialized)$"),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of a cluster, from the last run or the materialized graph."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    analytics = TwinAnalytics(domain)
+    if source == "materialized":
+        result = await run_blocking(
+            analytics.materialized_members, store, graph_name, cluster_id, offset, limit
+        )
+    else:
+        result = await run_blocking(
+            analytics.cluster_members, graph_name, cluster_id, offset, limit, settings
+        )
+    return {"success": True, **result}
+
+
+@router.post("/clusters/assignments")
+async def cluster_assignments(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Materialized cluster id for each requested entity URI (drawn nodes)."""
+    assert_domain_graph_read(request)
+    data = await request.json()
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    uris = _string_list(data.get("uris"), "uris") or []
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    assignments = await run_blocking(
+        TwinAnalytics(domain).cluster_assignments, store, graph_name, uris
+    )
+    return {"success": True, "assignments": assignments}
+
+
+@router.post(
+    "/clusters/materialize",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def materialize_clusters(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Write the last detection run into the graph (background task)."""
+    import threading
+
+    from back.core.task_manager import get_task_manager
+
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    if not await run_blocking(TwinAnalytics(domain).detection_summary, graph_name, settings):
+        raise ValidationError("No community detection run to materialize. Run Detect first.")
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Materialize Communities",
+        task_type="community_materialize",
+        steps=[{"name": "write", "description": "Writing clusters into the graph"}],
+    )
+
+    def run():
+        TwinBackgroundTasks.run_community_materialize_task(
+            tm, task.id, domain, settings, store, graph_name
+        )
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"success": True, "task_id": task.id, "message": "Materialization started"}
+
+
+@router.delete(
+    "/clusters/current",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def delete_current_clusters(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Drop the materialized community partition."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).clear_clusters, store, graph_name
+    )
+    return {"success": True, **result}
+
+
+# ---------------------------------------------------------------------------
+# Pattern detection (Intelligence → Discovery → Patterns)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/patterns/detect")
+async def detect_patterns(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Start pattern discovery on the Databricks job (background task)."""
+    import threading
+
+    from back.core.task_manager import get_task_manager
+
+    assert_domain_graph_read(request)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    class_filter = data.get("class_filter")
+    if not isinstance(class_filter, str) or not class_filter.strip():
+        raise ValidationError("class_filter is required")
+    hops = int(data.get("hops") or 3)
+    bins = int(data.get("bins") or 8)
+    min_support = int(data.get("min_support") or 3)
+    refine_top = int(data.get("refine_top") or 0)
+
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    available, reason = pattern_job_status(domain, settings)
+    if not available:
+        raise ValidationError(
+            reason
+            or (
+                "Pattern discovery runs on Databricks, which is not enabled "
+                "for this workspace. Enable 'Compute large-graph metrics on "
+                "Databricks' in Settings."
+            )
+        )
+
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Pattern Detection",
+        task_type="pattern_detection",
+        steps=[
+            {"name": "detect", "description": "Detecting patterns on Databricks"},
+            {"name": "save", "description": "Saving pattern catalog"},
+        ],
+    )
+
+    def run():
+        PatternBackgroundTasks.run_pattern_task(
+            tm,
+            task.id,
+            domain,
+            settings,
+            graph_name,
+            class_filter=class_filter.strip(),
+            hops=hops,
+            bins=bins,
+            min_support=min_support,
+            refine_top=refine_top,
+            auto_save=True,
+        )
+
+    threading.Thread(target=run, daemon=True).start()
+    return {
+        "success": True,
+        "task_id": task.id,
+        "message": "Pattern detection started (running on Databricks)",
+    }
+
+
+@router.get("/patterns/latest")
+async def latest_patterns(
+    request: Request,
+    top: int = Query(50, ge=1, le=200),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Summary, top patterns and preview of the last discovery run."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    available, reason = pattern_job_status(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).latest_patterns, graph_name, settings, top
+    )
+    return {
+        "success": True,
+        **result,
+        "job_available": available,
+        "blocked_reason": "" if available else (reason or ""),
+    }
+
+
+@router.get("/patterns/saved")
+async def list_saved_patterns(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Patterns saved from discovery (Unity Catalog snapshots)."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).list_saved_patterns, graph_name, settings
+    )
+    return {"success": True, **result}
+
+
+@router.get("/patterns/saved/{saved_id}/patterns")
+async def saved_pattern_catalog(
+    request: Request,
+    saved_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """All patterns snapshotted in one saved Detect run (picker catalog)."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).saved_pattern_patterns, graph_name, saved_id, settings
+    )
+    return {"success": True, **result}
+
+
+@router.get("/patterns/saved/{saved_id}/members")
+async def saved_pattern_members(
+    request: Request,
+    saved_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    pattern_id: str = Query("", description="Limit to one pattern in the saved run"),
+    certified: Optional[bool] = Query(
+        None,
+        description="Without pattern_id: only certified (true) or non-certified (false) patterns",
+    ),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of members for a saved Detect run (optionally one pattern)."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).saved_pattern_members,
+        graph_name,
+        saved_id,
+        offset,
+        limit,
+        settings,
+        pattern_id,
+        certified,
+    )
+    return {"success": True, **result}
+
+
+@router.get("/patterns/saved/{saved_id}/shape")
+async def saved_pattern_shape(
+    request: Request,
+    saved_id: str,
+    pattern_id: str = Query("", description="Pattern within the saved run"),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Snapshotted shape/diagram for one pattern in a saved Detect run."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).saved_pattern_shape,
+        graph_name,
+        saved_id,
+        settings,
+        pattern_id,
+    )
+    if not result:
+        raise ValidationError(f"Unknown saved pattern: {saved_id}")
+    return {"success": True, **result}
+
+
+@router.put(
+    "/patterns/saved/{saved_id}/certification",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def certify_saved_pattern(
+    request: Request,
+    saved_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Certify (or un-certify) one pattern of a saved Detect run."""
+    assert_domain_graph_read(request)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    pattern_id = data.get("pattern_id")
+    certified = data.get("certified")
+    if not isinstance(pattern_id, str) or not pattern_id.strip():
+        raise ValidationError("pattern_id is required")
+    if not isinstance(certified, bool):
+        raise ValidationError("certified must be a boolean")
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).certify_saved_pattern,
+        graph_name,
+        saved_id,
+        pattern_id.strip(),
+        certified,
+        settings,
+    )
+    return {"success": True, **result}
+
+
+@router.delete(
+    "/patterns/saved/{saved_id}",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def delete_saved_pattern(
+    request: Request,
+    saved_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Drop one saved pattern."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).delete_saved_pattern, graph_name, saved_id, settings
+    )
+    return {"success": True, **result}
+
+
+@router.get("/patterns/{pattern_id}/members")
+async def pattern_members(
+    request: Request,
+    pattern_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of a discovered pattern's members (last run)."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).pattern_members,
+        graph_name,
+        pattern_id,
+        offset,
+        limit,
+        settings,
+    )
+    return {"success": True, **result}
+
+
+@router.get("/patterns/{pattern_id}/shape")
+async def pattern_shape(
+    request: Request,
+    pattern_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Canonical shape payload for one discovered pattern."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).pattern_shape, graph_name, pattern_id, settings
+    )
+    if not result:
+        raise ValidationError(f"Unknown pattern_id: {pattern_id}")
+    return {"success": True, **result}
+
+
+@router.post(
+    "/patterns/save",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def save_pattern(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Snapshot one discovered pattern into its saved table (background task)."""
+    import threading
+
+    from back.core.task_manager import get_task_manager
+
+    assert_domain_graph_read(request)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    pattern_id = data.get("pattern_id")
+    label = data.get("label")
+    if not isinstance(pattern_id, str) or not pattern_id.strip():
+        raise ValidationError("pattern_id is required")
+    if not isinstance(label, str) or not label.strip():
+        raise ValidationError("label is required")
+
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    if not await run_blocking(
+        TwinAnalytics(domain).pattern_detection_summary, graph_name, settings
+    ):
+        raise ValidationError("No pattern detection run to save. Run Detect first.")
+
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Save Pattern",
+        task_type="pattern_save",
+        steps=[{"name": "write", "description": "Saving pattern catalog"}],
+    )
+
+    def run():
+        PatternBackgroundTasks.run_pattern_save_task(
+            tm,
+            task.id,
+            domain,
+            settings,
+            graph_name,
+            pattern_id=pattern_id.strip(),
+            label=label.strip(),
+        )
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"success": True, "task_id": task.id, "message": "Pattern save started"}
 
 
 # ===========================================
@@ -517,7 +1042,8 @@ async def get_latest_graph_metrics(
     """
     try:
         domain = get_domain(session_mgr)
-        stored = _load_stored_metrics(domain, settings)
+        # Blocking registry (Lakebase) read: run off the event loop.
+        stored = await run_blocking(_load_stored_metrics, domain, settings)
         if not stored:
             return {"success": True, "has_result": False}
 
@@ -550,7 +1076,8 @@ async def get_graph_metric_series(
     """Return one exhaustive score series from the latest analytics run."""
     try:
         domain = get_domain(session_mgr)
-        stored = _load_stored_metrics(domain, settings)
+        # Blocking registry (Lakebase) read: run off the event loop.
+        stored = await run_blocking(_load_stored_metrics, domain, settings)
         if not stored:
             return {"success": True, "has_result": False}
 
@@ -589,7 +1116,7 @@ async def get_graph_metrics_history(
     """Return the analytics run history (newest-first) for this domain.
 
     Spans every version unless ``version`` scopes it. Backs the analytics
-    table on Knowledge Graph → Management → Runs, which has no version
+    table on Intelligence → Analytics → Runs (and Settings → Runs), which has no version
     filter. Guarding on a version here would report an empty history for a
     domain whose current version is blank, even with rows on file for
     earlier ones.
@@ -624,25 +1151,29 @@ async def get_graph_metrics_summary(
     opening the Domain Validation page no longer blocks on a full NetworkX
     run. ``{success, has_result: false}`` when no analysis has been run.
     """
-    try:
-        domain = get_domain(session_mgr)
-        stored = _load_stored_metrics(domain, settings)
-        if not stored:
-            return {"success": True, "has_result": False}
+    def _work():
+        try:
+            domain = get_domain(session_mgr)
+            stored = _load_stored_metrics(domain, settings)
+            if not stored:
+                return {"success": True, "has_result": False}
 
-        return {
-            "success": True,
-            "has_result": True,
-            "stats": stored.get("stats") or {},
-            "top_pagerank": stored.get("top_pagerank") or [],
-            "computed_at": stored.get("computed_at", ""),
-        }
+            return {
+                "success": True,
+                "has_result": True,
+                "stats": stored.get("stats") or {},
+                "top_pagerank": stored.get("top_pagerank") or [],
+                "computed_at": stored.get("computed_at", ""),
+            }
 
-    except (ValidationError, InfrastructureError, NotFoundError):
-        raise
-    except Exception as e:
-        logger.exception("Graph metrics summary failed: %s", e)
-        raise InfrastructureError("Graph metrics summary failed", detail=str(e))
+        except (ValidationError, InfrastructureError, NotFoundError):
+            raise
+        except Exception as e:
+            logger.exception("Graph metrics summary failed: %s", e)
+            raise InfrastructureError("Graph metrics summary failed", detail=str(e))
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.post("/metrics/interpret")
@@ -1377,28 +1908,32 @@ async def databricks_build_info(
     ``materialization`` tells the page whether that relation is a Delta table
     or a pass-through view, so it can label it and explain the triple count.
     """
-    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+    def _work():
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-    domain = get_domain(session_mgr)
-    backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
-    readiness = HomeService.validate_status(domain)
-    view_table = effective_view_table(domain)
-    data_table = effective_databricks_table(domain, settings)
-    builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
-    probe = GraphDBFactory.get_health_probe(domain, settings, engine="delta")
-    data_status = probe.probe_status(data_table) if data_table else {}
-    return {
-        "success": True,
-        "triple_store_backend": backend,
-        "materialization": GraphDBFactory.resolve_lakehouse_materialization(
-            domain, settings
-        ),
-        "readiness": readiness,
-        "view_table": view_table,
-        "data_table": data_table,
-        "inferred_table": builder.inferred_table_fqn(),
-        "triplestore_status": data_status,
-    }
+        domain = get_domain(session_mgr)
+        backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
+        readiness = HomeService.validate_status(domain)
+        view_table = effective_view_table(domain)
+        data_table = effective_databricks_table(domain, settings)
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        probe = GraphDBFactory.get_health_probe(domain, settings, engine="delta")
+        data_status = probe.probe_status(data_table) if data_table else {}
+        return {
+            "success": True,
+            "triple_store_backend": backend,
+            "materialization": GraphDBFactory.resolve_lakehouse_materialization(
+                domain, settings
+            ),
+            "readiness": readiness,
+            "view_table": view_table,
+            "data_table": data_table,
+            "inferred_table": builder.inferred_table_fqn(),
+            "triplestore_status": data_status,
+        }
+
+    # Blocking registry / Databricks I/O: run off the event loop.
+    return await run_blocking(_work)
 
 
 @router.post(
@@ -1459,6 +1994,34 @@ async def start_databricks_triplestore_build(
 
     threading.Thread(target=run_build, daemon=True).start()
     return {"success": True, "task_id": task.id}
+
+
+# ===========================================
+# Build → Objects (physical objects of the current context version)
+# ===========================================
+
+
+@router.get("/build/objects")
+async def build_objects(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List the tables, views, sync registrations and graphs this version built.
+
+    Read-only for every caller; ``can_drop`` tells the page whether to offer the
+    Drop buttons (the drop endpoints themselves are admin-only).
+    """
+    from api.routers.internal._helpers import map_route_errors
+
+    domain = get_domain(session_mgr)
+    with map_route_errors("build objects", logger):
+        data = await run_blocking(
+            BuildObjects.list_for_domain, domain, session_mgr, settings
+        )
+    role = getattr(request.state, "user_role", "") or ""
+    data["can_drop"] = role_level(role) >= role_level(ROLE_ADMIN)
+    return data
 
 
 # ===========================================
@@ -1530,11 +2093,22 @@ async def triplestore_stats(
         # classification, the cheap analytics-job check) runs on the loop after.
         import asyncio
 
-        agg, entity_types, top_predicates, inferred_count = await asyncio.gather(
+        (
+            agg,
+            entity_types,
+            top_predicates,
+            inferred_count,
+            companions,
+            communities,
+        ) = await asyncio.gather(
             run_blocking(store.get_aggregate_stats, graph_name),
             run_blocking(store.get_type_distribution, graph_name),
             run_blocking(store.get_predicate_distribution, graph_name),
             run_blocking(store.get_inferred_triple_count, graph_name),
+            run_blocking(TwinGraphStats.companion_inventory, store, graph_name),
+            run_blocking(
+                TwinGraphStats.community_totals, domain, store, graph_name
+            ),
         )
 
         job_available, job_blocked_reason = analytics_job_configured(domain, settings)
@@ -1547,6 +2121,8 @@ async def triplestore_stats(
             inferred_count=inferred_count,
             job_available=job_available,
             job_blocked_reason=job_blocked_reason,
+            companions=companions,
+            communities=communities,
         )
         DigitalTwin(domain).set_ts_cache("stats", result)
         return result
@@ -1642,10 +2218,8 @@ async def start_dataquality_checks(
             run.shapes,
             triplestore_table,
             run.total,
-            swrl_rules=run.swrl_rules,
+            if_then_rules=run.if_then_rules,
             ontology_dict=run.ontology_dict,
-            decision_tables=run.decision_tables,
-            aggregate_rules=run.aggregate_rules,
             violation_limit=run.violation_limit,
         )
 
@@ -1676,14 +2250,12 @@ async def start_reasoning(
     data = await request.json()
     options = {
         "tbox": data.get("tbox", True),
-        "swrl": data.get("swrl", True),
+        "if_then": data.get("if_then", True),
         "graph": data.get("graph", True),
-        "decision_tables": data.get("decision_tables", False),
         "sparql_rules": data.get("sparql_rules", False),
-        "aggregate_rules": data.get("aggregate_rules", False),
     }
     # Per-rule name filters (optional; empty set = run all rules in that phase)
-    for key in ("swrl_rule_names", "decision_table_names", "sparql_rule_names", "aggregate_rule_names"):
+    for key in ("if_then_rule_names", "sparql_rule_names"):
         names = data.get(key)
         if names:
             options[key] = set(names)
@@ -1715,7 +2287,10 @@ async def start_reasoning(
     return {"success": True, "task_id": task.id, "message": "Inference started"}
 
 
-@router.post("/reasoning/materialize")
+@router.post(
+    "/reasoning/materialize",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
 async def materialize_inferred(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -1798,6 +2373,35 @@ async def get_inferred_triples(
     }
 
 
+@router.get("/reasoning/inferred/breakdown")
+async def get_inferred_breakdown(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Per-category breakdown (Reasoning / Cohorts / Communities) of inferred triples."""
+    assert_domain_graph_read(session_mgr.request)
+    domain = get_domain(session_mgr)
+    store = _require_graph_store(domain, settings)
+    graph_name = effective_graph_name(domain)
+    if not store.supports_inferred_breakdown:
+        return {
+            "success": True,
+            "graph_name": graph_name,
+            "supported": False,
+            "categories": [],
+            "total": None,
+        }
+    base_uri = (domain.ontology.get("base_uri") or DEFAULT_BASE_URI).strip()
+    categories = await run_blocking(store.get_inferred_breakdown, graph_name, base_uri)
+    return {
+        "success": True,
+        "graph_name": graph_name,
+        "supported": True,
+        "categories": categories,
+        "total": sum(c["triples"] for c in categories),
+    }
+
+
 # ===========================================
 # Graph Chat Assistant (LLM over the knowledge graph)
 # ===========================================
@@ -1810,7 +2414,7 @@ async def dtwin_classes(
 ):
     """Return session-domain classes and Graph Chat action metadata."""
     domain = get_domain(session_mgr)
-    swrl_rules = NodeBusinessRuleService.domain_swrl_rules(domain)
+    if_then_rules = NodeBusinessRuleService.domain_if_then_rules(domain)
     return {
         "success": True,
         "domain_name": _chat_resolve_domain_name(domain),
@@ -1818,6 +2422,10 @@ async def dtwin_classes(
             {
                 "name": cls.get("name", ""),
                 "uri": cls.get("uri", ""),
+                "datasets": (
+                    cls.get("datasets")
+                    or ([cls["dataset"]] if cls.get("dataset") else [])
+                ),
                 "dataset": cls.get("dataset") or None,
                 "bridges": NodeContextService.enrich_bridge_targets(
                     NodeContextService.class_bridge_entries(cls),
@@ -1826,7 +2434,7 @@ async def dtwin_classes(
                     drop_unavailable=False,
                 ),
                 "actions": NodeContextService.class_action_entries(cls),
-                "business_rules": NodeBusinessRuleService.class_entries(cls, swrl_rules),
+                "business_rules": NodeBusinessRuleService.class_entries(cls, if_then_rules),
                 "virtualAttributes": VirtualAttributeService.class_entries(cls),
             }
             for cls in (domain.get_classes() or [])
@@ -2002,7 +2610,7 @@ async def dtwin_nodes_business_rule_request(
     rule = resolved["rule"]
     simulation_id = TwinGraphAccess.sandbox_id(data.get("simulation_id"))
     if simulation_id:
-        from back.objects.simulation import Simulation
+        from back.objects.intelligence import Simulation
 
         Simulation(domain, settings).sandbox_relation(simulation_id)
 
@@ -2250,6 +2858,27 @@ def _chat_response_payload(agent_result, event_type: str | None = None) -> dict:
     return TwinAssistantCache.chat_response_payload(agent_result, event_type)
 
 
+def _chat_record_turn(
+    session_mgr: SessionManager,
+    domain_key: str,
+    history: list,
+    user_message: str,
+    reply: str | None,
+    limit: int,
+) -> None:
+    """Append one exchange to the per-domain saved history, trimmed to ``limit``."""
+    prior = list(history)
+    if prior and prior[-1].get("role") == "user" and (
+        prior[-1].get("content") or ""
+    ).strip() == user_message.strip():
+        prior = prior[:-1]
+    prior.append({"role": "user", "content": user_message})
+    prior.append({"role": "assistant", "content": reply or ""})
+    chat_cache = _chat_cache(session_mgr)
+    chat_cache["history"][domain_key] = _chat_trim(prior, limit)
+    _chat_save_cache(session_mgr, chat_cache)
+
+
 def _chat_forwarded_headers(request: Request) -> dict:
     prefixes = ("x-forwarded-", "x-real-")
     extra = {"x-csrf-token", "referer"}
@@ -2308,12 +2937,16 @@ async def dtwin_assistant_chat(
     chat_cache = _chat_cache(session_mgr)
     limit = _chat_clamp_limit(chat_cache.get("limit", _CHAT_DEFAULT_LIMIT))
 
+    # ``persist: false`` makes the turn stateless (used by Compare → Evaluate,
+    # which fires two parallel turns): no saved history is read or written.
+    persist = data.get("persist", True) is not False
+
     # Prefer the server-side persisted history (survives page navigation)
     # but fall back to whatever the client sent (legacy / cache miss).
-    saved_history = chat_cache["history"].get(domain_key) or []
+    saved_history = (chat_cache["history"].get(domain_key) or []) if persist else []
     history = saved_history if saved_history else client_history
 
-    host, token, llm_endpoint, _llm_endpoint_kind = require_domain_llm(
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(
         domain, settings
     )
 
@@ -2351,7 +2984,7 @@ async def dtwin_assistant_chat(
             run_chat_agent,
             host=host,
             token=token,
-            endpoint_name=llm_endpoint,
+            endpoint_name=llm_endpoint, endpoint_kind=llm_endpoint_kind,
             base_url=base_url,
             domain_name=domain_name,
             registry_params=registry_params,
@@ -2360,6 +2993,7 @@ async def dtwin_assistant_chat(
             user_message=user_message,
             conversation_history=history,
             describe_depth=describe_depth,
+            max_tokens=settings.dtwin_chat_max_tokens,
         )
 
     if not agent_result.success:
@@ -2380,16 +3014,10 @@ async def dtwin_assistant_chat(
     # (e.g. ``POST /dtwin/nodes/action/request``) and may have minted a
     # ``pending_actions`` token into the session while ``run_agent`` was
     # running. Saving the stale snapshot would clobber that token.
-    prior = list(history)
-    if prior and prior[-1].get("role") == "user" and (
-        prior[-1].get("content") or ""
-    ).strip() == user_message.strip():
-        prior = prior[:-1]
-    prior.append({"role": "user", "content": user_message})
-    prior.append({"role": "assistant", "content": agent_result.reply or ""})
-    chat_cache = _chat_cache(session_mgr)
-    chat_cache["history"][domain_key] = _chat_trim(prior, limit)
-    _chat_save_cache(session_mgr, chat_cache)
+    if persist:
+        _chat_record_turn(
+            session_mgr, domain_key, history, user_message, agent_result.reply, limit
+        )
 
     return _chat_response_payload(agent_result)
 
@@ -2436,10 +3064,11 @@ async def dtwin_assistant_chat_stream(
     chat_cache = _chat_cache(session_mgr)
     limit = _chat_clamp_limit(chat_cache.get("limit", _CHAT_DEFAULT_LIMIT))
 
-    saved_history = chat_cache["history"].get(domain_key) or []
+    persist = data.get("persist", True) is not False
+    saved_history = (chat_cache["history"].get(domain_key) or []) if persist else []
     history = saved_history if saved_history else client_history
 
-    host, token, llm_endpoint, _llm_endpoint_kind = require_domain_llm(
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(
         domain, settings
     )
 
@@ -2479,7 +3108,7 @@ async def dtwin_assistant_chat_stream(
                     run_chat_agent,
                     host=host,
                     token=token,
-                    endpoint_name=llm_endpoint,
+                    endpoint_name=llm_endpoint, endpoint_kind=llm_endpoint_kind,
                     base_url=base_url,
                     domain_name=domain_name,
                     registry_params=registry_params,
@@ -2488,6 +3117,7 @@ async def dtwin_assistant_chat_stream(
                     user_message=user_message,
                     conversation_history=history,
                     describe_depth=describe_depth,
+                    max_tokens=settings.dtwin_chat_max_tokens,
                     on_event=_on_event,
                 )
             await event_queue.put(("done", result))
@@ -2510,16 +3140,11 @@ async def dtwin_assistant_chat_stream(
                         # snapshot: the agent's tool calls loop back into this
                         # same process and may have minted a pending_actions
                         # token into the session while run_agent was running.
-                        prior = list(history)
-                        if prior and prior[-1].get("role") == "user" and (
-                            prior[-1].get("content") or ""
-                        ).strip() == user_message.strip():
-                            prior = prior[:-1]
-                        prior.append({"role": "user", "content": user_message})
-                        prior.append({"role": "assistant", "content": agent_result.reply or ""})
-                        fresh_cache = _chat_cache(session_mgr)
-                        fresh_cache["history"][domain_key] = _chat_trim(prior, limit)
-                        _chat_save_cache(session_mgr, fresh_cache)
+                        if persist:
+                            _chat_record_turn(
+                                session_mgr, domain_key, history,
+                                user_message, agent_result.reply, limit,
+                            )
 
                         yield "data: " + _json.dumps(
                             _chat_response_payload(agent_result, event_type="done")
@@ -2555,6 +3180,176 @@ async def dtwin_assistant_chat_stream(
             "Connection": "keep-alive",
         },
     )
+
+
+def _insights_fields(data: dict) -> dict:
+    """Validate and normalise the Evaluate business-insights request body."""
+    fields = {
+        "message": str(data.get("message") or "").strip(),
+        "live_answer": str(data.get("live_answer") or "").strip(),
+        "sandbox_answer": str(data.get("sandbox_answer") or "").strip(),
+        "simulation_id": str(data.get("simulation_id") or "").strip(),
+    }
+    if not fields["message"]:
+        raise ValidationError("No message provided")
+    if not fields["live_answer"] or not fields["sandbox_answer"]:
+        raise ValidationError("Insights need both the live and the sandbox answers")
+    if not fields["simulation_id"]:
+        raise ValidationError("Pick a ready scenario to compare")
+    fields["include_inferred"], _ = TwinGraphAccess.source_from_payload(data)
+    return fields
+
+
+def _insights_scenario(domain, settings, simulation_id: str) -> dict:
+    """Load the scenario facts from the registry; the browser never supplies them."""
+    from back.objects.intelligence import Simulation
+
+    row = Simulation(domain, settings).get(simulation_id)
+    if row.get("status") != "ready":
+        raise ValidationError("Run the simulation before asking for insights")
+    spec = row.get("spec") or {}
+    return {
+        "label": row.get("label") or spec.get("label") or "",
+        "description": spec.get("description") or "",
+        "patches": spec.get("patches") or [],
+    }
+
+
+def _insights_sse_response(run_kwargs: dict):
+    """Run the insights agent in a worker thread and stream its events as SSE."""
+    import asyncio
+    import json as _json
+
+    from fastapi.responses import StreamingResponse
+    from agents.agent_simulation_insights import run_agent as run_insights_agent
+    from agents.agent_simulation_insights import AgentResult
+    from agents.engine_base import AgentStep
+
+    loop = asyncio.get_event_loop()
+    event_queue: asyncio.Queue = asyncio.Queue()
+
+    def _on_event(step: AgentStep) -> None:
+        """Forward an AgentStep from the sync thread to the async generator."""
+        asyncio.run_coroutine_threadsafe(event_queue.put(step), loop).result(timeout=10)
+
+    async def _run_agent_task() -> None:
+        try:
+            result = await asyncio.to_thread(
+                run_insights_agent, on_event=_on_event, **run_kwargs
+            )
+            await event_queue.put(("done", result))
+        except Exception as exc:
+            await event_queue.put(("error", str(exc)))
+
+    agent_task = asyncio.create_task(_run_agent_task())
+
+    def _sse(payload: dict) -> str:
+        return "data: " + _json.dumps(payload) + "\n\n"
+
+    def _final_event(kind: str, payload) -> str:
+        if kind == "done" and isinstance(payload, AgentResult) and payload.success:
+            return _sse({
+                "type": "done",
+                "reply": payload.reply,
+                "usage": payload.usage,
+                "iterations": payload.iterations,
+            })
+        if kind == "error":
+            error_text = payload
+        else:
+            error_text = payload.error or "Business insights failed"
+        return _sse({"type": "error", "message": error_text})
+
+    async def _generate():
+        try:
+            while True:
+                item = await event_queue.get()
+                if isinstance(item, tuple):
+                    yield _final_event(*item)
+                    break
+                if isinstance(item, AgentStep):
+                    yield _sse({
+                        "type": "step",
+                        "step_type": item.step_type,
+                        "tool_name": item.tool_name,
+                        "content": item.content,
+                        "duration_ms": item.duration_ms,
+                    })
+        finally:
+            if not agent_task.done():
+                agent_task.cancel()
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.post("/assistant/insights/stream")
+async def dtwin_assistant_insights_stream(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Stream the Compare → Evaluate business-insights agent using Server-Sent Events.
+
+    Called once both the Live and the Sandbox Graph Chat answers succeed. The
+    scenario (label, description, fact changes) is read from the simulation
+    registry, never from the request body. The turn is stateless: neither the
+    saved Graph Chat history nor the session cache is touched.
+
+    Event shapes::
+
+        data: {"type": "step",  "step_type": "tool_call",   "tool_name": "...", "content": "..."}
+        data: {"type": "step",  "step_type": "tool_result", "tool_name": "...", "duration_ms": 123}
+        data: {"type": "done",  "reply": "...", "usage": {...}, "iterations": N}
+        data: {"type": "error", "message": "..."}
+    """
+    import os
+
+    data = await request.json()
+    fields = _insights_fields(data)
+
+    domain = get_domain(session_mgr)
+    scenario = _insights_scenario(domain, settings, fields["simulation_id"])
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(domain, settings)
+    reg = DigitalTwin.resolve_registry(session_mgr, settings)
+    app_port = os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
+    domain_name = _chat_resolve_domain_name(domain)
+
+    logger.info(
+        "Simulation insights/stream: simulation=%s, domain=%s, endpoint=%s",
+        fields["simulation_id"],
+        domain_name,
+        llm_endpoint,
+    )
+
+    return _insights_sse_response({
+        "host": host,
+        "token": token,
+        "endpoint_name": llm_endpoint,
+        "endpoint_kind": llm_endpoint_kind,
+        "base_url": f"http://localhost:{app_port}",
+        "domain_name": domain_name,
+        "registry_params": {
+            "registry_catalog": reg.get("catalog") or "",
+            "registry_schema": reg.get("schema") or "",
+            "registry_volume": reg.get("volume") or "",
+        },
+        "session_cookies": dict(request.cookies or {}),
+        "session_headers": _chat_forwarded_headers(request),
+        "message": fields["message"],
+        "live_answer": fields["live_answer"],
+        "sandbox_answer": fields["sandbox_answer"],
+        "include_inferred": fields["include_inferred"],
+        "simulation_id": fields["simulation_id"],
+        "scenario": scenario,
+    })
 
 
 @router.get("/assistant/history")
@@ -2622,7 +3417,7 @@ async def dtwin_graphql_schema(
     domain = get_domain(session_mgr)
     display_name = _chat_resolve_domain_name(domain)
     if not display_name:
-        raise ValidationError("No domain selected in the current session.")
+        raise ValidationError("No context selected in the current session.")
 
     ontology = domain.ontology or {}
     classes = ontology.get("classes", []) or []
@@ -2681,7 +3476,7 @@ async def dtwin_graphql_execute(
     domain = get_domain(session_mgr)
     display_name = _chat_resolve_domain_name(domain)
     if not display_name:
-        raise ValidationError("No domain selected in the current session.")
+        raise ValidationError("No context selected in the current session.")
 
     body = await request.json()
     query = (body.get("query") or "").strip()

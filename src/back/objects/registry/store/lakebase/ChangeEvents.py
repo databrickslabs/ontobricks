@@ -109,7 +109,7 @@ class ChangeEvents:
                 )
                 row = cur.fetchone()
                 if not row:
-                    return False, f"Domain '{folder}' not found"
+                    return False, f"Context '{folder}' not found"
                 domain_id = row[0]
                 params = [
                     (

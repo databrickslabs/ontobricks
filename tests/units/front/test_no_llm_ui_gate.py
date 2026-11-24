@@ -47,7 +47,7 @@ def test_gate_blocks_pointer_and_activation_keys_in_capture_phase():
     assert "event.key !== 'Enter' && event.key !== ' '" in permissions
     assert "event.preventDefault()" in permissions
     assert (
-        "'No LLM selected. Select one in Domain → General → AI.'" in permissions
+        "'No LLM selected. Select one in Configuration → AI.'" in permissions
     )
 
 
@@ -96,21 +96,19 @@ def test_every_domain_llm_trigger_has_declarative_marker():
         "src/front/templates/partials/ontology/_ontology_business_rules.html": [
             'data-br-action="auto-generate"',
         ],
-        "src/front/templates/partials/mapping/_mapping_autoassign.html": [
+        "src/front/templates/partials/mapping/_mapping_autoassign_modal.html": [
             "startAutoAssignBtn",
             "reassignAttrsBtn",
         ],
         "src/front/templates/partials/mapping/_mapping_design.html": [
             "autoMapPanelBtn",
-        ],
-        "src/front/templates/partials/mapping/_mapping_manual.html": [
-            "manualAutoMapBtn",
+            "openAutoAssignModalBtn",
         ],
         "src/front/templates/partials/dtwin/_query_chat.html": [
             "chatSendBtn",
             "assistant-suggestion",
         ],
-        "src/front/templates/partials/dtwin/_query_analytics.html": [
+        "src/front/templates/partials/intelligence/_intel_analytics.html": [
             "analyticsInterpretBtn",
         ],
     }

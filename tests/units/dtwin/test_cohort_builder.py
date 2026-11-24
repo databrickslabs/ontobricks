@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from back.core.graph_analysis.CohortBuilder import CohortBuilder
+from back.core.graph_analysis.cohort.CohortBuilder import CohortBuilder
 from back.core.graph_analysis.models import (
     CohortCompat,
     CohortHop,

@@ -71,7 +71,17 @@ THRESHOLDS = ROOT / "tests/eval/thresholds.yaml"
 #
 # Raised 28 -> 31 (single-inheritance axioms): extra subClassOf parents
 # against an existing hierarchy are dropped — see SPEC.md §6.
-_MIN_STAGED_EXAMPLES = 31
+#
+# Raised 31 -> 41 (paged completion, issue #173): ten `staged-paged-*` rows
+# prove a substage answer that exceeds the output budget completes across
+# `has_more`-flagged pages — merged, deduped, smaller-page truncation retry,
+# page-budget failure, and per-page closure rejection — see SPEC.md §3a/§6.
+# Raised 41 -> 43: extra-parent axioms across pages and case-folded attribute
+# keys must stay in the dataset so those merge/dedupe paths cannot regress.
+# Raised 43 -> 44: grouped-by-kind axioms dict (live `output must contain a
+# 'axioms' list` failure on the axioms substage) must stay in the dataset so
+# the dict-coercion path cannot regress.
+_MIN_STAGED_EXAMPLES = 44
 _REQUIRED_STAGED_CONSTRAINT_FIELDS = {"kind", "value"}
 
 # Every required staged topic must be exercised by at least one staged
@@ -98,6 +108,14 @@ _REQUIRED_STAGED_CONSTRAINT_KINDS = {
     "keeps_distinct_predicates_same_pair",
     "keeps_existing_ontology_relation",
     "drops_extra_subclassof",
+    # Paged completion (issue #173): a substage answer too large for one
+    # completion must paginate via `has_more` — locked in so this coverage
+    # cannot silently disappear from the dataset.
+    "paged_completion",
+    # Live axioms-substage failure: the `axioms` field intermittently
+    # arrives as a dict grouped by kind instead of a single list — locked
+    # in so the dict-coercion path cannot silently disappear.
+    "accepts_grouped_axioms_dict",
 }
 
 

@@ -1,0 +1,307 @@
+/* IF-THEN Visual Graph Editor styles */
+
+/* ── Editor layout (split view inside fullscreen modal) ── */
+
+.if-then-editor-layout {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+}
+
+.if-then-graph-pane {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.if-then-graph-pane svg {
+    display: block;
+}
+
+.if-then-graph-hint {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,.9);
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-size: .8rem;
+    color: #6c757d;
+    pointer-events: none;
+    z-index: 5;
+    white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+
+.if-then-rule-pane {
+    width: 340px;
+    min-width: 300px;
+    max-width: 400px;
+    border-left: 1px solid #dee2e6;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+.if-then-pane-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.if-then-pane-footer {
+    padding: 10px 16px;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #ffffff;
+}
+
+/* ── IF / THEN headings ── */
+
+.if-then-if-heading { color: #0d6efd; }
+.if-then-then-heading { color: #dc3545; }
+
+.if-then-badge-if-count {
+    background: #0d6efd;
+    color: #fff;
+    font-size: .65rem;
+    min-width: 20px;
+}
+.if-then-badge-then-count {
+    background: #dc3545;
+    color: #fff;
+    font-size: .65rem;
+    min-width: 20px;
+}
+
+/* ── Atom badges in the rule pane ── */
+
+.if-then-atom-badge {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: .78rem;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    gap: 6px;
+}
+
+.if-then-atom-badge.if-atom {
+    background: #e8f0fe;
+    border-left: 3px solid #0d6efd;
+    color: #1a3a6b;
+}
+
+.if-then-atom-badge.then-atom {
+    background: #fce8e8;
+    border-left: 3px solid #dc3545;
+    color: #6b1a1a;
+}
+
+.if-then-atom-badge .if-then-atom-remove {
+    margin-left: auto;
+    cursor: pointer;
+    opacity: .5;
+    transition: opacity .15s;
+    flex-shrink: 0;
+}
+
+.if-then-atom-badge .if-then-atom-remove:hover {
+    opacity: 1;
+}
+
+.if-then-atom-badge .if-then-atom-type {
+    font-size: .55rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: .04em;
+    border-radius: 2px;
+    padding: 1px 4px;
+    flex-shrink: 0;
+}
+
+.if-then-atom-badge.if-atom .if-then-atom-type {
+    background: #0d6efd;
+    color: #fff;
+}
+.if-then-atom-badge.then-atom .if-then-atom-type {
+    background: #dc3545;
+    color: #fff;
+}
+
+/* ── Attribute conditions ── */
+
+.if-then-conditions .if-then-condition-row .form-select,
+.if-then-conditions .if-then-condition-row .form-control {
+    font-size: .75rem;
+    padding: 2px 6px;
+    min-width: 0;
+}
+
+.if-then-conditions .if-then-condition-row .form-select {
+    background-position: right .35rem center;
+    padding-right: 1.3rem;
+}
+
+.if-then-conditions .if-then-condition-row {
+    flex-wrap: nowrap;
+}
+
+/* ── IF-THEN preview block ── */
+
+.if-then-preview-block {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: .375rem;
+    padding: 10px 12px;
+    font-size: .8rem;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    min-height: 40px;
+    word-break: break-all;
+}
+
+.if-then-preview-block .if-then-arrow {
+    color: #fbbf24;
+    font-weight: 700;
+    margin: 0 4px;
+}
+
+/* ── Context menu ── */
+
+.if-then-context-menu {
+    position: fixed;
+    z-index: 2000;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    min-width: 160px;
+    padding: 4px 0;
+    font-size: .82rem;
+}
+
+.if-then-ctx-item {
+    padding: 7px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background .1s;
+}
+.if-then-ctx-item:hover { background: #ffffff; }
+
+.if-then-ctx-if { color: #0d6efd; }
+.if-then-ctx-if:hover { background: #e8f0fe; }
+
+.if-then-ctx-then { color: #dc3545; }
+.if-then-ctx-then:hover { background: #fce8e8; }
+
+.if-then-ctx-remove { color: #6c757d; }
+.if-then-ctx-remove:hover { background: #ffffff; }
+
+/* ── Graph node selection highlights ── */
+
+.if-then-node-if .map-node-hitarea {
+    stroke: #0d6efd !important;
+    stroke-width: 3px !important;
+    fill: rgba(13, 110, 253, .08) !important;
+}
+
+.if-then-node-then .map-node-hitarea {
+    stroke: #dc3545 !important;
+    stroke-width: 3px !important;
+    fill: rgba(220, 53, 69, .08) !important;
+}
+
+.if-then-node-if .map-node-icon,
+.if-then-node-then .map-node-icon {
+    filter: drop-shadow(0 0 4px rgba(0,0,0,.2));
+}
+
+/* Variable label shown on selected nodes */
+.if-then-var-label {
+    font-size: 9px;
+    font-style: italic;
+    fill: #6c757d;
+    pointer-events: none;
+}
+.if-then-node-if .if-then-var-label { fill: #0d6efd; }
+.if-then-node-then .if-then-var-label { fill: #dc3545; }
+
+/* ── Graph link selection highlights ── */
+
+.if-then-link-if {
+    stroke: #0d6efd !important;
+    stroke-width: 2.5px !important;
+}
+
+.if-then-link-then {
+    stroke: #dc3545 !important;
+    stroke-width: 2.5px !important;
+    stroke-dasharray: 6,3 !important;
+}
+
+/* Link hit areas for click targets */
+.if-then-link-hitarea {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 16px;
+    cursor: pointer;
+    pointer-events: stroke;
+}
+.if-then-link-hitarea:hover {
+    stroke: rgba(0,0,0,.06);
+}
+
+/* Link labels on the graph */
+.if-then-link-label {
+    font-size: 10px;
+    fill: #6c757d;
+    text-anchor: middle;
+    pointer-events: none;
+}
+
+/* ── Map legend (within graph editor) ── */
+
+.if-then-legend {
+    position: absolute;
+    bottom: 50px;
+    left: 16px;
+    background: rgba(255,255,255,.92);
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: .7rem;
+    color: #6c757d;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.if-then-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+.if-then-legend-item:last-child { margin-bottom: 0; }
+
+.if-then-legend-swatch {
+    width: 16px;
+    height: 3px;
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+
+/* ── Node hover in graph ── */
+
+.if-then-graph-pane .map-node { cursor: pointer; }
+.if-then-graph-pane .map-node:hover .map-node-hitarea {
+    fill: rgba(0,0,0,.04);
+}

@@ -8,10 +8,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from back.core.errors import NotFoundError, ValidationError
+from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
-from back.objects.simulation import (
+from back.objects.intelligence import (
     Simulation,
     Diff,
     Runner,
@@ -19,8 +19,8 @@ from back.objects.simulation import (
     Spec,
 )
 
-runner_mod = sys.modules["back.objects.simulation.Runner"]
-sim_mod = sys.modules["back.objects.simulation.Simulation"]
+runner_mod = sys.modules["back.objects.intelligence.Runner"]
+sim_mod = sys.modules["back.objects.intelligence.Simulation"]
 
 pytestmark = pytest.mark.unit
 
@@ -314,16 +314,101 @@ class TestSimulationFacade:
         assert "FROM g_hr_v1 l" in create_view_sql
         assert f"FROM {sandbox} s" in create_view_sql
 
-    def test_diff_page(self):
+    def test_diff_page_reads_sandbox_companions(self, monkeypatch):
+        reg = _Registry()
+        sim = Simulation(_Domain(), None, registry=reg)
+        row = sim.create(_body())
+        reg.rows[row["id"]].update(status="ready", diff={}, diff_summary={"entity_count": 2})
+
+        class _Store:
+            pass
+
+        class _Sb:
+            def __init__(self, *a, **k):
+                pass
+
+            def has_before_picture(self):
+                return True
+
+            def load_before(self):
+                return [{"subject": "s", "predicate": "p", "object": "old"}]
+
+            def triples(self):
+                return [{"subject": "s", "predicate": "p", "object": "new"}]
+
+            def load_origins(self):
+                return {("s", "p", "new")}, {}
+
+        import importlib
+
+        sandbox_mod = importlib.import_module("back.objects.intelligence.Sandbox")
+        monkeypatch.setattr(
+            "back.core.graphdb.get_graphdb", lambda *a, **k: _Store()
+        )
+        monkeypatch.setattr(sandbox_mod, "Sandbox", _Sb)
+        page = sim.diff_page(row["id"], "added", 1, 50)
+        assert page["total"] == 1
+        assert page["rows"][0]["object"] == "new"
+        assert page["summary"]["added_count"] == 1
+        assert page["summary"]["entity_count"] == 2
+
+    def test_diff_page_falls_back_to_stored_rows_without_companion(self, monkeypatch):
         reg = _Registry()
         sim = Simulation(_Domain(), None, registry=reg)
         row = sim.create(_body())
         reg.rows[row["id"]].update(
-            diff={"added": [{"subject": "s", "predicate": "p", "object": "o", "origin": "inferred"}]},
-            diff_summary={"added_count": 1},
+            status="ready",
+            diff={"added": [{"subject": "s", "predicate": "p", "object": "o"}]},
+            diff_summary={"added_count": 9},
         )
+
+        class _Sb:
+            def __init__(self, *a, **k):
+                pass
+
+            def has_before_picture(self):
+                return False
+
+        import importlib
+
+        sandbox_mod = importlib.import_module("back.objects.intelligence.Sandbox")
+        monkeypatch.setattr(
+            "back.core.graphdb.get_graphdb", lambda *a, **k: object()
+        )
+        monkeypatch.setattr(sandbox_mod, "Sandbox", _Sb)
         page = sim.diff_page(row["id"], "added", 1, 50)
-        assert page["total"] == 1 and page["summary"] == {"added_count": 1}
+        assert page["total"] == 1
+        assert page["rows"][0]["object"] == "o"
+        assert page["summary"] == {"added_count": 9}
+
+    def test_diff_page_empty_without_before_companion(self, monkeypatch):
+        reg = _Registry()
+        sim = Simulation(_Domain(), None, registry=reg)
+        row = sim.create(_body())
+        reg.rows[row["id"]].update(
+            status="ready",
+            diff={},
+            diff_summary={"added_count": 9},
+        )
+
+        class _Sb:
+            def __init__(self, *a, **k):
+                pass
+
+            def has_before_picture(self):
+                return False
+
+        import importlib
+
+        sandbox_mod = importlib.import_module("back.objects.intelligence.Sandbox")
+        monkeypatch.setattr(
+            "back.core.graphdb.get_graphdb", lambda *a, **k: object()
+        )
+        monkeypatch.setattr(sandbox_mod, "Sandbox", _Sb)
+        page = sim.diff_page(row["id"], "added", 1, 50)
+        assert page["total"] == 0
+        assert page["listing_unavailable"] is True
+        assert page["summary"] == {"added_count": 9}
 
 
 # -- runner -------------------------------------------------------------------
@@ -375,6 +460,28 @@ class _FakeSandbox:
             out.add(Diff.key(p.triple()))
         return out
 
+    def persist_before(self, triples):
+        self.before_rows = {Diff.key(t): dict(t) for t in triples}
+
+    def persist_origins(self, patch_added, provenance=None):
+        self.origin_patch = set(patch_added or set())
+        self.origin_prov = dict(provenance or {})
+
+    def load_before(self):
+        return list(getattr(self, "before_rows", {}).values())
+
+    def load_origins(self):
+        return set(getattr(self, "origin_patch", set())), dict(getattr(self, "origin_prov", {}))
+
+    def has_before_picture(self):
+        return hasattr(self, "before_rows")
+
+    def before_table(self):
+        return self.table.replace("__sim_", "__smb_")
+
+    def origin_table(self):
+        return self.table.replace("__sim_", "__smo_")
+
 
 class _FakeReasoning:
     def __init__(self, domain, store, table):
@@ -384,7 +491,7 @@ class _FakeReasoning:
     def run_full_reasoning(self, options, progress_callback=None):
         assert options["materialize"] is False
         return ReasoningResult(
-            inferred_triples=[InferredTriple(EX + "acme", EX + "risk", "high", "swrl:Risk")],
+            inferred_triples=[InferredTriple(EX + "acme", EX + "risk", "high", "if_then:Risk")],
             stats={"graph_error": "boom"},
         )
 
@@ -432,6 +539,10 @@ class TestRunner:
         names = [o["name"] for o in s["artifacts"]]
         assert "dom_v1__sim_s1" in names
         assert any(o["kind"] == "view" for o in s["artifacts"])
+        assert row["diff"] == {}
+        fake = _FakeSandbox.instances[-1]
+        assert Diff.key({"subject": EX + "acme", "predicate": EX + "score", "object": "700"}) in fake.before_rows
+        assert Diff.key({"subject": EX + "acme", "predicate": EX + "score", "object": "300"}) in fake.origin_patch
         assert reg.runs[-1]["status"] == "success"
         assert tm.completed and not tm.failed
 
@@ -658,58 +769,58 @@ class TestRunner:
         assert reg.runs[-1]["status"] == "error"
         assert tm.failed and "secret" not in tm.failed[0]
 
-    def test_swrl_skip_fails_the_run(self, monkeypatch):
-        class _SkipSwrl(_FakeReasoning):
+    def test_if_then_skip_fails_the_run(self, monkeypatch):
+        class _SkipIfThen(_FakeReasoning):
             def run_full_reasoning(self, options, progress_callback=None):
                 return ReasoningResult(
                     stats={
-                        "swrl_skipped": True,
-                        "swrl_reason": "No SWRL rules defined in ontology",
+                        "if_then_skipped": True,
+                        "if_then_reason": "No IF-THEN rules defined in ontology",
                     }
                 )
 
         _FakeSandbox.instances = []
         monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
-        monkeypatch.setattr(runner_mod, "Reasoning", _SkipSwrl)
+        monkeypatch.setattr(runner_mod, "Reasoning", _SkipIfThen)
         monkeypatch.setattr(
             Scope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
         )
         reg, tm = _Registry(), _TM()
         _runner(reg, tm).run()
-        assert tm.failed == ["SWRL did not run: No SWRL rules defined in ontology"]
+        assert tm.failed == ["IF-THEN did not run: No IF-THEN rules defined in ontology"]
         assert reg.rows["s1"]["status"] == "failed"
 
-    def test_swrl_sql_errors_fail_the_run(self, monkeypatch):
-        class _BrokenSwrl(_FakeReasoning):
+    def test_if_then_sql_errors_fail_the_run(self, monkeypatch):
+        class _BrokenIfThen(_FakeReasoning):
             def run_full_reasoning(self, options, progress_callback=None):
                 return ReasoningResult(
                     stats={
-                        "swrl_errors": 1,
-                        "swrl_error_details": "attach: function try_cast does not exist",
+                        "if_then_errors": 1,
+                        "if_then_error_details": "attach: function try_cast does not exist",
                     }
                 )
 
         _FakeSandbox.instances = []
         monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
-        monkeypatch.setattr(runner_mod, "Reasoning", _BrokenSwrl)
+        monkeypatch.setattr(runner_mod, "Reasoning", _BrokenIfThen)
         monkeypatch.setattr(
             Scope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
         )
         reg, tm = _Registry(), _TM()
         _runner(reg, tm).run()
         assert tm.failed == [
-            "SWRL failed on 1 rule(s): attach: function try_cast does not exist"
+            "IF-THEN failed on 1 rule(s): attach: function try_cast does not exist"
         ]
 
     def test_validation_error_message_is_surfaced(self, monkeypatch):
         reg, tm = _Registry(), _TM()
 
         def _cap(self, *a, **kw):
-            raise ValidationError("Class population exceeds the cap")
+            raise ValidationError("The simulation scope matched no entities")
 
         monkeypatch.setattr(Scope, "resolve_entities", _cap)
         _runner(reg, tm).run()
-        assert tm.failed == ["Class population exceeds the cap"]
+        assert tm.failed == ["The simulation scope matched no entities"]
 
 
 # -- internal API -------------------------------------------------------------
@@ -845,6 +956,56 @@ class TestSimulationApi:
         assert "score" in out["reply"]
         assert "420" in out["description"]
 
+    async def test_propose_facts_appends_without_duplicates(self, monkeypatch):
+        import asyncio
+
+        from agents.agent_simulation_facts.AgentResult import AgentResult
+
+        existing = {
+            "op": "set",
+            "subject": "http://ex.org/p1",
+            "predicate": "http://ex.org/score",
+            "object": "410",
+        }
+        incoming = {
+            "op": "set",
+            "subject": "http://ex.org/p1",
+            "predicate": "http://ex.org/score",
+            "object": "420",
+        }
+        extra = {
+            "op": "add",
+            "subject": "http://ex.org/p1",
+            "predicate": "http://ex.org/hasContract",
+            "object": "http://ex.org/C1",
+        }
+        fake = AgentResult(success=True, reply="ok", proposed_patches=[incoming, extra, extra])
+
+        async def _inline(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _inline)
+        monkeypatch.setattr("agents.agent_simulation_facts.run_agent", lambda **kwargs: fake)
+        monkeypatch.setattr(
+            self.api, "require_domain_llm", lambda domain, settings: ("h", "t", "ep", "")
+        )
+        monkeypatch.setattr(
+            self.api.DigitalTwin,
+            "resolve_registry",
+            staticmethod(lambda *a, **k: {"catalog": "c", "schema": "s", "volume": "v"}),
+        )
+        monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
+        out = await self.api.propose_facts(
+            _Req(body={"prompt": "score to 420 and add C1"}),
+            body={
+                "prompt": "score to 420 and add C1",
+                "existing_patches": [existing, extra],
+            },
+            session_mgr=SimpleNamespace(),
+            settings=SimpleNamespace(),
+        )
+        assert out["patches"] == [extra, incoming]
+
     async def test_propose_facts_requires_prompt(self, monkeypatch):
         with pytest.raises(ValidationError):
             await self.api.propose_facts(
@@ -854,7 +1015,7 @@ class TestSimulationApi:
                 settings=SimpleNamespace(),
             )
 
-    async def test_propose_facts_falls_back_to_merged_description(self, monkeypatch):
+    async def test_propose_facts_fallback_description_ignores_general_tab(self, monkeypatch):
         import asyncio
 
         from agents.agent_simulation_facts.AgentResult import AgentResult
@@ -891,16 +1052,157 @@ class TestSimulationApi:
             session_mgr=SimpleNamespace(),
             settings=SimpleNamespace(),
         )
-        assert "Credit review on Jacob." in out["description"]
+        assert "Credit review on Jacob." not in out["description"]
         assert "score to 420" in out["description"]
 
-    def test_facts_user_message_includes_current_description(self):
+    async def test_propose_facts_forwards_gateway_endpoint_kind(self, monkeypatch):
+        import asyncio
+
+        from agents.agent_simulation_facts.AgentResult import AgentResult
+
+        seen = {}
+
+        def _run_agent(**kwargs):
+            seen.update(kwargs)
+            return AgentResult(success=True, reply="ok", proposed_patches=[])
+
+        async def _inline(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _inline)
+        monkeypatch.setattr("agents.agent_simulation_facts.run_agent", _run_agent)
+        monkeypatch.setattr(
+            self.api,
+            "require_domain_llm",
+            lambda domain, settings: ("h", "t", "databricks-claude-opus-4-6", "ai_gateway"),
+        )
+        monkeypatch.setattr(
+            self.api.DigitalTwin,
+            "resolve_registry",
+            staticmethod(lambda *a, **k: {"catalog": "c", "schema": "s", "volume": "v"}),
+        )
+        monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
+        await self.api.propose_facts(
+            _Req(body={"prompt": "set score"}),
+            body={"prompt": "set score", "description": "Credit review on Jacob."},
+            session_mgr=SimpleNamespace(),
+            settings=SimpleNamespace(),
+        )
+        assert seen["endpoint_kind"] == "ai_gateway"
+        assert seen["endpoint_name"] == "databricks-claude-opus-4-6"
+        assert "Credit review on Jacob." not in seen["user_message"]
+        assert "CURRENT DESCRIPTION" not in seen["user_message"]
+
+    async def test_propose_facts_names_missing_gateway_model(self, monkeypatch):
+        import asyncio
+
+        from agents.agent_simulation_facts.AgentResult import AgentResult
+
+        async def _inline(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _inline)
+        monkeypatch.setattr(
+            "agents.agent_simulation_facts.run_agent",
+            lambda **kwargs: AgentResult(
+                success=False,
+                error=(
+                    "LLM request failed: 404 Client Error: Not Found for url: "
+                    "https://ex/serving-endpoints/databricks-claude-opus-4-6/invocations "
+                    "— body: {\"error_code\":\"ENDPOINT_NOT_FOUND\","
+                    "\"message\":\"The given endpoint does not exist\"}"
+                ),
+            ),
+        )
+        monkeypatch.setattr(
+            self.api, "require_domain_llm", lambda domain, settings: ("h", "t", "ep", "ai_gateway")
+        )
+        monkeypatch.setattr(
+            self.api.DigitalTwin,
+            "resolve_registry",
+            staticmethod(lambda *a, **k: {"catalog": "c", "schema": "s", "volume": "v"}),
+        )
+        monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
+        with pytest.raises(InfrastructureError, match="LLM was not found") as exc:
+            await self.api.propose_facts(
+                _Req(body={"prompt": "set score"}),
+                body={"prompt": "set score"},
+                session_mgr=SimpleNamespace(),
+                settings=SimpleNamespace(),
+            )
+        assert "serving-endpoints" not in exc.value.message
+
+    def test_facts_step_label_explains_tools(self):
+        from agents.engine_base import AgentStep
+
+        think = AgentStep(step_type="thinking", content="Asking the model")
+        assert "model" in self.api._facts_step_label(think).lower()
+        search = AgentStep(
+            step_type="tool_call",
+            tool_name="search_entities",
+            content='{"query": "Jacob"}',
+        )
+        assert "Jacob" in self.api._facts_step_label(search)
+        done = AgentStep(
+            step_type="tool_result",
+            tool_name="list_classes",
+            content="{}",
+            duration_ms=12,
+        )
+        assert "Listed" in self.api._facts_step_label(done)
+
+    async def test_propose_facts_stream_emits_sse_steps(self, monkeypatch):
+        from agents.agent_simulation_facts.AgentResult import AgentResult
+        from agents.engine_base import AgentStep
+        from fastapi.responses import StreamingResponse
+
+        def _run_agent(**kwargs):
+            on_event = kwargs.get("on_event")
+            if on_event:
+                on_event(AgentStep(step_type="thinking", content="Asking the model"))
+                on_event(
+                    AgentStep(
+                        step_type="tool_call",
+                        tool_name="list_classes",
+                        content="{}",
+                    )
+                )
+            return AgentResult(success=True, reply="ok", proposed_patches=[])
+
+        monkeypatch.setattr("agents.agent_simulation_facts.run_agent", _run_agent)
+        monkeypatch.setattr(
+            self.api,
+            "require_domain_llm",
+            lambda domain, settings: ("h", "t", "ep", "ai_gateway"),
+        )
+        monkeypatch.setattr(
+            self.api.DigitalTwin,
+            "resolve_registry",
+            staticmethod(lambda *a, **k: {"catalog": "c", "schema": "s", "volume": "v"}),
+        )
+        monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
+        resp = await self.api.propose_facts_stream(
+            _Req(body={"prompt": "set score"}),
+            session_mgr=SimpleNamespace(),
+            settings=SimpleNamespace(),
+        )
+        assert isinstance(resp, StreamingResponse)
+        chunks = []
+        async for chunk in resp.body_iterator:
+            chunks.append(chunk.decode() if isinstance(chunk, bytes) else chunk)
+        body = "".join(chunks)
+        assert '"type": "step"' in body
+        assert "list_classes" in body
+        assert '"type": "done"' in body
+        assert '"success": true' in body
+
+    def test_facts_user_message_omits_scenario_description(self):
         msg = self.api._facts_user_message(
-            "set score", {"type": "entity", "focus": "u1"}, [], "Prior text."
+            "set score", {"type": "entity", "focus": "u1"}, []
         )
         assert "REQUEST" in msg
-        assert "CURRENT DESCRIPTION" in msg
-        assert "Prior text." in msg
+        assert "set score" in msg
+        assert "CURRENT DESCRIPTION" not in msg
 
     async def test_run_returns_task_id(self, monkeypatch):
         sim = self._sim(monkeypatch)
@@ -916,17 +1218,23 @@ class TestSimulationApi:
         }
         assert ("/simulation/create", ("POST",)) in guarded
         assert ("/simulation/facts/agent", ("POST",)) in guarded
+        assert ("/simulation/facts/agent/stream", ("POST",)) in guarded
         assert ("/simulation/{sim_id}", ("PUT",)) in guarded
         assert ("/simulation/{sim_id}", ("DELETE",)) in guarded
         assert ("/simulation/{sim_id}/run", ("POST",)) in guarded
         assert ("/simulation/{sim_id}/purge", ("POST",)) in guarded
         assert ("/simulation/{sim_id}/abort", ("POST",)) in guarded
         readonly = {r.path for r in self.api.router.routes if not r.dependencies}
-        assert {"/simulation/list", "/simulation/runs", "/simulation/{sim_id}/diff"} <= readonly
+        assert {
+            "/simulation/list",
+            "/simulation/runs",
+            "/simulation/{sim_id}/diff",
+            "/simulation/{sim_id}/compare",
+        } <= readonly
 
     def test_router_is_registered(self):
         from api.routers.internal import all_internal_routers
         from front.routes import all_frontend_routers
 
         assert self.api.router in all_internal_routers
-        assert any(r.prefix == "/simulation" for r in all_frontend_routers)
+        assert any(r.prefix == "/intelligence" for r in all_frontend_routers)

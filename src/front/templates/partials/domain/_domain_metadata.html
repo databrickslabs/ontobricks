@@ -4,7 +4,7 @@
 <div class="content-section">
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h4 class="mb-1"><i class="bi bi-database me-2"></i>Data Assets</h4>
+        <h4 class="mb-1"><i class="ob-brand-icon ob-icon-unity-catalog me-2" aria-hidden="true"></i>Unity Catalog</h4>
         <p class="text-muted mb-0 small">Load and manage data assets (tables, views, metric views) from Unity Catalog</p>
     </div>
     <div class="d-flex align-items-center gap-2">
@@ -12,7 +12,7 @@
             <i class="bi bi-trash me-1"></i> Reset
         </button>
         <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
-                title="Open the domain discussion" aria-label="Open the domain discussion"
+                title="Open the context discussion" aria-label="Open the context discussion"
                 onclick="openDomainDiscussion()">
             <i class="bi bi-chat-dots"></i>
         </button>
@@ -30,8 +30,11 @@
         </p>
         
         <!-- Current Data Sources Status -->
-        <div id="metadataStatus" class="alert alert-secondary mb-4">
-            <span id="metadataStatusText">No data assets loaded</span>
+        <div id="metadataStatus" class="mb-4">
+            <div id="metadataStatusText" class="text-muted small d-flex align-items-center gap-2">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <span>Loading data assets…</span>
+            </div>
         </div>
 
         <!-- Description quality warning (rendered dynamically by checkMetadataQuality) -->
@@ -75,7 +78,7 @@
                 </div>
             </div>
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="mb-0"><i class="bi bi-table"></i> Loaded Tables</h6>
+                <h6 class="mb-0"><i class="bi bi-table"></i> Loaded Unity Catalog Assets</h6>
                 <div class="d-flex align-items-center gap-2">
                     <span class="text-muted small" id="tableSelectionCount">0 tables</span>
                     <button type="button" class="btn btn-sm btn-outline-danger d-none" data-meta-action="remove-selected-tables" id="removeTablesBtn">
@@ -90,25 +93,33 @@
                     </button>
                 </div>
             </div>
-            <div class="table-responsive dm-table-scroll">
-                <table class="table table-sm table-bordered table-hover" id="metadataTablesTable">
-                    <thead class="table-light sticky-top">
-                        <tr>
-                            <th class="dm-th-select" title="Select tables for Update from UC or Remove">
-                                <input type="checkbox" class="form-check-input" id="selectAllTablesCheckbox" 
-                                       title="Select/Deselect all">
-                            </th>
-                            <th class="dm-th-table">Table</th>
-                            <th class="dm-th-datasource">Data Asset <small class="text-muted">(click to change)</small></th>
-                            <th class="dm-th-cols">Cols</th>
-                            <th class="dm-th-select-perm" title="Whether the service principal can SELECT this table">Rights</th>
-                            <th class="dm-th-desc">Description <small class="text-muted">(click to view/edit)</small></th>
-                        </tr>
-                    </thead>
-                    <tbody id="metadataTablesBody">
-                        <!-- Tables will be loaded here -->
-                    </tbody>
-                </table>
+            <div class="dm-list-wrap position-relative">
+                <div id="metadataListOverlay" class="dm-list-overlay d-none" aria-live="polite">
+                    <div class="d-flex align-items-center gap-2 text-muted">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span id="metadataListOverlayText">Reloading assets…</span>
+                    </div>
+                </div>
+                <div class="table-responsive dm-table-scroll">
+                    <table class="table table-sm table-bordered table-hover" id="metadataTablesTable">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th class="dm-th-select" title="Select tables for Update from UC or Remove">
+                                    <input type="checkbox" class="form-check-input" id="selectAllTablesCheckbox"
+                                           title="Select/Deselect all">
+                                </th>
+                                <th class="dm-th-table">Table</th>
+                                <th class="dm-th-datasource">Data Asset <small class="text-muted">(click to change)</small></th>
+                                <th class="dm-th-cols">Cols</th>
+                                <th class="dm-th-select-perm" title="Whether the service principal can SELECT this table">Rights</th>
+                                <th class="dm-th-desc">Description <small class="text-muted">(click to view/edit)</small></th>
+                            </tr>
+                        </thead>
+                        <tbody id="metadataTablesBody">
+                            <!-- Tables will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
             <div class="mt-2 text-muted small">
                 <i class="bi bi-info-circle"></i> Check tables to target them with "Update from UC" (refresh columns) or "Remove Selected Tables".
@@ -122,60 +133,95 @@
 </div>
 </div>
 
-<!-- Table Selection Modal -->
-<div class="modal fade" id="tableSelectionModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+<!-- Add Data Assets Modal: catalog, schema, table list and import in one dialog -->
+<div class="modal fade" id="addDataAssetsModal" tabindex="-1" aria-labelledby="addDataAssetsTitle">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-database me-2"></i>Select Tables to Import</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title" id="addDataAssetsTitle"><i class="bi bi-database me-2"></i>Add Data Assets from Unity Catalog</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div id="tableSelectionPermBanner" class="alert alert-light border py-2 px-3 mb-2 d-none small"></div>
-                <div class="mb-3 d-flex justify-content-between align-items-center">
-                    <div>
-                        <span id="tableSelectionInfo" class="text-muted small"></span>
+                <p class="text-muted small mb-3">
+                    Pick a catalog and schema, then select the tables to load. Their structure, columns and descriptions are loaded from Unity Catalog.
+                </p>
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-md-5">
+                        <label for="addDataAssetsCatalog" class="form-label">Catalog</label>
+                        <select class="form-select" id="addDataAssetsCatalog">
+                            <option value="">Loading catalogs...</option>
+                        </select>
                     </div>
-                    <div>
-                        <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-meta-action="import-select-all" data-meta-checked="1">
-                            <i class="bi bi-check-all"></i> Select All
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-meta-action="import-select-all" data-meta-checked="0">
-                            <i class="bi bi-x-lg"></i> Deselect All
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-info" data-meta-action="import-new-only">
-                            <i class="bi bi-plus-circle"></i> Select New Only
+                    <div class="col-md-5">
+                        <label for="addDataAssetsSchema" class="form-label">Schema</label>
+                        <select class="form-select" id="addDataAssetsSchema" disabled>
+                            <option value="">Select catalog first</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-outline-secondary w-100" id="addDataAssetsRefreshBtn"
+                                data-meta-action="add-assets-refresh"
+                                title="Refresh catalogs, schemas and the table list">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
                         </button>
                     </div>
                 </div>
-                <div class="mb-3">
-                    <input type="text" class="form-control form-control-sm" id="tableSearchFilter" 
-                           placeholder="Filter tables...">
+
+                <div id="addDataAssetsPlaceholder" class="text-muted small text-center py-4 border rounded bg-light">
+                    Choose a catalog and schema to list its tables.
                 </div>
-                <div class="table-responsive dm-table-scroll">
-                    <table class="table table-sm table-bordered table-hover" id="tableSelectionTable">
-                        <thead class="table-light sticky-top">
-                            <tr>
-                                <th class="dm-th-select">
-                                    <input type="checkbox" class="form-check-input" id="selectAllImportCheckbox" checked>
-                                </th>
-                                <th class="dm-th-import-name">Table Name</th>
-                                <th class="dm-th-import-status">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tableSelectionBody">
-                            <!-- Tables will be loaded here -->
-                        </tbody>
-                    </table>
+                <div id="addDataAssetsListing" class="d-none text-muted small text-center py-4">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    <span>Listing tables...</span>
                 </div>
-                <div class="mt-2">
-                    <span class="text-muted small" id="selectedCountInfo">0 tables selected</span>
+
+                <div id="addDataAssetsList" class="d-none">
+                    <div id="tableSelectionPermBanner" class="alert alert-light border py-2 px-3 mb-2 d-none small"></div>
+                    <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <span id="tableSelectionInfo" class="text-muted small"></span>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-meta-action="import-select-all" data-meta-checked="1">
+                                <i class="bi bi-check-all"></i> Select All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-meta-action="import-select-all" data-meta-checked="0">
+                                <i class="bi bi-x-lg"></i> Deselect All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-info" data-meta-action="import-new-only">
+                                <i class="bi bi-plus-circle"></i> Select New Only
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <input type="text" class="form-control form-control-sm" id="tableSearchFilter"
+                               placeholder="Filter tables...">
+                    </div>
+                    <div class="table-responsive dm-table-scroll">
+                        <table class="table table-sm table-bordered table-hover" id="tableSelectionTable">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th class="dm-th-select">
+                                        <input type="checkbox" class="form-check-input" id="selectAllImportCheckbox" checked>
+                                    </th>
+                                    <th class="dm-th-import-name">Table Name</th>
+                                    <th class="dm-th-import-status">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableSelectionBody">
+                                <!-- Tables will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-2">
+                        <span class="text-muted small" id="selectedCountInfo">0 tables selected</span>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="importSelectedBtn" data-meta-action="import-selected">
-                    <i class="bi bi-download"></i> Import Selected
+                <button type="button" class="btn btn-primary" id="importSelectedBtn" data-meta-action="import-selected" disabled>
+                    <i class="bi bi-download"></i> Add 0 assets
                 </button>
             </div>
         </div>
@@ -221,30 +267,6 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" data-meta-action="save-table-details">
                     <i class="bi bi-check-lg"></i> Save Changes
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Load Data Source Location Modal -->
-<div class="modal fade" id="loadMetadataLocationModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-database me-2"></i>Select Unity Catalog Location</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted small mb-3">
-                    Select the catalog and schema from which to load table data.
-                </p>
-                <div id="loadMetadataLocationWidget"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="loadMetadataConfirmBtn" data-meta-action="load-from-uc">
-                    <i class="bi bi-download"></i> Add assets
                 </button>
             </div>
         </div>

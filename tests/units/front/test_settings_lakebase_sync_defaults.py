@@ -1,6 +1,7 @@
 """Settings → Lakebase Bulk loading: Managed sync default; Snapshot / Triggered / Continuous cap."""
 
 from pathlib import Path
+import re
 
 import pytest
 
@@ -93,3 +94,37 @@ def test_apply_from_config_proposes_managed_sync_when_unset() -> None:
     ) in js
     assert "if (stEl) o.sync_table_mode = stEl.value || 'snapshot';" in js
     assert "o.sync_table_mode = 'snapshot';" not in js
+
+
+def test_lakebase_loading_banner_has_no_alert_background_or_border() -> None:
+    html = SETTINGS_TEMPLATE.read_text(encoding="utf-8")
+    for banner_id in ("lakebaseSectionBanner", "deltaSectionBanner", "neo4jSectionBanner"):
+        match = re.search(rf'<div\b[^>]*id="{banner_id}"[^>]*>', html)
+        assert match is not None, f"Missing {banner_id}"
+        tag = match.group(0)
+        assert "alert" not in tag, f"{banner_id} should not have alert class"
+        assert "border" not in tag.replace("spinner-border", ""), (
+            f"{banner_id} should not have border class"
+        )
+
+
+def test_teams_loading_spinner_has_no_border_or_background() -> None:
+    teams_template = (
+        REPO_ROOT / "src/front/templates/partials/settings/_settings_teams.html"
+    ).read_text(encoding="utf-8")
+    teams_css = (
+        REPO_ROOT / "src/front/static/registry/css/registry-teams.css"
+    ).read_text(encoding="utf-8")
+    assert 'class="teams-matrix-wrapper is-loading"' in teams_template
+    rule = re.search(
+        r"\.teams-matrix-wrapper\.is-loading\s*\{([^}]*)\}",
+        teams_css,
+    ) or re.search(
+        r"\.teams-matrix-wrapper:has\(\.spinner-border\)[^{]*\{([^}]*)\}",
+        teams_css,
+    )
+    assert rule is not None
+    assert "border: none" in rule.group(1)
+    assert "background: transparent" in rule.group(1)
+
+

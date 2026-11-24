@@ -6,7 +6,7 @@ import pytest
 from back.core.errors import ValidationError
 from back.core.helpers.DatabricksHelpers import DatabricksHelpers
 
-_NO_LLM_MSG = "No LLM selected. Select one in Domain → General → AI."
+_NO_LLM_MSG = "No LLM selected. Select one in Configuration → AI."
 _DEFAULT_INFO = object()
 
 

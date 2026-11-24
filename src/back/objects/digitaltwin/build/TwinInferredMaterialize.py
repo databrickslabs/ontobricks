@@ -21,6 +21,12 @@ class TwinInferredMaterialize:
 
     @staticmethod
     def uri_triples(raw_triples: list) -> List[dict]:
+        """Keep only relationship / class assertions (URI object).
+
+        Used by the batch Delta/graph materialise UI, which only writes
+        object-property edges.  Entity business rules that set datatype
+        attributes use :meth:`writable_triples` instead.
+        """
         return [
             t
             for t in raw_triples
@@ -28,6 +34,31 @@ class TwinInferredMaterialize:
             and is_uri(t.get("predicate", ""))
             and is_uri(t.get("object", ""))
         ]
+
+    @staticmethod
+    def writable_triples(raw_triples: list) -> List[dict]:
+        """Keep triples writable to the flat store (URI s/p, non-empty object).
+
+        Accepts both URI objects (relationships / class assertions) and
+        literal objects (set-attribute data properties).  Empty objects
+        (dangling relationship placeholders) are dropped.
+        """
+        out: List[dict] = []
+        for t in raw_triples:
+            subject = str(t.get("subject", "") or "")
+            predicate = str(t.get("predicate", "") or "")
+            obj = t.get("object", "")
+            if obj is None:
+                continue
+            obj_s = str(obj)
+            if not (is_uri(subject) and is_uri(predicate) and obj_s != ""):
+                continue
+            row = dict(t)
+            row["subject"] = subject
+            row["predicate"] = predicate
+            row["object"] = obj_s
+            out.append(row)
+        return out
 
     @staticmethod
     def run(

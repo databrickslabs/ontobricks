@@ -14,18 +14,36 @@ class SparqlQueryRunner:
     """Run SPARQL locally (RDFLib) and extract R2RML mapping structures from content."""
 
     @staticmethod
-    def execute_local_query(query, rdf_content, limit):
+    def execute_local_query(query, rdf_content, limit, output_format: str = "rows"):
         """Execute SPARQL query locally using RDFLib.
 
         Args:
             query: SPARQL query string
             rdf_content: RDF/Turtle content to query
             limit: Maximum number of results
+            output_format: ``rows`` (default) or ``json-ld`` (CONSTRUCT/DESCRIBE only)
 
         Returns:
-            dict: Query results with columns and data
+            dict: Query results with columns and data; when
+            ``output_format=json-ld``, also includes a ``jsonld`` object.
+
+        Raises:
+            ValidationError: If ``json-ld`` is requested for a non-graph query.
         """
+        import json
+
+        from rdflib import Graph
+
+        from back.core.errors.ValidationError import ValidationError
+        from back.core.w3c.owl.iri import serialize_graph
         from back.core.w3c.rdf_utils import parse_rdf_flexible
+
+        fmt = (output_format or "rows").strip().lower()
+        if fmt not in ("rows", "json-ld"):
+            raise ValidationError(
+                f"Unsupported SPARQL output format: {output_format}",
+                detail="Supported formats: rows, json-ld",
+            )
 
         g = parse_rdf_flexible(rdf_content, formats=("turtle", "xml"))
 
@@ -34,6 +52,10 @@ class SparqlQueryRunner:
         columns = []
 
         if results.type == "SELECT":
+            if fmt == "json-ld":
+                raise ValidationError(
+                    "output_format=json-ld is only supported for CONSTRUCT and DESCRIBE queries"
+                )
             columns = [str(var) for var in results.vars]
             for row in results:
                 row_dict = {}
@@ -45,6 +67,28 @@ class SparqlQueryRunner:
                     break
 
         elif results.type in ("CONSTRUCT", "DESCRIBE"):
+            if fmt == "json-ld":
+                out = Graph()
+                for prefix, ns in g.namespaces():
+                    out.bind(prefix, ns)
+                count = 0
+                for triple in results:
+                    out.add(triple)
+                    count += 1
+                    if limit and count >= limit:
+                        break
+                # limit truncates triples, not complete subgraphs.
+                jsonld_str = serialize_graph(out, "json-ld")
+                return {
+                    "success": True,
+                    "results": [],
+                    "columns": [],
+                    "count": count,
+                    "engine": "local",
+                    "jsonld": json.loads(jsonld_str),
+                    "format": "json-ld",
+                }
+
             columns = ["subject", "predicate", "object"]
             for s, p, o in results:
                 result_list.append(
@@ -52,6 +96,10 @@ class SparqlQueryRunner:
                 )
                 if limit and len(result_list) >= limit:
                     break
+        elif fmt == "json-ld":
+            raise ValidationError(
+                "output_format=json-ld is only supported for CONSTRUCT and DESCRIBE queries"
+            )
 
         return {
             "success": True,

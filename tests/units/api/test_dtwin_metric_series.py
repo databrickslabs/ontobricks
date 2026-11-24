@@ -27,8 +27,10 @@ def test_service_serializes_metric_series_payload(monkeypatch):
         def execute_query(self, sql):
             captured["sql"] = sql
             return [
-                {"node_uri": "urn:a", "label": "A", "score": 0.9},
-                {"node_uri": "urn:b", "label": "B", "score": 0.8},
+                {"node_uri": "urn:a", "label": "A", "score": 0.9,
+                 "node_rank": 1, "total_count": 2},
+                {"node_uri": "urn:b", "label": "B", "score": 0.8,
+                 "node_rank": 2, "total_count": 2},
             ]
 
     monkeypatch.setattr(
@@ -63,6 +65,34 @@ def test_service_serializes_metric_series_payload(monkeypatch):
     assert "ORDER BY pagerank DESC, node_uri ASC" in captured["sql"]
     assert "LIMIT " not in captured["sql"]
     assert "OFFSET " not in captured["sql"]
+
+
+def test_service_reports_sampled_when_warehouse_returned_fewer_rows_than_total(
+    monkeypatch,
+):
+    class _FakeClient:
+        def execute_query(self, sql):
+            return [
+                {"node_uri": "urn:a", "label": "A", "score": 0.9,
+                 "node_rank": 1, "total_count": 5_000_000},
+                {"node_uri": "urn:z", "label": "Z", "score": 0.0,
+                 "node_rank": 5_000_000, "total_count": 5_000_000},
+            ]
+
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.Base.create_databricks_client",
+        lambda domain, settings, *, for_write=False: _FakeClient(),
+    )
+    domain = SimpleNamespace(uc_domain_folder="acme", current_version="1")
+    settings = SimpleNamespace(analytics_job_output_schema="cat.sch")
+
+    payload = DigitalTwin(domain).load_graph_metric_series(
+        graph_name="graph_name", metric="pagerank", settings=settings
+    )
+
+    assert payload["total"] == 5_000_000
+    assert payload["sampled"] is True
+    assert payload["ranks"] == [1, 5_000_000]
 
 
 def test_service_validates_metric_before_creating_client(monkeypatch):

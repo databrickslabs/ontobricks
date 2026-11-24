@@ -245,6 +245,20 @@ class TraversalMixin:
             )
             return 0
 
+    def delete_community_triples(
+        self,
+        table_name: str,
+        cluster_uri_prefix: str,
+        in_cluster_predicate: str,
+    ) -> int:
+        """Remove the active community partition (idempotent).
+
+        Same subject-prefix + membership-predicate shape as cohorts.
+        """
+        return self.delete_cohort_triples(
+            table_name, cluster_uri_prefix, in_cluster_predicate
+        )
+
     def expand_entity_neighbors(
         self, table_name: str, entity_uris: Set[str]
     ) -> Set[str]:

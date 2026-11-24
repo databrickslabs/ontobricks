@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 
+{% block page_id %}home{% endblock %}
 {% block title %}{{ brand_page_title('Home') }}{% endblock %}
 
 {% block extra_css %}
@@ -13,36 +14,135 @@
 <div class="home-hero">
     <h1>
         <img data-brand-icon src="{{ ui_branding_for().logo_url }}" alt="{{ ui_branding_for().app_title }}" width="56" height="56" class="me-2 align-middle">
-        <span data-brand-title>{{ ui_branding_for().app_title }}</span> <span class="ob-home-brand-version">v{{ app_version }}</span>
+        <span data-brand-title>{{ ui_branding_for().app_title }}</span> <span class="home-hero-version">v{{ app_version }}</span>
     </h1>
-    <p class="tagline">Explore and govern your organization's knowledge &mdash; one trusted, connected view of your business data.</p>
+    <p class="tagline">Build, explore and govern your organization's knowledge &mdash; one trusted, connected view of your business data.</p>
 </div>
 
-<div id="domainStatus" class="domain-status hidden-initial"></div>
+<!-- Launch tiles: Databricks Jobs-style cards that open the Registry modal -->
+<div class="home-nav-tiles" id="homeTabs" role="tablist" aria-label="Registry sections">
+    <button type="button" class="home-nav-tile" id="home-tab-domains" role="tab"
+            aria-controls="home-pane-domains" aria-selected="false"
+            data-home-section="domains">
+        <span class="home-nav-tile-head">
+            <span class="home-nav-tile-icon" aria-hidden="true"><i class="bi bi-layers"></i></span>
+            <span class="home-nav-tile-title">Contexts</span>
+            <span class="home-nav-tile-count" id="homeCountContexts">&mdash;</span>
+        </span>
+        <span class="home-nav-tile-desc">Governed knowledge spaces — each holds an ontology, mappings and a knowledge graph version.</span>
+    </button>
+    <button type="button" class="home-nav-tile" id="home-tab-bridges" role="tab"
+            aria-controls="home-pane-bridges" aria-selected="false"
+            data-home-section="bridges">
+        <span class="home-nav-tile-head">
+            <span class="home-nav-tile-icon" aria-hidden="true"><i class="bi bi-signpost-split"></i></span>
+            <span class="home-nav-tile-title">Bridges</span>
+            <span class="home-nav-tile-count" id="homeCountBridges">&mdash;</span>
+        </span>
+        <span class="home-nav-tile-desc">Cross-context links that let you hop from an entity in one domain to its counterpart in another.</span>
+    </button>
+    <button type="button" class="home-nav-tile" id="home-tab-tasks" role="tab"
+            aria-controls="home-pane-tasks" aria-selected="false"
+            data-home-section="tasks">
+        <span class="home-nav-tile-head">
+            <span class="home-nav-tile-icon" aria-hidden="true"><i class="bi bi-clipboard-check"></i></span>
+            <span class="home-nav-tile-title">My tasks</span>
+            <span class="home-nav-tile-count" id="homeCountTasks">&mdash;</span>
+        </span>
+        <span class="home-nav-tile-desc">Your personal inbox for version reviews and collaboration items waiting on you.</span>
+    </button>
+</div>
 
-<!-- My Tasks (review worklist) -->
-<div class="workflow-section" id="homeTasksSection" style="display:none;">
-    <h5><i class="bi bi-inbox"></i> My Tasks</h5>
-    <div class="domain-panel">
-        <div id="homeTasksContainer"></div>
+<!-- Resources: Help · Website · GitHub -->
+<section class="home-resources" aria-label="Learn more">
+    <div class="home-resources-intro">
+        <h2 class="home-resources-title">Keep exploring</h2>
+        <p class="home-resources-lead">Docs in the app, system settings, demos on the web, and the open source repo.</p>
     </div>
-</div>
-
-<!-- All Domains - the open door -->
-<div class="workflow-section">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-        <h5 class="mb-0"><i class="bi bi-grid-3x3-gap"></i> All Domains</h5>
-        <button type="button" class="btn btn-sm btn-primary" data-requires-app="admin" onclick="domainNew()">
-            <i class="bi bi-file-earmark-plus me-1"></i>New Domain
+    <div class="home-resources-grid">
+        <button type="button" class="home-resource-card" id="homeOpenHelp" data-home-resource="help">
+            <span class="home-resource-icon" aria-hidden="true"><i class="bi bi-life-preserver"></i></span>
+            <span class="home-resource-body">
+                <span class="home-resource-label">Help Center</span>
+                <span class="home-resource-desc">Starter guide (including Intelligence), workflow walkthrough and FAQ — right inside the app.</span>
+            </span>
         </button>
+        <a class="home-resource-card" href="/settings" data-home-resource="settings">
+            <span class="home-resource-icon" aria-hidden="true"><i class="bi bi-gear-wide-connected"></i></span>
+            <span class="home-resource-body">
+                <span class="home-resource-label">Settings &amp; Config</span>
+                <span class="home-resource-desc">Databricks warehouse, graph engine backends, branding and automation runs.</span>
+            </span>
+        </a>
+        <a class="home-resource-card" href="https://ontobricks.org/" target="_blank" rel="noopener noreferrer"
+           data-home-resource="website">
+            <span class="home-resource-icon" aria-hidden="true"><i class="bi bi-globe2"></i></span>
+            <span class="home-resource-body">
+                <span class="home-resource-label">ontobricks.org</span>
+                <span class="home-resource-desc">Product site, demos and screenshots of the knowledge graph experience.</span>
+            </span>
+        </a>
+        <a class="home-resource-card" href="https://github.com/databrickslabs/ontobricks" target="_blank" rel="noopener noreferrer"
+           data-home-resource="github">
+            <span class="home-resource-icon" aria-hidden="true"><i class="bi bi-github"></i></span>
+            <span class="home-resource-body">
+                <span class="home-resource-label">GitHub</span>
+                <span class="home-resource-desc">Source, issues, releases and contribution guide for the Databricks Labs project.</span>
+            </span>
+        </a>
     </div>
-    <div id="domainGateway" class="ob-domain-grid">
-        <div class="ob-domain-grid-loading text-muted">
-            <div class="spinner-border" role="status" aria-hidden="true"></div>
-            <span>Loading domains...</span>
+</section>
+
+<p class="home-labs-credit">
+    OntoBricks is a
+    <a href="https://github.com/databrickslabs" target="_blank" rel="noopener noreferrer">Databricks Labs</a>
+    project &mdash; the solution is 100% powered by
+    <a href="https://www.databricks.com" target="_blank" rel="noopener noreferrer">Databricks</a>.
+</p>
+
+<!-- 80% Registry modal (opened by the launch tiles) -->
+<div class="modal fade" id="homeRegistryModal" tabindex="-1" aria-labelledby="homeRegistryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered home-registry-dialog">
+        <div class="modal-content home-registry-modal-content">
+            <div class="modal-header align-items-center py-3">
+                <h5 class="modal-title mb-0" id="homeRegistryModalLabel">
+                    <i class="bi bi-boxes me-2"></i><span id="homeRegistryModalTitle">Contexts</span>
+                </h5>
+                <div class="d-flex align-items-center gap-3 ms-auto">
+                    <div class="btn-group btn-group-sm home-registry-switcher" role="group" aria-label="Registry section">
+                        <button type="button" class="btn btn-outline-primary" data-home-section="domains"
+                                id="home-modal-tab-domains" aria-pressed="false">Contexts</button>
+                        <button type="button" class="btn btn-outline-primary" data-home-section="bridges"
+                                id="home-modal-tab-bridges" aria-pressed="false">Bridges</button>
+                        <button type="button" class="btn btn-outline-primary" data-home-section="tasks"
+                                id="home-modal-tab-tasks" aria-pressed="false">My tasks</button>
+                    </div>
+                    <div id="registryStatus" class="home-registry-status" style="display:none;"></div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0 d-flex flex-column">
+                <div class="tab-content p-3" id="homeTabContent">
+                    <div class="tab-pane fade show active" id="home-pane-domains" role="tabpanel"
+                         aria-labelledby="home-tab-domains">
+                        {% include "partials/registry/_registry_domains.html" %}
+                    </div>
+                    <div class="tab-pane fade" id="home-pane-bridges" role="tabpanel"
+                         aria-labelledby="home-tab-bridges">
+                        {% include "partials/registry/_registry_bridges.html" %}
+                    </div>
+                    <div class="tab-pane fade" id="home-pane-tasks" role="tabpanel"
+                         aria-labelledby="home-tab-tasks">
+                        {% include "partials/home/_home_my_tasks.html" %}
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+{% include 'partials/registry/_export_obx_modal.html' %}
+{% include 'partials/registry/_import_obx_modal.html' %}
 
 <!-- Home page JavaScript (extracted from template) -->
 <script src="{{ url_for('static', filename='home/js/home.js') }}?v={{ asset_version }}"></script>

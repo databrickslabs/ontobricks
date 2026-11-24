@@ -13,7 +13,7 @@
 document.getElementById('resetOntology')?.addEventListener('click', async function() {
     const confirmed = await showConfirmDialog({
         title: 'Reset Ontology',
-        message: 'Are you sure you want to reset the ontology? All entities and relationships will be cleared. <strong>This action cannot be undone.</strong>',
+        messageHtml: 'Are you sure you want to reset the ontology? All entities and relationships will be cleared. <strong>This action cannot be undone.</strong>',
         confirmText: 'Reset',
         confirmClass: 'btn-danger',
         icon: 'exclamation-triangle'
@@ -338,7 +338,7 @@ async function parseAndLoadOwl(content, filename) {
                     credentials: 'same-origin'
                 });
             } catch (e) {
-                console.log('Could not update domain base URI:', e);
+                console.log('Could not update context base URI:', e);
             }
             
             await autoGenerateOwl();
@@ -474,7 +474,7 @@ function showOwlImportReport(filename, onto, details) {
                             <table class="table table-sm table-striped">
                                 <thead class="table-light sticky-top">
                                     <tr>
-                                        <th>Name</th>
+                                        <th>ID</th>
                                         <th>Label</th>
                                         <th>Parent</th>
                                         <th>Attributes</th>
@@ -492,8 +492,8 @@ function showOwlImportReport(filename, onto, details) {
                             <table class="table table-sm table-striped">
                                 <thead class="table-light sticky-top">
                                     <tr>
-                                        <th>Name</th>
-                                        <th>Domain (From)</th>
+                                        <th>ID</th>
+                                        <th>Context (From)</th>
                                         <th>Range (To)</th>
                                     </tr>
                                 </thead>
@@ -717,7 +717,7 @@ async function parseAndLoadRdfs(content, filename) {
                     credentials: 'same-origin'
                 });
             } catch (e) {
-                console.log('Could not update domain base URI:', e);
+                console.log('Could not update context base URI:', e);
             }
             
             await autoGenerateOwl();
@@ -853,7 +853,7 @@ function showRdfsImportReport(filename, onto, details) {
                             <table class="table table-sm table-striped">
                                 <thead class="table-light sticky-top">
                                     <tr>
-                                        <th>Name</th>
+                                        <th>ID</th>
                                         <th>Label</th>
                                         <th>Parent</th>
                                         <th>Attributes</th>
@@ -871,8 +871,8 @@ function showRdfsImportReport(filename, onto, details) {
                             <table class="table table-sm table-striped">
                                 <thead class="table-light sticky-top">
                                     <tr>
-                                        <th>Name</th>
-                                        <th>Domain (From)</th>
+                                        <th>ID</th>
+                                        <th>Context (From)</th>
                                         <th>Range (To)</th>
                                     </tr>
                                 </thead>

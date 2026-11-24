@@ -1,13 +1,13 @@
 /**
  * OntoBricks - domain-versions.js
- * Version list management for the Domain > Versions submenu.
+ * Version list management for the Context > Versions submenu.
  */
 
 var versionsGithubEnabled = false;
 
 function githubDomainDeleteExtras(enabled) {
     return enabled
-        ? { checkboxLabel: 'Also delete this domain from GitHub', checkboxChecked: false }
+        ? { checkboxLabel: 'Also delete this context from GitHub', checkboxChecked: false }
         : {};
 }
 
@@ -132,27 +132,44 @@ function wrapDisabledVersionAction(button, reason) {
 let versionHeadingSequence = 0;
 
 function renderVersionCard(version, domainFolder) {
-    const status = VERSION_STATUS_MAP[String(version.status || 'DRAFT').toUpperCase()]
-        || VERSION_STATUS_MAP.DRAFT;
+    const statusKey = String(version.status || 'DRAFT').toUpperCase();
+    const status = VERSION_STATUS_MAP[statusKey] || VERSION_STATUS_MAP.DRAFT;
     const versionValue = String(version.version || '');
+    const statusSlug = (VERSION_STATUS_MAP[statusKey] ? statusKey : 'DRAFT').toLowerCase();
+
     const article = createVersionElement(
         'article',
-        'card dm-version-card' + (version.is_current ? ' is-loaded' : '')
+        'ob-rule-card dm-version-card mb-2' + (version.is_current ? ' is-loaded' : '')
     );
     article.setAttribute('role', 'listitem');
 
-    const body = createVersionElement('div', 'card-body');
-    const header = createVersionElement('div', 'dm-version-card-header');
-    const heading = createVersionElement('h5', 'mb-0', 'v' + versionValue);
+    // Big colored badge with the version covering all the left part
+    const badgeWrapper = createVersionElement(
+        'div',
+        'dm-version-badge status-' + statusSlug
+    );
+    const heading = createVersionElement('h5', 'dm-version-heading mb-0', 'v' + versionValue);
     heading.id = 'dmVersionHeading' + (++versionHeadingSequence);
     article.setAttribute('aria-labelledby', heading.id);
+    badgeWrapper.append(heading);
+
+    // Main content area matching Intelligence/Patterns list items
+    const content = createVersionElement(
+        'div',
+        'dm-version-card-content flex-grow-1 min-w-0 d-flex align-items-start justify-content-between'
+    );
+
+    const info = createVersionElement('div', 'flex-grow-1 min-w-0');
+
+    // Badges row: Status badge + Loaded + Latest
+    const header = createVersionElement('div', 'dm-version-card-header d-flex align-items-center gap-2 mb-1 flex-wrap');
     const statusBadge = createVersionElement(
         'span',
         'badge border ' + status.cls,
         status.label
     );
     prependVersionIcon(statusBadge, status.icon);
-    header.append(heading, statusBadge);
+    header.append(statusBadge);
     if (version.is_current) {
         header.append(createVersionElement('span', 'badge bg-primary', 'Loaded'));
     }
@@ -160,24 +177,37 @@ function renderVersionCard(version, domainFolder) {
         header.append(createVersionElement('span', 'badge bg-secondary', 'Latest'));
     }
 
+    // Description / label
     const description = createVersionElement(
-        'p',
-        'dm-version-card-description mt-2 mb-2',
+        'div',
+        'small fw-medium dm-version-card-description text-break mb-1',
         version.description || 'No description'
     );
-    const metadata = createVersionElement('div', 'dm-version-card-meta mb-3');
+
+    // Metadata line
+    const metadata = createVersionElement(
+        'div',
+        'dm-version-card-meta text-muted small mt-1 d-flex align-items-center gap-3 flex-wrap'
+    );
     [
         ['person', version.author || 'Unknown author'],
-        ['clock', version.last_update || 'No update date'],
-        ['hammer', version.last_build || 'Not built']
+        ['clock', formatDateTime(version.last_update) || 'No update date'],
+        ['hammer', formatDateTime(version.last_build) || 'Not built']
     ].forEach(function (item) {
         const value = createVersionElement('span', '', item[1]);
         prependVersionIcon(value, item[0]);
         metadata.append(value);
     });
 
-    const actions = createVersionElement('div', 'dm-version-card-actions');
-    const transitionGroup = createVersionElement('div', 'dm-version-action-group');
+    info.append(header, description, metadata);
+
+    // Actions on the right
+    const actions = createVersionElement(
+        'div',
+        'dm-version-card-actions d-flex align-items-center gap-2 ms-2 flex-shrink-0 flex-wrap justify-content-end'
+    );
+
+    const transitionGroup = createVersionElement('div', 'dm-version-action-group btn-group btn-group-sm');
     (version.transitions || []).forEach(function (transition) {
         const button = createVersionActionButton({
             action: 'transition',
@@ -193,7 +223,7 @@ function renderVersionCard(version, domainFolder) {
         );
     });
 
-    const directActions = createVersionElement('div', 'dm-version-action-group');
+    const directActions = createVersionElement('div', 'dm-version-action-group btn-group btn-group-sm');
     if (!version.is_current) {
         directActions.append(createVersionActionButton({
             action: 'load',
@@ -232,8 +262,8 @@ function renderVersionCard(version, domainFolder) {
     }
 
     actions.append(transitionGroup, directActions);
-    body.append(header, description, metadata, actions);
-    article.append(body);
+    content.append(info, actions);
+    article.append(badgeWrapper, content);
     return article;
 }
 
@@ -255,8 +285,7 @@ async function transitionVersion(
 ) {
     const confirmed = await showConfirmDialog({
         title: 'Update Lifecycle Status',
-        message: 'Change version v' + escapeHtml(version) + ' to '
-            + escapeHtml(targetStatus) + '?',
+        message: 'Change version v' + version + ' to ' + targetStatus + '?',
         confirmText: 'Update Status',
         confirmClass: 'btn-primary',
         icon: 'arrow-repeat'
@@ -292,15 +321,15 @@ async function transitionVersion(
 
 async function deleteVersionFromList(domainFolder, version, triggerButton = null, deletesDomain = false) {
     const options = {
-        title: deletesDomain ? 'Delete last version and domain' : 'Delete Version',
+        title: deletesDomain ? 'Delete last version and context' : 'Delete Version',
         message: deletesDomain
             ? 'Version v' + escapeHtml(version)
                 + ' is the only version of "' + escapeHtml(domainFolder)
-                + '". Deleting it will also delete the domain and all Knowledge '
+                + '". Deleting it will also delete the context and all Knowledge '
                 + 'Store content. This cannot be undone.'
             : 'Permanently delete version v' + escapeHtml(version)
-                + ' from domain "' + escapeHtml(domainFolder)
-                + '"? This permanently removes its Knowledge Store content '
+                + ' from context "' + escapeHtml(domainFolder)
+                + '"? This permanently removes its Documents content '
                 + 'and cannot be undone.',
         confirmText: 'Delete Version',
         confirmClass: 'btn-danger',
@@ -344,12 +373,16 @@ async function loadVersionFromList(version, triggerButton = null) {
     }
 
     try {
+        if (typeof showDomainLoading === 'function') {
+            showDomainLoading('Loading version ' + version + '…');
+        }
         showNotification('Loading version ' + version + '…', 'info', 3000);
 
         const statusData = await fetch('/domain/version-status', { credentials: 'same-origin' }).then(r => r.json());
         const domainFolder = (statusData && (statusData.domain_folder || statusData.project_folder)) || '';
         if (!domainFolder) {
-            showNotification('Cannot determine domain folder', 'error');
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
+            showNotification('Cannot determine context folder', 'error');
             return;
         }
 
@@ -364,16 +397,23 @@ async function loadVersionFromList(version, triggerButton = null) {
         if (data.success) {
             showNotification(data.message || 'Version loaded!', 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-            // Version load opens Domain → General rather than staying on Versions.
+            if (typeof rememberLoadedDomainOrClear === 'function') {
+                rememberLoadedDomainOrClear(data);
+            } else if (typeof clearRememberedDomainInfo === 'function') {
+                clearRememberedDomainInfo();
+            }
+            // Version load opens Context → General rather than staying on Versions.
             if (typeof navigateToDomainGeneral === 'function') {
                 navigateToDomainGeneral();
             } else {
-                window.location.href = '/domain/?section=information';
+                window.location.href = '/domain/?section=home';
             }
         } else {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             showNotification('Error: ' + data.message, 'error');
         }
     } catch (err) {
+        if (typeof hideDomainLoading === 'function') hideDomainLoading();
         showNotification('Error: ' + err.message, 'error');
     }
 }
@@ -393,6 +433,9 @@ async function reloadLastSavedVersion() {
     if (!confirmed) return;
 
     try {
+        if (typeof showDomainLoading === 'function') {
+            showDomainLoading('Reloading saved version…');
+        }
         showNotification('Reloading saved version…', 'info', 3000);
 
         const statusData = await fetch('/domain/version-status', { credentials: 'same-origin' }).then(r => r.json());
@@ -400,7 +443,8 @@ async function reloadLastSavedVersion() {
         const currentVersion = (statusData && statusData.version) || '1';
 
         if (!domainFolder) {
-            showNotification('Domain must be saved to the registry first', 'warning');
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
+            showNotification('Context must be saved to the registry first', 'warning');
             return;
         }
 
@@ -413,17 +457,24 @@ async function reloadLastSavedVersion() {
         const data = await response.json();
 
         if (data.success) {
-            showNotification('Version ' + currentVersion + ' reloaded!', 'success');
+            showNotification(data.message || ('Version ' + currentVersion + ' reloaded!'), 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
+            if (typeof rememberLoadedDomainOrClear === 'function') {
+                rememberLoadedDomainOrClear(data);
+            } else if (typeof clearRememberedDomainInfo === 'function') {
+                clearRememberedDomainInfo();
+            }
             if (typeof navigateToDomainGeneral === 'function') {
                 navigateToDomainGeneral();
             } else {
-                window.location.href = '/domain/?section=information';
+                window.location.href = '/domain/?section=home';
             }
         } else {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             showNotification('Error: ' + data.message, 'error');
         }
     } catch (err) {
+        if (typeof hideDomainLoading === 'function') hideDomainLoading();
         showNotification('Error: ' + err.message, 'error');
     }
 }

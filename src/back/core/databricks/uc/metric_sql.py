@@ -52,3 +52,30 @@ def build_metric_view_base_sql(
             quote_uc_identifier(d, role="column") for d in dims
         )
     return sql
+
+
+def build_metric_view_entity_sql(
+    entry: Dict[str, Any],
+    *,
+    key_column: str,
+    key_value: str,
+    limit: int = 5,
+    selected_columns: Optional[List[str]] = None,
+) -> str:
+    """Build metric-view SQL filtered to one entity key, with a row limit.
+
+    Inserts ``WHERE <key_column> = '<key_value>'`` after ``FROM`` (before any
+    ``GROUP BY``) so the key is applied as a dimension predicate. Callers must
+    pass a validated ``key_column`` identifier.
+    """
+    # back.core.helpers imports back.core.databricks: import lazily to avoid a cycle.
+    from back.core.helpers import sql_literal
+
+    base = build_metric_view_base_sql(entry, selected_columns=selected_columns)
+    key_ident = quote_uc_identifier(key_column, role="column")
+    where = f"WHERE {key_ident} = {sql_literal(key_value)}"
+    if "\nGROUP BY" in base:
+        sql = base.replace("\nGROUP BY", f"\n{where}\nGROUP BY", 1)
+    else:
+        sql = f"{base}\n{where}"
+    return f"{sql}\nLIMIT {max(0, int(limit))}"

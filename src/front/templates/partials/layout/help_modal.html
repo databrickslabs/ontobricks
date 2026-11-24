@@ -51,7 +51,7 @@
                                 </div>
                                 <div>
                                     <h2>Welcome to <span data-brand-title>{{ ui_branding_for().app_title }}</span></h2>
-                                    <p class="lead mb-0">The Knowledge Graph Builder for Databricks &mdash; design an ontology, map Databricks tables to it, materialize a knowledge graph, and explore it visually.</p>
+                                    <p class="lead mb-0">The Knowledge Graph Builder for Databricks &mdash; design an ontology, map Databricks tables to it, materialize a knowledge graph, explore it visually, then learn from it with Intelligence (analytics, communities, patterns and what-if scenarios).</p>
                                 </div>
                             </div>
 
@@ -60,14 +60,14 @@
                                     <div class="help-card">
                                         <div class="help-card-icon bg-soft-primary"><i class="bi bi-rocket-takeoff"></i></div>
                                         <h5>New here?</h5>
-                                        <p>Follow the <a href="#help-starter" data-help-jump="starter">Starter Guide</a> &mdash; build a full graph viewer in four clicks using the LLM-powered automation pipeline.</p>
+                                        <p>Follow the <a href="#help-starter" data-help-jump="starter">Starter Guide</a> &mdash; build a graph viewer in four clicks, then score, cluster and simulate it in Intelligence.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="help-card">
                                         <div class="help-card-icon bg-soft-success"><i class="bi bi-signpost-2"></i></div>
                                         <h5>Want the full flow?</h5>
-                                        <p>Read the <a href="#help-workflow" data-help-jump="workflow">Step-by-Step Workflow</a> to master ontology design, mapping, synchronization and exploration.</p>
+                                        <p>Read the <a href="#help-workflow" data-help-jump="workflow">Step-by-Step Workflow</a> to master ontology design, mapping, synchronization, exploration and Intelligence.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -88,53 +88,52 @@
 
                             <h4 class="mt-4"><i class="bi bi-diagram-3 me-2"></i>The OntoBricks pipeline</h4>
                             <div class="help-pipeline">
-                                <div class="help-step"><span class="help-step-num">1</span><div><strong>Registry</strong><br><small>Browse and select a domain</small></div></div>
+                                <div class="help-step"><span class="help-step-num">1</span><div><strong>Registry</strong><br><small>Browse and select a context</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">2</span><div><strong>Domain</strong><br><small>Define metadata, documents, data assets</small></div></div>
+                                <div class="help-step"><span class="help-step-num">2</span><div><strong>Context</strong><br><small>Define metadata, documents, data assets</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step"><span class="help-step-num">3</span><div><strong>Ontology</strong><br><small>Design entities &amp; relationships (OWL)</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">4</span><div><strong>Mapping</strong><br><small>Map ontology to UC tables (R2RML)</small></div></div>
+                                <div class="help-step"><span class="help-step-num">4</span><div><strong>Graph</strong><br><small>Map (R2RML), build, explore, query</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Graph</strong><br><small>Synchronize, explore, query</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">6</span><div><strong>Simulation</strong><br><small>What-if sandboxes on a graph slice</small></div></div>
+                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Intelligence</strong><br><small>Analytics, communities, patterns, cohorts, and what-if sandboxes</small></div></div>
                             </div>
                         </section>
 
                         <!-- STARTER GUIDE -->
                         <section class="help-section" id="help-starter" data-help-section-panel="starter">
-                            <h2><i class="bi bi-rocket-takeoff me-2"></i>Starter Guide &mdash; Build a Knowledge Graph in 4 Clicks</h2>
-                            <p class="text-muted">OntoBricks can generate an end-to-end graph viewer from your Databricks tables using LLM-powered automation. Here is the fastest path from zero to a queryable graph.</p>
+                            <h2><i class="bi bi-rocket-takeoff me-2"></i>Starter Guide &mdash; From tables to Intelligence</h2>
+                            <p class="text-muted">OntoBricks can generate an end-to-end graph viewer from your Databricks tables using LLM-powered automation. Here is the fastest path from zero to a queryable graph &mdash; then to Analytics, Communities, Patterns and what-if Scenarios.</p>
 
                             <h5 class="mt-4"><i class="bi bi-check2-circle me-2"></i>Prerequisites</h5>
                             <ul>
                                 <li>A Databricks workspace with Unity Catalog enabled</li>
                                 <li>A running SQL Warehouse</li>
                                 <li>A Lakebase Autoscaling database for the registry and Knowledge Store (configure via <em>Settings &rarr; Registry &rarr; Initialize</em> if empty)</li>
-                                <li>A Databricks AI Gateway model service or Model Serving endpoint (for LLM-powered automation)</li>
+                                <li>A Databricks Model Serving endpoint (for LLM-powered automation)</li>
                             </ul>
 
                             <div class="help-steps">
                                 <div class="help-step-card">
                                     <div class="help-step-badge">1</div>
                                     <div>
-                                        <h5><i class="bi bi-plus-circle me-2"></i>Create a Domain</h5>
-                                        <p>As an Admin (<code>CAN_MANAGE</code>), open <strong>Registry</strong> &rarr; click <em>New Domain</em>. Give it a name (e.g. <code>sales_demo</code>), then open the <strong>Domain</strong> tab and click <em>Save Domain</em> (<kbd>Cmd/Ctrl+S</kbd>). Editors and Builders open an assigned domain from Home or Registry Browse. The domain must be saved before ontology, mapping and digital-twin features unlock.</p>
+                                        <h5><i class="bi bi-plus-circle me-2"></i>Create a Context</h5>
+                                        <p>As an Admin (<code>CAN_MANAGE</code>), open <strong>Registry</strong> &rarr; click <em>New Context</em>. Give it a name (e.g. <code>sales_demo</code>), then open the <strong>Configuration</strong> tab and click <em>Save Context</em> (<kbd>Cmd/Ctrl+S</kbd>). Editors and Builders open an assigned context from Home or Registry Browse. The context must be saved before ontology, mapping and digital-twin features unlock.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
                                     <div class="help-step-badge">2</div>
                                     <div>
                                         <h5><i class="bi bi-database me-2"></i>Import Metadata</h5>
-                                        <p>Go to <strong>Domain &rarr; Data Assets</strong>, pick your <em>catalog</em> and <em>schema</em>, then click <em>Import Metadata</em>. OntoBricks fetches table and column metadata from Unity Catalog.</p>
+                                        <p>Go to <strong>Configuration &rarr; Data Assets</strong>, pick your <em>catalog</em> and <em>schema</em>, then click <em>Import Metadata</em>. OntoBricks fetches table and column metadata from Unity Catalog.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card help-step-optional">
                                     <div class="help-step-badge help-step-badge-optional"><i class="bi bi-plus-lg"></i></div>
                                     <div>
                                         <h5><i class="bi bi-file-earmark-text me-2"></i>Import Documents <span class="help-optional-tag">Optional</span></h5>
-                                        <p>Before generating, open <strong>Domain &rarr; Documents</strong> and attach reference material (PDFs, Office, images, text). Files are parsed into the versioned <strong>Knowledge Store</strong> (parsed text in Lakebase; originals are not kept). Generate and Mapping share that corpus.</p>
+                                        <p>Before generating, open <strong>Configuration &rarr; Documents</strong> and attach reference material (PDFs, Office, images, text). Files are parsed into the versioned <strong>Knowledge Store</strong> (parsed text in Lakebase; originals are not kept). Generate and Mapping share that corpus.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
@@ -148,69 +147,85 @@
                                     <div class="help-step-badge">4</div>
                                     <div>
                                         <h5><i class="bi bi-shuffle me-2"></i>Map your data &amp; Sync</h5>
-                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Studio</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Graph &rarr; Build</strong> and click <em>Build</em> &mdash; triples are materialized into your triple store.</p>
+                                        <p>Open <strong>Graph &rarr; Management &rarr; Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using <em>Mapping</em> (<em>Visual</em> or <em>List</em> tabs &mdash; click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via the <em>Auto-Map</em> button (opens the Batch Auto-Map dialog) &rarr; <em>Map All</em>. Once mappings are in place, go to <strong>Graph &rarr; Build</strong> and click <em>Build</em> &mdash; triples are materialized into your triple store.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
                                     <div class="help-step-badge"><i class="bi bi-check2"></i></div>
                                     <div>
                                         <h5><i class="bi bi-eye me-2"></i>Explore</h5>
-                                        <p>Head to <strong>Graph &rarr; Explorer</strong> to browse the graph, or <strong>Query</strong> for GraphQL and SPARQL. Viewers can search Explorer and use Graph Chat; load and node-action writes stay blocked.</p>
+                                        <p>Head to <strong>Graph &rarr; Explorer</strong> to browse your data as an interactive graph, or use <strong>Query</strong> for programmatic access. Right-click a node for data-quality checks, IF-THEN rules, or <em>Simulate from here</em>.</p>
+                                    </div>
+                                </div>
+                                <div class="help-step-card">
+                                    <div class="help-step-badge">5</div>
+                                    <div>
+                                        <h5><i class="bi bi-sliders2-vertical me-2"></i>Intelligence</h5>
+                                        <p>Open <strong>Intelligence</strong> from the app switcher (it lands on <em>Home</em>). After Build:</p>
+                                        <ul class="mb-0">
+                                            <li><strong>Analytics</strong> &mdash; Run Analysis (optional entity type). Dashboard scores influence, bridges, degree, closeness and clustering.</li>
+                                            <li><strong>Communities</strong> &mdash; Detect clusters, then Materialize so Explorer can colour and collapse them.</li>
+                                            <li><strong>Patterns</strong> &mdash; New &rarr; pick an entity type &rarr; Detect. Open a saved run for Coverage, the bar chart and the neighbourhood diagram.</li>
+                                            <li><strong>Cohorts</strong> &mdash; Design an explainable grouping rule, Preview, then Materialise.</li>
+                                            <li><strong>Scenarios</strong> &amp; <strong>Compare</strong> &mdash; what-if facts on a private sandbox, then overlay vs today&rsquo;s live graph and Evaluate a business question.</li>
+                                        </ul>
+                                        <p class="small text-muted mt-2 mb-0">Analytics, Communities and Patterns need <em>Compute large-graph metrics on Databricks</em> in Settings &rarr; Global and the jobs from <code>make deploy</code>. Full operator guide: <a href="#help-docs/intelligence" data-help-jump="docs" data-help-doc="intelligence">Intelligence</a>.</p>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="alert alert-info mt-3">
-                                <i class="bi bi-lightbulb me-2"></i><strong>Tip:</strong> You can navigate away from long-running tasks (Auto-Map, Sync, Data Quality, Simulation) &mdash; they run in the background and their progress is tracked in the <i class="bi bi-hourglass-split"></i> <strong>Background Tasks</strong> panel in the navbar.
+                                <i class="bi bi-lightbulb me-2"></i><strong>Tip:</strong> You can navigate away from long-running tasks (Auto-Map, Sync, Data Quality, Analytics, Detect, Simulation) &mdash; they run in the background and their progress is tracked in the <i class="bi bi-inboxes"></i> <strong>Activity</strong> panel in the navbar.
                             </div>
                         </section>
 
                         <!-- WORKFLOW -->
                         <section class="help-section" id="help-workflow" data-help-section-panel="workflow">
                             <h2><i class="bi bi-signpost-2 me-2"></i>Step-by-Step Workflow</h2>
-                            <p class="text-muted">The full OntoBricks workflow, in detail. Each step corresponds to a main navbar item.</p>
+                            <p class="text-muted">The full OntoBricks workflow, in detail. Each step corresponds to a workspace in the app switcher.</p>
 
                             <div class="accordion help-accordion" id="helpWorkflowAccordion">
                                 <!-- Registry -->
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#hw1">
-                                            <i class="bi bi-boxes me-2"></i><strong>1. Registry</strong> &mdash; manage domains
+                                            <i class="bi bi-boxes me-2"></i><strong>1. Registry</strong> &mdash; manage contexts
                                         </button>
                                     </h2>
                                     <div id="hw1" class="accordion-collapse collapse show" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
-                                            <p>The Registry is the central index of all domains (ontology + mapping + triple store) stored in Lakebase Postgres. Loading a domain opens <strong>Domain &rarr; General</strong>.</p>
+                                            <p>The Registry is the central index of all contexts (ontology + mapping + triple store) stored in Lakebase Postgres.</p>
                                             <ul>
-                                                <li><strong>Browse</strong> &mdash; list and open existing domains</li>
-                                                <li><strong>New Domain</strong> (Admin only) &mdash; create a fresh domain</li>
-                                                <li><strong>Load Domain</strong> (navbar) &mdash; open an existing domain from the registry</li>
-                                                <li><strong>Export / Import</strong> &mdash; move domains between environments as a portable <code>.obx</code> file (see the <a href="#help-docs/advanced-features#registry-import-and-export" data-help-jump="docs" data-help-doc="advanced-features" data-help-anchor="registry-import-and-export">Registry import and export</a> guide)</li>
-                                                <li><strong>Bridges</strong> &mdash; cross-domain links that allow navigating from one graph viewer to another</li>
+                                                <li><strong>Browse</strong> &mdash; list and open existing contexts</li>
+                                                <li><strong>New Context</strong> (Admin only) &mdash; create a fresh context</li>
+                                                <li><strong>Load Context</strong> (navbar) &mdash; open an existing context from the registry</li>
+                                                <li><strong>Export / Import</strong> &mdash; move contexts between environments as a portable <code>.obx</code> file (see the <a href="#help-docs/advanced-features#registry-import-and-export" data-help-jump="docs" data-help-doc="advanced-features" data-help-anchor="registry-import-and-export">Registry import and export</a> guide)</li>
+                                                <li><strong>Bridges</strong> &mdash; cross-context links that allow navigating from one graph viewer to another</li>
                                             </ul>
-                                            <p class="text-muted small mb-0">Automation (<em>Settings &rarr; Automation &rarr; Scheduler</em>) and the REST <em>API</em> reference (<em>Settings &rarr; Developer</em>) are configured from Settings, not the Registry modal.</p>
+                                            <p class="text-muted small mb-0">Automation (<em>Settings &rarr; Automation &rarr; Scheduler</em>), the REST <em>API</em> reference (<em>Settings &rarr; Developer</em>) and the <em>Registry Location</em> volume (<em>Settings &rarr; Registry</em>) are configured from Settings, not the Registry tabs on Home.</p>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Domain -->
+                                <!-- Context -->
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw2">
-                                            <i class="bi bi-box me-2"></i><strong>2. Domain</strong> &mdash; configure metadata, sources, documents
+                                            <i class="bi bi-box me-2"></i><strong>2. Context</strong> &mdash; configure metadata, sources, documents
                                         </button>
                                     </h2>
                                     <div id="hw2" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
                                             <ul>
-                                                <li><strong>General</strong> &mdash; name, description, base URI, custom URI override</li>
-                                                <li><strong>Versions</strong> &mdash; manage snapshots of your domain</li>
-                                                <li><strong>Cockpit</strong> &mdash; overall readiness dashboard (ontology &check;, mapping &check;, sync &check;)</li>
+                                                <li><strong>General</strong> &mdash; overall readiness dashboard (ontology &check;, mapping &check;, sync &check;)</li>
+                                                <li><strong>Configuration</strong> &mdash; name, description, base URI, custom URI override</li>
+                                                <li><strong>Versions</strong> &mdash; manage snapshots of your context</li>
                                                 <li><strong>Data Assets</strong> &mdash; import Unity Catalog metadata (catalog, schema, tables, columns)</li>
-                                                <li><strong>Knowledge Store</strong> &mdash; upload documents; parsed text is stored in Lakebase and shared by Generate and Mapping</li>
+                                                <li><strong>Documents</strong> &mdash; upload documents; parsed text is stored in Lakebase and shared by Generate and Mapping</li>
+                                                <li><strong>Pages</strong> &mdash; select Unity Catalog Knowledge Pages to use later in Ontology Generate</li>
                                             </ul>
-                                            <p>Loading a domain (Home, navbar Load, Registry, Versions) always opens <strong>Domain &rarr; General</strong>.</p>
-                                            <p><strong>Save</strong> your domain (<kbd>Cmd/Ctrl+S</kbd>) before moving to Ontology or Mapping.</p>
+                                            <p>Loading a context (Home, navbar Load, Registry, Versions) always opens <strong>Configuration</strong>.</p>
+                                            <p><strong>Save</strong> your context (<kbd>Cmd/Ctrl+S</kbd>) before moving to Ontology or Mapping.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -226,68 +241,56 @@
                                         <div class="accordion-body">
                                             <p>Four ways to build an ontology:</p>
                                             <ol>
-                                                <li><strong>Studio</strong> &mdash; drag &amp; drop entities, relationships, inheritance arrows on the OntoViz canvas. Auto-save. Click the smiley face (<i class="bi bi-emoji-smile"></i>) to auto-assign emoji icons via LLM.</li>
-                                                <li><strong>Generate (Wizard)</strong> &mdash; AI generates the full ontology from your UC metadata. Pick a Quick Template or write custom guidelines.</li>
+                                                <li><strong>Studio</strong> &mdash; force-directed ontology canvas. Use the View dropdown (All or a Business View) to filter entities. Collapse or expand all ontology groups from the toolbar, or use the + / &minus; badges on the canvas. Click the smiley face (<i class="bi bi-emoji-smile"></i>) to auto-assign emoji icons via LLM.</li>
+                                                <li><strong>Generate (Wizard)</strong> &mdash; AI generates the full ontology from UC metadata, Documents, and optional Genie Pages. Pick a Quick Template or write custom guidelines.</li>
                                                 <li><strong>Import</strong> &mdash; load OWL/RDFS files, or pull industry standards: <em>FIBO</em>, <em>CDISC</em>, <em>IOF</em>.</li>
                                                 <li><strong>Form-based</strong> &mdash; use the <strong>Entities</strong> and <strong>Relationships</strong> sidebar sections to add entities and object properties manually.</li>
                                             </ol>
                                             <p>Additional sidebar sections:</p>
                                             <ul>
-                                                <li><strong>Groups</strong> &mdash; organize entities logically for readability</li>
-                                                <li><strong>Business Views</strong> &mdash; curated subsets for end-users</li>
+                                                <li><strong>Groups</strong> &mdash; create from the Studio toolbar; assign an entity in the General tab</li>
+                                                <li><strong>Business Views</strong> &mdash; curated subsets selectable from the Studio View dropdown (not a separate menu)</li>
+                                                <li><strong>Sanity Checks</strong> &mdash; advisory ontology design lint (broken refs, orphans, naming, hierarchy)</li>
                                             </ul>
                                             <p><strong>Advanced features</strong> (Advanced section):</p>
                                             <ul>
                                                 <li><strong>Data Quality (SHACL)</strong> &mdash; define shapes for completeness, cardinality, pattern, consistency...</li>
-                                                <li><strong>Business Rules (SWRL)</strong> &mdash; author inference rules using the graphical D3 editor</li>
+                                                <li><strong>Business Rules (IF-THEN)</strong> &mdash; author inference rules using the graphical D3 editor</li>
                                                 <li><strong>Expr. &amp; Axioms</strong> &mdash; equivalent, disjoint, union, inverse, property chains...</li>
                                             </ul>
-                                            <p>Export the generated OWL/Turtle from <strong>Studio</strong> with <strong>Export</strong> (top right).</p>
+                                            <p>Download the generated OWL/Turtle from <strong>Ontology &rarr; General</strong>, OWL tab, with <strong>Download</strong>. REST and MCP also serve OWL as W3C <strong>JSON-LD</strong> when callers pass <code>format=json-ld</code>.</p>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Mapping -->
+                                <!-- Graph (includes Mapping) -->
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw4">
-                                            <i class="bi bi-shuffle me-2"></i><strong>4. Mapping</strong> &mdash; connect ontology to Databricks tables
+                                            <i class="bi bi-radar me-2"></i><strong>4. Graph</strong> &mdash; map, materialize &amp; explore
                                         </button>
                                     </h2>
                                     <div id="hw4" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
-                                            <p>Several complementary interfaces:</p>
+                                            <p class="mb-2"><strong>Mapping</strong> (Management sidebar group, right after Build) — connect ontology to Databricks tables:</p>
                                             <ul>
-                                                <li><strong>Studio</strong> &mdash; force-directed graph of your ontology. Click nodes to open the mapping panel (Wizard / SQL / Mapping tabs). Use <strong>Export</strong> (top right) to download the generated R2RML.</li>
-                                                <li><strong>Manual</strong> &mdash; tree grouped by mapping status (unmapped, partial, mapped)</li>
-                                                <li><strong>Auto-Map</strong> &mdash; LLM generates SQL mappings for every entity and relationship in one shot</li>
-                                                <li><strong>Import</strong> &mdash; load mappings from a file</li>
-                                                <li><strong>Diagnostics</strong> &mdash; consistency checks on the mapping</li>
-                                                <li><strong>Spark SQL</strong> &mdash; preview generated Spark SQL</li>
+                                                <li><em>Informations</em> &mdash; mapping status overview and completion gauges</li>
+                                                <li><em>Visual</em> &mdash; force-directed canvas; <em>List</em> &mdash; tree by mapping status. Click an item to open the mapping panel (Wizard / SQL / Mapping tabs).</li>
+                                                <li><strong>Import</strong> / <strong>Export</strong> (top right) &mdash; load an R2RML file, or download the generated R2RML.</li>
+                                                <li><strong>Auto-Map</strong> (Studio toolbar, or Build) &mdash; opens a dialog where the LLM generates SQL mappings for every entity and relationship in one shot</li>
+                                                <li><strong>Diagnostics</strong> (Build) &mdash; opens when mappings are not ready to inspect consistency issues and schema drift</li>
                                             </ul>
                                             <p>In the mapping panel, the <em>Mapping</em> tab lets you assign columns as <strong>ID</strong>, <strong>Label</strong> or a specific <strong>attribute</strong>, with a live data preview.</p>
-                                            <div class="alert alert-warning small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Mappings store the query <em>without</em> a <code>LIMIT</code> &mdash; the preview limit only affects the UI.</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Knowledge Graph -->
-                                <div class="accordion-item">
-                                    <h2 class="accordion-header">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw5">
-                                            <i class="bi bi-radar me-2"></i><strong>5. Graph</strong> &mdash; materialize &amp; explore
-                                        </button>
-                                    </h2>
-                                    <div id="hw5" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
-                                        <div class="accordion-body">
+                                            <div class="alert alert-warning small mb-3"><i class="bi bi-exclamation-triangle me-1"></i> Mappings store the query <em>without</em> a <code>LIMIT</code> &mdash; the preview limit only affects the UI.</div>
+                                            <p class="mb-2"><strong>Management / Navigation / Compute</strong>:</p>
                                             <ul>
-                                                <li><strong>Build</strong> / <strong>Runs</strong> &mdash; trigger a synchronization and inspect its run history</li>
-                                                <li><strong>Overview</strong> / <strong>Analytics</strong> &mdash; insight dashboards: entity &amp; relationship counts, last sync timestamp, quality status, usage trends</li>
-                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, pick live asserted, live inferred, or one ready sandbox per scenario from Graph, open canvas labels and quality rings from View, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
+                                                <li><strong>Build</strong> (Build / Runs tabs) &mdash; trigger a synchronization and browse build-run history</li>
+                                                <li><strong>Overview</strong> &mdash; entity &amp; relationship counts, last sync timestamp, quality status</li>
+                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, pick live asserted, live inferred, or one ready sandbox per scenario from Graph, open canvas labels and quality rings from View, collapse or expand all ontology groups from the toolbar (same toggle as Ontology → Studio), colour-by-cluster and collapse super-nodes from a partition materialized in Intelligence → Discovery → Communities</li>
                                                 <li><strong>Query</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>
                                                 <li><strong>Chat</strong> &mdash; ask natural-language questions over the materialized graph</li>
                                                 <li><strong>Data Quality</strong> &mdash; run SHACL / constraint validation against the triple store</li>
-                                                <li><strong>Inference</strong> &mdash; OWL 2 RL &amp; SWRL reasoning (SQL on Delta / Lakebase; Cypher on Neo4j)</li>
+                                                <li><strong>Business rules</strong> &mdash; OWL 2 RL &amp; IF-THEN reasoning (SQL on Delta / Lakebase; Cypher on Neo4j)</li>
                                             </ul>
                                             <p>A <em>Readiness Status</em> indicator tells you when ontology &amp; mapping are both ready to sync.</p>
                                         </div>
@@ -298,18 +301,21 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw6">
-                                            <i class="bi bi-sliders2-vertical me-2"></i><strong>6. Simulation</strong> &mdash; what-if sandboxes
+                                            <i class="bi bi-sliders2-vertical me-2"></i><strong>5. Intelligence</strong> &mdash; analytics, communities, cohorts, patterns, sandboxes
                                         </button>
                                     </h2>
                                     <div id="hw6" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
+                                            <p>Learn from and experiment with a built graph. The workspace <em>Home</em> lists every page as tiles. Communities, Patterns and Scenarios each have a <em>How it works</em> tab with business-friendly diagrams; every page header has the ontology discussion button and a Graph-ready badge.</p>
                                             <ul>
-                                                <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;)</li>
-                                                <li><strong>Run</strong> &mdash; preview a saved cohort rule and materialise it to the graph or a Unity Catalog table</li>
-                                                <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Graph → Inference, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed; <em>Explorer</em> opens that sandbox in the graph viewer</li>
-                                                <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>
+                                                <li><strong>Cohorts</strong> (Configuration) &mdash; group entities with rules you define and can explain (&ldquo;which entities travel together?&rdquo;). The <em>Design</em> tab authors the rule; the <em>Runs</em> tab previews it and materialises it to the graph (<code>:inCohort</code>) or a Unity Catalog table. Cohorts are reusable scenario scopes</li>
+                                                <li><strong>Analytics</strong> (Discovery; Analytics / Runs tabs) &mdash; centrality &amp; structural metrics (PageRank, betweenness, degree, closeness, clustering) via a serverless Databricks job; Dashboard, Data Model Health, AI Interpret, and analytics-run history</li>
+                                                <li><strong>Communities</strong> (Discovery) &mdash; find clusters of tightly connected entities (label propagation on a Databricks job, any graph size, optional entity-type scope). Preview the largest communities with modularity and convergence, then <em>Materialize</em> the partition so Explorer can colour and collapse it; <em>Purge</em> removes it</li>
+                                                <li><strong>Patterns</strong> (Discovery) &mdash; find entities that look alike. <em>New</em> opens the Detect dialog (entity, hops, numeric bins, min support, refine top-N), runs on Databricks and auto-saves the run under the entity type + date/time. KPIs: Hops, Entities (type population), Patterns, Coverage. A bar chart ranks patterns by matching entities; each pattern has a layered diagram (hover to highlight a path) and <em>Matching entities</em>. Patterns can be marked <em>Certified</em> (none by default): bars turn green when certified and red otherwise, and a gauge beside <em>Matching entities</em> shows the share of entities in certified patterns; <em>Group by certification</em> in the chart merges them into a Certified and a Not certified bar; the last bar, <em>Outside</em>, counts the entities in no pattern</li>
+                                                <li><strong>Scenarios</strong> (Simulation) &mdash; safe what-ifs on a private sandbox. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor: pick a scope (entity neighbourhood or cohort), add <em>Set / Add / Remove</em> facts (or let <em>Propose facts</em> draft them from plain language), tick the reasoning phases and rules, and run. <em>Results</em> lists triples added or removed (your fact vs inferred); <em>Explorer</em> opens the sandbox; <em>Purge</em> drops the sandbox and keeps the scenario as a draft</li>
+                                                <li><strong>Compare</strong> (Simulation) &mdash; pick a ready scenario and a live graph (inferred or asserted only). <em>Graphs</em> loads the colour-coded overlay automatically (grey unchanged, amber modified, green added, red removed; <em>Refresh</em> reloads) with exact metrics and a details panel. With no ready scenario the empty state stays. <em>Evaluate</em> asks the same question to the live graph and the sandbox, adds a business-insights commentary, and builds a printable / PDF report</li>
                                             </ul>
-                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar Background Tasks hourglass.</p>
+                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar <em>Activity</em> panel. Simulation, community and pattern run history also lives under <strong>Settings &rarr; Automation &rarr; Runs</strong>. Full guide: <a href="#help-docs/intelligence" data-help-jump="docs" data-help-doc="intelligence">Intelligence</a>.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -332,7 +338,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-share"></i></div>
                                         <h5>Interactive Graph Viewer</h5>
-                                        <p>Two-phase search, configurable depth, Graph dropdown to view a ready simulation sandbox, cross-domain bridges, cluster detection (client-side Graphology / server-side NetworkX), color-by-cluster, super-nodes.</p>
+                                        <p>Two-phase search, configurable depth, Graph dropdown to view a ready simulation sandbox, cross-context bridges, colour-by-cluster and super-nodes from a partition materialized in Intelligence → Discovery → Communities.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -352,15 +358,15 @@
                                 <div class="col-md-6">
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-lightning"></i></div>
-                                        <h5>SWRL Reasoning</h5>
+                                        <h5>IF-THEN Reasoning</h5>
                                         <p>Graphical D3 rule editor. Rules compile to SQL (Delta / Lakebase) or run as Cypher on Neo4j. Per-rule progress tracking during inference.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-signpost-split"></i></div>
-                                        <h5>Cross-domain Bridges</h5>
-                                        <p>Link entities from different domains. The navbar bridges navigation automatically switches domains and focuses the target entity.</p>
+                                        <h5>Cross-context Bridges</h5>
+                                        <p>Link entities from different contexts. The navbar bridges navigation automatically switches contexts and focuses the target entity.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -374,7 +380,28 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-people-fill"></i></div>
                                         <h5>Cohort Discovery</h5>
-                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Simulation &rarr; Cohorts</strong>, run &amp; preview in <strong>Simulation &rarr; Run</strong>.</p>
+                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design and run them on the two tabs of <strong>Intelligence &rarr; Configuration &rarr; Cohorts</strong> (<em>Design</em> and <em>Runs</em>).</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-graph-up-arrow"></i></div>
+                                        <h5>Graph Analytics</h5>
+                                        <p><strong>Intelligence &rarr; Discovery &rarr; Analytics</strong> scores every entity (PageRank, betweenness, degree, closeness, clustering) on a serverless Databricks job. Dashboard, Data Model Health, AI Interpret, and a Runs history.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-diagram-3"></i></div>
+                                        <h5>Communities &amp; Patterns</h5>
+                                        <p><strong>Intelligence &rarr; Discovery</strong>: <em>Communities</em> finds who is connected together (clusters you can materialize for Explorer); <em>Patterns</em> finds who looks alike (Coverage KPI, bar chart, neighbourhood diagrams and matching entities). Both run on Databricks.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-columns-gap"></i></div>
+                                        <h5>What-if Scenarios &amp; Compare</h5>
+                                        <p><strong>Intelligence &rarr; Simulation</strong>: change facts on a private sandbox, let your rules react, then <em>Compare</em> the result with today&rsquo;s live graph and <em>Evaluate</em> one business question on both, with an AI commentary and a PDF report.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -388,7 +415,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-cloud-arrow-up"></i></div>
                                         <h5>Unity Catalog first</h5>
-                                        <p>All domains are stored in UC volumes; triples land in a Delta view plus the domain's Graph DB engine (<strong>Lakebase</strong>, <strong>Lakehouse</strong>, or <strong>Neo4j</strong>). Incremental sync by default.</p>
+                                        <p>All contexts are stored in UC volumes; triples land in a Delta view plus the context's Graph DB engine (<strong>Lakebase</strong>, <strong>Lakehouse</strong>, or <strong>Neo4j</strong>). Incremental sync by default.</p>
                                     </div>
                                 </div>
                             </div>
@@ -401,7 +428,7 @@
                             <div class="accordion help-accordion" id="helpFaqAccordion">
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">What is an ontology, really?</button></h2>
-                                    <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">An ontology is a formal description of the concepts (classes/entities), their properties (attributes), and the relationships between them in a domain. OntoBricks expresses ontologies in the W3C <strong>OWL</strong> standard and materializes data as RDF triples.</div></div>
+                                    <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">An ontology is a formal description of the concepts (classes/entities), their properties (attributes), and the relationships between them in a context. OntoBricks expresses ontologies in the W3C <strong>OWL</strong> standard (Turtle or <strong>JSON-LD</strong>) and materializes data as RDF triples.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">Do I have to write OWL or SPARQL by hand?</button></h2>
@@ -409,15 +436,15 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">Which triple store backends are supported?</button></h2>
-                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">OntoBricks always materializes a <strong>Delta</strong> view in Unity Catalog (governance + lineage). Each domain also picks a <strong>Graph DB</strong> engine &mdash; <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta triples), or <strong>Neo4j</strong> (typed property graph over Bolt) &mdash; under <em>Domain &rarr; General &rarr; Knowledge Graph</em>. Engine connection settings live under <em>Settings &rarr; Back end</em>. See the in-app <a href="#help-docs/backend#neo4j-backend" data-help-jump="docs" data-help-doc="backend" data-help-anchor="neo4j-backend">Neo4j Backend</a> guide for Aura / Community / Enterprise requirements.</div></div>
+                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">OntoBricks always materializes a <strong>Delta</strong> view in Unity Catalog (governance + lineage). Each context also picks a <strong>Graph DB</strong> engine &mdash; <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta triples), or <strong>Neo4j</strong> (typed property graph over Bolt) &mdash; under <em>Configuration &rarr; Backend</em>. Engine connection settings live under <em>Settings &rarr; Back end</em>. See the in-app <a href="#help-docs/backend#neo4j-backend" data-help-jump="docs" data-help-doc="backend" data-help-anchor="neo4j-backend">Neo4j Backend</a> guide for Aura / Community / Enterprise requirements.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Why do I see grey/disabled menu items?</button></h2>
-                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry (a load always opens <em>Domain &rarr; General</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Graph then become enabled.</div></div>
+                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved context</em>. Create/load a context from the Registry (a load always opens <em>Configuration</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology and Graph (including Mapping) then become enabled.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Auto-Map is running &mdash; can I leave the page?</button></h2>
-                                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Auto-Map, Sync, Data Quality, Inference and Simulation all run as <em>background tasks</em>. Their progress is tracked in the <i class="bi bi-hourglass-split"></i> navbar icon &mdash; you can navigate anywhere and come back.</div></div>
+                                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Auto-Map, Sync, Data Quality, Inference, Analytics, Community/Pattern Detect and Simulation all run as <em>background tasks</em>. Their progress is tracked in the <i class="bi bi-inboxes"></i> <strong>Activity</strong> panel in the navbar &mdash; you can navigate anywhere and come back.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">How does the LLM automation pick the right model?</button></h2>
@@ -425,19 +452,23 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq7">Can I version my ontology?</button></h2>
-                                    <div id="faq7" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Use <strong>Domain &rarr; Versions</strong> to snapshot the current state. You can roll back or fork a version at any time.</div></div>
+                                    <div id="faq7" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Use <strong>Configuration &rarr; Versions</strong> to snapshot the current state. You can roll back or fork a version at any time.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq8">How do I share a link to a specific section?</button></h2>
                                     <div id="faq8" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Every sidebar section is deep-linkable. Simply copy the current URL &mdash; it already contains the <code>?section=...</code> parameter. Back/Forward in the browser works as expected.</div></div>
                                 </div>
                                 <div class="accordion-item">
-                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq9">How are bridges between domains defined?</button></h2>
-                                    <div id="faq9" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Go to <strong>Registry &rarr; Bridges</strong> to declare cross-domain links. In the Graph Viewer, right-clicking an entity exposes available bridges; clicking one switches domains and focuses the target entity.</div></div>
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq9">How are bridges between contexts defined?</button></h2>
+                                    <div id="faq9" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Go to <strong>Home &rarr; Bridges</strong> (the Bridges tab of the Registry) to declare cross-context links. In the Graph Viewer, right-clicking an entity exposes available bridges; clicking one switches contexts and focuses the target entity.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq10">Is CSRF protection enabled?</button></h2>
                                     <div id="faq10" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. A double-submit cookie guards every state-changing request. This is transparent to users of the web UI.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq11">What is Intelligence, and when do I use it?</button></h2>
+                                    <div id="faq11" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">After a first <strong>Build</strong>, open the <strong>Intelligence</strong> workspace. <em>Analytics</em> scores who matters structurally; <em>Communities</em> finds tightly connected clusters; <em>Patterns</em> finds look-alike neighbourhoods; <em>Cohorts</em> apply rules you write; <em>Scenarios</em> and <em>Compare</em> run what-ifs on a private sandbox without changing live data. See the <a href="#help-docs/intelligence" data-help-jump="docs" data-help-doc="intelligence">Intelligence</a> guide and the <a href="#help-starter" data-help-jump="starter">Starter Guide</a> step 5.</div></div>
                                 </div>
                             </div>
                         </section>
@@ -451,24 +482,28 @@
                                 <p>Your SQL Warehouse is not yet configured or is starting. Click the <i class="bi bi-server"></i> icon (admin-only) or go to <strong>Settings</strong> to pick a warehouse and wait for it to reach the <em>running</em> state.</p>
                             </div>
                             <div class="help-trouble">
-                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Registry is empty / no domains shown.&rdquo;</h5>
-                                <p>Open <strong>Settings &rarr; Registry</strong> and click <em>Initialize</em>. This creates or verifies the Lakebase registry schema (domains, versions, permissions, Knowledge Store). A UC Volume is no longer required for the registry.</p>
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Registry is empty / no contexts shown.&rdquo;</h5>
+                                <p>Open <strong>Settings &rarr; Registry</strong> and click <em>Initialize</em>. This creates or verifies the Lakebase registry schema (contexts, versions, permissions, Knowledge Store).</p>
                             </div>
                             <div class="help-trouble">
                                 <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Auto-Map failed on some entities.&rdquo;</h5>
-                                <p>Open <strong>Mapping &rarr; Auto-Map</strong> &mdash; the report table shows which entities failed and why. For entities with missing attribute mappings only, click <em>Re-Assign Missing Attributes</em> to retry just those.</p>
+                                <p>Open <strong>Auto-Map</strong> from Studio or Manual &mdash; the report table shows which entities failed and why. For entities with missing attribute mappings only, click <em>Re-Assign Missing Attributes</em> to retry just those.</p>
                             </div>
                             <div class="help-trouble">
                                 <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Sync is very slow.&rdquo;</h5>
                                 <p>Large mappings benefit from a larger SQL Warehouse. Also check that your mappings are reasonable SQL (avoid unnecessary cross-joins). Data movement is handled by Databricks Lakeflow synced tables.</p>
                             </div>
                             <div class="help-trouble">
-                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Session state leaked after switching domains.&rdquo;</h5>
-                                <p>Refresh the browser once. The latest version resets all per-domain state on switch &mdash; if you still see staleness, report it with a changelog reference.</p>
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Session state leaked after switching contexts.&rdquo;</h5>
+                                <p>Refresh the browser once. The latest version resets all per-context state on switch &mdash; if you still see staleness, report it with a changelog reference.</p>
                             </div>
                             <div class="help-trouble">
-                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;I see &lsquo;requires domain saved&rsquo; tooltips everywhere.&rdquo;</h5>
-                                <p>An Admin (<code>CAN_MANAGE</code>) must first create and save a domain: Registry &rarr; <em>New Domain</em> &rarr; then on the Domain page press <kbd>Cmd/Ctrl+S</kbd>. Editors and Builders can then open assigned domains from Home or Registry Browse.</p>
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;I see &lsquo;requires context saved&rsquo; tooltips everywhere.&rdquo;</h5>
+                                <p>An Admin (<code>CAN_MANAGE</code>) must first create and save a context: Registry &rarr; <em>New Context</em> &rarr; then on the Configuration page press <kbd>Cmd/Ctrl+S</kbd>. Editors and Builders can then open assigned contexts from Home or Registry Browse.</p>
+                            </div>
+                            <div class="help-trouble">
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Run Analysis / Detect is disabled.&rdquo;</h5>
+                                <p>Intelligence Discovery jobs need a <em>built</em> graph, the admin toggle <em>Compute large-graph metrics on Databricks</em> in <strong>Settings &rarr; Global</strong>, and the analytics / community / pattern jobs from <code>make deploy</code>. The page explains which prerequisite is missing. See <a href="#help-docs/intelligence" data-help-jump="docs" data-help-doc="intelligence">Intelligence</a>.</p>
                             </div>
                         </section>
 
@@ -479,7 +514,7 @@
                             <table class="table table-sm table-striped help-table">
                                 <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
                                 <tbody>
-                                    <tr><td><kbd>Cmd/Ctrl</kbd> + <kbd>S</kbd></td><td>Save the current domain</td></tr>
+                                    <tr><td><kbd>Cmd/Ctrl</kbd> + <kbd>S</kbd></td><td>Save the current context</td></tr>
                                     <tr><td><kbd>Cmd/Ctrl</kbd> + <kbd>K</kbd></td><td>Focus the sidebar search (when available)</td></tr>
                                     <tr><td><kbd>?</kbd></td><td>Toggle the compact keyboard-shortcut overlay</td></tr>
                                     <tr><td><kbd>Esc</kbd></td><td>Close the active overlay/modal</td></tr>
@@ -503,20 +538,28 @@
                             <h2><i class="bi bi-book me-2"></i>Glossary</h2>
                             <dl class="help-glossary">
                                 <dt>Ontology</dt><dd>Formal model of entities (classes), their attributes (data properties) and relationships (object properties), expressed in OWL.</dd>
-                                <dt>Entity</dt><dd>A concept in the domain (e.g. <em>Customer</em>, <em>Order</em>); the underlying OWL term is <em>Class</em>.</dd>
+                                <dt>Entity</dt><dd>A concept in the context (e.g. <em>Customer</em>, <em>Order</em>); the underlying OWL term is <em>Class</em>.</dd>
                                 <dt>Attribute / Data Property</dt><dd>A scalar value attached to an entity (e.g. <em>email</em>, <em>birthDate</em>).</dd>
                                 <dt>Relationship / Object Property</dt><dd>A link between two entities (e.g. <em>Customer placedOrder Order</em>).</dd>
                                 <dt>OWL</dt><dd>W3C Web Ontology Language &mdash; the vocabulary OntoBricks uses to describe the ontology.</dd>
+                                <dt>JSON-LD</dt><dd>W3C JSON for Linked Data &mdash; RDF encoded as JSON with a <code>@context</code>. Used for OWL import/export, SPARQL CONSTRUCT/DESCRIBE results, and the MCP <code>describe_ontology</code> tool.</dd>
                                 <dt>RDF / Triple</dt><dd>Subject-Predicate-Object statement &mdash; the native data model of the triple store.</dd>
                                 <dt>R2RML</dt><dd>W3C standard for mapping relational data (SQL tables) to RDF triples.</dd>
                                 <dt>SHACL</dt><dd>W3C Shapes Constraint Language &mdash; used for data quality validation.</dd>
-                                <dt>SWRL</dt><dd>Semantic Web Rule Language &mdash; &ldquo;IF ... THEN ...&rdquo; inference rules.</dd>
+                                <dt>IF-THEN</dt><dd>Inference rules written as &ldquo;IF ... THEN ...&rdquo;.</dd>
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
-                                <dt>Bridge</dt><dd>Cross-domain link between entities of two different domains.</dd>
-                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Simulation &rarr; Cohorts</em>, run under <em>Simulation &rarr; Run</em>.</dd>
+                                <dt>Bridge</dt><dd>Cross-context link between entities of two different contexts.</dd>
+                                <dt>Intelligence</dt><dd>Workspace for learning from and experimenting with a built graph: Cohorts, Analytics, Communities, Patterns, Scenarios and Compare. Opens on a Home landing of tiles.</dd>
+                                <dt>Analytics</dt><dd>Centrality and structural scores (PageRank, betweenness, degree, closeness, clustering) computed by <em>Intelligence &rarr; Discovery &rarr; Analytics</em> on a Databricks job. Never writes to the graph.</dd>
+                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed on the <em>Design</em> tab of <em>Intelligence &rarr; Configuration &rarr; Cohorts</em>, run on its <em>Runs</em> tab.</dd>
+                                <dt>Community</dt><dd>A group of entities much more connected to each other than to the rest of the graph, found by <em>Intelligence &rarr; Discovery &rarr; Communities</em>. <em>Modularity</em> scores how clearly the groups stand apart.</dd>
+                                <dt>Pattern</dt><dd>A recurring neighbourhood profile shared by several entities of one type (same kinds of links, similar attribute ranges), found by <em>Intelligence &rarr; Discovery &rarr; Patterns</em>. <em>Support</em> is how many entities share one pattern; <em>Coverage</em> is the share of the type population that follows at least one pattern.</dd>
+                                <dt>Scenario</dt><dd>A named what-if: scope (entity neighbourhood or cohort) plus hypothetical Set / Add / Remove facts, run on a private sandbox.</dd>
                                 <dt>Simulation</dt><dd>A named what-if sandbox: a slice of the Knowledge Graph copied into an isolated table, patched with hypothetical triples, and re-reasoned &mdash; the live graph is never modified.</dd>
-                                <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the domain Graph DB.</dd>
-                                <dt>Graph DB</dt><dd>Per-domain engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>
+                                <dt>Sandbox</dt><dd>The private copy of a graph slice a scenario writes to. <em>Compare</em> overlays a ready sandbox on the live graph; <em>Purge</em> drops it.</dd>
+                                <dt>Compare</dt><dd><em>Intelligence &rarr; Simulation &rarr; Compare</em> overlays a ready scenario on today&rsquo;s live graph. <em>Evaluate</em> asks the same business question to both and can export a PDF.</dd>
+                                <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the context Graph DB.</dd>
+                                <dt>Graph DB</dt><dd>Per-context engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>
                                 <dt>Neo4j</dt><dd>Optional Graph DB backend that stores the Knowledge Graph as a typed property graph (nodes, labels, relationships) instead of flat triples. Requires Neo4j 5.x (Aura recommended).</dd>
                                 <dt>Unity Catalog (UC)</dt><dd>Databricks unified governance for catalogs, schemas, tables and volumes.</dd>
                                 <dt>MCP</dt><dd>Model Context Protocol &mdash; exposes the graph viewer to LLM agents.</dd>
@@ -540,6 +583,7 @@
                                         <p class="small text-muted mb-1">Using OntoBricks</p>
                                         <ul class="list-unstyled mb-2">
                                             <li><a href="#help-docs/user-guide" data-help-jump="docs" data-help-doc="user-guide"><i class="bi bi-journal-text me-1"></i>User Guide</a></li>
+                                            <li><a href="#help-docs/intelligence" data-help-jump="docs" data-help-doc="intelligence"><i class="bi bi-sliders2-vertical me-1"></i>Intelligence</a></li>
                                             <li><a href="#help-docs/advanced-features" data-help-jump="docs" data-help-doc="advanced-features"><i class="bi bi-stars me-1"></i>Advanced features</a></li>
                                             <li><a href="#help-docs/mcp" data-help-jump="docs" data-help-doc="mcp"><i class="bi bi-plug me-1"></i>MCP</a></li>
                                         </ul>
@@ -567,9 +611,11 @@
                                         <h5><i class="bi bi-globe me-2"></i>W3C standards</h5>
                                         <ul class="list-unstyled mb-0">
                                             <li><a href="https://www.w3.org/TR/owl2-overview/" target="_blank" rel="noopener">OWL 2 <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.w3.org/TR/json-ld11/" target="_blank" rel="noopener">JSON-LD 1.1 <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                             <li><a href="https://www.w3.org/TR/r2rml/" target="_blank" rel="noopener">R2RML <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.w3.org/TR/sparql11-query/" target="_blank" rel="noopener">SPARQL 1.1 <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                             <li><a href="https://www.w3.org/TR/shacl/" target="_blank" rel="noopener">SHACL <i class="bi bi-box-arrow-up-right small"></i></a></li>
-                                            <li><a href="https://www.w3.org/submissions/SWRL/" target="_blank" rel="noopener">SWRL <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.w3.org/submissions/IF-THEN/" target="_blank" rel="noopener">IF-THEN <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                         </ul>
                                     </div>
                                 </div>

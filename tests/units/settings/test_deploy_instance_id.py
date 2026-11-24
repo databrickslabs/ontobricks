@@ -158,3 +158,17 @@ class TestDeployWiresInstanceTarget:
         call_at = body.index("\nensure_instance_target ")
         validate_at = body.index("\ndatabricks bundle validate ")
         assert call_at < validate_at
+
+    def test_deploy_re_ensures_target_before_each_bundle_run(self):
+        """bundle deploy can drop the gitignored generated target; re-ensure before run."""
+        body = (ROOT / "scripts" / "deploy.sh").read_text()
+        start_at = body.index("# ── 8. Run ")
+        run_block = body[start_at:]
+        main_run = run_block.index('databricks bundle run "$APP_RESOURCE_KEY"')
+        mcp_run = run_block.index('databricks bundle run "$MCP_APP_RESOURCE_KEY"')
+        ensures = [
+            m.start()
+            for m in re.finditer(r"(?m)^\s*ensure_instance_target ", run_block)
+        ]
+        assert any(e < main_run for e in ensures)
+        assert any(main_run < e < mcp_run for e in ensures)

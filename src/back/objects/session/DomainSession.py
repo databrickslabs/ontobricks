@@ -30,6 +30,7 @@ from typing import Dict, Any, List, Optional, Set, Tuple
 from back.core.graphdb.RealtimeSource import RealtimeSource
 from back.core.logging import get_logger
 from back.core.mcp_tools import coerce_mcp_policy
+from back.objects.domain.payload import migrate_legacy_if_then_key
 from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
@@ -105,6 +106,9 @@ def get_empty_domain() -> Dict[str, Any]:
                 # pending_refresh until the first successful rebuild.
                 "graph_cache_enabled": True,
                 "graph_cache_state": "pending_refresh",
+                # UC Knowledge Pages curated for later Ontology Generate.
+                # Snapshots only (no body); empty means no page sources.
+                "knowledge_pages": [],
             },
             "triplestore": {
                 "stats": {},
@@ -126,10 +130,8 @@ def get_empty_domain() -> Dict[str, Any]:
             "properties": [],
             "constraints": [],
             "shacl_shapes": [],
-            "swrl_rules": [],
-            "decision_tables": [],
+            "if_then_rules": [],
             "sparql_rules": [],
-            "aggregate_rules": [],
             "cohort_rules": [],
             "axioms": [],
             "expressions": [],
@@ -159,6 +161,104 @@ def get_empty_domain() -> Dict[str, Any]:
     }
 
 
+def _export_domain_info(domain: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the ``domain.info`` block of an export payload (version excluded)."""
+    from back.core.databricks.knowledge_pages import normalize_knowledge_pages
+    from back.core.graphdb.GraphDBFactory import (
+        normalize_graph_backend,
+        normalize_lakehouse_materialization,
+        normalize_materialization_mode,
+    )
+    from back.core.graphdb.search_cache import (
+        GRAPH_CACHE_STATE_READY,
+        normalize_graph_cache_enabled,
+        normalize_graph_cache_state,
+    )
+
+    info = domain["info"]
+    return {
+        "name": info.get("name", "NewDomain"),
+        "description": info.get("description", ""),
+        "author": info.get("author", ""),
+        "llm_endpoint": info.get("llm_endpoint", ""),
+        "llm_endpoint_kind": info.get("llm_endpoint_kind", ""),
+        "mcp_enabled": info.get("mcp_enabled", False),
+        "status": info.get("status", "DRAFT"),
+        "review_quorum": max(1, int(info.get("review_quorum") or 1)),
+        "mcp_policy": coerce_mcp_policy(info.get("mcp_policy")),
+        "graph_backend": normalize_graph_backend(info.get("graph_backend")),
+        "neo4j_connection": str(info.get("neo4j_connection", "") or "").strip(),
+        "lakehouse_materialization": normalize_lakehouse_materialization(
+            info.get("lakehouse_materialization")
+        ),
+        "materialization_mode": normalize_materialization_mode(info.get("materialization_mode")),
+        "realtime_source": RealtimeSource.coerce(info.get("realtime_source")),
+        "graph_cache_enabled": normalize_graph_cache_enabled(
+            info.get("graph_cache_enabled")
+        ),
+        "graph_cache_state": normalize_graph_cache_state(
+            info.get("graph_cache_state"),
+            enabled=normalize_graph_cache_enabled(info.get("graph_cache_enabled")),
+            default_when_missing=GRAPH_CACHE_STATE_READY,
+        ),
+        "knowledge_pages": normalize_knowledge_pages(info.get("knowledge_pages")),
+        "last_update": domain.get("last_update", ""),
+        "last_build": domain.get("last_build", ""),
+    }
+
+
+def _import_domain_info(domain: Dict[str, Any], info: Dict[str, Any]) -> None:
+    """Apply an imported ``info`` block onto ``domain`` (every field normalised)."""
+    from back.core.databricks.knowledge_pages import normalize_knowledge_pages
+    from back.core.graphdb.GraphDBFactory import (
+        normalize_graph_backend,
+        normalize_lakehouse_materialization,
+        normalize_materialization_mode,
+    )
+    from back.core.graphdb.search_cache import (
+        GRAPH_CACHE_STATE_READY,
+        normalize_graph_cache_enabled,
+        normalize_graph_cache_state,
+    )
+
+    target = domain["info"]
+    target["name"] = info.get("name", "NewDomain")
+    target["description"] = info.get("description", "")
+    target["author"] = info.get("author", "")
+    target["llm_endpoint"] = info.get("llm_endpoint", "")
+    target["llm_endpoint_kind"] = info.get("llm_endpoint_kind", "")
+    target["mcp_enabled"] = info.get("mcp_enabled", False)
+    target["status"] = info.get("status", "DRAFT")
+    target["review_quorum"] = max(1, int(info.get("review_quorum") or 1))
+    target["mcp_policy"] = coerce_mcp_policy(info.get("mcp_policy"))
+    target["graph_backend"] = normalize_graph_backend(info.get("graph_backend"))
+    target["neo4j_connection"] = str(info.get("neo4j_connection", "") or "").strip()
+    target["lakehouse_materialization"] = normalize_lakehouse_materialization(
+        info.get("lakehouse_materialization")
+    )
+    target["materialization_mode"] = normalize_materialization_mode(
+        info.get("materialization_mode")
+    )
+    target["realtime_source"] = RealtimeSource.coerce(info.get("realtime_source"))
+    target["graph_cache_enabled"] = normalize_graph_cache_enabled(
+        info.get("graph_cache_enabled"),
+        default=True,
+    )
+    target["graph_cache_state"] = normalize_graph_cache_state(
+        info.get("graph_cache_state"),
+        enabled=target["graph_cache_enabled"],
+        default_when_missing=GRAPH_CACHE_STATE_READY,
+    )
+    target["knowledge_pages"] = normalize_knowledge_pages(info.get("knowledge_pages"))
+    # Drop legacy domain DB override if present on import.
+    target.pop("neo4j_database", None)
+    domain["last_update"] = info.get("last_update", "")
+    domain["last_build"] = info.get("last_build", "")
+    ts = domain.setdefault("triplestore", get_empty_domain()["domain"]["triplestore"].copy())
+    ts.pop("backend", None)
+    ts.pop("delta", None)
+
+
 class DomainSession:
     """
     Unified domain session manager.
@@ -171,7 +271,7 @@ class DomainSession:
         classes = domain.ontology.classes
 
         # Set values
-        domain.info.name = "My Domain"
+        domain.info.name = "My Context"
         domain.ontology.classes.append(new_class)
 
         # Save changes
@@ -212,6 +312,7 @@ class DomainSession:
         self._fill_default_domain_subkeys(data, empty)
         self._fill_default_top_level_keys(data, empty)
         self._migrate_triplestore_node(data, empty)
+        self._migrate_legacy_if_then_key(data)
         self._migrate_legacy_ontology_root_keys(data)
         self._split_mixed_axioms(data)
         self._migrate_mapping_to_assignment(data)
@@ -343,15 +444,26 @@ class DomainSession:
         info.pop("triplestore_table", None)
 
     @staticmethod
+    def _migrate_legacy_if_then_key(data: Dict) -> None:
+        """Rename the pre-rename rules key at root, ontology and version level."""
+        versions = data.get("versions")
+        for doc in [data, *(versions.values() if isinstance(versions, dict) else [])]:
+            if not isinstance(doc, dict):
+                continue
+            migrate_legacy_if_then_key(doc)
+            if isinstance(doc.get("ontology"), dict):
+                migrate_legacy_if_then_key(doc["ontology"])
+
+    @staticmethod
     def _migrate_legacy_ontology_root_keys(data: Dict) -> None:
-        """Move root-level ``constraints``/``swrl_rules``/``axioms`` into ``ontology``."""
+        """Move root-level ``constraints``/``if_then_rules``/``axioms`` into ``ontology``."""
         if "constraints" in data and data["constraints"]:
             data["ontology"]["constraints"] = data["constraints"]
-        if "swrl_rules" in data and data["swrl_rules"]:
-            data["ontology"]["swrl_rules"] = data["swrl_rules"]
+        if "if_then_rules" in data and data["if_then_rules"]:
+            data["ontology"]["if_then_rules"] = data["if_then_rules"]
         if "axioms" in data and data["axioms"]:
             data["ontology"]["axioms"] = data["axioms"]
-        for k in ("constraints", "swrl_rules", "axioms"):
+        for k in ("constraints", "if_then_rules", "axioms"):
             data.pop(k, None)
 
     @staticmethod
@@ -698,7 +810,7 @@ class DomainSession:
                 "classes": [],
                 "properties": [],
                 "constraints": [],
-                "swrl_rules": [],
+                "if_then_rules": [],
                 "axioms": [],
                 "expressions": [],
                 "groups": [],
@@ -951,21 +1063,13 @@ class DomainSession:
             )
 
     @property
-    def swrl_rules(self) -> List[Dict]:
-        """Get SWRL rules."""
-        return self._data["ontology"].get("swrl_rules", [])
+    def if_then_rules(self) -> List[Dict]:
+        """Get IF-THEN rules."""
+        return self._data["ontology"].get("if_then_rules", [])
 
-    @swrl_rules.setter
-    def swrl_rules(self, value: List[Dict]):
-        self._data["ontology"]["swrl_rules"] = value
-
-    @property
-    def decision_tables(self) -> List[Dict]:
-        return self._data["ontology"].get("decision_tables", [])
-
-    @decision_tables.setter
-    def decision_tables(self, value: List[Dict]):
-        self._data["ontology"]["decision_tables"] = value
+    @if_then_rules.setter
+    def if_then_rules(self, value: List[Dict]):
+        self._data["ontology"]["if_then_rules"] = value
 
     @property
     def sparql_rules(self) -> List[Dict]:
@@ -974,14 +1078,6 @@ class DomainSession:
     @sparql_rules.setter
     def sparql_rules(self, value: List[Dict]):
         self._data["ontology"]["sparql_rules"] = value
-
-    @property
-    def aggregate_rules(self) -> List[Dict]:
-        return self._data["ontology"].get("aggregate_rules", [])
-
-    @aggregate_rules.setter
-    def aggregate_rules(self, value: List[Dict]):
-        self._data["ontology"]["aggregate_rules"] = value
 
     @property
     def cohort_rules(self) -> List[Dict]:
@@ -1184,7 +1280,7 @@ class DomainSession:
                 owl_content = Ontology.generate_owl(
                     self.ontology,
                     self.constraints,
-                    self.swrl_rules,
+                    self.if_then_rules,
                     self.axioms,
                     self.expressions,
                     self.groups,
@@ -1232,62 +1328,20 @@ class DomainSession:
             }
 
         Excludes: Databricks/registry settings and preferences; generated R2RML, OWL,
-        and SQL (rebuilt from source). Constraints, SWRL rules, and axioms live only
+        and SQL (rebuilt from source). Constraints, IF-THEN rules, and axioms live only
         under ``ontology``, not at the project root.
         """
         # Get current version from domain node
         version = self._data["domain"].get("current_version", "1")
 
         # Export info from project.info (without version - version is at versions level)
-        from back.core.graphdb.GraphDBFactory import (
-            normalize_graph_backend,
-            normalize_lakehouse_materialization,
-            normalize_materialization_mode,
-        )
-        from back.core.graphdb.search_cache import (
-            GRAPH_CACHE_STATE_READY,
-            normalize_graph_cache_enabled,
-            normalize_graph_cache_state,
-        )
-
-        stored = self._data["domain"]["info"]
-        info_export = {
-            "name": stored.get("name", "NewDomain"),
-            "description": stored.get("description", ""),
-            "author": stored.get("author", ""),
-            "llm_endpoint": stored.get("llm_endpoint", ""),
-            "llm_endpoint_kind": stored.get("llm_endpoint_kind", ""),
-            "mcp_enabled": stored.get("mcp_enabled", False),
-            "status": stored.get("status", "DRAFT"),
-            "review_quorum": max(1, int(stored.get("review_quorum") or 1)),
-            "mcp_policy": coerce_mcp_policy(stored.get("mcp_policy")),
-            "graph_backend": normalize_graph_backend(stored.get("graph_backend")),
-            "neo4j_connection": str(stored.get("neo4j_connection", "") or "").strip(),
-            "lakehouse_materialization": normalize_lakehouse_materialization(
-                stored.get("lakehouse_materialization")
-            ),
-            "materialization_mode": normalize_materialization_mode(
-                stored.get("materialization_mode")
-            ),
-            "realtime_source": RealtimeSource.coerce(stored.get("realtime_source")),
-            "graph_cache_enabled": normalize_graph_cache_enabled(
-                stored.get("graph_cache_enabled")
-            ),
-            "graph_cache_state": normalize_graph_cache_state(
-                stored.get("graph_cache_state"),
-                enabled=normalize_graph_cache_enabled(
-                    stored.get("graph_cache_enabled")
-                ),
-                default_when_missing=GRAPH_CACHE_STATE_READY,
-            ),
-            "last_update": self._data["domain"].get("last_update", ""),
-            "last_build": self._data["domain"].get("last_build", ""),
-        }
+        info_export = _export_domain_info(self._data["domain"])
 
         ontology_export = {
             "name": self._data["ontology"].get("name", ""),
             "base_uri": self._data["ontology"].get("base_uri", ""),
             "base_uri_auto": self._data["ontology"].get("base_uri_auto", False),
+            "identity_scope": self._data["ontology"].get("identity_scope", "class"),
             "description": self._data["ontology"].get("description", ""),
             "label_lang": self._data["ontology"].get("label_lang"),
             "comment_lang": self._data["ontology"].get("comment_lang"),
@@ -1296,10 +1350,8 @@ class DomainSession:
             "properties": self._data["ontology"].get("properties", []),
             "constraints": self._data["ontology"].get("constraints", []),
             "shacl_shapes": self._data["ontology"].get("shacl_shapes", []),
-            "swrl_rules": self._data["ontology"].get("swrl_rules", []),
-            "decision_tables": self._data["ontology"].get("decision_tables", []),
+            "if_then_rules": self._data["ontology"].get("if_then_rules", []),
             "sparql_rules": self._data["ontology"].get("sparql_rules", []),
-            "aggregate_rules": self._data["ontology"].get("aggregate_rules", []),
             "cohort_rules": self._data["ontology"].get("cohort_rules", []),
             "axioms": self._data["ontology"].get("axioms", []),
             "expressions": self._data["ontology"].get("expressions", []),
@@ -1332,33 +1384,12 @@ class DomainSession:
 
         return export
 
-    def import_from_file(self, data: Dict[str, Any], version: str = None):
-        """Import domain data from loaded file.
+    def _reset_content_sections(self, empty: Dict[str, Any]) -> None:
+        """Reset all content sections to empty defaults.
 
-        Args:
-            data: Domain data dictionary
-            version: Optional specific version to load (for versioned format)
-
-        Supports multiple formats:
-        1. New versioned format: { info: {...}, versions: { "1": { ontology, mapping, design_layout } } }
-        2. Legacy flat format: { info: {...}, ontology: {...}, mapping: {...}, ... }
-        3. Very old format: constraints/swrl_rules/axioms at top level
-
-        Note:
-        - Databricks connection settings are NOT imported (credentials stay local).
-        - R2RML output is NOT imported (it's regenerated from mappings).
-        - Root-level constraints/swrl_rules/axioms are migrated to ontology.
+        Switching between domains must never leak groups, layout, mappings or
+        other characteristics from the previously loaded domain.
         """
-        if isinstance(data, dict):
-            wrapped = data.get("domain") or data.get("project")
-            if isinstance(wrapped, dict) and "info" in wrapped and "info" not in data:
-                data = wrapped
-
-        empty = get_empty_domain()
-
-        # Reset all content sections to empty defaults so that switching
-        # between domains never leaks groups, layout, mappings, or other
-        # characteristics from the previously loaded domain.
         self._data["ontology"] = copy.deepcopy(empty["ontology"])
         self._data["assignment"] = copy.deepcopy(empty["assignment"])
         self._data["design_layout"] = copy.deepcopy(empty["design_layout"])
@@ -1376,56 +1407,35 @@ class DomainSession:
         # version leakage.
         self._data["generate_draft"] = None
 
+    def import_from_file(self, data: Dict[str, Any], version: str = None):
+        """Import domain data from loaded file.
+
+        Args:
+            data: Domain data dictionary
+            version: Optional specific version to load (for versioned format)
+
+        Supports multiple formats:
+        1. New versioned format: { info: {...}, versions: { "1": { ontology, mapping, design_layout } } }
+        2. Legacy flat format: { info: {...}, ontology: {...}, mapping: {...}, ... }
+        3. Very old format: constraints/if_then_rules/axioms at top level
+
+        Note:
+        - Databricks connection settings are NOT imported (credentials stay local).
+        - R2RML output is NOT imported (it's regenerated from mappings).
+        - Root-level constraints/if_then_rules/axioms are migrated to ontology.
+        """
+        if isinstance(data, dict):
+            wrapped = data.get("domain") or data.get("project")
+            if isinstance(wrapped, dict) and "info" in wrapped and "info" not in data:
+                data = wrapped
+
+        self._migrate_legacy_if_then_key(data)
+        empty = get_empty_domain()
+        self._reset_content_sections(empty)
+
         # Import info into domain.info
         if "info" in data:
-            from back.core.graphdb.GraphDBFactory import (
-                normalize_graph_backend,
-                normalize_lakehouse_materialization,
-                normalize_materialization_mode,
-            )
-            from back.core.graphdb.search_cache import (
-                GRAPH_CACHE_STATE_READY,
-                normalize_graph_cache_enabled,
-                normalize_graph_cache_state,
-            )
-
-            info = data["info"]
-            dest = self._data["domain"]["info"]
-            dest["name"] = info.get("name", "NewDomain")
-            dest["description"] = info.get("description", "")
-            dest["author"] = info.get("author", "")
-            dest["llm_endpoint"] = info.get("llm_endpoint", "")
-            dest["llm_endpoint_kind"] = info.get("llm_endpoint_kind", "")
-            dest["mcp_enabled"] = info.get("mcp_enabled", False)
-            dest["status"] = info.get("status", "DRAFT")
-            dest["review_quorum"] = max(1, int(info.get("review_quorum") or 1))
-            dest["mcp_policy"] = coerce_mcp_policy(info.get("mcp_policy"))
-            dest["graph_backend"] = normalize_graph_backend(info.get("graph_backend"))
-            dest["neo4j_connection"] = str(info.get("neo4j_connection", "") or "").strip()
-            dest["lakehouse_materialization"] = normalize_lakehouse_materialization(
-                info.get("lakehouse_materialization")
-            )
-            dest["materialization_mode"] = normalize_materialization_mode(
-                info.get("materialization_mode")
-            )
-            dest["realtime_source"] = RealtimeSource.coerce(info.get("realtime_source"))
-            dest["graph_cache_enabled"] = normalize_graph_cache_enabled(
-                info.get("graph_cache_enabled"), default=True
-            )
-            dest["graph_cache_state"] = normalize_graph_cache_state(
-                info.get("graph_cache_state"),
-                enabled=dest["graph_cache_enabled"],
-                default_when_missing=GRAPH_CACHE_STATE_READY,
-            )
-            # Drop legacy domain DB override if present on import.
-            dest.pop("neo4j_database", None)
-            self._data["domain"]["last_update"] = info.get("last_update", "")
-            self._data["domain"]["last_build"] = info.get("last_build", "")
-            ts = self._data["domain"].setdefault(
-                "triplestore", get_empty_domain()["domain"]["triplestore"].copy()
-            )
-            ts.pop("backend", None)
-            ts.pop("delta", None)
+            _import_domain_info(self._data["domain"], data["info"])
 
         # Check for new versioned format
         if "versions" in data:
@@ -1484,12 +1494,12 @@ class DomainSession:
                     merged_ont["expressions"] = ex
                 self._data["ontology"] = merged_ont
 
-            # Handle very old files where constraints/swrl_rules/axioms are at top level
+            # Handle very old files where constraints/if_then_rules/axioms are at top level
             if "constraints" in data and "constraints" not in data.get("ontology", {}):
                 self._data["ontology"]["constraints"] = data["constraints"]
 
-            if "swrl_rules" in data and "swrl_rules" not in data.get("ontology", {}):
-                self._data["ontology"]["swrl_rules"] = data["swrl_rules"]
+            if "if_then_rules" in data and "if_then_rules" not in data.get("ontology", {}):
+                self._data["ontology"]["if_then_rules"] = data["if_then_rules"]
 
             if "axioms" in data and "axioms" not in data.get("ontology", {}):
                 all_ax = data["axioms"]

@@ -8,7 +8,7 @@
 const AUTO_ASSIGN_TASK_KEY = 'ontobricks_autoassign_task';
 
 const AUTO_ASSIGN_PROGRESS_CFG = {
-    hostId: 'autoassign-section',
+    hostId: 'autoassign-modal-body',
     overlayId: 'autoAssignFormOverlay',
     overlayClass: 'task-progress-overlay',
     titleId: 'autoAssignOverlayTitle',
@@ -22,12 +22,164 @@ const AUTO_ASSIGN_PROGRESS_CFG = {
     subtitle: 'Generating SQL queries and column mappings with AI…',
 };
 
+function _drawAutoAssignGauge(canvasId, score) {
+    if (typeof window._drawMappingGauge === 'function') {
+        try { window._drawMappingGauge(canvasId, score); return; } catch (_) {}
+    }
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (score == null) {
+        if (canvas.parentElement) canvas.parentElement.style.opacity = '0.3';
+        return;
+    }
+    if (canvas.parentElement) canvas.parentElement.style.opacity = '1';
+    const val = Math.max(0, Math.min(100, Math.round(score)));
+    const color = val === 100 ? '#198754' : val >= 80 ? '#ffc107' : '#dc3545';
+    const cx = canvas.width / 2;
+    const cy = canvas.height - 4;
+    const r = Math.min(cx, cy) - 6;
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI, false);
+    ctx.strokeStyle = '#e9ecef';
+    ctx.stroke();
+    if (val > 0) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, Math.PI, Math.PI + (val / 100) * Math.PI, false);
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.fillStyle = color;
+    ctx.fillText(val + '%', cx, cy);
+}
+
 window.AutoAssignModule = {
     initialized: false,
     isRunning: false,
     isCancelled: false,
     results: [],
     currentTaskId: null,
+    _modalWired: false,
+    /** True while ontology / mappings / metadata are still loading for the dialog. */
+    _preparing: false,
+    _preparePromise: null,
+    /** Task id currently being polled — prevents duplicate monitor loops. */
+    _monitoringTaskId: null,
+    /** True when /domain/metadata reports no UC tables — blocks Start. */
+    _metadataMissing: false,
+
+    /**
+     * Open the Batch Auto-Map modal (Studio / Manual / Build).
+     */
+    open: async function() {
+        const modalEl = document.getElementById('autoAssignModal');
+        if (!modalEl || typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+            showNotification('Auto-Map dialog is not available on this page.', 'warning');
+            return;
+        }
+        this._wireModal(modalEl);
+        // Disable Start immediately so a fast click cannot race the prepare path.
+        this._setPreparing(true, 'Preparing Auto-Map…');
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        // shown.bs.modal also kicks prepare; share one in-flight promise.
+        await this._prepareModal();
+    },
+
+    _wireModal: function(modalEl) {
+        if (this._modalWired) return;
+        this._modalWired = true;
+        const self = this;
+        modalEl.addEventListener('shown.bs.modal', function() {
+            self._prepareModal();
+        });
+        modalEl.addEventListener('hide.bs.modal', function() {
+            if (self.isRunning) {
+                showNotification(
+                    'Auto-Map is running in the background. Track progress in the navbar.',
+                    'info',
+                    4000
+                );
+            }
+        });
+    },
+
+    /**
+     * Load ontology + mappings + metadata once per open. Concurrent callers
+     * (open + shown.bs.modal) share the same promise so Start cannot race
+     * and monitorTask cannot be started twice.
+     */
+    _prepareModal: async function() {
+        if (this._preparePromise) return this._preparePromise;
+        const self = this;
+        this._preparePromise = (async function() {
+            self._setPreparing(true, 'Loading ontology…');
+            await self.ensureLoaded();
+            self._setPreparing(true, 'Refreshing mapping status…');
+            await self.init();
+            self._setPreparing(false);
+        })().finally(function() {
+            self._preparePromise = null;
+        });
+        return this._preparePromise;
+    },
+
+    _setPreparing: function(preparing, message) {
+        this._preparing = !!preparing;
+        const el = document.getElementById('autoAssignPreparing');
+        const textEl = document.getElementById('autoAssignPreparingText');
+        if (textEl && message) textEl.textContent = message;
+        if (el) {
+            if (preparing) {
+                el.classList.remove('d-none');
+                el.classList.add('d-flex');
+            } else {
+                el.classList.add('d-none');
+                el.classList.remove('d-flex');
+            }
+        }
+        this._setStartBlocked(!!preparing || !!this._metadataMissing);
+    },
+
+    ensureLoaded: async function() {
+        if (typeof window.MappingState === 'undefined') {
+            window.MappingState = {
+                config: { entities: [], relationships: [] },
+                loadedOntology: null,
+                initialized: false,
+            };
+        }
+        if (!window.MappingState.loadedOntology) {
+            try {
+                const resp = await fetch('/ontology/load', { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (data.success && data.config) {
+                    window.MappingState.loadedOntology = data.config;
+                }
+            } catch (e) {
+                console.error('[AutoAssign] Error loading ontology:', e);
+            }
+        }
+        this._setPreparing(true, 'Loading mappings…');
+        if (!window.MappingState.initialized || !window.MappingState.config?.entities?.length) {
+            try {
+                const resp = await fetch('/mapping/load', { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (data.success && data.config) {
+                    window.MappingState.config = data.config;
+                }
+            } catch (e) {
+                console.error('[AutoAssign] Error loading mappings:', e);
+            }
+        }
+        window.MappingState.initialized = true;
+    },
     
     /**
      * Disable sidebar menus that should not be accessed while auto-map runs.
@@ -63,6 +215,9 @@ window.AutoAssignModule = {
             if (data.success && data.config) {
                 MappingState.config = data.config;
                 if (typeof _stampExcludedFlags === 'function') _stampExcludedFlags();
+                if (typeof window.refreshMappingLiveStatus === 'function') {
+                    window.refreshMappingLiveStatus([]);
+                }
                 console.log('[AutoAssign] Mapping config refreshed from server');
             }
         } catch (e) {
@@ -87,17 +242,19 @@ window.AutoAssignModule = {
         const savedTaskId = sessionStorage.getItem(AUTO_ASSIGN_TASK_KEY);
         if (savedTaskId) {
             console.log('[AutoAssign] Found saved task:', savedTaskId);
+            this._setPreparing(true, 'Checking previous Auto-Map run…');
             await this.checkAndResumeTask(savedTaskId);
         }
         
         this.initialized = true;
         this.updateStatus();
-        this.checkMetadataQuality();
+        this._setPreparing(true, 'Checking Unity Catalog metadata…');
+        await this.checkMetadataQuality();
     },
 
     /**
-     * Fetch catalog metadata and warn when table/column descriptions are missing.
-     * Missing descriptions reduce AI mapping accuracy.
+     * Fetch catalog metadata. Missing tables blocks Auto-Map; when tables
+     * exist, warn about missing descriptions (hurts LLM mapping accuracy).
      */
     checkMetadataQuality: async function() {
         const warningEl = document.getElementById('metadataQualityWarning');
@@ -108,20 +265,23 @@ window.AutoAssignModule = {
             const resp = await fetch('/domain/metadata', { credentials: 'same-origin' });
             const data = await resp.json();
             if (!data.success || !data.has_metadata) {
-                warningEl.style.display = 'none';
+                this._showMissingMetadataWarning(warningEl);
                 return;
             }
             metadata = data.metadata;
         } catch (e) {
             console.warn('[AutoAssign] Could not fetch metadata for quality check:', e);
+            this._showMissingMetadataWarning(warningEl);
             return;
         }
 
         const tables = metadata.tables || [];
         if (tables.length === 0) {
-            warningEl.style.display = 'none';
+            this._showMissingMetadataWarning(warningEl);
             return;
         }
+        this._metadataMissing = false;
+        this._setStartBlocked(false);
 
         const tablesNoDesc = [];
         const columnsNoDesc = [];
@@ -140,6 +300,7 @@ window.AutoAssignModule = {
 
         const totalMissing = tablesNoDesc.length + columnsNoDesc.length;
         if (totalMissing === 0) {
+            warningEl.classList.add('d-none');
             warningEl.style.display = 'none';
             return;
         }
@@ -174,7 +335,47 @@ window.AutoAssignModule = {
                     </div>
                 </div>
             </div>`;
+        warningEl.classList.remove('d-none');
         warningEl.style.display = 'block';
+    },
+
+    _showMissingMetadataWarning: function(warningEl) {
+        this._metadataMissing = true;
+        warningEl.innerHTML = `
+            <div class="alert alert-danger mb-0 py-2">
+                <div class="d-flex align-items-start gap-2">
+                    <i class="bi bi-database-x mt-1 flex-shrink-0"></i>
+                    <div class="flex-grow-1">
+                        <strong>No Unity Catalog metadata loaded.</strong>
+                        <span class="ms-1">Load tables under Context → Metadata before running Auto-Map.</span>
+                        <a href="/domain/?section=metadata" class="btn btn-link btn-sm py-0 px-1 ms-1 text-danger text-decoration-none">
+                            <i class="bi bi-cloud-download"></i> Load metadata
+                        </a>
+                    </div>
+                </div>
+            </div>`;
+        warningEl.classList.remove('d-none');
+        warningEl.style.display = 'block';
+        this._setStartBlocked(true);
+    },
+
+    _setStartBlocked: function(blocked) {
+        const startBtn = document.getElementById('startAutoAssignBtn');
+        const reassignBtn = document.getElementById('reassignAttrsBtn');
+        const effectivelyBlocked = !!blocked || !!this._preparing || !!this._metadataMissing;
+        if (startBtn) {
+            startBtn.disabled = effectivelyBlocked || startBtn.classList.contains('btn-success');
+            if (this._preparing) {
+                startBtn.title = 'Preparing Auto-Map…';
+            } else if (this._metadataMissing || blocked) {
+                startBtn.title = 'Load Unity Catalog metadata first (Context → Metadata)';
+            } else if (!startBtn.classList.contains('btn-success')) {
+                startBtn.removeAttribute('title');
+            }
+        }
+        if (reassignBtn) {
+            reassignBtn.disabled = effectivelyBlocked;
+        }
     },
 
     /**
@@ -201,11 +402,13 @@ window.AutoAssignModule = {
                 this.updateProgressFromTask(task);
                 this.monitorTask(taskId);
             } else if (task.status === 'completed' && task.result) {
+                // Stale session key only — apply results quietly (no completion toast;
+                // the live monitor already notified when the run finished).
                 console.log('[AutoAssign] Task completed, applying results');
                 sessionStorage.removeItem(AUTO_ASSIGN_TASK_KEY);
                 this.results = task.result.results || [];
                 await this.saveMappingsFromTask(task.result);
-                this.showReport();
+                this.showReport({ notify: false });
                 await this.refreshMappingConfig();
                 this.enableSidebarMenus();
             } else if (task.status === 'failed') {
@@ -348,12 +551,14 @@ window.AutoAssignModule = {
                 startBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i> All Mapped';
                 startBtn.classList.remove('btn-primary');
                 startBtn.classList.add('btn-success');
+                startBtn.removeAttribute('title');
             } else {
-                startBtn.disabled = false;
                 const count = unassignedEntities.length + unassignedRels.length;
                 startBtn.innerHTML = `<i class="bi bi-lightning-charge me-2"></i> Auto-Map (${count})`;
                 startBtn.classList.remove('btn-success');
                 startBtn.classList.add('btn-primary');
+                // Keep disabled while preparing or when UC metadata is missing.
+                this._setStartBlocked(!!this._preparing || !!this._metadataMissing);
             }
         }
     },
@@ -371,6 +576,8 @@ window.AutoAssignModule = {
         if (startBtn) startBtn.style.display = 'none';
         if (reassignBtn) reassignBtn.style.display = 'none';
         if (cancelBtn) cancelBtn.style.display = 'inline-block';
+        this._setBackgroundBtnVisible(true);
+        this._liveSigs = new Map();
 
         if (typeof TaskProgressUI !== 'undefined') {
             TaskProgressUI.clearPanels(AUTO_ASSIGN_PROGRESS_CFG);
@@ -390,6 +597,13 @@ window.AutoAssignModule = {
         }
         if (startBtn) startBtn.style.display = 'inline-block';
         if (cancelBtn) cancelBtn.style.display = 'none';
+        this._setBackgroundBtnVisible(false);
+    },
+
+    /** "Run in background" closes the dialog so the Visual / List tabs can be watched live. */
+    _setBackgroundBtnVisible: function(visible) {
+        const btn = document.getElementById('runInBackgroundBtn');
+        if (btn) btn.style.display = visible ? 'inline-block' : 'none';
     },
 
     /**
@@ -419,6 +633,42 @@ window.AutoAssignModule = {
                 : null;
             _drawMappingGauge('gaugeAutoEntities', ePct);
             _drawMappingGauge('gaugeAutoRelationships', rPct);
+            this.applyLiveMappings(res);
+        }
+    },
+
+    /** Per-URI signature of the live mappings already merged (reset per run). */
+    _liveSigs: new Map(),
+
+    /**
+     * Merge the running task's per-item mappings into MappingState and repaint
+     * the Visual / List tabs, so each item turns green / yellow as soon as the
+     * agent submits it. Mirrors the server merge: an existing ``excluded``
+     * flag is kept. The server reload on completion stays authoritative.
+     */
+    applyLiveMappings: function(res) {
+        const cfg = window.MappingState && MappingState.config;
+        if (!cfg) return;
+        const changed = [];
+        const merge = (key, incoming, keyOf) => {
+            const entries = cfg[key] = cfg[key] || [];
+            (incoming || []).forEach(m => {
+                const uri = keyOf(m);
+                const sig = JSON.stringify([m.sql_query, m.attribute_mappings || {}]);
+                if (!uri || this._liveSigs.get(uri) === sig) return;
+                this._liveSigs.set(uri, sig);
+                const idx = entries.findIndex(e => keyOf(e) === uri);
+                const merged = Object.assign({}, m);
+                if (idx >= 0 && entries[idx].excluded && !('excluded' in m)) merged.excluded = true;
+                if (idx >= 0) entries[idx] = merged; else entries.push(merged);
+                changed.push(uri);
+            });
+        };
+        merge('entities', res.live_entity_mappings, m => m.ontology_class || m.class_uri);
+        merge('relationships', res.live_relationship_mappings, m => m.property);
+        if (!changed.length) return;
+        if (typeof window.refreshMappingLiveStatus === 'function') {
+            window.refreshMappingLiveStatus(changed);
         }
     },
     
@@ -436,79 +686,91 @@ window.AutoAssignModule = {
     },
     
     /**
-     * Monitor task until completion (polls /tasks/{taskId})
+     * Monitor task until completion (polls /tasks/{taskId}).
+     * Concurrent calls for the same task are ignored so completion toasts
+     * fire only once (open + shown.bs.modal used to start two poll loops).
      */
     monitorTask: async function(taskId) {
+        if (this._monitoringTaskId === taskId) {
+            console.log('[AutoAssign] Already monitoring task', taskId);
+            return;
+        }
+        this._monitoringTaskId = taskId;
         const pollInterval = 1500;
         
-        while (true) {
-            try {
-                await new Promise(r => setTimeout(r, pollInterval));
-                
-                const response = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error('Task not found');
-                }
-                
-                const task = data.task;
-                this.updateProgressFromTask(task);
-                
-                if (task.status === 'completed') {
-                    sessionStorage.removeItem(AUTO_ASSIGN_TASK_KEY);
-                    this.currentTaskId = null;
-                    this.isRunning = false;
+        try {
+            while (true) {
+                try {
+                    await new Promise(r => setTimeout(r, pollInterval));
                     
-                    if (task.result) {
-                        this.results = task.result.results || [];
-                        await this.saveMappingsFromTask(task.result);
+                    const response = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        throw new Error('Task not found');
                     }
                     
-                    this.showReport();
-                    await this.refreshMappingConfig();
-                    this.enableSidebarMenus();
+                    const task = data.task;
+                    this.updateProgressFromTask(task);
                     
-                    if (typeof refreshTasks === 'function') refreshTasks();
-                    
-                    showNotification('Auto-map completed!', 'success');
-                    break;
-                } else if (task.status === 'failed') {
+                    if (task.status === 'completed') {
+                        sessionStorage.removeItem(AUTO_ASSIGN_TASK_KEY);
+                        this.currentTaskId = null;
+                        this.isRunning = false;
+                        
+                        if (task.result) {
+                            this.results = task.result.results || [];
+                            await this.saveMappingsFromTask(task.result);
+                        }
+                        
+                        this.showReport({ notify: true });
+                        await this.refreshMappingConfig();
+                        this.enableSidebarMenus();
+                        break;
+                    } else if (task.status === 'failed') {
+                        sessionStorage.removeItem(AUTO_ASSIGN_TASK_KEY);
+                        this.currentTaskId = null;
+                        this.isRunning = false;
+                        this.hideProgressUI();
+                        this.enableSidebarMenus();
+                        await this.refreshMappingConfig();
+                        showNotification('Auto-map failed: ' + (task.error || 'Unknown error'), 'error');
+                        break;
+                    } else if (task.status === 'cancelled') {
+                        sessionStorage.removeItem(AUTO_ASSIGN_TASK_KEY);
+                        this.currentTaskId = null;
+                        this.isRunning = false;
+                        this.hideProgressUI();
+                        this.enableSidebarMenus();
+                        await this.refreshMappingConfig();
+                        showNotification('Auto-map was cancelled', 'warning');
+                        break;
+                    }
+                } catch (error) {
+                    console.error('[AutoAssign] Monitoring error:', error);
                     sessionStorage.removeItem(AUTO_ASSIGN_TASK_KEY);
                     this.currentTaskId = null;
                     this.isRunning = false;
                     this.hideProgressUI();
                     this.enableSidebarMenus();
-                    showNotification('Auto-map failed: ' + (task.error || 'Unknown error'), 'error');
-                    break;
-                } else if (task.status === 'cancelled') {
-                    sessionStorage.removeItem(AUTO_ASSIGN_TASK_KEY);
-                    this.currentTaskId = null;
-                    this.isRunning = false;
-                    this.hideProgressUI();
-                    this.enableSidebarMenus();
-                    showNotification('Auto-map was cancelled', 'warning');
+                    showNotification('Error monitoring auto-map', 'error');
                     break;
                 }
-            } catch (error) {
-                console.error('[AutoAssign] Monitoring error:', error);
-                sessionStorage.removeItem(AUTO_ASSIGN_TASK_KEY);
-                this.currentTaskId = null;
-                this.isRunning = false;
-                this.hideProgressUI();
-                this.enableSidebarMenus();
-                showNotification('Error monitoring auto-map', 'error');
-                break;
             }
+        } finally {
+            if (this._monitoringTaskId === taskId) this._monitoringTaskId = null;
+            if (typeof refreshTasks === 'function') refreshTasks();
         }
-        
-        if (typeof refreshTasks === 'function') refreshTasks();
     },
     
     /**
      * Start the auto-map process (async task via backend)
      */
     start: async function() {
+        if (this._preparing) {
+            showNotification('Auto-Map is still preparing — please wait a moment.', 'info', 2500);
+            return;
+        }
         if (this.isRunning) return;
         
         const ontology = MappingState.loadedOntology || {};
@@ -563,8 +825,16 @@ window.AutoAssignModule = {
             direction: rel.direction || 'forward'
         }));
         
-        // Build schema context
-        const schemaContext = typeof buildSchemaContext === 'function' ? buildSchemaContext() : {};
+        if (this._metadataMissing) {
+            showNotification(
+                'No Unity Catalog metadata loaded. Load tables under Context → Metadata.',
+                'error'
+            );
+            return;
+        }
+
+        // Batch Auto-Map uses domain catalog_metadata on the server.
+        const schemaContext = {};
         
         try {
             // Start async task
@@ -581,8 +851,11 @@ window.AutoAssignModule = {
             
             const result = await response.json();
             
-            if (!result.success) {
-                showNotification('Error: ' + result.message, 'error');
+            if (!response.ok || result.success === false || result.error) {
+                showNotification(
+                    'Error: ' + (result.detail || result.message || 'Auto-Map failed'),
+                    'error'
+                );
                 return;
             }
             
@@ -618,6 +891,10 @@ window.AutoAssignModule = {
      * Re-running auto-map on them will regenerate the SQL and re-map attributes.
      */
     startPartial: async function() {
+        if (this._preparing) {
+            showNotification('Auto-Map is still preparing — please wait a moment.', 'info', 2500);
+            return;
+        }
         if (this.isRunning) return;
         
         const ontology = MappingState.loadedOntology || {};
@@ -665,8 +942,15 @@ window.AutoAssignModule = {
             };
         });
         
-        // Build schema context
-        const schemaContext = typeof buildSchemaContext === 'function' ? buildSchemaContext() : {};
+        if (this._metadataMissing) {
+            showNotification(
+                'No Unity Catalog metadata loaded. Load tables under Context → Metadata.',
+                'error'
+            );
+            return;
+        }
+
+        const schemaContext = {};
         
         try {
             const response = await fetch('/mapping/auto-assign/start', {
@@ -682,8 +966,11 @@ window.AutoAssignModule = {
             
             const result = await response.json();
             
-            if (!result.success) {
-                showNotification('Error: ' + result.message, 'error');
+            if (!response.ok || result.success === false || result.error) {
+                showNotification(
+                    'Error: ' + (result.detail || result.message || 'Auto-Map failed'),
+                    'error'
+                );
                 return;
             }
             
@@ -729,12 +1016,16 @@ window.AutoAssignModule = {
     },
     
     /**
-     * Show the report
+     * Show the report.
+     * @param {{notify?: boolean}} [opts] — when notify is true (live completion),
+     *   emit a single success toast. Stale resume paths pass notify:false.
      */
-    showReport: function() {
+    showReport: function(opts) {
+        const notify = !!(opts && opts.notify);
         if (typeof TaskProgressUI !== 'undefined') {
             TaskProgressUI.setOverlayVisible(AUTO_ASSIGN_PROGRESS_CFG, false);
         }
+        this._setBackgroundBtnVisible(false);
         document.getElementById('autoAssignReportSection').style.display = 'block';
         document.getElementById('cancelAutoAssignBtn').style.display = 'none';
         document.getElementById('startAutoAssignBtn').style.display = 'inline-block';
@@ -789,8 +1080,8 @@ window.AutoAssignModule = {
             `;
         }).join('');
         
-        // Show notification
-        if (successCount > 0) {
+        // One completion toast only — no redundant generic completion message.
+        if (notify && successCount > 0) {
             showNotification(`Auto-mapped ${successCount} item(s) successfully`, 'success', 3000);
         }
     },
@@ -811,20 +1102,18 @@ window.AutoAssignModule = {
     }
 };
 
-// Initialize when autoassign section becomes active
-document.addEventListener('sectionChange', function(e) {
-    if (e.detail?.section === 'autoassign') {
-        // Add delay and retry logic
-        const tryInit = (retries = 0) => {
-            if (MappingState.initialized && MappingState.loadedOntology) {
-                AutoAssignModule.init();
-            } else if (retries < 10) {
-                setTimeout(() => tryInit(retries + 1), 100);
-            } else {
-                console.warn('AutoAssignModule: Force init after timeout');
-                AutoAssignModule.init();
-            }
-        };
-        setTimeout(() => tryInit(0), 50);
-    }
+// Deep-link / resume: /dtwin/?open=automap (legacy /mapping/?open=automap redirects) or a saved running task opens the modal.
+document.addEventListener('DOMContentLoaded', function() {
+    const params = new URLSearchParams(window.location.search);
+    const openAutomap = params.get('open') === 'automap'
+        || window.__OB_OPEN_MAPPING_AUTOMAP === true
+        || window.location.hash === '#automap'
+        || window.location.hash === '#autoassign'
+        || params.get('section') === 'autoassign';
+    window.__OB_OPEN_MAPPING_AUTOMAP = false;
+    const hasSavedTask = !!sessionStorage.getItem(AUTO_ASSIGN_TASK_KEY);
+    if (!openAutomap && !hasSavedTask) return;
+    setTimeout(function() {
+        if (typeof AutoAssignModule !== 'undefined') AutoAssignModule.open();
+    }, 300);
 });

@@ -32,6 +32,13 @@
         <button type="button" class="btn btn-sm btn-outline-primary" data-sg-action="openOntologyViewer" title="View ontology model">
             <i class="bi bi-bezier2"></i> Ontology
         </button>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Expand or collapse all groups">
+            <button type="button" class="btn btn-outline-secondary" id="sgToggleAllGroupsBtn"
+                    data-sg-action="toggleAllGroups"
+                    title="Collapse all groups" aria-label="Collapse all groups" aria-pressed="false">
+                <i class="bi bi-arrows-collapse"></i>
+            </button>
+        </div>
         <div class="btn-group btn-group-sm">
             <button type="button" class="btn btn-outline-primary" data-sg-action="reload" title="Reload from Results">
                 <i class="bi bi-arrow-counterclockwise"></i>
@@ -231,35 +238,14 @@
                                 </div>
                             </div>
                             <div class="sg-cluster-controls mb-2">
-                                <label class="form-label small mb-1" for="sgClusterAlgorithm">Algorithm</label>
-                                <select class="form-select form-select-sm mb-1" id="sgClusterAlgorithm">
-                                    <option value="louvain" selected>Louvain</option>
-                                    <option value="label_propagation">Label Propagation</option>
-                                    <option value="greedy_modularity">Greedy Modularity</option>
-                                </select>
-                                <label class="form-label small mb-1" for="sgClusterResolution">Resolution: <span id="sgClusterResolutionValue">1.00</span></label>
-                                <input type="range" class="form-range form-range-sm sg-cluster-slider" id="sgClusterResolution"
-                                       min="0.1" max="3.0" step="0.05" value="1.0"
-                                       data-sg-input="updateClusterResolutionLabel">
-                                <div class="d-flex gap-1 mt-1">
-                                    <button type="button" class="btn btn-sm btn-outline-success flex-grow-1" data-sg-action="detectClusters">
-                                        <i class="bi bi-bezier2"></i> Detect (local)
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-primary flex-grow-1" data-sg-action="detectClustersBackend" title="Run detection on full graph via backend">
-                                        <i class="bi bi-cloud-arrow-down"></i> Full graph
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-warning" data-sg-action="clearClusters" title="Clear clusters">
-                                        <i class="bi bi-x-lg"></i>
-                                    </button>
-                                </div>
-                                <div class="form-check mt-2 mb-1">
+                                <div class="form-check mt-1 mb-1">
                                     <input class="form-check-input" type="checkbox" id="sgClusterColorBy" data-sg-change="toggleClusterColorBy">
                                     <label class="form-check-label small" for="sgClusterColorBy">Color by cluster</label>
                                 </div>
                             </div>
                             <div class="small text-muted mb-1" id="sgClusterCount"></div>
                             <div id="sgClusterList" class="sg-cluster-list">
-                                <span class="text-muted small">No clusters detected yet.</span>
+                                <span class="text-muted small">No materialized clusters — run Intelligence → Discovery → Communities.</span>
                             </div>
                             <hr class="my-3">
                             <!-- Entity Types section -->

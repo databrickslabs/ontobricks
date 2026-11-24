@@ -195,7 +195,10 @@ class Catalog:
             return False, [], str(exc)
 
     def read_version(
-        self, folder: str, version: str
+        self,
+        folder: str,
+        version: str,
+        include_simulations: bool = True,
     ) -> Tuple[bool, Dict[str, Any], str]:
         try:
             self._ensure_domain_versions_status_column()
@@ -245,9 +248,13 @@ class Catalog:
                     }
                 },
             }
-            attach = getattr(self, "attach_simulations_to_doc", None)
-            if callable(attach):
-                attach(doc, folder, version)
+            # Scenario specs/runs live in dedicated tables and are loaded by
+            # the simulation APIs. Skip the attach on Context open so we do
+            # not pull up to 500 run rows into every session hydrate.
+            if include_simulations:
+                attach = getattr(self, "attach_simulations_to_doc", None)
+                if callable(attach):
+                    attach(doc, folder, version)
             return True, doc, ""
         except Exception as exc:  # noqa: BLE001
             return False, {}, str(exc)
@@ -484,7 +491,7 @@ class Catalog:
                 )
                 row = cur.fetchone()
                 if not row:
-                    return False, f"Domain '{folder}' not found"
+                    return False, f"Context '{folder}' not found"
                 domain_id = row[0]
                 cur.execute(
                     f"DELETE FROM {self._q(self._schema)}.domain_permissions "
@@ -507,7 +514,7 @@ class Catalog:
                             e.get("role", "viewer"),
                         ),
                     )
-            return True, "Domain permissions saved"
+            return True, "Context permissions saved"
         except Exception as exc:  # noqa: BLE001
             return False, str(exc)
 

@@ -45,7 +45,7 @@ tags_metadata = [
     {
         "name": "Ontology",
         "description": "Ontology management - Create and manage OWL ontologies with classes, "
-        "properties, relationships, constraints, and SWRL rules.",
+        "properties, relationships, constraints, and IF-THEN rules.",
     },
     {
         "name": "Mapping",
@@ -58,8 +58,8 @@ tags_metadata = [
         "Queries are translated to SQL and executed on Databricks.",
     },
     {
-        "name": "Domain",
-        "description": "Domain management - Save, load, import/export complete domain configurations "
+        "name": "Context",
+        "description": "Context management - Save, load, import/export complete context configurations "
         "including ontology, mappings, and settings.",
     },
     {
@@ -212,6 +212,7 @@ _DOMAIN_SCOPED_PREFIXES = (
     "/mapping/",
     "/dtwin/",
     "/simulation/",
+    "/intelligence/",
 )
 
 # Routes that live under a domain-scoped prefix but enumerate
@@ -276,6 +277,7 @@ _STATUS_GATE_EDIT_PATHS = (
     "/domain/design-views/delete",
     "/domain/metadata/",
     "/domain/documents/",
+    "/clear-ontology",
 )
 
 # Non-mutating POST endpoints that live under an editing prefix but only
@@ -488,7 +490,7 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                 if self._wants_json(request):
                     return self._forbidden_json(
                         request,
-                        "You are not a member of this domain's team",
+                        "You are not a member of this context's team",
                     )
                 return RedirectResponse(
                     "/access-denied?reason=domain", status_code=302

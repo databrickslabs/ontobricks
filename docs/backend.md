@@ -1,9 +1,9 @@
 # Graph backends
 
 Where the knowledge graph is stored and how it is read. Each domain picks
-an engine under **Domain → General → Knowledge Graph**: Lakebase
+an engine under **Context → Configuration → Knowledge Graph**: [Lakebase](https://docs.databricks.com/aws/en/oltp/)
 (Postgres), Lakehouse (Delta triples), or Neo4j. This guide covers the
-Lakebase and Neo4j engines, then the engine contract, Unity Catalog layout,
+Lakebase and Neo4j engines, then the engine contract, [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) layout,
 and the query optimizations shared by all engines.
 
 <!-- toc -->
@@ -47,7 +47,7 @@ and the query optimizations shared by all engines.
 ## Lakebase graph store
 
 
-OntoBricks ships with **one built-in graph database engine: Lakebase Postgres**.
+OntoBricks ships with **one built-in graph database engine: [Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/)**.
 This document covers everything you need to provision, configure, and operate it —
 from the API gotchas that trip up fresh installs to the Postgres schema layout and
 troubleshooting runbook.
@@ -105,10 +105,10 @@ OntoBricks maintains **two complementary storage layers**:
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Triple Store** | Delta views in Unity Catalog (SQL Warehouse) | Governance, lineage, SPARQL source-of-truth |
+| **Triple Store** | Delta views in [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) ([SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)) | Governance, lineage, SPARQL source-of-truth |
 | **Graph DB** | Lakebase Postgres (flat triple table or UNION view) | Fast in-process graph traversal, reasoning, cohort writes |
 
-The Graph DB engine is selected **per domain** under **Domain → General → Knowledge Graph** (defaults to `lakebase`). Engine *connection* settings remain workspace-global under **Settings → Back end**.
+The Graph DB engine is selected **per domain** under **Context → Configuration → Knowledge Graph** (defaults to `lakebase`). Engine *connection* settings remain workspace-global under **Settings → Back end**.
 
 ---
 
@@ -118,7 +118,7 @@ The Graph DB engine is selected **per domain** under **Domain → General → Kn
 
 | Requirement | Notes |
 |-------------|-------|
-| Databricks Apps enabled | Needed to run OntoBricks as a platform app |
+| [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) enabled | Needed to run OntoBricks as a platform app |
 | SQL Warehouse | Standard or Serverless; bound as the `sql-warehouse` resource |
 | Unity Catalog | A catalog + schema for the registry and triplestore views |
 | Lakebase feature | Must be enabled on the workspace (contact workspace admin if absent) |
@@ -180,7 +180,7 @@ The script:
 | `--capacity CU_N` | `CU_2` | Compute tier: `CU_1`, `CU_2`, `CU_4` |
 | `--branch BRANCH` | `production` | Initial branch name |
 | `--database DBNAME` | `ontobricks_demo` | Postgres `datname` to create |
-| `--profile PROFILE` | `DEFAULT` | Databricks CLI profile |
+| `--profile PROFILE` | `DEFAULT` | [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/) profile |
 | `--wait N` | `120` | Seconds to wait for `AVAILABLE` |
 | `--dry-run` | — | Print plan without executing |
 
@@ -199,7 +199,7 @@ Knowledge Graph build) and performs the same flow as
    `/api/2.0/database/instances` API) and wait for `AVAILABLE`.
 2. Create the Postgres database and the graph schema.
 3. Grant `CAN_USE` on the project and `USAGE/CREATE/DML` on the schema to the
-   app **and** MCP service principals; optionally grant `ALL_PRIVILEGES` on the
+   app **and** MCP [service principals](https://docs.databricks.com/aws/en/admin/users-groups/service-principals); optionally grant `ALL_PRIVILEGES` on the
    configured UC catalog (managed-sync only).
 
 On success the chosen project/branch/database/schema are written into
@@ -811,7 +811,7 @@ instead of `window.confirm()`. If you see this on an older deployment,
 
 
 OntoBricks can store a domain's Knowledge Graph in **Neo4j** as a **typed
-property graph** (as opposed to the flat triple tables used by the Lakebase and
+property graph** (as opposed to the flat triple tables used by the [Lakebase](https://docs.databricks.com/aws/en/oltp/) and
 Delta backends). This document states what a Neo4j server must provide, which
 Neo4j *flavors* are supported for the first release, and the limitations users
 should know before pointing a production domain at Neo4j.
@@ -824,7 +824,7 @@ graph model internals see the module docstrings in
 
 ### 1. What the typed model stores
 
-When a domain's graph backend is **Neo4j** (Domain → General → Knowledge
+When a domain's graph backend is **Neo4j** (Context → Configuration → Knowledge
 Graph → *Neo4j*), the build pipeline writes a property graph, not flat triples:
 
 | RDF construct | Neo4j representation |
@@ -866,7 +866,7 @@ backend runs on Aura Free and Community with no plugins installed.
 
 **Named connection profiles.** Settings → Neo4j stores one or more **named
 connections** (`graph_engine_config.neo4j.connections[]`), each with its own
-Bolt URI, database, username, encryption flag, and Databricks secret
+Bolt URI, database, username, encryption flag, and [Databricks secret](https://docs.databricks.com/aws/en/security/secrets/)
 scope/key. There is no auto-migration from the older flat single-profile keys —
 admins re-enter connections in the master–detail UI.
 
@@ -895,7 +895,7 @@ flavors work with the caveats below.
 
 ### 4. Domain binding — named connection (required)
 
-When a domain's Graph Backend is **Neo4j**, Domain → General → Knowledge
+When a domain's Graph Backend is **Neo4j**, Context → Configuration → Knowledge
 Graph requires a **Neo4j connection** dropdown value (`domain.info.neo4j_connection`).
 That name resolves to one Settings profile at build / query time. There is no
 blank “use default” and no per-domain database override — the database lives on
@@ -940,7 +940,7 @@ tab) and rebuild the domain.
 
 Domains that still have a flat workspace Neo4j config (no `connections[]`) must
 be reconfigured: add named connection(s) in Settings → Neo4j, then set each
-Neo4j domain's **Neo4j connection** on Domain → General → Knowledge Graph.
+Neo4j domain's **Neo4j connection** on Context → Configuration → Knowledge Graph.
 
 ---
 
@@ -969,14 +969,14 @@ and global config.
 ---
 
 OntoBricks ships three **runtime** graph engines. The backend is chosen **per domain** under
-**Domain → General → Knowledge Graph** (mandatory; defaults to ``lakebase``) — the selection is
+**Context → Configuration → Knowledge Graph** (mandatory; defaults to ``lakebase``) — the selection is
 stored in ``DomainSession.info['graph_backend']``. Engine *connection* config stays workspace-global
 under **Settings → Back end**.
 
 | Engine | Storage | Notes |
 |--------|---------|--------|
-| ``lakebase`` (default) | Flat triple tables on **Lakebase Postgres** | Uses the App-bound Postgres instance (``PGHOST`` / ``PGDATABASE``…). Configure ``graph_engine_config.lakebase`` with optional ``database`` (Postgres DB name on that instance) and ``schema`` (default ``ontobricks_graph``), and ``sync_mode`` (``app_managed`` or ``managed_synced``). SQL-only (no Cypher); reasoning uses the existing SQL translators. |
-| ``databricks`` (Delta) | Unity Catalog Delta triple tables | Configure ``graph_engine_config.lakehouse.warehouse_id``. |
+| ``lakebase`` (default) | Flat triple tables on **[Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/)** | Uses the App-bound Postgres instance (``PGHOST`` / ``PGDATABASE``…). Configure ``graph_engine_config.lakebase`` with optional ``database`` (Postgres DB name on that instance) and ``schema`` (default ``ontobricks_graph``), and ``sync_mode`` (``app_managed`` or ``managed_synced``). SQL-only (no Cypher); reasoning uses the existing SQL translators. |
+| ``databricks`` (Delta) | [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) Delta triple tables | Configure ``graph_engine_config.lakehouse.warehouse_id``. |
 | ``neo4j`` | Native graph over Bolt | Neo4j Aura or self-hosted; connection config in ``graph_engine_config.neo4j`` (``uri``, ``database``, credentials). |
 
 Each backend's connection settings are stored in **separate** buckets under
@@ -1100,7 +1100,7 @@ snapshot powers Preview when **Inferred** is enabled; asserted-only searches
 fall back to the asserted SPO relation. Adjacency-driven expansion reads its
 payload from `_props`; if that table is missing, it retries against the
 reader-facing SPO relation. Lakehouse rebuild DDL always runs on
-the configured **Build SQL Warehouse**, never on the Lakehouse/RT query
+the configured **Build [SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)**, never on the Lakehouse/RT query
 warehouse, because Lakehouse/RT does not support `CREATE OR REPLACE TABLE`.
 The semantics differ by mode:
 
@@ -1206,7 +1206,7 @@ These have sensible **defaults** that you should **override** as needed:
 | `sync_from_remote(uc_path, volume_service)` | No-op | Same, for restore on cold start. |
 | `local_path()` | `None` | Your engine stores data locally. |
 | `remote_archive_path(uc_domain_path)` | `None` | Your engine has a remote archive naming convention. |
-| `get_query_translator(table_name)` | `SWRLSQLTranslator()` | Your engine needs a custom SWRL/rule translator for reasoning. |
+| `get_query_translator(table_name)` | `ShaclFlatSqlBackend()` | Your engine needs a custom rule translator for reasoning. |
 
 #### 2.3 Capability interfaces & the import boundary
 
@@ -1267,15 +1267,15 @@ Key decisions:
 
 1. **Query dialect**: If your engine speaks Cypher, set `supports_cypher = True`
    and `query_dialect = "cypher"`. Override the named query methods with native
-   Cypher implementations and ship a matching `SWRLCypherTranslator` (the SQL
+   Cypher implementations and ship a matching `IfThenCypherTranslator` (the SQL
    translator stays the default for SQL engines).
 
 2. **Graph model**: If your engine uses typed node/relationship tables, set
    `supports_graph_model = True` and implement `get_graph_schema()`. If it uses
    a flat triple table (like the shipped `FlatStore`), leave it `False`.
 
-3. **Reasoning translator**: Return the appropriate `SWRL*Translator` from
-   `get_query_translator()`. For SQL engines, the default `SWRLSQLTranslator`
+3. **Reasoning translator**: Return the appropriate rule backend from
+   `get_query_translator()`. For SQL engines, the default `ShaclFlatSqlBackend`
    works.
 
 4. **Sync**: If your engine stores data as local files, implement
@@ -1629,7 +1629,7 @@ managed-synced tables register under the **same ``catalog.schema`` as the Volume
 
 #### Unity Catalog Explorer — graph triples + synced table
 
-Open **Catalog Explorer** at ``<catalog>.<registry_volume_schema>``: graph triple
+Open **[Catalog Explorer](https://docs.databricks.com/aws/en/catalog-explorer/)** at ``<catalog>.<registry_volume_schema>``: graph triple
 tables, companion, union view, and the UC synced-table registration share that
 schema segment once the store is constructed (see build log
 ``Managed-sync registers UC synced table at …``).
@@ -1749,7 +1749,7 @@ rebuild — this is a full snapshot replacement, **not** an incremental refresh.
 Build and **Refresh cache** both trigger the same `rebuild_adjacency` backend
 operation; Refresh cache is a lightweight alternative when the underlying source
 data has not changed and only the indexes need to be brought up to date.
-**Domain → General → Backend → Search cache** skips that rebuild when
+**Context → Configuration → Backend → Search cache** skips that rebuild when
 off; turning the switch back on leaves the domain in `pending_refresh` until
 the next successful rebuild (live SPO until then). `cache=true` on a read
 requires the companions and returns 400 if they are missing.
@@ -1786,7 +1786,7 @@ AS SELECT subject, predicate, object FROM <mapping_view>
 ```
 
 The layout co-locates common predicate/subject filters. `OPTIMIZE` compacts
-files and applies Liquid Clustering after builds. App-written inferred triples
+files and applies [Liquid Clustering](https://docs.databricks.com/aws/en/delta/clustering) after builds. App-written inferred triples
 remain in `_inferred`; the `_graph` view combines `_data` and `_inferred`.
 
 In `view` materialization mode, `_data` remains a pass-through view. This avoids
@@ -2092,7 +2092,7 @@ Build and graph reads can use different warehouses:
 - Build and graph-index DDL always use the Build SQL Warehouse over Thrift.
 - Interactive reads may use a dedicated Lakehouse/RT query warehouse.
 
-Inside Databricks Apps, RT reads use the Statement Execution API with
+Inside [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/), RT reads use the Statement Execution API with
 `JSON_ARRAY` and `INLINE` results. This avoids Kernel CloudFetch downloads from
 external object storage, which are unavailable from the App runtime. Internal
 chunk links are followed only on the workspace host; external links and

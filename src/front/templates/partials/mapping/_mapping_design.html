@@ -1,54 +1,25 @@
-<!-- Visual Mapping Designer - D3.js Force-Directed Graph with Mapping Panel -->
-<!-- CSS: /static/mapping/css/mapping-design.css -->
-<!-- JS: /static/mapping/js/mapping-design.js -->
+<!-- Mapping Studio (Graph → Management → Mapping) — Informations | Visual (canvas) | List (tree) tabs.
+     Visual and List share the Visual bottom pane.
+     CSS: /static/mapping/css/mapping-design.css, mapping-manual.css
+     JS: /static/mapping/js/mapping-design.js, mapping-manual.js, mapping-import.js, mapping-r2rml.js -->
 <div class="content-section h-100 d-flex flex-column">
     <div class="section-header flex-shrink-0 d-flex justify-content-between align-items-center mb-4">
         <div class="me-auto">
             <h4 class="mb-1"><i class="bi bi-pencil me-2"></i>Mapping Studio</h4>
-            <p class="text-muted mb-0 small">Click on an entity or relationship to configure its data mapping.</p>
+            <p class="text-muted mb-0 small">Map ontology entities and relationships to Databricks tables — Visual canvas or List.</p>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <!-- Legend -->
-            <div class="mapping-design-legend me-2">
-                <div class="legend-item">
-                    <div class="legend-color legend-mapped"></div>
-                    <span>Mapped</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color legend-unmapped"></div>
-                    <span>Not Mapped</span>
-                </div>
-            </div>
-            <div class="btn-group btn-group-sm" role="group" aria-label="Zoom and view">
-                <button class="btn btn-outline-secondary" id="mappingMapZoomIn" title="Zoom In" aria-label="Zoom in">
-                    <i class="bi bi-zoom-in"></i>
-                </button>
-                <button class="btn btn-outline-secondary" id="mappingMapZoomOut" title="Zoom Out" aria-label="Zoom out">
-                    <i class="bi bi-zoom-out"></i>
-                </button>
-                <button class="btn btn-outline-secondary" id="mappingMapResetView" title="Reset View" aria-label="Reset view">
-                    <i class="bi bi-arrows-fullscreen"></i>
-                </button>
-                <button class="btn btn-outline-secondary active" id="mappingMapToggleGrid" title="Hide dot grid" aria-label="Show or hide the canvas dot grid" aria-pressed="true">
-                    <i class="bi bi-grid-3x3-gap"></i>
-                </button>
-            </div>
-            <div class="btn-group btn-group-sm" role="group" aria-label="Layout">
-                <button class="btn btn-outline-secondary" id="mappingMapResetLayout" title="Reset Layout" aria-label="Reset layout">
-                    <i class="bi bi-shuffle"></i>
-                </button>
-                <button class="btn btn-outline-secondary" id="mappingMapRefresh" title="Refresh Studio" aria-label="Refresh studio" onclick="refreshMappingDesign()">
-                    <i class="bi bi-arrow-clockwise"></i>
-                </button>
-            </div>
-            <button class="btn btn-sm btn-outline-secondary" id="mappingAutoExclude" title="Auto-exclude: orphan entities and entities connected only by inheritance (no object-property relationships)" onclick="autoExcludeAll()">
-                <i class="bi bi-magic me-1"></i> Auto-Exclude
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" id="mappingIncludeExcluded" title="Include all excluded entities and relationships" onclick="includeAllExcluded()">
-                <i class="bi bi-eye me-1"></i> Include excluded
-            </button>
             <button type="button" class="btn btn-sm btn-outline-danger" id="resetMappingsDesignBtn" title="Delete all entity and relationship mappings">
                 <i class="bi bi-arrow-counterclockwise me-1"></i> Unmap all
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="openAutoAssignModalBtn"
+                    data-requires-llm
+                    title="Batch Auto-Map all unmapped entities and relationships"
+                    onclick="AutoAssignModule.open()">
+                <i class="bi bi-lightning-charge me-1"></i> Auto-Map
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="mappingImportR2RMLBtn" title="Import an R2RML file (.ttl / .rdf) — replaces current mappings" aria-label="Import R2RML">
+                <i class="bi bi-box-arrow-in-down me-1"></i> Import
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="mappingExportR2RMLBtn" title="Export the generated R2RML mapping" aria-label="Export R2RML">
                 <i class="bi bi-download me-1"></i> Export
@@ -59,71 +30,156 @@
             </button>
         </div>
     </div>
-    
-    <!-- Canvas Container with always-visible bottom panel -->
-    <div class="mapping-designer-container ob-split-shell ob-split-shell--column" id="mappingDesignerContainer">
-        <!-- D3.js Designer Canvas -->
-        <div class="ob-split-pane" id="mappingMapCard">
-            <div class="mapping-design-map-card-body">
-                <div id="mapping-map-container" class="mapping-grid-visible">
-                    <!-- Loading Overlay -->
-                    <div id="mappingDesignerLoading" class="designer-loading-overlay">
-                        <div class="ob-loading-spinner">
-                            <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
-                                <g class="ob-ring">
-                                    <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
-                                        <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
-                                        <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
-                                        <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
-                                        <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
-                                    </g>
-                                    <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
-                                    <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
-                                    <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
-                                    <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
-                                </g>
-                                <g transform="translate(40,40)">
-                                    <g class="ob-center">
-                                        <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
-                                        <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
-                                        <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
-                                    </g>
-                                </g>
-                            </svg>
-                            <span class="ob-spinner-label">Loading mapping design...</span>
+    <input type="file" id="mappingStudioImportR2rmlFileInput" accept=".ttl,.rdf,.xml" class="d-none">
+
+    <div class="card h-100 flex-grow-1 min-h-0 border-0">
+        <div class="card-body p-0 ob-tabs-wrap h-100 d-flex flex-column min-h-0">
+            <ul class="nav nav-tabs ob-tabs nav-fill flex-shrink-0" id="mappingStudioTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="mappingStudioTabInformations" data-bs-toggle="tab"
+                            data-bs-target="#mappingStudioPaneInformations" type="button" role="tab"
+                            aria-controls="mappingStudioPaneInformations" aria-selected="true">
+                        <i class="bi bi-info-circle me-1"></i>Informations
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="mappingStudioTabVisual" data-bs-toggle="tab"
+                            data-bs-target="#mappingStudioPaneVisual" type="button" role="tab"
+                            aria-controls="mappingStudioPaneVisual" aria-selected="false">
+                        <i class="bi bi-share me-1"></i>Visual
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="mappingStudioTabList" data-bs-toggle="tab"
+                            data-bs-target="#mappingStudioPaneList" type="button" role="tab"
+                            aria-controls="mappingStudioPaneList" aria-selected="false">
+                        <i class="bi bi-list-nested me-1"></i>List
+                    </button>
+                </li>
+            </ul>
+
+            <div class="mapping-designer-container ob-split-shell ob-split-shell--column flex-grow-1 min-h-0" id="mappingDesignerContainer">
+                <div class="ob-split-pane" id="mappingStudioMainPane">
+                    <div class="tab-content h-100" id="mappingStudioTabContent">
+                        <div class="tab-pane fade show active p-3 h-100 overflow-auto" id="mappingStudioPaneInformations" role="tabpanel"
+                             aria-labelledby="mappingStudioTabInformations">
+                            {% include "partials/mapping/_mapping_information_content.html" %}
+                        </div>
+
+                        <div class="tab-pane fade h-100" id="mappingStudioPaneVisual" role="tabpanel"
+                             aria-labelledby="mappingStudioTabVisual">
+                            <div class="d-flex flex-column h-100">
+                                <div class="d-flex align-items-center flex-wrap gap-2 px-3 py-2 border-bottom flex-shrink-0">
+                                    <div class="mapping-design-legend me-2">
+                                        <div class="legend-item">
+                                            <div class="legend-color legend-mapped"></div>
+                                            <span>Mapped</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <div class="legend-color legend-unmapped"></div>
+                                            <span>Not Mapped</span>
+                                        </div>
+                                    </div>
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="Zoom and view">
+                                        <button class="btn btn-outline-secondary" id="mappingMapZoomIn" title="Zoom In" aria-label="Zoom in">
+                                            <i class="bi bi-zoom-in"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" id="mappingMapZoomOut" title="Zoom Out" aria-label="Zoom out">
+                                            <i class="bi bi-zoom-out"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" id="mappingMapResetView" title="Reset View" aria-label="Reset view">
+                                            <i class="bi bi-arrows-fullscreen"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary active" id="mappingMapToggleGrid" title="Hide dot grid" aria-label="Show or hide the canvas dot grid" aria-pressed="true">
+                                            <i class="bi bi-grid-3x3-gap"></i>
+                                        </button>
+                                    </div>
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="Layout">
+                                        <button class="btn btn-outline-secondary" id="mappingMapResetLayout" title="Reset Layout" aria-label="Reset layout">
+                                            <i class="bi bi-shuffle"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" id="mappingMapRefresh" title="Refresh Studio" aria-label="Refresh studio" onclick="refreshMappingDesign()">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </button>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-secondary" id="mappingAutoExclude" title="Auto-exclude: orphan entities and entities connected only by inheritance (no object-property relationships)" onclick="autoExcludeAll()">
+                                        <i class="bi bi-magic me-1"></i> Auto-Exclude
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" id="mappingIncludeExcluded" title="Include all excluded entities and relationships" onclick="includeAllExcluded()">
+                                        <i class="bi bi-eye me-1"></i> Include excluded
+                                    </button>
+                                </div>
+
+                                <div class="flex-grow-1 min-h-0 d-flex flex-column" id="mappingMapCard">
+                                    <div class="mapping-design-map-card-body">
+                                        <div id="mapping-map-container" class="mapping-grid-visible">
+                                            <div id="mappingDesignerLoading" class="designer-loading-overlay" style="display:none;" aria-hidden="true">
+                                                <div class="ob-loading-spinner">
+                                                    <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
+                                                        <g class="ob-ring">
+                                                            <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+                                                                <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
+                                                                <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
+                                                                <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
+                                                                <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
+                                                            </g>
+                                                            <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
+                                                            <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+                                                            <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
+                                                            <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+                                                        </g>
+                                                        <g transform="translate(40,40)">
+                                                            <g class="ob-center">
+                                                                <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
+                                                                <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
+                                                                <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
+                                                            </g>
+                                                        </g>
+                                                    </svg>
+                                                    <span class="ob-spinner-label">Loading mapping design...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade h-100" id="mappingStudioPaneList" role="tabpanel"
+                             aria-labelledby="mappingStudioTabList">
+                            {% include "partials/mapping/_mapping_manual.html" %}
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <div class="detail-panel-resize-handle" title="Drag to resize panels">
-            <div class="resize-handle-bar"></div>
-        </div>
-
-        <!-- Bottom panel for Mapping -->
-        <div class="mapping-right-panel ob-split-pane" id="mappingRightPanel">
-            <div class="panel-header">
-                <h6 id="panelTitle"><span id="panelItemName">Select Item</span></h6>
-            </div>
-            <div class="panel-body" id="panelBody">
-                <div class="panel-placeholder">
-                    <i class="bi bi-cursor"></i>
-                    <p class="mb-0">Click on an entity or relationship to configure its mapping.</p>
+                <div class="detail-panel-resize-handle" title="Drag to resize panels">
+                    <div class="resize-handle-bar"></div>
                 </div>
-            </div>
-            <div class="panel-footer" id="panelFooter">
-                <div class="d-flex flex-column justify-content-between h-100">
-                    <div class="d-flex flex-column gap-2">
-                        <button type="button" class="btn btn-outline-secondary btn-sm panel-action-btn" id="resetPanelBtn" title="Remove mapping">
-                            <i class="bi bi-arrow-counterclockwise"></i> Unmap
-                        </button>
-                        <button type="button" class="btn btn-outline-primary btn-sm panel-action-btn"
-                                id="autoMapPanelBtn" data-requires-llm
-                                title="Generate SQL, execute, and auto-map columns">
-                            <span class="spinner-border spinner-border-sm d-none me-1" role="status"></span>
-                            <i class="bi bi-lightning-charge"></i> Auto-Map
-                        </button>
+
+                <div class="mapping-right-panel ob-split-pane" id="mappingRightPanel">
+                    <div class="panel-header">
+                        <h6 id="panelTitle"><span id="panelItemName">Select Item</span></h6>
+                    </div>
+                    <div class="panel-body" id="panelBody">
+                        <div class="panel-placeholder">
+                            <i class="bi bi-cursor"></i>
+                            <p class="mb-0">Click on an entity or relationship to configure its mapping.</p>
+                        </div>
+                    </div>
+                    <div class="panel-footer" id="panelFooter">
+                        <div class="d-flex flex-column justify-content-between h-100">
+                            <div class="d-flex flex-column gap-2">
+                                <button type="button" class="btn btn-outline-secondary btn-sm panel-action-btn" id="resetPanelBtn" title="Remove mapping">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Unmap
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm panel-action-btn"
+                                        id="autoMapPanelBtn" data-requires-llm
+                                        title="Generate SQL, execute, and auto-map columns">
+                                    <span class="spinner-border spinner-border-sm d-none me-1" role="status"></span>
+                                    <i class="bi bi-lightning-charge"></i> Auto-Map
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -131,5 +187,4 @@
     </div>
 </div>
 
-<!-- D3.js Library -->
 <script src="https://d3js.org/d3.v7.min.js"></script>

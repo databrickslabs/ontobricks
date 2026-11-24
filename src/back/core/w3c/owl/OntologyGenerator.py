@@ -9,9 +9,17 @@ from typing import List, Dict
 
 from back.core.logging import get_logger
 from back.core.w3c.owl.OntologyRdfExtras import OntologyRdfExtras
-from back.core.w3c.owl.iri import ONTOBRICKS_NS, serialize_turtle
+from back.core.w3c.owl.iri import serialize_graph
+from back.core.w3c.owl.iri import ONTOBRICKS_NS
 
 logger = get_logger(__name__)
+
+
+def _normalize_datasets(cls: Dict) -> List:
+    """Defer ClassModel so this module does not pull back.objects at import time."""
+    from back.objects.ontology.ClassModel import ClassModel
+
+    return ClassModel.normalize_datasets(cls)
 
 
 class OntologyGenerator:
@@ -24,7 +32,7 @@ class OntologyGenerator:
         classes: List[Dict],
         properties: List[Dict],
         constraints: List[Dict] = None,
-        swrl_rules: List[Dict] = None,
+        if_then_rules: List[Dict] = None,
         axioms: List[Dict] = None,
         expressions: List[Dict] = None,
         groups: List[Dict] = None,
@@ -39,7 +47,7 @@ class OntologyGenerator:
             classes: List of class definitions
             properties: List of property definitions
             constraints: List of property constraints (cardinality, characteristics)
-            swrl_rules: List of SWRL rules
+            if_then_rules: List of IF-THEN rules
             axioms: List of OWL axioms (logical assertions)
             expressions: List of OWL class expressions (unionOf, intersectionOf, etc.)
             groups: List of entity group definitions (name, label, color, icon, members)
@@ -56,7 +64,7 @@ class OntologyGenerator:
         self.classes = classes or []
         self.properties = properties or []
         self.constraints = constraints or []
-        self.swrl_rules = swrl_rules or []
+        self.if_then_rules = if_then_rules or []
         self.axioms = axioms or []
         self.expressions = expressions or []
         self.groups = groups or []
@@ -83,12 +91,8 @@ class OntologyGenerator:
         self.graph.bind("ontobricks", ONTOBRICKS_NS)
         self.graph.bind(self._domain_prefix, self.ns)
 
-    def generate(self) -> str:
-        """Generate OWL content.
-
-        Returns:
-            OWL content as string (Turtle format)
-        """
+    def generate(self, output_format: str = "turtle") -> str:
+        """Generate OWL content (``turtle`` or ``json-ld``)."""
         # Create ontology
         ontology_uri = URIRef(self.base_uri.rstrip("#"))
         self.graph.add((ontology_uri, RDF.type, OWL.Ontology))
@@ -114,9 +118,9 @@ class OntologyGenerator:
         for constraint in self.constraints:
             self._add_constraint(constraint)
 
-        # Add SWRL rules
-        for rule in self.swrl_rules:
-            self._add_swrl_rule(rule)
+        # IF-THEN (Simple) rules are not written to the OWL: they are managed
+        # as their own JSON package (see RulesPackage). OWL import still reads
+        # rules from older files that carry ontobricks:IfThenRule annotations.
 
         # Add OWL axioms and class expressions
         for axiom in self.axioms:
@@ -132,8 +136,7 @@ class OntologyGenerator:
             self.graph, self.rdf_extras, live_subjects=live_subjects
         )
 
-        # Serialize to Turtle format
-        return serialize_turtle(self.graph)
+        return serialize_graph(self.graph, output_format)
 
     @staticmethod
     def _local_name(ref: str) -> str:
@@ -621,11 +624,11 @@ class OntologyGenerator:
                 (class_uri, ONTOBRICKS_NS.bridges, Literal(json.dumps(bridges)))
             )
 
-        # Add linked Unity Catalog dataset (table/view) as JSON string
-        dataset = cls.get("dataset")
-        if dataset:
+        # Linked Unity Catalog datasets (tables/views/metric views) as JSON array
+        datasets = _normalize_datasets(cls)
+        if datasets:
             self.graph.add(
-                (class_uri, ONTOBRICKS_NS.dataset, Literal(json.dumps(dataset)))
+                (class_uri, ONTOBRICKS_NS.dataset, Literal(json.dumps(datasets)))
             )
 
         # Add linked Unity Catalog function actions as JSON string
@@ -635,7 +638,7 @@ class OntologyGenerator:
                 (class_uri, ONTOBRICKS_NS.actions, Literal(json.dumps(actions)))
             )
 
-        # Add referenced SWRL business rules (by rule name) as JSON string
+        # Add referenced IF-THEN business rules (by rule name) as JSON string
         business_rules = cls.get("business_rules", [])
         if business_rules:
             self.graph.add(
@@ -869,44 +872,6 @@ class OntologyGenerator:
             self.graph.add((prop_uri, RDFS.range, range_uri))
 
         # Note: Relationship attributes are not supported - relationships are simple ObjectProperties
-
-    def _add_swrl_rule(self, rule: Dict):
-        """Add a SWRL rule to the ontology as OntoBricks annotation.
-
-        Note: Full SWRL requires RIF or SWRL XML format. Here we store as annotations
-        that can be parsed back and used by OntoBricks for quality checks.
-
-        Args:
-            rule: Rule definition with 'name', 'description', 'antecedent', 'consequent'
-        """
-        name = rule.get("name", "").strip()
-        if not name:
-            return
-
-        # Sanitize name for URI
-        safe_name = self._sanitize_name(name)
-        rule_uri = URIRef(self.base_uri + f"_swrlRule_{safe_name}")
-
-        # Add rule as OntoBricks SWRL rule resource
-        self.graph.add((rule_uri, RDF.type, ONTOBRICKS_NS.SWRLRule))
-        self.graph.add((rule_uri, RDFS.label, Literal(name)))
-
-        # Add description
-        description = rule.get("description", "")
-        if description:
-            self.graph.add((rule_uri, RDFS.comment, Literal(description)))
-
-        # Add antecedent (IF part)
-        antecedent = rule.get("antecedent", "")
-        if antecedent:
-            self.graph.add((rule_uri, ONTOBRICKS_NS.antecedent, Literal(antecedent)))
-
-        # Add consequent (THEN part)
-        consequent = rule.get("consequent", "")
-        if consequent:
-            self.graph.add((rule_uri, ONTOBRICKS_NS.consequent, Literal(consequent)))
-
-        logger.debug("Added SWRL rule: %s", name)
 
     def _add_axiom(self, axiom: Dict):
         """Add an OWL axiom to the ontology.

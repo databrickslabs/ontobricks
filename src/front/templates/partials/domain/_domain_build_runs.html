@@ -1,0 +1,56 @@
+<!-- Build-run history — Graph → Management → Build → Runs tab.
+     JS: /static/domain/js/domain-runs.js (shared with Analytics → Runs). -->
+<div id="buildRunsPaneBody">
+    <div class="ob-filter-bar">
+        <div class="ob-filter-search">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input type="search" class="form-control form-control-sm" id="runsFilter"
+                   placeholder="Filter runs" aria-label="Filter build runs">
+        </div>
+        <span class="ob-runs-count" id="runsCount" aria-live="polite"></span>
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="btnReloadBuildRuns"
+                onclick="loadBuildRuns()" title="Reload build runs from the registry">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Refresh
+        </button>
+    </div>
+
+    <div id="runsLoading" class="text-center py-5" style="display:none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mt-2 small">Loading build runs from registry&hellip;</p>
+    </div>
+
+    <div id="runsEmpty" class="text-center py-5" style="display:none;">
+        <i class="bi bi-list-check text-muted fs-1"></i>
+        <p class="text-muted mt-2 mb-1">No build runs found</p>
+        <p class="text-muted small">Build the context (Management &rarr; Build) to start recording runs.</p>
+    </div>
+
+    <div id="runsError" class="alert alert-warning m-3" role="alert" style="display:none;">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <span id="runsErrorMessage"></span>
+    </div>
+
+    <div id="runsTableWrapper" style="display:none;">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle ob-runs-table">
+                <thead>
+                    <tr>
+                        <th>Start time</th>
+                        <th>Run ID</th>
+                        <th>Version</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                        <th class="text-center" id="runsMaterializationHeader">Materialization</th>
+                        <th class="text-end">Triples</th>
+                        <th class="text-end"><span class="visually-hidden">Details</span></th>
+                    </tr>
+                </thead>
+                <tbody id="runsTableBody">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

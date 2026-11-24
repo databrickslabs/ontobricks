@@ -27,47 +27,371 @@ class TwinAnalytics:
     # Community detection
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def analytics_output_schema(domain: Any, settings: Any) -> str:
+        """``catalog.schema`` holding the analytics jobs' output tables."""
+        from back.objects.registry import RegistryCfg
+
+        schema = (getattr(settings, "analytics_job_output_schema", "") or "").strip()
+        if schema:
+            return schema
+        rcfg = RegistryCfg.from_domain(domain, settings)
+        return f"{rcfg.catalog}.{rcfg.schema}"
+
+    @staticmethod
+    def build_job_communities(
+        domain: Any, settings: Any, graph_name: str, source_table: str = ""
+    ) -> Any:
+        """Wire a :class:`JobCommunities` on the Build warehouse.
+
+        *source_table* is only needed to start a run; reading a previous run's
+        output does not touch the source.
+        """
+        from back.core.graph_analysis import (
+            JobCommunities,
+            LakeflowRunner,
+            community_output_table,
+        )
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.helpers import resolve_community_job_name
+
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        if not builder.has_client():
+            raise InfrastructureError(
+                "The community detection output cannot be read",
+                detail="No Build SQL Warehouse client could be created",
+            )
+        runner = LakeflowRunner(
+            resolve_community_job_name(settings),
+            timeout_s=int(getattr(settings, "analytics_job_timeout_s", 3600) or 3600),
+            running_label="Detecting communities on Databricks",
+        )
+        return JobCommunities(
+            source_table,
+            runner=runner,
+            query=builder.execute_query,
+            output_table=community_output_table(
+                TwinAnalytics.analytics_output_schema(domain, settings),
+                domain,
+                graph_name,
+            ),
+        )
+
     def detect_clusters(
+        self,
+        graph_name: str,
+        *,
+        class_filter: Optional[List[str]] = None,
+        predicate_filter: Optional[List[str]] = None,
+        settings: Any = None,
+        on_progress: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Run the community job on the mapped snapshot; blocks until done.
+
+        Called from a background task. Returns the run summary; the partition
+        itself stays in the job's output tables (see :meth:`latest_clusters`).
+        """
+        from back.core.graph_analysis import analytics_snapshot, resolve_analytics_source
+
+        source_table, reason = resolve_analytics_source(self._domain, settings)
+        if not source_table:
+            raise InfrastructureError(
+                "The community detection job cannot read this context", detail=reason
+            )
+        with analytics_snapshot(self._domain, settings, source_table) as scan_table:
+            communities = self.build_job_communities(
+                self._domain, settings, graph_name, scan_table
+            )
+            return communities.run(
+                class_filter=class_filter,
+                exclude_predicates=predicate_filter,
+                on_progress=on_progress,
+            )
+
+    def latest_clusters(
+        self, graph_name: str, settings: Any = None, top_n: int = 50
+    ) -> Dict[str, Any]:
+        """Summary, top-N clusters and preview of the last detection run."""
+        return self.build_job_communities(self._domain, settings, graph_name).latest(top_n)
+
+    def detection_summary(self, graph_name: str, settings: Any = None) -> Optional[Dict[str, Any]]:
+        """Stats of the last detection run, or ``None`` when there is none."""
+        return self.build_job_communities(self._domain, settings, graph_name).summary()
+
+    def cluster_members(
+        self,
+        graph_name: str,
+        cluster_id: int,
+        offset: int = 0,
+        limit: int = 100,
+        settings: Any = None,
+    ) -> Dict[str, Any]:
+        """One page of a cluster from the last detection run."""
+        return self.build_job_communities(self._domain, settings, graph_name).members(
+            cluster_id, offset, limit
+        )
+
+    def _base_uri(self) -> str:
+        from shared.config.constants import DEFAULT_BASE_URI
+
+        ontology = getattr(self._domain, "ontology", None) or {}
+        if isinstance(ontology, dict):
+            return (ontology.get("base_uri") or DEFAULT_BASE_URI).strip()
+        return DEFAULT_BASE_URI
+
+    def _materializer(self, store: Any, graph_name: str):
+        from back.core.graph_analysis import CommunityMaterializer
+
+        return CommunityMaterializer(store, graph_name, self._base_uri())
+
+    def materialize_clusters(
         self,
         store: Any,
         graph_name: str,
-        algorithm: str = "louvain",
-        resolution: float = 1.0,
-        predicate_filter: Optional[List[str]] = None,
-        class_filter: Optional[List[str]] = None,
-        max_triples: int = 500_000,
+        settings: Any = None,
+        on_progress: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        """Run community detection on the full knowledge graph.
+        """Replace the graph partition with the last detection run."""
+        from back.core.errors import ValidationError
 
-        Delegates to :class:`CommunityDetector` from ``back.core.graph_analysis``.
-        Returns a JSON-serializable dict matching the API contract.
-        """
-        from back.core.graph_analysis import CommunityDetector, ClusterRequest
-
-        request = ClusterRequest(
-            algorithm=algorithm,
-            resolution=resolution,
-            predicate_filter=predicate_filter,
-            class_filter=class_filter,
-            max_triples=max_triples,
+        communities = self.build_job_communities(self._domain, settings, graph_name)
+        stats = communities.summary()
+        if not stats:
+            raise ValidationError("No community detection run to materialize. Run Detect first.")
+        inserted = self._materializer(store, graph_name).materialize(
+            communities, stats, on_progress=on_progress
         )
-        detector = CommunityDetector(store, graph_name)
-        result = detector.detect(request)
+        return {"inserted": inserted, "cluster_count": stats["cluster_count"]}
 
-        return {
-            "clusters": [
-                {"id": c.id, "members": c.members, "size": c.size}
-                for c in result.clusters
-            ],
-            "stats": {
-                "node_count": result.stats.node_count,
-                "edge_count": result.stats.edge_count,
-                "cluster_count": result.stats.cluster_count,
-                "modularity": result.stats.modularity,
-                "algorithm": result.stats.algorithm,
-                "elapsed_ms": result.stats.elapsed_ms,
-            },
-        }
+    def load_current_clusters(
+        self, store: Any, graph_name: str, limit: int = 50
+    ) -> Dict[str, Any]:
+        """Top-N materialized clusters and totals, or empty clusters."""
+        return self._materializer(store, graph_name).load_current(limit)
+
+    def materialized_members(
+        self, store: Any, graph_name: str, cluster_id: int, offset: int = 0, limit: int = 100
+    ) -> Dict[str, Any]:
+        """One page of a materialized cluster's members."""
+        return self._materializer(store, graph_name).members(cluster_id, offset, limit)
+
+    def cluster_assignments(
+        self, store: Any, graph_name: str, uris: List[str]
+    ) -> Dict[str, int]:
+        """Materialized cluster id for each of *uris* that has one."""
+        return self._materializer(store, graph_name).assignments(uris)
+
+    def clear_clusters(self, store: Any, graph_name: str) -> Dict[str, Any]:
+        """Drop the materialized partition."""
+        deleted = self._materializer(store, graph_name).clear()
+        return {"deleted": deleted}
+
+    # ------------------------------------------------------------------
+    # Pattern detection
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _pattern_warehouse(domain: Any, settings: Any, what: str) -> Any:
+        """Return the Build (Delta) builder used for pattern reads and writes."""
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        if not builder.has_client():
+            raise InfrastructureError(
+                f"{what} cannot be read",
+                detail="No Build SQL Warehouse client could be created",
+            )
+        return builder
+
+    @staticmethod
+    def build_job_patterns(
+        domain: Any, settings: Any, graph_name: str, source_table: str = ""
+    ) -> Any:
+        """Wire a :class:`JobPatterns` on the Build warehouse."""
+        from back.core.graph_analysis import (
+            JobPatterns,
+            LakeflowRunner,
+            pattern_output_table,
+        )
+        from back.core.helpers import resolve_pattern_job_name
+
+        builder = TwinAnalytics._pattern_warehouse(
+            domain, settings, "The pattern detection output"
+        )
+        runner = LakeflowRunner(
+            resolve_pattern_job_name(settings),
+            timeout_s=int(getattr(settings, "analytics_job_timeout_s", 3600) or 3600),
+            running_label="Detecting patterns on Databricks",
+        )
+        return JobPatterns(
+            source_table,
+            runner=runner,
+            query=builder.execute_query,
+            output_table=pattern_output_table(
+                TwinAnalytics.analytics_output_schema(domain, settings),
+                domain,
+                graph_name,
+            ),
+        )
+
+    @staticmethod
+    def build_saved_patterns(domain: Any, settings: Any, graph_name: str) -> Any:
+        """Wire a :class:`SavedPatternStore` on the Build warehouse."""
+        from back.core.graph_analysis import (
+            SavedPatternStore,
+            pattern_output_table,
+            saved_pattern_table,
+        )
+
+        builder = TwinAnalytics._pattern_warehouse(
+            domain, settings, "The saved patterns"
+        )
+        schema = TwinAnalytics.analytics_output_schema(domain, settings)
+        return SavedPatternStore(
+            pattern_output_table(schema, domain, graph_name),
+            saved_pattern_table(schema, domain, graph_name),
+            query=builder.execute_query,
+            execute=builder.execute_statement,
+        )
+
+    def detect_patterns(
+        self,
+        graph_name: str,
+        *,
+        class_filter: str,
+        hops: int = 3,
+        bins: int = 8,
+        min_support: int = 3,
+        refine_top: int = 0,
+        settings: Any = None,
+        on_progress: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Run the pattern job on the mapped snapshot; blocks until done."""
+        from back.core.errors import ValidationError
+        from back.core.graph_analysis import analytics_snapshot, resolve_analytics_source
+
+        if not (class_filter or "").strip():
+            raise ValidationError("class_filter is required")
+        source_table, reason = resolve_analytics_source(self._domain, settings)
+        if not source_table:
+            raise InfrastructureError(
+                "The pattern detection job cannot read this context", detail=reason
+            )
+        with analytics_snapshot(self._domain, settings, source_table) as scan_table:
+            patterns = self.build_job_patterns(
+                self._domain, settings, graph_name, scan_table
+            )
+            return patterns.run(
+                class_filter=class_filter.strip(),
+                hops=hops,
+                bins=bins,
+                min_support=min_support,
+                refine_top=refine_top,
+                on_progress=on_progress,
+            )
+
+    def latest_patterns(
+        self, graph_name: str, settings: Any = None, top_n: int = 50
+    ) -> Dict[str, Any]:
+        return self.build_job_patterns(self._domain, settings, graph_name).latest(top_n)
+
+    def pattern_detection_summary(
+        self, graph_name: str, settings: Any = None
+    ) -> Optional[Dict[str, Any]]:
+        return self.build_job_patterns(self._domain, settings, graph_name).summary()
+
+    def pattern_members(
+        self,
+        graph_name: str,
+        pattern_id: str,
+        offset: int = 0,
+        limit: int = 100,
+        settings: Any = None,
+    ) -> Dict[str, Any]:
+        return self.build_job_patterns(self._domain, settings, graph_name).members(
+            pattern_id, offset, limit
+        )
+
+    def pattern_shape(
+        self, graph_name: str, pattern_id: str, settings: Any = None
+    ) -> Optional[Dict[str, Any]]:
+        return self.build_job_patterns(self._domain, settings, graph_name).shape(
+            pattern_id, with_diagram=True
+        )
+
+    def save_pattern(
+        self,
+        graph_name: str,
+        pattern_id: str,
+        label: str,
+        settings: Any = None,
+    ) -> Dict[str, Any]:
+        from back.core.errors import ValidationError
+
+        patterns = self.build_job_patterns(self._domain, settings, graph_name)
+        if not patterns.summary():
+            raise ValidationError("No pattern detection run to save. Run Detect first.")
+        return self.build_saved_patterns(self._domain, settings, graph_name).save(
+            pattern_id, label
+        )
+
+    def list_saved_patterns(
+        self, graph_name: str, settings: Any = None
+    ) -> Dict[str, Any]:
+        items = self.build_saved_patterns(self._domain, settings, graph_name).list_saved()
+        return {"patterns": items, "count": len(items)}
+
+    def saved_pattern_members(
+        self,
+        graph_name: str,
+        saved_id: str,
+        offset: int = 0,
+        limit: int = 100,
+        settings: Any = None,
+        pattern_id: str = "",
+        certified: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        return self.build_saved_patterns(self._domain, settings, graph_name).members(
+            saved_id, offset, limit, pattern_id=pattern_id, certified=certified
+        )
+
+    def saved_pattern_patterns(
+        self, graph_name: str, saved_id: str, settings: Any = None
+    ) -> Dict[str, Any]:
+        return self.build_saved_patterns(self._domain, settings, graph_name).patterns(
+            saved_id
+        )
+
+    def saved_pattern_shape(
+        self,
+        graph_name: str,
+        saved_id: str,
+        settings: Any = None,
+        pattern_id: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        return self.build_saved_patterns(self._domain, settings, graph_name).shape(
+            saved_id, pattern_id=pattern_id
+        )
+
+    def certify_saved_pattern(
+        self,
+        graph_name: str,
+        saved_id: str,
+        pattern_id: str,
+        certified: bool,
+        settings: Any = None,
+    ) -> Dict[str, Any]:
+        return self.build_saved_patterns(self._domain, settings, graph_name).set_certified(
+            saved_id, pattern_id, certified
+        )
+
+    def delete_saved_pattern(
+        self, graph_name: str, saved_id: str, settings: Any = None
+    ) -> Dict[str, Any]:
+        deleted = self.build_saved_patterns(self._domain, settings, graph_name).delete(
+            saved_id
+        )
+        return {"deleted": deleted, "saved_id": saved_id}
 
     def compute_graph_metrics(
         self,
@@ -107,7 +431,7 @@ class TwinAnalytics:
         source_table, reason = resolve_analytics_source(self._domain, settings)
         if not source_table:
             raise InfrastructureError(
-                "The graph analytics job cannot read this domain", detail=reason
+                "The graph analytics job cannot read this context", detail=reason
             )
 
         request = MetricsRequest(
@@ -140,7 +464,6 @@ class TwinAnalytics:
         from back.core.graph_analysis import JobMetrics, LakeflowRunner
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.helpers import resolve_analytics_job_name
-        from back.objects.registry import RegistryCfg
 
         builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
         if not builder.has_client():
@@ -156,12 +479,7 @@ class TwinAnalytics:
             timeout_s=int(getattr(settings, "analytics_job_timeout_s", 3600) or 3600),
         )
 
-        output_schema = (
-            getattr(settings, "analytics_job_output_schema", "") or ""
-        ).strip()
-        if not output_schema:
-            rcfg = RegistryCfg.from_domain(domain, settings)
-            output_schema = f"{rcfg.catalog}.{rcfg.schema}"
+        output_schema = TwinAnalytics.analytics_output_schema(domain, settings)
 
         return JobMetrics(
             source_table,
@@ -184,14 +502,12 @@ class TwinAnalytics:
         metric: str,
         settings: Any = None,
     ) -> Dict[str, Any]:
-        """Return one exhaustive node-series, sampled server-side if needed."""
+        """Return the ranked node-series, rank-bucketed on the warehouse."""
         from back.core.graph_analysis import (
             metric_series_query,
-            sample_metric_series,
             validate_metric_series_column,
         )
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
-        from back.objects.registry import RegistryCfg
 
         metric_name = validate_metric_series_column(metric)
 
@@ -202,27 +518,21 @@ class TwinAnalytics:
                 detail="No Build SQL Warehouse client could be created",
             )
 
-        output_schema = (
-            getattr(settings, "analytics_job_output_schema", "") or ""
-        ).strip()
-        if not output_schema:
-            rcfg = RegistryCfg.from_domain(self._domain, settings)
-            output_schema = f"{rcfg.catalog}.{rcfg.schema}"
+        output_schema = self.analytics_output_schema(self._domain, settings)
 
         output_table = _dt().analytics_output_table(
             output_schema, self._domain, graph_name
         )
         sql = metric_series_query(output_table, metric_name)
         rows = builder.execute_query(sql) or []
-        sampled_rows, ranks, sampled = sample_metric_series(rows)
-        total = len(rows)
+        total = int(rows[0].get("total_count") or len(rows)) if rows else 0
         return {
             "total": total,
-            "sampled": sampled,
-            "ranks": ranks,
-            "uris": [str(row.get("node_uri") or "") for row in sampled_rows],
-            "labels": [str(row.get("label") or "") for row in sampled_rows],
-            "scores": [float(row.get("score", 0.0) or 0.0) for row in sampled_rows],
+            "sampled": len(rows) < total,
+            "ranks": [int(row.get("node_rank") or i + 1) for i, row in enumerate(rows)],
+            "uris": [str(row.get("node_uri") or "") for row in rows],
+            "labels": [str(row.get("label") or "") for row in rows],
+            "scores": [float(row.get("score", 0.0) or 0.0) for row in rows],
         }
 
     @staticmethod

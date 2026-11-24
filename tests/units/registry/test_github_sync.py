@@ -76,7 +76,7 @@ class FakeRegistry(FakeStore):
         super().__init__(global_config)
         self.docs = docs  # {folder: {version: doc}}
 
-    def read_version(self, folder, version):
+    def read_version(self, folder, version, include_simulations=True):
         doc = self.docs.get(folder, {}).get(version)
         return (True, copy.deepcopy(doc), "") if doc else (False, {}, "missing")
 

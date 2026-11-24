@@ -50,6 +50,27 @@ logger = logging.getLogger(__name__)
 SHACL_TOOL = "check_entity_shacl_facets"
 
 
+def _class_inventory_tags(cls: dict) -> list[str]:
+    """Build describe_ontology inventory tags for one class."""
+    tags: list[str] = []
+    n_datasets = len(
+        cls.get("datasets") or ([cls["dataset"]] if cls.get("dataset") else [])
+    )
+    if n_datasets == 1:
+        tags.append("dataset")
+    elif n_datasets > 1:
+        tags.append(f"{n_datasets} datasets")
+    if cls.get("bridges"):
+        tags.append(f"{len(cls['bridges'])} bridge(s)")
+    if cls.get("actions"):
+        tags.append(f"{len(cls['actions'])} action(s)")
+    if cls.get("business_rules"):
+        tags.append(f"{len(cls['business_rules'])} business rule(s)")
+    if cls.get("virtualAttributes"):
+        tags.append(f"{len(cls['virtualAttributes'])} virtual attr")
+    return tags
+
+
 def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     """Register every OntoBricks MCP tool on *mcp*, bound to *session*."""
 
@@ -313,12 +334,9 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     async def describe_ontology(domain_name: Optional[str] = None) -> str:
         """Describe the selected domain's ontology structure.
 
-        Returns a structured summary (classes and their attachments) plus the
-        raw OWL/Turtle document, which carries the full class, attribute and
-        relationship (domain/range) detail. This is the ground truth for the
-        ontology *schema* — it does not touch the graph store, so it works even
-        for an ontology-only domain that has never been built. For such a
-        domain this is the only tool available.
+        Returns a class inventory plus the raw OWL document in JSON-LD
+        (attributes, relationships, domain/range). Schema-only — works for
+        ontology-only domains with no built graph.
 
         Args:
             domain_name: Registry domain name, or omit to use the selected one.
@@ -328,7 +346,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             return blocked
         name = session.selected_domain_name
         await session.ensure_registry()
-        params = {**session.registry_params(), "domain_name": name}
+        params = {**session.registry_params(), "domain_name": name, "format": "json-ld"}
 
         async with session.client() as client:
             owl_data = await _http._get(client, API_V1_DOMAIN_ONTOLOGY, params=params)
@@ -359,23 +377,13 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             lines.append("-" * 50)
             for cls in classes:
                 cls_name = cls.get("name") or _local_name(cls.get("uri", ""))
-                tags: list[str] = []
-                if cls.get("dataset"):
-                    tags.append("dataset")
-                if cls.get("bridges"):
-                    tags.append(f"{len(cls['bridges'])} bridge(s)")
-                if cls.get("actions"):
-                    tags.append(f"{len(cls['actions'])} action(s)")
-                if cls.get("business_rules"):
-                    tags.append(f"{len(cls['business_rules'])} business rule(s)")
-                if cls.get("virtualAttributes"):
-                    tags.append(f"{len(cls['virtualAttributes'])} virtual attr")
+                tags = _class_inventory_tags(cls)
                 suffix = f"  [{', '.join(tags)}]" if tags else ""
                 lines.append(f"  • {cls_name}{suffix}")
             lines.append("")
 
         if owl_content:
-            lines.append("OWL (Turtle)")
+            lines.append("OWL (JSON-LD)")
             lines.append("-" * 50)
             lines.append(owl_content)
         else:
@@ -440,9 +448,15 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                 lines.append(f"  • {name}  ({count:,} instances)")
                 lines.append(f"    URI: {uri}")
                 actions = session.class_actions.get(uri) or {}
-                dataset = actions.get("dataset") or {}
-                if dataset.get("fullName"):
-                    lines.append(f"    Dataset: {dataset['fullName']}")
+                datasets = actions.get("datasets") or (
+                    [actions["dataset"]] if actions.get("dataset") else []
+                )
+                for dataset in datasets:
+                    if not dataset.get("fullName"):
+                        continue
+                    kind = (dataset.get("type") or "").strip()
+                    kind_suffix = f" [{kind}]" if kind else ""
+                    lines.append(f"    Dataset: {dataset['fullName']}{kind_suffix}")
                     desc = (dataset.get("description") or "").strip()
                     if desc:
                         lines.append(f"    Description: {desc}")
@@ -878,7 +892,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         rule: str,
         domain_name: Optional[str] = None,
     ) -> str:
-        """Trigger a SWRL business rule declared on an entity's class.
+        """Trigger an IF-THEN business rule declared on an entity's class.
 
         Pass ``domain_name`` when the client does not reuse an MCP session.
         Requires the Builder role on that domain. Discover the available rules with

@@ -281,6 +281,51 @@ class MetadataService:
             logger.exception("Failed to refresh table metadata: %s", exc)
             return False, str(exc), existing_metadata
 
+    def probe_select_permissions(
+        self, tables: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Probe SELECT on each loaded asset and write ``can_select`` / ``select_error``.
+
+        Used by ``POST /domain/metadata/check-select`` after the asset list has
+        already been painted, so warehouse round-trips do not block first paint.
+        Mutates *tables* in place and returns a compact per-table result list.
+        """
+        results: List[Dict[str, Any]] = []
+        for table in tables:
+            full_name = (table.get("full_name") or table.get("name") or "").strip()
+            parts = full_name.split(".")
+            if len(parts) < 3:
+                err = "Missing catalog.schema.table full_name"
+                table["can_select"] = False
+                table["select_error"] = err
+                results.append(
+                    {
+                        "name": table.get("name"),
+                        "can_select": False,
+                        "select_error": err,
+                    }
+                )
+                continue
+            catalog, schema, table_name = parts[0], parts[1], parts[2]
+            kind = table.get("object_kind") or "table"
+            probe = self._catalog.check_table_select_permission(
+                catalog,
+                schema,
+                table_name,
+                object_kind=kind,
+                columns=table.get("columns") or [],
+            )
+            table["can_select"] = probe.get("can_select")
+            table["select_error"] = probe.get("error")
+            results.append(
+                {
+                    "name": table.get("name") or table_name,
+                    "can_select": table["can_select"],
+                    "select_error": table["select_error"],
+                }
+            )
+        return results
+
     def _fetch_tables_metadata(
         self,
         catalog: str,
@@ -306,13 +351,8 @@ class MetadataService:
                     for col in columns:
                         col.setdefault("role", "dimension")
                 comment = self._catalog.get_table_comment(catalog, schema, name)
-                select_probe = self._catalog.check_table_select_permission(
-                    catalog,
-                    schema,
-                    name,
-                    object_kind=object_kind,
-                    columns=columns,
-                )
+                # SELECT probes are deferred to POST /domain/metadata/check-select
+                # so the asset list can paint before rights are known.
                 tables.append(
                     {
                         "name": name,
@@ -321,8 +361,8 @@ class MetadataService:
                         "comment": comment,
                         "description": comment,
                         "columns": columns,
-                        "can_select": select_probe["can_select"],
-                        "select_error": select_probe["error"],
+                        "can_select": None,
+                        "select_error": None,
                     }
                 )
             except Exception as exc:
@@ -335,7 +375,7 @@ class MetadataService:
                         "comment": "",
                         "description": "",
                         "columns": [],
-                        "can_select": False,
+                        "can_select": None,
                         "select_error": str(exc),
                         "error": str(exc),
                     }

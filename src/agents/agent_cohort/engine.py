@@ -32,6 +32,7 @@ from agents.engine_base import (
 from agents.tools.context import ToolContext
 from agents.tracing import trace_agent
 from back.core.logging import get_logger
+from agents.llm_utils import llm_failure_message
 
 logger = get_logger(__name__)
 
@@ -212,7 +213,7 @@ def run_agent(
                 trace_name=_TRACE_NAME,
             )
         except Exception as exc:
-            error_msg = f"LLM request failed: {exc}"
+            error_msg = llm_failure_message(exc)
             logger.error(
                 "cohort_agent: %s at iteration %d", error_msg, iteration + 1
             )

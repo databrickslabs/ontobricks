@@ -77,7 +77,7 @@ class DomainPathModel(CredentialsModel):
 
     domain_path: str = Field(
         ...,
-        description="Full path to the domain JSON file in Unity Catalog volume",
+        description="Full path to the context JSON file in Unity Catalog volume",
         validation_alias=AliasChoices("domain_path", "project_path"),
         examples=["/Volumes/main/ontobricks/domains/my_domain.json"],
     )
@@ -98,6 +98,15 @@ class QueryModel(DomainPathModel):
         "local",
         description="Query execution engine: 'local' (RDFLib) or 'spark' (Databricks SQL)",
         examples=["local", "spark"],
+    )
+    output_format: str = Field(
+        "rows",
+        description=(
+            "Result encoding: 'rows' (default tabular binding list) or "
+            "'json-ld' (CONSTRUCT/DESCRIBE only). Note: limit truncates "
+            "triples, not complete subgraphs."
+        ),
+        examples=["rows", "json-ld"],
     )
 
 
@@ -140,7 +149,7 @@ class DomainFileInfoResponse(BaseModel):
     author: str = ""
     graph_backend: Literal["none", "lakebase", "databricks", "neo4j"] = Field(
         default="lakebase",
-        description="Normalized backend; 'none' denotes an ontology-only domain.",
+        description="Normalized backend; 'none' denotes an ontology-only context.",
     )
     statistics: DomainStatisticsResponse
 
@@ -204,7 +213,7 @@ async def api_health():
 # ===========================================
 
 
-@router.post("/domains/list", response_model=SuccessResponse, summary="List Domains")
+@router.post("/domains/list", response_model=SuccessResponse, summary="List Contexts")
 async def list_domains(
     data: UCLocationModel,
     x_databricks_host: Optional[str] = Header(
@@ -239,7 +248,7 @@ async def list_domains(
 
     return SuccessResponse(
         data={"domains": domains, "count": len(domains)},
-        message=f"Found {len(domains)} domains",
+        message=f"Found {len(domains)} contexts",
     )
 
 
@@ -327,7 +336,7 @@ async def get_r2rml(
     r2rml_content = sl["assignment"].get("r2rml_output", "")
 
     if not r2rml_content:
-        raise NotFoundError("No R2RML mapping found in domain. Generate R2RML first.")
+        raise NotFoundError("No R2RML mapping found in context. Generate R2RML first.")
 
     return SuccessResponse(data={"r2rml": r2rml_content, "format": "turtle"})
 
@@ -380,17 +389,23 @@ async def execute_query(
 
     domain_data = service.load_domain_from_uc(data.domain_path, host, token)
     result = service.execute_sparql_query(
-        domain_data, data.query, data.limit, data.engine
+        domain_data,
+        data.query,
+        data.limit,
+        data.engine,
+        output_format=data.output_format,
     )
 
-    return SuccessResponse(
-        data={
-            "results": result.get("results", []),
-            "columns": result.get("columns", []),
-            "count": result.get("count", 0),
-            "engine": result.get("engine", data.engine),
-        }
-    )
+    payload = {
+        "results": result.get("results", []),
+        "columns": result.get("columns", []),
+        "count": result.get("count", 0),
+        "engine": result.get("engine", data.engine),
+    }
+    if "jsonld" in result:
+        payload["jsonld"] = result["jsonld"]
+        payload["format"] = result.get("format", "json-ld")
+    return SuccessResponse(data=payload)
 
 
 @router.post("/query/validate", response_model=SuccessResponse)

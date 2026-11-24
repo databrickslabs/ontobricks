@@ -67,40 +67,17 @@ def test_brand_icon_assets_are_local_and_colored():
             assert "#" in svg, f"{filename} must define a brand color"
 
 
-def test_settings_gear_dropdown_does_not_prefix_bi_on_brand_icons():
-    """Brand marks in the top-right Settings menu must not get ``class="bi …"``.
-
-    ``.bi`` plus ``.ob-brand-icon`` fights Bootstrap Icons' ::before and the
-    20px icon column used by Registry / GitHub / Global, so Databricks sits
-    left of the other rows.
-    """
+def test_settings_is_not_a_top_navbar_gear_anymore():
+    """Settings lives in the user dropdown; the top-right gear is gone."""
     html = _BASE.read_text(encoding="utf-8")
-    start = html.index("settingsGearDropdown")
-    end = html.index("userMenuDropdown", start)
-    gear = html[start:end]
-    assert 'class="ob-dropdown-icon"' in gear
-    assert 'class="ob-dropdown-label"' in gear
-    assert "{% if 'ob-brand-icon' in item.icon %}" in gear
-    assert 'class="bi {{ item.icon }} me-1"' not in gear
-    nav_css = _NAV_CSS.read_text(encoding="utf-8")
-    slot = nav_css[
-        nav_css.index(".navbar .dropdown-menu .dropdown-item .ob-dropdown-icon {") :
-        nav_css.index(
-            "}",
-            nav_css.index(".navbar .dropdown-menu .dropdown-item .ob-dropdown-icon {"),
-        )
-    ]
-    assert "flex: 0 0 20px" in slot
-    assert "min-width: 20px" in slot
-    assert "overflow: hidden" in slot
-    label = nav_css[
-        nav_css.index(".navbar .dropdown-menu .dropdown-item .ob-dropdown-label {") :
-        nav_css.index(
-            "}",
-            nav_css.index(".navbar .dropdown-menu .dropdown-item .ob-dropdown-label {"),
-        )
-    ]
-    assert "line-height: 20px" in label
+    assert "settingsGearDropdown" not in html
+    assert "Open full settings" not in html
+    menu = html[html.index("ob-user-menu") : html.index("</ul>", html.index("ob-user-menu"))]
+    assert 'id="navSettingsLink"' in menu
+    assert "settings_m.v.route" in menu
+    assert 'data-requires-app="admin"' in menu
+    switcher = html[html.index("ob-app-switcher-list") : html.index("userMenuDropdown")]
+    assert "settings_m.v.route" not in switcher
 
 
 def test_databricks_settings_uses_official_databricks_icon():
@@ -119,6 +96,58 @@ def test_databricks_settings_uses_official_databricks_icon():
         '    background-image: url("/static/global/img/databricks-icon.svg");\n'
         "}"
     ) in css
+
+
+def test_context_menu_uses_official_genie_and_unity_catalog_icons():
+    """Context → Metadata menu: Pages = Genie mark, Data Assets → Unity Catalog."""
+    menus = json.loads(_MENU.read_text(encoding="utf-8"))["menus"]
+    domain = next(menu for menu in menus if menu["id"] == "domain")
+    meta = next(group for group in domain["groups"] if group["id"] == "domain-metadata")
+    items = {item["id"]: item for item in meta["items"]}
+
+    assert items["pages"]["icon"] == "ob-brand-icon ob-icon-genie"
+    assert items["metadata"]["label"] == "Unity Catalog"
+    assert items["metadata"]["icon"] == "ob-brand-icon ob-icon-unity-catalog"
+
+    css = _CSS.read_text(encoding="utf-8")
+    assert (
+        '.ob-icon-genie {\n'
+        '    background-image: url("/static/global/img/genie-icon.svg");\n'
+        "}"
+    ) in css
+    assert (
+        '.ob-icon-unity-catalog {\n'
+        '    background-image: url("/static/global/img/unity-catalog-icon.svg");\n'
+        "}"
+    ) in css
+
+    for filename in ("genie-icon.svg", "unity-catalog-icon.svg"):
+        asset = _IMG / filename
+        assert asset.is_file()
+        svg = asset.read_text(encoding="utf-8")
+        assert "<svg" in svg
+        assert "#" in svg, f"{filename} must define a brand color"
+
+    # Subnav dropdown: brand icons must share the Bootstrap Icons 20px column.
+    nav_css = _NAV_CSS.read_text(encoding="utf-8")
+    assert (
+        ".ob-subnav .dropdown-menu .dropdown-item .bi,\n"
+        ".ob-subnav .dropdown-menu .dropdown-item .ob-brand-icon {"
+    ) in nav_css
+    brand_slot = nav_css[
+        nav_css.index(
+            "/* Brand marks share the same 20px column as Bootstrap Icons so labels align. */"
+        ) :
+        nav_css.index(
+            "}",
+            nav_css.index(
+                ".ob-subnav .dropdown-menu .dropdown-item .ob-brand-icon {\n"
+                "    height: 0.95rem;"
+            ),
+        )
+    ]
+    assert "height: 0.95rem;" in brand_slot
+    assert "flex-shrink: 0;" in brand_slot
 
 
 def test_lakehouse_dynamic_icons_use_lakehouse_modifier():

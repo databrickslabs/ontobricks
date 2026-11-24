@@ -46,7 +46,7 @@ class TestRefLocalName:
     @pytest.mark.parametrize(
         "term",
         ["", "   ", "?x", "a", '"literal"', "'x'", "+1", "-2", "42", "<http://x.org#A>",
-         "rdf:type", "owl:Thing", "xsd:string", "swrlb:greaterThan"],
+         "rdf:type", "owl:Thing", "xsd:string", "builtin:greaterThan"],
     )
     def test_non_ontology_terms_not_checkable(self, term):
         assert Rules._ref_local_name(term) == (False, "")
@@ -86,12 +86,6 @@ class TestSparqlReferences:
 
 class TestRuleReferenceDispatch:
     def test_dispatches_to_each_rule_kind(self):
-        assert Rules.rule_reference_errors(
-            "decision_tables", {"target_class": "Ghost"}, CLASSES, PROPS
-        ) == ["target class 'Ghost' does not exist in the ontology"]
-        assert Rules.rule_reference_errors(
-            "aggregate_rules", {"result_class": "Ghost"}, CLASSES, PROPS
-        ) == ["result_class 'Ghost' does not exist in the ontology"]
         assert Rules.rule_reference_errors(
             "sparql_rules", {"query": "CONSTRUCT { ?x a :Ghost . } WHERE { ?x a :Order . }"},
             CLASSES, PROPS,

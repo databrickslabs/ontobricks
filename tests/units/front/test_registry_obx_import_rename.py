@@ -57,7 +57,7 @@ def test_import_preview_has_domain_checkboxes():
     assert 'class="form-check-input import-obx-pick"' in SCRIPT
     assert "function syncImportPickState()" in SCRIPT
     assert "action: 'skip'" in SCRIPT
-    assert "Pick at least one domain to import" in SCRIPT
+    assert "Pick at least one context to import" in SCRIPT
     assert "registry-th-import-obx-check" in TEMPLATE
     assert ".registry-th-import-obx-check" in STYLES
 

@@ -211,6 +211,80 @@ _CLOSURE_RULE = (
 )
 
 
+# Paged-output contract (issue #173): a substage's full answer can exceed the
+# endpoint's ~8k-token output budget (a wide table's attributes, a large
+# draft's relations). The model emits one bounded page and sets ``has_more``
+# when items remain; the orchestrator asks for the next page until it is
+# false. Shared by the three completion system prompts.
+_PAGINATION_RULE = """\
+# PAGED OUTPUT (BOUNDED — CRITICAL)
+The COMPLETE answer may not fit in one response. Emit a bounded page of
+COMPLETE items and set "has_more": true when more items remain — you will be
+asked for the next page. Never cut an item mid-record. Set "has_more": false
+on the last page (or when nothing remains). Do not re-emit items you already
+returned on an earlier page."""
+
+
+_MAX_EMITTED_KEYS = 1000
+
+
+def _emitted_keys_block(emitted_keys: Sequence[str]) -> str:
+    """Compact already-emitted key list for continuation/retry prompts.
+
+    The raw page JSON is deliberately NOT re-injected (review of issue #173:
+    16 pages x ~8k tokens of history would die on the input cap the same
+    way the single-shot answer died on the output cap). One short key per
+    item gives the model exactly what it must not repeat.
+
+    ~1000 keys is roughly 7k input tokens, so a 40-entity draft (~600
+    attributes) fits whole; past the cap the most recent keys are kept and
+    the cross-page dedupe is the backstop."""
+    keys = list(emitted_keys)
+    lines = []
+    if len(keys) > _MAX_EMITTED_KEYS:
+        lines.append(f"  - … {len(keys) - _MAX_EMITTED_KEYS} earlier items")
+        keys = keys[-_MAX_EMITTED_KEYS:]
+    return "\n".join(lines + [f"  - {k}" for k in keys])
+
+
+def build_continuation_user_prompt(
+    substage: str, emitted_keys: Sequence[str]
+) -> str:
+    """Continuation turn asking for the next page of a completion substage.
+
+    Carries the compact emitted-key list (never the raw prior pages) so the
+    model knows what NOT to re-emit without dying on the input cap."""
+    return (
+        f"Earlier pages of {substage} were already received. Emit the NEXT "
+        "page — only NEW items. "
+        "Items already emitted (do NOT re-emit any of them):\n"
+        f"{_emitted_keys_block(emitted_keys)}\n"
+        'Same JSON shape; set "has_more": true only if more items remain '
+        "after this page."
+    )
+
+
+def build_truncated_page_retry_prompt(
+    substage: str, emitted_keys: Sequence[str] = ()
+) -> str:
+    """Re-ask for the current page with fewer items after a length truncation.
+
+    The truncated output is discarded and NOT shown to the model (same
+    input-cap rationale as the continuation path), so the prompt says so
+    instead of referring to a page the model cannot see."""
+    done = (
+        "Items already emitted (do NOT re-emit any of them):\n"
+        f"{_emitted_keys_block(emitted_keys)}\n"
+        if emitted_keys
+        else ""
+    )
+    return (
+        f"Your last page of {substage} exceeded the output limit and was "
+        "discarded. Emit that page again with FEWER items — a smaller page "
+        f'is fine; set "has_more": true if items remain.\n{done}JSON only.'
+    )
+
+
 def build_relations_system_prompt() -> str:
     return f"""\
 You are an ontology engineer inferring OBJECT-PROPERTY RELATIONS between a
@@ -229,11 +303,13 @@ fixed, closed set of entities.
 • Never restate a relation listed under EXISTING OBJECT PROPERTIES, in
   either direction or as a paraphrase — only add genuinely new facts.
 
+{_PAGINATION_RULE}
+
 # OUTPUT (JSON ONLY — NO PROSE, NO CODE FENCES)
 {{"relations": [
   {{"label": "placesOrder", "domain": "<entity_id>", "range": "<entity_id>",
     "evidence": "short justification"}}
-]}}"""
+], "has_more": false}}"""
 
 
 def build_attributes_system_prompt() -> str:
@@ -248,11 +324,13 @@ set of entities.
 • Exclude surrogate keys, audit columns, and foreign keys already carried by
   relations.
 
+{_PAGINATION_RULE}
+
 # OUTPUT (JSON ONLY — NO PROSE, NO CODE FENCES)
 {{"attributes": [
   {{"label": "orderDate", "domain": "<entity_id>", "datatype": "xsd:date",
     "evidence": "short justification"}}
-]}}"""
+], "has_more": false}}"""
 
 
 def build_axioms_system_prompt() -> str:
@@ -273,10 +351,12 @@ closed set of entities.
   cannot represent multiple inheritance.
 • Never emit two subClassOf axioms with the same subject.
 
+{_PAGINATION_RULE}
+
 # OUTPUT (JSON ONLY — NO PROSE, NO CODE FENCES)
 {{"axioms": [
   {{"kind": "subClassOf", "subject": "<entity_id>", "object": "<entity_id>"}}
-]}}"""
+], "has_more": false}}"""
 
 
 def _prior_results_block(draft: GenerateDraft, substages: Sequence[str]) -> str:

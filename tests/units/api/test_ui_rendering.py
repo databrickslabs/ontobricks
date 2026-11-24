@@ -29,7 +29,13 @@ class _TagCollector(HTMLParser):
         self.tags.append((tag, d))
 
 
-_WORKSPACE_PAGE_PREFIXES = ("/ontology", "/mapping", "/domain", "/dtwin")
+_WORKSPACE_PAGE_PREFIXES = (
+    "/ontology",
+    "/mapping",
+    "/domain",
+    "/dtwin",
+    "/intelligence",
+)
 
 
 def ensure_loaded_domain(client) -> None:
@@ -136,7 +142,8 @@ class TestBaseTemplate:
     @pytest.mark.parametrize("path", ["/", "/settings", "/ontology"])
     def test_has_notification_container(self, client, path):
         html = _html(client, path)
-        assert _find(_tags(html), id_="notifCenterDropdown") is not None
+        assert _find(_tags(html), id_="activityCenterDropdown") is not None
+        assert _find(_tags(html), id_="notifCenterList") is not None
 
     @pytest.mark.parametrize("path", ["/", "/settings", "/ontology"])
     def test_bootstrap_script_loaded(self, client, path):
@@ -172,75 +179,72 @@ class TestBaseTemplate:
         trigger_html = trigger_match.group(1)
         assert 'id="currentDomainName"' in trigger_html
 
-        registry_toggle = _find(tags, id_="registryModalToggle")
-        assert registry_toggle is not None
-        assert registry_toggle.get("title") == "Registry"
-        assert registry_toggle.get("aria-label") == "Open Registry"
-        registry_match = re.search(
-            r'<a\b[^>]*id="registryModalToggle"[^>]*>(.*?)</a>',
-            html,
-            flags=re.DOTALL,
-        )
-        assert registry_match is not None
-        registry_inner = registry_match.group(1)
-        assert re.search(r'<i\b[^>]*class="[^"]*\bbi-boxes\b[^"]*"[^>]*>', registry_inner)
-        assert "<span" not in registry_inner
+        # The Registry navbar icon was removed: Home is the Registry.
+        assert _find(tags, id_="registryModalToggle") is None
 
-    def test_subnav_has_domain_dropdown(self, client):
-        """Domain dropdown is in the L2 subnav."""
-        html = _html(client, "/")
-        assert _find(_tags(html), id_="subnavDomainDropdown") is not None
-
-    def test_subnav_has_knowledge_graph_dropdown(self, client):
-        """Graph is a dropdown in the L2 subnav with its sections."""
+    def test_subnav_has_app_switcher_instead_of_workspace_dropdowns(self, client):
+        """L2 workspace dropdowns are gone; the app switcher owns Context→Intelligence."""
         html = _html(client, "/")
         tags = _tags(html)
-        kg_toggles = [t for t in tags if t[0] == "a" and t[1].get("data-subnav-route") == "/dtwin/"]
-        assert len(kg_toggles) > 0
-        assert _find(tags, id_="subnavKgDropdown") is not None
+        assert _find(tags, id_="obAppSwitcher") is not None
+        assert _find(tags, id_="subnavDomainDropdown") is None
+        assert _find(tags, id_="subnavKgDropdown") is None
+        assert _find(tags, id_="subnavOntologyDropdown") is None
+        assert _find(tags, id_="subnavSimDropdown") is None
+        assert _find(tags, id_="subnavMappingDropdown") is None
+        routes = {
+            t[1].get("data-subnav-route")
+            for t in tags
+            if t[0] == "a" and t[1].get("data-subnav-route")
+        }
+        assert "/domain/" in routes
+        assert "/ontology/" in routes
+        assert "/dtwin/" in routes
+        assert "/intelligence/" in routes
 
     def test_subnav_has_mutually_exclusive_workspace_and_settings_slots(self, client):
         html = _html(client, "/")
         tags = _tags(html)
         assert _find(tags, tag="nav", id_="obSubnav") is not None
-        assert _find(tags, id_="domainWorkspaceSubnavNav") is not None
+        assert _find(tags, id_="domainWorkspaceSubnavNav") is None
         assert _find(tags, id_="settingsDomainReturnNav") is not None
+        assert _find(tags, id_="obAppSwitcher") is not None
         settings_return_link = _find(tags, tag="a", id_="settingsDomainReturnLink")
         assert settings_return_link is not None
         assert settings_return_link.get("href") == "/domain/"
-        assert settings_return_link.get("title") == "Back to domain"
-        assert settings_return_link.get("aria-label") == "Back to domain"
-
-    def test_subnav_has_ontology_and_mapping_dropdowns(self, client):
-        """Ontology and Mapping are dropdowns in the L2 subnav."""
-        html = _html(client, "/")
-        tags = _tags(html)
-        assert _find(tags, id_="subnavOntologyDropdown") is not None
-        assert _find(tags, id_="subnavMappingDropdown") is not None
+        assert settings_return_link.get("title") == "Back to context"
+        assert settings_return_link.get("aria-label") == "Back to context"
 
     def test_navbar_has_ontology_link_under_domain(self, client):
-        """Ontology appears as a sub-item under the Domain dropdown (navbar_hidden)."""
+        """Ontology remains reachable via the L2 app switcher."""
         html = _html(client, "/")
         assert "/ontology/" in html
 
-    def test_navbar_has_mapping_link_under_domain(self, client):
-        """Mapping appears as a sub-item under the Domain dropdown (navbar_hidden)."""
-        html = _html(client, "/")
-        assert "/mapping/" in html
+    def test_navbar_has_graph_mapping_links(self, client):
+        """Mapping sections live under Graph (/dtwin/) sidebar, not a top-level menu."""
+        html = _html(client, "/dtwin/")
+        assert 'data-section="design"' in html or "/dtwin/?section=design" in html
+        assert 'id="subnavMappingDropdown"' not in html
+        home = _html(client, "/")
+        assert 'id="subnavMappingDropdown"' not in home
 
     def test_navbar_has_settings_link(self, client):
+        """Settings is reached from the User dropdown (admin-only), not the L1 gear."""
         html = _html(client, "/")
-        tags = _tags(html)
-        assert any(t == "a" and a.get("href") == "/settings" for t, a in tags)
-        assert "Settings" in html
+        assert _find(_tags(html), id_="navSettingsLink") is not None
+        assert 'id="navSettingsLink"' in html
+        assert "settingsGearDropdown" not in html
 
-    def test_navbar_has_warehouse_status(self, client):
+    def test_navbar_has_no_warehouse_status(self, client):
+        """SQL Warehouse status lives in Settings, not the top navbar."""
         html = _html(client, "/")
-        assert _find(_tags(html), id_="warehouseStatusLink") is not None
+        assert _find(_tags(html), id_="warehouseStatusLink") is None
+        assert "ob-warehouse-status-icon" not in html
 
     def test_navbar_has_task_tracker(self, client):
         html = _html(client, "/")
-        assert _find(_tags(html), id_="taskTrackerToggle") is not None
+        assert _find(_tags(html), id_="activityCenterToggle") is not None
+        assert _find(_tags(html), id_="taskTrackerList") is not None
 
 
 # =====================================================
@@ -267,9 +271,11 @@ class TestHomePage:
         assert _find(_tags(html), id_="homeDomainName") is None
         assert _find(_tags(html), id_="kpiEntities") is None
 
-    def test_domain_gateway(self, client):
+    def test_registry_tabs_replace_the_gateway(self, client):
         html = _html(client, "/")
-        assert _find(_tags(html), id_="domainGateway") is not None
+        assert _find(_tags(html), id_="domainGateway") is None
+        assert _find(_tags(html), id_="homeTabs") is not None
+        assert _find(_tags(html), id_="registryDomainsSection") is not None
 
     def test_no_quick_links(self, client):
         """Settings / About quick links were removed from the Home page."""
@@ -283,11 +289,14 @@ class TestHomePage:
         assert "/settings" not in hrefs
         assert "/about" not in hrefs
 
-    def test_my_tasks_before_domains(self, client):
-        """My Tasks now sits above the All Domains gateway."""
+    def test_tab_order_browse_bridges_my_tasks(self, client):
+        """Tabs are Browse, Bridges, then My tasks."""
         html = _html(client, "/")
-        assert "homeTasksSection" in html
-        assert html.index("homeTasksSection") < html.index("domainGateway")
+        browse = html.index('data-home-section="domains"')
+        bridges = html.index('data-home-section="bridges"')
+        tasks = html.index('data-home-section="tasks"')
+        assert browse < bridges < tasks
+        assert "homeTasksContainer" in html
 
 
 # =====================================================
@@ -345,27 +354,28 @@ class TestSettingsPage:
         assert _find(_tags(html), id_="lakebaseSyncMode") is not None
         assert _find(_tags(html), id_="lakebaseManagedSyncPanel") is not None
 
-    def test_registry_modal_on_home(self, client):
+    def test_registry_tabs_on_home(self, client):
         html = _html(client, "/")
         tags = _tags(html)
-        assert _find(tags, id_="registryModal") is not None
+        assert _find(tags, id_="registryModal") is None
+        assert _find(tags, id_="homeRegistryModal") is not None
         assert _find(tags, id_="registryDomainsSection") is not None
-        assert _find(tags, id_="registryModalToggle") is not None
-        tabs = _find(tags, id_="registryModalTabs")
+        assert _find(tags, id_="registryStatus") is not None
+        tabs = _find(tags, id_="homeTabs")
         assert tabs is not None
         tab_classes = _class_tokens(tabs.get("class", ""))
-        assert "mb-3" not in tab_classes
-        assert "nav-tabs" in tab_classes
-        assert "ob-tabs" in tab_classes
-        content = _find(tags, id_="registryModalTabContent")
+        assert "home-nav-tiles" in tab_classes
+        assert "nav-tabs" not in tab_classes
+        content = _find(tags, id_="homeTabContent")
         assert content is not None
         assert "ob-tab-content" not in _class_tokens(content.get("class", ""))
         assert 'id="registryDropdown"' not in html
+        assert "home-registry-dialog" in html
 
     def test_registry_legacy_url_redirects(self, client):
         resp = client.get("/registry/", follow_redirects=False)
         assert resp.status_code in (301, 302, 307, 308)
-        assert "open=registry" in (resp.headers.get("location") or "")
+        assert "section=domains" in (resp.headers.get("location") or "")
 
     def test_teams_on_settings_admin_page(self, client):
         settings_html = _html(client, "/settings")
@@ -396,25 +406,29 @@ class TestSettingsPage:
         html = _html(client, "/settings")
         assert 'data-page="settings"' in html
 
+    def test_body_has_page_id_home(self, client):
+        """Home shares Settings' L2 pattern (Back to context, no workspace rail)."""
+        html = _html(client, "/")
+        assert 'data-page="home"' in html
+
     def test_settings_subnav_has_only_return_link_markup(self, client):
         html = _html(client, "/settings")
         tags = _tags(html)
         settings_nav = _find(tags, id_="settingsDomainReturnNav")
         assert settings_nav is not None
-        workspace_nav = _find(tags, id_="domainWorkspaceSubnavNav")
-        assert workspace_nav is not None
+        assert _find(tags, id_="domainWorkspaceSubnavNav") is None
         settings_link = _find(tags, tag="a", id_="settingsDomainReturnLink")
         assert settings_link is not None
         assert settings_link.get("href") == "/domain/"
-        assert settings_link.get("title") == "Back to domain"
-        assert settings_link.get("aria-label") == "Back to domain"
+        assert settings_link.get("title") == "Back to context"
+        assert settings_link.get("aria-label") == "Back to context"
         settings_inner = re.search(
             r'<a\b[^>]*id="settingsDomainReturnLink"[^>]*>(.*?)</a>',
             html,
             flags=re.DOTALL,
         )
         assert settings_inner is not None
-        assert "Back to domain" in settings_inner.group(1)
+        assert "Back to context" in settings_inner.group(1)
         assert "Back to domain management" not in settings_inner.group(1)
         assert re.search(
             r'<a\b[^>]*id="settingsDomainReturnLink"[^>]*>.*\bbi-arrow-left\b.*</a>',
@@ -444,11 +458,11 @@ class TestOntologyPage:
             "import",
             "wizard",
             "map",
-            "design",
             "entities",
             "relationships",
             "dataquality",
-            "swrl",
+            "designchecks",
+            "if-then",
             "axioms",
         ],
     )
@@ -465,11 +479,11 @@ class TestOntologyPage:
             "import-section",
             "wizard-section",
             "map-section",
-            "design-section",
             "entities-section",
             "relationships-section",
             "dataquality-section",
-            "swrl-section",
+            "designchecks-section",
+            "if-then-section",
             "axioms-section",
         ],
     )
@@ -479,9 +493,15 @@ class TestOntologyPage:
             _find(_tags(html), id_=section_id) is not None
         ), f"Section div #{section_id} not found"
 
-    def test_ontoviz_script_loaded(self, client):
+    def test_ontology_map_script_loaded(self, client):
         html = _html(client, "/ontology")
-        assert any("ontoviz.js" in src for src in _script_srcs(html))
+        assert any("ontology-map.js" in src for src in _script_srcs(html))
+        assert not any("ontoviz.js" in src for src in _script_srcs(html))
+        assert any("ontology-persistence.js" in src for src in _script_srcs(html))
+
+    def test_studio_view_select_present(self, client):
+        html = _html(client, "/ontology")
+        assert _find(_tags(html), id_="studioViewBtn") is not None
 
     def test_ontology_core_script_loaded(self, client):
         html = _html(client, "/ontology")
@@ -497,31 +517,57 @@ class TestOntologyPage:
 
 
 # =====================================================
-# MAPPING PAGE
+# MAPPING (hosted under Graph /dtwin/)
 # =====================================================
 
 
-class TestMappingPage:
-    def test_title(self, client):
+class TestMappingUnderGraph:
+    """Mapping Studio (Informations / Visual / List) lives on the Graph page; /mapping/ redirects."""
+
+    def test_legacy_mapping_url_lands_on_graph(self, client):
         html = _html(client, "/mapping")
-        assert "Mapping" in _title_text(html)
+        assert "Graph" in _title_text(html)
 
     def test_sidebar_present(self, client):
-        html = _html(client, "/mapping")
+        html = _html(client, "/dtwin/")
         assert _find(_tags(html), class_="sidebar-nav") is not None
 
     @pytest.mark.parametrize(
         "section",
-        ["information", "design", "manual", "autoassign", "sparksql"],
+        ["design"],
     )
-    def test_sidebar_has_section_link(self, client, section):
-        html = _html(client, "/mapping")
+    def test_sidebar_has_mapping_section_link(self, client, section):
+        html = _html(client, "/dtwin/")
         tags = _tags(html)
         found = any(t == "a" and a.get("data-section") == section for t, a in tags)
         assert found, f"Sidebar link for section '{section}' not found"
 
+    def test_studio_has_visual_and_list_tabs(self, client):
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        assert _find(tags, id_="mappingStudioTabVisual") is not None
+        assert _find(tags, id_="mappingStudioTabList") is not None
+        assert _find(tags, id_="manualAssignmentTree") is not None
+        assert not any(t == "a" and a.get("data-section") == "manual" for t, a in tags)
+
+    def test_sidebar_has_no_import_or_automap_or_diagnostics_page(self, client):
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        assert not any(t == "a" and a.get("data-section") == "import" for t, a in tags)
+        assert not any(t == "a" and a.get("data-section") == "autoassign" for t, a in tags)
+        assert not any(t == "a" and a.get("data-section") == "diagnostics" for t, a in tags)
+        assert _find(tags, id_="import-section") is None
+        assert _find(tags, id_="autoassign-section") is None
+        assert _find(tags, id_="diagnostics-section") is None
+        assert _find(tags, id_="mappingImportR2RMLBtn") is not None
+        assert _find(tags, id_="information-section") is None
+        assert _find(tags, id_="mappingStudioPaneInformations") is not None
+        assert _find(tags, id_="autoAssignModal") is not None
+        assert _find(tags, id_="openAutoAssignModalBtn") is not None
+        assert _find(tags, id_="mappingDiagnosticsModal") is not None
+
     def test_mapping_core_script_loaded(self, client):
-        html = _html(client, "/mapping")
+        html = _html(client, "/dtwin/")
         assert any("mapping-core.js" in src for src in _script_srcs(html))
 
 
@@ -533,7 +579,7 @@ class TestMappingPage:
 class TestDomainPage:
     def test_title(self, client):
         html = _html(client, "/domain")
-        assert "Domain" in _title_text(html)
+        assert "Configuration" in _title_text(html)
 
     def test_sidebar_present(self, client):
         html = _html(client, "/domain")
@@ -541,14 +587,21 @@ class TestDomainPage:
 
     @pytest.mark.parametrize(
         "section",
-        ["information", "metadata", "documents", "validation", "owl-content",
-         "r2rml", "mytasks", "discussions"],
+        ["information", "metadata", "documents", "validation",
+         "mytasks", "discussions"],
     )
     def test_sidebar_has_section_link(self, client, section):
         html = _html(client, "/domain")
         tags = _tags(html)
         found = any(t == "a" and a.get("data-section") == section for t, a in tags)
         assert found, f"Sidebar link for section '{section}' not found"
+
+    def test_general_precedes_configuration_in_domain_menu(self, client):
+        """General (Cockpit) precedes Configuration in the Domain sidebar."""
+        html = _html(client, "/domain")
+        general = html.index('data-section="validation"')
+        configuration = html.index('data-section="information"')
+        assert general < configuration
 
     @pytest.mark.parametrize(
         "section_id",
@@ -590,16 +643,15 @@ class TestDomainPage:
         assert _find(_tags(html), id_="domainDiscussionsContainer") is not None
         assert _find(_tags(html), id_="domainMyTasksContainer") is not None
 
-    def test_kpi_band(self, client):
-        """The current-domain KPI / health band, moved here from the Home
-        page, sits at the top of Domain → General."""
+    def test_kpi_band_removed(self, client):
+        """The KPI band no longer sits at the top of the Configuration page."""
         html = _html(client, "/domain")
-        assert _find(_tags(html), id_="domainKpiPanel") is not None
+        assert _find(_tags(html), id_="domainKpiPanel") is None
         for kpi_id in (
             "kpiEntities", "kpiRelationships", "kpiMappings",
             "kpiStatus", "kpiVersion",
         ):
-            assert _find(_tags(html), id_=kpi_id) is not None
+            assert _find(_tags(html), id_=kpi_id) is None
 
 
 # =====================================================
@@ -629,11 +681,14 @@ class TestDigitalTwinPage:
         html = _html(client, "/dtwin/")
         assert _find(_tags(html), id_="sigmagraph-section") is not None
 
-    def test_runs_section_present(self, client):
-        """Runs lives on the Knowledge Graph page, which is the only menu
-        that declares it."""
+    def test_build_page_hosts_runs_tab(self, client):
+        """Build-run history lives under Graph → Build → Runs (not a sidebar item)."""
         html = _html(client, "/dtwin/")
-        assert _find(_tags(html), id_="runs-section") is not None
+        tags = _tags(html)
+        assert _find(tags, id_="runs-section") is None
+        assert _find(tags, id_="buildTabRunsBtn") is not None
+        assert _find(tags, id_="buildPaneRuns") is not None
+        assert _find(tags, id_="runsTableBody") is not None
 
     def test_sigma_script_loaded(self, client):
         html = _html(client, "/dtwin/")

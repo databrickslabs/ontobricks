@@ -124,7 +124,7 @@ class TestMCPContractPaths:
     def test_external_openapi_preserves_descriptive_metadata(self, client):
         spec = client.get("/api/openapi.json").json()
         tags = {tag["name"]: tag["description"] for tag in spec["tags"]}
-        assert "graph_backend" in tags["Domain"]
+        assert "graph_backend" in tags["Context"]
         assert "materialized graph" in tags["GraphQL"]
         assert spec["info"]["contact"]["name"] == "OntoBricks Support"
         assert spec["info"]["license"] == {

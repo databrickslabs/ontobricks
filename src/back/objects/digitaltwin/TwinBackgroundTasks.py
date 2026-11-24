@@ -15,6 +15,18 @@ from back.objects.digitaltwin.models import DomainSnapshot
 logger = get_logger(__name__)
 
 
+def _error_text(exc: Exception) -> str:
+    """Task failure text: the error message plus its detail, when any."""
+    detail = getattr(exc, "detail", None)
+    return f"{exc}: {detail}" if detail and str(detail) not in str(exc) else str(exc)
+
+
+def _analytics():
+    from back.objects.digitaltwin.TwinAnalytics import TwinAnalytics
+
+    return TwinAnalytics
+
+
 def _dt():
     from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 
@@ -185,15 +197,13 @@ class TwinBackgroundTasks:
         triplestore_table: str,
         total: int,
         *,
-        swrl_rules=None,
+        if_then_rules=None,
         ontology_dict=None,
-        decision_tables=None,
-        aggregate_rules=None,
         violation_limit=None,
         failure_message: str = "Data quality checks failed",
         use_exception_message_on_failure: bool = False,
     ) -> None:
-        """Run SHACL / SWRL / DT / aggregate checks inside a worker thread.
+        """Run SHACL / IF-THEN checks inside a worker thread.
 
         Every check is compiled to SQL and executed against the triple-store
         VIEW on the SQL warehouse, or against a run-scoped snapshot of it.
@@ -233,10 +243,8 @@ class TwinBackgroundTasks:
                     store,
                     t0,
                     total,
-                    swrl_rules=swrl_rules,
+                    if_then_rules=if_then_rules,
                     ontology=ontology_dict,
-                    decision_tables=decision_tables,
-                    aggregate_rules=aggregate_rules,
                     violation_limit=violation_limit,
                     parallel=snap.parallel,
                 )
@@ -431,6 +439,100 @@ class TwinBackgroundTasks:
             tm.fail_task(task_id, str(exc))
 
     @staticmethod
+    def run_community_task(
+        tm,
+        task_id: str,
+        domain,
+        settings,
+        graph_name: str,
+        *,
+        class_filter: Optional[List[str]] = None,
+        predicate_filter: Optional[List[str]] = None,
+    ) -> None:
+        """Run community detection on the Databricks job in a worker thread.
+
+        The partition stays in the job's output tables; the client reads it
+        through ``/dtwin/clusters/latest`` once the task completes.
+        """
+        import time as _time
+
+        from back.objects.digitaltwin.DetectRunHistory import DetectRunHistory
+
+        class_filter_list = list(class_filter or [])
+        t0 = _time.time()
+        try:
+            tm.start_task(task_id, "Detecting communities...")
+            tm.update_progress(task_id, 20, "Starting the Databricks community detection job")
+            stats = _analytics()(domain).detect_clusters(
+                graph_name,
+                class_filter=class_filter,
+                predicate_filter=predicate_filter,
+                settings=settings,
+                on_progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),
+            )
+            clusters = int(stats.get("cluster_count", 0) or 0)
+            nodes = int(stats.get("node_count", 0) or 0)
+            elapsed_ms = stats.get("elapsed_ms")
+            DetectRunHistory.record_community(
+                domain, settings, task_id=task_id, class_filter=class_filter_list,
+                started=t0, stats=stats,
+            )
+            tm.complete_task(
+                task_id,
+                result={
+                    "cluster_count": clusters,
+                    "node_count": nodes,
+                    "converged": bool(stats.get("converged", True)),
+                    "run_page_url": stats.get("run_page_url", ""),
+                    "elapsed_ms": elapsed_ms,
+                },
+                message=(
+                    f"{clusters:,} communities over {nodes:,} nodes "
+                    f"(computed on Databricks"
+                    + (f" in {int(elapsed_ms)} ms" if elapsed_ms is not None else "")
+                    + ")"
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Community detection task failed: %s", exc)
+            DetectRunHistory.record_community(
+                domain, settings, task_id=task_id, class_filter=class_filter_list,
+                started=t0, error=_error_text(exc),
+            )
+            tm.fail_task(task_id, _error_text(exc))
+
+    @staticmethod
+    def run_community_materialize_task(
+        tm,
+        task_id: str,
+        domain,
+        settings,
+        store,
+        graph_name: str,
+    ) -> None:
+        """Write the last detection run into the graph in a worker thread."""
+        try:
+            tm.start_task(task_id, "Materializing communities...")
+            tm.update_progress(task_id, 10, "Clearing the previous partition")
+            result = _analytics()(domain).materialize_clusters(
+                store,
+                graph_name,
+                settings=settings,
+                on_progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),
+            )
+            tm.complete_task(
+                task_id,
+                result=result,
+                message=(
+                    f"Materialized {result.get('cluster_count', 0):,} clusters "
+                    f"({result.get('inserted', 0):,} triples)"
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Community materialization task failed: %s", exc)
+            tm.fail_task(task_id, _error_text(exc))
+
+    @staticmethod
     def run_inference_task(
         tm,
         task_id: str,
@@ -477,27 +579,24 @@ class TwinBackgroundTasks:
             tm.update_progress(task_id, 30, "Running inference phases")
 
             logger.info(
-                "%s task %s: running phases (tbox=%s, swrl=%s, graph=%s, "
-                "constraints=%s, decision_tables=%s, sparql_rules=%s, "
-                "aggregate_rules=%s)",
+                "%s task %s: running phases (tbox=%s, if_then=%s, graph=%s, "
+                "constraints=%s, sparql_rules=%s)",
                 label,
                 task_id,
                 options.get("tbox"),
-                options.get("swrl"),
+                options.get("if_then"),
                 options.get("graph"),
                 options.get("constraints"),
-                options.get("decision_tables"),
                 options.get("sparql_rules"),
-                options.get("aggregate_rules"),
             )
 
-            def _swrl_progress(idx: int, total: int, rule_name: str) -> None:
+            def _if_then_progress(idx: int, total: int, rule_name: str) -> None:
                 pct = 30 + int((idx / max(total, 1)) * 50)
                 tm.update_progress(
-                    task_id, pct, f"SWRL {idx + 1}/{total}: {rule_name}"
+                    task_id, pct, f"IF-THEN {idx + 1}/{total}: {rule_name}"
                 )
 
-            result = svc.run_full_reasoning(options, progress_callback=_swrl_progress)
+            result = svc.run_full_reasoning(options, progress_callback=_if_then_progress)
             logger.info(
                 "%s task %s: phases done — %d inferred, %d violations",
                 label,

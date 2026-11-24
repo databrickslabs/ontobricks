@@ -21,6 +21,8 @@ from back.core.helpers.UIBranding import (  # noqa: F401
     UIBranding,
     DEFAULT_APP_TITLE,
     DEFAULT_AURORA_COLOR,
+    DEFAULT_BUTTON_PRIMARY_COLOR,
+    DEFAULT_BUTTON_SECONDARY_COLOR,
     DEFAULT_PRIMARY_COLOR,
     DEFAULT_LOGO_PATH,
     derive_brand_palette,
@@ -67,6 +69,8 @@ resolve_lakehouse_use_sea = DatabricksHelpers.resolve_lakehouse_use_sea
 resolve_build_use_sea = DatabricksHelpers.resolve_build_use_sea
 resolve_analytics_job_enabled = DatabricksHelpers.resolve_analytics_job_enabled
 resolve_analytics_job_name = DatabricksHelpers.resolve_analytics_job_name
+resolve_community_job_name = DatabricksHelpers.resolve_community_job_name
+resolve_pattern_job_name = DatabricksHelpers.resolve_pattern_job_name
 resolve_app_registry_context = DatabricksHelpers.resolve_app_registry_context
 get_databricks_client = DatabricksHelpers.get_databricks_client
 get_data_plane_client = DatabricksHelpers.get_data_plane_client
@@ -93,6 +97,8 @@ __all__ = [
     "resolve_build_use_sea",
     "resolve_analytics_job_enabled",
     "resolve_analytics_job_name",
+    "resolve_community_job_name",
+    "resolve_pattern_job_name",
     "resolve_app_registry_context",
     "get_databricks_client",
     "get_data_plane_client",
@@ -127,6 +133,8 @@ __all__ = [
     "UIBranding",
     "DEFAULT_APP_TITLE",
     "DEFAULT_AURORA_COLOR",
+    "DEFAULT_BUTTON_PRIMARY_COLOR",
+    "DEFAULT_BUTTON_SECONDARY_COLOR",
     "DEFAULT_PRIMARY_COLOR",
     "DEFAULT_LOGO_PATH",
     "derive_brand_palette",

@@ -61,7 +61,7 @@ class TestListRegistryDomains:
 
     def test_unexpected_error_is_wrapped(self, svc):
         svc.list_domain_details_cached.side_effect = RuntimeError("boom")
-        with pytest.raises(InfrastructureError, match="Failed to list registry domains"):
+        with pytest.raises(InfrastructureError, match="Failed to list registry contexts"):
             RegistryDomainSettings.list_registry_domains_result(MagicMock(), MagicMock())
 
     def test_annotates_versions_without_mutating_cache(self, svc, monkeypatch):
@@ -146,7 +146,7 @@ class TestDeleteRegistryDomain:
         result = RegistryDomainSettings.delete_registry_domain_result(
             "claims", MagicMock(), MagicMock()
         )
-        assert result == {"success": True, "message": 'Domain "claims" deleted from registry'}
+        assert result == {"success": True, "message": 'Context "claims" deleted from registry'}
         svc.delete_domain.assert_called_once_with("claims")
 
     def test_a_display_name_is_deleted_under_its_registry_folder(self, svc):
@@ -192,7 +192,7 @@ class TestDeleteRegistryDomain:
 
     def test_unexpected_error_is_wrapped(self, svc):
         svc.delete_domain.side_effect = RuntimeError("x")
-        with pytest.raises(InfrastructureError, match="Delete registry domain failed"):
+        with pytest.raises(InfrastructureError, match="Delete registry context failed"):
             RegistryDomainSettings.delete_registry_domain_result("claims", MagicMock(), MagicMock())
 
 

@@ -76,6 +76,12 @@ AUTO_ASSIGN_CHUNK_SIZE: int = 5  # max entities + relationships per agent run
 AUTO_ASSIGN_CHUNK_COOLDOWN: int = 15  # seconds to wait between chunks
 
 # =====================================================
+# Graph Chat (Digital Twin assistant)
+# =====================================================
+# Foundation Model output ceiling (see agent_auto_icon_assign._ABSOLUTE_MAX_TOKENS).
+DTWIN_CHAT_MAX_TOKENS: int = 8192
+
+# =====================================================
 # UI Defaults
 # =====================================================
 MAX_NOTIFICATIONS: int = 10

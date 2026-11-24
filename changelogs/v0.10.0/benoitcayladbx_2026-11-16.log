@@ -1,0 +1,1384 @@
+## Fix Graph sidebar stuck on Mapping Studio (?section=design&tab=build)
+
+Context: After Mapping was hosted under Graph, clicking any Graph sidebar
+item appeared to stay on Studio with URL ``/dtwin/?section=design&tab=build``.
+Root cause: ``mapping-init-section.js`` injects a pre-paint ``display: … !important``
+style that was never cleared on Graph, locking the first URL section; and
+``SidebarNav._pushSectionState`` preserved Build's ``?tab=build`` when leaving
+``sync``, producing sticky ``design&tab=build`` URLs.
+
+Changes:
+
+1. src/front/static/global/js/sidebar-nav.js
+   Clear ``#initial-section-style`` on every section activation; drop foreign
+   ``?tab=`` params when navigating away from the section that owns them.
+2. src/front/static/mapping/js/mapping-init.js
+   Hosted-on-Graph bootstrap also clears the pre-paint style after SidebarNav
+   takes over (covers default Explorer landings).
+3. tests/units/front/test_sidebar_nav_section_url.py
+   Contracts for style clear + tab scrubbing.
+4. tests/e2e/dtwin/test_dtwin_flows.py
+   Sidebar parity includes Mapping sections (information/design/manual) + sync.
+
+Modified files:
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/mapping/js/mapping-init.js
+- tests/units/front/test_sidebar_nav_section_url.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10618 passed, 328 skipped, 8 deselected, 39 warnings in 48.36s ========
+
+## Mapping Studio Visual + List tabs (fold Manual into List)
+
+Context: Mapping Studio should host both the canvas and the former Manual
+tree. Added Visual | List tabs on Studio, moved Manual content into List,
+removed the Manual sidebar item, and deep-link ``?section=manual`` to
+``design&tab=list``.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_design.html
+   Studio section header + card with ``ob-tabs`` Visual / List; Visual keeps
+   canvas + panel; List includes the Manual body.
+2. src/front/templates/partials/mapping/_mapping_manual.html
+   List-tab body only (``#mappingStudioListRoot``); no standalone page chrome.
+3. src/front/config/menu_config.json
+   Remove Mapping → Manual sidebar item.
+4. src/front/templates/dtwin.html
+   Drop ``#manual-section``.
+5. src/front/static/mapping/js/mapping-design.js
+   ``MappingStudioTabs`` syncs ``?tab=visual|list`` and inits List/Manual.
+6. src/front/static/mapping/js/mapping-init.js / mapping-init-section.js
+   Legacy ``manual`` → Studio List; designer skips init while List is active.
+7. src/front/static/mapping/js/mapping-manual.js
+   Action delegation binds to ``#mappingStudioListRoot``.
+8. src/front/static/global/js/sidebar-nav.js
+   ``design`` owns ``visual`` / ``list`` tab query params.
+9. src/front/static/mapping/css/mapping-design.css
+   Studio tab panes fill remaining height.
+10. Help + docs + tests updated for Visual/List and no Manual menu.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/mapping/_mapping_manual.html
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/js/mapping-init-section.js
+- src/front/static/mapping/js/mapping-manual.js
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/mapping/css/mapping-design.css
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/development.md
+- tests/units/front/test_mapping_studio_tabs.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/e2e/mapping/test_mapping_flows.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10623 passed, 327 skipped, 8 deselected, 39 warnings in 44.83s ========
+
+## Share Mapping Studio bottom pane between Visual and List
+
+Context: Studio Visual and List each had their own mapping panel. List now
+reuses Visual's `#mappingRightPanel` so selecting an entity or relationship
+in either tab edits the same bottom pane.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_design.html
+   Split shell wraps both tab panes; shared `#mappingRightPanel` sits below
+   Visual and List.
+2. src/front/templates/partials/mapping/_mapping_manual.html
+   List tab is the tree only — no private bottom panel.
+3. src/front/static/mapping/js/mapping-manual.js
+   List selection opens `openEntityMappingFromDesign` /
+   `openRelationshipMappingFromDesign`.
+4. src/front/static/mapping/js/mapping-design.js
+   Single panel host (`#panelBody`); closing the pane also clears List
+   selection.
+5. src/front/static/mapping/css/mapping-design.css
+   Shared split pane fills remaining Studio height.
+6. tests/units/front/test_mapping_studio_tabs.py
+   Contract: `#mappingRightPanel` is outside the Visual tab pane.
+7. tests/units/front/test_manual_mapping_panel_host.py
+   List uses the shared Studio pane, not `#manualPanelBody`.
+8. docs/user-guide.md
+   Visual and List share the same bottom mapping pane.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/mapping/_mapping_manual.html
+- src/front/static/mapping/js/mapping-manual.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/css/mapping-design.css
+- tests/units/front/test_mapping_studio_tabs.py
+- tests/units/front/test_manual_mapping_panel_host.py
+- tests/units/front/test_no_llm_ui_gate.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10625 passed, 327 skipped, 8 deselected, 39 warnings in 46.86s ========
+
+## Pin Mapping Studio bottom pane to the shell bottom
+
+Context: After Visual and List started sharing `#mappingRightPanel`, the
+Visual top pane no longer flex-grew inside the column split shell, so the
+bottom panel floated mid-page instead of sticking to the page bottom like
+List.
+
+Changes:
+
+1. src/front/static/mapping/css/mapping-design.css
+   `#mappingStudioMainPane` and active Studio tab panes flex-fill above the
+   shared bottom panel.
+2. src/front/templates/partials/mapping/_mapping_design.html
+   Canvas wrapper is no longer a nested `ob-split-pane` (top pane is the
+   Visual|List host).
+3. tests/units/front/test_mapping_designer_split_layout.py
+   Contract that the Studio main pane fills remaining height above the
+   bottom panel.
+
+Modified files:
+- src/front/static/mapping/css/mapping-design.css
+- src/front/templates/partials/mapping/_mapping_design.html
+- tests/units/front/test_mapping_designer_split_layout.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10626 passed, 327 skipped, 8 deselected, 39 warnings in 45.26s ========
+
+## Add Studio Informations tab, Import R2RML button, and remove inner tab round corners
+
+Context: User requested an Informations tab in Mapping Studio containing the
+Mapping General informations content, an Import button above the tabs to
+import R2RML files, and pointed out that embedded tab pages had inner round
+corners.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_information_content.html
+   Extracted reusable General Informations markup (prerequisites, summary KPI
+   tiles, gauges, status, entity/relationship breakdown).
+2. src/front/templates/partials/mapping/_mapping_information.html
+   Includes `_mapping_information_content.html`.
+3. src/front/templates/partials/mapping/_mapping_design.html
+   Added first tab `Informations` before `Visual` and `List`, added R2RML
+   Import button (`#mappingImportR2RMLBtn`) next to Export in toolbar, and
+   file input (`#mappingStudioImportR2rmlFileInput`).
+4. src/front/static/mapping/css/mapping-design.css
+   Removed nested inner borders and `border-radius` on `#mappingStudioMainPane`
+   and `#mappingRightPanel` inside Studio tabs, eliminating inner rounded
+   corners inside the tabbed card.
+5. src/front/static/mapping/js/mapping-design.js
+   `MappingStudioTabs` supports `informations`, `visual`, and `list`; hides
+   the bottom mapping panel when on `Informations` and triggers status/gauge
+   refresh.
+6. src/front/static/mapping/js/mapping-import.js
+   Wired `#mappingImportR2RMLBtn` and `#mappingStudioImportR2rmlFileInput` to
+   import R2RML files via `importR2rmlContent()`.
+7. src/front/static/global/js/mapping-information.js
+   Updated status, gauge, and summary renderers to query all matching DOM
+   elements so both General and Studio Informations tabs stay synchronized.
+8. src/front/static/global/js/sidebar-nav.js
+   Added `informations` to `_TAB_OWNERS.design`.
+9. src/front/static/global/css/permissions.css
+   Gated `#mappingImportR2RMLBtn` and input in read-only / viewer modes.
+10. tests/units/front/test_mapping_studio_tabs.py
+    Contracts for Informations tab, Import/Export buttons, and clean embedding.
+11. docs/user-guide.md
+    Documented Studio Informations, Visual, and List tabs and Import action.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_information_content.html
+- src/front/templates/partials/mapping/_mapping_information.html
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/static/mapping/css/mapping-design.css
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-import.js
+- src/front/static/global/js/mapping-information.js
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_mapping_studio_tabs.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10628 passed, 327 skipped, 8 deselected, 39 warnings in 46.54s ========
+
+## Remove Mapping/General page; move Studio under Graph → Management
+
+Context: the Graph → Mapping → General page (Informations | R2RML tabs) is
+redundant now that Mapping Studio hosts an Informations tab. The Studio page
+moves into the Management group as its first item (before Build). The R2RML
+preview tab (Copy / Download / Regenerate) goes away with the General page;
+R2RML stays available through the Studio toolbar (Import / Export).
+
+Changes:
+1. src/front/config/menu_config.json
+   Removed the `digitaltwin-mapping` group. `digitaltwin-management` now lists
+   Studio (`design`) first, then Build (`sync`), then Overview (`insight`).
+2. src/front/templates/dtwin.html
+   Removed the `#information-section` (General) block and its includes of
+   `_mapping_information.html` / `_mapping_r2rml.html`.
+3. src/front/templates/partials/mapping/_mapping_information.html
+   Deleted (General page wrapper with Unmap all and Informations | R2RML tabs).
+4. src/front/templates/partials/mapping/_mapping_r2rml.html
+   Deleted (R2RML preview tab, Copy / Regenerate / Download, local import).
+5. src/front/templates/partials/mapping/_mapping_information_content.html
+   Now only the Studio Informations tab body.
+6. src/front/routes/dtwin.py, src/front/routes/mapping.py
+   Legacy `?section=information` and `/mapping/` redirect to
+   `/dtwin/?section=design&tab=informations`.
+7. src/front/static/mapping/js/mapping-init-section.js, mapping-init.js
+   Legacy `information` / `import` / `manual` deep links map to Studio tabs;
+   the Visual canvas initialises only when the Visual tab is active.
+8. src/front/static/mapping/js/mapping-r2rml.js
+   Reduced to export-only: `forceRegenerateR2RML()` and the
+   `#mappingExportR2RMLBtn` download handler.
+9. src/front/static/mapping/js/mapping-import.js
+   Reduced to the Studio Import flow (`#mappingImportR2RMLBtn`).
+10. src/front/static/global/js/mapping-information.js
+    Removed the legacy R2RML import/export block; Unmap all is wired to
+    `#resetMappingsDesignBtn` only.
+11. src/front/static/global/js/mapping-core.js
+    `autoGenerateR2RML` no longer writes to the removed `#r2rmlPreview`.
+12. src/front/static/global/css/mapping.css, src/front/static/global/css/pages.css
+    Removed General / R2RML preview styles.
+13. src/front/static/global/css/permissions.css
+    Read-only gates now target `#mappingImportR2RMLBtn`,
+    `#mappingStudioImportR2rmlFileInput` and `#resetMappingsDesignBtn`.
+14. src/front/templates/partials/layout/help_modal.html
+    Graph help describes Studio (Informations / Visual / List, Import / Export).
+15. Tests updated to the new structure:
+    tests/units/api/test_ui_rendering.py,
+    tests/units/front/test_mapping_r2rml_import_tab.py (rewritten for the
+    Studio toolbar), test_unmap_all_ui.py, test_view_mode_write_gates.py,
+    test_help_center_menu_sync.py, test_workspace_map_modal.py,
+    test_sidebar_content_stretch_contract.py, test_mapping_studio_tabs.py,
+    test_mapping_automap_modal.py, test_mapping_diagnostics_modal.py,
+    test_unloaded_workspace_redirect.py.
+16. tests/e2e/mapping/test_mapping_flows.py, tests/e2e/dtwin/test_dtwin_flows.py,
+    tests/e2e/scenarios/test_full_lifecycle.py, tests/e2e/scenarios/test_scenario_01_generate_live.py,
+    tests/e2e/README.md
+    Opt-in suites: General / R2RML preview replaced by Studio toolbar
+    checks (Import / Export download).
+17. docs/user-guide.md, docs/getting-started.md, docs/examples.md,
+    docs/api.md, docs/architecture.md, docs/development.md
+    Navigation paths moved to Graph → Management → Studio; the General / R2RML
+    tab sections are removed.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/front/templates/base.html
+- src/front/templates/partials/mapping/_mapping_information.html (deleted)
+- src/front/templates/partials/mapping/_mapping_r2rml.html (deleted)
+- src/front/templates/partials/mapping/_mapping_information_content.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/routes/dtwin.py
+- src/front/routes/mapping.py
+- src/front/static/mapping/js/mapping-init-section.js
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/js/mapping-r2rml.js
+- src/front/static/mapping/js/mapping-import.js
+- src/front/static/global/js/mapping-information.js
+- src/front/static/global/js/mapping-core.js
+- src/front/static/global/css/mapping.css
+- src/front/static/global/css/pages.css
+- src/front/static/global/css/permissions.css
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_mapping_r2rml_import_tab.py
+- tests/units/front/test_unmap_all_ui.py
+- tests/units/front/test_view_mode_write_gates.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_mapping_studio_tabs.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_mapping_diagnostics_modal.py
+- tests/units/front/test_unloaded_workspace_redirect.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/e2e/scenarios/test_full_lifecycle.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/e2e/README.md
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/examples.md
+- docs/api.md
+- docs/architecture.md
+- docs/development.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10623 passed, 326 skipped, 8 deselected, 39 warnings in 50.6s ========
+
+## Center diagram in Visual by default and fix Graph ready status badge legibility
+
+Context: In Mapping Studio's Visual tab, the diagram loaded at (0, 0) without
+centering or fitting to the canvas. Also, the "Graph ready · Lakebase" (and
+other backend) readiness badges rendered with low contrast and washed-out text/icons
+because global `.badge.bg-success { background-color: #28a745 !important; }`
+overrode the transparent background and paired with dark green text (`#198754`),
+while the brand mark and backend label were washed out by `opacity-75`.
+
+Changes:
+1. src/front/static/mapping/js/mapping-design.js
+   Implemented `centerMappingDiagram(animate)`: computes bounding box and
+   centroid of mapping nodes, scales and translates them to fit centered within
+   the visible container with comfortable padding. Called on initial map render,
+   on tab switch to Visual (`MappingStudioTabs._onShown`), in `resizeMapSvg()`,
+   on Reset Layout, and on the "Reset view" button click. Exposes
+   `window.centerMappingDiagram`.
+2. src/front/static/global/css/mapping.css
+   Removed legacy forced `.badge.bg-success { background-color: #28a745 !important; }`
+   and `.badge.bg-secondary` rules that broke Bootstrap subtle/opacity styling.
+3. src/front/static/query/js/query-sync.js
+   Updated `updateKgReadyIndicators()` to use `bg-success-subtle text-success-emphasis border border-success-subtle fw-medium`,
+   removed `opacity-75` from the backend label/icon, and updated related readiness badges
+   for consistent legibility.
+4. src/front/static/query/css/query-sync.css & src/front/static/global/css/components.css
+   Added clear flex-aligned `.kg-status-indicator .badge` sizing and `.ob-brand-icon`
+   dimensions across all subpages.
+5. src/front/static/domain/js/domain-validation.js
+   Updated existence and status badges to use subtle high-contrast styling.
+6. tests/units/front/test_mapping_studio_tabs.py
+   Added contract tests for `centerMappingDiagram` and Visual centering integration.
+7. tests/units/front/test_kg_readiness_indicator.py
+   Added contract assertions for subtle high-contrast readiness badge classes and visible backend brand mark.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/global/css/mapping.css
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/css/query-sync.css
+- src/front/static/global/css/components.css
+- src/front/static/domain/js/domain-validation.js
+- tests/units/front/test_mapping_studio_tabs.py
+- tests/units/front/test_kg_readiness_indicator.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10625 passed, 326 skipped, 8 deselected, 39 warnings in 46.67s ========
+
+## Rename Graph "Studio" menu to "Mapping" and move it under Build
+
+Context: The Graph → Management item previously labelled "Studio" (mapping workspace) is renamed "Mapping" for clarity, and moved so it sits directly after "Build" in the Management group. The menu item id (`design`) is unchanged, so existing `?section=design` deep links keep working. The Ontology "Studio" menu item is not affected.
+
+Changes:
+1. src/front/config/menu_config.json
+   Graph → Management order is now Build, Mapping (`design`, label "Mapping", icon bi-pencil), Overview.
+2. src/front/templates/partials/layout/help_modal.html
+   Graph workflow and Mapping help now name the item "Mapping" and state it sits right after Build.
+3. src/front/templates/dtwin.html
+   Section comment updated to "Management → Mapping".
+4. src/front/templates/partials/dtwin/_query_sync.html, src/front/static/query/js/query-databricks-build.js
+   Build "not ready" alert link text changed from "Studio" to "Mapping" (same `/dtwin/?section=design` target).
+5. Navigation paths in docs (user-guide, getting-started, examples, architecture, development, api) and code comments/docstrings (mapping.py, permissions.css, _mapping_design.html, dtwin.html) now read "Graph → Management → Mapping". The user-guide Step 2 heading and its TOC anchor were updated accordingly.
+6. tests/units/front/test_help_center_menu_sync.py
+   Management order assertion and Graph mapping label assertion updated.
+7. tests/units/front/test_build_automap_cta.py
+   Link text assertions updated to "Mapping".
+8. tests/e2e/dtwin/test_dtwin_flows.py, tests/e2e/mapping/test_mapping_flows.py, tests/e2e/scenarios/test_scenario_01_generate_live.py, tests/units/front/test_mapping_r2rml_import_tab.py, tests/units/front/test_unloaded_workspace_redirect.py
+   Docstrings and step labels updated to the new path.
+
+Note: the Mapping page header in `_mapping_design.html` still reads "Mapping Studio" (the page title, not the menu label); unchanged.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/dtwin.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/routes/mapping.py
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_build_automap_cta.py
+- tests/units/front/test_mapping_r2rml_import_tab.py
+- tests/units/front/test_unloaded_workspace_redirect.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- docs/user-guide.md, docs/getting-started.md, docs/examples.md, docs/architecture.md, docs/development.md, docs/api.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10625 passed, 326 skipped, 8 deselected, 39 warnings in 45.29s ========
+
+## Sync Visual ↔ List selection in Mapping Studio
+
+Context: Selecting an entity or relationship in Mapping → Visual only
+highlighted the canvas; the List tree stayed unselected. Selecting in List
+opened the shared panel but did not highlight the Visual node/link. Users
+expect both views to show the same selection.
+
+Changes:
+1. src/front/static/mapping/js/mapping-design.js
+   Added `highlightMappingMapSelection`, `highlightMappingListSelection` and
+   `syncMappingSelection`. `openEntityMappingFromDesign` /
+   `openRelationshipMappingFromDesign` now call `syncMappingSelection` so
+   both Visual and List stay in sync regardless of which view was clicked.
+   After a Visual redraw, and when switching back to the Visual or List tab,
+   the open panel's selection is restored.
+2. src/front/static/mapping/js/mapping-manual.js
+   Added `ManualModule.selectInTree(type, uri, name)` — highlights the tree
+   row, expands collapsed ancestors, scrolls into view, updates
+   `currentItem`, without re-opening the panel. `refresh()` restores the
+   previous selection after a tree rebuild.
+3. tests/units/front/test_manual_mapping_panel_host.py
+   Contract tests for the Visual↔List selection sync helpers and List
+   restore-on-refresh behaviour.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-manual.js
+- tests/units/front/test_manual_mapping_panel_host.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10630 passed, 326 skipped, 8 deselected, 39 warnings in 47.10s ========
+
+## Test & scenario review for the new Mapping UI (+ local e2e domain seeding)
+
+Context: Reviewed unit, e2e and scenario suites against the new Graph →
+Management → Mapping page (Informations / Visual / List tabs, Build →
+Mapping → Overview order, Visual↔List selection sync). Running the e2e
+suites locally (`ONTOBRICKS_E2E_FAKE_CREDS=1`) showed that every workspace
+URL (`/dtwin`, `/mapping`, `/ontology`, `/domain`) 303'd to Home because the
+`page` fixture only seeded a session domain in live mode — 85 local e2e
+failures, and the passing ones were partly asserting against the landing
+page. Fixing that surfaced a few real stale tests and one real mobile bug.
+
+Changes:
+1. tests/e2e/conftest.py, pytest.ini, pyproject.toml
+   New `needs_domain` marker: the `page` fixture seeds a session-only
+   domain (`ZzE2eLive`) for marked tests in local mode too (live mode
+   unchanged — it always seeds).
+2. tests/e2e/mapping/test_mapping_flows.py
+   Rewritten for the new UI (13 tests): sidebar order Build → Mapping →
+   Overview with label "Mapping" and no `information`/`manual` items;
+   default Informations tab; legacy `/mapping/`, `?section=information`,
+   `?section=manual` redirects land on the right `tab`; tab clicks sync
+   `?tab=` and hide the bottom panel on Informations only; R2RML
+   import/export; Auto-Map modal (skipped when no LLM endpoint); Build
+   Diagnostics modal; with an injected two-class ontology — Visual is
+   centered on render, Visual click selects the List row, List click
+   selects the Visual node, `selectInTree` expands collapsed parents.
+   Removed the stale `information` section parametrization.
+3. tests/e2e/navigation/test_navigation_flows.py,
+   tests/e2e/navigation/test_sidebar_bottom_alignment.py,
+   tests/e2e/dtwin/test_dtwin_flows.py, tests/e2e/domain/*.py,
+   tests/e2e/ontology/{class_crud,import,information,owl_export,
+   property_crud,sidebar}_flows.py
+   Marked `needs_domain` so they exercise the real workspace pages locally.
+4. tests/e2e/ontology/test_sidebar_flows.py
+   Stale section ids: dropped `design`, `if_then` → `designchecks`,
+   `if-then` (current Ontology menu).
+5. src/front/static/query/css/query-chat.css
+   `.graph-chat-header-actions` could not shrink (`flex: 0 0 auto`), so its
+   `flex-wrap` never applied and the Discuss button overflowed a 390px
+   viewport by 38px. Now `flex: 0 1 auto; min-width: 0; max-width: 100%`.
+6. tests/units/front/test_sidebar_content_stretch_contract.py
+   Contract for the chat header shrink/wrap fix.
+7. tests/e2e/scenarios/test_full_lifecycle.py,
+   tests/e2e/scenarios/test_scenario_01_generate_live.py
+   Scenario review: flows remain compatible (`/dtwin/?open=automap`,
+   Export button on the Informations tab, API-driven saves). Navigation now
+   targets `?section=design&tab=informations` explicitly; "Studio" wording
+   replaced by "Mapping".
+8. tests/e2e/README.md
+   Documented `needs_domain` and the new mapping e2e coverage.
+
+Modified files:
+- pyproject.toml
+- pytest.ini
+- src/front/static/query/css/query-chat.css
+- tests/e2e/README.md
+- tests/e2e/conftest.py
+- tests/e2e/domain/test_domain_flows.py
+- tests/e2e/domain/test_domain_versions_cards.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/navigation/test_navigation_flows.py
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+- tests/e2e/ontology/test_class_crud_flows.py
+- tests/e2e/ontology/test_import_flows.py
+- tests/e2e/ontology/test_information_flows.py
+- tests/e2e/ontology/test_owl_export_flows.py
+- tests/e2e/ontology/test_property_crud_flows.py
+- tests/e2e/ontology/test_sidebar_flows.py
+- tests/e2e/scenarios/test_full_lifecycle.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"` → ======== 10631 passed, 333 skipped, 8 deselected, 39 warnings in 53.50s ========
+- Local e2e (`ONTOBRICKS_E2E_FAKE_CREDS=1`), mapping + dtwin + navigation → 63 passed, 5 skipped (was 34 failed);
+  domain + ontology → all pass except 8 `test_domain_versions_cards.py` (502 console errors under fake creds — previously masked by the Home redirect, not related to Mapping).
+- Scenarios not run (opt-in; `fevm-ontobricks-int` CLI token expired — needs `databricks auth login --profile fevm-ontobricks-int`).
+
+## Explorer groups toggle + Intelligence Graph-ready badges
+
+Context: Graph → Explorer already had expand/collapse-all in the Groups popup
+and canvas menu, but Ontology → Studio exposes a single toolbar toggle.
+Intelligence section titles (except Analytics and Cohorts) had no Graph-ready
+badge, so users could not see whether the graph was built before running
+communities, patterns, or simulations.
+
+Changes:
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Added `#sgToggleAllGroupsBtn` in the Explorer toolbar (Studio-style single
+   collapse/expand toggle) next to zoom.
+2. src/front/static/query/js/query-sigmagraph.js
+   Wired `toggleAllGroups` to existing collapseAll/expandAll; the button flips
+   icon/title/aria-pressed and is disabled when no groups exist.
+3. Intelligence section titles now include `_kg_status_indicator.html`:
+   communities, patterns list/details, scenarios, workbench, compare.
+4. src/front/templates/intelligence.html + query-sync.js
+   Load query-sync.js so Intelligence badges fill. Pages without Build still
+   probe `/dtwin/sync/status`. Go to Build on Intelligence navigates to
+   `/dtwin/?section=sync`.
+5. Help Center + user-guide: Explorer toolbar groups toggle.
+6. Unit contracts for the toggle, Intelligence includes, and the status probe.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-sync.js
+- src/front/templates/intelligence.html
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/templates/partials/intelligence/_intel_patterns.html
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/intelligence/_sim_scenarios.html
+- src/front/templates/partials/intelligence/_sim_workbench.html
+- src/front/templates/partials/intelligence/_sim_compare.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/front/test_explorer_clusters_readonly.py
+- tests/units/front/test_kg_section_headers.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10640 passed, 333 skipped, 8 deselected, 39 warnings in 51.37s ========
+
+## Fix Mapping Visual spinner that never stops
+
+Context: Graph → Mapping → Visual sometimes stayed on "Loading mapping
+design..." forever. The overlay defaulted to display:flex, Mapping section
+entry armed the spinner even for the Informations tab then returned early,
+and opening Visual before MappingState finished loading skipped init entirely.
+
+Changes:
+1. src/front/templates/partials/mapping/_mapping_design.html
+   Overlay starts with display:none / aria-hidden.
+2. src/front/static/global/css/mapping.css
+   Mapping designer overlay CSS default is display:none.
+3. src/front/static/mapping/js/mapping-init.js
+   Informations/List no longer arm the Visual spinner; ?tab=visual lets
+   MappingStudioTabs own init (avoids the Bootstrap .active race).
+4. src/front/static/mapping/js/mapping-design.js
+   Visual tab shown always calls initMappingDesigner (waits for MappingState);
+   loadMapLayout aborts after 8s; init finally always clears the overlay.
+5. tests/units/front/test_mapping_visual_spinner_hang.py
+   Regression contracts for the three hang modes.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/static/global/css/mapping.css
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/js/mapping-design.js
+- tests/units/front/test_mapping_visual_spinner_hang.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10647 passed, 333 skipped, 8 deselected, 39 warnings in 50.39s ========
+
+
+================================================================================
+Pattern detection performance (hub pruning, single-pass signatures, stage_ms)
+================================================================================
+
+Context:
+Detect on large graphs was slow: hop joins exploded through hubs before the
+frontier cap applied, types were re-joined every hop, signatures were
+recomputed per detail level, and shapes scanned every member. This change
+instruments stages, prunes hub expansion, denormalises types, hashes all
+detail levels in one pass, and builds non-refined shapes from one
+representative anchor — without changing pattern_id hashing.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   Per-stage timers (`stage_ms`); single-pass `_sigs` with collect_set;
+   `_dir` carries src_type/dst_type; `_reps` for shapes; narrowed refine
+   top-N; `--pattern-hub-degree` (default 5000) skips walking through hubs.
+2. resources/pattern_detection.job.yml
+   New job parameter `pattern_hub_degree`.
+3. src/back/core/graph_analysis/pattern/JobPatterns.py
+   Passes `pattern_hub_degree`; summary surfaces hub_degree / hub_count.
+4. tests/units/core/test_graph_analytics_job_sql.py
+   SQLite `collect_set` shim.
+5. tests/units/core/test_pattern_job_sql.py
+   Instrumentation, single-pass, denorm, rep-shape, and hub-pruning tests.
+6. tests/units/core/test_job_patterns.py
+   Asserts hub-degree job parameter.
+7. docs/architecture.md / docs/user-guide.md
+   Hub pruning and stage_ms notes.
+8. docs/superpowers/specs/2026-11-16-pattern-detection-performance-design.md
+   Spec marked implemented.
+9. docs/superpowers/plans/2026-11-16-pattern-detection-performance.md
+   Implementation plan.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- resources/pattern_detection.job.yml
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- tests/units/core/test_graph_analytics_job_sql.py
+- tests/units/core/test_pattern_job_sql.py
+- tests/units/core/test_job_patterns.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-16-pattern-detection-performance-design.md
+- docs/superpowers/plans/2026-11-16-pattern-detection-performance.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10661 passed, 333 skipped, 8 deselected, 39 warnings in 47.45s ========
+
+## Community and Pattern run history in Settings → Automation → Runs
+
+Context:
+Community detection and Pattern detection wrote no run history, so an
+admin could not see past Detect runs, their status, or their failures
+(Analytics, Build and Simulation already had one). Two new tabs on
+Settings → Automation → Runs list Detect runs across every domain. Scope
+was confirmed as those two tabs only (no Intelligence-page tabs). Storage
+is two new Lakebase tables. Events are Detect only, completed and failed
+rows, same as Analytics. Design: `docs/superpowers/specs/2026-11-16-analysis-run-history-design.md`.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/schema.sql
+   New `community_runs` and `pattern_runs` tables with
+   `(domain_id, version, computed_at DESC)` indexes, same shape and cap as
+   `graph_analytics_runs`.
+2. src/back/objects/registry/store/lakebase/DetectRuns.py (new)
+   Mixin for both tables driven by one `_KINDS` spec: lazy create
+   (information_schema check, fail-soft), record (best-effort, per-
+   `(domain, version)` cap of 100), cross-domain paged read with total.
+3. src/back/objects/registry/store/lakebase/store.py
+   Mixes in `DetectRuns`; per-kind lazy-create flags; both tables added to
+   `_KNOWN_TABLES`.
+4. src/back/objects/registry/store/lakebase/__init__.py
+   Exports `DetectRuns`.
+5. src/back/objects/registry/store/base.py
+   `CommunityRun` / `PatternRun` documented aliases (the architecture ratchet
+   caps the number of classes per file); no-op / `([], 0)` defaults for the
+   four store methods.
+6. src/back/objects/digitaltwin/DetectRunHistory.py (new)
+   `DetectRunHistory.record_community` / `record_pattern`: build the row from
+   the job summary (or the error) and append it through `svc.store`. Best-effort,
+   never changes the task outcome. Extracted from `TwinBackgroundTasks` to keep
+   it inside the 800-LOC class budget.
+7. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   `run_community_task` and `run_pattern_task` record one row on completion and
+   one on failure.
+8. src/back/objects/digitaltwin/__init__.py
+   Re-exports `DetectRunHistory`.
+9. src/back/objects/domain/settings/ScheduleSettings.py
+   `_all_runs_result` accepts kinds `community` and `pattern`.
+10. src/api/routers/internal/settings.py
+   `GET /settings/runs/community` and `GET /settings/runs/patterns`
+   (domain / limit / offset, same envelope as the other run readers).
+11. src/front/templates/partials/settings/_settings_runs.html
+   Two new tabs (Community runs, Pattern runs) with their own loading / empty
+   / error / table / pagination elements, between Analytics and Simulation.
+12. src/front/templates/settings.html
+   Two page-level details modals (`srCommunityRunDetailsModal`,
+   `srPatternRunDetailsModal`).
+13. src/front/static/config/js/settings-runs.js
+   Two descriptors in `TABS`, state, paging reset, load order, detail
+   builders and window handlers for both tabs.
+14. src/front/static/global/js/runs-render.js
+   `communityRunCells`, `communityRunDetailsHtml`, `patternRunCells`,
+   `patternRunDetailsHtml`, plus a job-run link helper.
+15. tests/units/registry/_v090_fake_pg.py
+   Registers the two new lazy-create flags with the scripted harness.
+16. tests/units/registry/test_v090_lakebase_detect_runs.py (new)
+   Lazy create, record binds and cap, no-op without table, cross-domain paging,
+   mapping and fail-soft reads for both tables.
+17. tests/units/dtwin/test_v090_detect_run_history.py (new)
+   Completed and failed rows for both tasks, failing write does not change the
+   outcome, missing scope skips the write, Save/Materialize write nothing.
+18. tests/units/settings/test_all_runs_endpoints.py
+   Community and pattern routes join the paging / domain-filter / not-configured
+   matrix.
+19. tests/units/front/test_settings_runs_page.py
+   Tab, pane, state-element, pagination, modal and script contracts for the two
+   new tabs.
+20. docs/user-guide.md, docs/api.md, docs/architecture.md
+   Runs tab description, the two endpoints, and the two new tables.
+21. docs/superpowers/specs/2026-11-16-analysis-run-history-design.md (new, gitignored)
+   Design record for this change.
+
+Decisions:
+- Lakebase is the only registry backend, so the tables live there; the base
+  store defaults are no-ops for any other backend.
+- Existing deployments get the tables lazily on first write or read; fresh
+  deployments get them from `schema.sql`.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/schema.sql
+- src/back/objects/registry/store/lakebase/DetectRuns.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/__init__.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/digitaltwin/DetectRunHistory.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/__init__.py
+- src/back/objects/domain/settings/ScheduleSettings.py
+- src/api/routers/internal/settings.py
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/settings.html
+- src/front/static/config/js/settings-runs.js
+- src/front/static/global/js/runs-render.js
+- tests/units/registry/_v090_fake_pg.py
+- tests/units/registry/test_v090_lakebase_detect_runs.py
+- tests/units/dtwin/test_v090_detect_run_history.py
+- tests/units/settings/test_all_runs_endpoints.py
+- tests/units/front/test_settings_runs_page.py
+- docs/user-guide.md
+- docs/api.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10750 passed, 333 skipped, 8 deselected, 39 warnings in 46.66s ========
+(Architecture ratchet green: class-per-file, re-exports, size budget. JS syntax checked with `node --check`.)
+
+## Bootstrap and preflight for the Detect run tables
+
+Context:
+The 0.10.0 deploy succeeded, but the Lakebase bootstrap reported "registry
+schema migrations already current; skipping DDL". The preflight's expected
+table list did not include `community_runs` / `pattern_runs`, so the
+bootstrap never created them. The app creates them lazily, but the
+migration path should own them, as every other registry table does.
+
+Changes:
+
+1. scripts/bootstrap/lakebase-perms.sh
+   Step 2b creates `community_runs` and `pattern_runs` (plus their
+   `(domain_id, version, computed_at DESC)` indexes), `CREATE TABLE IF NOT
+   EXISTS`. The applied-migrations echo lists both.
+2. scripts/_internal/_lakebase_preflight.py
+   `EXPECTED_TABLES` includes both tables, so the "already current" gate
+   sees them as pending until they exist.
+3. tests/units/scripts/test_lakebase_preflight.py
+   Asserts both tables are expected and created by Step 2b.
+4. update_to_0.10.0.md
+   Documents the two 0.10.0 registry objects, a read-only verification query,
+   a post-upgrade check, and a troubleshooting entry. Replaces the statements
+   that there is no 0.10 registry DDL.
+
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- scripts/_internal/_lakebase_preflight.py
+- tests/units/scripts/test_lakebase_preflight.py
+- update_to_0.10.0.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Live registry: `make bootstrap-lakebase` applied to `ontobricks_demo_10_registry_sc`
+(project `ontobricks-demo-10-registry`, branch `production`). Read-only check afterwards:
+`community_runs` and `pattern_runs` exist, both indexes exist, and both app service
+principals have INSERT/SELECT on both tables.
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10751 passed, 333 skipped, 8 deselected, 39 warnings in 61.95s ========
+
+## Pattern detection: forward-only walks
+
+Context:
+Pattern detection walked every triple both ways: each relation produced an `out`
+and an `in` edge row, and every hop followed both. That doubled the edge table,
+put a `direction` field into every token and typed edge, drew reversed arrows in
+the diagram, and let a walk step back along an inbound relation. The user asked
+for forward-only walks (subject → object). Spec:
+`docs/superpowers/specs/2026-11-16-pattern-forward-only-design.md`.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   `build_directed_edges` emits one row per eligible triple (no reversed copy,
+   no `direction` column). `build_hop` walks `_dir` forward only; `expanded`,
+   the structural and neighbour-attribute tokens, and `typed_edges` drop
+   `direction`. `init_tokens` DDL and `write_shape_edges` drop it too. The
+   preview-edge filter `direction = 'out'` is removed. Hub degree is now
+   out-degree.
+2. src/back/core/graph_analysis/pattern/pattern_diagram.py
+   Edges no longer carry `direction`. `_attribute_of` parses the two token
+   shapes (anchor `0||type|self|prop|bin`, neighbour `hop|via|type|prop|bin`).
+3. src/back/core/graph_analysis/pattern/JobPatterns.py
+   `shape_edges_query` no longer selects `direction`.
+4. src/front/static/intelligence/js/intelligence-patterns.js
+   Arrows always point at the child (`marker-end`); the `patArrowIn` marker is
+   removed.
+5. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Help text describes forward walks and the token layout without direction.
+6. tests/units/core/test_pattern_job_sql.py
+   Fixtures and expectations updated for forward walks. The hub fixture uses a
+   node with many outgoing relations. The shell test now covers a cycle. New
+   `TestForwardOnlyWalk` covers inbound-only anchors and dead ends.
+7. tests/units/core/test_pattern_diagram.py
+   Tokens and edges without direction; attribute chips checked for both shapes.
+8. tests/units/core/test_saved_pattern_store.py
+   Fixture `shape_edges` table without `direction`.
+9. docs/superpowers/specs/2026-11-16-pattern-forward-only-design.md (new)
+   Design, behaviour changes, deployment notes.
+10. docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+    Algorithm step 2 points to the amendment; the `direction` field is removed
+    from the hop record.
+11. docs/user-guide.md and docs/architecture.md
+    Pattern walk description: forward only, inbound relations not walked, hub
+    pruning on out-degree.
+
+Behaviour changes:
+- Every `pattern_id` changes once (tokens no longer carry the direction).
+- Anchors that are only the object of relations get empty neighbourhoods.
+- Saved patterns keep the snapshot they were saved from until re-saved.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/pattern/pattern_diagram.py
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- tests/units/core/test_pattern_job_sql.py
+- tests/units/core/test_pattern_diagram.py
+- tests/units/core/test_saved_pattern_store.py
+- docs/superpowers/specs/2026-11-16-pattern-forward-only-design.md
+- docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10755 passed, 333 skipped, 8 deselected, 39 warnings in 54.27s ========
+(`node --check` passes on intelligence-patterns.js.)
+
+## Context / Versions list redesigned with Intelligence / Patterns style and left status badge
+
+Context:
+In Context → Versions, align the versions list card presentation with the
+`ob-rule-card` list style used in Intelligence → Patterns. Each version item
+features a prominent colored badge covering the entire left height of the card
+displaying the version number (`v1`, `v2`, etc.), with a background color that
+reflects its lifecycle status (Draft = warning/amber, In Review = info/blue,
+Published = success/green).
+
+Changes:
+
+1. src/front/static/domain/css/domain-versions.css
+   - Style `.dm-version-card` with `display: flex; align-items: stretch; padding: 0; overflow: hidden;`
+     and the standard `ob-rule-card` border, radius and hover focus rings.
+   - Define `.dm-version-badge` covering all the left part with status-driven
+     background colors (`.status-draft`, `.status-in-review`, `.status-published`).
+   - Define `.dm-version-heading` for the bold centered version text.
+   - Style `.dm-version-card-content`, `.dm-version-card-meta`, and responsive mobile wrapping.
+2. src/front/static/domain/js/domain-versions.js
+   - Update `renderVersionCard`:
+     - Wrap version number in `.dm-version-badge.status-<slug>` as the left block.
+     - Layout main body like Intelligence/Patterns: top badges row (Status, Loaded, Latest),
+       description, and metadata (author, update date, build state).
+     - Align actions on the right in compact `.btn-group.btn-group-sm` groups.
+3. tests/units/front/test_domain_versions_cards.py
+   - Add `test_version_cards_use_patterns_list_style_and_status_colored_left_badge` testing
+     the `ob-rule-card` class, left badge child order, status-slug class assignment, and heading binding.
+   - Add `test_css_defines_big_colored_left_badge_and_patterns_card_style` verifying the CSS contracts.
+
+Modified files:
+- src/front/static/domain/css/domain-versions.css
+- src/front/static/domain/js/domain-versions.js
+- tests/units/front/test_domain_versions_cards.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10755 passed, 333 skipped, 8 deselected, 39 warnings in 54.23s ========
+(`node --check` passes on domain-versions.js.)
+
+## Pattern save: catalog and cardinalities only
+
+Context:
+Auto-save after Detect copied every member of every pattern into
+`graph_pattern_saved_<slug>`, duplicating `shape_json` / `diagram_json` on
+each member row and rescanning shape edges once per pattern. On mid-size
+domains that made the Save step dominate wall-clock for no display benefit:
+the list and details pages only need the pattern catalog, support counts and
+diagrams.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   Save writes **one row per pattern** in a single `INSERT … UNION ALL`
+   (KPIs, support, seed label, shape tokens, diagram). Metrics map and
+   summary are read once. Members are no longer copied; `members()` pages
+   from the live Detect output while that run is current, and still pages
+   legacy member-row snapshots from the saved table. `list_saved` /
+   `patterns` aggregate by `(saved_id, pattern_id)` so both schemas share
+   the same size = sum(support) semantics.
+2. tests/units/core/test_saved_pattern_store.py
+   Expect catalog rows (not members), a single INSERT, members from Detect,
+   legacy member-row paging, and catalog survival after Detect wipe.
+3. src/front/static/intelligence/js/intelligence-patterns.js
+   Saved-run subtitle and comments describe catalog + diagrams, not member
+   snapshots.
+4. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Help text: save stores cardinalities and diagrams, not every member row.
+5. src/api/routers/internal/dtwin.py
+   Task step label: "Saving pattern catalog".
+6. docs/architecture.md, docs/user-guide.md,
+   docs/superpowers/specs/2026-11-13-pattern-detection-design.md,
+   docs/superpowers/specs/2026-11-16-pattern-forward-only-design.md
+   Document catalog-only Save and the members fallback.
+
+Behaviour changes:
+- New saves are O(patterns), not O(members × patterns).
+- Matching entities on a saved run follow the live Detect output; after a
+  new Detect they may be empty for older saves. Catalog, KPIs and diagrams
+  stay frozen.
+- Legacy member-row saves keep working.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- tests/units/core/test_saved_pattern_store.py
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/api/routers/internal/dtwin.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+- docs/superpowers/specs/2026-11-16-pattern-forward-only-design.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10757 passed, 333 skipped, 8 deselected, 39 warnings in 48.89s ========
+
+## Date and time display: YYYY/MM/DD HH:MM:SS across the UI
+
+Context:
+Dates and times were displayed inconsistently. The Versions card showed raw
+Python ISO-8601 strings for "last update" and "last build"
+(e.g. `2026-11-05T07:36:01.730419+00:00`), other screens used browser locale
+formats (`toLocaleString`, `toLocaleDateString`, `toLocaleTimeString`), and the
+Registry used "Today 07:36" / "2026-11-05 07:36" variants. The UI now uses one
+format everywhere: `2026/11/05 07:36:01` (browser local time). The JSON API
+still returns ISO-8601 strings; the change is display-only.
+
+Changes:
+
+1. src/front/static/global/js/utils.js
+   - Add the shared formatter `formatDateTime(value)` (`YYYY/MM/DD HH:MM:SS`) and
+     `formatDateOnly(value)` (`YYYY/MM/DD`). Both accept ISO strings (any offset),
+     Date objects and epoch ms. Naive ISO strings are read as UTC (the backend
+     convention), and microseconds are trimmed to milliseconds for Safari.
+   - `NotificationCenter._timeAgo` falls back to `formatDateTime` after 24 h.
+   - Expose both helpers on `window`.
+2. src/front/static/domain/js/domain-versions.js
+   - Versions card: "last update" and "last build" use `formatDateTime`
+     (the raw ISO strings are no longer shown).
+3. src/front/static/registry/js/registry.js
+   - Remove `_shortDate`; version dates use `formatDateTime` (the "Today" /
+     "Yesterday" prefixes are dropped in favour of the single format).
+4. src/front/static/global/js/task-tracker.js
+   - `getTimeAgo` fallback after 24 h uses `formatDateTime`.
+5. src/front/static/global/js/runs-render.js
+   - `fmtTs` (Settings → Runs tables and run details) uses `formatDateTime`.
+6. src/front/static/global/js/comments-panel.js, src/front/static/global/js/review-modals.js,
+   src/front/static/domain/js/domain-review.js, src/front/static/domain/js/domain-audit.js
+   - Comment, review and audit timestamps use `formatDateTime`.
+7. src/front/static/domain/js/domain-validation.js, src/front/static/query/js/query-sync.js
+   - Built / last update timestamps use `formatDateTime` (replaces the `toLocaleString` options).
+8. src/front/static/domain/js/domain-pages.js
+   - `_fmtTime` (domain page update time) shows date and time with `formatDateTime`.
+9. src/front/static/domain/js/domain-collaboration.js
+   - Relative "x ago" keeps its labels; the absolute fallback uses `formatDateTime`,
+     and day group headers use `formatDateOnly`.
+10. src/front/static/config/js/schedule.js
+    - `formatAbsoluteTime` shows `YYYY/MM/DD HH:MM:SS (timezone)`.
+11. src/front/static/config/js/settings-locks.js, src/front/static/config/js/settings-github.js
+    - Lock and GitHub sync timestamps use `formatDateTime`.
+12. src/front/static/intelligence/js/intelligence-patterns.js
+    - Saved pattern "Saved …" line and the auto-save label use `formatDateTime`.
+13. src/front/static/intelligence/js/intelligence-communities.js, src/front/static/intelligence/js/simulation.js
+    - "computed at" / "last run" timestamps use `formatDateTime`.
+14. src/front/static/query/js/query-analytics.js, src/front/static/query/js/query-reasoning.js
+    - "computed at" (absolute part) and "Executed at" use `formatDateTime`.
+15. src/front/static/query/js/query-shacl-facets.js
+    - "Checked at" shows the full date and time (was time only).
+16. src/front/static/query/js/timed-task-log.js
+    - Exported build log text (created / started / completed / step times and
+      "Exported at") uses `formatDateTime`. The download filename stamp and the
+      live-timer `data-step-elapsed` attribute keep the raw ISO value on purpose.
+17. tests/units/front/test_date_time_format.py (new)
+    - Runs the formatter under Node with `TZ=UTC`: microsecond ISO, offsets,
+      naive ISO as UTC, Date / epoch inputs, date-only values, empty and invalid values,
+      and call-site contracts (Versions card, timed task log).
+18. tests/units/front/test_domain_versions_cards.py
+    - The renderer harness also loads the `utils.js` date/time block, since
+      `domain-versions.js` now calls the global `formatDateTime`.
+
+Modified files:
+- src/front/static/global/js/utils.js
+- src/front/static/global/js/task-tracker.js
+- src/front/static/global/js/runs-render.js
+- src/front/static/global/js/comments-panel.js
+- src/front/static/global/js/review-modals.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/domain/js/domain-review.js
+- src/front/static/domain/js/domain-audit.js
+- src/front/static/domain/js/domain-validation.js
+- src/front/static/domain/js/domain-pages.js
+- src/front/static/domain/js/domain-collaboration.js
+- src/front/static/registry/js/registry.js
+- src/front/static/config/js/schedule.js
+- src/front/static/config/js/settings-locks.js
+- src/front/static/config/js/settings-github.js
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/js/intelligence-communities.js
+- src/front/static/intelligence/js/simulation.js
+- src/front/static/query/js/query-analytics.js
+- src/front/static/query/js/query-reasoning.js
+- src/front/static/query/js/query-shacl-facets.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/timed-task-log.js
+- tests/units/front/test_date_time_format.py (new)
+- tests/units/front/test_domain_versions_cards.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10764 passed, 333 skipped, 8 deselected, 39 warnings in 47.76s ========
+(`node --check` passes on all modified JS files; `tests/units/front` → 1994 passed.)
+
+## Spinner indicator when deleting a pattern
+
+Context:
+Deleting a saved pattern from the Patterns list did not show a spinner while
+the DELETE API request was in-flight, leaving the user without visual feedback
+that deletion was actively progressing.
+
+Changes:
+
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   In `deleteSaved`, the delete button displays an inline spinner
+   (`spinner-border-sm`), enters `is-busy`, is disabled, and updates its title
+   to "Deleting…". The surrounding saved pattern card receives `.is-deleting`
+   (dimmed and pointer-events disabled) to prevent double actions. If the
+   deletion fails, original button icon and card state are restored.
+2. src/front/static/intelligence/css/intelligence.css
+   Added `.pat-saved-card.is-deleting` with dimmed opacity and disabled pointer events.
+3. tests/units/front/test_intelligence_page_contract.py
+   Asserted `.pat-saved-card.is-deleting` in CSS and `is-deleting` in JS contract.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10764 passed, 333 skipped, 8 deselected, 39 warnings in 47.85s ========
+
+## Regression: shared Contract must not invent reverse hasContract
+
+Context:
+A Detect diagram showed ``Customer → hasContract → Contract → hasContract →
+Customer``. The second edge does not exist in the ontology: it was produced by
+the old bidirectional walk stepping back through a Contract shared by two
+customers. Forward-only walks already fix this in the job code; a regression
+test locks the shared-contract case. The fix only appears in Detect results
+after the pattern job is redeployed to Databricks.
+
+Changes:
+
+1. tests/units/core/test_pattern_job_sql.py
+   `TestForwardOnlyWalk.test_shared_contract_does_not_invent_reverse_hasContract`
+   — two customers share one Contract; hop 2 stays empty and shape edges keep
+   only ``Customer → hasContract → Contract``.
+
+Modified files:
+- tests/units/core/test_pattern_job_sql.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/core/test_pattern_job_sql.py::TestForwardOnlyWalk` → 3 passed
+
+## Detect and catalog save merged into one background task
+
+Context:
+Detect patterns and the follow-up catalog save ran as two separate steps from
+the UI, so the save waited on the Detect result and the page had to chain two
+polls. The save now runs inside the same background task as the Detect job,
+as a second step. The pattern-task runners moved out of
+`TwinBackgroundTasks` into their own class to stay under the 800-LOC class
+budget (`tests/units/architecture/test_size_budget.py`), which the merge had
+pushed to 803.
+
+Changes:
+
+1. src/back/objects/digitaltwin/PatternBackgroundTasks.py (new)
+   `PatternBackgroundTasks` holds `run_pattern_task` (Detect, then
+   `DetectRunHistory.record_pattern`, then `save_pattern` for the top pattern
+   when `auto_save` and `pattern_count > 0`; the result carries `saved_id`,
+   `saved_label`, `pattern_id`), `run_pattern_save_task` (manual re-save) and
+   `_pattern_auto_save_label`. Moved verbatim from `TwinBackgroundTasks`.
+2. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   Removed the pattern runners (now in `PatternBackgroundTasks`).
+3. src/back/objects/digitaltwin/__init__.py
+   Exports `PatternBackgroundTasks`.
+4. src/api/routers/internal/dtwin.py
+   `detect_patterns` and `save_pattern` call `PatternBackgroundTasks`.
+5. tests/units/dtwin/test_v090_detect_run_history.py,
+   tests/units/api/test_dtwin_patterns.py
+   Point at `PatternBackgroundTasks` (the route test patches it on `dtwin`).
+
+Known gap, fixed in the next section: the forward-only walk alone only stopped
+the artifact for a shared Contract. A Contract reached via `hasPolicy` with an
+outgoing `hasContract` still merged into the `hasContract` Contract.
+
+Modified files:
+- src/back/objects/digitaltwin/PatternBackgroundTasks.py (new)
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/__init__.py
+- src/api/routers/internal/dtwin.py
+- tests/units/dtwin/test_v090_detect_run_history.py
+- tests/units/api/test_dtwin_patterns.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10767 passed, 333 skipped, 8 deselected, 39 warnings in 47.38s ========
+(`tests/units/architecture/test_size_budget.py` was failing at 803 LOC before this change; it passes now.)
+
+## Diagram chains keep the predicate that reached the parent
+
+Context:
+The Patterns diagram drew `Customer -hasContract-> Contract -hasContract->
+Customer` for the Addison Martin pattern, though no such path exists. The
+diagram node was `(hop, type)`, so all hop-1 Contracts merged into one node,
+and hop-2 typed edges were aggregated by `(parent_type, via, child_type)`. Chains
+therefore spliced edges from different Contracts. The walk direction was not
+the cause. Decision: node identity includes the incoming predicate. Pattern
+signatures (`pattern_id`) are unchanged.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py (`PatternSQL`)
+   - `build_frontier_0`: frontier rows carry `via` (`''` for the anchor).
+   - `build_hop`: frontier is `(anchor, node, via)`; `expanded` carries
+     `parent_via`; tokens are emitted from `SELECT DISTINCT anchor, parent,
+     node, via, node_type`, so the token multiset is unchanged; typed edges
+     group by `parent_via`.
+   - `init_tokens`: `typed_edges` gains `parent_via`.
+   - `write_shape_edges`: `<out>_shape_edges` gains `parent_via`.
+2. src/back/core/graph_analysis/pattern/pattern_diagram.py
+   Node id is `hop|via|type` (the token prefix); `_attribute_of` and the edge
+   builder use it; each edge starts from the parent's `(hop-1, parent_via, type)`
+   node. Node dict gains `via` / `via_label`.
+3. src/back/core/graph_analysis/pattern/JobPatterns.py
+   `shape_edges_query` selects `parent_via`.
+4. tests/units/core/test_pattern_job_sql.py
+   `TestForwardOnlyWalk.test_chain_hangs_off_the_predicate_that_reached_it`
+   (Addison shape: hop-2 edge is under the hasPolicy Contract only).
+5. tests/units/core/test_pattern_diagram.py
+   Rows carry `parent_via`; node ids are `hop|via|type`; new
+   `test_same_type_reached_by_two_predicates_keeps_its_own_chain`.
+6. tests/units/core/test_saved_pattern_store.py
+   Fixture `shape_edges` table gains `parent_via`.
+7. docs/architecture.md, docs/user-guide.md,
+   docs/superpowers/specs/2026-11-16-pattern-forward-only-design.md
+   Describe the new node identity and the known limit.
+
+Known limit: the parent is remembered one level only. Chains of three or more
+hops can still splice two hop-1 branches that share a predicate and type at
+hop 2. Full-path keys would remove it at the cost of more shape-edge rows.
+
+Deployment / data:
+Detect output tables are rebuilt on the next Detect. Saved snapshots keep their
+stored `diagram_json` (old `hop|type` ids) until the pattern is saved again.
+Performance: a node reached through k predicates now has k frontier rows; the
+Databricks job cost grows with that multiplicity. To be measured on a real
+domain.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/pattern/pattern_diagram.py
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- tests/units/core/test_pattern_job_sql.py
+- tests/units/core/test_pattern_diagram.py
+- tests/units/core/test_saved_pattern_store.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-16-pattern-forward-only-design.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10769 passed, 333 skipped, 8 deselected, 39 warnings in 49.72s ========
+(Pattern signature hash tests unchanged: `TestAliceBobCarol` / `TestSinglePassSignatures` pass without edits.)
+
+
+## Context menu: Versions under Governance, Audit trail under Collaboration
+
+Context:
+In the Context menu, Versions sat in the General group and Audit trail sat in
+Governance. The user asked to move Versions into Governance and Audit trail into
+Collaboration. Item IDs, icons, labels and requirements are unchanged, so routes
+(`/domain/?section=versions`, `/domain/?section=audit`) and section bodies keep
+working. The top-bar "Versions" navbar action (`domainSwitch`) is not part of the
+menu groups and is unchanged.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - `domain-main` (General): removed `versions`; now [General, Configuration].
+   - `domain-management` (Governance): `versions` (Versions) appended after
+     `review` (Publication); `audit` removed; now [Publication, Versions].
+   - `domain-collaboration` (Collaboration): `audit` (Audit trail) appended after
+     `discussions`; now [My Tasks, Discussions, Audit trail].
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10769 passed, 333 skipped, 8 deselected, 39 warnings in 48.99s ========
+(`tests/units/front` and `test_ui_rendering.py` menu/sidebar subset → 391 passed.)
+
+## Pattern diagram: read Detect tables that still lack parent_via
+
+Context:
+After the diagram node-identity change, the Patterns page showed only the
+Entity (no hops) for a 3-hop Detect. The warehouse Detect tables still had
+the previous schema (`direction`, no `parent_via`): the job had not been
+redeployed. The app selected `parent_via`, Databricks raised
+`UNRESOLVED_COLUMN`, Discover's shape endpoint 500'd, and Save's
+`_safe_rows` swallowed the error as `[]`, so auto-save stored an
+anchor-only `diagram_json`.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/JobPatterns.py
+   - `shape_edges_query(..., legacy=False)` can omit `parent_via`.
+   - `fetch_shape_edges` tries the new query and falls back to the legacy
+     SELECT when the column is missing; fills `parent_via=""`.
+   - `_diagram` uses `fetch_shape_edges` instead of `_safe_rows`.
+2. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   - `_live_shape_payload` uses `fetch_shape_edges` so Save again stores
+     multi-hop diagrams against old Detect tables.
+   - `_diagram_needs_rebuild` + `shape()`: an anchor-only snapshot with
+     `hop_count > 0` is rebuilt from the live Detect edges when those
+     still match (repairs poisoned auto-saves without a new Detect).
+3. tests/units/core/test_job_patterns.py
+   `test_shape_diagram_reads_legacy_edges_without_parent_via`.
+4. tests/units/core/test_saved_pattern_store.py
+   `test_save_draws_hops_from_legacy_shape_edges_without_parent_via`,
+   `test_shape_rebuilds_anchor_only_snapshot_from_live_detect`.
+
+Note: hop-2+ splicing on legacy Detect tables remains until the pattern
+job is redeployed and Detect is re-run. Opening a poisoned saved card
+repairs the diagram from the current Detect output when it is still the
+same run.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- tests/units/core/test_job_patterns.py
+- tests/units/core/test_saved_pattern_store.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10772 passed, 333 skipped, 8 deselected, 39 warnings in 48.70s ========
+
+## Pattern diagram: one entity type per hop column
+
+Context:
+After keying diagram nodes as `hop|via|type`, the same entity type could appear
+twice in one hop column (e.g. two Contract or Agent boxes). The Patterns page
+should show one box per type per hop. Saved snapshots that still used the
+via-keyed ids (or empty-via orphan parents) are rebuilt on open.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/pattern_diagram.py
+   Node identity is again `(hop, type)` (`hop|type`). `via` on `node_id` is
+   ignored for compatibility. Edges still carry relationship labels; multiple
+   predicates to the same type are multiple arrows into one box.
+2. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   `_diagram_needs_rebuild` also triggers when the same type appears twice in
+   one hop (via-keyed snapshots) or when hop ≥ 1 nodes have no incoming edge.
+3. tests/units/core/test_pattern_diagram.py
+   Expectations updated; `test_same_type_reached_by_two_predicates_is_one_box`.
+4. docs/user-guide.md, docs/architecture.md
+   Diagram copy matches one box per type per hop.
+
+Note: `parent_via` remains on Detect typed edges for the job. Until the pattern
+job is redeployed, legacy tables may still splice hop-2 chains onto a merged
+type box; the Entity stays the only root.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/pattern_diagram.py
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- tests/units/core/test_pattern_diagram.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10774 passed, 333 skipped, 8 deselected, 39 warnings in 48.19s ========
+
+=== Pattern catalog save: constant statement count (was 2 warehouse queries per pattern) ===
+
+Context: on the 100M-triple `bigcustomers100m` domain Detect's Spark job takes
+about 5.5 min (stage_ms: prep 78s, hops 127s, signatures 45s), but the
+background task then sat in "Saving pattern catalog" for 55+ minutes. `save()`
+looped over every pattern of the run (46,754) and ran two sequential warehouse
+queries per pattern (`_shapes` and `_shape_edges`, ~200 ms each) to build each
+diagram. The earlier "catalog-only" save removed the member fan-out but kept
+this per-pattern loop; it was never measured on a run this large.
+
+Changes:
+
+1. src/back/core/graph_analysis/pattern/SavedPatternStore.py
+   `save()` now issues a constant number of statements: it reads the focus
+   plus the top `EAGER_DIAGRAMS` (100) patterns by support in bulk (shapes,
+   KPIs, edges: 3 queries), writes those rows with their diagram, and writes
+   every other pattern with ONE server-side `INSERT ... SELECT` over
+   `<out>_shapes` joined to aggregated `<out>_shape_edges` (KPIs computed in
+   the warehouse, `diagram_json` empty). `shape()` already rebuilds a missing
+   diagram from live Detect on first open and persists it. `_payload_from_rows`
+   extracted from `_live_shape_payload`; `_metrics_from` and
+   `_detect_pattern_ids` removed (replaced by `_eager_pattern_ids`).
+2. src/back/core/graph_analysis/pattern/saved_pattern_sql.py (new)
+   Pure SQL builders (`kpi_sql`, `insert_catalog_sql`, `insert_rest_sql`,
+   `sql_lit`), extracted to keep `SavedPatternStore` under the 800-LOC budget.
+3. src/back/core/graph_analysis/pattern/JobPatterns.py
+   `shapes_bulk_query`, `shape_edges_bulk_query` (per-pattern cap via
+   `ROW_NUMBER`), `fetch_shape_edges_for` (grouped by pattern, same legacy
+   `parent_via` fallback and missing-table contract as `fetch_shape_edges`;
+   fallback logic shared in `_edge_rows_with_fallback`).
+4. tests/units/core/test_saved_pattern_store.py, test_job_patterns.py
+   Statement count independent of pattern count (400 extra patterns),
+   SQL-computed KPIs equal the Python ones, lazy diagram beyond the eager cap
+   is drawn and persisted on first open, missing edges table, bulk edge reader
+   grouping / legacy fallback / missing table.
+5. docs/user-guide.md, docs/architecture.md: save behaviour and new module.
+
+Measured on the real warehouse (46,754 patterns, Detect output of
+`graph_patterns_bigcustomers100m_2`): the `INSERT ... SELECT` for all patterns
+takes 6 s; the three eager bulk reads take about 1.5 s each. Previous
+behaviour: 55+ min and still running.
+
+Behaviour note: patterns outside the focus + top-100 have no stored diagram
+until first opened; if a new Detect replaces the live tables before that, such
+a pattern shows its KPIs and shape tokens but no diagram.
+
+Modified files:
+- src/back/core/graph_analysis/pattern/SavedPatternStore.py
+- src/back/core/graph_analysis/pattern/saved_pattern_sql.py
+- src/back/core/graph_analysis/pattern/JobPatterns.py
+- tests/units/core/test_saved_pattern_store.py
+- tests/units/core/test_job_patterns.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-16.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 10781 passed, 333 skipped, 8 deselected

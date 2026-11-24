@@ -65,7 +65,7 @@ Manual procedure to validate the Neo4j graph DB engine end-to-end against a live
 
 1. In the app, navigate to **Digital Twin → Inference**.
 2. Open any rule, click **Run**.
-3. **Expected:** UI reports zero violations / zero inferences. No crash. The fastapi log should contain the warning `SWRLFlatCypherTranslator.build_violation_cypher: SWRL→Cypher translation is not implemented yet.`
+3. **Expected:** UI reports zero violations / zero inferences. No crash. The fastapi log should contain the warning `ShaclFlatCypherBackend.build_violation_cypher: IF-THEN→Cypher translation is not implemented yet.`
 4. **Screenshot:** Inference page showing 0 results → `05-inference-no-op.png`.
 
 ## Capture

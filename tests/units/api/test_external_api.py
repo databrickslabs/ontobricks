@@ -138,6 +138,55 @@ class TestAPIv1Query:
         assert response.status_code == 200
         assert response.json()["data"]["engine"] == "spark"
 
+    @patch("api.service.load_domain_from_uc")
+    @patch("api.service.validate_sparql_query", return_value=(True, None))
+    @patch("api.service.execute_sparql_query")
+    def test_query_jsonld_output_format_forwarded(
+        self, mock_exec, mock_validate, mock_load, client
+    ):
+        """output_format=json-ld is forwarded and returned in the payload."""
+        mock_load.return_value = {
+            "versions": {
+                "1": {
+                    "ontology": {
+                        "name": "T",
+                        "base_uri": "http://t#",
+                        "classes": [],
+                        "properties": [],
+                    },
+                    "assignment": {
+                        "entities": [],
+                        "relationships": [],
+                        "r2rml_output": "@prefix : <http://t#> .",
+                    },
+                }
+            }
+        }
+        mock_exec.return_value = {
+            "results": [],
+            "columns": [],
+            "count": 2,
+            "engine": "local",
+            "format": "json-ld",
+            "jsonld": {"@context": {"ex": "http://t#"}, "@graph": []},
+        }
+        response = client.post(
+            "/api/v1/query",
+            json={
+                "domain_path": "/Volumes/main/test/domain.json",
+                "query": "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }",
+                "output_format": "json-ld",
+                "databricks_host": "https://test.databricks.com",
+                "databricks_token": "tok",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["format"] == "json-ld"
+        assert "@context" in data["jsonld"]
+        mock_exec.assert_called_once()
+        assert mock_exec.call_args.kwargs.get("output_format") == "json-ld"
+
 
 # =========================================================================
 # v1.py — POST /api/v1/query/samples
@@ -331,7 +380,7 @@ class TestDomainDesignStatus:
         domain.get_entity_mappings.return_value = []
         domain.get_relationship_mappings.return_value = []
         domain.shacl_shapes = []
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.get_r2rml.return_value = ""
         mock_dt.resolve_domain.return_value = domain
         mock_dt.is_datatype_range = DigitalTwin_is_datatype_range
@@ -372,7 +421,7 @@ class TestDomainDesignStatus:
         domain.get_entity_mappings.return_value = []
         domain.get_relationship_mappings.return_value = []
         domain.shacl_shapes = []
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.get_r2rml.return_value = ""
         mock_dt.resolve_domain.return_value = domain
         mock_dt.is_datatype_range = DigitalTwin_is_datatype_range
@@ -429,6 +478,35 @@ class TestDomainOntologyGET:
         assert data["format"] == "turtle"
         assert data["content"] == "@prefix owl: ..."
         assert data["class_count"] == 1
+
+    @patch("api.routers.domains._owl_document_for_domain")
+    @patch("api.routers.domains.DigitalTwin")
+    def test_ontology_jsonld_success(self, mock_dt, mock_doc, client):
+        """format=json-ld returns JSON-LD content and format."""
+        domain = MagicMock()
+        domain.domain_folder = "test"
+        domain.get_classes.return_value = [{"name": "A", "label": "A"}]
+        domain.ontology = {"name": "T", "properties": [], "base_uri": "http://ex/"}
+        mock_dt.resolve_domain.return_value = domain
+        mock_doc.return_value = '{"@context": {"ex": "http://ex/"}, "@type": "owl:Class"}'
+
+        response = client.get("/api/v1/domain/ontology", params={"format": "json-ld"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["format"] == "json-ld"
+        assert "@context" in data["content"]
+        mock_doc.assert_called_once_with(domain, "json-ld")
+
+    @patch("api.routers.domains.DigitalTwin")
+    def test_ontology_invalid_format(self, mock_dt, client):
+        """Unsupported format returns 400 before domain resolution work matters."""
+        response = client.get("/api/v1/domain/ontology", params={"format": "n3"})
+        assert response.status_code == 400
+        body = response.json()
+        assert "json-ld" in body.get("message", "").lower() or "json-ld" in str(
+            body.get("detail", "")
+        ).lower() or "format" in body.get("message", "").lower()
 
 
 # =========================================================================
@@ -549,7 +627,7 @@ class TestDigitalTwinDataQuality:
         """When no shapes or rules are enabled, returns success=False."""
         domain = MagicMock()
         domain.shacl_shapes = []
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.ontology = {}
         domain._data = {}
         mock_dt.resolve_domain.return_value = domain
@@ -569,7 +647,7 @@ class TestDigitalTwinDataQuality:
         domain.shacl_shapes = [
             {"name": "shape1", "enabled": True, "category": "cardinality"},
         ]
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.ontology = {"classes": [], "properties": []}
         domain._data = {"ontology": {}}
         mock_dt.resolve_domain.return_value = domain
@@ -592,7 +670,7 @@ class TestDigitalTwinDataQuality:
             {"name": "shape1", "enabled": True, "category": "cardinality"},
             {"name": "shape2", "enabled": True, "category": "value"},
         ]
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.ontology = {}
         domain._data = {"ontology": {}}
         mock_dt.resolve_domain.return_value = domain
@@ -620,7 +698,7 @@ class TestDigitalTwinDataQualityProgress:
         """Start a task and immediately poll for it — should find the task."""
         domain = MagicMock()
         domain.shacl_shapes = [{"name": "s", "enabled": True}]
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.ontology = {}
         domain._data = {"ontology": {}}
         mock_dt.resolve_domain.return_value = domain
@@ -669,14 +747,14 @@ class TestDigitalTwinInference:
             "/api/v1/digitaltwin/inference/start",
             json={
                 "tbox": False,
-                "swrl": True,
+                "if_then": True,
                 "graph": False,
                 "constraints": False,
             },
         )
         assert response.status_code == 200
         data = response.json()
-        assert "swrl" in data["message"].lower()
+        assert "if_then" in data["message"].lower()
         assert "tbox" not in data["message"].lower()
 
     @patch("api.routers.digitaltwin.DigitalTwin")

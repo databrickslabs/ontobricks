@@ -31,7 +31,7 @@ def test_metadata_import_ui_respects_import_limit() -> None:
     js = METADATA_JS.read_text(encoding="utf-8")
     assert "import_limit" in js
     assert "_remainingImportSlots" in js
-    show = js[js.index("function showTableSelectionModal") : js.index("function toggleImportTableSelection")]
+    show = js[js.index("function renderImportTable") : js.index("function toggleImportTableSelection")]
     assert "_remainingImportSlots" in show
     select_new = js[js.index("function selectNewTablesOnly") : js.index("function filterImportTables")]
     assert "_remainingImportSlots" in select_new

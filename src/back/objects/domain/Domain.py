@@ -37,6 +37,7 @@ from back.core.databricks import (
     has_metadata as check_has_metadata,
     validate_metadata,
 )
+from back.core.databricks.knowledge_pages import normalize_knowledge_pages
 from back.core.helpers import (
     build_auto_base_uri,
     get_databricks_host_and_token,
@@ -47,6 +48,7 @@ from back.core.helpers import (
 )
 from back.core.graphdb.RealtimeSource import RealtimeSource
 from back.core.logging import get_logger
+from back.core.w3c.r2rml.InstanceIdentity import InstanceIdentity
 from back.core.mcp_tools import (
     MCP_CONTEXT_FEATURES,
     MCP_DOMAIN_TOOLS,
@@ -194,6 +196,60 @@ def merge_table_metadata(
         old_table["columns"] = new_columns
 
 
+def _resolve_uc_load_version(
+    svc: RegistryService, domain_name: str, version: str | None
+) -> str:
+    """Resolve active/latest version when the caller did not pass one."""
+    if version:
+        return version
+    active_ver, _ = svc.find_mcp_version(domain_name)
+    if active_ver:
+        logger.info(
+            "No version specified for '%s'; resolved to active v%s",
+            domain_name,
+            active_ver,
+        )
+        return active_ver
+    latest = svc.get_latest_version(domain_name)
+    if not latest:
+        raise NotFoundError(f'No versions found for context "{domain_name}"')
+    logger.info(
+        "No version specified for '%s'; no active version, falling back to latest v%s",
+        domain_name,
+        latest,
+    )
+    return latest
+
+
+def _commit_uc_load_session(session, svc: RegistryService, domain_name: str, version: str, cfg) -> bool:
+    """Stamp folder/registry meta, clear DT caches, persist once.
+
+    Returns whether *version* is the latest. OWL/R2RML stay lazy
+    (``ensure_generated_content``) because ``save`` strips them.
+    """
+    sorted_versions = svc.list_versions_sorted(domain_name)
+    is_latest = sorted_versions[0] == version if sorted_versions else True
+    session.domain_folder = domain_name
+    session.is_active_version = is_latest
+    reg_settings = session.settings.setdefault("registry", {})
+    if not reg_settings.get("catalog"):
+        reg_settings["catalog"] = cfg.catalog
+    if not reg_settings.get("schema"):
+        reg_settings["schema"] = cfg.schema
+    if not reg_settings.get("volume"):
+        reg_settings["volume"] = cfg.volume
+    clear_version_status_cache()
+    invalidate_registry_cache()
+    # Lazy graph load: hydrate on first DT/Build access.
+    ts_stats = session.triplestore.setdefault("stats", {})
+    ts_stats.pop("status", None)
+    ts_stats.pop("dt_existence", None)
+    session.triplestore.pop("_ts_cache_timestamp", None)
+    session.save()
+    return is_latest
+
+
+
 class Domain:
     """Non-HTTP façade for domain lifecycle, registry sync, metadata, and design state.
 
@@ -253,6 +309,7 @@ class Domain:
             "version": self._s.current_version,
             "base_uri": self._s.ontology.get("base_uri", ""),
             "base_uri_auto": self._s.ontology.get("base_uri_auto", None),
+            "identity_scope": InstanceIdentity.normalize_scope(self._s.ontology.get("identity_scope")),
             "llm_endpoint": llm_endpoint,
             "llm_endpoint_kind": (
                 normalize_llm_endpoint_kind(
@@ -266,7 +323,7 @@ class Domain:
             "status": self._s.info.get("status", "DRAFT"),
             "review_quorum": self._s.info.get("review_quorum", 1),
             "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
-            **self._graph_info(),
+            **self._graph_settings_info(),
             "view_table": view_table,
             "graph_name": graph_name,
         }
@@ -370,7 +427,7 @@ class Domain:
                 domain_name
             ):
                 raise ValidationError(
-                    "Domain name must be CamelCase alphanumeric only "
+                    "Context name must be CamelCase alphanumeric only "
                     "(letters and digits, no spaces or special characters), "
                     "e.g. MyOntologyDomain",
                 )
@@ -395,15 +452,11 @@ class Domain:
         self._s.info.update(
             {
                 "name": domain_name,
-                "description": data.get(
-                    "description", self._s.info.get("description", "")
-                ),
+                "description": data.get("description", self._s.info.get("description", "")),
                 "author": data.get("author", self._s.info.get("author", "")),
                 "llm_endpoint": llm_endpoint,
                 "llm_endpoint_kind": llm_endpoint_kind,
-                "mcp_enabled": data.get(
-                    "mcp_enabled", self._s.info.get("mcp_enabled", False)
-                ),
+                "mcp_enabled": data.get("mcp_enabled", self._s.info.get("mcp_enabled", False)),
                 "review_quorum": self._coerce_quorum(
                     data.get(
                         "review_quorum",
@@ -480,6 +533,8 @@ class Domain:
             domain_name, provided, auto=auto
         )
         self._s.ontology["base_uri_auto"] = auto
+        if InstanceIdentity.apply_scope(self._s.ontology, data):
+            self._s.set_r2rml("")
 
         # Update version separately
         if data.get("version"):
@@ -499,11 +554,11 @@ class Domain:
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
             "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
-            **self._graph_info(),
+            **self._graph_settings_info(),
         }
 
-    def _graph_info(self) -> Dict[str, Any]:
-        """The graph-related ``info`` keys, coerced, as the UI and API expose them."""
+    def _graph_settings_info(self) -> Dict[str, Any]:
+        """Graph backend, materialization, cache, and curated Knowledge Pages fields of ``domain.info``."""
         info = self._s.info
         cache_enabled = self._coerce_graph_cache_enabled(info.get("graph_cache_enabled"))
         return {
@@ -520,6 +575,11 @@ class Domain:
             "graph_cache_state": self._coerce_graph_cache_state(
                 info.get("graph_cache_state"), enabled=cache_enabled
             ),
+            "graph_cache_refreshed_at": str(
+                self._s.info.get("graph_cache_refreshed_at") or ""
+            ).strip()
+            or None,
+            "knowledge_pages": normalize_knowledge_pages(self._s.info.get("knowledge_pages")),
         }
 
     @staticmethod
@@ -547,6 +607,19 @@ class Domain:
         return normalize_lakehouse_materialization(
             raw if isinstance(raw, str) else None
         )
+
+    def get_knowledge_pages_selection(self) -> list:
+        """Return the curated Knowledge Pages selection for this domain."""
+        pages = normalize_knowledge_pages(self._s.info.get("knowledge_pages"))
+        self._s.info["knowledge_pages"] = pages
+        return pages
+
+    def save_knowledge_pages_selection(self, pages: Any) -> list:
+        """Replace the curated Knowledge Pages selection and persist the session."""
+        normalized = normalize_knowledge_pages(pages)
+        self._s.info["knowledge_pages"] = normalized
+        self._s.save()
+        return normalized
 
     @staticmethod
     def _coerce_materialization_mode(raw: Any) -> str:
@@ -631,22 +704,17 @@ class Domain:
     def _resolve_base_uri(
         self, domain_name: str, provided: str = "", *, auto: bool = True
     ) -> str:
-        """Return the effective ontology base URI for ``domain_name``.
-
-        Mirrors the frontend ``updateAutoBaseUri`` (``{default}/{Name}#``):
-        a custom (non-auto) value is kept (after IRI sanitization), while auto
-        mode — or an empty custom value — is generated from the globally
-        configured default base URI domain and a sanitized domain name.
-        Guarantees a non-empty, well-formed URI so a new domain never persists
-        an empty or sentinel base_uri.
-        """
+        """Return the ontology base URI (custom kept; auto from global default)."""
         if not auto and provided:
             return self._sanitize_base_uri(provided)
         try:
             default_domain = resolve_default_base_uri(self._s, self._settings)
-        except Exception as exc:  # noqa: BLE001 — never fail a save on URI gen
-            logger.debug("default base URI resolve failed: %s", exc)
-            default_domain = ""
+        except Exception as exc:  # noqa: BLE001 — surface resolve failures
+            logger.warning("default base URI resolve failed: %s", exc)
+            raise ValidationError(
+                "Could not resolve the default ontology base URI. "
+                "Check Databricks credentials and the global default base URI."
+            ) from exc
         return self._sanitize_base_uri(
             build_auto_base_uri(domain_name, default_domain)
         )
@@ -668,6 +736,7 @@ class Domain:
             "description": self._s.info.get("description", ""),
             "base_uri": self._s.ontology.get("base_uri", ""),
             "base_uri_auto": self._s.ontology.get("base_uri_auto", None),
+            "identity_scope": InstanceIdentity.normalize_scope(self._s.ontology.get("identity_scope")),
             "version": self._s.current_version,
             "author": self._s.info.get("author", ""),
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
@@ -675,7 +744,7 @@ class Domain:
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
             "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
-            **self._graph_info(),
+            **self._graph_settings_info(),
             # Catalog for the MCP tab, so the template never restates the
             # tool / context lists that live in back.core.mcp_tools.
             "mcp_domain_tools": list(MCP_DOMAIN_TOOLS),
@@ -713,7 +782,7 @@ class Domain:
                 owl_content = Ontology.generate_owl(
                     self._s.ontology,
                     self._s.constraints,
-                    self._s.swrl_rules,
+                    self._s.if_then_rules,
                     self._s.axioms,
                     self._s.expressions,
                     self._s.groups,
@@ -741,7 +810,7 @@ class Domain:
 
         return {
             "success": True,
-            "message": "Domain imported",
+            "message": "Context imported",
             "name": self._s.info.get("name", "NewDomain"),
             "version": self._s.current_version,
             "stats": {
@@ -774,7 +843,7 @@ class Domain:
                 raise ValidationError("Registry not configured")
             folder = self._s.uc_domain_folder
             if not folder:
-                raise ValidationError("Domain not saved to registry")
+                raise ValidationError("Context not saved to registry")
             runs = svc.load_build_runs(folder, version=version, limit=limit)
             return {
                 "success": True,
@@ -811,7 +880,7 @@ class Domain:
                 raise ValidationError("Registry not configured")
             folder = self._s.uc_domain_folder
             if not folder:
-                raise ValidationError("Domain not saved to registry")
+                raise ValidationError("Context not saved to registry")
             return {
                 "success": True,
                 "domain_folder": folder,
@@ -852,20 +921,20 @@ class Domain:
             svc = self.build_registry_service()
             result = await run_blocking(self.load_domain_from_uc, svc, target_domain)
             logger.info(
-                "[Bridge] Server-side domain switch to '%s' v%s",
+                "[Bridge] Server-side context switch to '%s' v%s",
                 target_domain,
                 result.get("version", "?"),
             )
             return True
         except OntoBricksError as e:
             logger.warning(
-                "[Bridge] Domain switch to '%s' failed: %s",
+                "[Bridge] Context switch to '%s' failed: %s",
                 target_domain,
                 e,
             )
         except Exception as e:
             logger.exception(
-                "[Bridge] Error switching to domain '%s': %s",
+                "[Bridge] Error switching to context '%s': %s",
                 target_domain,
                 e,
             )
@@ -929,14 +998,14 @@ class Domain:
             ok, names, msg = svc.list_domains_cached()
             if not ok:
                 raise InfrastructureError(
-                    "Failed to list domains from registry", detail=msg
+                    "Failed to list contexts from registry", detail=msg
                 )
             return {"success": True, "domains": names}
         except OntoBricksError:
             raise
         except Exception as e:
             logger.exception("List domains failed: %s", e)
-            raise InfrastructureError("Failed to list domains", detail=str(e)) from e
+            raise InfrastructureError("Failed to list contexts", detail=str(e)) from e
 
     @staticmethod
     def list_domain_versions_result(
@@ -948,7 +1017,7 @@ class Domain:
                 raise ValidationError("Registry not configured")
             ok, versions, msg = svc.list_versions(domain_name)
             if not ok:
-                raise InfrastructureError("Failed to list domain versions", detail=msg)
+                raise InfrastructureError("Failed to list context versions", detail=msg)
             # Best-effort per-version lifecycle status, so callers (e.g. the
             # Load-Domain modal) can label versions DRAFT / IN-REVIEW /
             # PUBLISHED. Sourced from the cached domain metadata; never fatal.
@@ -980,7 +1049,7 @@ class Domain:
         except Exception as e:
             logger.exception("List domain versions failed: %s", e)
             raise InfrastructureError(
-                "Failed to list domain versions", detail=str(e)
+                "Failed to list context versions", detail=str(e)
             ) from e
 
     def list_version_details(
@@ -1000,7 +1069,7 @@ class Domain:
 
             folder = self._s.uc_domain_folder
             if not folder:
-                raise ValidationError("Domain not saved to registry")
+                raise ValidationError("Context not saved to registry")
 
             sorted_versions = svc.list_versions_sorted(folder)
             if not sorted_versions:
@@ -1111,13 +1180,13 @@ class Domain:
             is_new_domain = not self._s.domain_folder
             if is_new_domain and not is_valid_domain_name((raw_name or "").strip()):
                 raise ValidationError(
-                    "Domain name must be CamelCase alphanumeric only "
+                    "Context name must be CamelCase alphanumeric only "
                     "(letters and digits, no spaces or special characters), "
                     "e.g. MyOntologyDomain",
                 )
             if is_new_domain and svc.domain_exists(folder):
                 raise ConflictError(
-                    f'A domain named "{folder}" already exists in the registry. Please choose a different name.',
+                    f'A context named "{folder}" already exists in the registry. Please choose a different name.',
                 )
             version = self._s.current_version or "1"
             # Lifecycle lock: never overwrite a version that is no longer a
@@ -1199,15 +1268,15 @@ class Domain:
                 invalidate_registry_cache()
                 reg_path = f"{c.catalog}.{c.schema}.{c.volume}/domains/{folder}/V{version}/V{version}.json"
                 logger.info("Domain saved to registry: %s", reg_path)
-                return {"success": True, "message": "Domain saved"}
+                return {"success": True, "message": "Context saved"}
             raise InfrastructureError(
-                "Failed to save domain to Unity Catalog registry", detail=message
+                "Failed to save context to Unity Catalog registry", detail=message
             )
         except OntoBricksError:
             raise
         except Exception as e:
             logger.exception("Save domain to UC failed: %s", e)
-            raise InfrastructureError("Save domain to UC failed", detail=str(e)) from e
+            raise InfrastructureError("Save context to UC failed", detail=str(e)) from e
 
     def load_domain_from_uc(
         self,
@@ -1223,92 +1292,48 @@ class Domain:
         """
         try:
             if not domain_name:
-                raise ValidationError("Domain name is required")
-            if not version:
-                active_ver, _ = svc.find_mcp_version(domain_name)
-                if active_ver:
-                    version = active_ver
-                    logger.info(
-                        "No version specified for '%s'; resolved to active v%s",
-                        domain_name,
-                        version,
-                    )
-                else:
-                    version = svc.get_latest_version(domain_name)
-                    if not version:
-                        raise NotFoundError(
-                            f'No versions found for domain "{domain_name}"'
-                        )
-                    logger.info(
-                        "No version specified for '%s'; no active version, falling back to latest v%s",
-                        domain_name,
-                        version,
-                    )
+                raise ValidationError("Context name is required")
+            version = _resolve_uc_load_version(svc, domain_name, version)
             c = svc.cfg
             if not c.catalog or not c.volume:
                 raise ValidationError("Registry not configured")
-            r_ok, domain_data, r_msg = svc.read_version(domain_name, version)
+            # Skip attaching up to 500 simulation runs — session never imports them.
+            r_ok, domain_data, r_msg = svc.read_version(
+                domain_name, version, include_simulations=False
+            )
             if not r_ok:
                 if r_msg and "not found" in r_msg.lower():
                     raise NotFoundError(r_msg)
                 raise InfrastructureError(
-                    "Failed to load domain from registry", detail=r_msg
+                    "Failed to load context from registry", detail=r_msg
                 )
 
             self._s.clear_generated_content()
             self._s.import_from_file(domain_data, version=version)
-            loaded_entities = len(self._s.get_entity_mappings())
-            loaded_rels = len(self._s.get_relationship_mappings())
-            loaded_classes = len(self._s.get_classes())
             logger.info(
                 "load-from-uc v%s: %d classes, %d entity mappings, %d rel mappings",
                 version,
-                loaded_classes,
-                loaded_entities,
-                loaded_rels,
+                len(self._s.get_classes()),
+                len(self._s.get_entity_mappings()),
+                len(self._s.get_relationship_mappings()),
             )
-            sorted_versions = svc.list_versions_sorted(domain_name)
-            is_latest = sorted_versions[0] == version if sorted_versions else True
-            self._s.domain_folder = domain_name
-            self._s.is_active_version = is_latest
-            reg_settings = self._s.settings.setdefault("registry", {})
-            if not reg_settings.get("catalog"):
-                reg_settings["catalog"] = c.catalog
-            if not reg_settings.get("schema"):
-                reg_settings["schema"] = c.schema
-            if not reg_settings.get("volume"):
-                reg_settings["volume"] = c.volume
-            self._s.ensure_generated_content()
-            self._s.save()
-            clear_version_status_cache()
-            invalidate_registry_cache()
-            # Lazy graph load: skip eager registry sync here. The graph
-            # backend (Lakebase synced tables) is hydrated on demand on
-            # first DT/Build access. Future engines should follow the
-            # same lazy pattern via GraphDBFactory.
-            ts_stats = self._s.triplestore.setdefault("stats", {})
-            ts_stats.pop("status", None)
-            ts_stats.pop("dt_existence", None)
-            self._s.triplestore.pop("_ts_cache_timestamp", None)
-            self._s.save()
-            # Editability is driven by lifecycle status (DRAFT), not by
-            # whether this is the latest version: an older DRAFT version is
-            # still fully editable.
+            is_latest = _commit_uc_load_session(self._s, svc, domain_name, version, c)
             lifecycle = (self._s.info.get("status") or "DRAFT").upper()
             label = "editable" if lifecycle == "DRAFT" else f"{lifecycle}, read-only"
-            msg = f"Domain loaded: {domain_name} v{version} ({label})"
             return {
                 "success": True,
-                "message": msg,
+                "message": f"Context loaded: {domain_name} v{version} ({label})",
                 "is_active": is_latest,
                 "version": version,
+                # Client paints Save/Close chrome before /navbar/state.
+                "domain": self.get_domain_info(),
             }
         except OntoBricksError:
             raise
         except Exception as e:
             logger.exception("Load domain from UC failed: %s", e)
             raise InfrastructureError(
-                "Load domain from UC failed", detail=str(e)
+                "Load context from UC failed", detail=str(e)
             ) from e
 
     def create_new_domain_version(self, svc: RegistryService) -> Dict[str, Any]:
@@ -1320,7 +1345,7 @@ class Domain:
         try:
             reg = self._s.registry
             if not reg.get("catalog") or not self._s.domain_folder:
-                raise ValidationError("Domain must be saved to Unity Catalog first")
+                raise ValidationError("Context must be saved to Unity Catalog first")
             if not self._s.is_active_version:
                 raise ConflictError(
                     "Cannot create a new version from an older version. Load the latest version first."

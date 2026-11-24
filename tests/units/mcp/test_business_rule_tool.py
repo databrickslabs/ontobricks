@@ -48,7 +48,7 @@ def test_node_context_lists_business_rules_with_hint(fmt) -> None:
             "business_rules": _RULES,
         }
     )
-    assert "Business rules (SWRL):" in text
+    assert "Business rules (IF-THEN):" in text
     assert "VipCustomer" in text
     assert "Customer(?c) ^ hasOrder(?c, ?o) -> VIP(?c)" in text
     assert "run_entity_business_rule(entity_uri, rule)" in text

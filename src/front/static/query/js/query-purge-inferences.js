@@ -58,6 +58,9 @@ const InferencePurgeModule = {
             if (typeof checkTripleStoreStatus === 'function') {
                 await checkTripleStoreStatus(true);
             }
+            if (window.InferredBreakdownModule && typeof window.InferredBreakdownModule.load === 'function') {
+                window.InferredBreakdownModule.load();
+            }
         } catch (error) {
             showNotification(error.message || 'Purge failed.', 'error');
         } finally {

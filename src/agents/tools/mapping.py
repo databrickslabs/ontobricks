@@ -190,13 +190,10 @@ def tool_submit_entity_mapping(
 
     if existing_idx >= 0:
         ctx.entity_mappings[existing_idx] = mapping
-        logger.debug(
-            "tool_submit_entity_mapping: updated existing mapping at index %d",
-            existing_idx,
-        )
     else:
         ctx.entity_mappings.append(mapping)
-        logger.debug("tool_submit_entity_mapping: appended new mapping")
+    if ctx.on_mapping:
+        ctx.on_mapping("entity", mapping)
 
     mapped_attrs = len(mapping["attribute_mappings"])
     unmapped_count = len(mapping["unmapped_attributes"])
@@ -315,13 +312,10 @@ def tool_submit_relationship_mapping(
 
     if existing_idx >= 0:
         ctx.relationships[existing_idx] = mapping
-        logger.debug(
-            "tool_submit_relationship_mapping: updated existing at index %d",
-            existing_idx,
-        )
     else:
         ctx.relationships.append(mapping)
-        logger.debug("tool_submit_relationship_mapping: appended new mapping")
+    if ctx.on_mapping:
+        ctx.on_mapping("relationship", mapping)
 
     logger.info(
         "tool_submit_relationship_mapping: '%s' recorded — source=%s, target=%s",

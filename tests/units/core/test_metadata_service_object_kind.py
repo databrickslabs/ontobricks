@@ -54,17 +54,17 @@ def test_load_schema_metadata_tags_kinds():
     assert kinds == {"orders": "table", "rev_mv": "metric_view"}
 
 
-def test_load_probes_metric_view_with_kind_and_columns():
+def test_load_defers_select_probe_and_keeps_metric_view_roles():
+    """Import paints the list first; SELECT rights are filled by check-select."""
     catalog = _FakeCatalog()
     svc = MetadataService(catalog_svc=catalog)
     ok, msg, meta = svc.load_selected_tables("c", "s", ["rev_mv"])
     assert ok, msg
-    probe = catalog.last_probe
-    assert probe["object_kind"] == "metric_view"
-    assert {c["name"]: c["role"] for c in probe["columns"]} == {
-        "region": "dimension",
-        "revenue": "measure",
-    }
+    assert getattr(catalog, "last_probe", None) is None
+    by_name = {t["name"]: t for t in meta["tables"]}
+    assert by_name["rev_mv"]["can_select"] is None
+    roles = {c["name"]: c["role"] for c in by_name["rev_mv"]["columns"]}
+    assert roles == {"region": "dimension", "revenue": "measure"}
 
 
 def test_legacy_metadata_without_object_kind_defaults_table():

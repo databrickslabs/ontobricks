@@ -1,16 +1,18 @@
-"""Contracts for responsive Registry modal data loading."""
+"""Contracts for responsive Registry data loading on the Home tabs."""
 
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REGISTRY_JS = REPO_ROOT / "src/front/static/registry/js/registry.js"
-REGISTRY_MODAL_JS = REPO_ROOT / "src/front/static/global/js/registry-modal.js"
+HOME_JS = REPO_ROOT / "src/front/static/home/js/home.js"
 
 
-def test_registry_modal_events_identify_their_source():
-    source = REGISTRY_MODAL_JS.read_text(encoding="utf-8")
-    assert source.count("source: 'registry-modal'") == 2
+def test_home_tab_events_identify_their_source():
+    source = HOME_JS.read_text(encoding="utf-8")
+    assert source.count("source: 'home'") >= 1
+    assert "homeRegistryModal" in source
+    assert "sidebarSectionChanged" in source
 
 
 def test_registry_domain_loads_are_deduplicated_and_cached_briefly():
@@ -21,13 +23,30 @@ def test_registry_domain_loads_are_deduplicated_and_cached_briefly():
     assert "loadRegistryDomains(true)" in source
 
 
-def test_registry_modal_prefetches_bridges_with_request_deduplication():
+def test_registry_bridges_prefetch_with_request_deduplication():
     source = REGISTRY_JS.read_text(encoding="utf-8")
     assert "let bridgesLoadPromise = null;" in source
     assert "if (bridgesLoadPromise) return bridgesLoadPromise;" in source
-    assert "e.detail?.source === 'registry-modal'" in source
-    assert "loadRegistryBridges();" in source
+    assert "if (section === 'bridges') {" in source
     assert "loadRegistryBridges(true)" in source
+
+
+def test_home_prefetches_domains_before_bridges_and_sets_context_tile_count():
+    """Contexts win the Home network queue; tile count comes from domains."""
+    source = REGISTRY_JS.read_text(encoding="utf-8")
+    assert "homeCountContexts" in source
+    assert "loadRegistryDomains()" in source
+    # Bridges prefetch is chained after domains settle on Home.
+    assert ".finally(() => loadRegistryBridges())" in source or \
+        ".finally(() => { loadRegistryBridges(); })" in source
+    # Immediate bridges-only path remains for deep links.
+    assert "urlSection === 'bridges'" in source
+
+
+def test_home_js_does_not_fetch_list_projects_for_tile_count():
+    source = HOME_JS.read_text(encoding="utf-8")
+    assert "/domain/list-projects" not in source
+    assert "loadContextCount" not in source
 
 
 def test_domain_mutations_invalidate_prefetched_bridges():

@@ -1,0 +1,867 @@
+## Patterns list: Patterns + How it works tabs
+
+Context: The Patterns list page showed only saved snapshots. Users needed an
+in-app explanation of the detection algorithm next to the saved runs. Added
+two `ob-tabs`: Patterns (saved cards) and How it works (English algorithm
+walkthrough).
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Card body uses `ob-tabs` / `nav-fill` with Patterns (default) and How it
+   works panes; How it works documents anchors, hops, binning, tokens,
+   adaptive levels, hashing, refine, min support, and UI outcomes.
+2. src/front/static/intelligence/css/intelligence.css
+   Light `.pat-how-it-works` heading/code sizing.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract for tab ids, `ob-tabs`, and How it works content.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10572 passed, 324 skipped, 8 deselected, 39 warnings in 48.57s ========
+
+## Communities: Communities + How it works tabs
+
+Context: Mirror the Patterns list tabs on Community detection so users can
+read how label-propagation clustering works next to the Detect / Preview UI.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_communities.html
+   Wrap the rail + preview in `ob-tabs` with Communities (default) and How
+   it works panes; How it works covers LPA, ranking, modularity, preview,
+   materialize, and the difference vs Patterns.
+2. src/front/static/intelligence/css/intelligence.css
+   Flex fill for `.comm-tabs-card` / active Communities pane so the layout
+   still stretches; `.comm-how-it-works` heading/code sizing.
+3. tests/units/front/test_intelligence_page_contract.py
+   Contract for tab ids, How it works copy, and CSS hooks.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10572 passed, 324 skipped, 8 deselected, 39 warnings in 44.67s ========
+
+## Scenarios: How it works tab + discuss button
+
+Context: Mirror Patterns/Communities on the Scenarios list with an in-app
+How it works walkthrough (scope, facts, reasoning, Results, Compare,
+Evaluate). Also add the ontology discussion header button on Scenarios;
+Compare already had it.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_sim_scenarios.html
+   `ob-tabs` with Scenarios (default) and How it works panes; discuss
+   button (`simDiscussBtn`) before Refresh / New scenario.
+2. src/front/static/intelligence/js/simulation.js
+   Bind `simDiscussBtn` to `openOntologyDiscussion()`.
+3. src/front/static/intelligence/css/intelligence.css
+   Shared how-it-works heading/code sizing for sim; How pane scroll.
+4. tests/units/front/test_intelligence_page_contract.py
+   Contract for Scenarios How it works tabs and copy.
+5. tests/units/front/test_intelligence_discuss_buttons.py
+   Cover `_sim_scenarios.html` / `simDiscussBtn` and CTA ordering.
+
+Modified files:
+- src/front/templates/partials/intelligence/_sim_scenarios.html
+- src/front/static/intelligence/js/simulation.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_intelligence_discuss_buttons.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10576 passed, 324 skipped, 8 deselected, 39 warnings in 46.01s ========
+
+## How it works tabs: business-friendly diagrams
+
+Context: The Patterns, Communities and Scenarios How it works tabs were too
+technical for business users. Each tab now leads with plain-language steps,
+an energy & utilities example (customers, contracts, meters, sites) and
+inline SVG concept diagrams; the previous algorithm text is kept in a
+collapsed "Technical details" section. Removed the non-existent "Class"
+scenario scope from the copy, and aligned the Compare wording with the
+actual "View difference" button.
+
+Changes:
+
+1. src/front/templates/partials/intelligence/_intel_patterns_saved.html
+   Business walkthrough with two diagrams (looking around a customer by
+   hops; grouping look-alikes into patterns with min support), plain-word
+   settings, uses; technical text moved into `<details class="howto-tech">`.
+2. src/front/templates/partials/intelligence/_intel_communities.html
+   Business walkthrough with two diagrams (three grid communities with rare
+   bridging links; label propagation in three steps), usage steps, typical
+   uses, Patterns vs Communities; technical text collapsed.
+3. src/front/templates/partials/intelligence/_sim_scenarios.html
+   Business walkthrough with three diagrams (scenario journey; Set / Add /
+   Remove facts; Compare colour legend), Compare and Evaluate guidance,
+   scenario ideas; technical text collapsed; "View difference" wording.
+4. src/front/static/intelligence/css/intelligence.css
+   Shared `.howto-*` / `.hw-*` diagram styles on `--db-*` tokens (no inline
+   colours), green arrowhead variant, collapsible technical section styling.
+5. tests/units/front/test_intelligence_page_contract.py
+   Contracts for figures, accessible SVG titles, energy example, collapsed
+   technical details, no inline styles, and unique SVG ids across tabs.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_patterns_saved.html
+- src/front/templates/partials/intelligence/_intel_communities.html
+- src/front/templates/partials/intelligence/_sim_scenarios.html
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 44.67s ========
+
+## Documentation: complete Intelligence guide
+
+Context: The user guide chapter was still titled "Simulation", missed the
+Compare / Evaluate flow as a page, kept stale "(Sidebar)" headings for
+Cohorts runs and simulation runs, and mentioned a class scope that the
+editor does not offer. Rewrote it as a full Intelligence chapter and synced
+the in-app Help Center and README.
+
+Changes:
+
+1. docs/user-guide.md
+   New "Step 4: Intelligence (Cohorts, Discovery & Simulation)" chapter:
+   overview table, prerequisites, shared page features, Cohorts,
+   Communities (plain words, usage, reading results, internals), Patterns
+   (steps, Detect settings table, reading a diagram, saved runs), choosing
+   between tools, Scenarios (scope and fact kinds, run pipeline, list,
+   editor, run history location), new Compare section (Graphs, Evaluate,
+   best practices), end-to-end energy example, limits and troubleshooting;
+   TOC anchor and feature inventory updated.
+2. src/front/templates/partials/layout/help_modal.html
+   Workflow step 6 rewritten in menu order (Cohorts, Communities, Patterns,
+   Scenarios, Compare incl. Evaluate) with a User Guide link; new Feature
+   Guide cards for Discovery and Simulation; glossary entries Community,
+   Pattern, Sandbox.
+3. README.md
+   "Discover and simulate (Intelligence)" summary and new guide anchor.
+
+Modified files:
+- docs/user-guide.md
+- src/front/templates/partials/layout/help_modal.html
+- README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 44.67s ========
+
+## Disable Intelligence write CTAs in read-only mode
+
+Context: On a read-only domain (no edit rights, non-DRAFT version, or
+Resume editing / another editor's lock), Patterns New, Communities Clear
+graph and Scenarios New stayed clickable because they were missing from
+``permissions.css``. The async edit-lock flip lands after page JS has
+already synced ``_canEdit``, so CSS gates are required.
+
+Changes:
+
+1. src/front/static/global/css/permissions.css
+   Gate ``#patDetectBtn``, ``#patDetectRunBtn``, ``#commClearBtn``,
+   ``#commDetectBtn``, ``#commMaterializeBtn``, ``#simNewBtn`` under
+   ``body:is(.read-only-version, .role-viewer, .read-only-locked)``.
+2. src/front/static/intelligence/js/simulation.js
+   ``_canEdit`` / ``_applyEditGate`` for New scenario; refuse
+   ``newScenario`` with a read-only toast.
+3. tests/units/front/test_view_mode_write_gates.py
+   Contract for the CSS gates and the Scenarios JS guard.
+
+Modified files:
+- src/front/static/global/css/permissions.css
+- src/front/static/intelligence/js/simulation.js
+- tests/units/front/test_view_mode_write_gates.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10582 passed, 324 skipped, 8 deselected, 39 warnings in 47.17s ========
+
+## Move Analytics to Intelligence; Overview under Graph Management
+
+Context: Graph/Analytics belonged with Discovery work rather than Graph
+Insight. The Insight group was removed; Overview stays on Graph under
+Management (after Build). Analytics is the first Discovery submenu item
+on Intelligence, with the panel/assets relocated accordingly.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Graph Management = Build, Overview, Runs; drop Insight group; put
+   Analytics first under Intelligence → Discovery.
+2. src/front/templates/partials/intelligence/_intel_analytics.html
+   Moved from partials/dtwin/_query_analytics.html; discuss uses
+   openOntologyDiscussion.
+3. src/front/templates/dtwin.html
+   Keep Overview; remove Analytics section/CSS/JS; keep Runs analytics
+   details modal.
+4. src/front/templates/intelligence.html
+   Host analytics section + query-analytics CSS/JS + Chart.js.
+5. src/front/static/query/js/query-analytics.js
+   Bootstrap __TRIPLESTORE_CONFIG; load on sidebarSectionChanged;
+   prefer openOntologyDiscussion after audit save.
+6. src/front/static/query/js/query.js
+   Drop analytics section hook (owned by query-analytics.js now).
+7. src/front/static/global/js/task-tracker.js
+   graph_analytics deep-link → /intelligence/?section=analytics.
+8. src/front/templates/partials/layout/help_modal.html
+   Help workflow lists Overview under Graph Management and Analytics
+   under Intelligence Discovery.
+9. docs/user-guide.md, docs/architecture.md, docs/development.md
+   Document the new menu homes.
+10. tests/units/front/*.py, tests/units/api/test_ui_rendering.py,
+    tests/e2e/dtwin/test_dtwin_flows.py
+    Contracts, paths, /intelligence workspace seeding, e2e notes.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/intelligence/_intel_analytics.html
+- src/front/templates/partials/dtwin/_query_analytics.html (deleted)
+- src/front/templates/dtwin.html
+- src/front/templates/intelligence.html
+- src/front/static/query/js/query-analytics.js
+- src/front/static/query/js/query.js
+- src/front/static/global/js/task-tracker.js
+- src/front/templates/partials/layout/help_modal.html
+- src/front/routes/intelligence.py
+- docs/user-guide.md
+- docs/architecture.md
+- docs/development.md
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_analytics_dashboard.py
+- tests/units/front/test_analytics_unavailable_metrics.py
+- tests/units/front/test_analytics_stale_result_gate.py
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/front/test_kg_section_headers.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/front/test_runs_page.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10583 passed, 324 skipped, 8 deselected, 39 warnings in 45.10s ========
+
+## Embed Runs tabs on Build and Analytics
+
+Context: Graph → Runs was a separate sidebar item with both build and
+analytics histories. Each producer now owns its history as a second
+`ob-tabs` pane (Cohorts Design/Runs pattern): Build keeps build runs only;
+Analytics keeps analytics runs. The Graph Runs sidebar item is gone;
+`?section=runs` redirects to Build → Runs.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   New Build shell: Build | Runs card-integrated tabs wrapping Lakebase /
+   Lakehouse panels and build-run history.
+2. src/front/templates/partials/domain/_domain_build_runs.html
+   Build-run table extracted from the old combined Runs page.
+3. src/front/templates/partials/domain/_domain_analytics_runs.html
+   Analytics-run table for Intelligence → Analytics → Runs.
+4. src/front/templates/partials/domain/_domain_runs.html
+   Removed (split into the two producer-owned partials).
+5. src/front/templates/partials/intelligence/_intel_analytics.html
+   Outer Analytics | Runs tabs; inner Dashboard / Health / AI Insights
+   stay under Analytics.
+6. src/front/templates/dtwin.html / intelligence.html
+   Wire the Build shell; drop Graph runs-section; host analytics-run
+   details modal + domain-runs.js on Intelligence.
+7. src/front/static/domain/js/domain-runs.js
+   Separate loaders/latches; Build and Analytics page tab chrome
+   (`?tab=runs`).
+8. src/front/config/menu_config.json / routes/dtwin.py
+   Remove Management → Runs; redirect legacy `section=runs`.
+9. docs + help + tests
+   Contracts, user guide, clarity/stretch/UI rendering updates.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/templates/partials/domain/_domain_build_runs.html
+- src/front/templates/partials/domain/_domain_analytics_runs.html
+- src/front/templates/partials/domain/_domain_runs.html (deleted)
+- src/front/templates/partials/intelligence/_intel_analytics.html
+- src/front/templates/dtwin.html
+- src/front/templates/intelligence.html
+- src/front/static/domain/js/domain-runs.js
+- src/front/static/query/js/query-analytics.js
+- src/front/static/config/js/settings-runs.js
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/config/menu_config.json
+- src/front/routes/dtwin.py
+- src/api/routers/internal/dtwin.py
+- docs/user-guide.md
+- docs/development.md
+- tests/units/front/test_runs_page.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/api/test_ui_rendering.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10576 passed, 324 skipped, 8 deselected, 39 warnings in 46.36s ========
+
+## Add padding to Build page tab content
+
+Context: In Graph → Build (`/dtwin/?section=sync&tab=build`), the tab content
+container lacked padding, causing the header and content inside the Build tab
+to sit flush against the card's left border without margin or padding.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   Use standard card-integrated `.tab-content.p-3` container for
+   `#buildPageTabContent`, giving both the Build and Runs tab panes proper
+   padding from card edges.
+2. tests/units/front/test_clarity_design_contract.py
+   Assert `tab-content p-3` on the Build tab content container per the
+   design contract.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10576 passed, 324 skipped, 8 deselected, 39 warnings in 46.27s ========
+
+## Propose Auto-Map when Build mapping is not ready
+
+Context: On Graph → Build, when Mapping readiness is Not ready, users had no
+in-page path to fix mappings before Build. Add an Auto-Map CTA beside the
+Mapping badge and a two-step not-ready alert (Auto-Map / Studio, then Build).
+Studio is linked to Mapping Studio (`/mapping/?section=design`).
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sync.html
+   Add `#syncAutoMapBtn` next to Mapping readiness; rewrite not-ready alert
+   with Auto-Map then Build steps and a Studio hyperlink.
+2. src/front/static/query/js/query-sync.js
+   Show `#syncAutoMapBtn` only when mapping is not ready and the user can edit.
+3. src/front/static/query/js/query-databricks-build.js
+   Mirror Mapping badge, Auto-Map CTA, and stepped not-ready alert (with Studio
+   link) on the Lakehouse Build readiness card.
+4. tests/units/front/test_build_automap_cta.py
+   Contract tests for Lakebase/Lakehouse Auto-Map CTA, step order, and Studio link.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+- tests/units/front/test_build_automap_cta.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 45.78s ========
+
+## Left sidebar transparent background and border removal
+
+Context: Style the left navigation sidebar without a background color and without an outer border, matching the visual language of the Level-2 second navbar (`#obSubnav`).
+
+Changes:
+
+1. src/front/static/global/css/sidebar-layout.css
+   Update `.sidebar-nav` to `background: transparent; border: none; border-radius: 0;`.
+2. tests/units/front/test_clarity_design_contract.py
+   Update contract test `test_sidebar_has_transparent_background_and_no_border` to assert transparent background and no border.
+3. .cursor/11-frontend-design.mdc
+   Update sidebar design rules to document the borderless, transparent rail treatment.
+
+Modified files:
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10580 passed, 324 skipped, 8 deselected, 39 warnings in 45.90s ========
+
+## Sidebar collapse toggle: no hover highlight
+
+Context: The collapse/expand toggle at the top of the left sidebar highlighted its background on hover (`--db-hover-warm`). The user wants no hover highlight on this icon.
+
+Changes:
+
+1. src/front/static/global/css/sidebar-layout.css
+   Remove the `.sidebar-toggle:hover` background rule.
+2. tests/units/front/test_clarity_design_contract.py
+   Add `test_sidebar_toggle_has_no_hover_highlight` asserting no `.sidebar-toggle:hover` rule exists.
+
+Modified files:
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10581 passed, 324 skipped, 8 deselected, 39 warnings in 45.37s ========
+
+## Re-materialise DAB instance target before bundle run
+
+Context: `make deploy` uploaded the bundle for `dev-lakebase-10x` but failed
+at app start with `no such target` because `databricks bundle deploy` drops the
+gitignored `resources/_generated_instance_target.yml`. Re-call
+`ensure_instance_target` before each `bundle run`.
+
+Changes:
+
+1. scripts/deploy.sh
+   Re-materialise the per-instance DAB target before starting the main app and
+   again before starting the MCP companion.
+2. tests/units/settings/test_deploy_instance_id.py
+   Assert step 8 re-ensures the target before each bundle run.
+
+Modified files:
+- scripts/deploy.sh
+- tests/units/settings/test_deploy_instance_id.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10582 passed, 324 skipped, 8 deselected, 39 warnings in 45.43s ========
+
+## White card panel under section titles on bare pages
+
+Context: Domain → Versions already places body content on a white `.card`
+under the title (warm canvas around the header). Domain → Validation and
+several other sections left tiles/tables/forms floating on the warm canvas.
+Align those pages with the Versions pattern: title stays outside; content sits
+in a white card.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_validation.html
+   Wrap post-header body in `.card` / `.card-body`.
+2. src/front/templates/partials/domain/_domain_review.html
+   Wrap `#reviewBody` in a white card.
+3. src/front/templates/partials/domain/_domain_mytasks.html
+   Wrap `#domainMyTasksContainer` in a white card.
+4. src/front/templates/partials/domain/_domain_discussions.html
+   Wrap `#domainDiscussionsContainer` in a white card.
+5. src/front/templates/partials/mapping/_mapping_diagnostics.html
+   Wrap KPI tiles / empty / results in a white card.
+6. src/front/templates/partials/settings/_settings_teams.html
+   Wrap teams filters/matrix in a white card.
+7. src/front/templates/partials/settings/_settings_github.html
+   Wrap GitHub form in a white card.
+8. src/front/templates/partials/settings/_settings_schedule.html
+   Wrap schedules table in a white card.
+9. src/front/templates/partials/settings/_settings_runs.html
+   Move context filter into the existing runs card above the tab rail.
+10. src/front/templates/partials/dtwin/_query_api.html
+    Wrap API reference body in a white card.
+11. src/front/templates/settings.html
+    Wrap Locks and Logs includes in `.card` / `.card-body`.
+12. tests/units/front/test_section_content_white_panel.py
+    Contract that previously bare sections keep a white card under the title.
+13. tests/units/front/test_settings_runs_page.py
+    Allow optional content above the Runs tab rail inside the card.
+14. .cursor/11-frontend-design.mdc
+    Document the header-on-canvas / body-in-card rule for sidebar pages.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/domain/_domain_review.html
+- src/front/templates/partials/domain/_domain_mytasks.html
+- src/front/templates/partials/domain/_domain_discussions.html
+- src/front/templates/partials/mapping/_mapping_diagnostics.html
+- src/front/templates/partials/settings/_settings_teams.html
+- src/front/templates/partials/settings/_settings_github.html
+- src/front/templates/partials/settings/_settings_schedule.html
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/partials/dtwin/_query_api.html
+- src/front/templates/settings.html
+- tests/units/front/test_section_content_white_panel.py
+- tests/units/front/test_settings_runs_page.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10595 passed, 324 skipped, 8 deselected, 39 warnings in 44.57s ========
+
+## Document sidebar section body layout (white card under title)
+
+Context: The two-zone sidebar section layout (title on the warm canvas, body in
+one white `.card`, Domain → Versions as reference) must be part of the
+canonical frontend rules and the frontend-design skill so future sections
+follow it.
+
+Changes:
+
+1. .cursor/11-frontend-design.mdc
+   Add the *Section Body Surface (white card under the title)* subsection with
+   skeleton, rules, and contract test pointer.
+2. .claude/skills/frontend-design/SKILL.md
+   Add a procedure step requiring the header-on-canvas / body-in-card layout.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- .claude/skills/frontend-design/SKILL.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+## Graph/Overview layout and title, sidebar tooltips, and Build icon
+
+Context:
+1. Graph → Overview (`/dtwin/?section=insight`) previously had its title as "Insights" and its content was sitting bare on the canvas instead of inside a white card.
+2. The user requested the title to be "Overview".
+3. When the sidebar is collapsed, users need hover tooltips indicating the feature/sub-menu name.
+4. Replace the Build icon everywhere with something more relevant (`bi-hammer`) instead of `bi-fast-forward`.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_insights.html
+   Rename heading to "Overview", wrap body content inside a `.card` / `.card-body` panel.
+2. src/front/templates/partials/layout/_sidebar_nav.html
+   Add `data-sidebar-title="{{ item.label }}"` to every nav link.
+3. src/front/static/global/js/sidebar-nav.js
+   Implement `_updateTooltips()` using Bootstrap Tooltip (`placement: 'right'`, `trigger: 'hover'`, `container: 'body'`). Automatically enabled when collapsed, disabled when expanded, and hidden on click.
+4. src/front/config/menu_config.json
+   Change Build icon from `bi-fast-forward` to `bi-hammer`.
+5. src/front/templates/partials/dtwin/_query_build.html
+   Change Build icon in section header, action buttons, and tabs to `bi-hammer`.
+6. src/front/static/query/js/query-sync.js
+   Update "Go to Build" button icon to `bi-hammer`.
+7. tests/units/front/test_help_center_menu_sync.py
+   Assert consistent `bi-hammer` icon for Build.
+8. tests/units/front/test_section_content_white_panel.py
+   Add contracts verifying Overview title and white-card layout, and sidebar tooltips contract.
+9. .cursor/11-frontend-design.mdc
+   Document sidebar collapsed tooltips behavior.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_insights.html
+- src/front/templates/partials/layout/_sidebar_nav.html
+- src/front/static/global/js/sidebar-nav.js
+- src/front/config/menu_config.json
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/static/query/js/query-sync.js
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_section_content_white_panel.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10600 passed, 324 skipped, 8 deselected, 39 warnings in 47.13s ========
+
+## Build backend brand icon and Overview cache stats
+
+Context: Graph → Build needed the same large backend mark as Context → Configuration → Backend (Lakebase / Lakehouse / Neo4j). Graph → Overview only showed triple-store KPIs; users also need graph-cache companion counts (adjacency in/out, properties, entity search) and Intelligence materializations (inferred triples, communities).
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_build.html
+   Page header shows a large `.ob-brand-icon` next to the Build title.
+2. src/front/static/query/css/query-sync.css
+   Sizes `.build-backend-logo` like the Configuration backend cards, larger.
+3. src/front/static/query/js/query-sync.js
+   Sets the brand icon from the active backend; Overview renders cache + Intelligence KPI rows.
+4. src/front/static/query/js/query-databricks-build.js
+   Updates the Build header icon when Lakehouse panels are applied.
+5. src/front/templates/partials/dtwin/_query_insights.html
+   Adds Graph cache and Materialized from Intelligence blocks under the summary tiles.
+6. src/back/core/graphdb/interfaces/SearchCacheMixin.py
+   `companion_inventory` returns ready flags and `COUNT(*)` for adj in/out, props, and entity-search tables.
+7. src/back/objects/digitaltwin/TwinGraphStats.py
+   `/sync/stats` payload includes `graph_cache` and `intelligence`; stale session cache without `graph_cache` is refreshed.
+8. src/api/routers/internal/dtwin.py
+   Loads companion inventory and community totals in parallel with existing stats queries.
+9. tests/units/front/test_search_cache_ui.py
+   Contracts for the Build brand icon and Overview cache / Intelligence markup.
+10. tests/units/graphdb/test_search_cache.py
+    Companion inventory counts, missing tables, and Neo4j-style empty inventory.
+11. tests/units/dtwin/test_v090_twin_build_prepare.py
+    Stats cache freshness requires `graph_cache`; assemble exposes cache + Intelligence blocks.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_build.html
+- src/front/static/query/css/query-sync.css
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+- src/front/templates/partials/dtwin/_query_insights.html
+- src/back/core/graphdb/interfaces/SearchCacheMixin.py
+- src/back/objects/digitaltwin/TwinGraphStats.py
+- src/api/routers/internal/dtwin.py
+- tests/units/front/test_search_cache_ui.py
+- tests/units/graphdb/test_search_cache.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10606 passed, 324 skipped, 8 deselected, 39 warnings in 45.33s ========
+
+## Move Mapping R2RML import into General → R2RML
+
+Context: Mapping had a dedicated Import sidebar page for R2RML files. Import belongs with the R2RML preview/export surface under General, so the Import page is removed and the controls live in the R2RML tab.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_r2rml.html
+   Hosts Import button, replace warning, result banner, and file input next to Copy / Download / Regenerate.
+2. src/front/templates/partials/mapping/_mapping_import.html
+   Removed — Import is no longer a sidebar section.
+3. src/front/templates/mapping.html
+   Drops the `#import-section` include.
+4. src/front/config/menu_config.json
+   Removes Mapping → Design → Import menu item (Ontology Import unchanged).
+5. src/front/static/mapping/js/mapping-init-section.js
+   Legacy `?section=import` opens General and flags the R2RML tab.
+6. src/front/static/mapping/js/mapping-r2rml.js
+   Activates the R2RML tab when the legacy import deep-link flag is set.
+7. src/front/static/mapping/js/mapping-import.js
+   After a successful parse, refreshes the R2RML preview from returned Turtle or regenerate.
+8. src/front/templates/partials/mapping/_mapping_information.html
+   General subtitle mentions R2RML import.
+9. src/front/templates/partials/layout/help_modal.html
+   Workflow copy points Import at General → R2RML.
+10. tests/units/front/test_mapping_r2rml_import_tab.py
+    Contracts for menu removal, R2RML-tab import controls, and help copy.
+11. tests/units/api/test_ui_rendering.py
+    Mapping sidebar no longer expects Import; asserts R2RML import button exists.
+12. tests/units/front/test_sidebar_content_stretch_contract.py
+    Drops Mapping Import section/partial from the stretch inventory.
+13. tests/e2e/mapping/test_mapping_flows.py
+    Sidebar sections without Import; covers R2RML-tab Import button.
+14. tests/e2e/README.md
+    Documents the Mapping sidebar without Import.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_r2rml.html
+- src/front/templates/partials/mapping/_mapping_import.html (deleted)
+- src/front/templates/mapping.html
+- src/front/config/menu_config.json
+- src/front/static/mapping/js/mapping-init-section.js
+- src/front/static/mapping/js/mapping-r2rml.js
+- src/front/static/mapping/js/mapping-import.js
+- src/front/templates/partials/mapping/_mapping_information.html
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_mapping_r2rml_import_tab.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10608 passed, 324 skipped, 8 deselected, 39 warnings in 48.08s ========
+
+## Move Batch Auto-Map into a modal popup
+
+Context: Mapping → Auto-Map was a full sidebar page. Batch Auto-Map belongs next to Studio / Manual editing, and Graph → Build already offered an Auto-Map CTA. Converted Auto-Map into a Bootstrap modal opened from Studio, Manual, and Build; removed the Auto-Map page.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_autoassign_modal.html
+   New modal-xl scrollable dialog with gauges, Map All / Cancel / Re-Assign, report, and progress host.
+2. src/front/templates/partials/mapping/_mapping_autoassign.html
+   Deleted — Auto-Map is no longer a sidebar section.
+3. src/front/templates/mapping.html
+   Includes the modal; drops `#autoassign-section`.
+4. src/front/config/menu_config.json
+   Removes Mapping → Advanced → Auto-Map.
+5. src/front/templates/partials/mapping/_mapping_design.html
+   Studio header Auto-Map button opens the modal.
+6. src/front/templates/partials/mapping/_mapping_manual.html
+   Manual header Auto-Map button opens the modal.
+7. src/front/static/mapping/js/mapping-autoassign.js
+   `AutoAssignModule.open()`, modal host for progress, deep-link `/mapping/?open=automap`, block close while running.
+8. src/front/static/mapping/js/mapping-init.js / mapping-init-section.js
+   Section-nav guard no longer special-cases autoassign; legacy `?section=autoassign` opens Studio + modal.
+9. src/front/templates/partials/dtwin/_query_sync.html
+   Build Auto-Map CTA links to `/mapping/?open=automap`.
+10. src/front/static/query/js/query-databricks-build.js
+    Lakehouse Build readiness Auto-Map CTA uses the same deep-link.
+11. src/front/static/global/js/task-tracker.js
+    Resume deep-link for `auto_assign` opens the modal.
+12. src/front/static/global/css/permissions.css
+    View-mode disables the new open / Map All / Re-Assign controls.
+13. src/front/templates/partials/layout/help_modal.html
+    Help copy points Auto-Map at the Studio/Manual/Build dialog.
+14. tests/units/front/test_mapping_automap_modal.py
+    Contracts for menu removal, modal markup, Studio/Manual buttons, Build deep-link.
+15. tests/units/front/test_build_automap_cta.py / test_no_llm_ui_gate.py / test_sidebar_content_stretch_contract.py / test_ui_rendering.py
+    Updated for modal + removed page.
+16. tests/e2e/mapping/test_mapping_flows.py / scenarios/test_scenario_01_generate_live.py / e2e/README.md
+    E2E opens the modal via deep-link / Studio button.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_autoassign_modal.html
+- src/front/templates/partials/mapping/_mapping_autoassign.html (deleted)
+- src/front/templates/mapping.html
+- src/front/config/menu_config.json
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/mapping/_mapping_manual.html
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/js/mapping-init-section.js
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/global/js/task-tracker.js
+- src/front/static/global/css/permissions.css
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_build_automap_cta.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/e2e/README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10611 passed, 324 skipped, 8 deselected, 39 warnings in 46.51s ========
+
+## Auto-Map popup alignment and Mapping Diagnostics popup in Graph/Build
+
+Context:
+1. In the Batch Auto-Map modal, align the Auto-Map button on the top right next to the close button.
+2. In Graph → Build, clicking Auto-Map opens the modal in place without navigating away; running it allows closing/dismissing while it runs in the background, updating Build readiness when complete.
+3. Convert Mapping Diagnostics into a popup modal window and remove the Diagnostics page from the Mapping sidebar. In Graph/Build, when mapping is not ready, provide a Diagnostics button that opens this popup.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_autoassign_modal.html
+   Header action buttons aligned top-right (`ms-auto` container with Close button). Added "Run in background" button.
+2. src/front/static/mapping/js/mapping-autoassign.js
+   Self-contained canvas arc gauge fallback; `ensureLoaded` hydrates ontology and mappings on any page; modal can be dismissed while running in background; on completion refreshes Build readiness.
+3. src/front/templates/partials/mapping/_mapping_diagnostics_modal.html
+   New Diagnostics modal popup window with Run Diagnostics, KPI tiles, and issues accordion.
+4. src/front/templates/partials/mapping/_mapping_diagnostics.html
+   Removed — Diagnostics is no longer a sidebar section.
+5. src/front/templates/mapping.html
+   Drops `#diagnostics-section` and includes `_mapping_diagnostics_modal.html`.
+6. src/front/config/menu_config.json
+   Removes Mapping → Advanced → Diagnostics (leaving Design: General, Studio, Manual).
+7. src/front/templates/dtwin.html
+   Includes `_mapping_autoassign_modal.html`, `_mapping_diagnostics_modal.html`, `mapping-diagnostics.css`, and modal scripts.
+8. src/front/templates/partials/dtwin/_query_sync.html
+   When mapping is not ready, shows Auto-Map button (opens modal in place) and Diagnostics button (opens diagnostics modal in place).
+9. src/front/static/query/js/query-sync.js
+   Toggles Diagnostics button alongside Auto-Map button based on mapping readiness.
+10. src/front/static/query/js/query-databricks-build.js
+    Lakehouse readiness renders Auto-Map and Diagnostics buttons opening modals in place.
+11. src/front/static/mapping/js/mapping-diagnostics.js
+    Exposes `window.MappingDiagnostics.open()`, runs diagnostics automatically on modal open.
+12. src/front/static/mapping/js/mapping-init-section.js
+    Legacy `?section=diagnostics` deep-link opens the diagnostics modal.
+13. src/front/templates/partials/layout/help_modal.html
+    Help copy updated for Build diagnostics and modal Auto-Map.
+14. tests/units/front/test_mapping_diagnostics_modal.py
+    Contracts for menu removal, modal markup, dtwin inclusion, and Build readiness buttons.
+15. tests/units/front/test_mapping_automap_modal.py / test_build_automap_cta.py / test_section_content_white_panel.py / test_sidebar_content_stretch_contract.py / test_ui_rendering.py / test_button_design_contract.py / tests/e2e/mapping/test_mapping_flows.py / tests/e2e/README.md
+    Updated contracts and tests.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_autoassign_modal.html
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/templates/partials/mapping/_mapping_diagnostics_modal.html
+- src/front/templates/partials/mapping/_mapping_diagnostics.html (deleted)
+- src/front/templates/mapping.html
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/mapping/js/mapping-diagnostics.js
+- src/front/static/mapping/js/mapping-init-section.js
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_mapping_diagnostics_modal.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_build_automap_cta.py
+- tests/units/front/test_section_content_white_panel.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_button_design_contract.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10612 passed, 324 skipped, 8 deselected, 39 warnings in 44.40s ========
+
+
+
+## Move Mapping under Graph and remove top-level Mapping menu
+
+Context: Mapping (General, Studio, Manual) was a separate L2 workspace. Fold it
+into a Mapping sidebar group on Graph, drop the top-level Mapping menu / column,
+and keep legacy `/mapping/` URLs as redirects into `/dtwin/?section=…`. Docs and
+inline comments updated to match.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Remove `assignment` menu; add `digitaltwin-mapping` (General / Studio / Manual)
+   as the first Graph sidebar group.
+2. src/front/templates/dtwin.html
+   Host Mapping sections, CSS, scripts, and init; keep Auto-Map / Diagnostics modals.
+3. src/front/templates/mapping.html
+   Deleted — HTML entry is a redirect only.
+4. src/front/routes/mapping.py
+   Legacy `/mapping/` → `/dtwin/?section=information` (preserves query string).
+5. src/front/templates/base.html
+   Remove L2 Mapping dropdown (`subnavMappingDropdown`).
+6. src/front/templates/partials/layout/_workspace_map_modal.html
+   Four columns (Context, Ontology, Graph, Intelligence); Mapping items under Graph.
+7. src/front/static/global/css/components.css
+   Workspace map grid uses 4 columns.
+8. src/front/static/mapping/js/mapping-init.js
+   Hosted-on-Graph mode: `MappingPageHooks` + `sidebarSectionChanged`; query.js owns SidebarNav.
+9. src/front/static/query/js/query.js
+   Wire `onBeforeSectionChange` through MappingPageHooks (Auto-Map gate / autosave).
+10. Deep-links and CTAs
+    Studio / Assign / Auto-Map task resume → `/dtwin/?…` (Build, task-tracker,
+    ontology panels, domain validation).
+11. Help + docs
+    help_modal, user-guide, getting-started, development, architecture, api,
+    examples — Graph → Mapping navigation; Diagnostics/Auto-Map as modals.
+12. Inline comments
+    navbar.js, mapping-init.js, mapping-import.js, mapping-autoassign.js,
+    permissions.css — no longer refer to a top-level Mapping page.
+13. Tests
+    Workspace map, subnav, help sync, UI rendering, unload redirects, e2e mapping
+    flows updated for Graph-hosted Mapping.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/front/templates/mapping.html (deleted)
+- src/front/routes/mapping.py
+- src/front/templates/base.html
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/global/css/components.css
+- src/front/static/global/css/permissions.css
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/task-tracker.js
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/mapping/js/mapping-import.js
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/static/query/js/query.js
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/domain/js/domain-validation.js
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/development.md
+- docs/architecture.md
+- docs/api.md
+- docs/examples.md
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_mapping_automap_modal.py
+- tests/units/front/test_mapping_diagnostics_modal.py
+- tests/units/front/test_mapping_r2rml_import_tab.py
+- tests/units/front/test_unloaded_workspace_redirect.py
+- tests/units/front/test_build_automap_cta.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_inherited_relations_ui.py
+- tests/units/front/test_mapping_designer_split_layout.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_knowledge_graph_icon.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/mapping/test_mapping_flows.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → ======== 10613 passed, 324 skipped, 8 deselected, 39 warnings in 45.80s ========

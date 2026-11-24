@@ -36,6 +36,8 @@ _READY_FLAGS = (
     "_cohort_schedules_imported",
     "_domain_documents_ready",
     "_simulation_tables_ready",
+    "_community_runs_ready",
+    "_pattern_runs_ready",
 )
 
 

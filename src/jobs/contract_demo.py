@@ -26,8 +26,12 @@ DEFAULT_STATUS = "DRAFT"
 
 
 def sql_escape(value: str) -> str:
-    """Escape single quotes for a SQL string literal."""
-    return (value or "").replace("'", "''")
+    """Escape a value for a Spark ``'...'`` literal.
+
+    Spark treats a backslash as an escape character, so it is doubled before
+    quotes; otherwise ``\\'`` closes the literal early.
+    """
+    return (value or "").replace("\\", "\\\\").replace("'", "''")
 
 
 def validate_identifier(name: str, label: str) -> str:

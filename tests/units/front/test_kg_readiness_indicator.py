@@ -16,8 +16,14 @@ _KG_PAGES = [
     "src/front/templates/partials/dtwin/_query_chat.html",
     "src/front/templates/partials/dtwin/_query_insights.html",
     "src/front/templates/partials/dtwin/_query_reasoning.html",
-    "src/front/templates/partials/dtwin/_query_cohorts.html",
-    "src/front/templates/partials/dtwin/_query_analytics.html",
+    "src/front/templates/partials/ontology/_ontology_cohorts.html",
+    "src/front/templates/partials/intelligence/_intel_analytics.html",
+    "src/front/templates/partials/intelligence/_intel_communities.html",
+    "src/front/templates/partials/intelligence/_intel_patterns.html",
+    "src/front/templates/partials/intelligence/_intel_patterns_saved.html",
+    "src/front/templates/partials/intelligence/_sim_scenarios.html",
+    "src/front/templates/partials/intelligence/_sim_workbench.html",
+    "src/front/templates/partials/intelligence/_sim_compare.html",
 ]
 
 
@@ -40,6 +46,32 @@ def test_update_kg_ready_indicators_covers_three_states():
     assert "Graph ready" in js
     assert "Graph not built" in js
     assert "kg-go-build-btn" in js
+    # Badge updater also drives the blocking page gate.
+    assert "updateKgGates()" in js
+
+
+def test_kg_gate_blocks_when_graph_is_definitely_empty():
+    js = SYNC_JS.read_text(encoding="utf-8")
+    assert "function updateKgGates()" in js
+    assert "function _kgShouldBlockPage()" in js
+    assert "Knowledge Graph not ready" in js
+    assert "data-kg-gate" in js
+    assert "kg-gate-blocked" in js
+    # Unknown / pending / building must not block with a rebuild CTA.
+    body = js[js.index("function _kgShouldBlockPage()"):]
+    body = body[: body.index("\n}")]
+    assert "!tripleStoreStatusUnknown" in body
+    assert "!tripleStoreStatusPending" in body
+    assert "!syncIsRunning" in body
+
+
+def test_kg_gate_keeps_modals_mounted():
+    js = SYNC_JS.read_text(encoding="utf-8")
+    assert "function _kgSiblingIsModalHost(" in js
+    body = js[js.index("function updateKgGates()"):]
+    body = body[: body.index("\nfunction _kgSiblingIsModalHost(")]
+    assert "_kgSiblingIsModalHost(sib)" in body
+    assert "kg-gate-hidden" in body
 
 
 def test_backend_label_covers_lakehouse_neo4j_lakebase():
@@ -67,12 +99,45 @@ def test_go_to_build_delegated_click_handler_present():
     js = SYNC_JS.read_text(encoding="utf-8")
     assert "kg-go-build-btn" in js
     assert 'data-section="sync"' in js
+    # Intelligence has no Build sidebar link — jump to Graph → Build.
+    assert "/dtwin/?section=sync" in js
+
+
+def test_intelligence_page_loads_query_sync_for_the_badge():
+    html = (REPO_ROOT / "src/front/templates/intelligence.html").read_text(
+        encoding="utf-8"
+    )
+    assert "query/js/query-sync.js" in html
+
+
+def test_pages_without_build_section_still_probe_graph_status():
+    js = SYNC_JS.read_text(encoding="utf-8")
+    body = js[js.index("document.addEventListener('DOMContentLoaded'"):]
+    assert "querySelector('[data-kg-status]')" in body
+    assert "checkTripleStoreStatus()" in body
 
 
 def test_kg_status_css_present():
     css = SYNC_CSS.read_text(encoding="utf-8")
     assert ".kg-status-indicator" in css
     assert ".kg-go-build-btn" in css
+    assert ".kg-gate-card" in css
+    assert ".kg-gate-blocked" in css
+    components = (
+        REPO_ROOT / "src/front/static/global/css/components.css"
+    ).read_text(encoding="utf-8")
+    assert ".kg-gate-card" in components
+    assert ".kg-gate-blocked" in components
+
+
+def test_ready_badge_has_high_contrast_classes_and_visible_icon():
+    js = SYNC_JS.read_text(encoding="utf-8")
+    ready_slice = js[js.index("else if (tripleStoreHasData)") : js.index("else if (tripleStoreStatusUnknown)")]
+    assert "bg-success-subtle" in ready_slice
+    assert "text-success-emphasis" in ready_slice
+    assert "border-success-subtle" in ready_slice
+    # Must not have opacity-75 washing out backend brand mark and text
+    assert "opacity-75" not in ready_slice
 
 
 class TestAnUnreachableEngineIsNotAMissingGraph:

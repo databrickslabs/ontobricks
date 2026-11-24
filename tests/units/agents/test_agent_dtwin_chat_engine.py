@@ -5,8 +5,14 @@ from unittest.mock import patch
 
 import pytest
 
-from agents.agent_dtwin_chat.engine import AgentResult, normalize_reply_content, run_agent
+from agents.agent_dtwin_chat.engine import (
+    DEFAULT_MAX_TOKENS,
+    AgentResult,
+    normalize_reply_content,
+    run_agent,
+)
 from agents.tools.context import ToolContext
+from shared.config.settings import Settings
 
 _PENDING_ACTION = {
     "token": "tok",
@@ -71,6 +77,69 @@ def _run_with_scripted_llm(llm_side_effect):
             session_cookies={},
             user_message="recompute risk",
         )
+
+
+def _final_answer_response():
+    return {
+        "choices": [{"message": {"content": "Answer", "tool_calls": None}}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+    }
+
+
+def test_engine_default_max_tokens_matches_settings_default():
+    assert DEFAULT_MAX_TOKENS == Settings.model_fields["dtwin_chat_max_tokens"].default
+
+
+@pytest.mark.parametrize("configured, expected", [(None, 8192), (4096, 4096)])
+def test_run_agent_sends_the_configured_max_tokens(configured, expected):
+    extra = {} if configured is None else {"max_tokens": configured}
+    with patch(
+        "agents.agent_dtwin_chat.engine.call_serving_endpoint",
+        return_value=_final_answer_response(),
+    ) as llm:
+        result = run_agent(
+            host="https://example.invalid",
+            token="token",
+            endpoint_name="endpoint",
+            base_url="http://localhost:8000",
+            domain_name="main",
+            registry_params={},
+            session_cookies={},
+            user_message="hello",
+            **extra,
+        )
+
+    assert result.reply == "Answer"
+    assert llm.call_args.kwargs["max_tokens"] == expected
+
+
+def test_run_agent_forwards_domain_endpoint_kind():
+    seen = {}
+
+    def _call_llm(*_args, **kwargs):
+        seen.update(kwargs)
+        return {
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {},
+        }
+
+    with patch(
+        "agents.agent_dtwin_chat.engine.call_serving_endpoint",
+        side_effect=_call_llm,
+    ):
+        result = run_agent(
+            host="https://example.invalid",
+            token="token",
+            endpoint_name="databricks-claude-opus-4-6",
+            endpoint_kind="ai_gateway",
+            base_url="http://localhost:8000",
+            domain_name="main",
+            registry_params={},
+            session_cookies={},
+            user_message="hello",
+        )
+    assert result.success is True
+    assert seen["endpoint_kind"] == "ai_gateway"
 
 
 def test_run_agent_preserves_pending_action_on_llm_error():
@@ -145,3 +214,63 @@ def test_normalize_reply_content_uses_non_technical_fallback(content):
     assert normalize_reply_content(content) == (
         "I couldn't display that answer. Please try again."
     )
+
+
+def test_run_agent_keeps_full_tool_result_in_trace_steps():
+    """The Graph Chat thinking trace must show the complete tool output."""
+    big_result = json.dumps({"rows": ["x" * 40] * 60})  # well over 500 chars
+    assert len(big_result) > 500
+
+    def llm_side_effect(*_args, **_kwargs):
+        if llm_side_effect.calls == 0:
+            llm_side_effect.calls += 1
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": "tc1",
+                                    "function": {
+                                        "name": "list_entity_types",
+                                        "arguments": "{}",
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+        return {"choices": [{"message": {"content": "done"}}], "usage": {}}
+
+    llm_side_effect.calls = 0
+
+    def _dispatch(_handlers, _ctx, _tool_name, _arguments, *, trace_name=""):
+        return big_result
+
+    with (
+        patch(
+            "agents.agent_dtwin_chat.engine.call_serving_endpoint",
+            side_effect=llm_side_effect,
+        ),
+        patch(
+            "agents.agent_dtwin_chat.engine.dispatch_tool",
+            side_effect=_dispatch,
+        ),
+    ):
+        result = run_agent(
+            host="https://example.invalid",
+            token="token",
+            endpoint_name="endpoint",
+            base_url="http://localhost:8000",
+            domain_name="main",
+            registry_params={},
+            session_cookies={},
+            user_message="list types",
+        )
+
+    result_steps = [s for s in result.steps if s.step_type == "tool_result"]
+    assert len(result_steps) == 1
+    assert result_steps[0].content == big_result

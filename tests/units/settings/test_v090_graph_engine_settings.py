@@ -144,7 +144,7 @@ class TestLakehouseDomainVersionKeys:
             "from_context",
             return_value=self._svc(ok=False, message="nope"),
         ):
-            with pytest.raises(InfrastructureError, match="Failed to list registry domains"):
+            with pytest.raises(InfrastructureError, match="Failed to list registry contexts"):
                 SettingsService._lakehouse_domain_version_keys(MagicMock(), MagicMock())
 
 

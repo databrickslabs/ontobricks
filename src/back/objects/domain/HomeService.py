@@ -246,9 +246,21 @@ class HomeService:
 
     @staticmethod
     async def get_detailed_validation(
-        domain, settings, warehouse_id: str = ""
+        domain,
+        settings,
+        warehouse_id: str = "",
+        parts: str | None = None,
     ) -> Dict[str, Any]:
         """Get detailed validation status.
+
+        ``parts`` selects which payload slices to compute so the Context →
+        General page can paint progressively:
+
+        - ``overview`` — in-session ontology / mapping / metadata / warehouse
+          (no UC or Lakebase I/O)
+        - ``documents`` — live UC document count
+        - ``graph`` — Knowledge Graph status + artefact existence
+        - omitted / ``all`` — full payload (previous behaviour)
 
         Knowledge Graph graph status and artefact existence are served from the
         session cache when available (populated after each successful build).
@@ -258,24 +270,102 @@ class HomeService:
             domain: DomainSession instance
             settings: App settings (Databricks / warehouse resolution)
             warehouse_id: resolved warehouse ID (empty string if none)
+            parts: comma-separated slice names (see above)
 
         Returns:
-            dict: Comprehensive validation details
+            dict: Validation details for the requested parts
         """
         from back.objects.domain.Domain import Domain
         from back.objects.digitaltwin import DigitalTwin
 
-        dt = DigitalTwin(domain)
-        await run_blocking(dt.sync_last_build_from_schedule, settings)
-        ts_status, dt_exist, document_count = await asyncio.gather(
-            dt.get_or_fetch_graph_status(settings),
-            # Cockpit must show the live Lakebase state — bypass the session
-            # cache to avoid replaying a stale failure ("table not found")
-            # across page loads.
-            dt.get_or_fetch_dt_existence(settings, force_refresh=True),
-            run_blocking(Domain(domain).count_documents, settings),
-        )
+        requested = HomeService._normalize_validation_parts(parts)
+        result: Dict[str, Any] = {
+            "success": True,
+            "parts": sorted(requested),
+        }
 
+        if "overview" in requested:
+            result.update(
+                HomeService._build_validation_overview(domain, warehouse_id)
+            )
+
+        need_documents = "documents" in requested
+        need_graph = "graph" in requested
+        if need_documents or need_graph:
+            dt = DigitalTwin(domain)
+            coros = []
+            labels = []
+            if need_graph:
+                await run_blocking(dt.sync_last_build_from_schedule, settings)
+                coros.append(dt.get_or_fetch_graph_status(settings))
+                # Cockpit must show the live Lakebase state — bypass the session
+                # cache to avoid replaying a stale failure ("table not found")
+                # across page loads.
+                coros.append(
+                    dt.get_or_fetch_dt_existence(settings, force_refresh=True)
+                )
+                labels.extend(["ts_status", "dt_exist"])
+            if need_documents:
+                coros.append(run_blocking(Domain(domain).count_documents, settings))
+                labels.append("document_count")
+            values = await asyncio.gather(*coros)
+            fetched = dict(zip(labels, values))
+            if need_documents:
+                result["document_count"] = fetched["document_count"]
+            if need_graph:
+                result["dtwin"] = HomeService._build_validation_graph_detail(
+                    domain,
+                    fetched["ts_status"],
+                    fetched["dt_exist"],
+                )
+
+        return result
+
+    @staticmethod
+    def _normalize_validation_parts(parts: str | None) -> set[str]:
+        """Parse ``parts`` into a set; empty / all → full payload."""
+        allowed = {"overview", "documents", "graph"}
+        if not parts or parts.strip().lower() in {"", "all"}:
+            return set(allowed)
+        requested = {
+            p.strip().lower()
+            for p in parts.split(",")
+            if p.strip()
+        }
+        unknown = requested - allowed
+        if unknown:
+            raise ValueError(
+                f"Unknown validation parts: {sorted(unknown)}; "
+                f"allowed={sorted(allowed)}"
+            )
+        return requested or set(allowed)
+
+    @staticmethod
+    def _ontology_warnings(domain, active_props) -> list[str]:
+        """Advisory ontology warnings for the General overview."""
+        warnings: list[str] = []
+        ontology_name = domain.ontology.get("name", "")
+        if not ontology_name or ontology_name == "MyOntology":
+            warnings.append("Ontology name is still set to default")
+        object_props = [p for p in active_props if p.get("type") != "DatatypeProperty"]
+        if len(object_props) == 0:
+            warnings.append("No relationships defined")
+        props_without_domain = [p for p in object_props if not p.get("domain")]
+        if props_without_domain:
+            names = ", ".join(
+                p.get("label") or p.get("name", "(unnamed)")
+                for p in props_without_domain
+            )
+            warnings.append(
+                f"{len(props_without_domain)} relationship(s) without context: {names}"
+            )
+        return warnings
+
+    @staticmethod
+    def _build_validation_overview(
+        domain, warehouse_id: str = ""
+    ) -> Dict[str, Any]:
+        """In-session overview slice — no UC / Lakebase I/O."""
         all_classes = domain.get_classes()
         all_properties = domain.get_properties()
         active_classes, active_props, all_obj_props, _ = (
@@ -283,19 +373,14 @@ class HomeService:
         )
         entity_mappings = domain.get_entity_mappings()
         relationship_mappings = domain.get_relationship_mappings()
-        design_layout = domain.design_layout
 
         active_entity_mappings = [m for m in entity_mappings if not m.get("excluded")]
         active_relationship_mappings = [
             m for m in relationship_mappings if not m.get("excluded")
         ]
-        ignored_entity_count = len(all_classes) - len(active_classes)
-        ignored_rel_count = len(all_obj_props) - len(active_props)
-
         ontology_valid, ontology_errors = HomeService._validate_ontology_classes(
             all_classes
         )
-
         unmapped_entities, unmapped_relationships, unmapped_attributes, *_ = (
             HomeService._compute_mapping_gaps(
                 active_classes,
@@ -304,9 +389,6 @@ class HomeService:
                 active_relationship_mappings,
             )
         )
-
-        has_design = bool(design_layout and design_layout.get("views"))
-
         mapping_issues = HomeService._build_mapping_issues(
             active_classes,
             active_props,
@@ -316,88 +398,24 @@ class HomeService:
             len(unmapped_relationships),
             len(unmapped_attributes),
         )
-        mapping_warnings = []
-
-        # Mapping is complete ONLY if ALL active classes, ObjectProperties, and attributes are mapped
-        all_classes_mapped = len(unmapped_entities) == 0 and len(active_classes) > 0
-        all_properties_mapped = len(unmapped_relationships) == 0
-        all_attributes_mapped = len(unmapped_attributes) == 0
         mapping_complete = (
-            all_classes_mapped and all_properties_mapped and all_attributes_mapped
+            len(unmapped_entities) == 0
+            and len(active_classes) > 0
+            and len(unmapped_relationships) == 0
+            and len(unmapped_attributes) == 0
         )
         mapping_valid = mapping_complete and len(mapping_issues) == 0
-
         mapped_entity_count = len(active_classes) - len(unmapped_entities)
         mapped_rel_count = len(active_props) - len(unmapped_relationships)
-
-        # Ontology warnings
-        ontology_warnings = []
-        ontology_name = domain.ontology.get("name", "")
-        if not ontology_name or ontology_name == "MyOntology":
-            ontology_warnings.append("Ontology name is still set to default")
-        object_props = [p for p in active_props if p.get("type") != "DatatypeProperty"]
-        if len(object_props) == 0:
-            ontology_warnings.append("No relationships defined")
-        props_without_domain = [p for p in object_props if not p.get("domain")]
-        if props_without_domain:
-            names = ", ".join(
-                p.get("label") or p.get("name", "(unnamed)")
-                for p in props_without_domain
-            )
-            ontology_warnings.append(
-                f"{len(props_without_domain)} relationship(s) without domain: {names}"
-            )
-
-        dtwin = HomeService._compute_dtwin_indicator(domain, ts_status, dt_exist)
-
-        dt_existence = dt_exist or {}
-        ts_st = ts_status or {}
-
-        last_update = domain.last_update
-        last_build = domain.last_build
-        needs_rebuild = bool(last_update and last_build and last_update > last_build)
-
-        dtwin_detail = {
-            **dtwin,
-            "view_exists": dt_existence.get("view_exists"),
-            "view_table": dt_existence.get("view_table", ""),
-            "view_check_error": dt_existence.get("view_check_error"),
-            "graph_name": dt_existence.get("graph_name", ""),
-            "graph_has_data": dt_existence.get("graph_has_data", False),
-            "graph_display": dt_existence.get("graph_display", ""),
-            "lakebase_table_exists": dt_existence.get("lakebase_table_exists"),
-            "lakebase_check_error": dt_existence.get("lakebase_check_error"),
-            "lakebase_database": dt_existence.get("lakebase_database", ""),
-            "lakebase_schema": dt_existence.get("lakebase_schema", ""),
-            "lakebase_table": dt_existence.get("lakebase_table", ""),
-            "lakebase_synced_uc": dt_existence.get("lakebase_synced_uc", ""),
-            "lakebase_synced_uc_exists": dt_existence.get("lakebase_synced_uc_exists"),
-            "lakebase_sync_mode": dt_existence.get("lakebase_sync_mode", "app_managed"),
-            "graph_engine": dt_existence.get("graph_engine", "lakebase"),
-            "last_built": last_build,
-            "last_update": last_update,
-            "has_data": ts_st.get("has_data", False),
-            "triple_count": dt_existence.get("triple_count") or ts_st.get("count", 0),
-            "needs_rebuild": needs_rebuild,
-        }
-
-        # Metadata table count (in-session, no I/O)
+        has_design = bool(
+            domain.design_layout and domain.design_layout.get("views")
+        )
         metadata = domain._data["domain"].get("metadata", {})
-        metadata_table_count = len(metadata.get("tables", [])) if metadata else 0
-
-        # Document count: live list of UC documents path (same rules as domain documents list)
-
         domain_info = domain.info or {}
-        dname = domain_info.get("name", "NewDomain")
-        dversion = domain.current_version or "1"
-
         detail_datatype_props = [
             p for p in all_properties if p.get("type") != "ObjectProperty"
         ]
-
         return {
-            "success": True,
-            # Flat format expected by the JavaScript
             "ontology_valid": ontology_valid,
             "mapping_valid": mapping_valid,
             "mapping_complete": mapping_complete,
@@ -412,25 +430,23 @@ class HomeService:
                 "relationships": mapped_rel_count,
                 "total_classes": len(active_classes),
                 "total_properties": len(active_props),
-                "ignored_entities": ignored_entity_count,
-                "ignored_relationships": ignored_rel_count,
+                "ignored_entities": len(all_classes) - len(active_classes),
+                "ignored_relationships": len(all_obj_props) - len(active_props),
             },
             "ontology_issues": ontology_errors,
-            "ontology_warnings": ontology_warnings,
+            "ontology_warnings": HomeService._ontology_warnings(domain, active_props),
+            "design_checks": HomeService._design_check_summary(domain),
             "mapping_issues": mapping_issues,
-            "mapping_warnings": mapping_warnings,
+            "mapping_warnings": [],
             "unmapped_entities": unmapped_entities,
             "unmapped_relationships": unmapped_relationships,
             "unmapped_attributes": unmapped_attributes,
-            # Knowledge Graph status (summary + detail)
-            "dtwin": dtwin_detail,
-            # Warehouse status
             "warehouse": {"warehouse_id": warehouse_id},
-            "metadata_table_count": metadata_table_count,
-            "document_count": document_count,
-            "domain_name": dname,
-            "domain_version": dversion,
-            # Also include nested format for other consumers
+            "metadata_table_count": (
+                len(metadata.get("tables", [])) if metadata else 0
+            ),
+            "domain_name": domain_info.get("name", "NewDomain"),
+            "domain_version": domain.current_version or "1",
             "ontology": {
                 "valid": ontology_valid,
                 "entity_count": len(all_classes),
@@ -448,6 +464,46 @@ class HomeService:
         }
 
     @staticmethod
+    def _build_validation_graph_detail(
+        domain,
+        ts_status: Dict[str, Any],
+        dt_exist: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Knowledge Graph slice of the validation payload."""
+        dtwin = HomeService._compute_dtwin_indicator(domain, ts_status, dt_exist)
+        dt_existence = dt_exist or {}
+        ts_st = ts_status or {}
+        last_update, last_build = domain.last_update, domain.last_build
+        needs_rebuild = bool(last_update and last_build and last_update > last_build)
+        return {
+            **dtwin,
+            "view_exists": dt_existence.get("view_exists"),
+            "view_table": dt_existence.get("view_table", ""),
+            "view_check_error": dt_existence.get("view_check_error"),
+            "graph_name": dt_existence.get("graph_name", ""),
+            "graph_has_data": dt_existence.get("graph_has_data", False),
+            "graph_display": dt_existence.get("graph_display", ""),
+            "lakebase_table_exists": dt_existence.get("lakebase_table_exists"),
+            "lakebase_check_error": dt_existence.get("lakebase_check_error"),
+            "lakebase_database": dt_existence.get("lakebase_database", ""),
+            "lakebase_schema": dt_existence.get("lakebase_schema", ""),
+            "lakebase_table": dt_existence.get("lakebase_table", ""),
+            "lakebase_synced_uc": dt_existence.get("lakebase_synced_uc", ""),
+            "lakebase_synced_uc_exists": dt_existence.get(
+                "lakebase_synced_uc_exists"
+            ),
+            "lakebase_sync_mode": dt_existence.get(
+                "lakebase_sync_mode", "app_managed"
+            ),
+            "graph_engine": dt_existence.get("graph_engine", "lakebase"),
+            "last_built": last_build,
+            "last_update": last_update,
+            "has_data": ts_st.get("has_data", False),
+            "triple_count": dt_existence.get("triple_count") or ts_st.get("count", 0),
+            "needs_rebuild": needs_rebuild,
+        }
+
+    @staticmethod
     def _compute_dtwin_indicator(
         domain,
         ts_status: Dict[str, Any],
@@ -460,6 +516,15 @@ class HomeService:
         from back.objects.digitaltwin import DigitalTwin
 
         return DigitalTwin.compute_dtwin_indicator(domain, ts_status, dt_exist)
+
+    @staticmethod
+    def _design_check_summary(domain) -> Dict[str, int]:
+        """Advisory design-check counts; never affects ontology_valid."""
+        from back.objects.ontology.DesignChecks import DesignChecks
+
+        return DesignChecks.run(
+            domain.get_classes(), domain.get_properties(), domain.groups
+        )["summary"]
 
     @staticmethod
     async def get_navbar_state(

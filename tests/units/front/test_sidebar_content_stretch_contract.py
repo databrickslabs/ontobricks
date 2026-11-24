@@ -25,6 +25,7 @@ TEAMS_CSS = REPO_ROOT / "src/front/static/registry/css/registry-teams.css"
 
 SECTION_INVENTORY = {
     "domain.html": {
+        "home",
         "information",
         "metadata",
         "validation",
@@ -33,53 +34,45 @@ SECTION_INVENTORY = {
         "discussions",
         "versions",
         "documents",
-        "owl-content",
-        "r2rml",
         "sync",
         "audit",
+        "pages",
     },
     "ontology.html": {
+        "home",
         "wizard",
         "information",
         "import",
-        "design",
         "map",
         "entities",
         "relationships",
-        "groups",
         "dataquality",
-        "swrl",
+        "designchecks",
+        "if-then",
         "axioms",
-        "owl",
-    },
-    "mapping.html": {
-        "information",
-        "import",
-        "design",
-        "manual",
-        "autoassign",
-        "diagnostics",
-        "r2rml",
-        "sparksql",
     },
     "dtwin.html": {
+        "home",
+        "design",
         "sync",
-        "runs",
         "insight",
         "dataquality",
         "reasoning",
-        "analytics",
         "sigmagraph",
         "graphql",
         "chat",
     },
-    "simulation.html": {
+    "intelligence.html": {
+        "home",
+        "analytics",
+        "communities",
         "scenarios",
         "cohorts",
-        "cohort-run",
-        "runs",
+        "patterns",
+        "compare",
     },
     "settings.html": {
+        "home",
         "databricks",
         "delta",
         "lakebase",
@@ -111,35 +104,24 @@ STRETCH_PARTIALS = (
     "partials/domain/_domain_discussions.html",
     "partials/domain/_domain_versions.html",
     "partials/domain/_domain_documents.html",
-    "partials/domain/_domain_owl_content.html",
-    "partials/domain/_domain_r2rml.html",
+    "partials/domain/_domain_pages.html",
     "partials/domain/_domain_audit.html",
     "partials/ontology/_ontology_wizard.html",
     "partials/ontology/_ontology_information.html",
     "partials/ontology/_ontology_import.html",
-    "partials/ontology/_ontology_design.html",
     "partials/ontology/_ontology_entities.html",
     "partials/ontology/_ontology_relationships.html",
-    "partials/ontology/_ontology_groups.html",
     "partials/ontology/_ontology_dataquality.html",
+    "partials/ontology/_ontology_design_checks.html",
     "partials/ontology/_ontology_business_rules.html",
     "partials/ontology/_ontology_cohorts.html",
     "partials/ontology/_ontology_axioms.html",
-    "partials/ontology/_ontology_owl_content.html",
-    "partials/mapping/_mapping_information.html",
-    "partials/mapping/_mapping_import.html",
     "partials/mapping/_mapping_design.html",
-    "partials/mapping/_mapping_manual.html",
-    "partials/mapping/_mapping_autoassign.html",
-    "partials/mapping/_mapping_diagnostics.html",
-    "partials/mapping/_mapping_r2rml.html",
-    "partials/mapping/_mapping_sparksql.html",
+    "partials/dtwin/_query_build.html",
     "partials/dtwin/_query_sync.html",
-    "partials/domain/_domain_runs.html",
     "partials/dtwin/_query_insights.html",
     "partials/dtwin/_query_reasoning.html",
-    "partials/dtwin/_query_cohorts.html",
-    "partials/dtwin/_query_analytics.html",
+    "partials/intelligence/_intel_analytics.html",
     "partials/settings/_settings_teams.html",
     "partials/settings/_settings_runs.html",
     "partials/settings/_settings_schedule.html",
@@ -309,7 +291,7 @@ def test_primary_partial_uses_root_content_section(relative_path):
         for tag, classes in roots[1:]
         if tag != "script"
         and "modal" not in classes
-        and "swrl-context-menu" not in classes
+        and "if-then-context-menu" not in classes
     ]
     assert not unexpected_siblings, (
         f"{relative_path} leaves primary content outside the stretch root: "
@@ -372,12 +354,12 @@ def test_fixed_height_dataquality_and_logs_use_shell_vertical_padding():
     _assert_winning_declarations(
         SIDEBAR_CSS,
         ".sidebar-content:has(#dataquality-section.active)",
-        {"padding": r"0\s+0\.5rem"},
+        {"padding": r"0\s+0\.25rem"},
     )
     _assert_winning_declarations(
         SIDEBAR_CSS,
         "#logs-section.active",
-        {"padding": r"0\s+1rem"},
+        {"padding": r"var\(--ob-page-padding\)"},
     )
 
 
@@ -483,6 +465,14 @@ def test_existing_internal_scroll_variants_have_complete_flex_chains():
         (
             QUERY_SPARQL_CSS,
             (
+                (
+                    "#graphql-section .query-card-fill",
+                    {"flex": "1", "min-height": "0", "overflow": "hidden"},
+                ),
+                (
+                    "#graphql-section .query-card-fill > .card-body",
+                    {"flex": "1", "min-height": "0", "overflow": "hidden"},
+                ),
                 (
                     ".query-language-content",
                     {
@@ -600,7 +590,7 @@ def test_affected_sidebar_components_use_scoped_internal_scroll_chains():
             BUSINESS_RULES_CSS,
             (
                 (
-                    "#swrl-section .card-body",
+                    "#if-then-section .card-body",
                     {
                         "display": "flex",
                         "flex-direction": "column",
@@ -617,7 +607,7 @@ def test_affected_sidebar_components_use_scoped_internal_scroll_chains():
                     {"max-height": "none", "overflow-y": "visible"},
                 ),
                 (
-                    "#swrlRulesList",
+                    "#ifThenRulesList",
                     {"max-height": "none", "overflow-y": "visible"},
                 ),
             ),
@@ -635,3 +625,13 @@ def test_affected_sidebar_components_use_scoped_internal_scroll_chains():
     for css_path, selectors in chains:
         for selector, declarations in selectors:
             _assert_declarations(css_path, selector, declarations)
+
+
+def test_graph_chat_header_actions_can_shrink_and_wrap_on_mobile():
+    # A non-shrinking actions row never wraps and pushes the Discuss button
+    # past a 390px viewport (horizontal page overflow).
+    _assert_declarations(
+        QUERY_CHAT_CSS,
+        ".graph-chat-header-actions",
+        {"flex": "0 1 auto", "min-width": "0", "max-width": "100%"},
+    )

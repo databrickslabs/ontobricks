@@ -13,7 +13,10 @@ let mappingMapSvg = null;
 let mappingMapSimulation = null;
 let mappingMapZoom = null;
 let mappingMapNodes = [];
+let mappingMapHasCentered = false;
 let isMappingResizing = false;
+/** Bumps on every initMappingDesigner call so a superseded concurrent run aborts. */
+let mappingDesignerInitSeq = 0;
 
 const MAPPING_PANEL_DEFAULT_HEIGHT = 320;
 const MAPPING_PANEL_MIN_HEIGHT = 200;
@@ -101,21 +104,30 @@ function showMappingDesignerLoading(show) {
     const loadingEl = document.getElementById('mappingDesignerLoading');
     if (loadingEl) {
         loadingEl.style.display = show ? 'flex' : 'none';
+        loadingEl.setAttribute('aria-hidden', show ? 'false' : 'true');
     }
 }
 
 /**
- * Load saved map layout from the Ontology Designer
+ * Load saved map layout from the Ontology Designer.
+ * Hard-capped so a hung warehouse/session call cannot leave the Visual spinner on.
  */
 async function loadMapLayout() {
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
     try {
-        const response = await fetch('/domain/map-layout', { credentials: 'same-origin' });
+        const response = await fetch('/domain/map-layout', {
+            credentials: 'same-origin',
+            signal: ctrl ? ctrl.signal : undefined,
+        });
         const data = await response.json();
         if (data.success && data.layout) {
             return data.layout;
         }
     } catch (error) {
         console.log('[MappingMap] Could not load map layout:', error);
+    } finally {
+        if (timer) clearTimeout(timer);
     }
     return null;
 }
@@ -124,6 +136,7 @@ async function loadMapLayout() {
  * Initialize the mapping designer (D3.js Designer)
  */
 async function initMappingDesigner(opts) {
+    const seq = ++mappingDesignerInitSeq;
     const showLoading = !(opts && opts.showLoading === false);
     if (showLoading) {
         showMappingDesignerLoading(true);
@@ -141,6 +154,7 @@ async function initMappingDesigner(opts) {
             attempts++;
         }
     }
+    if (seq !== mappingDesignerInitSeq) return;
     
     const container = document.getElementById('mapping-map-container');
     if (!container) {
@@ -150,13 +164,13 @@ async function initMappingDesigner(opts) {
     }
     
     try {
-        // Clear previous map content (keep the loading overlay and its spinner SVG)
-        const existingSvg = container.querySelector(':scope > svg');
-        if (existingSvg) existingSvg.remove();
-        const existingLegend = container.querySelector('.mapping-map-legend');
-        if (existingLegend) existingLegend.remove();
-        const existingEmpty = container.querySelector('.map-empty-message');
-        if (existingEmpty) existingEmpty.remove();
+        // Clear every previous canvas layer (keep the loading overlay). A concurrent
+        // init used to leave a second SVG behind because only the first was removed
+        // — that ghost layer showed duplicate "Not Mapped" relationship paths until
+        // a later re-init happened to clear one of them.
+        container.querySelectorAll(':scope > svg').forEach(el => el.remove());
+        container.querySelectorAll(':scope > .mapping-map-legend').forEach(el => el.remove());
+        container.querySelectorAll(':scope > .map-empty-message').forEach(el => el.remove());
         
         // Get ontology data from MappingState; if missing, try fetching it once
         if (!MappingState.loadedOntology) {
@@ -171,6 +185,7 @@ async function initMappingDesigner(opts) {
                 console.warn('Mapping Designer: On-demand ontology fetch failed:', e);
             }
         }
+        if (seq !== mappingDesignerInitSeq) return;
         if (!MappingState.loadedOntology) {
             container.innerHTML += `
                 <div class="map-empty-message text-center text-muted py-5">
@@ -220,6 +235,7 @@ async function initMappingDesigner(opts) {
         // in the background so it never blocks the spinner.  Once it resolves, re-render
         // to pick up any drift indicators on nodes and panels.
         const savedLayout = await loadMapLayout();
+        if (seq !== mappingDesignerInitSeq) return;
         if (!mappingDriftLoaded) {
             loadSchemaDrift().then(() => {
                 if (mappingMapInitialized) initMappingDesigner({ showLoading: false });
@@ -249,29 +265,9 @@ async function initMappingDesigner(opts) {
             
             const isExcluded = !!cls.excluded;
             const isMapped = mappedClassUris.has(cls.uri);
-            
-            // Check if attributes are fully assigned
-            let mappingStatus = isExcluded ? 'excluded' : (isMapped ? 'mapped' : 'unmapped');
-            if (!isExcluded && isMapped) {
-                const dataProps = cls.dataProperties || [];
-                if (dataProps.length > 0) {
-                    const em = mappingByClassUri[cls.uri] || {};
-                    const attrMap = em.attribute_mappings || {};
-                    const excludedAttrs = new Set(em.excluded_attributes || []);
-                    // Only count included attributes — excluded ones don't create a gap.
-                    const includedProps = dataProps.filter(dp => {
-                        const name = dp.name || dp.localName || '';
-                        return name && !excludedAttrs.has(name);
-                    });
-                    const hasAllAttrs = includedProps.every(dp => {
-                        const name = dp.name || dp.localName || '';
-                        return !!attrMap[name];
-                    });
-                    if (!hasAllAttrs) {
-                        mappingStatus = 'partial';
-                    }
-                }
-            }
+            const mappingStatus = isExcluded
+                ? 'excluded'
+                : (isMapped ? entityAttributeStatus(cls, mappingByClassUri[cls.uri]) : 'unmapped');
             
             return {
                 id: cls.name || cls.localName,
@@ -409,7 +405,8 @@ async function initMappingDesigner(opts) {
             linkIndexMap.set(key, idx + 1);
         });
         
-        // Create SVG
+        // Create SVG (abort if a newer init superseded this run while we awaited)
+        if (seq !== mappingDesignerInitSeq) return;
         const width = container.clientWidth;
         const height = container.clientHeight;
         
@@ -982,6 +979,11 @@ async function initMappingDesigner(opts) {
         container.appendChild(legend);
         
         mappingMapInitialized = true;
+        centerMappingDiagram(false);
+        // Re-apply the open panel selection after a Visual redraw.
+        if (currentPanelType && currentPanelUri) {
+            highlightMappingMapSelection(currentPanelType, currentPanelUri, null);
+        }
         
         // Bind zoom controls
         document.getElementById('mappingMapZoomIn')?.addEventListener('click', () => {
@@ -993,7 +995,7 @@ async function initMappingDesigner(opts) {
         });
         
         document.getElementById('mappingMapResetView')?.addEventListener('click', () => {
-            svg.transition().duration(500).call(mappingMapZoom.transform, d3.zoomIdentity);
+            centerMappingDiagram(true);
         });
         
         document.getElementById('mappingMapResetLayout')?.addEventListener('click', async () => {
@@ -1016,6 +1018,7 @@ async function initMappingDesigner(opts) {
                     }
                 });
                 mappingMapSimulation.alpha(0.01).restart();
+                centerMappingDiagram(true);
                 
                 if (typeof showNotification === 'function') {
                     showNotification('Layout restored from Ontology Studio', 'info', 2000);
@@ -1030,11 +1033,11 @@ async function initMappingDesigner(opts) {
     } catch (error) {
         console.error('Error initializing mapping map:', error);
     } finally {
-        if (showLoading) {
-            setTimeout(() => {
-                showMappingDesignerLoading(false);
-            }, 500);
-        }
+        // Always clear — a prior show(true) can outlive a silent re-init
+        // (showLoading:false), and a hung overlay is worse than a brief flash.
+        const hide = () => showMappingDesignerLoading(false);
+        if (showLoading) setTimeout(hide, 500);
+        else hide();
     }
 }
 
@@ -1046,6 +1049,81 @@ function refreshMappingDesign() {
     // have changed too — allow exactly one new drift fetch.
     mappingDriftLoaded = false;
     initMappingDesigner();
+}
+
+/**
+ * 'mapped' when every included data property of *cls* has a column in *em*,
+ * else 'partial' (excluded attributes never create a gap).
+ */
+function entityAttributeStatus(cls, em) {
+    const attrMap = (em && em.attribute_mappings) || {};
+    const excludedAttrs = new Set((em && em.excluded_attributes) || []);
+    const missing = ((cls && cls.dataProperties) || []).some(dp => {
+        const name = dp.name || dp.localName || '';
+        return name && !excludedAttrs.has(name) && !attrMap[name];
+    });
+    return missing ? 'partial' : 'mapped';
+}
+
+/**
+ * Briefly pulse a node / link / tree row that a running Auto-Map just mapped.
+ */
+function flashLiveMapped(el) {
+    if (!el || !el.classList) return;
+    el.classList.remove('live-mapped');
+    void el.getBoundingClientRect();
+    el.classList.add('live-mapped');
+    setTimeout(() => el.classList.remove('live-mapped'), 2500);
+}
+
+/**
+ * Re-colour the existing Visual canvas from MappingState in place — no
+ * redraw, so zoom / pan / selection survive the 1.5s Auto-Map poll.
+ */
+function refreshMappingMapStatus(changedUris) {
+    if (typeof d3 === 'undefined' || !mappingMapInitialized) return;
+    const cfg = MappingState.config || {};
+    const classByUri = new Map(((MappingState.loadedOntology || {}).classes || []).map(c => [c.uri, c]));
+    const entityByUri = new Map();
+    (cfg.entities || []).forEach(m => entityByUri.set(m.ontology_class || m.class_uri, m));
+    const mappedProps = new Set((cfg.relationships || []).filter(m => m.sql_query).map(m => m.property));
+    const changed = new Set(changedUris || []);
+
+    d3.selectAll('.mapping-map-node').each(function(d) {
+        if (!d || d.excluded) return;
+        const em = entityByUri.get(d.uri);
+        d.mapped = !!(em && em.sql_query);
+        d.mappingStatus = d.mapped ? entityAttributeStatus(classByUri.get(d.uri), em) : 'unmapped';
+        d3.select(this)
+            .classed('mapped', d.mappingStatus === 'mapped')
+            .classed('partial', d.mappingStatus === 'partial')
+            .classed('unmapped', d.mappingStatus === 'unmapped');
+        if (changed.has(d.uri)) flashLiveMapped(this);
+    });
+
+    d3.selectAll('.mapping-map-link, .mapping-map-link-hitarea, .mapping-map-link-label').each(function(d) {
+        if (!d || d.type !== 'relationship' || d.excluded) return;
+        d.mapped = mappedProps.has(d.uri);
+        const sel = d3.select(this).classed('mapped', d.mapped).classed('unmapped', !d.mapped);
+        if (sel.classed('self-loop')) {
+            sel.attr('marker-end', d.mapped ? 'url(#mapping-arrow-self-mapped)' : 'url(#mapping-arrow-self-unmapped)');
+        }
+        if (changed.has(d.uri) && sel.classed('mapping-map-link-hitarea')) flashLiveMapped(this);
+    });
+}
+
+/**
+ * Repaint Visual + List + status cards after MappingState changed outside
+ * the panels (a running Auto-Map streaming per-item results).
+ */
+function refreshMappingLiveStatus(changedUris) {
+    refreshMappingMapStatus(changedUris);
+    if (window.ManualModule && typeof ManualModule.refreshLive === 'function') {
+        ManualModule.refreshLive(changedUris);
+    }
+    if (typeof window.updateMappingCompletionStatus === 'function') {
+        window.updateMappingCompletionStatus();
+    }
 }
 
 // Alias for compatibility
@@ -1060,11 +1138,70 @@ function loadOntologyIntoMappingDesigner() {
 let currentPanelType = null; // 'entity' or 'relationship'
 let currentPanelUri = null;
 let currentPanelDirty = false;
-// Body element id of the host holding the panel: 'panelBody' (Designer right panel)
-// or 'manualPanelBody' (Manual Mapping bottom panel). The panel markup uses
-// page-global ep*/rp* ids, so a leftover copy in the other host would shadow the
-// live one on every getElementById lookup.
+// Body element id of the host holding the panel. Studio Visual and List share
+// `#panelBody` in `#mappingRightPanel`.
 let currentPanelHostId = null;
+
+/**
+ * Highlight the matching node/link on the Visual canvas (no panel open).
+ * Matches by URI first, then by name / localName / id.
+ */
+function highlightMappingMapSelection(type, uri, name) {
+    if (typeof d3 === 'undefined') return;
+    d3.selectAll('.mapping-map-node').classed('selected', false);
+    d3.selectAll('.mapping-map-link-hitarea').classed('selected', false);
+
+    const matches = (d) => {
+        if (!d) return false;
+        if (uri && d.uri && d.uri === uri) return true;
+        if (name && (d.name === name || d.id === name || d.localName === name)) return true;
+        return false;
+    };
+
+    if (type === 'entity') {
+        d3.selectAll('.mapping-map-node').filter(matches).classed('selected', true);
+        return;
+    }
+    d3.selectAll('.mapping-map-link-hitarea').filter(matches).classed('selected', true);
+}
+
+/**
+ * Highlight the matching row in the List tree (no panel open).
+ * Expands collapsed ancestors and scrolls the row into view when found.
+ */
+function highlightMappingListSelection(type, uri, name) {
+    if (window.ManualModule && typeof ManualModule.selectInTree === 'function') {
+        ManualModule.selectInTree(type, uri, name);
+        return;
+    }
+    const tree = document.getElementById('manualAssignmentTree');
+    if (!tree) return;
+    tree.querySelectorAll('.manual-tree-node-content.selected').forEach(el => {
+        el.classList.remove('selected');
+    });
+    let node = null;
+    if (uri) {
+        node = tree.querySelector(`.manual-tree-node.item-node[data-type="${type}"][data-uri="${CSS.escape(uri)}"]`);
+    }
+    if (!node && name) {
+        node = Array.from(tree.querySelectorAll(`.manual-tree-node.item-node[data-type="${type}"]`))
+            .find(el => el.dataset.name === name);
+    }
+    if (!node) return;
+    const content = node.querySelector('.manual-tree-node-content');
+    if (content) content.classList.add('selected');
+}
+
+/**
+ * Keep Visual and List selection in sync for the open panel item.
+ */
+function syncMappingSelection(type, uri, name) {
+    highlightMappingMapSelection(type, uri, name);
+    highlightMappingListSelection(type, uri, name);
+}
+window.syncMappingSelection = syncMappingSelection;
+window.highlightMappingMapSelection = highlightMappingMapSelection;
+window.highlightMappingListSelection = highlightMappingListSelection;
 
 /**
  * Open the right panel for entity mapping
@@ -1090,6 +1227,11 @@ function openEntityMappingFromDesign(entity) {
     const panelTitle = document.getElementById('panelTitle');
     panelTitle.innerHTML = `<i class="bi bi-box"></i> <span id="panelItemName">${ontologyClass.label || ontologyClass.name}</span>`;
     
+    syncMappingSelection(
+        'entity',
+        ontologyClass.uri,
+        ontologyClass.name || ontologyClass.localName
+    );
     loadEntityPanelContent(ontologyClass.uri, ontologyClass.label || ontologyClass.name);
     openMappingPanel();
 }
@@ -1118,6 +1260,11 @@ function openRelationshipMappingFromDesign(rel) {
     const panelTitle = document.getElementById('panelTitle');
     panelTitle.innerHTML = `<i class="bi bi-arrow-left-right"></i> <span id="panelItemName">${ontologyProperty.label || ontologyProperty.name}</span>`;
     
+    syncMappingSelection(
+        'relationship',
+        ontologyProperty.uri,
+        ontologyProperty.name || ontologyProperty.localName
+    );
     loadRelationshipPanelContent(ontologyProperty);
     openMappingPanel();
 }
@@ -1153,10 +1300,6 @@ function claimMappingPanel(panelBody, type, uri) {
 
 function markMappingPanelDirty() {
     currentPanelDirty = true;
-    if (currentPanelHostId === 'manualPanelBody') {
-        const saveBtn = document.getElementById('manualSavePanelBtn');
-        if (saveBtn && window.isActiveVersion !== false) saveBtn.disabled = false;
-    }
 }
 
 /**
@@ -1180,11 +1323,7 @@ function releaseMappingPanel() {
  * Close whichever host currently holds the panel.
  */
 function closeActiveMappingPanel() {
-    if (currentPanelHostId === 'manualPanelBody' && window.ManualModule) {
-        ManualModule.closePanel();
-    } else {
-        closeMappingPanel();
-    }
+    closeMappingPanel();
 }
 
 /**
@@ -1202,9 +1341,15 @@ function closeMappingPanel() {
         panelTitle.innerHTML = '<span id="panelItemName">Select Item</span>';
     }
     
-    // Clear selections on map
+    // Clear selections on map and List tree
     d3.selectAll('.mapping-map-node').classed('selected', false);
     d3.selectAll('.mapping-map-link-hitarea').classed('selected', false);
+    document.querySelectorAll('#manualAssignmentTree .manual-tree-node-content.selected').forEach(el => {
+        el.classList.remove('selected');
+    });
+    if (window.ManualModule) {
+        window.ManualModule.currentItem = null;
+    }
     
     setTimeout(resizeMapSvg, 0);
 }
@@ -1231,6 +1376,63 @@ function guardedCloseMappingPanel() {
 }
 
 /**
+ * Center and fit the mapping diagram in the canvas container.
+ *
+ * @param {boolean} [animate=false] - Whether to animate the transform transition.
+ */
+function centerMappingDiagram(animate = false) {
+    const container = document.getElementById('mapping-map-container');
+    if (!container || !mappingMapSvg || !mappingMapZoom) return;
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    if (width <= 0 || height <= 0) return;
+
+    const nodes = mappingMapNodes || [];
+    if (!nodes.length) {
+        mappingMapSvg.call(mappingMapZoom.transform, d3.zoomIdentity);
+        return;
+    }
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    nodes.forEach(n => {
+        const x = Number.isFinite(n.x) ? n.x : (Number.isFinite(n.fx) ? n.fx : null);
+        const y = Number.isFinite(n.y) ? n.y : (Number.isFinite(n.fy) ? n.fy : null);
+        if (x !== null && y !== null) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+        }
+    });
+
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+        return;
+    }
+
+    // Node radius / card size margin (node circles are r=25 + text labels)
+    const padding = 70;
+    const graphWidth = Math.max(maxX - minX + padding * 2, 80);
+    const graphHeight = Math.max(maxY - minY + padding * 2, 80);
+
+    // Compute scale so the whole diagram fits comfortably without over-zooming on small graphs
+    const scale = Math.min(Math.max(Math.min(width / graphWidth, height / graphHeight), 0.35), 1.0);
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+    const tx = width / 2 - midX * scale;
+    const ty = height / 2 - midY * scale;
+
+    const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+    if (animate) {
+        mappingMapSvg.transition().duration(500).call(mappingMapZoom.transform, transform);
+    } else {
+        mappingMapSvg.call(mappingMapZoom.transform, transform);
+    }
+    mappingMapHasCentered = true;
+}
+window.centerMappingDiagram = centerMappingDiagram;
+
+/**
  * Resize the map SVG to fit its container
  */
 function resizeMapSvg() {
@@ -1250,6 +1452,10 @@ function resizeMapSvg() {
         if (centerForce) {
             centerForce.x(width / 2).y(height / 2);
         }
+    }
+
+    if (!mappingMapHasCentered && width > 0 && height > 0) {
+        centerMappingDiagram(false);
     }
 }
 
@@ -2957,13 +3163,11 @@ function resetEntityPanel() {
     const classUri = document.getElementById('panelEntityClass')?.value;
     if (!classUri) return;
     
-    // Remove the mapping from state
-    const existingIndex = MappingState.config.entities.findIndex(m => m.ontology_class === classUri);
-    if (existingIndex >= 0) {
+    // Remove the mapping from state (exclusions are kept - see unmapMappingEntry)
+    if (unmapMappingEntry(MappingState.config.entities, 'ontology_class', classUri, 'ontology_class_label')) {
         const classInfo = MappingState.loadedOntology?.classes?.find(c => c.uri === classUri);
         const className = classInfo ? (classInfo.label || classInfo.name) : 'Entity';
         
-        MappingState.config.entities.splice(existingIndex, 1);
         showNotification(`Mapping for "${className}" removed`, 'success', 2000);
         
         // Save and refresh
@@ -3037,13 +3241,11 @@ function resetRelPanel() {
     const propertyUri = document.getElementById('panelPropertyUri')?.value;
     if (!propertyUri) return;
     
-    // Remove the mapping from state
-    const existingIndex = MappingState.config.relationships.findIndex(m => m.property === propertyUri);
-    if (existingIndex >= 0) {
+    // Remove the mapping from state (exclusions are kept - see unmapMappingEntry)
+    if (unmapMappingEntry(MappingState.config.relationships, 'property', propertyUri, 'property_label')) {
         const propertyInfo = MappingState.loadedOntology?.properties?.find(p => p.uri === propertyUri);
         const propertyName = propertyInfo ? (propertyInfo.label || propertyInfo.name) : 'Relationship';
         
-        MappingState.config.relationships.splice(existingIndex, 1);
         showNotification(`Mapping for "${propertyName}" removed`, 'success', 2000);
         
         // Save and refresh
@@ -3553,20 +3755,8 @@ function contextMenuUnassignEntity(entityData) {
     const uri = entityData.uri;
     const displayName = entityData.label || entityData.name;
 
-    const existingIndex = MappingState.config.entities.findIndex(m => m.ontology_class === uri);
-    if (existingIndex >= 0) {
-        const excl = MappingState.config.entities[existingIndex].excluded_attributes;
-        if (excl && excl.length > 0) {
-            // Keep a stub so attribute exclusions survive the unmap.
-            MappingState.config.entities[existingIndex] = {
-                ontology_class: uri,
-                ontology_class_label: MappingState.config.entities[existingIndex].ontology_class_label || '',
-                sql_query: '',
-                excluded_attributes: [...excl]
-            };
-        } else {
-            MappingState.config.entities.splice(existingIndex, 1);
-        }
+    // Exclusions (hidden item, excluded attributes) survive the unmap.
+    if (unmapMappingEntry(MappingState.config.entities, 'ontology_class', uri, 'ontology_class_label')) {
         showNotification(`Mapping for "${displayName}" removed`, 'success', 2000);
         autoSaveMappings();
         refreshMappingDesign();
@@ -3602,19 +3792,8 @@ function contextMenuUnassignRelationship(relData) {
     const uri = relData.uri;
     const displayName = relData.label || relData.name;
 
-    const existingIndex = MappingState.config.relationships.findIndex(m => m.property === uri);
-    if (existingIndex >= 0) {
-        const excl = MappingState.config.relationships[existingIndex].excluded_attributes;
-        if (excl && excl.length > 0) {
-            MappingState.config.relationships[existingIndex] = {
-                property: uri,
-                property_label: MappingState.config.relationships[existingIndex].property_label || '',
-                sql_query: '',
-                excluded_attributes: [...excl]
-            };
-        } else {
-            MappingState.config.relationships.splice(existingIndex, 1);
-        }
+    // Exclusions (hidden item, excluded attributes) survive the unmap.
+    if (unmapMappingEntry(MappingState.config.relationships, 'property', uri, 'property_label')) {
         showNotification(`Mapping for "${displayName}" removed`, 'success', 2000);
         autoSaveMappings();
         refreshMappingDesign();
@@ -3864,6 +4043,149 @@ async function includeAllExcluded() {
 window.autoExcludeAll = autoExcludeAll;
 window.includeAllExcluded = includeAllExcluded;
 
+/**
+ * Mapping Studio Visual | List tabs — URL ``?section=design&tab=visual|list``.
+ */
+const MappingStudioTabs = {
+    _bound: false,
+
+    current: function () {
+        const infoBtn = document.getElementById('mappingStudioTabInformations');
+        if (infoBtn && infoBtn.classList.contains('active')) return 'informations';
+        const listBtn = document.getElementById('mappingStudioTabList');
+        if (listBtn && listBtn.classList.contains('active')) return 'list';
+        return 'visual';
+    },
+
+    _syncUrl: function (tab) {
+        const name = (tab === 'list' || tab === 'visual') ? tab : 'informations';
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('section') !== 'design'
+                && url.searchParams.get('section') !== 'manual') {
+            return;
+        }
+        if (url.searchParams.get('section') === 'manual') {
+            url.searchParams.set('section', 'design');
+        }
+        if (url.searchParams.get('tab') !== name) {
+            url.searchParams.set('tab', name);
+            window.history.replaceState(
+                Object.assign({}, window.history.state || {}, { section: 'design', tab: name }),
+                '',
+                url
+            );
+        }
+    },
+
+    show: function (tab) {
+        let name = 'informations';
+        if (tab === 'visual') name = 'visual';
+        else if (tab === 'list') name = 'list';
+        const btnId = name === 'list'
+            ? 'mappingStudioTabList'
+            : (name === 'visual' ? 'mappingStudioTabVisual' : 'mappingStudioTabInformations');
+        const btn = document.getElementById(btnId);
+        MappingStudioTabs._syncUrl(name);
+        // Bootstrap Tab.show() fires shown.bs.tab → _onShown. Calling _onShown
+        // here as well used to schedule two concurrent Visual inits and leave a
+        // ghost SVG of duplicate "Not Mapped" relationship paths.
+        if (btn && typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+            if (btn.classList.contains('active')) {
+                MappingStudioTabs._onShown(name);
+            } else {
+                try {
+                    bootstrap.Tab.getOrCreateInstance(btn).show();
+                } catch (_) {
+                    MappingStudioTabs._onShown(name);
+                }
+            }
+        } else {
+            MappingStudioTabs._onShown(name);
+        }
+    },
+
+    _onShown: function (tab) {
+        let name = 'informations';
+        if (tab === 'visual') name = 'visual';
+        else if (tab === 'list') name = 'list';
+        MappingStudioTabs._syncUrl(name);
+
+        const container = document.getElementById('mappingDesignerContainer');
+        const resizeHandle = container?.querySelector('.detail-panel-resize-handle');
+        const rightPanel = document.getElementById('mappingRightPanel');
+        const isInfo = name === 'informations';
+        if (resizeHandle) resizeHandle.classList.toggle('d-none', isInfo);
+        if (rightPanel) rightPanel.classList.toggle('d-none', isInfo);
+
+        if (isInfo && typeof updateTaxonomyStatus === 'function') {
+            setTimeout(function() {
+                try { updateTaxonomyStatus(); } catch (e) {
+                    console.warn('Mapping Studio: updateTaxonomyStatus failed', e);
+                }
+            }, 30);
+        }
+        if (name === 'list' && typeof ManualModule !== 'undefined') {
+            setTimeout(function () {
+                try { ManualModule.init(); } catch (e) {
+                    console.warn('Mapping Studio List: ManualModule.init failed', e);
+                }
+                // Tree rebuild clears selection — restore from the open panel.
+                if (currentPanelType && currentPanelUri
+                        && typeof highlightMappingListSelection === 'function') {
+                    highlightMappingListSelection(currentPanelType, currentPanelUri, null);
+                }
+            }, 50);
+        }
+        if (name === 'visual') {
+            if (typeof mappingMapInitialized !== 'undefined' && mappingMapInitialized) {
+                setTimeout(function () {
+                    if (typeof resizeMapSvg === 'function') resizeMapSvg();
+                    if (typeof centerMappingDiagram === 'function') centerMappingDiagram(false);
+                    if (currentPanelType && currentPanelUri
+                            && typeof highlightMappingMapSelection === 'function') {
+                        highlightMappingMapSelection(currentPanelType, currentPanelUri, null);
+                    }
+                }, 80);
+            } else if (typeof initMappingDesigner === 'function') {
+                // Always start (and clear) the Visual spinner. Do not require
+                // MappingState.initialized yet — initMappingDesigner waits for it.
+                // Skipping here used to leave the CSS-default overlay stuck forever
+                // when the user opened Visual before MappingState finished loading.
+                if (typeof showMappingDesignerLoading === 'function') {
+                    showMappingDesignerLoading(true);
+                }
+                setTimeout(function () {
+                    initMappingDesigner();
+                }, 50);
+            }
+        }
+    },
+
+    init: function () {
+        if (MappingStudioTabs._bound || !document.getElementById('mappingStudioTabs')) return;
+        MappingStudioTabs._bound = true;
+        document.getElementById('mappingStudioTabInformations')?.addEventListener(
+            'shown.bs.tab', function () { MappingStudioTabs._onShown('informations'); }
+        );
+        document.getElementById('mappingStudioTabVisual')?.addEventListener(
+            'shown.bs.tab', function () { MappingStudioTabs._onShown('visual'); }
+        );
+        document.getElementById('mappingStudioTabList')?.addEventListener(
+            'shown.bs.tab', function () { MappingStudioTabs._onShown('list'); }
+        );
+        let requested = window.__OB_MAPPING_STUDIO_TAB
+            || new URLSearchParams(window.location.search).get('tab');
+        window.__OB_MAPPING_STUDIO_TAB = null;
+        if (requested === 'manual') requested = 'list';
+        if (requested === 'list' || requested === 'visual' || requested === 'informations') {
+            MappingStudioTabs.show(requested);
+        } else {
+            MappingStudioTabs._onShown('informations');
+        }
+    }
+};
+window.MappingStudioTabs = MappingStudioTabs;
+
 // Initialize panel close/save buttons
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('closePanelBtn')?.addEventListener('click', guardedCloseMappingPanel);
@@ -3879,13 +4201,19 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    MappingStudioTabs.init();
 });
 
 // Expose functions globally
 window.initMappingDesigner = initMappingDesigner;
 window.loadOntologyIntoMappingDesigner = loadOntologyIntoMappingDesigner;
 window.refreshMappingDesign = refreshMappingDesign;
+window.refreshMappingLiveStatus = refreshMappingLiveStatus;
+window.entityAttributeStatus = entityAttributeStatus;
+window.flashLiveMapped = flashLiveMapped;
 window.resizeMapSvg = resizeMapSvg;
+window.centerMappingDiagram = centerMappingDiagram;
 
 // Handle window resize
 window.addEventListener('resize', function() {

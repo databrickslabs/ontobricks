@@ -29,6 +29,10 @@ from __future__ import annotations
 import json
 import uuid
 
+import pytest
+
+pytestmark = pytest.mark.needs_domain
+
 # Turtle snippet with three classes that have explicit URIs.
 _SETUP_OWL = """
 @prefix owl:  <http://www.w3.org/2002/07/owl#> .

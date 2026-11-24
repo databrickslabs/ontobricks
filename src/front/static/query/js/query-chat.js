@@ -546,7 +546,143 @@
         container.appendChild(div);
         container.scrollTop = container.scrollHeight;
 
-        return { div, stepsEl, bodyEl: body };
+        return {
+            div,
+            stepsEl,
+            bodyEl: body,
+            thinkingEl: null,      // <details> holding the full thinking trace
+            thinkingListEl: null,  // container of per-tool step blocks
+            stepCount: 0,
+            pendingStep: null,     // tool_call block waiting for its tool_result
+        };
+    }
+
+    /**
+     * Pretty-print a step payload (JSON when possible, raw text otherwise).
+     * Always rendered through textContent, never as HTML.
+     */
+    function formatStepPayload(text) {
+        const raw = (text === undefined || text === null) ? '' : String(text);
+        if (!raw.trim()) return '(empty)';
+        try {
+            return JSON.stringify(JSON.parse(raw), null, 2);
+        } catch (_) {
+            return raw;
+        }
+    }
+
+    function _stepSection(label, text) {
+        const section = document.createElement('div');
+        section.className = 'graph-chat-step-section';
+        const title = document.createElement('div');
+        title.className = 'graph-chat-step-label';
+        title.textContent = label;
+        const pre = document.createElement('pre');
+        pre.className = 'graph-chat-step-pre';
+        pre.textContent = formatStepPayload(text);
+        section.appendChild(title);
+        section.appendChild(pre);
+        return section;
+    }
+
+    /**
+     * Lazily create the collapsible "Thinking process" block of a bubble.
+     * Open while the agent runs so the trace is visible as it grows.
+     */
+    function ensureThinking(bubble) {
+        if (bubble.thinkingEl) return bubble.thinkingEl;
+
+        const details = document.createElement('details');
+        details.className = 'graph-chat-thinking';
+        details.open = true;
+
+        const summary = document.createElement('summary');
+        summary.className = 'graph-chat-thinking-title';
+        summary.innerHTML = '<i class="bi bi-diagram-3"></i> Thinking process ' +
+            '<span class="graph-chat-thinking-count"></span>';
+        details.appendChild(summary);
+
+        const list = document.createElement('div');
+        list.className = 'graph-chat-thinking-list';
+        details.appendChild(list);
+
+        bubble.bodyEl.insertBefore(details, bubble.stepsEl);
+        bubble.thinkingEl = details;
+        bubble.thinkingListEl = list;
+        return details;
+    }
+
+    function _updateThinkingCount(bubble) {
+        const countEl = bubble.thinkingEl && bubble.thinkingEl.querySelector('.graph-chat-thinking-count');
+        if (countEl) countEl.textContent = '(' + bubble.stepCount + ' tool call' + (bubble.stepCount === 1 ? '' : 's') + ')';
+    }
+
+    /**
+     * Append one tool_call step as an expandable block (input shown now,
+     * result filled in when the matching tool_result arrives).
+     */
+    function _appendToolCallStep(bubble, event) {
+        ensureThinking(bubble);
+        const block = document.createElement('details');
+        block.className = 'graph-chat-step';
+        block.open = true;
+
+        const summary = document.createElement('summary');
+        summary.className = 'graph-chat-step-title';
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-wrench';
+        const code = document.createElement('code');
+        code.textContent = event.tool_name || 'tool';
+        const meta = document.createElement('span');
+        meta.className = 'graph-chat-step-meta';
+        meta.textContent = 'running…';
+        summary.appendChild(icon);
+        summary.appendChild(document.createTextNode(' '));
+        summary.appendChild(code);
+        summary.appendChild(document.createTextNode(' '));
+        summary.appendChild(meta);
+        block.appendChild(summary);
+        block.appendChild(_stepSection('Input', event.content));
+
+        bubble.thinkingListEl.appendChild(block);
+        bubble.stepCount += 1;
+        bubble.pendingStep = { block: block, meta: meta, name: event.tool_name || '' };
+        _updateThinkingCount(bubble);
+    }
+
+    /**
+     * Attach a tool_result to the pending tool_call block (or create a
+     * standalone block if no call was seen for it).
+     */
+    function _appendToolResultStep(bubble, event) {
+        const pending = bubble.pendingStep;
+        const durationTxt = (event.duration_ms || 0) + ' ms';
+        if (pending && pending.name === (event.tool_name || '')) {
+            pending.meta.textContent = '· ' + durationTxt;
+            pending.block.appendChild(_stepSection('Result', event.content));
+            bubble.pendingStep = null;
+            return;
+        }
+        ensureThinking(bubble);
+        const block = document.createElement('details');
+        block.className = 'graph-chat-step';
+        block.open = true;
+        const summary = document.createElement('summary');
+        summary.className = 'graph-chat-step-title';
+        summary.innerHTML = '<i class="bi bi-arrow-return-right"></i> ';
+        const code = document.createElement('code');
+        code.textContent = event.tool_name || 'tool';
+        const meta = document.createElement('span');
+        meta.className = 'graph-chat-step-meta';
+        meta.textContent = '· ' + durationTxt;
+        summary.appendChild(code);
+        summary.appendChild(document.createTextNode(' '));
+        summary.appendChild(meta);
+        block.appendChild(summary);
+        block.appendChild(_stepSection('Result', event.content));
+        bubble.thinkingListEl.appendChild(block);
+        bubble.stepCount += 1;
+        _updateThinkingCount(bubble);
     }
 
     /**
@@ -561,28 +697,36 @@
         const statusEl = stepsEl.querySelector('.graph-chat-stream-status');
         if (event.step_type === 'tool_call') {
             if (statusEl) statusEl.textContent = 'Calling ' + (event.tool_name || 'tool') + '…';
+            _appendToolCallStep(bubble, event);
         } else if (event.step_type === 'tool_result') {
             if (statusEl) statusEl.textContent = (event.tool_name || 'tool') + ' done (' + (event.duration_ms || 0) + ' ms)';
+            _appendToolResultStep(bubble, event);
         }
         if (container) container.scrollTop = container.scrollHeight;
     }
 
     /**
      * Replace the streaming bubble's placeholder with the final rendered reply.
+     * The thinking trace stays on top of the reply, collapsible.
      */
     function finalizeStreamingBubble(bubble, event) {
         if (!bubble) return;
-        const { stepsEl, bodyEl } = bubble;
+        const { stepsEl, bodyEl, thinkingEl } = bubble;
 
         // Remove the live-steps placeholder
         if (stepsEl && stepsEl.parentNode === bodyEl) {
             bodyEl.removeChild(stepsEl);
         }
 
-        // Render the final markdown reply
+        // Render the final markdown reply (this replaces the body children,
+        // so the thinking block is re-attached right after)
         const reply = readableMessage(event.reply);
         bodyEl.innerHTML = renderMarkdown(reply);
         enhanceEntityLinks(bodyEl);
+
+        if (thinkingEl) {
+            bodyEl.insertBefore(thinkingEl, bodyEl.firstChild);
+        }
 
         if (Array.isArray(event.tools) && event.tools.length) {
             bodyEl.appendChild(buildToolTrace(event.tools));
@@ -605,7 +749,7 @@
      */
     function errorStreamingBubble(bubble, message) {
         if (!bubble) return;
-        const { stepsEl, bodyEl, div } = bubble;
+        const { stepsEl, bodyEl, div, thinkingEl } = bubble;
         if (stepsEl && stepsEl.parentNode === bodyEl) {
             bodyEl.removeChild(stepsEl);
         }
@@ -613,6 +757,10 @@
         div.querySelector('.assistant-msg-avatar').style.background = 'var(--bs-danger, #dc3545)';
         div.querySelector('.assistant-msg-avatar').innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i>';
         bodyEl.textContent = message;
+        // Keep the partial thinking trace collected before the failure
+        if (thinkingEl) {
+            bodyEl.insertBefore(thinkingEl, bodyEl.firstChild);
+        }
     }
 
     // =====================================================

@@ -150,7 +150,7 @@ class TestSaveValidation:
         ok, msg = _save(
             sched,
             task_type="reasoning",
-            config={"phases": {"swrl": True}, "materialize_graph": False},
+            config={"phases": {"if_then": True}, "materialize_graph": False},
         )
         assert ok is False
         assert "discard" in msg
@@ -222,7 +222,7 @@ class TestSavePersistenceAndJobs:
             ("reasoning", ""),
         ):
             cfg = (
-                {"phases": {"swrl": True}, "materialize_graph": True}
+                {"phases": {"if_then": True}, "materialize_graph": True}
                 if task_type == "reasoning"
                 else {}
             )

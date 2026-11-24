@@ -1,8 +1,11 @@
 """Workspace HTML pages send an unloaded session straight Home.
 
-Domain / Ontology / Mapping / Knowledge Graph have no useful chrome without
-a domain in session. The four page routes share ``home_redirect_if_unloaded``
-and answer 303 ``/`` instead of rendering an empty workspace.
+Domain / Ontology / Knowledge Graph have no useful chrome without a domain
+in session. The page routes share ``home_redirect_if_unloaded`` and answer
+303 ``/`` instead of rendering an empty workspace.
+
+Legacy ``/mapping/`` still guards unloaded sessions, then redirects into
+Graph → Management → Mapping when a domain is loaded.
 """
 
 from pathlib import Path
@@ -23,7 +26,6 @@ DEPENDENCIES = REPO_ROOT / "src/front/fastapi/dependencies.py"
 _WORKSPACE_PAGES = (
     "/domain/",
     "/ontology/",
-    "/mapping/",
     "/dtwin/",
 )
 
@@ -46,7 +48,7 @@ class TestTheGuardLivesOnEveryWorkspacePage:
 
 
 class TestAnUnloadedSessionNeverRendersAWorkspace:
-    @pytest.mark.parametrize("path", _WORKSPACE_PAGES)
+    @pytest.mark.parametrize("path", _WORKSPACE_PAGES + ("/mapping/",))
     def test_get_redirects_home(self, client, path):
         response = client.get(path, follow_redirects=False)
         assert response.status_code == 303
@@ -57,3 +59,15 @@ class TestAnUnloadedSessionNeverRendersAWorkspace:
         ensure_loaded_domain(client)
         response = client.get(path, follow_redirects=False)
         assert response.status_code == 200
+
+    def test_legacy_mapping_redirects_into_graph(self, client):
+        ensure_loaded_domain(client)
+        response = client.get("/mapping/", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"].startswith("/dtwin/")
+
+    def test_legacy_mapping_preserves_section_query(self, client):
+        ensure_loaded_domain(client)
+        response = client.get("/mapping/?section=design", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/dtwin/?section=design"

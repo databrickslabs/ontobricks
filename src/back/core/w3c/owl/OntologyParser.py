@@ -14,6 +14,45 @@ from shared.config.constants import DEFAULT_BASE_URI
 logger = get_logger(__name__)
 
 
+def _normalize_datasets(raw: Any) -> List[Dict]:
+    """Defer ClassModel so this module does not pull back.objects at import time."""
+    from back.objects.ontology.ClassModel import ClassModel
+
+    return ClassModel.normalize_datasets(raw)
+
+
+def _if_then_rule_nodes(graph: Graph) -> Dict[Any, None]:
+    """Subjects typed as IF-THEN rules, in document order.
+
+    OWL files exported before the rename type their rules as ``SWRLRule``.
+    """
+    rule_classes = (ONTOBRICKS_NS.IfThenRule, ONTOBRICKS_NS["SWRLRule"])
+    return dict.fromkeys(s for c in rule_classes for s in graph.subjects(RDF.type, c))
+
+
+_OWL_TERMINATORS = (".", "]", ">", "}")
+
+
+def _salvage_truncated_owl(owl_content: str) -> str:
+    """Drop an incomplete trailing Turtle statement; leave JSON-LD untouched."""
+    content_stripped = owl_content.strip()
+    if not content_stripped or content_stripped[:1] in ("{", "["):
+        return owl_content
+    if any(content_stripped.endswith(t) for t in _OWL_TERMINATORS):
+        return owl_content
+    lines = content_stripped.split("\n")
+    while lines and not (
+        any(lines[-1].strip().endswith(t) for t in (".", "]", "}"))
+        or lines[-1].strip() == ""
+        or lines[-1].strip().startswith("#")
+    ):
+        lines.pop()
+    if not lines:
+        return owl_content
+    logger.warning("Content appeared truncated, removed incomplete statements")
+    return "\n".join(lines)
+
+
 class OntologyParser:
     """Parse OWL ontologies to extract classes and properties."""
 
@@ -21,37 +60,17 @@ class OntologyParser:
         """Initialize the parser with OWL content.
 
         Args:
-            owl_content: OWL content (Turtle, RDF/XML, etc.)
+            owl_content: OWL content (Turtle, RDF/XML, JSON-LD, etc.)
         """
         self.graph = Graph()
-
-        # Check for truncated content (common with LLM generation)
-        content_stripped = owl_content.strip()
-        if content_stripped and not (
-            content_stripped.endswith(".")
-            or content_stripped.endswith("]")
-            or content_stripped.endswith(">")
-        ):
-            # Content appears truncated - try to salvage by removing incomplete last line
-            lines = content_stripped.split("\n")
-            # Remove lines until we find one ending with a valid terminator
-            while lines and not (
-                lines[-1].strip().endswith(".")
-                or lines[-1].strip().endswith("]")
-                or lines[-1].strip() == ""
-                or lines[-1].strip().startswith("#")
-            ):
-                lines.pop()
-            if lines:
-                owl_content = "\n".join(lines)
-                logger.warning(
-                    "Content appeared truncated, removed incomplete statements"
-                )
+        owl_content = _salvage_truncated_owl(owl_content)
 
         from back.core.w3c.rdf_utils import parse_rdf_flexible
 
         try:
-            self.graph = parse_rdf_flexible(owl_content, formats=("turtle", "xml"))
+            self.graph = parse_rdf_flexible(
+                owl_content, formats=("turtle", "xml", "json-ld")
+            )
         except ValueError as e:
             raise ValidationError("Failed to parse OWL content", detail=str(e)) from e
 
@@ -192,7 +211,7 @@ class OntologyParser:
         are returned by :meth:`get_groups` instead).
 
         Returns:
-            List of dicts with 'uri', 'name', 'label', 'comment', 'emoji', 'parent', 'group', 'dashboard', 'dashboardParams', 'bridges', 'dataset', 'dataProperties'
+            List of dicts with 'uri', 'name', 'label', 'comment', 'emoji', 'parent', 'group', 'dashboard', 'dashboardParams', 'bridges', 'datasets', 'dataset', 'dataProperties'
         """
         classes = []
         group_uris = self._get_group_class_uris()
@@ -284,13 +303,11 @@ class OntologyParser:
                     pass
                 break
 
-            # Get linked Unity Catalog dataset from OntoBricks custom property
-            dataset = None
+            # Linked UC datasets (JSON array, or legacy singular object)
+            datasets: List[Dict] = []
             for ds in self.graph.objects(cls, ONTOBRICKS_NS.dataset):
-                try:
-                    dataset = json.loads(str(ds))
-                except (json.JSONDecodeError, ValueError):
-                    pass
+                try: datasets = _normalize_datasets(json.loads(str(ds)))
+                except (json.JSONDecodeError, ValueError): pass
                 break
 
             # Get linked Unity Catalog function actions from OntoBricks property
@@ -302,7 +319,7 @@ class OntologyParser:
                     pass
                 break
 
-            # Get referenced SWRL business rules from OntoBricks property
+            # Get referenced IF-THEN business rules from OntoBricks property
             business_rules = []
             for br in self.graph.objects(cls, ONTOBRICKS_NS.businessRules):
                 try:
@@ -355,7 +372,8 @@ class OntologyParser:
                     "dashboard": dashboard or "",
                     "dashboardParams": dashboard_params,
                     "bridges": bridges,
-                    "dataset": dataset,
+                    "datasets": datasets,
+                    "dataset": datasets[0] if datasets else None,
                     "actions": actions,
                     "business_rules": business_rules,
                     "virtualAttributes": virtual_attributes,
@@ -833,16 +851,15 @@ class OntologyParser:
 
         return constraints
 
-    def get_swrl_rules(self) -> List[Dict]:
-        """Extract SWRL rules from the ontology.
+    def get_if_then_rules(self) -> List[Dict]:
+        """Extract IF-THEN rules from the ontology.
 
         Returns:
             List of rule dicts with 'name', 'description', 'antecedent', 'consequent'
         """
         rules = []
 
-        # Extract OntoBricks SWRL rules
-        for rule_res in self.graph.subjects(RDF.type, ONTOBRICKS_NS.SWRLRule):
+        for rule_res in _if_then_rule_nodes(self.graph):
             rule = {}
 
             for label in self.graph.objects(rule_res, RDFS.label):

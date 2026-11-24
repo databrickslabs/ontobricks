@@ -1,0 +1,827 @@
+================================================================================
+## Add Business insights agent to Simulation Compare → Evaluate
+================================================================================
+
+Context: The Evaluate tab showed the Live and Sandbox answers side by side, but
+left the reader to work out what the scenario changed. A dedicated agent now
+compares both answers against the scenario's fact changes and writes four
+short business-oriented sections into a third pane under the two answers. It
+runs only when both answers succeed. Its tools are read-only and each call
+names the graph it targets (live or sandbox).
+
+Changes:
+
+1. src/agents/agent_simulation_insights/engine.py
+   One-shot agent loop (`run_agent`, `@trace_agent`), system prompt with four
+   required headings, answer truncation (6000 chars), user-message assembly
+   from the prompt, both answers and the scenario facts.
+2. src/agents/agent_simulation_insights/tools.py
+   Four read-only Graph Chat wrappers (`list_entity_types`, `describe_entity`,
+   `query_graphql`, `get_entity_context`), each with a required `graph`
+   argument. `graph_view()` routes live (no scenario) and sandbox (scenario,
+   inferred). No mutation tool and no SPARQL.
+3. src/agents/agent_simulation_insights/AgentResult.py
+   Result dataclass (success, reply, steps, iterations, error, usage).
+4. src/agents/agent_simulation_insights/__init__.py
+   Package exports.
+5. src/api/routers/internal/dtwin.py
+   New `POST /dtwin/assistant/insights/stream` (SSE: step / done / error).
+   Validates the body, loads the scenario from the simulation registry
+   (`Simulation.get`, never the browser), and is stateless (no history read or
+   write). Helpers: `_insights_fields`, `_insights_scenario`,
+   `_insights_sse_response`.
+6. src/front/templates/partials/simulation/_sim_compare.html
+   Full-width "Business insights" pane under the Live | Sandbox row (status,
+   thinking steps, error, Markdown answer; ids `simEvalInsights*`).
+7. src/front/static/simulation/js/simulation-evaluate.js
+   Generic `_sse()` client shared by the chat and insights streams; `run()`
+   starts insights only when both Live and Sandbox succeed, otherwise shows
+   "Insights need both answers." Ask both stays busy until insights settle.
+   The pane-id map now includes `insights`.
+8. tests/eval/datasets/agent_simulation_insights/baseline.jsonl
+   20 baseline rows: 8 happy, 3 identical, 4 ambiguous, 3 adversarial,
+   2 synthetic.
+9. tests/eval/judges/simulation_insights.py
+   Dry-run dataset-contract judge (input well-formed, patches parse as `Patch`,
+   section headings and graph list valid).
+10. tests/eval/run_agent_simulation_insights.py
+    Eval runner (dry run; `--live` exits with an explicit "not wired" error).
+11. tests/eval/thresholds.yaml
+    `simulation_insights` threshold block.
+12. tests/units/agents/test_simulation_insights_tools.py
+    Read-only tool surface, required graph argument, routing, invalid graph.
+13. tests/units/agents/test_simulation_insights_engine.py
+    Truncation, user message, happy path, tool routing, tool feedback, final
+    iteration without tools, LLM / empty / iteration-cap errors, on_event.
+14. tests/units/api/test_dtwin_insights_stream.py
+    Input validation, draft and unknown scenarios, scenario read server-side
+    (body ignored), stateless history, happy and error SSE events.
+15. tests/units/front/test_simulation_page_contract.py
+    Insights pane markup and placement, auto-run gate, pane counts updated
+    from two to three.
+
+Notes:
+- Live scoring is not wired yet: the dry-run validates the dataset contract
+  only. The MLflow eval run and the live judge scores are still pending
+  (see .planning/simulation-insights/SPEC.md, gitignored).
+- The UI was not exercised in a browser; coverage is the contract tests plus a
+  JS syntax check.
+
+Modified files:
+- src/agents/agent_simulation_insights/__init__.py (new)
+- src/agents/agent_simulation_insights/AgentResult.py (new)
+- src/agents/agent_simulation_insights/engine.py (new)
+- src/agents/agent_simulation_insights/tools.py (new)
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/static/simulation/js/simulation-evaluate.js
+- tests/eval/datasets/agent_simulation_insights/baseline.jsonl (new)
+- tests/eval/judges/simulation_insights.py (new)
+- tests/eval/run_agent_simulation_insights.py (new)
+- tests/eval/thresholds.yaml
+- tests/units/agents/test_simulation_insights_tools.py (new)
+- tests/units/agents/test_simulation_insights_engine.py (new)
+- tests/units/api/test_dtwin_insights_stream.py (new)
+- tests/units/front/test_simulation_page_contract.py
+
+Test results:
+- `uv run --frozen pytest -q -m "not scenario"`: 10069 passed, 326 skipped,
+  8 deselected, 0 failed.
+- `uv run --frozen python tests/eval/run_agent_simulation_insights.py`:
+  schema_valid=1.000 n=20 threshold=1.000 (exit 0).
+- `node --check` on simulation-evaluate.js: OK.
+
+
+================================================================================
+## Add printable Evaluate business-insights report
+================================================================================
+
+Context: After Ask both, the insights pane was a short analysis only. Users
+needed a full summary they can open in a modal and export as PDF: hypothetical
+facts, Compare overlay, both answers, then the agent narrative.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_insights_report_modal.html
+   Bootstrap xl modal with Close and Export PDF (print).
+2. src/front/templates/partials/simulation/_sim_compare.html
+   Open report button next to the insights title (disabled until insights
+   succeed).
+3. src/front/templates/simulation.html
+   Include the report modal.
+4. src/front/static/simulation/js/simulation-evaluate.js
+   Compose the report from GET /simulation/{id}, SimulationCompare.data /
+   canvas snapshot, stored answers, and the agent Markdown. Export PDF calls
+   window.print() with a print class on html.
+5. src/front/static/simulation/css/simulation.css
+   Report layout and @media print rules that isolate the modal.
+6. tests/units/front/test_simulation_page_contract.py
+   Modal include, Open report, print, and composed sections.
+7. docs/user-guide.md
+   Evaluate tab and printable report.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_insights_report_modal.html
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/templates/simulation.html
+- src/front/static/simulation/js/simulation-evaluate.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+
+Test results:
+- `uv run --frozen pytest -q -m "not scenario"`: 10071 passed, 326 skipped,
+  8 deselected, 0 failed.
+- `node --check` on simulation-evaluate.js: OK.
+
+================================================================================
+
+Context: The second banner (L2 domain subnav under the top navbar) was heavy:
+numbered 1-5 workspace "steps", a filled primary domain badge, a separate
+Versions button, and a Save button with no unsaved-state signal. Redesigned
+to the approved "C" direction (breadcrumb switcher + quiet segmented tabs).
+The L1 top navbar is unchanged. Specs: docs/superpowers/specs/2026-11-06-l2-subnav-modern-restyle-design.md
+and docs/superpowers/plans/2026-11-06-l2-subnav-modern-restyle.md (both local,
+gitignored).
+
+Changes:
+
+1. src/front/templates/base.html
+   Domain crumb (`#domainContextTrigger`, `.ob-subnav-crumb`) with caret; version
+   crumb (`.ob-subnav-version-crumb`, `#menuSwitchDomain` from menu_config) showing
+   `vN ▾`, so Versions is merged into the version crumb. Workspace ordinals 1-5
+   removed. Separate right-side Versions button removed. Close is a ghost action.
+   Save gets a dirty dot (`.ob-subnav-save-dirty`) and a shortcut keycap
+   (`.ob-subnav-save-kbd`).
+2. src/front/static/global/css/main.css
+   Removed the superseded L2 rules (domain badge, ordinals, gradient active tab,
+   outlined Versions/Close/Save). Added the crumb, grey workspace track, raised
+   active chip, Save dirty/keycap, and ghost Close rules. Mobile and constrained
+   media blocks updated to the new selectors.
+3. src/front/static/global/js/navbar.js
+   Dirty bus: `setDomainDirty(source, dirty)` and `clearAllDomainDirty()`
+   (exposed on window); `.is-dirty` toggled on Save; cleared after a successful
+   domain save. Platform-aware shortcut label (⌘S / Ctrl+S).
+4. src/front/static/global/js/ontology-design.js
+   Publishes ontology registry-dirty state to the bus (guarded calls).
+5. src/front/static/global/js/mapping-core.js
+   Publishes mapping registry-dirty state to the bus (guarded calls).
+6. tests/units/front/test_segmented_subnav_contract.py
+   Contract updated to the C direction (crumbs, track, Save dirty/keycap, no
+   ordinals).
+7. tests/units/front/test_mobile_subnav_contract.py
+   Visible-label count updated (Versions is now the vN crumb).
+8. tests/units/front/test_clarity_design_contract.py
+   Active workspace contract: surface chip instead of gradient.
+9. tests/units/front/test_subnav_dirty_contract.py (new)
+   Contract for the dirty bus, publishers, and shortcut label.
+10. .cursor/11-frontend-design.mdc
+    L2 contract rewritten (layout list, action styles, mobile, tokens).
+11. docs/user-guide.md, docs/architecture.md
+    Version switch, Save dirty dot, and L2 description updated.
+
+Decisions and deviations from the approved spec:
+- Keyboard shortcut: Ctrl/Cmd+S was already handled globally in
+  base-ui-handlers.js (including inside inputs). No second handler was added,
+  to avoid a double save. The on-button keycap label is the only new piece.
+- Version switcher: kept the existing "Switch Version" modal (it already has the
+  New Version action in its footer) instead of rebuilding it as an anchored
+  dropdown. Converting it to an anchored dropdown is a possible follow-up.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/ontology-design.js
+- src/front/static/global/js/mapping-core.js
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_subnav_dirty_contract.py (new)
+- .cursor/11-frontend-design.mdc
+- docs/user-guide.md
+- docs/architecture.md
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front`: 1743 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 10076 passed, 326 skipped,
+  8 deselected, 0 failed.
+- `node --check` on navbar.js, ontology-design.js, mapping-core.js: OK.
+- Not yet verified in a browser (visual check at desktop and mobile widths
+  pending).
+
+
+Follow-up: L2 workspace track colour
+
+Context: the grey workspace track (--db-line-soft) did not match the rest of the
+UI after review.
+
+Changes:
+1. src/front/static/global/css/main.css
+   .ob-subnav-workspace-list back to the white --db-surface-warm surface with a
+   1px --db-border; active chip gets the same border.
+2. tests/units/front/test_segmented_subnav_contract.py
+   Track contract now asserts the white surface and border.
+3. .cursor/11-frontend-design.mdc
+   Track description and token table updated.
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front`: 1743 passed.
+
+
+Follow-up: remove the inline L2 breadcrumb
+
+Context: the breadcrumb trail on the right of the L2 row (for example
+"Simulation / Scenarios") was no longer wanted. The workspace track and the
+sidebar already show the current location.
+
+Changes:
+1. src/front/templates/base.html
+   Removed the `#obBreadcrumbWrap` <li> from the L2 row and the duplicate hidden
+   `#obBreadcrumb` nav (which also reused the `#obBreadcrumbList` id).
+2. src/front/static/global/css/main.css
+   Removed the `.ob-subnav-breadcrumb-wrap` rules and the `#obBreadcrumbWrap`
+   rules in the constrained and mobile media blocks. The flex spacer stays.
+3. src/front/static/global/js/breadcrumb.js
+   Stripped the crumb rendering, route map, and section updates. The file now
+   only keeps `--ob-chrome-height` in sync (`window.OBBreadcrumb._updateChromeHeight`),
+   which navbar.js depends on.
+4. tests/units/front/test_breadcrumb.py
+   Deleted: it only tested the removed crumb rendering.
+5. tests/units/front/test_settings_subnav_hidden.py
+   Removed the settings-page breadcrumb guard test.
+6. tests/units/front/test_knowledge_graph_icon.py
+   Removed the breadcrumb icon-match test (the menu-icon tests remain).
+7. tests/units/front/test_segmented_subnav_contract.py, test_mobile_subnav_contract.py
+   Assertions for the removed breadcrumb updated.
+8. .cursor/11-frontend-design.mdc, docs/architecture.md, docs/user-guide.md, docs/development.md
+   Breadcrumb documentation replaced with the removal note.
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front`: 1736 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 10069 passed, 326 skipped, 8 deselected, 0 failed.
+
+
+Follow-up: L2 workspace links styled like the crumbs
+
+Context: after the grey track and the white chip, the workspace menu still did
+not fit the page. Requested: no page-coloured background behind the workspace
+menu, and hover/colours consistent with the Domain and version crumbs.
+
+Changes:
+1. src/front/static/global/css/main.css
+   .ob-subnav-workspace-list: transparent track, no border. .ob-subnav-link:
+   600 weight, --db-text, hover --db-primary-darker on --db-hover-indigo.
+   .ob-subnav-link.active: --db-primary-darker, 600 weight, no fill, no shadow.
+2. tests/units/front/test_segmented_subnav_contract.py,
+   tests/units/front/test_clarity_design_contract.py
+   Contracts updated to the crumb-style links.
+3. .cursor/11-frontend-design.mdc
+   L2 visual contract and token table updated.
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front`: 1736 passed.
+
+## Ontology editor: "Name" labels renamed to "ID"
+
+Context: entity and relationship identifiers are the local names used to build URIs (`base_uri + name`). The editor labelled them "Name", which hid that they drive the URI. Renamed the user-facing wording to "ID" in the ontology editor. Stored data keys (`name`, `uri`) are unchanged. URI rewrite on rename (DC-E06 duplicate URIs) is NOT part of this entry and is still pending.
+
+Changes:
+1. `src/front/static/ontology/js/ontology-shared-panels.js`: entity field label "Icon and name" → "Icon and ID"; entity and relationship label placeholders "Defaults to name if empty" → "Defaults to ID if empty"; attribute placeholder/aria-label "Attribute name" → "Attribute ID"; relationship field label "Name" → "ID"; validation and duplicate messages now say "ID" (e.g. "An entity with ID \"x\" already exists").
+2. `src/front/static/ontology/js/ontology-information.js`: four "Imported Entities/Relationships" table headers "Name" → "ID".
+3. `src/front/templates/partials/ontology/_ontology_import.html`: conflict table header "Name" → "ID".
+4. `docs/user-guide.md`: "Edit the entity/relationship name" → "ID".
+5. `docs/architecture.md`: entity and relationship table rows "Name" → "ID".
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-information.js
+- src/front/templates/partials/ontology/_ontology_import.html
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front`: 1612 passed, 124 failed. All failures are Node-based harnesses failing at process start (`dyld: Library not loaded: libsimdjson.29.dylib`, Homebrew Node 25.6.1 broken on this machine). Not caused by this change; to be re-run once Node is repaired.
+
+## Ontology: renaming an entity or relationship re-derives its URI (DC-E06)
+
+Context: Sanity Check DC-E06 ("URI ... is used by 2 propertys: assignedto2, assignedto"). The editor keeps the URI on rename so mappings stay identifiable, but the freed name was then reused by a new item whose URI (`base_uri + name`) collided with the renamed item's old URI. Decision (option A): a rename rewrites the URI from the new name and remaps the mappings that reference it.
+
+Changes:
+1. `src/back/objects/ontology/ClassModel.py`: new `_rederive_renamed_uris` and `rewrite_renamed_uris`. An item is renamed when its URI was owned in the previous state by a different name; its URI becomes `<namespace><new name>` (namespace kept, so imported entities keep their source namespace). Attributes are re-derived too. Legacy duplicate URIs are ambiguous: the renamed item gets its new URI and the mappings stay on the original one. New `attribute_uris` returns attribute URIs per class (positional).
+2. `src/back/objects/ontology/Editor.py`: `save_ontology_config_from_editor` re-derives renamed URIs before the orphan prune, then calls the new public `remap_mapping_uris` (entity `ontology_class`/`class_uri`; relationship `property`, `source_class`, `target_class`). The response now returns `uri_renames` (`classes`, `properties`) and `attribute_uris`.
+3. `src/back/objects/ontology/Ontology.py`: `apply_agent_ontology_changes` applies the same re-derivation and remap before its prune.
+4. `src/front/static/global/js/ontology-core.js`: `saveConfigToSession` calls the new `applyStoredUris(result)` after a successful save, so the editor holds the stored URIs (otherwise the next save would send the old URI). Classes and relationships are remapped by old URI, attributes by position.
+5. `src/front/static/ontology/js/ontology-shared-panels.js`: comments on the URI carry-over in `saveSharedEntity` and `saveSharedRelationship` updated (the URI is still sent so the backend can identify the item).
+6. `docs/user-guide.md`: note that renaming updates the URI and keeps mappings; a build must be re-run for the triples to use the new URI.
+
+Not changed: triples already materialised in the triple store keep the previous URI until the next build; saved artefacts that embed URIs (e.g. SWRL/cohort/simulation results) are not rewritten; relationship constraints/axioms stay name-based as before.
+
+Modified files:
+- src/back/objects/ontology/ClassModel.py
+- src/back/objects/ontology/Editor.py
+- src/back/objects/ontology/Ontology.py
+- src/front/static/global/js/ontology-core.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- docs/user-guide.md
+- tests/units/ontology/test_uri_rename.py (new)
+- tests/units/front/test_uri_rename_contract.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Test results:
+- `uv run --frozen pytest -q tests/units/ontology/test_uri_rename.py`: 9 passed.
+- `uv run --frozen pytest -q tests/units/front/test_uri_rename_contract.py`: 3 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 9956 passed, 125 failed, 326 skipped. All 125 failures are Node-based harnesses that abort at start (`dyld: Library not loaded: libsimdjson.29.dylib`, Homebrew Node 25.6.1 broken on this machine). Not caused by this change. Needs `brew reinstall node` (or simdjson) to re-run; the new `applyStoredUris` JS is not executed by the test suite yet.
+- Known pre-existing issue: collecting `tests/units/ontology/` alone raises a circular import (`OntologyGenerator`) on HEAD too; the full run is unaffected.
+
+## Fix Sanity Checks click for orphaned attributes (DC-W03)
+
+Context: Clicking a Sanity Checks warning such as ``paymentmethod`` / "Property has no domain" opened Ontology → Relationships, where the item does not exist. Root cause: the finding was a DatatypeProperty (attribute), tagged ``kind: property``. Relationships only lists ObjectProperties, so the link looked dead.
+
+Changes:
+1. `src/back/objects/ontology/DesignChecks.py`: DatatypeProperty findings are tagged ``kind: attribute``; domain is included when present; DC-W03/W04 messages say "Attribute" for datatype properties.
+2. `src/front/static/ontology/js/ontology-design-checks.js`: attribute findings with a domain open Entities on the owner; orphans stay on Sanity Checks with a warning toast (no Relationships redirect).
+3. `docs/user-guide.md`: document attribute click behaviour.
+4. `tests/units/ontology/test_design_checks.py`: cover attribute kind and domain payload.
+5. `tests/units/front/test_ontology_design_checks_contract.py`: contract that attributes do not open Relationships.
+
+Modified files:
+- src/back/objects/ontology/DesignChecks.py
+- src/front/static/ontology/js/ontology-design-checks.js
+- docs/user-guide.md
+- tests/units/ontology/test_design_checks.py
+- tests/units/front/test_ontology_design_checks_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Test results:
+- `uv run --frozen pytest -q tests/units/ontology/test_design_checks.py tests/units/front/test_ontology_design_checks_contract.py`: 45 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 9959 passed, 125 failed, 326 skipped. All 125 failures are Node harnesses aborting at start (`dyld: Library not loaded: libsimdjson.29.dylib`). Not caused by this change.
+
+## Let Sanity Checks attach or remove an orphan attribute
+
+Context: Clicking DC-W03 for an unattached DatatypeProperty (e.g. ``paymentmethod``) only showed a toast. The user still could not fix the orphan. Clicking now opens a dialog to attach the attribute to an entity or delete it.
+
+Changes:
+1. `src/front/static/ontology/js/ontology-design-checks.js`: orphan attribute click opens a modal (entity select + Attach / Remove). Attach sets ``domain`` and adds the attribute to the class ``dataProperties``; Remove deletes the property after confirm. Both persist via ``saveConfigToSession`` and refresh the report.
+2. `docs/user-guide.md`: orphan click now attaches or removes.
+3. `tests/units/front/test_ontology_design_checks_contract.py`: contract for attach/remove helpers.
+
+Modified files:
+- src/front/static/ontology/js/ontology-design-checks.js
+- docs/user-guide.md
+- tests/units/front/test_ontology_design_checks_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front/test_ontology_design_checks_contract.py tests/units/ontology/test_design_checks.py`: 45 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 9959 passed, 125 failed, 326 skipped. All 125 failures are Node harnesses aborting at start (`dyld: Library not loaded: libsimdjson.29.dylib`). Not caused by this change.
+
+## Add Sanity Checks Auto-fix (propose-then-apply)
+
+Context: Sanity Checks findings needed a guided repair path. Each fixable finding (and Fix all per rule) now opens a confirmation modal with an explained plan and ranked alternatives. Mechanical rules use deterministic fixers; judgement rules use ``agent_design_fixer``. Orphan attribute attach/remove is folded into this flow (the previous JS-only orphan modal is removed). Apply validates and mutates server-side, remapping URIs/mappings on rename.
+
+Changes:
+1. `src/back/objects/ontology/autofix_ops.py`: operation vocabulary, rule routing, naming helpers, FixPlan builders.
+2. `src/back/objects/ontology/autofix_rule_fixers.py`: mechanical plans for E01–E05, I02, I03.
+3. `src/back/objects/ontology/autofix_apply.py`: atomic apply + attach/remove/rename/merge handlers.
+4. `src/back/objects/ontology/DesignAutofix.py`: propose orchestration (rule / AI / No-LLM fallbacks for W02/W03).
+5. `src/back/objects/ontology/DesignChecks.py`: DC-E04 findings include ``member`` for Auto-fix.
+6. `src/back/objects/ontology/Editor.py`: extract URI rewrite/remap and mapping prune helpers (size budget).
+7. `src/agents/agent_design_fixer/`: read-only tools + engine + ``submit_fix_plan`` terminal tool.
+8. `src/agents/tools/context.py`: ``ontology_groups`` and ``submitted_fix_plan`` fields.
+9. `src/api/routers/internal/ontology.py`: ``POST .../autofix/propose`` and ``.../apply``.
+10. `src/front/static/ontology/js/ontology-design-checks.js`: Auto-fix / Fix all modal; remove orphan modal.
+11. `src/front/static/ontology/css/ontology-design-checks.css`: Auto-fix button/group styles.
+12. `tests/eval/datasets/agent_design_fixer/baseline.jsonl`: ≥20 eval rows.
+13. `tests/eval/judges/design_fixer.py` + `tests/eval/run_agent_design_fixer.py` + thresholds.
+14. `docs/user-guide.md` / `docs/architecture.md`: Auto-fix UX and agent entry.
+
+Modified files:
+- src/back/objects/ontology/autofix_ops.py
+- src/back/objects/ontology/autofix_rule_fixers.py
+- src/back/objects/ontology/autofix_apply.py
+- src/back/objects/ontology/DesignAutofix.py
+- src/back/objects/ontology/DesignChecks.py
+- src/back/objects/ontology/Editor.py
+- src/back/objects/ontology/__init__.py
+- src/agents/agent_design_fixer/__init__.py
+- src/agents/agent_design_fixer/AgentResult.py
+- src/agents/agent_design_fixer/engine.py
+- src/agents/agent_design_fixer/tools.py
+- src/agents/tools/context.py
+- src/api/routers/internal/ontology.py
+- src/front/static/ontology/js/ontology-design-checks.js
+- src/front/static/ontology/css/ontology-design-checks.css
+- tests/eval/datasets/agent_design_fixer/baseline.jsonl
+- tests/eval/judges/design_fixer.py
+- tests/eval/run_agent_design_fixer.py
+- tests/eval/thresholds.yaml
+- tests/units/ontology/test_design_autofix_ops.py
+- tests/units/ontology/test_design_autofix_rules.py
+- tests/units/ontology/test_design_autofix_apply.py
+- tests/units/ontology/test_design_autofix_propose.py
+- tests/units/agents/test_agent_design_fixer_tools.py
+- tests/units/agents/test_agent_design_fixer_engine.py
+- tests/units/api/test_design_autofix_endpoints.py
+- tests/units/front/test_ontology_design_checks_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests:
+- Autofix unit + contract suite: 50 passed.
+- `uv run --frozen python tests/eval/run_agent_design_fixer.py`: schema_valid=1.000 n=21.
+- `uv run --frozen pytest -q -m "not scenario"`: 10003 passed, 124 failed, 326 skipped. All failures are Node harnesses (`libsimdjson.29.dylib` missing) — environmental, not caused by this change. Architecture size/class-per-file gates pass after AgentResult extract and Editor helper extract.
+
+## Rewrite uv.lock package URLs onto the public CDN
+
+Context: Deploy pre-flight rejected the committed lock because it pinned every package to `pypi-proxy.dev.databricks.com` (3226 URLs). The Databricks Apps container installs from the lock verbatim and the proxy cold-caches wheels, which crashes the app ~45s after start. Public `pypi.org` is blocked on this machine via `/etc/hosts` (`127.0.0.1`), so a clean `UV_INDEX_URL=https://pypi.org/simple uv lock` was not possible. Per the chosen workaround, registry and package URLs were rewritten in place to `pypi.org/simple` and `files.pythonhosted.org` while keeping hashes and sizes unchanged.
+
+Changes:
+
+1. uv.lock
+   Replaced all `pypi-proxy.dev.databricks.com` registry/package URLs with `https://pypi.org/simple` and `https://files.pythonhosted.org/packages/...` (3226 refs → 0 remaining). Hashes and sizes untouched.
+
+Modified files:
+- uv.lock
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `UV_INDEX_URL=https://pypi.org/simple uv lock --check` → exit 0. Spot-check wheel download from files.pythonhosted.org → HTTP 200. `uv run --frozen pytest -q -m "not scenario"` → 10003 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before).
+
+================================================================================
+## Refresh GitHub token secret name dropdown on every load
+================================================================================
+
+Context: In Settings → GitHub, the Token secret name dropdown never picked up
+newly created Databricks secrets in the deployed app. A one-shot `loaded`
+guard skipped re-listing scopes/keys after the first visit, the scope refresh
+button did not cascade into keys, and there was no refresh control next to
+the secret name (unlike Neo4j settings).
+
+Changes:
+
+1. src/front/static/config/js/settings-github.js
+   Always re-list scopes and keys on each settings load; scope refresh now
+   also refreshes keys (preserving the current selection); wire a dedicated
+   secret-name refresh button.
+2. src/front/templates/partials/settings/_settings_github.html
+   Add a refresh button next to Token secret name, matching Neo4j.
+3. tests/units/front/test_settings_github_loading.py
+   Assert the one-shot guard is gone, the secret-name refresh control exists,
+   and scope refresh cascades into keys.
+
+Modified files:
+- src/front/static/config/js/settings-github.js
+- src/front/templates/partials/settings/_settings_github.html
+- tests/units/front/test_settings_github_loading.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q tests/units/settings/test_github_settings.py tests/units/front/test_settings_github_loading.py` → 17 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before; no GitHub-settings regressions).
+
+================================================================================
+## Move Sanity Checks count badges into tab headers
+================================================================================
+
+Context: Ontology → Sanity Checks showed error/warning/info count badges in a
+separate summary strip above the tabs. The badges belong next to each severity
+label, matching the Data Quality tab-header count pattern.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_design_checks.html
+   Remove the summary strip; place count badges inside Errors / Warnings / Info tab headers.
+2. src/front/static/ontology/js/ontology-design-checks.js
+   Update badge text to numeric counts only (labels live on the tabs).
+3. src/front/static/ontology/css/ontology-design-checks.css
+   Drop unused `.dc-summary` styles.
+4. tests/units/front/test_ontology_design_checks_contract.py
+   Assert badges sit inside their tab buttons and the summary strip is gone.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_design_checks.html
+- src/front/static/ontology/js/ontology-design-checks.js
+- src/front/static/ontology/css/ontology-design-checks.css
+- tests/units/front/test_ontology_design_checks_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_design_checks_contract.py` → 9 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before; no Sanity Checks regressions).
+
+================================================================================
+## Remove count text from Sanity Checks tab badges
+================================================================================
+
+Context: The severity badges in the Errors / Warnings / Info tab headers showed
+numeric counts. Per user request, the count text is removed and the badges are
+kept as empty colour pills. The JS that wrote the counts is removed so it does
+not repopulate them.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_design_checks.html
+   Empty the three tab badges (no text), mark them aria-hidden, and make them round pills.
+2. src/front/static/ontology/js/ontology-design-checks.js
+   Remove the badge-count update from `_render` (and the now-unused `summary` read).
+3. tests/units/front/test_ontology_design_checks_contract.py
+   Assert the count ids are gone and the three empty pills sit inside their tab buttons.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_design_checks.html
+- src/front/static/ontology/js/ontology-design-checks.js
+- tests/units/front/test_ontology_design_checks_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_design_checks_contract.py` → 9 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before; no Sanity Checks regressions).
+
+================================================================================
+## Restore Sanity Checks count badges in tab headers
+================================================================================
+
+Context: The previous change emptied the Errors / Warnings / Info tab badges,
+which removed the counts the user wants visible. Restores the numeric counts
+in the tab badges, with the JS updating them on each refresh.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_design_checks.html
+   Restore the `dcBadgeError` / `dcBadgeWarning` / `dcBadgeInfo` count badges inside the tab headers.
+2. src/front/static/ontology/js/ontology-design-checks.js
+   Restore the `setBadge` count update in `_render`.
+3. tests/units/front/test_ontology_design_checks_contract.py
+   Assert the count ids are present and sit inside their tab buttons.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_design_checks.html
+- src/front/static/ontology/js/ontology-design-checks.js
+- tests/units/front/test_ontology_design_checks_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_design_checks_contract.py` → 9 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before; no Sanity Checks regressions).
+
+================================================================================
+## Use entity / attribute wording in Sanity Checks and Auto-fix
+================================================================================
+
+Context: Sanity Checks titles, messages and the Auto-fix modal used OWL
+jargon ("class", "domain", raw op ids like `set_domain` and `domain=Order`).
+In OntoBricks the user-facing nouns are entity / attribute / relationship, and
+"domain" means an OntoBricks domain, so the rdfs:domain wording was confusing.
+Op ids and data fields are unchanged; only user-facing text is renamed.
+
+Changes:
+
+1. src/back/objects/ontology/DesignChecks.py
+   Rename titles (Broken entity link, Orphan entity, Missing entity, Entity naming, Attribute / relationship naming); reword every finding message to entity / attribute / relationship via new `_noun` / `_plural` helpers.
+2. src/back/objects/ontology/autofix_rule_fixers.py
+   Reword clear_parent / clear_domain / rename rationales and summaries (no "class" or "domain").
+3. src/back/objects/ontology/autofix_apply.py
+   Reword apply errors (Entity / Attribute / Relationship not found) via `_prop_noun`.
+4. src/front/static/ontology/js/ontology-design-checks.js
+   Mirror the new rule titles; add `OP_LABELS` / `PARAM_LABELS` + `_opLabel` so the modal shows "Set owning entity", "Detach from entity", "entity: Order" instead of raw op ids and `key=value` params.
+
+Modified files:
+- src/back/objects/ontology/DesignChecks.py
+- src/back/objects/ontology/autofix_rule_fixers.py
+- src/back/objects/ontology/autofix_apply.py
+- src/front/static/ontology/js/ontology-design-checks.js
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q -k "design or autofix or sanity"` → 282 passed, 11 skipped. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (all failures are Node-subprocess tests crashing because local node cannot load libsimdjson.29.dylib; none touch Sanity Checks).
+
+================================================================================
+## Keep attribute-to-entity membership in sync on set_domain
+================================================================================
+
+Context: The Auto-fix operation `set_domain` on an attribute only updated the
+attribute's owning entity link, while `attach_attribute` also listed the
+attribute under that entity's attributes. Applying `set_domain` therefore left
+the attribute missing from its entity's attribute list. `set_domain` now
+behaves the same way as `attach_attribute` for attributes. Relationships are
+unchanged.
+
+Changes:
+
+1. src/back/objects/ontology/autofix_apply.py
+   Add `_is_attribute` and `_sync_attribute_owner`; `_op_set_domain` now moves
+   the attribute into the target entity's attribute list and removes it from
+   the previous entity. Idempotent.
+2. tests/units/ontology/test_design_autofix_apply.py
+   Add five tests: attach on attribute, move from previous entity, idempotent
+   re-apply, relationship left untouched, unknown entity rejected.
+
+Modified files:
+- src/back/objects/ontology/autofix_apply.py
+- tests/units/ontology/test_design_autofix_apply.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q -p no:cacheprovider` on the design-checks, autofix propose, autofix endpoint and contract tests → 32 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10010 passed, 124 failed, 326 skipped (same Node/libsimdjson environmental failures; none in Sanity Checks or Auto-fix).
+
+================================================================================
+## Graph Chat: full, collapsible thinking process
+================================================================================
+
+Context: Graph Chat only showed the current tool name in a status line and a
+"Tools used" list, with tool results cut to 500 characters on the backend. The
+user wants the whole reasoning trace visible in the chat, with expand/collapse.
+The trace now shows every tool call (input arguments) and its full result, and
+stays on top of the final answer.
+
+Changes:
+
+1. src/agents/agent_dtwin_chat/engine.py
+   `tool_result` steps carry the full tool output instead of `[:500]`. The LLM
+   payload was already untruncated; only the observable step content changes.
+2. src/front/static/query/js/query-chat.js
+   Streaming bubble builds a collapsible "Thinking process (N tool calls)"
+   block, open by default. Each tool call is its own expandable block with
+   pretty-printed Input and Result sections and the duration. Blocks fill in
+   live as SSE events arrive. The block is kept on success and on error. All
+   tool output is rendered via `textContent` (no HTML injection).
+3. src/front/static/query/css/query-chat.css
+   Styles for `.graph-chat-thinking`, `.graph-chat-step*` (scrollable `pre`,
+   dark code panel).
+4. tests/units/agents/test_agent_dtwin_chat_engine.py
+   New test: a >500-char tool result is kept whole in the trace step.
+
+Limitation: the thinking trace is live-only. It is not persisted with the saved
+Graph Chat history, same as the existing "Tools used" list, so it is not shown
+again after a page reload.
+
+Modified files:
+- src/agents/agent_dtwin_chat/engine.py
+- src/front/static/query/js/query-chat.js
+- src/front/static/query/css/query-chat.css
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9993 passed, 142 failed,
+326 skipped, 8 deselected. The Graph Chat tests (`test_query_chat_*`,
+`test_dtwin_assistant_chat`, `test_dtwin_chat_persist_flag`, engine tests)
+pass. The failures are in ontology/DQ/wizard front-end contract tests and in
+Node-based tests. Node cannot load `libsimdjson.29.dylib` on this machine, and
+these areas have uncommitted work in the tree. The new engine test passes.
+`query-chat.js` parses (checked with esprima; `?.` unsupported by esprima, same
+as HEAD). Not verified in a live browser.
+
+================================================================================
+## Studio Business View filter and ontology group collapse
+================================================================================
+
+Context: After OntoViz / Business Views design section removal, Studio needs an
+in-canvas Business View dropdown to filter the map, plus ontology-group
+collapse/expand so large domains stay readable. Creating a Business View from
+selection must stay on Studio instead of navigating to the deleted design
+section.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Add Studio view state (`_studioActiveView`, `_studioViewLayout`),
+   `refreshStudioViewSelect` / `applyStudioView` / `wireStudioViewControls` /
+   `flushStudioLayoutBeforeSave`, Business View node/link filtering in
+   `initOntologyMap`, and ontology-group collapse with synthetic
+   `__group__*` nodes, toggles, and layout persistence (`collapsedGroups` in
+   map-layout / view visibility). `_createMapBusinessView` stays on Studio.
+2. src/front/static/ontology/css/ontology-map.css
+   Styles for `.studio-view-select`, `.studio-group-toggle`, and
+   `.map-group-node .map-group-circle`.
+3. src/front/static/ontology/js/ontology-groups.js
+   Call `window.refreshStudioGroups()` after successful save/delete.
+4. tests/units/front/test_ontology_map_external_badge.py
+   Expect badge filter on `entityNodeElements` (group nodes excluded).
+5. tests/units/front/test_ontology_map_multi_select.py
+   Assert Studio stay-on-canvas BV creation; update shared-helper endpoint
+   counts for `applyStudioView`.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/ontology/js/ontology-groups.js
+- tests/units/front/test_ontology_map_external_badge.py
+- tests/units/front/test_ontology_map_multi_select.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/front/test_ontology_map_external_badge.py tests/units/front/test_ontology_map_multi_select.py` → 34 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 9992 passed, 143 failed, 326 skipped (pre-existing Node/libsimdjson + already-removed design-section contracts; ontology-map assertions updated and green).
+
+================================================================================
+## Remove OntoViz; Studio owns Business Views + group collapse
+================================================================================
+
+Context: Business Views lived in a separate sidebar section on a custom OntoViz
+canvas. Studio (D3) is now the only ontology canvas: OntoViz is removed, the
+Business Views menu entry is gone, and a Studio View dropdown (All + views)
+filters the graph. Ontology groups collapse/expand with a top-left + badge.
+
+Changes:
+
+1. Deleted `src/front/static/global/ontoviz/**`, `ontology-design.js`,
+   `_ontology_design.html`; removed menu `design` / Business Views entry and
+   `#design-section` from `ontology.html`.
+2. Added `ontology-persistence.js` for registry dirty / unload beacons formerly
+   in the design module; wired from `ontology.html` and navbar save flush via
+   `flushStudioLayoutBeforeSave`.
+3. Studio toolbar: `#studioViewSelect` (All + views) and delete control;
+   `ontology-map.js` filters nodes/links from design-view visibility; creating
+   a BV stays on Studio.
+4. Group collapse: synthetic `__group__*` nodes, `.studio-group-toggle`,
+   `refreshStudioGroups` after Groups CRUD.
+5. Tests/docs/help modal updated for the new IA; new
+   `test_studio_views_groups_contract.py`.
+
+Modified files:
+- src/front/static/global/ontoviz/** (deleted)
+- src/front/static/global/js/ontology-design.js (deleted)
+- src/front/templates/partials/ontology/_ontology_design.html (deleted)
+- src/front/static/global/js/ontology-persistence.js (new)
+- src/front/templates/ontology.html
+- src/front/config/menu_config.json
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/permissions.js
+- src/front/static/global/css/main.css
+- src/front/static/global/css/ontology.css
+- src/front/static/global/css/permissions.css
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/front/test_studio_views_groups_contract.py (new)
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_*.py (OntoViz / design-section contracts)
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: targeted Studio/OntoViz contracts → 415 passed (1 deselected: Node
+simdjson SIGABRT on job-status helper). Full suite
+`uv run --frozen pytest -q -m "not scenario"` → 10013 passed, 125 failed,
+325 skipped — failures are pre-existing Node/`libsimdjson.29.dylib` dyld
+errors on JS helper tests, not Studio/OntoViz regressions.
+
+================================================================================
+## Remove Groups sidebar; manage groups from Studio + General tab
+================================================================================
+
+Context: Groups no longer need a dedicated sidebar section. Create/edit/delete
+moves to the Studio toolbar (reusing the group modal); membership stays on the
+entity General tab select.
+
+Changes:
+
+1. src/front/config/menu_config.json — remove Groups menu item.
+2. src/front/templates/ontology.html — drop `#groups-section`; include groups
+   modal at page level.
+3. src/front/templates/partials/ontology/_ontology_groups.html — modal only
+   (Delete button when editing).
+4. src/front/templates/partials/ontology/_ontology_map.html — Studio Groups
+   dropdown (`#studioGroupsBtn` / New group + edit list).
+5. src/front/static/ontology/js/ontology-groups.js — toolbar wiring, no list
+   page; refresh Studio + General-tab options after CRUD.
+6. src/front/static/ontology/js/ontology-shared-panels.js —
+   `refreshSharedEntityGroupOptions`; refresh Studio after membership change.
+7. Tests/docs/help updated.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/ontology.html
+- src/front/templates/partials/ontology/_ontology_groups.html
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/global/css/permissions.css
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/getting-started.md
+- tests/units/front/test_studio_views_groups_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/front/test_studio_views_groups_contract.py tests/units/front/test_sidebar_content_stretch_contract.py tests/units/front/test_help_center_menu_sync.py tests/units/api/test_ui_rendering.py` → 273 passed.
+
+
+================================================================================
+## Preserve exact entity layout across Studio group collapse/expand
+================================================================================
+
+Context: Collapsing or expanding a group rebuilt the D3 map and could reshuffle
+entity positions (async persist race + collapsed members absent from the live
+graph when saving).
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   In-memory `_studioEntityPositions` cache; snapshot before collapse/expand;
+   apply cache when rebuilding nodes; await persist + init; save collapsed
+   members' coords; sync group-drag onto the anchor member.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Assert snapshot helpers and awaited persist/rebuild.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_studio_views_groups_contract.py tests/units/front/test_ontology_map_multi_select.py tests/units/front/test_ontology_map_external_badge.py` → 42 passed.
+

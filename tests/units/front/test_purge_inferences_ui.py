@@ -13,23 +13,64 @@ def _read(relative: str) -> str:
     return (REPO_ROOT / relative).read_text(encoding="utf-8")
 
 
-def test_shared_purge_button_is_in_all_kg_build_and_inference_sections():
+def test_shared_purge_button_is_in_reasoning_and_cohorts():
     include = '{% include "partials/dtwin/_purge_inferences_button.html" %}'
     paths = [
-        "src/front/templates/partials/dtwin/_query_sync.html",
-        "src/front/templates/partials/dtwin/_query_databricks_build.html",
         "src/front/templates/partials/dtwin/_query_reasoning.html",
-        "src/front/templates/partials/dtwin/_query_cohorts.html",
+        "src/front/templates/partials/ontology/_ontology_cohorts.html",
     ]
     for path in paths:
         assert include in _read(path)
+
+
+def test_build_purge_lives_in_header_kebab_not_inferred_tab():
+    build = _read("src/front/templates/partials/dtwin/_query_build.html")
+    more = _read("src/front/templates/partials/dtwin/_build_more_actions.html")
+    header = build.split('id="buildHeaderActions"', 1)[1].split('id="buildPageTabs"', 1)[0]
+    inferred = build.split('id="buildPaneInferred"', 1)[1].split('id="buildPaneCache"', 1)[0]
+    assert '_build_more_actions.html' in header
+    assert 'js-purge-inferences-btn' in more
+    assert '_purge_inferences_button.html' not in inferred
+    assert 'js-purge-inferences-btn' not in inferred
+
+
+def test_build_more_actions_offers_purge_and_refresh_cache():
+    more = _read("src/front/templates/partials/dtwin/_build_more_actions.html")
+    assert 'bi-three-dots-vertical' in more
+    assert 'ob-dbx-menu-toggle' in more
+    assert 'ob-dbx-menu' in more
+    assert 'border-0' in more
+    assert 'btn-outline-secondary' not in more
+    assert 'text-danger' not in more
+    assert 'ob-dbx-menu-label">Purge inferences' in more
+    assert 'ob-dbx-menu-label">Refresh cache' in more
+    assert 'data-sync-action="refresh-adjacency-only"' in more
+    assert 'js-dbx-adjacency-refresh' in more
+
+
+def test_ob_dbx_menu_lives_in_shared_components_css():
+    css = _read("src/front/static/global/css/components.css")
+    assert '.ob-dbx-menu' in css
+    assert '.ob-dbx-menu-icon' in css
+    assert '.ob-dbx-menu-label' in css
+    assert '.ob-dbx-menu-toggle' in css
+    assert 'font-size: 0.8125rem' in css
+    # Must not be re-declared in the Build-only stylesheet.
+    sync_css = _read("src/front/static/query/css/query-sync.css")
+    assert '.ob-dbx-menu' not in sync_css
+
+
+def test_purge_label_is_plain_purge_and_refreshes_inferred_breakdown():
+    js = _read("src/front/static/query/js/query-purge-inferences.js")
+    assert "InferredBreakdownModule.load()" in js
 
 
 def test_shared_button_uses_destructive_style_without_inline_handler():
     html = _read(
         "src/front/templates/partials/dtwin/_purge_inferences_button.html"
     )
-    assert "Purge Inferences" in html
+    assert "</i>Purge" in html
+    assert "Purge Inferences" not in html
     assert "btn-outline-danger" in html
     assert "js-purge-inferences-btn" in html
     assert "onclick=" not in html

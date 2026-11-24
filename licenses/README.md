@@ -12,11 +12,12 @@ This folder contains the license files for all external libraries used by OntoBr
 | Bootstrap Icons | 1.11.2 | MIT | [javascript/bootstrap-icons-LICENSE.txt](javascript/bootstrap-icons-LICENSE.txt) |
 | Chart.js | 4.x | MIT | [javascript/chartjs-LICENSE.txt](javascript/chartjs-LICENSE.txt) |
 | D3.js | 7.x | ISC | [javascript/d3-LICENSE.txt](javascript/d3-LICENSE.txt) |
+| DOMPurify | 3.4.17 | Apache-2.0 / MPL-2.0 | [javascript/dompurify-LICENSE.txt](javascript/dompurify-LICENSE.txt) |
 | GraphiQL | 3.x | MIT | [javascript/graphiql-LICENSE.txt](javascript/graphiql-LICENSE.txt) |
 | Graphology | 0.26.0 | MIT | [javascript/graphology-LICENSE.txt](javascript/graphology-LICENSE.txt) |
 | Graphology Library | 0.8.0 | MIT | [javascript/graphology-library-LICENSE.txt](javascript/graphology-library-LICENSE.txt) |
 | Grid.js | latest | MIT | [javascript/gridjs-LICENSE.txt](javascript/gridjs-LICENSE.txt) |
-| Marked | latest | MIT | [javascript/marked-LICENSE.txt](javascript/marked-LICENSE.txt) |
+| Marked | 15.0.12 | MIT | [javascript/marked-LICENSE.txt](javascript/marked-LICENSE.txt) |
 | React / ReactDOM | 18.x | MIT | [javascript/react-LICENSE.txt](javascript/react-LICENSE.txt) |
 | Sigma.js | 3.0.2 | MIT | [javascript/sigma-LICENSE.txt](javascript/sigma-LICENSE.txt) |
 
@@ -31,9 +32,11 @@ This folder contains the license files for all external libraries used by OntoBr
 | FastAPI | >=0.129.0 | MIT | [python/fastapi-LICENSE.txt](python/fastapi-LICENSE.txt) |
 | ItsDangerous | >=2.1.0 | BSD-3-Clause | [python/itsdangerous-LICENSE.txt](python/itsdangerous-LICENSE.txt) |
 | Jinja2 | >=3.1.0 | BSD-3-Clause | [python/jinja2-LICENSE.txt](python/jinja2-LICENSE.txt) |
-| MLflow | >=3.15.0 | Apache-2.0 | [python/mlflow-LICENSE.txt](python/mlflow-LICENSE.txt) |
+| MLflow | >=3.17.2 | Apache-2.0 | [python/mlflow-LICENSE.txt](python/mlflow-LICENSE.txt) |
+| neo4j | >=5.0 | Apache-2.0 | [python/neo4j-LICENSE.txt](python/neo4j-LICENSE.txt) |
 | NetworkX | >=3.0 | BSD-3-Clause | [python/networkx-LICENSE.txt](python/networkx-LICENSE.txt) |
 | OWL-RL | >=7.0.0 | W3C Software License | [python/owlrl-LICENSE.txt](python/owlrl-LICENSE.txt) |
+| psycopg / psycopg-pool | >=3.2.0 | LGPL-3.0 | [python/psycopg-LICENSE.txt](python/psycopg-LICENSE.txt) |
 | PyArrow | >=23.0.1 | Apache-2.0 | [python/pyarrow-LICENSE.txt](python/pyarrow-LICENSE.txt) |
 | Pydantic | >=2.5.0 | MIT | [python/pydantic-LICENSE.txt](python/pydantic-LICENSE.txt) |
 | Pydantic Settings | >=2.14.2 | MIT | [python/pydantic-settings-LICENSE.txt](python/pydantic-settings-LICENSE.txt) |
@@ -43,7 +46,7 @@ This folder contains the license files for all external libraries used by OntoBr
 | RDFLib | >=7.6.0 | BSD-3-Clause | [python/rdflib-LICENSE.txt](python/rdflib-LICENSE.txt) |
 | Requests | >=2.33.0 | Apache-2.0 | [python/requests-LICENSE.txt](python/requests-LICENSE.txt) |
 | Starlette | >=1.3.1 | BSD-3-Clause | [python/starlette-LICENSE.txt](python/starlette-LICENSE.txt) |
-| Strawberry GraphQL | >=0.315.7 | MIT | [python/strawberry-graphql-LICENSE.txt](python/strawberry-graphql-LICENSE.txt) |
+| Strawberry GraphQL | >=0.327.2 | MIT | [python/strawberry-graphql-LICENSE.txt](python/strawberry-graphql-LICENSE.txt) |
 | Uvicorn | >=0.27.0 | BSD-3-Clause | [python/uvicorn-LICENSE.txt](python/uvicorn-LICENSE.txt) |
 | scikit-learn | (transitive via MLflow) | BSD-3-Clause | [python/scikit-learn-LICENSE.txt](python/scikit-learn-LICENSE.txt) |
 | SciPy | (transitive via MLflow) | BSD-3-Clause | [python/scipy-LICENSE.txt](python/scipy-LICENSE.txt) |
@@ -52,9 +55,9 @@ This folder contains the license files for all external libraries used by OntoBr
 
 | Library | Version | License | File |
 |---------|---------|---------|------|
-| FastMCP | >=2.3.1 | Apache-2.0 | [python/fastmcp-LICENSE.txt](python/fastmcp-LICENSE.txt) |
+| FastMCP | >=3.4.10 | Apache-2.0 | [python/fastmcp-LICENSE.txt](python/fastmcp-LICENSE.txt) |
 | HTTPX | >=0.25.0 | BSD-3-Clause | [python/httpx-LICENSE.txt](python/httpx-LICENSE.txt) |
-| cryptography | >=50.0.0 | Apache-2.0 / BSD-3-Clause | [cryptography.io](https://cryptography.io/) |
+| cryptography | >=50.0.0 | Apache-2.0 / BSD-3-Clause | [python/cryptography-LICENSE.txt](python/cryptography-LICENSE.txt) |
 
 > FastAPI, Uvicorn, Pydantic, and Databricks SDK are also used by the MCP server; their licenses are listed in the main application section above.
 
@@ -73,7 +76,8 @@ This folder contains the license files for all external libraries used by OntoBr
 | **MIT** | Bootstrap, Bootstrap Icons, Chart.js, GraphiQL, Graphology, Graphology Library, Grid.js, Marked, React/ReactDOM, Sigma.js, APScheduler, FastAPI, Pydantic, Pydantic Settings, Strawberry GraphQL |
 | **ISC** | D3.js |
 | **BSD-3-Clause** | HTTPX, ItsDangerous, Jinja2, NetworkX, python-dotenv, RDFLib, scikit-learn, SciPy, Starlette, Uvicorn |
-| **Apache-2.0** | aiofiles, Databricks SDK, databricks-sql-connector, FastMCP, MLflow, PyArrow, pySHACL, python-multipart, Requests |
+| **Apache-2.0** | aiofiles, cryptography, Databricks SDK, databricks-sql-connector, DOMPurify, FastMCP, MLflow, neo4j, PyArrow, pySHACL, python-multipart, Requests |
+| **LGPL-3.0** | psycopg, psycopg-pool |
 | **W3C Software License** | OWL-RL |
 | **SIL OFL 1.1** | JetBrains Mono, Outfit (Google Fonts) |
 

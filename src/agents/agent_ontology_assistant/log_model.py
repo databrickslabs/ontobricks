@@ -42,8 +42,6 @@ def log_agent(experiment_name: str = "ontobricks-agents") -> str:
             }
         ],
         "custom_inputs": {
-            "host": "https://example.cloud.databricks.com",
-            "token": "dapi...",
             "endpoint_name": "databricks-meta-llama-3-3-70b-instruct",
             "classes": [],
             "properties": [],

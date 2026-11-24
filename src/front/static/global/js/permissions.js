@@ -120,7 +120,7 @@
         event.stopPropagation();
         event.stopImmediatePropagation();
         showNotification(
-            'No LLM selected. Select one in Domain → General → AI.',
+            'No LLM selected. Select one in Configuration → AI.',
             'warning'
         );
     }
@@ -170,15 +170,13 @@
 
     /*
      * Selector matching every interactive design surface (mapping map,
-     * ontology map, Business Views OntoViz canvas, …) where right-
-     * click menus would trigger writes. We block ``contextmenu`` on
-     * descendants during the capture phase, which pre-empts the per-
-     * widget D3/Canvas handlers and swallows the browser's default
-     * menu — so we don't need to chase every individual handler.
+     * ontology Studio map, …) where right-click menus would trigger
+     * writes. We block ``contextmenu`` on descendants during the
+     * capture phase, which pre-empts the per-widget D3 handlers and
+     * swallows the browser's default menu.
      */
     const READ_ONLY_DESIGN_SURFACE_SELECTOR =
-        '#mapping-map-container, #ontology-map-container, '
-        + '.ovz-canvas, .ontoviz-container';
+        '#mapping-map-container, #ontology-map-container';
 
     function installReadOnlyContextMenuBlocker() {
         if (window._readOnlyContextMenuBlockerInstalled) return;
@@ -218,12 +216,12 @@
      * the current permission scope without opening Settings.
      */
     const ROLE_TOOLTIPS = {
-        admin: 'Admin — full access to all domains, settings, and registry.',
-        builder: 'Builder — full read/write access on this domain '
+        admin: 'Admin — full access to all contexts, settings, and registry.',
+        builder: 'Builder — full read/write access on this context '
             + '(ontology, mappings, twins, dashboards).',
-        editor: 'Editor — can read and edit this domain\'s ontology and '
+        editor: 'Editor — can read and edit this context\'s ontology and '
             + 'mappings.',
-        viewer: 'Viewer — read-only access on this domain. Ask a domain '
+        viewer: 'Viewer — read-only access on this context. Ask a context '
             + 'admin for editor or builder rights to make changes.',
     };
 

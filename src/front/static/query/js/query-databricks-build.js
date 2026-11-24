@@ -121,29 +121,50 @@ function _dbxBuildPollDelay(task) {
 
 function applyTripleStoreBackendPanels() {
     const backend = _tsxBackend();
+    if (typeof _setBackendBrandIcon === 'function') {
+        _setBackendBrandIcon(document.getElementById('buildBackendIcon'), backend);
+    }
     const lakePanel = document.getElementById('sync-lakebase-panel');
     const dbxPanel = document.getElementById('sync-databricks-panel');
     const isDbx = backend === 'databricks';
 
     if (lakePanel) lakePanel.classList.toggle('d-none', isDbx);
     if (dbxPanel) dbxPanel.classList.toggle('d-none', !isDbx);
+
+    const lakeActions = document.getElementById('sync-lakebase-actions');
+    const dbxActions = document.getElementById('sync-databricks-actions');
+    if (lakeActions) lakeActions.classList.toggle('d-none', isDbx);
+    if (dbxActions) {
+        dbxActions.classList.toggle('d-none', !isDbx);
+        dbxActions.classList.toggle('d-flex', isDbx);
+    }
 }
 
 function _updateDbxAdjacencyButton() {
-    const btn = document.getElementById('dbxAdjacencyRefreshBtn');
-    if (!btn) return;
     const backend = String(_tsxBackend() || 'lakebase').toLowerCase();
     const visible = backend === 'databricks';
-    if (backend !== 'databricks') {
-        btn.classList.add('d-none');
-        btn.disabled = true;
-        return;
-    }
-    btn.classList.toggle('d-none', !visible);
-    btn.disabled = !dbxBuildReady
+    const disabled = !visible
+        || !dbxBuildReady
         || !dbxGraphHasData
         || dbxBuildRunning
         || dbxAdjacencyRefreshRunning;
+    const btn = document.getElementById('dbxAdjacencyRefreshBtn');
+    if (btn) {
+        if (!visible) {
+            btn.classList.add('d-none');
+            btn.disabled = true;
+        } else {
+            btn.classList.toggle('d-none', !visible);
+            btn.disabled = disabled;
+        }
+    }
+    // Header kebab item (Lakehouse): mirror disable state; parent group is
+    // already backend-gated so the item stays visible.
+    document.querySelectorAll('.js-dbx-adjacency-refresh').forEach((item) => {
+        if (item.id === 'dbxAdjacencyRefreshBtn') return;
+        item.disabled = disabled;
+        item.classList.toggle('disabled', disabled);
+    });
 }
 
 /**
@@ -172,7 +193,7 @@ function _applyDbxStorageKind(isViewMode) {
             ? '<i class="bi bi-eye me-1"></i>VIEW · no data copy'
             : '<i class="bi bi-table me-1"></i>TABLE · materialized copy';
         badge.title = isViewMode
-            ? 'Views only: ..._data is a SELECT over the gateway view, so it '
+            ? 'Virtual Graph (no copy): ..._data is a SELECT over the gateway view, so it '
               + 'always reflects the current source data.'
             : 'Materialized: ..._data is a Delta copy of the gateway view, '
               + 'refreshed only by a build.';
@@ -181,7 +202,7 @@ function _applyDbxStorageKind(isViewMode) {
     const note = document.getElementById('dbxBuildStorageNote');
     if (note) {
         note.textContent = isViewMode
-            ? 'Views only — Build refreshes the gateway definition; no triples '
+            ? 'Virtual Graph (no copy) — Build refreshes the gateway definition; no triples '
               + 'are copied. Inferred triples keep their own Delta table.'
             : 'Materialized — Build copies the gateway output into this Delta '
               + 'table, so it is a point-in-time snapshot of the source.';
@@ -230,10 +251,50 @@ async function loadDatabricksBuildInfo() {
         if (typeof loadIncrementalStatus === 'function') loadIncrementalStatus();
         const readinessCard = document.getElementById('dbxBuildReadinessCard');
         if (readinessCard) {
+            const canOfferAutoMap = !(window.OB && typeof window.OB.canEditOntology === 'function'
+                && !window.OB.canEditOntology());
+            const mappingBadge = dbxBuildReady
+                ? '<span class="badge bg-success bg-opacity-10 text-success border border-success">'
+                    + '<i class="bi bi-check-circle-fill me-1"></i>Ready</span>'
+                : '<span class="badge bg-danger text-white border border-danger">'
+                    + '<i class="bi bi-x-circle-fill me-1"></i>Not ready</span>';
+            const autoMapBtn = (!dbxBuildReady && canOfferAutoMap)
+                ? '<button type="button"'
+                    + ' class="btn btn-sm btn-outline-primary py-0 px-2"'
+                    + ' id="dbxBuildAutoMapBtn"'
+                    + ' onclick="if (typeof AutoAssignModule !== \'undefined\') AutoAssignModule.open();"'
+                    + ' title="Open Batch Auto-Map to generate SQL mappings">'
+                    + '<i class="bi bi-lightning-charge me-1"></i>Auto-Map</button>'
+                : '';
+            const diagBtn = !dbxBuildReady
+                ? '<button type="button"'
+                    + ' class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1"'
+                    + ' id="dbxBuildMappingDiagBtn"'
+                    + ' onclick="if (typeof MappingDiagnostics !== \'undefined\') MappingDiagnostics.open();"'
+                    + ' title="Open Mapping Diagnostics">'
+                    + '<i class="bi bi-shield-check me-1"></i>Diagnostics</button>'
+                : '';
+            const notReadyAlert = dbxBuildReady ? ''
+                : '<div class="alert alert-warning small mb-0 mt-2">'
+                    + '<div class="d-flex align-items-start gap-2">'
+                    + '<i class="bi bi-exclamation-triangle mt-1 flex-shrink-0"></i>'
+                    + '<div><strong>Mapping must be ready before you can build.</strong>'
+                    + '<ol class="mb-0 ps-3 mt-1">'
+                    + '<li>Run <button type="button" class="btn btn-link btn-sm p-0 align-baseline text-decoration-none fw-semibold" onclick="if (typeof AutoAssignModule !== \'undefined\') AutoAssignModule.open();">Auto-Map</button> (or map manually in'
+                    + ' <a href="/dtwin/?section=design">Mapping</a>)'
+                    + ' so Mapping shows Ready.</li>'
+                    + '<li>View <button type="button" class="btn btn-link btn-sm p-0 align-baseline text-decoration-none fw-semibold" onclick="if (typeof MappingDiagnostics !== \'undefined\') MappingDiagnostics.open();">Diagnostics</button> to inspect mapping issues or schema drift.</li>'
+                    + '<li>Click <strong>Build</strong> to materialize the graph.</li>'
+                    + '</ol></div></div></div>';
             readinessCard.innerHTML =
-                '<h6 class="fw-semibold mb-2"><i class="bi bi-clipboard-check me-1"></i>Readiness</h6>' +
-                '<div class="small">Mapping: ' + (r.mapping_valid ? '<span class="text-success">Ready</span>' : '<span class="text-warning">Not ready</span>') +
-                '</div>';
+                '<h6 class="fw-semibold mb-2"><i class="bi bi-clipboard-check me-1"></i>Readiness Status</h6>'
+                + '<div class="d-flex align-items-center gap-2 flex-wrap">'
+                + '<span class="text-muted small"><i class="bi bi-diagram-2 me-1"></i>Mapping</span>'
+                + mappingBadge
+                + autoMapBtn
+                + diagBtn
+                + '</div>'
+                + notReadyAlert;
         }
 
         const ts = data.triplestore_status || {};
@@ -316,9 +377,8 @@ async function startDatabricksAdjacencyRefresh() {
     if (!dbxBuildReady || dbxBuildRunning || dbxAdjacencyRefreshRunning || !dbxGraphHasData) {
         return;
     }
-    const btn = document.getElementById('dbxAdjacencyRefreshBtn');
-    if (btn) btn.disabled = true;
     dbxAdjacencyRefreshRunning = true;
+    _updateDbxAdjacencyButton();
     _hideDbxBuildResult();
     _resetDbxProgressBar();
 
@@ -541,7 +601,13 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('dbxBuildRefreshBtn')?.addEventListener('click', loadDatabricksBuildInfo);
     document.getElementById('dbxBuildLoadRetry')?.addEventListener('click', loadDatabricksBuildInfo);
     document.getElementById('dbxBuildStartBtn')?.addEventListener('click', startDatabricksBuild);
-    document.getElementById('dbxAdjacencyRefreshBtn')?.addEventListener('click', startDatabricksAdjacencyRefresh);
+    document.getElementById('dbxAdjacencyRefreshBtn')?.addEventListener(
+        'click', startDatabricksAdjacencyRefresh
+    );
+    document.querySelectorAll('.js-dbx-adjacency-refresh').forEach((el) => {
+        if (el.id === 'dbxAdjacencyRefreshBtn') return;
+        el.addEventListener('click', startDatabricksAdjacencyRefresh);
+    });
     document.getElementById('dbxBuildLogHide')?.addEventListener('click', hideDbxBuildLog);
     document.getElementById('dbxBuildLogExport')?.addEventListener('click', exportDbxBuildLog);
 

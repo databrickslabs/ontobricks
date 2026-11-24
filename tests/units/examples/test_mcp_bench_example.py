@@ -1,4 +1,4 @@
-"""Unit tests for ``examples/mcp_bench.py`` (MCP benchmark harness, PR #193)."""
+"""Unit tests for ``resources/examples/mcp_bench.py`` (MCP benchmark harness, PR #193)."""
 
 from __future__ import annotations
 

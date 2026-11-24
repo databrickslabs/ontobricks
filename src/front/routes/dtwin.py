@@ -33,13 +33,19 @@ async def query_page(
     if redirect is not None:
         return redirect
     if is_graphless_backend((domain_session.info or {}).get("graph_backend")):
-        return RedirectResponse("/domain/?section=information", status_code=303)
+        return RedirectResponse("/domain/?section=home", status_code=303)
     if request.query_params.get("section") == "cohorts":
-        dest = "/simulation/?section=cohort-run"
+        dest = "/intelligence/?section=cohorts&tab=runs"
         rule = request.query_params.get("rule")
         if rule:
             dest += f"&rule={rule}"
         return RedirectResponse(dest, status_code=303)
+    # Runs moved under Build as a tab (build history only).
+    if request.query_params.get("section") == "runs":
+        return RedirectResponse("/dtwin/?section=sync&tab=runs", status_code=303)
+    # Mapping → General was removed; its Informations tab now lives in Studio.
+    if request.query_params.get("section") == "information":
+        return RedirectResponse("/dtwin/?section=design&tab=informations", status_code=303)
 
     ont = domain_session.ontology or {}
     props = ont.get("properties", [])
@@ -47,13 +53,11 @@ async def query_page(
     reasoning_ctx = {
         "classes_count": len(ont.get("classes", [])),
         "properties_count": len(props),
-        "swrl_rules_count": len(ont.get("swrl_rules", [])),
+        "if_then_rules_count": len(ont.get("if_then_rules", [])),
         "object_properties_count": sum(
             1 for p in props if p.get("type") == "ObjectProperty"
         ),
-        "decision_tables_count": len(ont.get("decision_tables", [])),
         "sparql_rules_count": len(ont.get("sparql_rules", [])),
-        "aggregate_rules_count": len(ont.get("aggregate_rules", [])),
         "cohort_rules_count": len(ont.get("cohort_rules", [])),
         "owlrl_available": DigitalTwin.is_owlrl_available(),
         "backend_type": DigitalTwin(domain_session).effective_backend_label(),

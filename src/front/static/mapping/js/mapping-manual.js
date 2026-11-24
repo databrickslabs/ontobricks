@@ -34,9 +34,49 @@ window.ManualModule = {
      * Refresh the tree view
      */
     refresh: function() {
+        const prev = this.currentItem
+            || (typeof currentPanelType !== 'undefined' && currentPanelType && currentPanelUri
+                ? { type: currentPanelType, uri: currentPanelUri, name: null }
+                : null);
         this.buildTree();
+        if (prev) {
+            this.selectInTree(prev.type, prev.uri, prev.name);
+        }
     },
     
+    /**
+     * Rebuild the tree while an Auto-Map streams results: keep collapsed
+     * nodes and scroll positions, and pulse the rows that just changed.
+     */
+    refreshLive: function(changedUris) {
+        const container = document.getElementById('manualAssignmentTree');
+        if (!this.initialized || !container) return;
+        const nodeKey = node => {
+            const root = node.closest('.root-node');
+            return `${root ? root.dataset.status : ''}/${node.dataset.category || node.dataset.status || ''}`;
+        };
+        const collapsed = new Set();
+        container.querySelectorAll('.manual-tree-toggle[data-expanded="false"]').forEach(btn => {
+            collapsed.add(nodeKey(btn.closest('.manual-tree-node')));
+        });
+        const scrolled = [];
+        for (let el = container; el; el = el.parentElement) {
+            if (el.scrollTop > 0) scrolled.push([el, el.scrollTop]);
+        }
+
+        this.refresh();
+
+        container.querySelectorAll('.manual-tree-toggle').forEach(btn => {
+            if (collapsed.has(nodeKey(btn.closest('.manual-tree-node')))) this.toggleNode(btn);
+        });
+        scrolled.forEach(([el, top]) => { el.scrollTop = top; });
+        const changed = new Set(changedUris || []);
+        if (typeof window.flashLiveMapped !== 'function') return;
+        container.querySelectorAll('.manual-tree-node.item-node').forEach(li => {
+            if (changed.has(li.dataset.uri)) window.flashLiveMapped(li);
+        });
+    },
+
     /**
      * Build and render the mapping tree
      */
@@ -93,6 +133,8 @@ window.ManualModule = {
                 emoji: cls.emoji || '📦',
                 mapped: !!mapping && !!mapping.sql_query
             };
+            item.partial = item.mapped && typeof window.entityAttributeStatus === 'function'
+                && window.entityAttributeStatus(cls, mapping) === 'partial';
             if (cls.excluded) {
                 excludedEntities.push(item);
             } else if (item.mapped) {
@@ -243,6 +285,8 @@ window.ManualModule = {
         let statusBadge;
         if (parentStatus === 'excluded') {
             statusBadge = '<span class="manual-status-badge excluded">Excluded</span>';
+        } else if (parentStatus === 'assigned' && item.partial) {
+            statusBadge = '<span class="manual-status-badge partial" title="Some attributes have no column">Partial</span>';
         } else if (parentStatus === 'assigned') {
             statusBadge = '<span class="manual-status-badge assigned">Mapped</span>';
         } else {
@@ -354,6 +398,64 @@ window.ManualModule = {
     },
     
     /**
+     * Highlight a tree row without opening the panel (used by Visual↔List sync).
+     * Expands collapsed ancestors and scrolls the row into view when found.
+     */
+    selectInTree: function(type, uri, name) {
+        const container = document.getElementById('manualAssignmentTree');
+        if (!container) return false;
+
+        container.querySelectorAll('.manual-tree-node-content.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+
+        let node = null;
+        if (uri) {
+            try {
+                node = container.querySelector(
+                    `.manual-tree-node.item-node[data-type="${type}"][data-uri="${CSS.escape(uri)}"]`
+                );
+            } catch (_) {
+                node = Array.from(container.querySelectorAll(`.manual-tree-node.item-node[data-type="${type}"]`))
+                    .find(el => el.dataset.uri === uri) || null;
+            }
+        }
+        if (!node && name) {
+            node = Array.from(container.querySelectorAll(`.manual-tree-node.item-node[data-type="${type}"]`))
+                .find(el => el.dataset.name === name) || null;
+        }
+        if (!node) return false;
+
+        // Expand every collapsed ancestor so the row is visible.
+        let ancestor = node.parentElement;
+        while (ancestor && ancestor !== container) {
+            if (ancestor.classList && ancestor.classList.contains('manual-tree-children')
+                    && ancestor.classList.contains('collapsed')) {
+                const parentNode = ancestor.closest('.manual-tree-node');
+                const toggle = parentNode && parentNode.querySelector(':scope > .manual-tree-node-content .manual-tree-toggle');
+                if (toggle) this.toggleNode(toggle);
+            }
+            ancestor = ancestor.parentElement;
+        }
+
+        const content = node.querySelector('.manual-tree-node-content');
+        if (content) {
+            content.classList.add('selected');
+            try {
+                content.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            } catch (_) { /* noop */ }
+        }
+
+        this.currentItem = {
+            type: type,
+            uri: node.dataset.uri || uri || null,
+            name: node.dataset.name || name || null,
+            label: node.dataset.label || name || null
+        };
+        return true;
+    },
+
+    /**
      * Select an item and open the panel
      */
     selectItem: function(type, uri, name, label, contentElement) {
@@ -368,53 +470,22 @@ window.ManualModule = {
         // Store current item
         this.currentItem = { type, uri, name, label };
         
-        // Open panel with content
+        // Open panel with content (also syncs Visual selection via open*FromDesign)
         this.openPanel(type, uri, name, label);
     },
     
     /**
-     * Open the panel for an item - reuses the Designer panel content functions
+     * Open the shared Studio mapping pane (the Visual bottom panel).
      */
     openPanel: function(type, uri, name, label) {
-        const container = document.getElementById('manual-container');
-        const titleSpan = document.getElementById('manualPanelItemName');
-        const titleIcon = document.querySelector('#manualPanelTitle i');
-        const panelBody = document.getElementById('manualPanelBody');
-        
-        // Update title
-        titleSpan.textContent = label || name;
-        titleIcon.className = type === 'entity' ? 'bi bi-box' : 'bi bi-arrow-left-right';
-        
-        // Load content using the same functions from mapping-design.js
-        if (type === 'entity') {
-            // Find the class in ontology
-            const ontologyClass = MappingState.loadedOntology?.classes?.find(c => c.uri === uri);
-            if (ontologyClass && typeof loadEntityPanelContent === 'function') {
-                // Use the Designer's panel content function with our panel body
-                loadEntityPanelContent(uri, label || name, panelBody);
-                // Re-initialize Bootstrap tabs after content is loaded
-                this.initBootstrapTabs(panelBody);
-            } else {
-                panelBody.innerHTML = '<div class="alert alert-warning">Entity not found in ontology</div>';
-            }
-        } else {
-            // Find the property in ontology
-            const ontologyProperty = MappingState.loadedOntology?.properties?.find(p => p.uri === uri);
-            if (ontologyProperty && typeof loadRelationshipPanelContent === 'function') {
-                // Use the Designer's panel content function with our panel body
-                loadRelationshipPanelContent(ontologyProperty, panelBody);
-                // Re-initialize Bootstrap tabs after content is loaded
-                this.initBootstrapTabs(panelBody);
-            } else {
-                panelBody.innerHTML = '<div class="alert alert-warning">Relationship not found in ontology</div>';
-            }
+        const item = { uri: uri, name: name, label: label };
+        if (type === 'entity' && typeof openEntityMappingFromDesign === 'function') {
+            openEntityMappingFromDesign(item);
+            return;
         }
-        
-        // Show panel (bottom)
-        container.classList.add('panel-open');
-        
-        // Enable save button listener
-        this.setupSaveButton();
+        if (type !== 'entity' && typeof openRelationshipMappingFromDesign === 'function') {
+            openRelationshipMappingFromDesign(item);
+        }
     },
     
     /**
@@ -455,32 +526,13 @@ window.ManualModule = {
      * Close the panel
      */
     closePanel: function() {
-        const container = document.getElementById('manual-container');
-        if (container) container.classList.remove('panel-open');
-        
-        // Hand the shared panel back and drop any in-flight preview query
-        if (typeof releaseMappingPanel === 'function') releaseMappingPanel();
-        
-        // Clear selection
         document.querySelectorAll('#manualAssignmentTree .manual-tree-node-content.selected').forEach(el => {
             el.classList.remove('selected');
         });
-        
         this.currentItem = null;
-        const saveBtn = document.getElementById('manualSavePanelBtn');
-        if (saveBtn) saveBtn.disabled = true;
-        
-        // Reset panel body to placeholder
-        const panelBody = document.getElementById('manualPanelBody');
-        if (panelBody) {
-            panelBody.innerHTML = `
-                <div class="text-muted small text-center py-4">
-                    <i class="bi bi-hand-index"></i> Click on an entity or relationship above to configure its mapping
-                </div>
-            `;
+        if (typeof closeMappingPanel === 'function') {
+            closeMappingPanel();
         }
-        const titleSpan = document.getElementById('manualPanelItemName');
-        if (titleSpan) titleSpan.textContent = 'Select an item above';
     },
     
     /**
@@ -494,9 +546,7 @@ window.ManualModule = {
         
         if (type === 'entity') {
             // Remove entity mapping from state
-            const existingIndex = MappingState.config.entities.findIndex(m => m.ontology_class === uri);
-            if (existingIndex >= 0) {
-                MappingState.config.entities.splice(existingIndex, 1);
+            if (unmapMappingEntry(MappingState.config.entities, 'ontology_class', uri, 'ontology_class_label')) {
                 showNotification(`Mapping for "${displayName}" removed`, 'success', 2000);
                 autoSaveMappings();
             } else {
@@ -504,9 +554,7 @@ window.ManualModule = {
             }
         } else {
             // Remove relationship mapping from state
-            const existingIndex = MappingState.config.relationships.findIndex(m => m.property === uri);
-            if (existingIndex >= 0) {
-                MappingState.config.relationships.splice(existingIndex, 1);
+            if (unmapMappingEntry(MappingState.config.relationships, 'property', uri, 'property_label')) {
                 showNotification(`Mapping for "${displayName}" removed`, 'success', 2000);
                 autoSaveMappings();
             } else {
@@ -696,10 +744,14 @@ window.ManualModule = {
     }
 };
 
-// Initialize when manual section becomes active
+// Initialize when Studio List tab (or legacy manual section) becomes active
 document.addEventListener('sectionChange', function(e) {
-    if (e.detail?.section === 'manual') {
-        ManualModule.init();
+    if (e.detail?.section === 'manual' || e.detail?.section === 'design') {
+        if (typeof MappingStudioTabs !== 'undefined' && MappingStudioTabs.current() === 'list') {
+            ManualModule.init();
+        } else if (e.detail?.section === 'manual') {
+            ManualModule.init();
+        }
     }
 });
 
@@ -708,7 +760,8 @@ document.addEventListener('sectionChange', function(e) {
  */
 (function initManualActionDelegation() {
     function bind() {
-        const root = document.getElementById('manual-section');
+        const root = document.getElementById('mappingStudioListRoot')
+            || document.getElementById('manual-section');
         if (!root || root.dataset.manualActionsBound === '1') return;
         root.dataset.manualActionsBound = '1';
         root.addEventListener('click', function (e) {
@@ -724,18 +777,6 @@ document.addEventListener('sectionChange', function(e) {
                     break;
                 case 'manual-refresh':
                     ManualModule.refresh();
-                    break;
-                case 'manual-reset-panel':
-                    ManualModule.resetPanel();
-                    break;
-                case 'manual-auto-map':
-                    ManualModule.autoMap();
-                    break;
-                case 'manual-close-panel':
-                    ManualModule.closePanel();
-                    break;
-                case 'manual-save-mapping':
-                    ManualModule.saveMapping();
                     break;
                 default:
                     break;

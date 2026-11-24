@@ -114,12 +114,12 @@ class GitHubSettings:
             )
         except Exception as exc:
             message = getattr(exc, "message", "") or str(exc)
-            github_mirror.record("error", "all domains", "", message, [])
+            github_mirror.record("error", "all contexts", "", message, [])
             raise
         finally:
             sync.close()
         sha = result.get("commit_sha") or ""
-        github_mirror.record("ok", "all domains", sha, "", result["errors"])
+        github_mirror.record("ok", "all contexts", sha, "", result["errors"])
         for item in result.pop("pushed", []):
             if sha or item["errors"]:
                 github_mirror.audit(
@@ -142,7 +142,7 @@ class GitHubSettings:
             sync.close()
         if not grouped:
             raise ValidationError(
-                "No domains found in the GitHub repository. "
+                "No contexts found in the GitHub repository. "
                 "Use Sync all in Settings → GitHub first."
             )
         return GitHubSettings._preview_from_listing(
@@ -169,7 +169,7 @@ class GitHubSettings:
             message = getattr(exc, "message", "") or str(exc)
             github_mirror.record("error", folder, "", message, [])
             raise InfrastructureError(
-                f'Registry domain "{folder}" was deleted, but GitHub delete failed',
+                f'Registry context "{folder}" was deleted, but GitHub delete failed',
                 detail=message,
             ) from exc
         finally:
@@ -191,7 +191,7 @@ class GitHubSettings:
             sync.close()
         if not envelope.get("domains"):
             raise ValidationError(
-                "No domains found in the GitHub repository. "
+                "No contexts found in the GitHub repository. "
                 "Use Sync all in Settings → GitHub first."
             )
         return json.dumps(envelope).encode("utf-8")

@@ -30,7 +30,7 @@ def assert_domain_graph_read(request: Request) -> None:
 
     domain_role = getattr(request.state, "user_domain_role", "") or ""
     if role_level(domain_role) < role_level(ROLE_VIEWER):
-        raise AuthorizationError("You are not a member of this domain's team")
+        raise AuthorizationError("You are not a member of this context's team")
 
 
 def assert_public_graph_read(request: Request, domain, settings) -> None:
@@ -74,4 +74,4 @@ def assert_public_graph_write(request: Request, domain, settings) -> None:
         return
     domain_role = getattr(request.state, "user_domain_role", "") or ""
     if role_level(domain_role) < role_level(ROLE_BUILDER):
-        raise AuthorizationError("The Builder role is required to modify this domain's graph")
+        raise AuthorizationError("The Builder role is required to modify this context's graph")

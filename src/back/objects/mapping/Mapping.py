@@ -21,8 +21,11 @@ from back.core.databricks import DocumentParseService
 from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
+from back.core.w3c.r2rml.InstanceIdentity import InstanceIdentity
 from back.core.errors import InfrastructureError, ValidationError
 from back.objects.session import is_valid_session_id
+from back.objects.mapping.AutoAssignLiveFeed import AutoAssignLiveFeed
+from back.objects.mapping.reset import reset_mappings
 
 logger = get_logger(__name__)
 
@@ -146,6 +149,7 @@ class Mapping:
         documents: Optional[list] = None,
         on_step: Optional[Callable[[str, int], None]] = None,
         max_iterations: Optional[int] = None,
+        on_mapping: Optional[Callable[[str, dict], None]] = None,
     ) -> "AutoAssignAgentResult":
         """Run ``agent_auto_assignment`` (blocking).
 
@@ -167,6 +171,7 @@ class Mapping:
             documents=documents,
             on_step=on_step,
             max_iterations=max_iterations,
+            on_mapping=on_mapping,
         )
 
     def run_auto_assign_task(
@@ -208,13 +213,12 @@ class Mapping:
             documents = Mapping.fetch_documents_for_agent(domain, host, token)
 
             tm.advance_step(task.id, "Running AI mapping agent…")
-            task.result = {
-                "live_stats": True,
-                "entities_assigned": 0,
-                "entities_total": len(entities),
-                "relationships_assigned": 0,
-                "relationships_total": len(relationships),
-            }
+            feed = AutoAssignLiveFeed(
+                task,
+                entities_total=len(entities),
+                relationships_total=len(relationships),
+            )
+            feed.publish()
             logger.info("Auto-assign agent thread started — task=%s", task.id)
 
             all_items = [("entity", e) for e in entities] + [
@@ -234,8 +238,8 @@ class Mapping:
                 chunk_size,
             )
 
-            entity_mapping_by_uri: Dict[str, Dict[str, Any]] = {}
-            rel_mapping_by_uri: Dict[str, Dict[str, Any]] = {}
+            entity_mapping_by_uri = feed.entities
+            rel_mapping_by_uri = feed.relationships
             total_iterations = 0
             total_usage = {"prompt_tokens": 0, "completion_tokens": 0}
             chunk_errors: List[str] = []
@@ -321,6 +325,7 @@ class Mapping:
                         relationship_mappings=context_rel_mappings,
                         documents=documents,
                         on_step=on_step,
+                        on_mapping=feed.item_callback(chunk_entity_uris, chunk_rel_uris),
                     )
                 except Exception as chunk_exc:
                     logger.exception(
@@ -330,6 +335,7 @@ class Mapping:
                         chunk_exc,
                     )
                     chunk_errors.append(f"Chunk {chunk_num}: {chunk_exc}")
+                    feed.rollback_chunk()
                     continue
 
                 if agent_result.error and not agent_result.success:
@@ -340,17 +346,10 @@ class Mapping:
                         agent_result.error,
                     )
                     chunk_errors.append(f"Chunk {chunk_num}: {agent_result.error}")
+                    feed.rollback_chunk()
                     continue
 
-                for em in agent_result.entity_mappings:
-                    uri = em.get("ontology_class") or em.get("class_uri", "")
-                    if uri and uri in chunk_entity_uris:
-                        entity_mapping_by_uri[uri] = em
-                for rm in agent_result.relationship_mappings:
-                    uri = rm.get("property", "")
-                    if uri and uri in chunk_rel_uris:
-                        rel_mapping_by_uri[uri] = rm
-
+                feed.commit_chunk(agent_result, chunk_entity_uris, chunk_rel_uris)
                 all_steps.extend(agent_result.steps)
                 total_iterations += agent_result.iterations
                 for k in total_usage:
@@ -378,19 +377,7 @@ class Mapping:
                     f"[{chunk_num}/{num_chunks}] Entities: {e_done}/{len(entities)}, "
                     f"Relationships: {r_done}/{len(relationships)}",
                 )
-                # Republish the cumulative agent step log on every chunk.
-                # ``Task.to_dict`` serializes ``result`` while the task is
-                # still running, so the Mapping overlay's existing poll shows
-                # per-entity/relationship reasoning live instead of only at
-                # completion.
-                task.result = {
-                    "live_stats": True,
-                    "entities_assigned": e_done,
-                    "entities_total": len(entities),
-                    "relationships_assigned": r_done,
-                    "relationships_total": len(relationships),
-                    "agent_steps": serialize_agent_steps(all_steps),
-                }
+                feed.publish(serialize_agent_steps(all_steps))
 
                 logger.info(
                     "Chunk %d/%d done: +%d entities, +%d rels (cumulative: %d entities, %d rels)",
@@ -715,7 +702,8 @@ class Mapping:
         tables = (self._domain.catalog_metadata or {}).get("tables", [])
         if not tables:
             raise ValidationError(
-                "No metadata loaded. Please load metadata first in Settings.",
+                "No metadata loaded. Load Unity Catalog tables under "
+                "Context → Metadata before running Auto-Map.",
             )
         return {"tables": tables}
 
@@ -940,17 +928,9 @@ class Mapping:
                         meta=meta,
                     )
 
-    def reset_mapping(self) -> None:
-        domain = self._domain
-        domain.assignment["entities"] = []
-        domain.assignment["relationships"] = []
-        domain.assignment["r2rml_output"] = ""
-        domain.clear_generated_content()
-        domain.record_change(
-            "mapping_reset", entity_type="mapping",
-            summary="All mappings reset",
-        )
-        domain.save()
+    def reset_mapping(self, keep_exclusions: bool = False) -> None:
+        """Delete all mappings; ``keep_exclusions`` keeps hidden items (see ``reset``)."""
+        reset_mappings(self._domain, keep_exclusions=keep_exclusions)
 
     def generate_r2rml(self) -> str:
         """Generate R2RML from current mapping configuration.
@@ -2301,9 +2281,8 @@ class Mapping:
             and not self._references_excluded_entity(r, excluded_lookup)
         ]
 
-        entity_results = [
-            self._diagnose_entity(ent, ont_index) for ent in active_entities
-        ]
+        entity_results = [self._diagnose_entity(ent, ont_index) for ent in active_entities]
+        InstanceIdentity.flag_collisions(ontology, active_entities, entity_results)
         rel_results = [
             self._diagnose_relationship(rel, entity_lookup, ont_index)
             for rel in active_rels
@@ -2750,7 +2729,7 @@ class Mapping:
                             {
                                 "check": "domain_match",
                                 "status": "warning",
-                                "detail": f"Ontology domain is '{ont_domain}' but source entity is '{src_name or local_src}'",
+                                "detail": f"Ontology context is '{ont_domain}' but source entity is '{src_name or local_src}'",
                             }
                         )
             if ont_range and resolved_tgt:

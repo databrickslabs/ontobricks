@@ -41,6 +41,9 @@ EXPECTED_TABLES: tuple[str, ...] = (
     "build_runs",
     "graph_analytics",
     "graph_analytics_runs",
+    # Detect run history (0.10.0, see Step 2b of lakebase-perms.sh).
+    "community_runs",
+    "pattern_runs",
     "domain_review_events",
     "domain_comments",
     "domain_tasks",

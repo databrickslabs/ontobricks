@@ -25,6 +25,7 @@ from back.objects.digitaltwin.node.NodeBusinessRuleService import (
 )
 from back.objects.digitaltwin.node.NodeShaclService import NodeShaclService
 from back.objects.digitaltwin.node.VirtualAttributeService import VirtualAttributeService
+from back.objects.ontology.ClassModel import ClassModel
 from back.objects.registry import RegistryCfg, RegistryService
 from back.objects.session import SessionManager, get_domain, get_session_manager
 
@@ -72,7 +73,7 @@ class DomainInfo(BaseModel):
     graph_backend: Literal["none", "lakebase", "databricks", "neo4j"] = Field(
         default="lakebase",
         description="Backend configured on the numeric-latest version; "
-        "'none' denotes an ontology-only domain.",
+        "'none' denotes an ontology-only context.",
     )
     # Per-domain MCP surface policy. Empty means "every tool exposed, every
     # ontology attachment surfaced normally".
@@ -145,6 +146,7 @@ class VersionsResponse(BaseModel):
 class ClassActionsItem(BaseModel):
     name: str
     uri: str
+    datasets: List[dict] = Field(default_factory=list)
     dataset: Optional[dict] = None
     bridges: List[dict] = Field(default_factory=list)
     actions: List[dict] = Field(default_factory=list)
@@ -168,8 +170,8 @@ class ClassActionsResponse(BaseModel):
 @router.get(
     "/domains",
     response_model=DomainsResponse,
-    summary="List registry domains",
-    description="Return all domains stored in the registry with their name and description.",
+    summary="List registry contexts",
+    description="Return all contexts stored in the registry with their name and description.",
 )
 async def list_registry_domains(
     registry_catalog: Optional[str] = Query(
@@ -199,7 +201,7 @@ async def list_registry_domains(
     svc = RegistryService(cfg, DigitalTwin.uc_from_domain(domain, settings))
     ok, items, msg = svc.list_mcp_domains()
     if not ok:
-        raise InfrastructureError(msg or "Failed to list domains")
+        raise InfrastructureError(msg or "Failed to list contexts")
     return DomainsResponse(
         success=True,
         domains=[
@@ -223,14 +225,14 @@ async def list_registry_domains(
 @router.get(
     "/domain/versions",
     response_model=VersionsResponse,
-    summary="List domain versions",
-    description="Return all versions available for a given domain in the registry, "
+    summary="List context versions",
+    description="Return all versions available for a given context in the registry, "
     "sorted from latest to oldest.",
 )
 async def list_domain_versions(
     domain_name: str = Query(
         ...,
-        description="Domain name in the registry",
+        description="Context name in the registry",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -260,7 +262,7 @@ async def list_domain_versions(
 
     versions_sorted = svc.list_versions_sorted(domain_name, reverse=True)
     if not versions_sorted:
-        raise NotFoundError(f"No versions found for domain '{domain_name}'")
+        raise NotFoundError(f"No versions found for context '{domain_name}'")
 
     latest = versions_sorted[0]
 
@@ -299,18 +301,18 @@ async def list_domain_versions(
     "/domain/design-status",
     response_model=DesignStatusResponse,
     summary="Get design status",
-    description="Return the readiness status of the domain's ontology, metadata, "
-    "and assignment. Indicates whether the domain is ready to build "
+    description="Return the readiness status of the context's ontology, metadata, "
+    "and assignment. Indicates whether the context is ready to build "
     "(sync triples to the triple store).",
 )
 async def get_domain_design_status(
     domain_name: Optional[str] = Query(
         None,
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -486,7 +488,7 @@ async def get_domain_design_status(
     response_model_exclude_none=True,
     summary="List class Actions (dataset + bridges + actions + virtual attributes)",
     description="Return per-class dataset, bridge, Unity Catalog function "
-    "action and virtual attribute metadata for all classes in the domain's "
+    "action and virtual attribute metadata for all classes in the context's "
     "published ontology. Virtual attributes are declarations only — their "
     "values come from the node-context endpoint. Only non-empty values are "
     "included.",
@@ -494,11 +496,11 @@ async def get_domain_design_status(
 async def get_domain_classes(
     domain_name: Optional[str] = Query(
         None,
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
     registry_schema: Optional[str] = Query(None, description="Override registry schema"),
@@ -523,11 +525,16 @@ async def get_domain_classes(
     # attachment is never handed to an MCP client.
     policy = NodeContextService.resolve_context_policy(domain)
     disabled = NodeContextService.context_feature_disabled
-    swrl_rules = NodeBusinessRuleService.domain_swrl_rules(domain)
+    if_then_rules = NodeBusinessRuleService.domain_if_then_rules(domain)
 
     items: List[ClassActionsItem] = []
     for cls in raw_classes:
-        dataset = None if disabled(policy, "dataset") else cls.get("dataset") or None
+        datasets = (
+            []
+            if disabled(policy, "dataset")
+            else ClassModel.normalize_datasets(cls)
+        )
+        dataset = datasets[0] if datasets else None
         bridges = (
             []
             if disabled(policy, "bridges")
@@ -544,7 +551,7 @@ async def get_domain_classes(
         business_rules = (
             []
             if disabled(policy, BUSINESS_RULES_FEATURE)
-            else NodeBusinessRuleService.class_entries(cls, swrl_rules)
+            else NodeBusinessRuleService.class_entries(cls, if_then_rules)
         )
         virtual_attributes = (
             []
@@ -555,6 +562,7 @@ async def get_domain_classes(
             ClassActionsItem(
                 name=cls.get("name", ""),
                 uri=cls.get("uri", ""),
+                datasets=datasets,
                 dataset=dataset,
                 bridges=bridges,
                 actions=actions,
@@ -577,21 +585,52 @@ async def get_domain_classes(
 # ---------------------------------------------------------------------------
 
 
+def _owl_document_for_domain(domain: Any, fmt: str) -> str:
+    """Serialize the domain ontology as Turtle (cached) or JSON-LD."""
+    from back.objects.ontology import Ontology
+
+    kwargs = dict(
+        data=domain.ontology,
+        constraints=domain.constraints,
+        if_then_rules=domain.if_then_rules,
+        axioms=domain.axioms,
+        expressions=domain.expressions,
+        groups=domain.groups,
+    )
+    if fmt == "json-ld":
+        try:
+            return Ontology.generate_owl(**kwargs, output_format="json-ld")
+        except Exception as e:
+            logger.exception("OWL JSON-LD generation failed: %s", e)
+            raise InfrastructureError(f"OWL generation failed: {e}") from e
+
+    domain.ensure_generated_content()
+    owl_content = domain.generated.get("owl", "")
+    if owl_content:
+        return owl_content
+    try:
+        owl_content = Ontology.generate_owl(**kwargs)
+        domain.generated["owl"] = owl_content
+        return owl_content
+    except Exception as e:
+        logger.exception("OWL generation failed: %s", e)
+        raise InfrastructureError(f"OWL generation failed: {e}") from e
+
+
 @router.get(
     "/domain/ontology",
     response_model=OWLResponse,
-    summary="Get domain ontology (OWL/Turtle)",
-    description="Return the domain's ontology serialized as OWL in Turtle format. "
-    "Includes the full OWL document, base URI, and class/property counts.",
+    summary="Get context ontology (OWL)",
+    description="Return the context ontology as OWL (Turtle default, or JSON-LD).",
 )
 async def get_domain_ontology(
     domain_name: Optional[str] = Query(
         None,
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -602,9 +641,20 @@ async def get_domain_ontology(
     registry_volume: Optional[str] = Query(
         None, description="Override registry volume"
     ),
+    format: str = Query(
+        "turtle",
+        description="Serialization format: turtle (default) or json-ld",
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
+    fmt = (format or "turtle").strip().lower()
+    if fmt not in ("turtle", "json-ld"):
+        raise ValidationError(
+            f"Unsupported ontology format: {format}",
+            detail="Supported formats: turtle, json-ld",
+        )
+
     domain = DigitalTwin.resolve_domain(
         domain_name,
         session_mgr,
@@ -618,42 +668,23 @@ async def get_domain_ontology(
     classes = domain.get_classes()
     properties = domain.ontology.get("properties", [])
     if not classes:
-        raise ValidationError("Domain has no ontology classes defined")
+        raise ValidationError("Context has no ontology classes defined")
 
-    domain.ensure_generated_content()
-    owl_content = domain.generated.get("owl", "")
-
-    if not owl_content:
-        try:
-            from back.objects.ontology import Ontology
-
-            owl_content = Ontology.generate_owl(
-                domain.ontology,
-                domain.constraints,
-                domain.swrl_rules,
-                domain.axioms,
-                domain.expressions,
-                domain.groups,
-            )
-            domain.generated["owl"] = owl_content
-        except Exception as e:
-            logger.exception("OWL generation failed: %s", e)
-            raise InfrastructureError(f"OWL generation failed: {e}") from e
-
+    owl_content = _owl_document_for_domain(domain, fmt)
     if not owl_content:
         raise InfrastructureError("Could not generate OWL content")
 
     base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
     logger.info(
-        "API: returning OWL for domain '%s' (%d classes, %d properties)",
+        "API: returning OWL (%s) for context '%s' (%d classes, %d properties)",
+        fmt,
         domain.domain_folder or "(session)",
         len(classes),
         len(properties),
     )
-
     return OWLResponse(
         success=True,
-        format="turtle",
+        format=fmt,
         content=owl_content,
         base_uri=base_uri,
         class_count=len(classes),
@@ -665,17 +696,17 @@ async def get_domain_ontology(
     "/domain/r2rml",
     response_model=R2RMLResponse,
     summary="Get R2RML mapping",
-    description="Return the domain's R2RML mapping document in Turtle format. "
+    description="Return the context's R2RML mapping document in Turtle format. "
     "R2RML defines how relational tables map to RDF triples.",
 )
 async def get_domain_r2rml(
     domain_name: Optional[str] = Query(
         None,
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -702,7 +733,7 @@ async def get_domain_r2rml(
     entities = domain.get_entity_mappings()
     relationships = domain.get_relationship_mappings()
     if not entities:
-        raise ValidationError("Domain has no entity mappings defined")
+        raise ValidationError("Context has no entity mappings defined")
 
     domain.ensure_generated_content()
     r2rml_content = domain.get_r2rml()
@@ -726,7 +757,7 @@ async def get_domain_r2rml(
 
     base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
     logger.info(
-        "API: returning R2RML for domain '%s' (%d entities, %d relationships)",
+        "API: returning R2RML for context '%s' (%d entities, %d relationships)",
         domain.domain_folder or "(session)",
         len(entities),
         len(relationships),
@@ -746,18 +777,18 @@ async def get_domain_r2rml(
     "/domain/sparksql",
     response_model=SparkSQLResponse,
     summary="Get generated Spark SQL",
-    description="Return the Spark SQL query generated from the domain's R2RML mappings. "
+    description="Return the Spark SQL query generated from the context's R2RML mappings. "
     "This is the SQL that produces (subject, predicate, object) triples when "
     "executed against the source tables.",
 )
 async def get_domain_sparksql(
     domain_name: Optional[str] = Query(
         None,
-        description="Domain name in the registry (uses current session domain if omitted)",
+        description="Context name in the registry (uses current session context if omitted)",
     ),
     domain_version: Optional[str] = Query(
         None,
-        description="Domain version to load (uses latest version if omitted)",
+        description="Context version to load (uses latest version if omitted)",
     ),
     registry_catalog: Optional[str] = Query(
         None, description="Override registry catalog"
@@ -822,7 +853,7 @@ async def get_domain_sparksql(
 
         sql_content = result.get("sql", "")
         logger.info(
-            "API: returning Spark SQL for domain '%s' (%d chars)",
+            "API: returning Spark SQL for context '%s' (%d chars)",
             domain.domain_folder or "(session)",
             len(sql_content),
         )

@@ -33,6 +33,8 @@ def test_registry_migration_expectations_cover_bootstrap_ddl() -> None:
     assert ("schedule_runs", "detail") in EXPECTED_COLUMNS
     assert "domain_edit_locks" in EXPECTED_TABLES
     assert "domain_change_events" in EXPECTED_TABLES
+    assert "community_runs" in EXPECTED_TABLES
+    assert "pattern_runs" in EXPECTED_TABLES
     assert ("domain_comments", "anchor_type") in STALE_COLUMNS
 
 
@@ -53,6 +55,19 @@ def test_lakebase_perms_does_not_abort_when_relocation_is_denied() -> None:
     step = body[body.index("Step 1b") : body.index("Step 2: Postgres schema grants")]
     assert "EXCEPTION WHEN OTHERS THEN" in step
     assert "exit 1" not in step.split("Ensuring pgcrypto")[1]
+
+
+def test_lakebase_perms_creates_the_detect_run_tables() -> None:
+    """community_runs / pattern_runs must be created by bootstrap, not only lazily by the app."""
+    body = LAKEBASE_PERMS.read_text()
+    migration_step = body[
+        body.index("Step 2b: Registry schema migrations") : body.index(
+            "for app in", body.index("Step 2b: Registry schema migrations")
+        )
+    ]
+    for table in ("community_runs", "pattern_runs"):
+        assert f'CREATE TABLE IF NOT EXISTS "${{SCHEMA}}".{table} (' in migration_step
+        assert f"ON \"${{SCHEMA}}\".{table}(domain_id, version, computed_at DESC)" in migration_step
 
 
 def test_lakebase_perms_skips_ddl_when_registry_migrations_are_current() -> None:

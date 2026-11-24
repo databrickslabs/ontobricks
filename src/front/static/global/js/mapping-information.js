@@ -25,28 +25,28 @@ function filterObjectProperties(allProperties) {
 
 // Update metadata prerequisite status
 async function updateMetadataStatus() {
-    const prereqAlert = document.getElementById('metadataPrerequisite');
-    const checkIcon = document.getElementById('metadataCheckIcon');
-    const checkStatus = document.getElementById('metadataCheckStatus');
-    if (!prereqAlert) return;
+    const prereqAlerts = document.querySelectorAll('#metadataPrerequisite');
+    const checkIcons = document.querySelectorAll('#metadataCheckIcon');
+    const checkStatuses = document.querySelectorAll('#metadataCheckStatus');
+    if (!prereqAlerts.length) return;
 
     try {
         const response = await fetch('/domain/metadata', { credentials: 'same-origin' });
         const data = await response.json();
 
         if (data.success && data.has_metadata && data.metadata?.tables?.length) {
-            prereqAlert.className = 'alert alert-success';
-            checkIcon.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>';
-            checkStatus.textContent = `${data.metadata.tables.length} table(s) loaded`;
+            prereqAlerts.forEach(el => el.className = 'alert alert-success');
+            checkIcons.forEach(el => el.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>');
+            checkStatuses.forEach(el => el.textContent = `${data.metadata.tables.length} table(s) loaded`);
         } else {
-            prereqAlert.className = 'alert alert-warning';
-            checkIcon.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>';
-            checkStatus.innerHTML = '<strong>No data assets loaded</strong> — Data assets are required before creating mappings. Please load data assets first.';
+            prereqAlerts.forEach(el => el.className = 'alert alert-warning');
+            checkIcons.forEach(el => el.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>');
+            checkStatuses.forEach(el => el.innerHTML = '<strong>No data assets loaded</strong> — Data assets are required before creating mappings. Please load data assets first.');
         }
     } catch (e) {
-        prereqAlert.className = 'alert alert-danger';
-        checkIcon.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>';
-        checkStatus.textContent = 'Error checking data assets status';
+        prereqAlerts.forEach(el => el.className = 'alert alert-danger');
+        checkIcons.forEach(el => el.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>');
+        checkStatuses.forEach(el => el.textContent = 'Error checking data assets status');
     }
 }
 
@@ -59,23 +59,23 @@ function updateTaxonomyStatus() {
 
     updateMetadataStatus();
 
-    const prereqAlert = document.getElementById('ontologyPrerequisite');
-    const checkIcon = document.getElementById('ontologyCheckIcon');
-    const checkStatus = document.getElementById('ontologyCheckStatus');
+    const prereqAlerts = document.querySelectorAll('#ontologyPrerequisite');
+    const checkIcons = document.querySelectorAll('#ontologyCheckIcon');
+    const checkStatuses = document.querySelectorAll('#ontologyCheckStatus');
     
     if (MappingState.loadedOntology) {
-        prereqAlert.className = 'alert alert-success';
-        checkIcon.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>';
+        prereqAlerts.forEach(el => el.className = 'alert alert-success');
+        checkIcons.forEach(el => el.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>');
         const classCount = MappingState.loadedOntology.classes?.length || 0;
         const propCount = filterObjectProperties(MappingState.loadedOntology.properties).length;
-        checkStatus.textContent = `${MappingState.loadedOntology.info?.label || 'Loaded'} (${classCount} classes, ${propCount} relationships)`;
+        checkStatuses.forEach(el => el.textContent = `${MappingState.loadedOntology.info?.label || 'Loaded'} (${classCount} classes, ${propCount} relationships)`);
         
         // Enable menu items
         updateMenuState(true);
     } else {
-        prereqAlert.className = 'alert alert-warning';
-        checkIcon.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>';
-        checkStatus.textContent = 'No ontology loaded - Please load an ontology first';
+        prereqAlerts.forEach(el => el.className = 'alert alert-warning');
+        checkIcons.forEach(el => el.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>');
+        checkStatuses.forEach(el => el.textContent = 'No ontology loaded - Please load an ontology first');
         
         // Disable menu items
         updateMenuState(false);
@@ -101,56 +101,60 @@ function updateMenuState(enabled) {
 var _mappingGauges = {};
 
 function _drawMappingGauge(canvasId, score) {
-    if (_mappingGauges[canvasId]) {
-        _mappingGauges[canvasId].destroy();
-        delete _mappingGauges[canvasId];
-    }
-    var canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    var ctx = canvas.getContext('2d');
+    var canvases = document.querySelectorAll('#' + canvasId);
+    if (!canvases.length) return;
 
-    if (score == null) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        canvas.parentElement.style.opacity = '0.3';
-        return;
-    }
-    canvas.parentElement.style.opacity = '1';
+    canvases.forEach(function(canvas, idx) {
+        var key = canvasId + '_' + idx;
+        if (_mappingGauges[key]) {
+            _mappingGauges[key].destroy();
+            delete _mappingGauges[key];
+        }
+        var ctx = canvas.getContext('2d');
 
-    var val = Math.max(0, Math.min(100, Math.round(score)));
-    var color = val === 100 ? '#198754' : val >= 80 ? '#ffc107' : '#dc3545';
-    var remaining = 100 - val;
+        if (score == null) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (canvas.parentElement) canvas.parentElement.style.opacity = '0.3';
+            return;
+        }
+        if (canvas.parentElement) canvas.parentElement.style.opacity = '1';
 
-    _mappingGauges[canvasId] = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            datasets: [{
-                data: [val, remaining],
-                backgroundColor: [color, '#e9ecef'],
-                borderWidth: 0,
-                circumference: 180,
-                rotation: 270,
-            }]
-        },
-        options: {
-            responsive: false,
-            cutout: '70%',
-            plugins: { legend: { display: false }, tooltip: { enabled: false } },
-            layout: { padding: 0 },
-        },
-        plugins: [{
-            id: 'mappingGaugeLabel',
-            afterDraw: function(chart) {
-                var c = chart.ctx, w = chart.width, h = chart.height;
-                var cx = w / 2, cy = h - 4;
-                c.save();
-                c.textAlign = 'center';
-                c.textBaseline = 'bottom';
-                c.font = 'bold 14px system-ui, sans-serif';
-                c.fillStyle = color;
-                c.fillText(val + '%', cx, cy);
-                c.restore();
-            }
-        }],
+        var val = Math.max(0, Math.min(100, Math.round(score)));
+        var color = val === 100 ? '#198754' : val >= 80 ? '#ffc107' : '#dc3545';
+        var remaining = 100 - val;
+
+        _mappingGauges[key] = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [val, remaining],
+                    backgroundColor: [color, '#e9ecef'],
+                    borderWidth: 0,
+                    circumference: 180,
+                    rotation: 270,
+                }]
+            },
+            options: {
+                responsive: false,
+                cutout: '70%',
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                layout: { padding: 0 },
+            },
+            plugins: [{
+                id: 'mappingGaugeLabel',
+                afterDraw: function(chart) {
+                    var c = chart.ctx, w = chart.width, h = chart.height;
+                    var cx = w / 2, cy = h - 4;
+                    c.save();
+                    c.textAlign = 'center';
+                    c.textBaseline = 'bottom';
+                    c.font = 'bold 14px system-ui, sans-serif';
+                    c.fillStyle = color;
+                    c.fillText(val + '%', cx, cy);
+                    c.restore();
+                }
+            }],
+        });
     });
 }
 
@@ -160,22 +164,26 @@ function updateMappingCompletionStatus() {
     if (placeholder) placeholder.style.display = 'none';
     if (content) content.classList.remove('d-none');
 
-    const entityCountEl = document.getElementById('entityMappingCount');
-    const relationshipCountEl = document.getElementById('relationshipMappingCount');
-    const attributeCountEl = document.getElementById('attributeMappingCount');
-    const statusBadge = document.getElementById('mappingStatusBadge');
-    const statusMessage = document.getElementById('mappingStatusMessage');
+    const entityCountEls = document.querySelectorAll('#entityMappingCount');
+    const relationshipCountEls = document.querySelectorAll('#relationshipMappingCount');
+    const attributeCountEls = document.querySelectorAll('#attributeMappingCount');
+    const statusBadges = document.querySelectorAll('#mappingStatusBadge');
+    const statusMessages = document.querySelectorAll('#mappingStatusMessage');
     
     if (!MappingState.loadedOntology) {
-        entityCountEl.textContent = '0 / 0';
-        relationshipCountEl.textContent = '0 / 0';
-        if (attributeCountEl) attributeCountEl.textContent = '0 / 0';
+        entityCountEls.forEach(el => el.textContent = '0 / 0');
+        relationshipCountEls.forEach(el => el.textContent = '0 / 0');
+        attributeCountEls.forEach(el => el.textContent = '0 / 0');
         _drawMappingGauge('gaugeMapEntities', null);
         _drawMappingGauge('gaugeMapAttributes', null);
         _drawMappingGauge('gaugeMapRelationships', null);
-        statusBadge.textContent = 'No Ontology';
-        statusBadge.className = 'badge bg-secondary';
-        statusMessage.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Please load an ontology first from the Ontology page.';
+        statusBadges.forEach(el => {
+            el.textContent = 'No Ontology';
+            el.className = 'badge bg-secondary';
+        });
+        statusMessages.forEach(el => {
+            el.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Please load an ontology first from the Ontology page.';
+        });
         renderSummaryDetailLists({}, []);
         return;
     }
@@ -255,9 +263,12 @@ function updateMappingCompletionStatus() {
     ).length;
 
     // Update counts
-    entityCountEl.innerHTML = `${mappedClasses} / ${totalClasses}${_excl(excludedEntityCount)}`;
-    relationshipCountEl.innerHTML = `${mappedProperties} / ${totalProperties}${_excl(excludedRelCount)}`;
-    if (attributeCountEl) attributeCountEl.innerHTML = `${mappedAttributes} / ${totalAttributes}${_excl(excludedAttrCount)}`;
+    const entityCountStr = `${mappedClasses} / ${totalClasses}${_excl(excludedEntityCount)}`;
+    const relCountStr = `${mappedProperties} / ${totalProperties}${_excl(excludedRelCount)}`;
+    const attrCountStr = `${mappedAttributes} / ${totalAttributes}${_excl(excludedAttrCount)}`;
+    entityCountEls.forEach(el => { el.innerHTML = entityCountStr; });
+    relationshipCountEls.forEach(el => { el.innerHTML = relCountStr; });
+    attributeCountEls.forEach(el => { el.innerHTML = attrCountStr; });
 
     // Draw gauges
     const entityPct = totalClasses > 0 ? (mappedClasses / totalClasses) * 100 : null;
@@ -280,26 +291,22 @@ function updateMappingCompletionStatus() {
     const isValidated = MappingState.mappingValidated && isComplete;
     
     if (isValidated) {
-        statusBadge.textContent = 'Valid';
-        statusBadge.className = 'badge bg-success';
-        statusMessage.innerHTML = '<i class="bi bi-check-circle text-success"></i> All mappings complete. R2RML is ready.';
+        statusBadges.forEach(el => { el.textContent = 'Valid'; el.className = 'badge bg-success'; });
+        statusMessages.forEach(el => { el.innerHTML = '<i class="bi bi-check-circle text-success"></i> All mappings complete. R2RML is ready.'; });
     } else if (isComplete) {
-        statusBadge.textContent = 'Complete';
-        statusBadge.className = 'badge bg-success';
-        statusMessage.innerHTML = '<i class="bi bi-check-circle text-success"></i> All entities, relationships, and attributes are mapped.';
+        statusBadges.forEach(el => { el.textContent = 'Complete'; el.className = 'badge bg-success'; });
+        statusMessages.forEach(el => { el.innerHTML = '<i class="bi bi-check-circle text-success"></i> All entities, relationships, and attributes are mapped.'; });
     } else if (mappedItems > 0) {
-        statusBadge.textContent = 'In Progress';
-        statusBadge.className = 'badge bg-info';
+        statusBadges.forEach(el => { el.textContent = 'In Progress'; el.className = 'badge bg-info'; });
         
         const missing = [];
         if (mappedClasses < totalClasses) missing.push(`${totalClasses - mappedClasses} entities`);
         if (mappedProperties < totalProperties) missing.push(`${totalProperties - mappedProperties} relationships`);
         if (mappedAttributes < totalAttributes) missing.push(`${totalAttributes - mappedAttributes} attributes`);
-        statusMessage.innerHTML = `<i class="bi bi-hourglass-split text-info"></i> Mapping in progress. Still need: ${missing.join(', ')}.`;
+        statusMessages.forEach(el => { el.innerHTML = `<i class="bi bi-hourglass-split text-info"></i> Mapping in progress. Still need: ${missing.join(', ')}.`; });
     } else {
-        statusBadge.textContent = 'Not Started';
-        statusBadge.className = 'badge bg-secondary';
-        statusMessage.innerHTML = '<i class="bi bi-info-circle"></i> No mappings yet. Go to Entities to start mapping classes to tables.';
+        statusBadges.forEach(el => { el.textContent = 'Not Started'; el.className = 'badge bg-secondary'; });
+        statusMessages.forEach(el => { el.innerHTML = '<i class="bi bi-info-circle"></i> No mappings yet. Go to Entities to start mapping classes to tables.'; });
     }
 }
 
@@ -307,16 +314,16 @@ function updateMappingCompletionStatus() {
  * Render entity and relationship detail lists in the summary grid.
  */
 function renderSummaryDetailLists(mappingByClass, objectProperties, excludedClassNames) {
-    const entityListEl = document.getElementById('entityDetailList');
-    const relListEl = document.getElementById('relationshipDetailList');
-    if (!entityListEl || !relListEl) return;
+    const entityListEls = document.querySelectorAll('#entityDetailList');
+    const relListEls = document.querySelectorAll('#relationshipDetailList');
+    if (!entityListEls.length || !relListEls.length) return;
 
     excludedClassNames = excludedClassNames || new Set();
     const classes = MappingState.loadedOntology?.classes || [];
 
     // --- Entity list ---
     if (classes.length === 0) {
-        entityListEl.innerHTML = '<div class="text-muted small fst-italic">No entities defined</div>';
+        entityListEls.forEach(el => { el.innerHTML = '<div class="text-muted small fst-italic">No entities defined</div>'; });
     } else {
         const rows = classes.map((cls, idx) => {
             const name = cls.label || cls.name || cls.localName || cls.uri;
@@ -357,13 +364,15 @@ function renderSummaryDetailLists(mappingByClass, objectProperties, excludedClas
                 ${badge}
             </div>`;
         });
-        entityListEl.innerHTML = rows.join('');
-        _bindExcludeCheckboxes(entityListEl);
+        entityListEls.forEach(el => {
+            el.innerHTML = rows.join('');
+            _bindExcludeCheckboxes(el);
+        });
     }
 
     // --- Relationship list ---
     if (objectProperties.length === 0) {
-        relListEl.innerHTML = '<div class="text-muted small fst-italic">No relationships defined</div>';
+        relListEls.forEach(el => { el.innerHTML = '<div class="text-muted small fst-italic">No relationships defined</div>'; });
     } else {
         const mappedPropUris = new Set(
             (MappingState.config.relationships || []).map(m => m.property)
@@ -395,8 +404,10 @@ function renderSummaryDetailLists(mappingByClass, objectProperties, excludedClas
                 ${badge}
             </div>`;
         });
-        relListEl.innerHTML = rows.join('');
-        _bindExcludeCheckboxes(relListEl);
+        relListEls.forEach(el => {
+            el.innerHTML = rows.join('');
+            _bindExcludeCheckboxes(el);
+        });
     }
 }
 
@@ -433,7 +444,7 @@ async function confirmResetMappings() {
     }
     const confirmed = await showConfirmDialog({
         title: 'Unmap All',
-        message: 'This will delete <strong>all entity and relationship mappings</strong>.<br><br>Are you sure you want to continue?',
+        messageHtml: 'This will delete <strong>all entity and relationship mappings</strong>.<br>Hidden (excluded) entities, relationships and attributes stay hidden.<br><br>Are you sure you want to continue?',
         confirmText: 'Unmap all',
         confirmClass: 'btn-danger',
         icon: 'exclamation-triangle'
@@ -444,10 +455,7 @@ async function confirmResetMappings() {
 }
 
 async function resetAllMappings() {
-    // The button exists on both Mapping → General and Mapping → Studio;
-    // target whichever one is currently rendered for the spinner.
-    const btn = document.getElementById('resetMappingsBtn')
-        || document.getElementById('resetMappingsDesignBtn');
+    const btn = document.getElementById('resetMappingsDesignBtn');
     const originalHTML = btn ? btn.innerHTML : '';
     if (btn) {
         btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
@@ -455,39 +463,51 @@ async function resetAllMappings() {
     }
     
     try {
-        MappingState.config = {
-            entities: [],
-            relationships: []
-        };
+        // Only the mappings are deleted. Hidden (excluded) entities/relationships
+        // and excluded attributes are the user's curation of the ontology, not
+        // mappings: wiping them turned every hidden item red ("not mapped").
+        // The server keeps them, and we must NOT push an empty config to
+        // /mapping/save first - it replaces the lists wholesale.
+        const clearResp = await fetch('/mapping/clear?keep_exclusions=true', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+        });
+        const cleared = await clearResp.json();
+        if (cleared && cleared.success === false) {
+            throw new Error(cleared.message || 'Reset failed');
+        }
 
-        // Re-stamp excluded flags so the ontology objects reflect the now-empty
-        // mapping config.  Without this the designer still shows previously
-        // excluded classes/properties as excluded because the flags live on the
-        // MappingState.loadedOntology objects and are only cleared by this call.
+        // Adopt what the server kept (the exclusion stubs) and re-stamp the
+        // ontology objects, whose `excluded` flags are derived from that config.
+        const loadResp = await fetch('/mapping/load', { credentials: 'same-origin' });
+        const loaded = await loadResp.json();
+        const kept = (loaded && loaded.config) || {};
+        MappingState.config = {
+            entities: kept.entities || [],
+            relationships: kept.relationships || []
+        };
         if (typeof _stampExcludedFlags === 'function') {
             _stampExcludedFlags();
         }
         
-        await fetch('/mapping/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(MappingState.config),
-            credentials: 'same-origin'
-        });
-        
-        await fetch('/mapping/clear', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin'
-        });
-        
-        const r2rmlPreview = document.getElementById('r2rmlPreview');
-        if (r2rmlPreview) r2rmlPreview.value = '';
-        
         MappingState.r2rmlAutoGenerated = false;
         MappingState.mappingValidated = false;
-        
-        updateMappingCompletionStatus();
+
+        // Visual / List stay open while Unmap all runs from the Studio
+        // header — recolour them from MappingState (same path as live
+        // Auto-Map). updateMappingCompletionStatus is included.
+        if (typeof window.refreshMappingLiveStatus === 'function') {
+            window.refreshMappingLiveStatus([]);
+        } else {
+            updateMappingCompletionStatus();
+            if (typeof window.refreshMappingDesign === 'function') {
+                window.refreshMappingDesign();
+            }
+            if (window.ManualModule && typeof ManualModule.refresh === 'function') {
+                ManualModule.refresh();
+            }
+        }
         
         showNotification('✅ All mappings reset.', 'success');
         
@@ -502,325 +522,14 @@ async function resetAllMappings() {
     }
 }
 
-// =====================================================
-// IMPORT R2RML
-// =====================================================
-
-// Import R2RML Button - shows dropdown
-function setupImportExportButtons() {
-    const importBtn = document.getElementById('importR2RMLBtn');
-    if (importBtn) {
-        importBtn.addEventListener('click', function(e) {
-            let dropdown = document.getElementById('importR2RMLDropdown');
-            if (!dropdown) {
-                dropdown = document.createElement('div');
-                dropdown.id = 'importR2RMLDropdown';
-                dropdown.className = 'dropdown-menu show';
-                dropdown.style.cssText = 'position: absolute; z-index: 1050;';
-                dropdown.innerHTML = `
-                    <a class="dropdown-item" href="#" id="importR2RMLLocal">
-                        <i class="bi bi-hdd"></i> Import from Local File
-                    </a>
-                    <a class="dropdown-item" href="#" id="importR2RMLUC">
-                        <i class="bi bi-cloud-download"></i> Import from Unity Catalog
-                    </a>
-                `;
-                this.parentElement.appendChild(dropdown);
-                
-                // Position it below the button
-                dropdown.style.top = (this.offsetTop + this.offsetHeight) + 'px';
-                dropdown.style.left = this.offsetLeft + 'px';
-                
-                // Add event listeners
-                document.getElementById('importR2RMLLocal').addEventListener('click', function(e) {
-                    e.preventDefault();
-                    dropdown.remove();
-                    document.getElementById('r2rmlFileInput').click();
-                });
-                
-                document.getElementById('importR2RMLUC').addEventListener('click', function(e) {
-                    e.preventDefault();
-                    dropdown.remove();
-                    importR2RMLFromUC();
-                });
-                
-                // Close dropdown when clicking outside
-                setTimeout(() => {
-                    document.addEventListener('click', function closeDropdown(event) {
-                        if (!dropdown.contains(event.target) && event.target !== importBtn) {
-                            dropdown.remove();
-                            document.removeEventListener('click', closeDropdown);
-                        }
-                    });
-                }, 100);
-            } else {
-                dropdown.remove();
-            }
-        });
-    }
-    
-    // Export R2RML Button - shows dropdown
-    const exportBtn = document.getElementById('exportR2RMLBtn');
-    if (exportBtn) {
-        exportBtn.addEventListener('click', function(e) {
-            let dropdown = document.getElementById('exportR2RMLDropdown');
-            if (!dropdown) {
-                dropdown = document.createElement('div');
-                dropdown.id = 'exportR2RMLDropdown';
-                dropdown.className = 'dropdown-menu show';
-                dropdown.style.cssText = 'position: absolute; z-index: 1050;';
-                dropdown.innerHTML = `
-                    <a class="dropdown-item" href="#" id="exportR2RMLLocal">
-                        <i class="bi bi-hdd"></i> Export to Local File
-                    </a>
-                    <a class="dropdown-item" href="#" id="exportR2RMLUC">
-                        <i class="bi bi-cloud-upload"></i> Export to Unity Catalog
-                    </a>
-                `;
-                this.parentElement.appendChild(dropdown);
-                
-                // Position it below the button
-                dropdown.style.top = (this.offsetTop + this.offsetHeight) + 'px';
-                dropdown.style.left = this.offsetLeft + 'px';
-                
-                // Add event listeners
-                document.getElementById('exportR2RMLLocal').addEventListener('click', function(e) {
-                    e.preventDefault();
-                    dropdown.remove();
-                    exportR2RMLToLocal();
-                });
-                
-                document.getElementById('exportR2RMLUC').addEventListener('click', function(e) {
-                    e.preventDefault();
-                    dropdown.remove();
-                    exportR2RMLToUC();
-                });
-                
-                // Close dropdown when clicking outside
-                setTimeout(() => {
-                    document.addEventListener('click', function closeDropdown(event) {
-                        if (!dropdown.contains(event.target) && event.target !== exportBtn) {
-                            dropdown.remove();
-                            document.removeEventListener('click', closeDropdown);
-                        }
-                    });
-                }, 100);
-            } else {
-                dropdown.remove();
-            }
-        });
-    }
-    
-    // Handle local file import
-    const fileInput = document.getElementById('r2rmlFileInput');
-    if (fileInput) {
-        fileInput.addEventListener('change', async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            try {
-                showNotification('Importing R2RML file...', 'info', 2000);
-                const content = await file.text();
-                await parseAndLoadR2RML(content, file.name);
-            } catch (error) {
-                showNotification('Error reading file: ' + error.message, 'error');
-            }
-            
-            this.value = '';
-        });
-    }
-}
-
-// Import from Unity Catalog
-function importR2RMLFromUC() {
-    UCFileDialog.open({
-        mode: 'load',
-        title: 'Import R2RML from Unity Catalog',
-        extensions: ['.ttl', '.rdf'],
-        onSelect: async function(fileInfo) {
-            await parseAndLoadR2RML(fileInfo.content, fileInfo.filename);
-        }
-    });
-}
-
-// Parse and load R2RML content
-async function parseAndLoadR2RML(content, filename) {
-    try {
-        const response = await fetch('/mapping/parse-r2rml', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ content: content }),
-            credentials: 'same-origin'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            // Update mapping state with parsed mappings
-            if (result.entities) {
-                MappingState.config.entities = result.entities;
-            }
-            if (result.relationships) {
-                MappingState.config.relationships = result.relationships;
-            }
-            
-            // Update R2RML preview
-            const r2rmlPreview = document.getElementById('r2rmlPreview');
-            if (r2rmlPreview) r2rmlPreview.value = content;
-            
-            // Save to session
-            await fetch('/mapping/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(MappingState.config),
-                credentials: 'same-origin'
-            });
-            
-            if (MappingState.config.entities.length > 0) {
-                MappingState.mappingValidated = true;
-                MappingState.r2rmlAutoGenerated = true;
-            }
-            
-            // Refresh UI
-            updateMappingCompletionStatus();
-            
-            // Update navbar status indicator
-            if (typeof window.refreshOntologyStatus === 'function') {
-                window.refreshOntologyStatus();
-            }
-            
-            showNotification(`R2RML imported: ${filename} (${result.entities?.length || 0} entities, ${result.relationships?.length || 0} relationships)`, 'success');
-        } else {
-            showNotification('Error parsing R2RML: ' + result.message, 'error');
-        }
-    } catch (error) {
-        showNotification('Error importing R2RML: ' + error.message, 'error');
-    }
-}
-
-// =====================================================
-// EXPORT R2RML
-// =====================================================
-
-// Get R2RML content - generate if needed
-async function getR2RMLContent() {
-    // First check if we have content in the preview
-    let r2rmlContent = document.getElementById('r2rmlPreview')?.value;
-    
-    if (r2rmlContent && r2rmlContent.trim()) {
-        return r2rmlContent;
-    }
-    
-    // Check if we have mappings to generate R2RML from
-    if (!MappingState.config.entities || MappingState.config.entities.length === 0) {
-        return null;
-    }
-    
-    // Generate R2RML from backend
-    try {
-        showNotification('Generating R2RML...', 'info', 2000);
-        const response = await fetch('/mapping/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success && result.r2rml) {
-            // Update the preview textarea too
-            const preview = document.getElementById('r2rmlPreview');
-            if (preview) preview.value = result.r2rml;
-            return result.r2rml;
-        }
-    } catch (error) {
-        console.error('Error generating R2RML:', error);
-    }
-    
-    return null;
-}
-
-// Export to local file
-async function exportR2RMLToLocal() {
-    const r2rmlContent = await getR2RMLContent();
-    
-    if (!r2rmlContent) {
-        showNotification('No R2RML content to export. Configure entity mappings first.', 'warning');
-        return;
-    }
-    
-    const name = MappingState.loadedOntology?.info?.label || 'mapping';
-    const filename = name.replace(/\s+/g, '_').toLowerCase() + '_r2rml.ttl';
-    
-    const blob = new Blob([r2rmlContent], { type: 'text/turtle' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    showNotification(`R2RML exported: ${filename}`, 'success');
-}
-
-// Export to Unity Catalog
-async function exportR2RMLToUC() {
-    const r2rmlContent = await getR2RMLContent();
-    
-    if (!r2rmlContent) {
-        showNotification('No R2RML content to export. Configure entity mappings first.', 'warning');
-        return;
-    }
-    
-    const name = MappingState.loadedOntology?.info?.label || 'mapping';
-    const defaultFilename = name.replace(/\s+/g, '_').toLowerCase() + '_r2rml.ttl';
-    
-    UCFileDialog.open({
-        mode: 'save',
-        title: 'Export R2RML to Unity Catalog',
-        extensions: ['.ttl'],
-        defaultFilename: defaultFilename,
-        onSave: async function(location) {
-            try {
-                const response = await fetch('/write-volume-file', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        file_path: location.path,
-                        content: r2rmlContent
-                    }),
-                    credentials: 'same-origin'
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showNotification(`R2RML exported to ${location.filename}`, 'success');
-                } else {
-                    showNotification('Error exporting: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showNotification('Error exporting R2RML: ' + error.message, 'error');
-            }
-        }
-    });
-}
-
 function _initMappingInformationButtons() {
-    setupImportExportButtons();
-    // "Unmap all" appears on both Mapping → General (#resetMappingsBtn) and
-    // Mapping → Studio (#resetMappingsDesignBtn); both open the same confirm
-    // dialog before clearing mappings.
-    ['resetMappingsBtn', 'resetMappingsDesignBtn'].forEach(function(_id) {
-        var _btn = document.getElementById(_id);
-        if (_btn && !_btn.dataset.obResetWired) {
-            _btn.addEventListener('click', function() { confirmResetMappings(); });
-            _btn.dataset.obResetWired = '1';
-        }
-    });
+    // "Unmap all" lives in the Mapping Studio header (#resetMappingsDesignBtn);
+    // it opens the confirm dialog before clearing mappings.
+    var _btn = document.getElementById('resetMappingsDesignBtn');
+    if (_btn && !_btn.dataset.obResetWired) {
+        _btn.addEventListener('click', function() { confirmResetMappings(); });
+        _btn.dataset.obResetWired = '1';
+    }
 }
 
 if (document.readyState === 'loading') {

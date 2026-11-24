@@ -19,6 +19,10 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+pytestmark = pytest.mark.needs_domain
+
 
 # ── Turtle fixture shared across tests ───────────────────────────────────────
 

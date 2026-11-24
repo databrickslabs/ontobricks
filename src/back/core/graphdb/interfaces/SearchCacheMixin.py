@@ -8,10 +8,23 @@ relation, honouring the per-request ``auto`` / ``force_on`` / ``force_off`` mode
 
 from __future__ import annotations
 
+from typing import Any, Dict, List, Optional
+
 from back.core.logging import get_logger
-from back.core.graphdb.entity_search import is_asserted_only_relation
+from back.core.graphdb.entity_search import (
+    is_asserted_only_relation,
+    is_missing_relation_error,
+)
 
 logger = get_logger(__name__)
+
+COMPANION_INVENTORY_KEYS = (
+    ("adj_out", "Adjacency out"),
+    ("adj_in", "Adjacency in"),
+    ("props", "Properties"),
+    ("entity_search", "Entity search"),
+    ("entity_search_asserted", "Entity search (asserted)"),
+)
 
 
 class SearchCacheMixin:
@@ -129,3 +142,63 @@ class SearchCacheMixin:
         ready = bool(search_table) and self._companion_tables_exist(search_table)
         self._raise_if_force_on_missing(ready)
         return ready
+
+    def companion_inventory(self, table_name: str) -> List[Dict[str, Any]]:
+        """Row counts of adjacency / props / entity-search companions.
+
+        Used by Graph → Overview. Returns an empty list when this backend
+        has no search-cache companions (Neo4j, graph-less domains).
+        """
+        if not getattr(self, "supports_adjacency", False):
+            return []
+        adj_out, adj_in = self.adjacency_table_ids(table_name)
+        ids = {
+            "adj_out": adj_out,
+            "adj_in": adj_in,
+            "props": self.props_table_id(table_name),
+            "entity_search": self.entity_search_table_id(table_name),
+            "entity_search_asserted": self.entity_search_asserted_table_id(
+                table_name
+            ),
+        }
+        inventory: List[Dict[str, Any]] = []
+        for key, label in COMPANION_INVENTORY_KEYS:
+            fqn = str(ids.get(key) or "")
+            if not fqn:
+                inventory.append(
+                    {
+                        "key": key,
+                        "label": label,
+                        "table": "",
+                        "ready": False,
+                        "row_count": None,
+                    }
+                )
+                continue
+            ready = self._companion_tables_exist(fqn)
+            inventory.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "table": fqn.rsplit(".", 1)[-1],
+                    "ready": ready,
+                    "row_count": self._count_companion_rows(fqn) if ready else None,
+                }
+            )
+        return inventory
+
+    def _count_companion_rows(self, table_fqn: str) -> Optional[int]:
+        """``COUNT(*)`` of a companion, or ``None`` when the relation is missing."""
+        if not table_fqn:
+            return None
+        relation = self._sql_relation(table_fqn)
+        try:
+            rows = self.execute_query(f"SELECT COUNT(*) AS cnt FROM {relation}") or []
+        except Exception as exc:  # noqa: BLE001
+            if is_missing_relation_error(exc):
+                return None
+            logger.info("Companion row count failed for %s: %s", table_fqn, exc)
+            return None
+        if not rows:
+            return None
+        return int(rows[0].get("cnt") or 0)

@@ -93,7 +93,7 @@ def test_behaviour_lists_runtime_features_in_effect_order_with_chips():
     positions = [pane.index(b) for b in boxes]
     assert positions == sorted(positions)
     assert 'id="sharedEntityVirtualAttributes"' not in pane
-    headings = [pane.index(f"title: '{h}'") for h in ("Functions", "Jobs", "Inference rules (SWRL)")]
+    headings = [pane.index(f"title: '{h}'") for h in ("Functions", "Jobs", "Inference rules (IF-THEN)")]
     chips = [pane.index(f"chip: '{c}'") for c in ("result", "background", "graphWrite")]
     assert headings == sorted(headings) and chips == sorted(chips)
     assert pane.count("chip: '") == 3

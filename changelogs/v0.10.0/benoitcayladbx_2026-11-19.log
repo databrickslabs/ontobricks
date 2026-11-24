@@ -1,0 +1,2429 @@
+================================================================================
+## Single "Add Data Assets" dialog for Unity Catalog import
+================================================================================
+
+Context: Importing Unity Catalog tables under Context > Data Assets went through
+three stacked popups: "Select Unity Catalog Location" (a widget with a nested
+"Select Catalog & Schema" picker), then a "Select Tables to Import" list, then
+the import. Design was agreed in brainstorming: one dialog holds the catalog and
+schema pickers, the table list and the Import action. Backend endpoints
+(`/domain/metadata/list-tables`, `/domain/metadata/initialize-async`) and the
+shared UCLocationWidget are unchanged; the Change Data Asset modal is unchanged.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_metadata.html
+   Replaced `#tableSelectionModal` and `#loadMetadataLocationModal` with one
+   `#addDataAssetsModal` (modal-xl). It holds Catalog and Schema selects, a
+   "Context" shortcut button, a placeholder/spinner/list area, the permission
+   banner, Select All / Deselect All / Select New Only, the filter, and the
+   footer button `#importSelectedBtn` ("Add N assets"). Existing IDs and
+   `data-meta-action` values are kept.
+2. src/front/static/domain/js/domain-metadata.js
+   - Removed `loadMetadataModal`, `loadMetadataWidgetInitialized`,
+     `pendingLoadCatalog`, `pendingLoadSchema`.
+   - `showLoadMetadataModal()` opens the single dialog and fills catalogs and the
+     context shortcut from `UCLocationWidget.loadCatalogs()` and
+     `UCLocationWidget.loadDomainLocation()`.
+   - New `onAddDataAssetsCatalogChange()`, `onAddDataAssetsSchemaChange()`,
+     `useContextLocationForAssets()`, `resetAddDataAssetsListing()`,
+     `getAddDataAssetsLocation()`, `_showAddAssetsState()`, `_setSelectValue()`,
+     `_optionHtml()`.
+   - `loadMetadataFromUC()` replaced by `loadTablesForSelection(catalog, schema)`:
+     lists tables inline when a schema is picked. A request-id guard drops stale
+     responses. Same initial selection logic (new tables up to the import limit).
+   - `showTableSelectionModal()` renamed `renderImportTable()` and no longer
+     opens a modal.
+   - `importSelectedTables()` reads catalog and schema from the dialog and hides
+     `#addDataAssetsModal`. Fixed `const selectedTables` being reassigned on the
+     import-limit path (would throw a TypeError).
+   - Template bindings: `load-from-uc` removed, `add-assets-use-context` added,
+     catalog and schema `change` events routed to the new handlers.
+3. src/front/static/global/css/permissions.css
+   Removed the `#loadMetadataConfirmBtn` read-only selector (element no longer
+   exists). `#importSelectedBtn` and `[data-meta-action="show-load-modal"]` gates
+   are unchanged.
+4. tests/units/front/test_add_data_assets_dialog.py (new)
+   Source-contract tests for the single dialog: legacy modals gone, required
+   hooks present, no chained-modal state in JS, inline schema listing, import
+   reads from the dialog, read-only gate.
+5. tests/units/front/test_mapping_metric_view_ui.py
+   Copy test retargeted from the removed `#loadMetadataConfirmBtn` to
+   `#importSelectedBtn` ("Add 0 assets").
+6. tests/units/front/test_data_assets_import_limit.py
+   Import-limit contract now looks for `renderImportTable` (renamed from
+   `showTableSelectionModal`). Limit check unchanged.
+7. docs/user-guide.md
+   Step 3 "Import Table Metadata" rewritten for the single dialog.
+8. docs/getting-started.md
+   Assign Data Assets step describes the single dialog.
+9. docs/examples.md
+   Step 2 "Load Data Source" updated to the single dialog.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/static/domain/js/domain-metadata.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_add_data_assets_dialog.py (new)
+- tests/units/front/test_mapping_metric_view_ui.py
+- tests/units/front/test_data_assets_import_limit.py
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/examples.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log (new)
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10881 passed, 334 skipped,
+  8 deselected, 0 failed.
+- `node --check src/front/static/domain/js/domain-metadata.js`: OK.
+- Not done: live browser check (desktop, mobile, read-only role). Needs a
+  Databricks workspace for the catalog and schema APIs.
+
+
+================================================================================
+## Fix Select All in the Add Data Assets dialog
+================================================================================
+
+Context: Select All (toolbar button and header checkbox) looked like a no-op.
+It forced already-loaded rows off, then the header checkbox snapped back to
+unchecked/indeterminate because not every visible row was selected. The
+remaining-slot count also used already-loaded flags from the current schema
+listing instead of how many assets are in the domain.
+
+Changes:
+
+1. src/front/static/domain/js/domain-metadata.js
+   Added `computeSelectAllImportState`: Select All checks every visible row,
+   including Already loaded. The import-limit cap applies only to new assets
+   and shows a warning when some new rows are skipped. `_remainingImportSlots`
+   uses the domain metadata table count. Import submits only new tables so
+   already-loaded checks do not consume the limit.
+2. tests/units/front/test_add_data_assets_dialog.py
+   Node tests for Select All / Deselect All / remaining-slot cap.
+
+Modified files:
+- src/front/static/domain/js/domain-metadata.js
+- tests/units/front/test_add_data_assets_dialog.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10884 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Already-loaded assets have no checkbox; Context becomes Refresh
+================================================================================
+
+Context: Feedback on the single Add Data Assets dialog: (1) already-loaded
+assets must not be reloadable, so they should have no checkbox; (2) the
+Context shortcut is less useful than a Refresh that reloads catalogs/schemas
+and the table list from Unity Catalog.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_metadata.html
+   Replaced the Context button with `#addDataAssetsRefreshBtn`
+   (`data-meta-action="add-assets-refresh"`).
+2. src/front/static/domain/js/domain-metadata.js
+   - Already-loaded rows render an empty checkbox cell; Select All /
+     `computeSelectAllImportState` never selects them; the header checkbox
+     only considers rows that still have a checkbox; the selection counter
+     counts new assets only.
+   - Removed the Context shortcut (`addDataAssetsContext`,
+     `useContextLocationForAssets`). Added `refreshAddDataAssets()` which
+     clears the UCLocationWidget cache, reloads catalogs (preserving the
+     current selection) and re-lists tables for the current schema.
+3. docs/user-guide.md
+   Step 3 updated for Refresh and non-selectable already-loaded assets.
+4. tests/units/front/test_add_data_assets_dialog.py
+   Contracts updated for Refresh, no Context, and Select All skipping
+   already-loaded assets.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/static/domain/js/domain-metadata.js
+- docs/user-guide.md
+- tests/units/front/test_add_data_assets_dialog.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10886 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Faster Data Assets paint: deferred Rights + reload spinner
+================================================================================
+
+Context: The Unity Catalog Data Assets page felt slow to display because SELECT
+permission probes ran with metadata load. After Add/Update from the popup, the
+list also refreshed without a clear loading state. The heading still said
+"Loaded Tables".
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_metadata.html
+   Renamed "Loaded Tables" to "Loaded Unity Catalog Assets". Added
+   `#metadataListOverlay` spinner over the assets table.
+2. src/front/static/domain/css/domain-metadata.css
+   Overlay styles for the reload spinner.
+3. src/front/static/domain/js/domain-metadata.js
+   - `loadMetadataStatus` paints the list first, then calls
+     `refreshSelectPermissionsInBackground()`.
+   - New `POST /domain/metadata/check-select` fills the Rights column in place.
+   - After Add/Update (popup close / Update from UC), shows the list overlay
+     spinner while reloading assets.
+4. src/back/core/databricks/uc/MetadataService.py
+   Import no longer probes SELECT (sets `can_select: null`). Added
+   `probe_select_permissions` for the background Rights pass.
+5. src/back/objects/domain/_metadata_select.py (new)
+   Orchestrates the background probe + session save (kept out of Domain to
+   respect the class size budget).
+6. src/api/routers/internal/domain.py
+   Added `POST /metadata/check-select`.
+7. docs/user-guide.md
+   Notes two-phase list paint + background Rights.
+8. tests/units/front/test_loaded_uc_assets_deferred_rights.py (new)
+   plus MetadataService / guard-UI contract updates.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/static/domain/css/domain-metadata.css
+- src/front/static/domain/js/domain-metadata.js
+- src/back/core/databricks/uc/MetadataService.py
+- src/back/objects/domain/_metadata_select.py (new)
+- src/api/routers/internal/domain.py
+- docs/user-guide.md
+- tests/units/front/test_loaded_uc_assets_deferred_rights.py (new)
+- tests/units/core/test_metadata_service_object_kind.py
+- tests/units/core/test_metadata_service_uc_failures.py
+- tests/units/front/test_metadata_guard_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10890 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Reduced UI corner rounding to minimum (almost square)
+================================================================================
+
+Context: The UI had heavily rounded corners across surfaces, including 14px cards,
+10px controls/inputs/buttons, 14px submenu dropdowns with 9px rounded items, and
+rounded pills. The user requested reducing all rounded boxes (submenus, pages,
+cards, modals, inputs, and controls) to the minimum (almost a square).
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - Reduced shared radii tokens: `--db-radius-sm: 2px`, `--db-radius-md: 2px`,
+     `--db-radius-lg: 2px`, with `--db-radius-control`, `--db-radius-card`, and
+     `--db-radius-chip` all resolving to 2px.
+   - Added Bootstrap CSS variable overrides in `:root` (`--bs-border-radius: 2px`,
+     `--bs-border-radius-sm: 2px`, `--bs-border-radius-lg: 2px`,
+     `--bs-card-border-radius: 2px`, `--bs-modal-border-radius: 2px`,
+     `--bs-dropdown-border-radius: 2px`, `--bs-btn-border-radius: 2px`,
+     `--bs-alert-border-radius: 2px`, etc.) so standard Bootstrap elements inherit
+     the almost-square aesthetic.
+   - Replaced hardcoded 9px radii on `.navbar .dropdown-menu .dropdown-item` and
+     `.ob-subnav .dropdown-menu .dropdown-item` with `var(--db-radius-control)`.
+   - Updated `.ob-subnav-link`, `.ob-subnav-resume-btn`, `.ob-subnav-save-kbd`,
+     and `.modal-content` to use the 2px tokens.
+   - Updated `pre` and `code` blocks to 2px border radius.
+2. src/front/static/global/css/sidebar-layout.css
+   - Replaced hardcoded 9px radii on `.sidebar-nav .nav-link` and `.sidebar-toggle`
+     with `var(--db-radius-control)`.
+   - Updated `.sidebar-nav .nav-link.active::before` indicator to `border-radius: 0 2px 2px 0`.
+3. src/front/static/global/css/components.css
+   - Aligned `.ob-workspace-map-item`, `.canvas-container`, `.ob-kpi-tile`,
+     `.ob-kpi-tile-icon`, `.step-status`, `.task-tracker-dropdown`,
+     `.wizard-form-overlay`, `.task-activity-log`, and `.ob-shortcut-card` to
+     `var(--db-radius-control)` / `var(--db-radius-card)`.
+4. src/front/static/global/css/pages.css
+   - Aligned `.sql-code`, `.notif-center-dropdown`, `.column-header`, `.code-preview`,
+     `.graph-legend`, and `.code-textarea` to `var(--db-radius-control)`.
+5. src/front/static/global/css/help-modal.css
+   - Aligned `.help-modal .modal-content`, `.help-hero`, `.help-hero-icon`,
+     `.help-title-logo`, `.help-card`, `.help-card-icon`, `.help-step`,
+     `.help-step-card`, `.help-feature`, `.help-feature-icon`, and accordion buttons
+     to `var(--db-radius-control)` / `var(--db-radius-card)`.
+6. src/front/static/registry/css/registry.css
+   - Replaced 0.5rem and 0.75rem with `var(--db-radius-card)` on `.bridges-domain-card`,
+     `.bridges-summary-bar`, and `#bridgesGraph`.
+7. src/front/static/global/css/review-modals.css
+   - Replaced 10px and rem radii on `.review-chat-bubble`, `.oc-thread`, and
+     `.oc-md pre` with `var(--db-radius-control)`.
+8. src/front/static/domain/css/domain-review.css
+   - Replaced 8px, 10px, and 7px on `.review-banner`, `.review-stage`, `.review-stage-icon`,
+     and `.review-card` with design tokens.
+9. src/front/static/global/css/config.css
+   - Aligned `.doc-drop-zone`, `.registry-domain-table-wrapper`, and `.lk-domain-card`
+     with design tokens.
+10. src/front/static/query/css/query-chat.css
+    - Replaced 16px, 14px, and 8px radii on chat bubbles, thinking indicator,
+      welcome icon, and code blocks with `var(--db-radius-control)`.
+11. src/front/static/ontology/css/ontology-assistant.css
+    - Aligned `.assistant-popup`, header, footer, message bubbles, and textarea
+      with design tokens.
+12. src/front/static/ontology/css/ontology-map.css
+    - Replaced 8px and 10px on `.map-legend`, `.map-context-menu`, `.map-context-submenu`,
+      `.map-connection-tooltip`, and `.map-search-popup` with design tokens.
+13. src/front/static/mapping/css/mapping-design.css, mapping-manual.css, mapping.css
+    - Replaced 8px and 10px on legends, context menus, status/count badges, and canvas
+      containers with design tokens.
+14. tests/units/front/test_clarity_design_contract.py
+    - Updated assertions for dropdown item radii to expect `var(--db-radius-control)`.
+15. .cursor/11-frontend-design.mdc
+    - Updated design system documentation to reflect the 2px almost-square radius scale.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- src/front/static/global/css/components.css
+- src/front/static/global/css/pages.css
+- src/front/static/global/css/help-modal.css
+- src/front/static/global/css/config.css
+- src/front/static/global/css/review-modals.css
+- src/front/static/global/css/mapping.css
+- src/front/static/registry/css/registry.css
+- src/front/static/domain/css/domain-review.css
+- src/front/static/query/css/query-chat.css
+- src/front/static/ontology/css/ontology-assistant.css
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/mapping/css/mapping-design.css
+- src/front/static/mapping/css/mapping-manual.css
+- tests/units/front/test_clarity_design_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10890 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+## Compare: auto-load differences; Rename View difference → Refresh
+
+Context: On Intelligence → Simulation → Compare, users had to press
+"View difference" after picking a ready scenario. The overlay now loads
+automatically whenever a ready scenario is available; with none, the empty
+state stays. The action button is renamed Refresh for manual reloads.
+
+Changes:
+
+1. src/front/static/intelligence/js/simulation-compare.js
+   Auto-run compare on section show when a ready scenario is selected;
+   also re-run on scenario or live-source change; drop the autoRun flag.
+2. src/front/templates/partials/intelligence/_sim_compare.html
+   Rename run button to Refresh (bi-arrow-clockwise); update idle copy.
+3. src/front/templates/partials/intelligence/_sim_scenarios.html
+   How-it-works copy: overlay loads automatically; Refresh reloads.
+4. src/front/templates/partials/layout/help_modal.html
+   Help text aligned with auto-load + Refresh wording.
+5. docs/intelligence.md
+   Graphs-tab docs: auto-load overlay; Refresh; empty when no scenario.
+6. docs/user-guide.md
+   Compare workflow row updated for auto-load + Refresh.
+7. tests/units/front/test_intelligence_page_contract.py
+   Contract asserts Refresh label, no View difference, auto-run path.
+
+Modified files:
+- src/front/static/intelligence/js/simulation-compare.js
+- src/front/templates/partials/intelligence/_sim_compare.html
+- src/front/templates/partials/intelligence/_sim_scenarios.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/intelligence.md
+- docs/user-guide.md
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10890 passed, 334 skipped, 8 deselected, 44 warnings in 50.77s
+
+
+================================================================================
+## Round navbar count bubbles (notifications and task tracker)
+================================================================================
+
+Context: After reducing the global radius scale to 2px, the red count badges in
+the top navbar (notification bell and task tracker) became squares because they
+use Bootstrap's `rounded-pill` class, which is pinned to the 2px pill token. The
+user asked for them to be round again.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   - `#taskTrackerBadge, #notifCenterBadge`: fixed 16px square box with
+     `aspect-ratio: 1 / 1`, `border-radius: 50% !important` (ID selector and
+     `!important` beat `.rounded-pill`), flex-centred count, no vertical padding.
+2. tests/units/front/test_clarity_design_contract.py
+   - New `test_navbar_count_bubbles_are_round` contract test.
+
+Modified files:
+- src/front/static/global/css/components.css
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10891 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Center the count inside the round navbar bubble
+================================================================================
+
+Context: The round count bubble rendered the number at the top instead of the
+vertical centre. `task-tracker.js` forced `display: inline-block` inline on the
+task badge, which overrides the flex centring in the stylesheet; an inline-block
+with a fixed height keeps its text on the top line box.
+
+Changes:
+
+1. src/front/static/global/js/task-tracker.js
+   - `updateTaskBadge()` now shows the badge with `display: inline-flex` instead of
+     `inline-block`, so the count is centred vertically.
+2. tests/units/front/test_clarity_design_contract.py
+   - New `test_task_tracker_badge_uses_flex_so_count_is_centred` guard test.
+
+Modified files:
+- src/front/static/global/js/task-tracker.js
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10892 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Settings/Home return link shows the context name and version
+================================================================================
+
+Context: On Settings and Home, the L2 return control read a static "Back to
+context". The user asked for it to show the open context: "Back to {Name} V{n}".
+
+Changes:
+
+1. src/front/templates/base.html
+   - The return link label is wrapped in `#settingsDomainReturnLabel`. The
+     server-rendered fallback stays "Back to context" (no context open).
+2. src/front/static/global/js/navbar.js
+   - `applyDomainInfo()` sets the label to `Back to {domainName} V{version}` when a
+     context is loaded, and back to "Back to context" otherwise. Same version
+     format as the workspace map label.
+3. src/front/static/global/css/main.css
+   - The label span ellipsizes inside the 200px rail (the link width is pinned to
+     the sidebar width by an existing test). The full text stays in the title.
+4. tests/units/front/test_settings_subnav_hidden.py
+   - New `test_settings_return_label_shows_context_name_and_version` contract test.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/main.css
+- tests/units/front/test_settings_subnav_hidden.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10893 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Combine workspace map and Switch Version; version badge on L2 context
+================================================================================
+
+Context: The L2 subnav had two separate controls for context identity: the
+context name opened the workspace map, and a `vN ▾` crumb opened Switch Version.
+The user asked to merge both into the context popup, remove the version crumb,
+and show the version as a badge next to the context name.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Removed the `/` separator and `.ob-subnav-version-crumb` (and the
+     `domainSwitch` action wiring from that crumb).
+   - Added `#domainContextVersion.domain-version-badge` beside the context name
+     (status badge still injects between name and version).
+2. src/front/templates/partials/layout/_workspace_map_modal.html
+   - Embedded the Switch Version strip (`.ob-workspace-map-versions`) with
+     `#switchVersionSelect`, save-before-switch, New Version, and Switch.
+3. src/front/static/global/js/navbar.js
+   - `applyDomainInfo()` sets the version badge to `V{n}` (hidden when no context).
+   - `openWorkspaceMap()` binds version actions once and refreshes the version list.
+   - `domainSwitch()` opens the workspace map (no separate modal).
+   - Removed dynamic `#domainSwitchModal` / `showSwitchDomainDialog`.
+4. src/front/static/global/css/components.css
+   - Styles for `.ob-workspace-map-versions` strip.
+5. src/front/static/global/css/main.css
+   - Styles for `.domain-version-badge`; dropped obsolete version-crumb / crumb-sep
+     mobile rules; widened the context trigger slightly for badges.
+6. .cursor/11-frontend-design.mdc
+   - Documented the combined popup and version badge (no vN crumb).
+7. Contract tests updated for the new L2 + workspace map shape.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/front/test_switch_domain_modal.py
+- tests/units/front/test_mobile_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10896 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+
+================================================================================
+## Compact spacing between text and content (L2 subnav, sidebar, headers, cards)
+================================================================================
+
+Context: The UI had excessive dead whitespace between titles/text and content
+surfaces. The L2 subnav had a 48px (3rem) rail height, the sidebar had generous
+padding and a 16px gap to the content card, section headers floated high above
+content with 0.5rem (or template mb-4) margins, and cards/headers had large
+padding. The user asked to reduce these spaces across L2, the sidebar, and pages.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - Reduced `--ob-subnav-rail-height` from 3rem (48px) to 2.25rem (36px).
+   - Tightened `.ob-subnav-nav` padding from 0.25rem to 0.15rem.
+   - Reduced padding on `.ob-subnav-link`, `.ob-subnav-crumb`, `.ob-subnav-save-btn`,
+     `.ob-subnav-close-btn`, `.ob-subnav-resume-btn`, `.ob-subnav-settings-return-link`,
+     and `.ob-subnav-workspace-list`.
+   - Tightened `#obSubnav .container-fluid` left padding from 0.5rem to 0.25rem to
+     match the new sidebar outer gutter.
+   - Compacted `.section-header`: `padding-top: 0.25rem`, `margin-bottom: 0.25rem !important`
+     (overriding template `mb-4`/`mb-3` utilities), `h1..h4` margin reduced to 0.1rem,
+     subtitle margin to 0.
+   - Compacted `.card-header` (padding `0.5rem 0.75rem`, down from `1rem 1.25rem`),
+     `.card-body` (padding `0.75rem`), and `.ob-tab-content` (padding `0.75rem`).
+   - Compacted `.content-wrapper` (padding `0.75rem 1rem`, down from `2rem`),
+     and `.page-header` (margin `0.75rem`, padding `0.25rem 0 0.5rem`).
+2. src/front/static/global/css/sidebar-layout.css
+   - Reduced `.sidebar-layout` outer padding (`0.15rem 0.25rem 0.25rem`, down from
+     `0.25rem 0.5rem 0.5rem`) and inner gap between sidebar and content (`0.25rem`,
+     down from `0.5rem`).
+   - Reduced `.sidebar-content` horizontal padding (`0 0.25rem`, down from `0 0.5rem`),
+     cutting the gap between sidebar nav links and content cards from 16px to 8px.
+   - Tightened `.sidebar-nav` padding (`0.25rem 0`), `.sidebar-title` padding,
+     `.nav-link` padding (`0.25rem 0.5rem`), margin, and icon gap (`0.35rem`).
+   - Compacted `.sidebar-toggle` padding (`0.3rem 0.5rem`).
+   - Aligned `.sidebar-layout .section-header` to `padding-top: 0.25rem` and
+     `margin-bottom: 0.25rem !important`.
+3. tests/units/front/test_clarity_design_contract.py
+   - Updated layout gutter, L2 top padding, and section-header alignment assertions
+     for the compact spacing tokens.
+4. tests/units/front/test_segmented_subnav_contract.py
+   - Updated subnav rail height (2.25rem), container left padding (0.25rem), and
+     nav padding (0.15rem) assertions.
+5. tests/units/front/test_sidebar_content_stretch_contract.py
+   - Updated `.sidebar-content:has(#dataquality-section.active)` padding assertion
+     to `0 0.25rem`.
+6. .cursor/11-frontend-design.mdc
+   - Documented the compact 0.25rem outer gutter, 2.25rem L2 rail height, and
+     0.25rem title-to-content rhythm.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10896 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+## Move sidebar collapse toggle into L2 left of Context
+
+Context: The collapse/expand control lived at the top of the sidebar rail,
+so it moved with the rail and competed with section links. Move it to a fixed
+L2 position immediately left of the Context name (still visible on Settings,
+left of the return link) so the control stays put while the rail collapses.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Added fixed `#obSidebarToggle` / `#obSidebarToggleItem` as the first L2
+     item (not under `data-subnav-domain-chrome`), left of the Context crumb.
+2. src/front/static/global/js/sidebar-nav.js
+   - Stopped injecting `.sidebar-toggle` into the rail; wire and reveal the L2
+     button when a `.sidebar-nav` exists; sync `aria-pressed` / title via
+     `_syncToggleChrome`.
+3. src/front/static/global/css/main.css
+   - Styled `.ob-subnav-sidebar-toggle` to the L2 rail height with no hover fill.
+4. src/front/static/global/css/sidebar-layout.css
+   - Removed in-rail `.sidebar-toggle` styles (control now lives in L2).
+5. tests/units/front/test_sidebar_collapse_prepaint.py
+   - Added contract that the toggle is fixed left of Context and no longer
+     injected into the sidebar.
+6. tests/units/front/test_segmented_subnav_contract.py
+   - Assert `#obSidebarToggle` precedes `#domainContextTrigger`.
+7. tests/units/front/test_clarity_design_contract.py
+   - No-hover assertion covers `.ob-subnav-sidebar-toggle`.
+8. .cursor/11-frontend-design.mdc
+   - Documented the fixed L2 collapse control in the sidebar and L2 layout
+     contracts.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_sidebar_collapse_prepaint.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10897 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+## Align L2 sidebar toggle icon with sidebar nav icons
+
+Context: The fixed L2 collapse button sat about 7px left of the sidebar icon
+column and used a larger glyph (1.05rem vs 0.95rem), so the two icon sets did
+not line up.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-subnav-sidebar-toggle-item`: `margin-left: 0.44rem` so the 2.25rem
+     button centre lands on the sidebar icon centre (~29px from the shell edge).
+   - `.ob-subnav-sidebar-toggle i`: font-size `0.95rem` (matches
+     `.sidebar-nav .nav-link i`).
+2. tests/units/front/test_sidebar_collapse_prepaint.py
+   - Added `test_sidebar_toggle_icon_is_centred_on_sidebar_icon_column`
+     asserting matching icon size and the margin-left alignment offset.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_sidebar_collapse_prepaint.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10898 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+## Add Databricks-style L2 app switcher left of Close
+
+Context: Users asked for a navigation affordance similar to the Databricks
+navbar ``nav-icon`` app switcher, placed left of Close, that opens the main
+workspaces (Context, Ontology, Graph, Intelligence).
+
+Changes:
+
+1. src/front/templates/base.html
+   - Added `#obAppSwitcher` (9-dot `.ob-nav-icon`) and
+     `.ob-app-switcher-menu` 2×2 tile grid driven by menu_config workspaces,
+     between the flex spacer and Close/Save.
+2. src/front/static/global/css/main.css
+   - Styled the trigger like Databricks nav-icon (transparent, soft hover)
+     and the popover as a 2-column tile grid with icon wells + labels.
+3. src/front/static/global/js/navbar.js
+   - Added `initAppSwitcherActiveState()` (called from
+     `initSubnavActiveState`) to mark the current workspace tile.
+4. tests/units/front/test_app_switcher_contract.py
+   - New contracts for placement, 9-dot styles, tile set, and active-state
+     wiring.
+5. tests/units/front/test_segmented_subnav_contract.py
+   - Assert switcher sits between Context chrome and Close.
+6. .cursor/11-frontend-design.mdc
+   - Documented the app switcher in the L2 left→right layout.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10901 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+## Remove L2 workspace dropdown rail beside Context
+
+Context: After adding the Databricks-style app switcher, the Context /
+Ontology / Graph / Intelligence dropdown menus to the right of the Context
+crumb were redundant. Remove that segmented rail so L2 is Context chrome +
+app switcher + Close/Save.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Removed `.ob-subnav-workspaces` / workspace dropdowns
+     (`#subnavDomainDropdown`, Ontology, Graph, Intelligence).
+   - Kept `#obAppSwitcher`; Graph + Intelligence tiles carry
+     `nav-requires-graph`.
+2. src/front/static/global/js/navbar.js
+   - Dropped `disableCurrentSubnavDropdown` and domainSectionName /
+     domainWorkspaceSubnavNav wiring; `initSubnavActiveState` only marks
+     app-switcher tiles.
+3. src/front/static/global/css/main.css
+   - Removed workspace-rail / `.ob-subnav-link` styles; kept app-switcher
+     and L2 dropdown-menu styles.
+4. tests/units/front/test_segmented_subnav_contract.py
+   - Contracts now assert the rail is gone and app switcher owns navigation.
+5. tests/units/front/test_mobile_subnav_contract.py
+   - Updated label/tooltip counts for Close/Save + app switcher only.
+6. tests/units/front/test_settings_subnav_hidden.py
+   - Domain chrome toggles via `data-subnav-domain-chrome` only.
+7. tests/units/front/test_no_backend_ui.py
+   - Graph gate asserted on app-switcher tiles.
+8. tests/units/front/test_clarity_design_contract.py
+   - Current workspace selection asserted on `.ob-app-switcher-tile.is-current`.
+9. tests/units/api/test_ui_rendering.py
+   - Rendering contracts updated for app switcher / no workspace dropdowns.
+10. tests/e2e/navigation/test_sidebar_bottom_alignment.py
+    - L2 geometry reads `.ob-subnav-nav` instead of the removed workspace list.
+11. .cursor/11-frontend-design.mdc
+    - Documented removed rail and app-switcher-only workspace navigation.
+12. docs/architecture.md
+    - L2 description updated to match.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_settings_subnav_hidden.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+- .cursor/11-frontend-design.mdc
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10898 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+## Reshape app switcher to Databricks line-item list
+
+Context: The L2 app switcher used a 2×2 tile grid. Match the Databricks
+workspace app switcher (fe-vm-bcayla-demos): one option per line with icon,
+label, and a check on the current workspace.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Replaced `.ob-app-switcher-grid` / `.ob-app-switcher-tile` with
+     `.ob-app-switcher-list` / `.ob-app-switcher-item` (+ check icon).
+2. src/front/static/global/css/main.css
+   - Vertical flex list; horizontal rows (icon well + label + check);
+     current row uses `--db-primary-light` and shows the checkmark.
+3. src/front/static/global/js/navbar.js
+   - `initAppSwitcherActiveState` targets `.ob-app-switcher-item`.
+4. tests/units/front/test_app_switcher_contract.py
+   - Contracts assert line-item layout (no 2×2 grid).
+5. tests/units/front/test_no_backend_ui.py
+   - Graph gate asserted on `.ob-app-switcher-item.nav-requires-graph`.
+6. tests/units/front/test_clarity_design_contract.py
+   - Current selection asserted on `.ob-app-switcher-item.is-current`.
+7. .cursor/11-frontend-design.mdc
+   - Documented the Databricks line-item app switcher pattern.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_clarity_design_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10898 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+## Add Databricks-style subtitles to app switcher rows
+
+Context: The app switcher listed workspace names only. Match the Databricks
+two-line layout: title plus a smaller feature subtitle, with a wider, taller
+popover so the copy can breathe.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Added `description` on Context, Ontology, Graph, and Intelligence.
+2. src/front/templates/base.html
+   - Each `.ob-app-switcher-item` now has `.ob-app-switcher-item-copy`
+     wrapping the label and `.ob-app-switcher-item-desc`.
+3. src/front/static/global/css/main.css
+   - Popover min-width `22rem`; taller rows; muted 0.72rem subtitle.
+4. tests/units/front/test_app_switcher_contract.py
+   - Asserts subtitle markup, copy stack, and wider menu.
+5. .cursor/11-frontend-design.mdc
+   - Documented title + subtitle rows and `description` from menu_config.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- tests/units/front/test_app_switcher_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10898 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Workspace Home pages for Context, Ontology, Graph, and Intelligence
+================================================================================
+
+Context: The Databricks-style L2 app switcher jumped into each workspace's
+previous default section (Configuration, General, Explorer, Scenarios). Each
+function now has a Home landing similar to the OntoBricks registry home:
+feature tiles with short explanations and Help Center links. The app switcher
+always opens those homes.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Added a default `home` sidebar item and `home_tiles` on Context,
+     Ontology, Graph, and Intelligence.
+2. src/front/templates/partials/layout/_workspace_home.html
+   - Shared landing: section header, white card, feature tiles, Help resources.
+3. src/front/templates/domain.html, ontology.html, dtwin.html, intelligence.html
+   - Host `#home-section` as the default active sidebar section.
+4. src/front/templates/base.html
+   - App switcher hrefs are `{route}?section=home`.
+5. src/front/static/global/css/main.css
+   - `.ob-workspace-home-*` tile and resource grid.
+6. src/front/static/global/js/sidebar-nav.js
+   - Tile clicks call `SidebarNav.switchTo`.
+7. src/front/static/global/js/help-modal.js
+   - Page-level `data-help-jump` opens the Help Center (docs deep-link).
+8. tests/units/front/test_workspace_home_contract.py
+   - Contracts for default Home, tiles, and app-switcher landing URLs.
+9. docs/user-guide.md, .cursor/11-frontend-design.mdc
+   - Documented workspace Home and app-switcher landing.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/_workspace_home.html
+- src/front/templates/domain.html
+- src/front/templates/ontology.html
+- src/front/templates/dtwin.html
+- src/front/templates/intelligence.html
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/global/js/help-modal.js
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_intelligence_page_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_section_content_white_panel.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sparql_playground_contract.py
+- docs/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10906 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Group workspace Home tiles by sidebar menu sections
+================================================================================
+
+Context: Workspace Home pages showed a flat feature-tile grid. Group tiles by
+the same sidebar menu sections (Governance, Metadata, Design, Navigation, …)
+so the landing mirrors the left nav.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Removed flat `home_tiles`; moved `description` / `help_jump` / `help_doc`
+     onto each sidebar menu item.
+2. src/front/templates/partials/layout/_workspace_home.html
+   - Renders one `.ob-workspace-home-group` per menu group (skips Home).
+3. src/front/static/global/css/main.css
+   - Group title styles; spacing only between groups and before resources
+     (no divider lines).
+   - Resources row (Starter Guide / User Guide / Workflow) pinned to the
+     bottom of the Home card (`margin-top: auto` in a flex card body).
+4. tests/units/front/test_workspace_home_contract.py
+   - Contracts assert group-driven markup and per-item descriptions.
+5. docs/user-guide.md, .cursor/11-frontend-design.mdc
+   - Documented grouped Home landings.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/_workspace_home.html
+- src/front/static/global/css/main.css
+- tests/units/front/test_workspace_home_contract.py
+- docs/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10906 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Add Settings as admin-only 5th app switcher with Home
+================================================================================
+
+Context: Admins needed Settings in the Databricks-style L2 app switcher, with
+the same Home landing pattern as Context / Ontology / Graph / Intelligence.
+Non-admins must not see Settings in the switcher.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Settings gets `description`, `admin_only`, a default `home` group, and
+     per-item `description` / help links.
+2. src/front/templates/settings.html
+   - Hosts `#home-section` as the default active section.
+3. src/front/templates/base.html
+   - Fifth app-switcher row for Settings (`?section=home`,
+     `data-requires-app="admin"`).
+4. src/front/templates/partials/layout/_workspace_home.html
+   - Home tiles honour `admin_only` via `data-requires-app="admin"`.
+5. src/front/static/global/css/permissions.css
+   - Restore flex display for admin-gated app-switcher items and home tiles.
+6. tests + docs / design notes updated for the fifth row and admin gate.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/settings.html
+- src/front/templates/base.html
+- src/front/templates/partials/layout/_workspace_home.html
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- docs/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10908 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Remove Settings gear from the top navbar
+================================================================================
+
+Context: Settings is now the admin-only fifth row of the L2 app switcher, so
+the top-right gear dropdown was redundant.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Removed `#settingsGearDropdown` and its dropdown menu.
+2. tests/units/front/test_backend_brand_icons.py,
+   test_clarity_design_contract.py, e2e navigation flows
+   - Contracts assert the gear is gone; Settings opens via route / app switcher.
+3. docs/user-guide.md, .cursor/11-frontend-design.mdc, tests/e2e/README.md
+   - Document Settings via the app switcher, not an L1 gear.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_backend_brand_icons.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_admin_only_domain_create.py
+- tests/e2e/navigation/test_navigation_flows.py
+- tests/e2e/README.md
+- docs/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10908 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Remove SQL Warehouse status icon from the top navbar
+================================================================================
+
+Context: The admin-only SQL Warehouse status icon in L1 duplicated the
+Settings configuration surface. Remove it from the top navbar.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Removed `#warehouseStatusLink` / `#warehouseStatusIcon` from the L1 navbar.
+2. src/front/static/global/js/navbar.js
+   - Removed `applyWarehouseIcon()` and its call in `loadNavbarState()`.
+3. src/front/static/global/css/components.css
+   - Removed `.ob-warehouse-status-icon`.
+4. src/front/config/menu_config.json
+   - Removed the `warehouse` entry from `utility_links`.
+5. tests/units/api/test_ui_rendering.py
+   - Contract asserts the warehouse icon is absent; Settings link check now
+     accepts the app-switcher `/settings` route.
+6. .cursor/11-frontend-design.mdc
+   - L1 utilities list no longer includes warehouse.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/components.css
+- src/front/config/menu_config.json
+- tests/units/api/test_ui_rendering.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10908 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Combine navbar tasks and notifications into one Activity panel
+================================================================================
+
+Context: The L1 navbar had two adjacent icons (hourglass for background
+tasks, bell for notifications). Combine them into a single Activity Center
+with one icon and one dropdown.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Replaced the two dropdowns with `#activityCenterToggle` (`bi-inboxes`)
+     and `#activityCenterDropdown` (tasks list above notifications list).
+2. src/front/static/global/js/utils.js
+   - Added `ActivityCenter` (toggle, combined badge, click-outside).
+3. src/front/static/global/js/task-tracker.js, base-ui-handlers.js
+   - Badge/toggle go through ActivityCenter; keep `#taskTrackerList`.
+4. src/front/static/global/css/components.css, pages.css
+   - `.activity-center-dropdown` styles; one round `#activityCenterBadge`.
+5. src/front/config/menu_config.json
+   - `utility_links` activity entry uses `bi-inboxes`.
+6. tests/units/front/test_activity_center_contract.py
+   - One icon, one panel, no leftover bell/hourglass toggles.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/utils.js
+- src/front/static/global/js/task-tracker.js
+- src/front/static/global/js/base-ui-handlers.js
+- src/front/static/global/css/components.css
+- src/front/static/global/css/pages.css
+- src/front/config/menu_config.json
+- tests/units/front/test_activity_center_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/api/test_ui_rendering.py
+- docs/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10910 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+## Databricks-style user avatar; Help and Report issue in user menu
+================================================================================
+
+Context: Match the Databricks workspace user control (circular initials
+avatar) and move Help + Report an issue into that dropdown so L1 stays
+leaner.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Replaced `bi-person-circle` with `.ob-user-avatar` initials from email.
+   - Moved `#helpCenterToggle` and `#navReportIssue` into `.ob-user-menu`.
+2. src/front/static/global/css/main.css
+   - `.ob-user-avatar` circle styles (primary fill, white initials).
+3. src/front/static/global/js/help-modal.js
+   - Closes the user dropdown before opening Help.
+4. tests + e2e help flows + design notes updated.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/help-modal.js
+- src/front/config/menu_config.json
+- tests/units/front/test_user_menu_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/ui/test_home_and_explorer_contracts.py
+- tests/e2e/help/test_help_modal_flows.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10912 passed, 334 skipped,
+  8 deselected, 0 failed.
+
+================================================================================
+Databricks-style page panel and page typography
+================================================================================
+
+Context
+-------
+Sidebar pages should look like Databricks product pages (e.g. Compute → AI
+Search): the title, subtitle and body sit together on one white, bordered
+panel, with Databricks page-title and description typography.
+
+Changes
+-------
+1. src/front/static/global/css/sidebar-layout.css — `.sidebar-section.active`
+   is now a white panel (`--db-surface-warm`, 1px `--db-border`,
+   `--db-radius-card`, `padding: var(--ob-page-padding)`); new
+   `--ob-page-padding: 0.75rem 1rem` token on `.sidebar-layout`; logs section
+   reuses the token; header gap to body 0.75rem, no top padding.
+2. src/front/static/global/css/main.css — `.section-header` titles use 22px /
+   600 / 28px line in `--db-text`, title icons 0.85em secondary; subtitles
+   13px in `--db-text-secondary`; header has no top padding.
+3. src/front/static/global/css/mapping.css, src/front/static/global/css/query.css,
+   src/front/static/ontology/css/ontology-map.css,
+   src/front/static/query/css/query-sigmagraph.css — full-height sections
+   (`#design-section`, `#graphql-section`, `#map-section`,
+   `#sigmagraph-section`) reuse `var(--ob-page-padding)`.
+4. .cursor/11-frontend-design.mdc, .claude/skills/frontend-design/SKILL.md —
+   Section Body Surface rewritten around the white page panel and typography.
+5. tests/units/front/test_databricks_page_panel_contract.py (new) — panel,
+   shared padding and typography contracts.
+6. tests/units/front/test_clarity_design_contract.py,
+   tests/units/front/test_ontology_split_panel_layout.py,
+   tests/units/front/test_sidebar_content_stretch_contract.py,
+   tests/units/front/test_section_content_white_panel.py — updated to the new
+   inset/gap rules and wording.
+
+Modified files
+--------------
+- .claude/skills/frontend-design/SKILL.md
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/main.css
+- src/front/static/global/css/mapping.css
+- src/front/static/global/css/query.css
+- src/front/static/global/css/sidebar-layout.css
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_databricks_page_panel_contract.py
+- tests/units/front/test_ontology_split_panel_layout.py
+- tests/units/front/test_section_content_white_panel.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10919 passed, 334 skipped,
+8 deselected, 0 failed.
+
+================================================================================
+Page panel: rounded top-left corner (Databricks style)
+================================================================================
+
+Context
+-------
+Databricks product pages round only the top-left corner of the content panel
+next to the sidebar. The OntoBricks page panel now does the same.
+
+Changes
+-------
+1. src/front/static/global/css/sidebar-layout.css — `.sidebar-section.active`
+   uses `border-radius: var(--ob-page-panel-radius) 0 0 0`; new token
+   `--ob-page-panel-radius: 0.5rem` on `.sidebar-layout`.
+2. tests/units/front/test_databricks_page_panel_contract.py — asserts the
+   top-left-only radius and the new token.
+3. .cursor/11-frontend-design.mdc — panel description updated.
+
+Modified files
+--------------
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_databricks_page_panel_contract.py
+- .cursor/11-frontend-design.mdc
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10919 passed, 334 skipped,
+8 deselected, 0 failed.
+
+================================================================================
+Databricks-style tabs
+================================================================================
+
+Context
+-------
+Align the shared tab rail with Databricks product tabs (e.g. Compute → AI
+Search): left-aligned 13px labels, underline as wide as the label, no hover
+fill, dark active label over a 3px primary underline.
+
+Changes
+-------
+1. src/front/static/global/css/components.css — `.nav-tabs.ob-tabs`: rail
+   `gap: 1.5rem`; links 0.8125rem / 1.25rem line, `padding: 0.5rem 0`,
+   3px transparent bottom border; hover recolours the label to
+   `--db-primary` with a transparent background; active uses `--db-text` +
+   3px `--db-primary` underline; focus outline offset 2px; compact density
+   `0.35rem 0` with a 1rem gap; rails flush with a card edge
+   (`.card >`, `.card-header >`, `.card-body.p-0 >`, `.ob-tabs-wrap >`) get
+   `padding-inline: 1rem`.
+2. src/front/static/global/css/main.css — Bootstrap `.nav-tabs` fallback
+   mirrors the same typography, spacing, hover and active colours.
+3. .cursor/11-frontend-design.mdc — Tabs section and density catalogue
+   rewritten for the Databricks treatment.
+4. tests/units/front/test_clarity_design_contract.py,
+   tests/units/front/test_ontology_split_panel_layout.py — contracts updated
+   (active colour, hover without fill, focus offset, densities, gap).
+
+Modified files
+--------------
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_ontology_split_panel_layout.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10919 passed, 334 skipped,
+8 deselected, 0 failed.
+
+================================================================================
+Remove global borders for tabs (Databricks style)
+================================================================================
+
+Context
+-------
+In Databricks product pages, tabs sit directly on the page panel surface
+without an enclosing card border or an edge-to-edge baseline border across the
+tab rail. All global borders for tabs have been removed.
+
+Changes
+-------
+1. src/front/static/global/css/components.css — `.nav-tabs.ob-tabs`: removed
+   `border-bottom: 1px solid var(--db-border)`; card-integrated tab workspaces
+   (`.sidebar-section > .content-section > .card:has(.ob-tabs-wrap)`,
+   `.card.ob-tabs-wrap`, etc.) now have `border: none`, `background: transparent`,
+   `box-shadow: none`; removed artificial `padding-inline` on `.ob-tabs`.
+2. src/front/static/global/css/main.css — `.nav-tabs`: removed global
+   `border-bottom`.
+3. .cursor/11-frontend-design.mdc — updated tab section and card-integrated
+   tab documentation.
+4. tests/units/front/test_clarity_design_contract.py,
+   tests/units/front/test_databricks_page_panel_contract.py — updated tab
+   strip contract and added test for borderless tab workspaces.
+
+Modified files
+--------------
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_databricks_page_panel_contract.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10920 passed, 334 skipped,
+8 deselected, 0 failed.
+
+================================================================================
+Workspace Home tiles: Databricks MCP card style
+================================================================================
+
+Context
+-------
+Workspace Home pages (Context, Ontology, Graph, Intelligence, Settings) now
+render their feature tiles like the Databricks MCP server cards (Agents → MCP).
+
+Changes
+-------
+1. src/front/templates/partials/layout/_workspace_home.html — tile markup
+   restructured: `.ob-workspace-home-tile-head` row (icon chip + title), then
+   the description; trailing arrow icon removed.
+2. src/front/static/global/css/main.css — tiles stack vertically with 1rem
+   padding, 1px border, 0.5rem radius (`--ob-home-card-radius`) and a soft
+   hover shadow; icon chip is a 2rem bordered light square; title 14px
+   semibold, description 13px secondary; group titles 15px semibold dark
+   (no uppercase); the Home body drops its enclosing card frame and padding;
+   the resources row reuses the same card style.
+3. tests/units/front/test_workspace_home_contract.py — new contract for the
+   MCP card structure and styles.
+4. .cursor/11-frontend-design.mdc — Workspace Home tile style documented.
+
+Modified files
+--------------
+- .cursor/11-frontend-design.mdc
+- src/front/static/global/css/main.css
+- src/front/templates/partials/layout/_workspace_home.html
+- tests/units/front/test_workspace_home_contract.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10921 passed, 334 skipped,
+8 deselected, 0 failed.
+
+================================================================================
+Context → General: progressive per-section load with spinners
+================================================================================
+
+Context
+-------
+Context → General (cockpit) used a full-page overlay that waited for the
+entire `/validate/detailed` payload (including live UC document listing and
+Lakebase graph checks). Ontology and mapping tiles stayed blank until that
+finished. The page now loads by section with per-section spinners.
+
+Changes
+-------
+1. src/back/objects/domain/HomeService.py — `get_detailed_validation` accepts
+   `parts` (overview / documents / graph / all); overview is in-session only;
+   documents and graph keep their live I/O; helpers
+   `_normalize_validation_parts`, `_build_validation_overview`,
+   `_build_validation_graph_detail`, `_ontology_warnings`.
+2. src/api/routers/internal/home.py — `/validate/detailed?parts=` query param
+   (400 on unknown parts).
+3. src/front/static/domain/js/domain-validation.js — parallel fetches for
+   overview, documents and graph; apply each slice as it arrives; remove the
+   full-page overlay hand-off.
+4. src/front/templates/partials/domain/_domain_validation.html — remove
+   `validationLoadingOverlay`; add per-section spinners
+   (`validationAssetsSpinner`, `validationOntologySpinner`,
+   `validationMappingSpinner`, `validationGraphSpinner`,
+   `domainHealthBannerSpinner`).
+5. src/front/static/domain/css/domain-validation.css — section spinner styles.
+6. tests/units/front/test_validation_progressive_load.py (new),
+   tests/units/domain/test_home_service.py — overview skips live I/O;
+   tests/units/architecture/baseline.json — ratcheted after the split.
+7. docs/user-guide.md — General page progressive-load note.
+
+Modified files
+--------------
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- docs/user-guide.md
+- src/api/routers/internal/home.py
+- src/back/objects/domain/HomeService.py
+- src/front/static/domain/css/domain-validation.css
+- src/front/static/domain/js/domain-validation.js
+- src/front/templates/partials/domain/_domain_validation.html
+- tests/units/architecture/baseline.json
+- tests/units/domain/test_home_service.py
+- tests/units/front/test_validation_progressive_load.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped,
+8 deselected, 0 failed.
+
+================================================================================
+UI refinement: App switcher rounded boxes & Review/Validation load speed
+================================================================================
+
+Context
+-------
+1. App switcher (level 2 navbar right) updated with Databricks-style rounded
+   boxes for the popover menu, row items, and icon chips.
+2. Context → General validation dashboard uses spinners inside each box rather
+   than overlay masks on top of sections.
+3. Context → Review page load accelerated: `loadReadiness()` queries in-session
+   overview (`/validate/detailed?parts=overview`) instantly and loads graph
+   check in background; `ReviewService` avoids duplicate cloud reads of the
+   version document.
+
+Changes
+-------
+1. src/front/static/global/css/main.css — `.ob-app-switcher-menu`,
+   `.ob-app-switcher-item`, `.ob-app-switcher-item-icon`, and
+   `.ob-subnav-app-switcher` updated to `0.5rem` / `0.375rem` rounded boxes with
+   1px border on icon chips.
+2. src/front/templates/partials/domain/_domain_validation.html,
+   src/front/static/domain/css/domain-validation.css,
+   src/front/static/domain/js/domain-validation.js — section overlay masks
+   removed; spinners placed inside each card and tile box.
+3. src/front/static/domain/js/domain-review.js — `loadReadiness()` uses
+   `parts=overview` for immediate rendering; graph status resolves in background.
+4. src/back/objects/registry/collab/ReviewService.py — pass `data` from
+   `_load()` into `_has_ontology()` to eliminate duplicate cloud read.
+5. tests/units/front/test_app_switcher_contract.py,
+   tests/units/front/test_validation_progressive_load.py — contracts updated.
+
+Modified files
+--------------
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/back/objects/registry/collab/ReviewService.py
+- src/front/static/domain/css/domain-validation.css
+- src/front/static/domain/js/domain-review.js
+- src/front/static/domain/js/domain-validation.js
+- src/front/static/global/css/main.css
+- src/front/templates/partials/domain/_domain_validation.html
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_validation_progressive_load.py
+
+Test result
+-----------
+uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped,
+8 deselected, 0 failed.
+
+## Merge L1 into unified chrome bar
+
+Context: Collapse the former top navbar (L1) and contextual subnav (L2) into
+one always-visible `#obSubnav` bar. Left: sidebar toggle + OntoBricks brand.
+Right: Context & version → Close/Save → app switcher → Activity → User. Keep
+the former L2 look (transparent over canvas grey, no bottom border) and add
+slightly more spacing between right-side controls.
+
+Changes:
+
+1. src/front/templates/base.html
+   Single `#obSubnav` chrome; brand/Activity/User moved in; right-side order
+   Context → Close/Save → switcher → Activity → User; L1 menus removed.
+2. src/front/static/global/css/main.css
+   Transparent borderless bar (override Bootstrap `.navbar` white); brand and
+   utility link styles; right-side item spacing after the flex spacer.
+3. src/front/static/global/js/navbar.js
+   Bar always visible; only domain chrome / settings return toggle.
+4. src/front/static/global/js/breadcrumb.js
+   `--ob-chrome-height` measures `#obSubnav` only.
+5. src/front/static/global/js/base-ui-handlers.js
+   Comment updated for unified chrome action delegation.
+6. .cursor/11-frontend-design.mdc, docs/user-guide.md
+   Document unified chrome layout and Settings/Home return behavior.
+7. tests/units/front/*, tests/units/ui/*, tests/e2e/navigation/*
+   Contracts updated for single-bar order, transparent surface, and chrome height.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- docs/user-guide.md
+- src/front/static/global/css/main.css
+- src/front/static/global/js/base-ui-handlers.js
+- src/front/static/global/js/breadcrumb.js
+- src/front/static/global/js/navbar.js
+- src/front/templates/base.html
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+- tests/units/front/test_app_switcher_contract.py
+- tests/units/front/test_backend_brand_icons.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_settings_subnav_hidden.py
+- tests/units/front/test_workspace_home_contract.py
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped, 8 deselected, 0 failed in 49.79s
+
+## Back to Context link aligned right of sidebar, untruncated
+
+Context: On Settings the "Back to {context} V{n}" link was a fixed 200px chip
+after the brand, so long names were ellipsized and it did not line up with the
+content column. It now starts right of the sidebar column (aligned with the
+content panel) and shows the full label. Home has no sidebar and keeps the link
+inline after the brand.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   `.ob-subnav-settings-return-link` uses natural width with `nowrap` (no
+   ellipsis). Desktop rule anchors `#settingsDomainReturnNav` at
+   `left: calc(var(--ob-sidebar-width, 200px) + 0.5rem)` when the page has a
+   `.sidebar-layout`.
+2. src/front/static/global/css/sidebar-layout.css
+   Defines `--ob-sidebar-width` (200px; 48px when `ob-sidebar-collapsed`) on
+   pages with a sidebar.
+3. tests/units/front/test_settings_subnav_hidden.py
+   Contracts updated for natural width, nowrap label, sidebar-column anchor and
+   collapsed width variable.
+4. .cursor/11-frontend-design.mdc
+   Documents the return-link placement and no-truncation rule.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_settings_subnav_hidden.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10926 passed, 334 skipped, 8 deselected, 0 failed in 49.51s
+
+## Databricks Jobs-style run lists
+
+Context: Run history pages (Graph → Build → Runs, Intelligence → Analytics →
+Runs, Settings → Automation → Runs) used grey-header Bootstrap tables with
+filled status pills and outline eye buttons. They now follow the Databricks
+Jobs → Runs list: flat table, start time first as a link, icon + word status,
+ghost details control, and a run-count toolbar.
+
+Changes:
+
+1. src/front/static/global/js/runs-render.js
+   Added `runStatus` (Succeeded / Failed / Running / Canceled / Pending),
+   `timeLink`, `versionText`, `durationOrDash`; every row builder leads with a
+   start-time link and uses icon + word status; ghost details button; build
+   rows gain a Duration column. Modal badges unchanged.
+2. src/front/templates/partials/domain/_domain_build_runs.html,
+   src/front/templates/partials/domain/_domain_analytics_runs.html
+   `.ob-runs-toolbar` with run count; `.ob-runs-table` with sentence-case
+   headers (Start time first), no grey band or inline widths.
+3. src/front/templates/partials/settings/_settings_runs.html
+   Same table style for the five cross-context run tabs.
+4. src/front/static/domain/js/domain-runs.js
+   Fills `#runsCount` / `#analyticsRunsCount`.
+5. src/front/static/global/css/components.css, src/front/static/global/css/main.css
+   New shared run-list component (`.ob-runs-*`, `.ob-run-*`) and `--db-link`
+   / `--db-link-hover` tokens.
+6. .cursor/11-frontend-design.mdc
+   New "Run Lists" section.
+7. tests/units/front/test_databricks_runs_list_contract.py
+   New contract for the run-list style across all seven tables.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/js/domain-runs.js
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- src/front/static/global/js/runs-render.js
+- src/front/templates/partials/domain/_domain_analytics_runs.html
+- src/front/templates/partials/domain/_domain_build_runs.html
+- src/front/templates/partials/settings/_settings_runs.html
+- tests/units/front/test_databricks_runs_list_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10936 passed, 334 skipped, 8 deselected, 0 failed in 52.70s
+
+================================================================================
+## Databricks tab header baseline line and removal of inner card box under page titles
+================================================================================
+
+Context:
+1. Under section headers (`.sidebar-section > .content-section`), pages such as
+   Versions and Review displayed an inner bordered card box around their
+   workspace content. Because the active sidebar section is already the white
+   Databricks-style page panel with its own border, top-level cards directly
+   under the section header now have `border: none; background: transparent;
+   box-shadow: none;` so contents sit seamlessly on the panel without an inner box.
+2. Tabs across the application lacked the Databricks Computes / product tabs
+   header baseline line. The tab rail (`.nav-tabs.ob-tabs`, `.nav-tabs`) now
+   features a continuous `border-bottom: 1px solid var(--db-border); width: 100%;`,
+   and tab items use `margin-bottom: -1px;` so the active primary underline sits
+   directly on top of the baseline border.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   - Added `border-bottom: 1px solid var(--db-border); width: 100%; margin-right: 0;`
+     to `.nav-tabs.ob-tabs`.
+   - Added `margin-bottom: -1px;` to `.nav-tabs.ob-tabs .nav-link`.
+   - Removed borders from all top-level workspace cards directly under
+     `.sidebar-section > .content-section` (`.card`, `form.card`).
+2. src/front/static/global/css/main.css
+   - Added `border-bottom: 1px solid var(--db-border); width: 100%; margin-right: 0;`
+     to `.nav-tabs`.
+   - Added `margin-bottom: -1px;` to `.nav-tabs .nav-link`.
+3. src/front/static/global/css/sidebar-layout.css
+   - Set `border: none; background: transparent; box-shadow: none;` on
+     `.sidebar-section > .content-section > .card` and
+     `.sidebar-section > .content-section > form.card`.
+4. src/front/static/domain/css/domain-versions.css
+   - Set `border: none; background: transparent; box-shadow: none;` on
+     `.dm-versions-workspace`.
+5. .cursor/11-frontend-design.mdc
+   - Updated tab documentation to specify the Databricks baseline header line
+     (`border-bottom: 1px solid var(--db-border)`).
+   - Documented that top-level workspace cards under the section header have no
+     enclosing border or box.
+6. tests/units/front/test_clarity_design_contract.py,
+   tests/units/front/test_databricks_page_panel_contract.py,
+   tests/units/front/test_domain_versions_cards.py
+   - Updated and added unit contracts to assert the 1px header baseline border
+     on `.nav-tabs.ob-tabs` / `.nav-tabs` and the borderless workspace card.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/css/domain-versions.css
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_databricks_page_panel_contract.py
+- tests/units/front/test_domain_versions_cards.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10937 passed, 334 skipped, 8 deselected, 0 failed in 49.65s
+
+================================================================================
+## Align Settings "Back to context" link on the right before Activity
+================================================================================
+
+Context: In Settings, the "Back to context" link (`#settingsDomainReturnNav`) was
+previously absolutely positioned right after the left sidebar column. It is now
+aligned on the right side of the chrome bar immediately before the Activity
+Center dropdown, in natural flex order after the flex spacer.
+
+Changes:
+
+1. src/front/templates/base.html
+   - Moved `<li id="settingsDomainReturnNav">` after the flex-spacer and app
+     switcher, positioned directly before the Activity Center dropdown item.
+2. src/front/static/global/css/main.css
+   - Removed the `@media (min-width: 768px)` rule that absolutely positioned
+     `#settingsDomainReturnNav` left of the content panel. It now flows naturally
+     on the right.
+3. .cursor/11-frontend-design.mdc
+   - Updated chrome layout specification to reflect that `#settingsDomainReturnNav`
+     sits on the right immediately preceding Activity Center.
+4. tests/units/front/test_settings_subnav_hidden.py
+   - Updated unit test `test_settings_return_link_aligned_on_right_before_activity`
+     to assert natural flow on the right before `#activityCenterToggle`.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/main.css
+- src/front/templates/base.html
+- tests/units/front/test_settings_subnav_hidden.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10937 passed, 334 skipped, 8 deselected, 0 failed in 50.18s
+
+
+
+
+## Documents tab: remove "Upload Documents" card box
+
+Context:
+The domain Documents section (`/domain/?section=documents`) wrapped the upload
+area in a bordered card with a "Upload Documents" header. Requested to drop the
+visual box and title while keeping the upload content.
+
+Changes:
+1. src/front/templates/partials/domain/_domain_documents.html
+   - Replaced the upload `card mb-4` wrapper with a plain `mb-4` block.
+   - Removed the upload card header (`card-header` with "Upload Documents").
+   - Removed the `card-body` padding wrapper around the upload content.
+   - The "Parsed Documents" card is unchanged.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/templates/partials/domain/_domain_documents.html
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10937 passed, 334 skipped, 8 deselected, 0 failed in 49.77s
+
+
+## Documents tab: remove intro paragraph above upload area
+
+Context:
+Following the removal of the "Upload Documents" card, the explanatory sentence
+"Upload files to this context's documents. The context must be saved to the
+registry first." was still shown at the top of the upload area. Requested to
+remove it.
+
+Changes:
+1. src/front/templates/partials/domain/_domain_documents.html
+   - Removed the `<p class="text-muted mb-3">` intro paragraph at the top of
+     the upload block.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/templates/partials/domain/_domain_documents.html
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10937 passed, 334 skipped, 8 deselected, 0 failed in 48.82s
+
+
+## My Tasks: Databricks Query History style list
+
+Context:
+Context → My Tasks (`/domain/?section=mytasks`) showed two separate tables
+("Assigned to me" and "Review worklist") with uppercase captions and filled
+status badges. Requested to align it with the Databricks SQL → Query History
+page: a filter bar above a single flat, hoverable list.
+
+Changes:
+1. src/front/templates/partials/domain/_domain_mytasks.html
+   - Added a filter bar (`.ob-tasks-filters`) inside the section card: search
+     input (`#domainTasksSearch`), Type and Status dropdown filter buttons
+     (`#domainTasksTypeFilter`, `#domainTasksStatusFilter`) and a task count
+     (`#domainTasksCount`).
+2. src/front/static/domain/js/domain-collaboration.js
+   - Normalised assigned tasks and review worklist items into one row model
+     (`assignedRow`, `reviewRow`), sorted by last update.
+   - Added client-side filtering (`applyTaskFilters`, `initTaskFilters`) by
+     text, type and status, with "N tasks" / "N of M tasks" count and a
+     no-match empty state.
+   - Render a single `table-hover ob-runs-table ob-tasks-table` with columns
+     Status, Task, Context, Type, From, Updated, Due, actions; review titles
+     are links opening the review.
+   - Replaced the filled badges (`taskStatusBadge`, `statusBadge`) with one
+     icon + word status (`taskStatus`, `.ob-run-status.is-*`); row actions
+     are `btn-outline-secondary`.
+   - Removed `assignedHtml` / `reviewHtml`.
+3. src/front/static/domain/css/domain-collaboration.css
+   - Added `.ob-tasks-filters`, `.ob-tasks-search`, `.ob-tasks-filter-btn`
+     (with `.is-active`), `.ob-tasks-title`, `.ob-tasks-meta`.
+4. .cursor/11-frontend-design.mdc
+   - Documented the "Work Lists (Query History style)" pattern.
+5. tests/units/front/test_domain_mytasks_query_history.py
+   - New contracts for the filter bar, single flat table, icon + word status,
+     client-side filtering and CSS location.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/css/domain-collaboration.css
+- src/front/static/domain/js/domain-collaboration.js
+- src/front/templates/partials/domain/_domain_mytasks.html
+- tests/units/front/test_domain_mytasks_query_history.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10943 passed, 334 skipped, 8 deselected, 0 failed in 51.76s
+
+
+## My Tasks: compact row height
+
+Context:
+The My Tasks rows inherited the Runs list padding, which made the rows taller
+than needed. Requested to reduce row height.
+
+Changes:
+1. src/front/static/domain/css/domain-collaboration.css
+   - Added `.ob-tasks-table` header padding (0.35rem vertical).
+   - Added `.ob-tasks-table > tbody > tr > td` padding (0.3rem vertical) and
+     `line-height: 1.3`.
+   - Added `.ob-tasks-table .btn-sm` vertical padding (0.05rem) and
+     `line-height: 1.4` so row buttons no longer force taller rows.
+2. tests/units/front/test_domain_mytasks_query_history.py
+   - Added `test_task_rows_are_compact` asserting the compact cell padding.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/css/domain-collaboration.css
+- tests/units/front/test_domain_mytasks_query_history.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10944 passed, 334 skipped, 8 deselected, 0 failed in 49.93s
+
+
+## Work-list template: shared filter bar and compact table across the app
+
+Context:
+The My Tasks restyle (filter bar + flat compact table) is now the app-wide
+template for flat work lists. The filter bar, compact rows and status styles
+were moved from the My Tasks page into the shared stylesheet, and the Build
+and Analytics run lists and the Home My Tasks tile were moved onto the same
+template. The Discussions timeline is a timeline, not a table, so it keeps
+its own layout.
+
+Changes:
+1. src/front/static/global/css/components.css
+   - Added the shared `.ob-filter-bar`, `.ob-filter-search`, `.ob-filter-btn`
+     (incl. `.is-active`) styles, moved from `domain-collaboration.css`.
+   - Compacted `.ob-runs-table` rows: header padding `0.35rem 0.75rem`, body
+     padding `0.3rem 0.75rem` with `line-height: 1.3`; `.ob-runs-table .btn-sm`
+     uses tighter vertical padding.
+   - Removed the unused `.ob-runs-toolbar` rule.
+2. src/front/static/domain/css/domain-collaboration.css
+   - Removed the My Tasks copies of the filter bar and compact table rules;
+     only `.ob-tasks-title` and `.ob-tasks-meta` remain.
+3. src/front/templates/partials/domain/_domain_mytasks.html
+   - Renamed filter classes to the shared `ob-filter-*` names.
+4. src/front/static/domain/js/domain-collaboration.js
+   - Renamed the filter-value selector to `.ob-filter-value`.
+5. src/front/static/global/js/list-filter.js (new)
+   - `window.ObListFilter.bind(input, tbody, countEl, noun)`: free-text filter
+     over table rows, with "N runs" / "N of M runs" count.
+6. src/front/templates/partials/domain/_domain_build_runs.html
+7. src/front/templates/partials/domain/_domain_analytics_runs.html
+   - Replaced `.ob-runs-toolbar` with `.ob-filter-bar`: search input
+     (`#runsFilter`, `#analyticsRunsFilter`), count, and Refresh on the right
+     (`ms-auto`).
+8. src/front/static/domain/js/domain-runs.js
+   - Bound both run-list filters lazily and re-applied them after each render;
+     the count is now filter-aware.
+9. src/front/templates/domain.html, intelligence.html, dtwin.html
+   - Load `global/js/list-filter.js` before `domain/js/domain-runs.js`.
+10. src/front/static/home/js/home-tasks.js
+    - Home My Tasks tables use `table table-hover align-middle ob-runs-table`.
+11. src/front/static/registry/css/registry-my-tasks.css
+    - Removed the `.my-tasks-table` overrides (uppercase headers); kept the
+      approvals and empty-state helpers.
+12. .cursor/11-frontend-design.mdc
+    - Documented the Work-List Template as the app-wide pattern.
+13. tests/units/front/test_domain_mytasks_query_history.py
+    - Rewritten contracts for the shared classes, compact rows, the list
+      filter helper, run-list wiring, script load order and the Home tile.
+14. tests/units/front/test_databricks_runs_list_contract.py
+    - Toolbar contract now targets `.ob-filter-bar` and checks the run count
+      sits before the Refresh button.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/css/domain-collaboration.css
+- src/front/static/domain/js/domain-collaboration.js
+- src/front/static/domain/js/domain-runs.js
+- src/front/static/global/css/components.css
+- src/front/static/global/js/list-filter.js
+- src/front/static/home/js/home-tasks.js
+- src/front/static/registry/css/registry-my-tasks.css
+- src/front/templates/domain.html
+- src/front/templates/dtwin.html
+- src/front/templates/intelligence.html
+- src/front/templates/partials/domain/_domain_analytics_runs.html
+- src/front/templates/partials/domain/_domain_build_runs.html
+- src/front/templates/partials/domain/_domain_mytasks.html
+- tests/units/front/test_databricks_runs_list_contract.py
+- tests/units/front/test_domain_mytasks_query_history.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10950 passed, 334 skipped, 8 deselected, 0 failed in 49.29s
+
+## Indent Explorer right pane tab header
+
+Context: In the Graph Explorer (`/dtwin/?section=sigmagraph`), the right pane's
+compact tab strip (`.sg-panel-tabs`) was flush against the card's left border
+with 0px padding, making the leading "Details" tab touch the panel's left edge.
+Added `padding: 0 1rem` to inset the tabs so the "Details" tab aligns neatly
+with the `p-3` (1rem) inner tab content below it.
+
+Changes:
+
+1. src/front/static/query/css/query-sigmagraph.css
+   Added `padding: 0 1rem` to `#sigmagraph-section .sg-panel-tabs, .sg-panel-tabs`
+   so the tabs are inset 1rem from the panel's edges while keeping the baseline
+   border spanning the full card width.
+2. tests/units/front/test_clarity_design_contract.py
+   Updated `test_sigmagraph_panel_uses_the_shared_compact_tab_rail` to assert
+   horizontal 1rem padding on `.sg-panel-tabs`.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_clarity_design_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10950 passed, 334 skipped, 8 deselected, 0 failed in 49.70s
+
+## Remove borders for tabs on GraphQL/Query page
+
+Context: On the Graph Query page (`/dtwin/?section=graphql`), the enclosing
+card (`.query-card-fill`) rendered a Bootstrap card frame and border around the
+GraphQL / SPARQL tabs, and the tab rail had a baseline border. Removed both
+borders so the tabs float cleanly and borderless directly on the white page
+panel surface, matching Databricks style.
+
+Changes:
+
+1. src/front/static/query/css/query-sparql.css
+   Added `border: none; background: transparent; box-shadow: none;` to
+   `#graphql-section .query-card-fill` and `border: none !important; border-bottom: none !important;`
+   to `#graphql-section .query-language-tabs`.
+2. src/front/static/global/css/components.css
+   Extended the card-integrated borderless rule to include
+   `.sidebar-section > .card:has(.nav-tabs.ob-tabs)` and
+   `.sidebar-section > .card.query-card-fill`.
+3. tests/units/front/test_query_language_tabs_style.py
+   Added `test_query_language_tabs_and_card_have_no_border` contract test.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/components.css
+- src/front/static/query/css/query-sparql.css
+- tests/units/front/test_query_language_tabs_style.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10951 passed, 334 skipped, 8 deselected, 0 failed in 50.37s
+
+## Remove borders for Graph Chat panel
+
+Context: Same Databricks borderless treatment as Graph → Query. The Graph Chat
+panel (`/dtwin/?section=chat`) sat in a Bootstrap `.card` frame; it now sits
+flush on the white page panel with no border, background or shadow.
+
+Changes:
+
+1. src/front/static/query/css/query-chat.css
+   Added `#chat-section .graph-chat-container { border: none; background:
+   transparent; box-shadow: none; }` (scoped so bare `.graph-chat-container`
+   still does not override shared `.card` chrome).
+2. src/front/static/global/css/components.css
+   Included `.sidebar-section > .card.graph-chat-container` in the card-
+   integrated borderless rule.
+3. tests/units/front/test_button_design_contract.py
+   Asserts the scoped borderless rule under `#chat-section`.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/components.css
+- src/front/static/query/css/query-chat.css
+- tests/units/front/test_button_design_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10951 passed, 334 skipped, 8 deselected, 0 failed in 49.83s
+
+## Remove alert background and border from Settings Lakebase spinner
+
+Context: In Settings → Lakebase (`/settings?section=lakebase`), the loading
+indicator for "Loading Lakebase settings…" was rendered inside an
+`alert alert-light border` box, drawing a colored background and border box on
+the page panel surface. Removed the alert and border classes (and similarly for
+Delta and Neo4j loading banners) so the spinner and text float cleanly on the
+panel without an enclosing box.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Removed `alert alert-light border` from `#lakebaseSectionBanner`,
+   `#deltaSectionBanner`, and `#neo4jSectionBanner`.
+2. tests/units/front/test_settings_lakebase_sync_defaults.py
+   Added `test_lakebase_loading_banner_has_no_alert_background_or_border` test.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/templates/settings.html
+- tests/units/front/test_settings_lakebase_sync_defaults.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10952 passed, 334 skipped, 8 deselected, 0 failed in 50.56s
+
+## Remove alert background and border from Delta and Teams spinners
+
+Context: In Settings → Delta (`/settings?section=delta`) and Settings → Teams
+(`/settings?section=teams`), spinners were displayed with enclosing borders and
+backgrounds (alert box for Delta; white bordered container for Teams). Removed
+the alert/border styling from Delta's banner and made the Teams matrix container
+borderless and transparent while loading so both spinners float cleanly directly
+on the page panel surface without an enclosing box.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Cleaned `#deltaSectionBanner` to be borderless and transparent without
+   `alert alert-light border`.
+2. src/front/templates/partials/settings/_settings_teams.html
+   Updated `#teamsMatrixContainer` loading markup with `.is-loading` and
+   centered flex layout.
+3. src/front/static/registry/css/registry-teams.css
+   Added `.teams-matrix-wrapper.is-loading, .teams-matrix-wrapper:has(.spinner-border)`
+   with `border: none; background: transparent;`.
+4. src/front/static/registry/js/registry-teams.js
+   Toggles `.is-loading` on `#teamsMatrixContainer` during `loadMatrix()`,
+   removing it upon completion or error.
+5. tests/units/front/test_settings_lakebase_sync_defaults.py
+   Added `test_teams_loading_spinner_has_no_border_or_background` test.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/registry/css/registry-teams.css
+- src/front/static/registry/js/registry-teams.js
+- src/front/templates/partials/settings/_settings_teams.html
+- src/front/templates/settings.html
+- tests/units/front/test_settings_lakebase_sync_defaults.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10953 passed, 334 skipped, 8 deselected, 0 failed in 50.30s
+
+## Settings → Locks list uses the shared flat list style
+
+Context: the Settings → Locks table still used the Bootstrap grey-header
+`table-sm` style, unlike the Databricks-style run lists. The user asked for
+the usual list style on `http://localhost:8000/settings?section=locks`.
+
+Changes:
+
+1. src/front/static/config/js/settings-locks.js
+   `renderLocks()` now renders `<table class="table table-hover align-middle ob-runs-table">`
+   with a plain `<thead>` (no `table-sm`, no `table-light`), matching the
+   shared `.ob-runs-table` list used by the run lists.
+2. tests/units/front/test_databricks_runs_list_contract.py
+   Added `test_settings_locks_list_uses_the_shared_list_style`.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/config/js/settings-locks.js
+- tests/units/front/test_databricks_runs_list_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10956 passed, 334 skipped, 8 deselected, 0 failed in 51.89s
+
+## Remove obsolete documents/volume block from Settings → Registry
+
+Context: In Settings → Registry (`/settings?section=registry`), a section card
+was dedicated to "Unity Catalog Volume — binary context document uploads". Since
+context documents are persisted in Lakebase (`domain_documents` table) and
+parsed Volume-free, the UC Volume block and mentions of `documents/` uploads
+are no longer necessary and have been removed.
+
+Changes:
+
+1. src/front/templates/partials/registry/_registry_configuration.html
+   - Removed the obsolete Unity Catalog Volume card (`#registryVolumeLabel`,
+     `#registryVolumeCheckBadge`, `#registryVolumeCheckDetail`) describing
+     binary document uploads.
+   - Updated the section header and label from "Registry Catalog & Volume" to
+     "Registry Catalog Schema".
+   - Cleaned up the migration alert note referencing volume-based documents.
+2. src/front/static/config/js/settings-registry-configuration.js
+   - Removed badge reset and probe handling for `#registryVolumeCheckBadge`
+     and `#registryVolumeCheckDetail`.
+   - Updated `ucOk` validation to evaluate schema accessibility without volume.
+3. src/front/static/registry/js/registry.js
+   - Updated `updateRegistryLabel()` to guard `#registryVolumeLabel` cleanly
+     when absent from the DOM.
+4. tests/units/front/test_settings_registry_documents_removed.py
+   - Added contract tests asserting the absence of volume/documents elements
+     and verifying core UC schema and Lakebase elements remain intact.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/config/js/settings-registry-configuration.js
+- src/front/static/registry/js/registry.js
+- src/front/templates/partials/registry/_registry_configuration.html
+- tests/units/front/test_settings_registry_documents_removed.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10956 passed, 334 skipped, 8 deselected, 0 failed in 52.67s
+
+
+## Collapsed sidebar narrower (48px → 40px)
+
+Context: the collapsed sidebar rail felt too wide. Reduced the collapsed
+width so the icon rail takes less horizontal space.
+
+Changes:
+
+1. src/front/static/global/css/sidebar-layout.css
+   `html.ob-sidebar-collapsed .sidebar-nav, .sidebar-nav.collapsed` width and
+   min-width 48px → 40px; `html.ob-sidebar-collapsed:has(.sidebar-layout)`
+   `--ob-sidebar-width` 48px → 40px (drives the Back-to-context offset).
+2. tests/units/front/test_clarity_design_contract.py
+   Geometry token assertions updated to 40px.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10956 passed, 334 skipped, 8 deselected, 0 failed in 50.42s
+
+## Studio View left-alignment, Group controls joined, and sidebar toggle icon left-alignment
+
+Context: In the Ontology Studio map (`/ontology/?section=map`), the View dropdown
+toggle centered its text ("All" or view name); the Groups dropdown and Expand/collapse
+toggle were in separate button groups with a gap between them. Additionally, the
+L2 sidebar collapse/expand icon was centered over the 36px toggle button, landing
+slightly to the right of the sidebar icons column below it.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_map.html
+   - Added `.text-start` to `#studioViewBtn` and `#studioViewName`.
+   - Merged `#studioGroupsBtn` and `#studioToggleAllGroupsBtn` into a single
+     `.btn-group btn-group-sm` so they stick together with joined borders and zero gap.
+2. src/front/static/ontology/css/ontology-map.css
+   - Styled `.studio-view-toggle` with `display: inline-flex; align-items: center; justify-content: space-between; text-align: left;`.
+   - Added `min-width: 0; text-align: left; margin-right: 0.25rem;` on `.studio-view-toggle-name`
+     to keep "All" or selected views left-aligned with the caret on the right edge.
+3. src/front/static/global/css/main.css
+   - Left-aligned the L2 collapse/expand toggle icon (`#obSidebarToggle i`) with the
+     sidebar nav icon column in both expanded (~19px) and collapsed (~15.5px) states:
+     - Expanded: `.ob-subnav-sidebar-toggle-item` `margin-left: 0.25rem`, `.ob-subnav-sidebar-toggle` `padding-left: calc(0.5rem + 3px)` with `width: 20px; text-align: center;` on the icon.
+     - Collapsed: `html.ob-sidebar-collapsed .ob-subnav-sidebar-toggle` sets `width: 32px; padding: 0; justify-content: center; border-left: 3px solid transparent;`, matching the 32px centered icon rail of `.sidebar-nav.collapsed .nav-link` exactly.
+4. tests/units/front/test_studio_views_groups_contract.py
+   - Added contract assertions verifying that the View toggle is left-aligned and that the
+     groups dropdown and expand/collapse button are in the same `.btn-group`.
+5. tests/units/front/test_sidebar_collapse_prepaint.py
+   - Updated `test_sidebar_toggle_icon_is_left_aligned_with_sidebar_icons` to assert
+     the left-aligned icon geometry in both expanded and collapsed sidebar states.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/global/css/main.css
+- src/front/static/ontology/css/ontology-map.css
+- src/front/templates/partials/ontology/_ontology_map.html
+- tests/units/front/test_sidebar_collapse_prepaint.py
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10957 passed, 334 skipped, 8 deselected, 0 failed in 51.18s
+
+## Context → Review progressive per-section loading
+
+Context: `/domain/?section=review` blocked the whole page behind one spinner until
+`/domain/version-status` and `/review/{folder}/{version}` finished sequentially.
+Users waited on a blank card even though readiness and team can load independently.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_review.html
+   Painted a static skeleton with per-section slots and borderless spinners:
+   `#reviewBannerSlot`, `#reviewLifecycleSlot`, `#reviewReadiness`, `#reviewTeam`,
+   `#reviewTimelineSlot` (same progressive pattern as Context → General).
+2. src/front/static/domain/js/domain-review.js
+   - `paintReviewSkeleton()` resets each slot on open/refresh.
+   - Reuses `fetchOnce('/domain/version-status')` when available.
+   - Loads review detail, readiness (`/validate/detailed?parts=overview`) and
+     team in parallel via `Promise.all`; each filler owns its slot errors.
+   - Banner / lifecycle / audit trail fill when review detail arrives; KG check
+     still resolves in the background after overview.
+3. tests/units/front/test_review_progressive_load.py
+   Added contract tests for the per-section slots and parallel fill path.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+- src/front/static/domain/js/domain-review.js
+- src/front/templates/partials/domain/_domain_review.html
+- tests/units/front/test_review_progressive_load.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10961 passed, 334 skipped, 8 deselected, 0 failed in 50.99s
+
+================================================================================
+## Explicit error message when listing Genie Pages (Knowledge Pages) fails
+================================================================================
+
+Context: Context → Pages search showed only "List Knowledge Pages failed" when
+Databricks refused the request (e.g. missing permissions). The HTTP status and
+the Databricks reason were only in `detail`, which the global handler strips
+outside debug mode, so users could not tell the cause.
+
+Changes:
+
+1. src/back/core/databricks/KnowledgePageService.py
+   - `list_pages` catches `requests.RequestException` and raises an
+     `InfrastructureError` built by the new `_list_error` helper.
+   - `_list_error` names the cause: 401 (authentication), 403 (permission
+     denied, ask a workspace admin), 404 (API not available / Genie Pages not
+     enabled), 429 (rate limited), 5xx (Databricks unavailable); other statuses
+     get a generic refusal. Appends the HTTP status and the clipped Databricks
+     error message. Connection/timeout errors get "Could not reach Databricks".
+   - Raw request error stays in `detail` for debug mode.
+2. tests/units/core/test_knowledge_pages.py
+   - 403 names the missing permission and includes the Databricks message.
+   - Connection error gives an explicit "Could not reach Databricks" message.
+
+Modified files:
+- src/back/core/databricks/KnowledgePageService.py
+- tests/units/core/test_knowledge_pages.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"`: 10961 passed, 334 skipped, 8 deselected, 0 failed.
+- Not done: live check against a workspace where the user lacks access.
+
+
+================================================================================
+## Context → Review: optimistic first paint of the Lifecycle section
+================================================================================
+
+Context: The Lifecycle (context status) section waited for the full
+`/review/{folder}/{version}` payload, even though the status itself is already
+known from the cached `/domain/version-status` response. The section now paints
+from version-status first and is enriched once the review detail arrives.
+
+Changes:
+
+1. src/front/static/domain/js/domain-review.js
+   - New `lifecyclePreview(status)` builds a `pending: true` model from the
+     status alone (no events, approvers, quorum).
+   - New `paintLifecyclePreview(status)` renders the Lifecycle card into
+     `#reviewLifecycleSlot`.
+   - `loadReview()` calls `paintLifecyclePreview(vs.status)` right after the
+     version-status check, before the review detail request is awaited.
+   - `lifecycleDiagram(d)` shows "Loading details…" in the Draft, In Review and
+     Published footers while `d.pending` is true; the In Review description
+     reads "Sign-off required" until quorum is known. The progress bar is
+     hidden in pending mode.
+   - The full `render(detail)` still overwrites the slot with the complete
+     Lifecycle card (submitter, sign-offs, quorum, publisher).
+2. tests/units/front/test_review_progressive_load.py
+   - New `test_lifecycle_paints_optimistically_from_version_status` asserting
+     the preview is painted after the version-status check and before the
+     detail fetch, and that the pending placeholders exist.
+
+Modified files:
+- src/front/static/domain/js/domain-review.js
+- tests/units/front/test_review_progressive_load.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_review_progressive_load.py`: 3 passed.
+- `node --check src/front/static/domain/js/domain-review.js`: OK.
+- `uv run --frozen pytest -q -m "not scenario"`: 10962 passed, 334 skipped, 8 deselected, 0 failed in 54.09s.
+- Not done: browser timing check of `/review/...` vs `/domain/version-status` latency on a live workspace.
+
+
+================================================================================
+## Navbar Close / Save / Resume editing use Databricks Du Bois button style
+================================================================================
+
+Context: The right-side chrome actions (Close, Save, Resume editing) were
+compact ghost/filled chips. They now share the Databricks workspace header
+button geometry (32px, 4px radius, 13px/500) used on Lakewatch-style pages.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - New `.ob-subnav-action` shared chrome-button geometry (`--ob-subnav-btn-height`
+     2rem, `--ob-subnav-btn-radius` 0.25rem).
+   - Close is a secondary outline (`--db-surface-warm`, `--db-border`, `--db-text`).
+   - Save stays the only filled primary (`--db-primary` / `--db-on-primary`).
+   - Resume editing is a warning-outlined secondary using status tokens
+     (replaces hardcoded Bootstrap yellow).
+2. src/front/templates/base.html
+   - Close and Save carry `.ob-subnav-action`.
+3. src/front/static/global/js/edit-lock.js
+   - Resume editing button also carries `.ob-subnav-action`.
+4. .cursor/11-frontend-design.mdc
+   - Documents the Du Bois chrome-action contract.
+5. tests/units/front/test_segmented_subnav_contract.py
+   tests/units/front/test_mobile_subnav_contract.py
+   tests/units/front/test_clarity_design_contract.py
+   - Contracts updated for the shared class, outlined Close, and mobile padding.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/templates/base.html
+- src/front/static/global/js/edit-lock.js
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_clarity_design_contract.py tests/units/front/test_app_switcher_contract.py`: 68 passed.
+- Playwright computed-style check of the three chrome buttons against `main.css`: 32px height, 4px radius, 13px/500; Close outlined white, Save filled primary, Resume warning outline.
+- `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 52.60s.
+- Not done: live click-through on localhost (dev server had stopped).
+
+
+================================================================================
+## Navbar Close button gets a visible outline
+================================================================================
+
+Context: After the Du Bois restyle, the Close button's outline used
+`--db-border` (#ECEAE6), a hairline divider colour that is effectively invisible
+on the white chrome bar. Close looked borderless and only changed background on
+hover. Save is filled and Resume keeps its amber outline.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - New token `--db-border-control` (#C9C5BF) in `:root`, for outlined control
+     borders stronger than the hairline `--db-border`.
+   - `.ob-subnav-close-btn` border and hover border use `--db-border-control`.
+2. .cursor/11-frontend-design.mdc
+   - Documents `--db-border-control` for outlined chrome buttons.
+3. tests/units/front/test_segmented_subnav_contract.py
+   - Asserts the Close outline uses `--db-border-control` and the token exists.
+
+Modified files:
+- src/front/static/global/css/main.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_clarity_design_contract.py tests/units/front/test_app_switcher_contract.py`: 68 passed.
+- Playwright render with the full stylesheet cascade: Close border 1px solid rgb(201,197,191); Save and Resume unchanged.
+- `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 49.04s.
+
+
+================================================================================
+## Navbar Close button: ghost at rest, outline on hover only
+================================================================================
+
+Context: The Close button kept a visible outline and white fill at rest. The
+requested behaviour is borderless and transparent at rest, with the border and
+hover fill appearing only on hover. Save (filled primary) and Resume editing
+(warning state) keep their styles.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-subnav-close-btn` rests with `background: transparent` and a 1px
+     transparent border (same box size as hover, no layout shift).
+   - `.ob-subnav-close-btn:hover` shows `--db-hover-warm` fill and the
+     `--db-border-control` outline.
+2. .cursor/11-frontend-design.mdc
+   - Documents the Close rest/hover contract.
+3. tests/units/front/test_segmented_subnav_contract.py
+   - Asserts the transparent rest state and the hover-only outline and fill.
+
+Modified files:
+- src/front/static/global/css/main.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py`: 10 passed.
+- Playwright with the full stylesheet cascade: rest background rgba(0,0,0,0), border colour rgba(0,0,0,0), width 80.45px; hover background rgb(243,242,240), border rgb(201,197,191), width 80.45px.
+- `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 49.54s.
+
+
+================================================================================
+## Navbar Close, Save and Resume editing: borderless and transparent at rest
+================================================================================
+
+Context: All right-side chrome actions (Close, Save, Resume editing) now use
+Databricks-style ghost buttons: completely borderless and transparent at rest,
+revealing a subtle background tint only on hover without borders.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   - `.ob-subnav-save-btn` is now ghost at rest (`background: transparent`,
+     `border: 1px solid transparent`, `color: var(--db-text)`). Hover gives
+     `--db-hover-warm` with no border.
+   - `.ob-subnav-resume-btn` is ghost at rest (`background: transparent`,
+     `border: 1px solid transparent`, `color: var(--db-status-warning)`).
+     Hover gives `--db-status-warning-soft-bg` with no border.
+   - `.ob-subnav-close-btn:hover` removes border (`border-color: transparent`),
+     matching the borderless hover style.
+   - `.ob-subnav-save-kbd` text and border use muted neutral tokens so the
+     keycap remains crisp on the transparent background.
+2. .cursor/11-frontend-design.mdc
+   - Updated chrome action specification to ghost buttons at rest with hover fills.
+3. tests/units/front/test_segmented_subnav_contract.py
+   - Updated contract tests for borderless ghost rest and hover behaviour on all
+     three buttons.
+
+Modified files:
+- src/front/static/global/css/main.css
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_segmented_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_clarity_design_contract.py tests/units/front/test_app_switcher_contract.py`: 68 passed.
+- Playwright computed-style verification: Close, Save, and Resume all transparent at rest with no visible border; hover adds subtle tint without border.
+- `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 51.10s.
+
+
+================================================================================
+## Scenarios: align the full-lifecycle journey with the workspace Home landing
+================================================================================
+
+Context: Context (`/domain`) now opens on the workspace Home tiles, so the
+Configuration panel holding `#domainName` is hidden on a bare `/domain` load.
+`test_full_lifecycle.py` waited for that field to be visible and timed out.
+All other scenario selectors and deep links (`/ontology?section=wizard`,
+`SidebarNav.switchTo("import"|"entities")`, `/dtwin/?open=automap`,
+`/dtwin/?section=design&tab=informations`, `#autoAssignModal`,
+`#mappingExportR2RMLBtn`, …) were audited against the current templates and
+are unchanged.
+
+Changes:
+
+1. tests/e2e/scenarios/test_full_lifecycle.py
+   - Step 2 now navigates to `/domain/?section=information` (Context →
+     Configuration, the same deep link the app uses) before asserting the
+     editable `#domainName` field.
+
+Modified files:
+- tests/e2e/scenarios/test_full_lifecycle.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest tests/e2e/scenarios/test_full_lifecycle.py -m scenario`: 1 passed (previous version: TimeoutError on `#domainName`).
+- `uv run --frozen pytest -q -m "not scenario"`: 10963 passed, 334 skipped, 8 deselected, 0 failed in 48.73s.
+
+================================================================================
+## App switcher trigger renamed "Feature selector"
+================================================================================
+
+Context: The 9-dot app switcher trigger in the unified chrome bar was labelled
+"Switch workspace" (tooltip) and "Open workspace switcher" (accessible name).
+It now reads "Feature selector" in both places so the tooltip and the screen
+reader label match. Hover styling is unchanged: matching the Databricks
+reference hover was not possible because the reference workspace requires an
+Okta sign-in that blocks automated browsers. Pending the reference values.
+
+Changes:
+
+1. src/front/templates/base.html
+   - `#obAppSwitcher` `title` "Switch workspace" → "Feature selector".
+   - `#obAppSwitcher` `aria-label` "Open workspace switcher" → "Open feature selector".
+2. tests/units/front/test_app_switcher_contract.py
+   - New `test_app_switcher_trigger_is_labelled_feature_selector`: asserts the
+     new title/aria-label and that "Switch workspace" no longer appears in base.html.
+
+Modified files:
+- src/front/templates/base.html
+- tests/units/front/test_app_switcher_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_app_switcher_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_segmented_subnav_contract.py`: 19 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 10964 passed, 334 skipped, 8 deselected, 0 failed in 50.34s.
+
+================================================================================
+## Feature selector: Ontology description updated
+================================================================================
+
+Context: The Ontology entry's subtitle in the Feature selector (app switcher)
+read "Design classes, properties, and SHACL constraints". It now reads
+"Design Entities, Relationships, Data Quality and Business rules", to reflect
+what the Ontology workspace covers.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Ontology `description` → "Design Entities, Relationships, Data Quality and Business rules".
+   - The same string is also the subtitle of the Ontology Workspace Home header
+     (`partials/layout/_workspace_home.html`), so both places stay in sync.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `python3 -m json.tool` validation of menu_config.json: OK.
+- `uv run --frozen pytest -q -m "not scenario"`: 10964 passed, 334 skipped, 8 deselected, 0 failed in 48.94s.
+
+================================================================================
+## Feature selector: Context description updated
+================================================================================
+
+Context: The Context entry's subtitle in the Feature selector (app switcher)
+read "Govern versions, documents, and workspace settings". It now reads
+"Govern versions, Metadata, Publication and Manage collaboration".
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Context `description` → "Govern versions, Metadata, Publication and Manage collaboration".
+   - The same string is the subtitle of the Context Workspace Home header
+     (`partials/layout/_workspace_home.html`), so both places stay in sync.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- `python3 -m json.tool` validation of menu_config.json: OK.
+- `uv run --frozen pytest -q -m "not scenario"`: 10964 passed, 334 skipped, 8 deselected, 0 failed in 49.64s.
+
+================================================================================
+## Feature selector: wider menu so workspace subtitles display in full
+================================================================================
+
+Context: The feature selector (app switcher) truncated the workspace subtitles
+with an ellipsis: the menu was capped at 26rem, leaving about 304px for the
+description column, while the Ontology subtitle needs 341px. Context's
+subtitle was also reworded to "Manage versions, Metadata, Publication and
+collaboration".
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Context `description` → "Manage versions, Metadata, Publication and collaboration"
+     (replaces "Govern versions, Metadata, Publication and Manage collaboration").
+2. src/front/static/global/css/main.css
+   - `.ob-app-switcher-menu` `max-width` 26rem → 30rem (`min-width` 22rem unchanged).
+     The menu now auto-sizes to 453px, so all five subtitles render without truncation.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/static/global/css/main.css
+- changelogs/v0.10.0/benoitcayladbx_2026-11-19.log
+
+Tests:
+- Headless Chromium on the running dev server: each subtitle's natural width is at or below the displayed width (widest: 341px in a 341px column).
+- `uv run --frozen pytest -q -m "not scenario"`: 10964 passed, 334 skipped, 8 deselected, 0 failed in 50.70s.

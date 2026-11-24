@@ -44,7 +44,8 @@ def _constrained_block(css: str) -> str:
     return match.group(1)
 
 
-def test_workspace_targets_are_grouped_before_context_and_actions():
+def test_chrome_layout_is_brand_context_actions_switcher_utilities():
+    """Workspace dropdown rail is gone; app switcher owns Context→Intelligence nav."""
     html = _read(BASE_HTML)
     assert 'id="obSubnav"' in html
     context_li = re.search(
@@ -53,42 +54,50 @@ def test_workspace_targets_are_grouped_before_context_and_actions():
         flags=re.DOTALL,
     )
     assert context_li, "Missing .ob-subnav-context wrapper"
-    context_classes = context_li.group(0)
-    assert "ob-subnav-item" in context_classes
-    assert html.index(context_li.group(0)) < html.index('class="ob-subnav-workspaces"')
-    assert html.count('class="ob-subnav-ordinal"') == 5
-    workspace_match = re.search(
-        r'<li\b[^>]*class="[^"]*\bob-subnav-workspaces\b[^"]*"[^>]*>',
-        html,
-    )
-    assert workspace_match, "Missing .ob-subnav-workspaces wrapper"
-    group_start = html.index(workspace_match.group(0))
-    group_end = html.index("<!-- Flex spacer", group_start)
-    group = html[group_start:group_end]
+    assert "ob-subnav-item" in context_li.group(0)
 
-    ids = [
+    # Retired segmented workspace rail + ordinals.
+    assert 'class="ob-subnav-workspaces"' not in html
+    assert 'class="ob-subnav-workspace-list"' not in html
+    assert 'class="ob-subnav-ordinal"' not in html
+    for element_id in (
         "subnavDomainDropdown",
         "subnavOntologyDropdown",
-        "subnavMappingDropdown",
         "subnavKgDropdown",
         "subnavSimDropdown",
-    ]
-    positions = [group.index(element_id) for element_id in ids]
+        "domainWorkspaceSubnavNav",
+        "domainSectionName",
+    ):
+        assert f'id="{element_id}"' not in html
 
-    assert positions == sorted(positions)
-    assert 'class="ob-subnav-workspace-list"' in group
-    assert "obBreadcrumbWrap" not in group
-    assert "ob-subnav-save-btn" not in group
     assert "currentDomainName" in html
     assert "domainContextVersion" in html
-    assert html.index("ob-subnav-switch-btn") < html.index("ob-subnav-close-btn")
+    assert "ob-subnav-version-crumb" not in html
+    assert "ob-subnav-crumb-sep" not in html
+    assert re.search(
+        r'id="domainContextVersion"[^>]*class="[^"]*\bdomain-version-badge\b',
+        html,
+    )
+    assert html.index("obSidebarToggle") < html.index("brandLogoImg")
+    assert html.index("brandLogoImg") < html.index("ob-subnav-flex-spacer")
+    assert html.index("ob-subnav-flex-spacer") < html.index("domainContextTrigger")
+    assert html.index("domainContextTrigger") < html.index("ob-subnav-close-btn")
     assert html.index("ob-subnav-close-btn") < html.index("ob-subnav-save-btn")
+    assert html.index("ob-subnav-save-btn") < html.index("activityCenterToggle")
+    assert html.index("activityCenterToggle") < html.index("obAppSwitcher")
+    assert html.index("obAppSwitcher") < html.index("userMenuDropdown")
+    assert "ob-subnav-switch-btn" not in html
+    assert "ob-subnav-save-dirty" in html
+    assert 'aria-label="' in html  # icon-only Save/Close expose their names
 
 
 def test_subnav_surface_is_transparent_and_borderless():
     css = _read(MAIN_CSS)
-    block = _rule(css, ".ob-subnav")
-
+    # Unified chrome keeps former L2 look (canvas grey, no border) even when
+    # the element also carries Bootstrap `.navbar`.
+    block = _rule(css, ".ob-subnav,\n.ob-subnav.navbar")
+    if "transparent" not in block:
+        block = _rule(css, ".ob-subnav.navbar")
     assert re.search(r"background(?:-color)?\s*:\s*transparent", block)
     assert re.search(r"border-bottom\s*:\s*(?:0|none)", block)
 
@@ -99,125 +108,26 @@ def test_subnav_left_edge_matches_sidebar_panel_gutter():
     subnav_container = _rule(main_css, "#obSubnav .container-fluid")
     sidebar_layout = _rule(sidebar_css, ".sidebar-layout")
 
-    assert re.search(r"padding\s*:\s*0\.25rem\s+0\.5rem\s+0\.5rem\s*;", sidebar_layout)
+    assert re.search(r"padding\s*:\s*0\.15rem\s+0\.25rem\s+0\.25rem\s*;", sidebar_layout)
     assert re.search(
-        r"padding-left\s*:\s*0\.5rem\s*!important\s*;",
+        r"padding-left\s*:\s*0\.25rem\s*!important\s*;",
         subnav_container,
     )
 
 
-def test_workspace_targets_stretch_to_near_full_inner_height():
+def test_context_crumb_and_rail_use_quiet_tokens():
     css = _read(MAIN_CSS)
-    group = _rule(css, ".ob-subnav-workspace-list")
-    stretch = re.search(
-        r"\.ob-subnav-workspace-list\s*>\s*\.ob-subnav-item\s*,\s*"
-        r"\.ob-subnav-workspace-list\s*>\s*\.ob-subnav-item\s*>\s*\.ob-subnav-link\s*\{([^}]*)\}",
-        css,
-        flags=re.DOTALL,
-    )
+    crumb = _rule(css, ".ob-subnav-crumb")
+    crumb_hover = _rule(css, ".ob-subnav-crumb:hover")
 
-    assert "padding: 0.2rem" in group
-    assert stretch, "Missing workspace target stretch rule"
-    assert "height: 100%" in stretch.group(1)
-
-
-def test_workspace_group_uses_shared_segmented_control_tokens():
-    css = _read(MAIN_CSS)
-    group = _rule(css, ".ob-subnav-workspace-list")
-    context_trigger = _rule(css, ".ob-subnav-context-trigger")
-    context_icon = _rule(css, ".ob-subnav-context-trigger > .bi")
-    context_hover = _rule(css, ".ob-subnav-context-trigger:hover")
-    context_copy = _rule(css, ".ob-subnav-context-copy")
-    context_name = _rule(css, ".ob-subnav-context-name")
-    context_version = _rule(css, ".ob-subnav-context-version")
-    context_status = _rule(css, ".ob-subnav-context-copy .domain-status-badge")
-    context_focus = _rule(css, ".ob-subnav-context-trigger:focus-visible")
-    ordinal = _rule(css, ".ob-subnav-ordinal")
-    active = _rule(css, ".ob-subnav-link.active")
-    active_ordinal = _rule(css, ".ob-subnav-link.active .ob-subnav-ordinal")
-    focus = _rule(css, ".ob-subnav-link:focus-visible")
-
-    assert "background: var(--db-surface-warm)" in group
-    assert "border: 1px solid var(--db-border)" in group
-    assert "border-radius: var(--db-radius-control)" in group
-    assert "background: var(--db-primary-soft)" in context_trigger
-    assert "border: 0" in context_trigger
-    assert "border: 1px solid var(--db-primary)" not in context_trigger
-    assert "border-radius: var(--db-radius-control)" in context_trigger
-    assert "color: var(--db-primary-darker)" in context_trigger
-    assert "background: var(--db-primary-soft-hover)" in context_hover
-    assert "border-color:" not in context_hover
-    assert "color: var(--db-primary-darker)" in context_hover
-    assert "width: 200px" in context_trigger
-    assert "min-width: 200px" in context_trigger
-    assert "max-width: 200px" in context_trigger
-    assert "justify-content: center" in context_trigger
-    assert "position: relative" in context_trigger
-    assert "padding-left: 1.75rem" in context_trigger
-    assert "padding-right: 0.55rem" in context_trigger
-    assert "position: absolute" in context_icon
-    assert "left: 0.65rem" in context_icon
-    assert "display: grid" in context_copy
-    assert "grid-template-columns: minmax(0, 1fr) auto" in context_copy
-    assert "grid-template-rows: auto auto" in context_copy
-    assert "row-gap: 0.12rem" in context_copy
-    assert "align-items: center" in context_copy
-    assert "justify-items: center" in context_copy
-    assert "width: 100%" in context_copy
-    assert "column-gap: 0.4rem" in context_copy
-    assert "grid-column: 1" in context_status
-    assert "grid-row: 1" in context_status
-    assert "justify-self: center" in context_status
-    assert "margin-left: 0 !important" in context_status
-    assert "grid-column: 1" in context_name
-    assert "grid-row: 2" in context_name
-    assert "text-align: center" in context_name
-    assert "min-width: 0" in context_name
-    assert "width: 100%" in context_name
-    assert "max-width: 100%" in context_name
-    assert "white-space: nowrap" in context_name
-    assert "overflow: hidden" in context_name
-    assert "text-overflow: ellipsis" in context_name
-    assert "grid-column: 2" in context_version
-    assert "grid-row: 1 / span 2" in context_version
-    assert "align-self: center" in context_version
-    assert "justify-self: center" in context_version
-    assert "font-size: 0.88rem" in context_version
-    assert "font-weight: 700" in context_version
-    assert "background: var(--db-primary-darker)" in context_version
-    assert "color: var(--db-on-primary)" in context_version
-    assert "border-radius: var(--db-radius-control)" in context_version
-    assert "white-space: nowrap" in context_version
-    assert "box-shadow: var(--db-focus-ring)" in context_focus
-    assert "border: 1px solid var(--db-border)" in ordinal
-    assert "color: var(--db-text-muted)" in ordinal
-    assert "background: var(--db-gradient-primary)" in active
-    assert "color: var(--db-on-primary)" in active
-    assert "background: var(--db-on-primary)" in active_ordinal
-    assert "color: var(--db-primary)" in active_ordinal
-    assert "outline: 2px solid transparent" in focus
-    assert "box-shadow: var(--db-focus-ring)" in focus
-    assert "--ob-subnav-rail-height: 3rem" in css
+    assert "color: var(--db-text)" in crumb
+    assert "background: var(--db-hover-indigo)" in crumb_hover
+    assert "--ob-subnav-rail-height: 2.25rem" in css
     nav = _rule(css, ".ob-subnav-nav")
-    assert "padding: 0.25rem 0 0" in nav
-    assert re.search(
-        r"\.ob-subnav-context-trigger\s*,\s*\.ob-subnav-workspace-list\s*\{[^}]*height\s*:\s*var\(--ob-subnav-rail-height\)",
-        css,
-    )
-    assert re.search(
-        r"\.ob-subnav-context-trigger\s*,\s*\.ob-subnav-workspace-list\s*\{[^}]*min-height\s*:\s*var\(--ob-subnav-rail-height\)",
-        css,
-    )
-    shared_height_rule = re.search(
-        r"\.ob-subnav-context-trigger\s*,\s*\.ob-subnav-workspace-list\s*\{([^}]*)\}",
-        css,
-        flags=re.DOTALL,
-    )
-    assert shared_height_rule
-    assert "box-sizing: border-box" in shared_height_rule.group(1)
-    assert "border-radius: var(--db-radius-control)" in shared_height_rule.group(1)
-    assert "background:" not in shared_height_rule.group(1)
-    assert "border: 1px solid" not in shared_height_rule.group(1)
+    assert "padding: 0.15rem 0" in nav
+    # Segmented workspace rail styles must not return.
+    assert ".ob-subnav-workspace-list" not in css
+    assert ".ob-subnav-link" not in css
 
 
 def test_obsolete_l1_domain_rules_are_removed():
@@ -228,58 +138,116 @@ def test_obsolete_l1_domain_rules_are_removed():
     assert ".ob-nav-path-sep" not in css
 
 
-def test_active_target_disables_only_its_dropdown():
+def test_app_switcher_owns_current_workspace_state():
     html = _read(BASE_HTML)
     js = _read(NAVBAR_JS)
 
-    assert "if (route && path.startsWith(route))" in js
-    assert "disableCurrentSubnavDropdown(link)" in js
-    assert "toggle.removeAttribute('data-bs-toggle')" in js
-    assert "toggle.classList.remove('dropdown-toggle')" in js
-    assert "toggle.setAttribute('aria-current', 'page')" in js
-    assert "event.preventDefault()" in js
-    assert "if (menu) menu.remove()" in js
-    for element_id in (
-        "subnavDomainDropdown",
-        "subnavOntologyDropdown",
-        "subnavMappingDropdown",
-        "subnavKgDropdown",
-        "subnavSimDropdown",
-    ):
-        tag = re.search(
-            rf'<a\b[^>]*id="{element_id}"[^>]*>',
-            html,
-            flags=re.DOTALL,
-        )
-        assert tag, element_id
-        assert 'data-bs-toggle="dropdown"' in tag.group(0)
-    assert "domainContextVersion.textContent = hasDomain ? String(version) : '';" in js
+    assert "initAppSwitcherActiveState" in js
+    assert "disableCurrentSubnavDropdown" not in js
+    assert 'id="obAppSwitcher"' in html
+    assert "`V${version}`" in js
+    assert "domainContextVersion" in js
+    assert "domain-version-badge" in js or "domainContextVersion" in js
 
 
-def test_save_is_the_only_primary_filled_domain_action():
+def test_chrome_actions_use_genie_chip_style():
     css = _read(MAIN_CSS)
-    save = _rule(css, ".ob-subnav-save-btn")
-    switch = _rule(css, ".ob-subnav-switch-btn")
-    switch_hover = _rule(css, ".ob-subnav-switch-btn:hover")
-    close = _rule(css, ".ob-subnav-close-btn")
+    dirty = _rule(css, ".ob-subnav-save-dirty")
+    action = _rule(css, ".ob-subnav-action")
+    action_hover = _rule(css, ".ob-subnav-action:hover")
 
-    assert "background: var(--db-gradient-primary)" in save
-    assert "box-shadow: var(--db-shadow-primary)" in save
-    assert "background-color: var(--db-surface-warm)" in switch
-    assert "background-color: var(--db-hover-indigo)" in switch_hover
-    assert "background-color: var(--db-surface-warm)" in close
-    assert "color: var(--db-status-danger)" in close
+    assert "--ob-subnav-btn-height: var(--ob-subnav-icon-hit)" in css
+    assert "--ob-subnav-btn-radius: var(--ob-subnav-icon-radius)" in css
+    assert "--ob-subnav-icon-hit: 2rem;" in css
+    assert "--db-btn-radius: 0.25rem;" in css
+    assert "height: var(--ob-subnav-btn-height)" in action
+    assert "width: var(--ob-subnav-btn-height)" in action
+    assert "border-radius: var(--ob-subnav-btn-radius)" in action
+    assert "border: 1px solid var(--db-border)" in action
+    assert "background: var(--db-surface-warm)" in action
+    # Hover matches Activity (no gradient, no Create/Share fill)
+    assert "background: var(--db-hover-indigo)" in action_hover
+    assert "gradient" not in action_hover
+    assert "var(--db-btn-primary)" not in action
+    assert "var(--db-btn-primary)" not in action_hover
+    # Dirty indicator on Save
+    assert "background: var(--db-status-warning)" in dirty
+    assert "display: none" in dirty
+    assert re.search(r"\.ob-subnav-save-btn\.is-dirty\s+\.ob-subnav-save-dirty\s*\{[^}]*display:\s*inline-block", css)
+
+
+def test_navbar_icons_share_one_hover_square():
+    """Save, Close, Activity and the feature switcher use the same hit square."""
+    css = _read(MAIN_CSS)
+    assert "--ob-subnav-icon-hit: 2rem;" in css
+    assert "--ob-subnav-icon-radius: var(--db-btn-radius);" in css
+
+    for selector in (
+        ".ob-subnav-utility-link",
+        ".ob-subnav-app-switcher",
+        ".ob-subnav-action",
+    ):
+        block = _rule(css, selector)
+        assert "var(--ob-subnav-icon-hit)" in block or "var(--ob-subnav-btn-height)" in block, selector
+        assert (
+            "var(--ob-subnav-icon-radius)" in block
+            or "var(--ob-subnav-btn-radius)" in block
+        ), selector
+
+    # Save/Close: bare at rest, Activity hover on hover (no border either way).
+    rest = re.search(
+        r"\.ob-subnav-save-btn,\s*\.ob-subnav-close-btn\s*\{([^}]*)\}",
+        css,
+    )
+    assert rest and "background: transparent" in rest.group(1) and "border: 0" in rest.group(1)
+    hover = re.search(
+        r"\.ob-subnav-save-btn:hover,\s*\.ob-subnav-close-btn:hover\s*\{([^}]*)\}",
+        css,
+    )
+    assert hover and "background: var(--db-hover-indigo)" in hover.group(1)
+    assert "border: 0" in hover.group(1)
+
+
+def test_activity_and_user_have_room_for_the_notification_badge():
+    css = _read(MAIN_CSS)
+    assert (
+        ".ob-subnav-nav .ob-subnav-item:has(#activityCenterToggle) + .ob-subnav-item"
+        in css
+    )
+    rule = re.search(
+        r"\.ob-subnav-nav\s+\.ob-subnav-item:has\(#activityCenterToggle\)\s*\+\s*\.ob-subnav-item\s*\{([^}]*)\}",
+        css,
+    )
+    assert rule and "margin-inline-start: 0.85rem" in rule.group(1)
+
+
+def test_chrome_actions_share_databricks_button_class():
+    html = _read(BASE_HTML)
+    assert 'class="ob-subnav-action ob-subnav-close-btn' in html
+    assert 'class="ob-subnav-action ob-subnav-save-btn' in html
+    js = (REPO_ROOT / "src/front/static/global/js/edit-lock.js").read_text(
+        encoding="utf-8"
+    )
+    assert "ob-subnav-action ob-subnav-resume-btn" in js
+    css = _read(MAIN_CSS)
+    resume = _rule(css, ".ob-subnav-resume-btn")
+    assert "color: var(--db-status-warning)" in resume
+    assert "width: auto" in resume
+    resume_hover = _rule(css, ".ob-subnav-resume-btn:hover")
+    assert "background: var(--db-hover-indigo)" in resume_hover
 
 
 def test_mobile_contract_does_not_add_horizontal_scrolling():
     mobile = _mobile_block(_read(MAIN_CSS))
 
     assert re.search(r"\.ob-subnav-context-copy\s*\{[^}]*display\s*:\s*none", mobile)
-    assert re.search(r"\.ob-subnav-ordinal\s*\{[^}]*display\s*:\s*none", mobile)
-    assert re.search(r"\.ob-subnav-label\s*\{[^}]*display\s*:\s*none", mobile)
+    assert re.search(
+        r"\.ob-subnav-action:not\(\.ob-subnav-resume-btn\)\s+\.ob-subnav-label\s*\{[^}]*display\s*:\s*none",
+        mobile,
+    )
     assert ".ob-subnav" in mobile
     assert ".ob-subnav-nav" in mobile
-    assert ".ob-subnav-workspace-list" in mobile
+    assert ".ob-subnav-workspace-list" not in mobile
     assert re.search(r"\.ob-subnav-context-trigger\s*\{[^}]*width\s*:\s*auto", mobile)
     assert re.search(r"\.ob-subnav-context-trigger\s*\{[^}]*min-width\s*:\s*2rem", mobile)
     assert re.search(r"\.ob-subnav-context-trigger\s*\{[^}]*max-width\s*:\s*none", mobile)
@@ -292,11 +260,10 @@ def test_mobile_contract_does_not_add_horizontal_scrolling():
     assert "overflow-x: auto" not in mobile
 
 
-def test_constrained_contract_hides_breadcrumb_and_clips_action_labels():
+def test_constrained_contract_clips_action_labels():
     css = _read(MAIN_CSS)
     constrained = _constrained_block(css)
 
-    assert re.search(r"#obBreadcrumbWrap\s*\{[^}]*display\s*:\s*none\s*!important", constrained)
     assert ".ob-subnav-context-trigger" not in constrained
     for declaration in (
         "position: absolute",

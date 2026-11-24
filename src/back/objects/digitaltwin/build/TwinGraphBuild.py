@@ -94,7 +94,7 @@ class TwinGraphBuild:
         if len(parts) != 3:
             raise ValidationError(
                 "View location must be fully qualified: catalog.schema.view_name "
-                "(configure in Domain / Triple Store tab)"
+                "(configure in Context / Triple Store tab)"
             )
 
         domain.ensure_generated_content()

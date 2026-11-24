@@ -262,4 +262,5 @@ class TestRunAgent:
             )
 
         assert result.success is False
-        assert "boom" in result.error
+        assert result.error == "LLM request failed."
+        assert "boom" not in result.error

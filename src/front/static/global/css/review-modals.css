@@ -32,7 +32,7 @@
     min-width: 0;
     background: var(--db-bg-secondary, #f5f6f8);
     border: 1px solid var(--db-border, #e0e0e0);
-    border-radius: 10px;
+    border-radius: var(--db-radius-control);
     padding: 0.5rem 0.75rem;
 }
 
@@ -102,7 +102,7 @@
 .oc-thread {
     padding: 0.6rem 0.6rem 0.4rem;
     border: 1px solid var(--db-border, #e3e6ea);
-    border-radius: 0.5rem;
+    border-radius: var(--db-radius-control);
     margin-bottom: 0.75rem;
     background: var(--db-surface, #fff);
 }
@@ -166,7 +166,7 @@
 
 /* Rendered markdown bodies (agent reports + comments). Tight, bubble-friendly
    spacing so block elements don't blow the thread/timeline layout out. Used by
-   the Discussion panel (.oc-text.oc-md) and the Domain → Discussions timeline
+   the Discussion panel (.oc-text.oc-md) and the Context → Discussions timeline
    (.oc-tl-text.oc-md). */
 .oc-md {
     white-space: normal;
@@ -200,7 +200,7 @@
 .oc-md pre {
     background: var(--db-surface-muted, #f6f8fa);
     padding: 0.5rem;
-    border-radius: 0.375rem;
+    border-radius: var(--db-radius-control);
     overflow-x: auto;
     margin: 0 0 0.4rem;
 }

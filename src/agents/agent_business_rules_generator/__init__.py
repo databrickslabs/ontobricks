@@ -1,7 +1,7 @@
 """
-Business Rules Generator Agent — proposes SWRL, Decision Table, SPARQL, and
-Aggregate rules from the domain's uploaded documents and the live ontology
-design, for the user to review and accept in the Business Rules page.
+Business Rules Generator Agent — proposes IF-THEN and SPARQL rules from the
+domain's uploaded documents and the live ontology design, for the user to
+review and accept in the Business Rules page.
 
 Exports:
     run_agent / AgentResult — entry point used by

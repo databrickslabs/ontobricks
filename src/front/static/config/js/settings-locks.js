@@ -138,9 +138,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         container.innerHTML =
             '<div class="table-responsive">' +
-            '<table class="table table-sm table-hover align-middle mb-0">' +
-            '<thead class="table-light"><tr>' +
-            '<th style="width: 26%;">Domain</th>' +
+            '<table class="table table-hover align-middle ob-runs-table">' +
+            '<thead><tr>' +
+            '<th style="width: 26%;">Context</th>' +
             '<th style="width: 10%;">Version</th>' +
             '<th style="width: 12%;">Status</th>' +
             '<th style="width: 26%;">Held by</th>' +
@@ -153,8 +153,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function fmtDate(iso) {
         if (!iso) return '';
-        const d = new Date(iso);
-        return isNaN(d.getTime()) ? String(iso) : d.toLocaleString();
+        return formatDateTime(iso);
     }
 
     function setText(id, val) {

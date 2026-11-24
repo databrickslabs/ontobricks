@@ -3,7 +3,7 @@
         <div class="me-auto">
             <h4 class="mb-1"><i class="bi bi-inbox me-2"></i>My Tasks</h4>
             <p class="text-muted mb-0 small">
-                Tasks assigned to you and domain versions waiting on your
+                Tasks assigned to you and context versions waiting on your
                 review &mdash; act on them inline.
             </p>
         </div>
@@ -13,10 +13,53 @@
         </button>
     </div>
 
-    <div id="domainMyTasksContainer">
-        <div class="text-center text-muted small py-4">
-            <span class="spinner-border spinner-border-sm me-1"></span>
-            Loading your tasks...
+    <div class="card">
+        <div class="card-body">
+            <div class="ob-filter-bar" role="search" aria-label="Filter tasks">
+                <div class="ob-filter-search">
+                    <i class="bi bi-search" aria-hidden="true"></i>
+                    <input type="search" class="form-control form-control-sm"
+                           id="domainTasksSearch" placeholder="Filter tasks"
+                           aria-label="Filter tasks by title, context or requester">
+                </div>
+
+                <div class="dropdown">
+                    <button type="button" class="btn btn-sm ob-filter-btn dropdown-toggle"
+                            id="domainTasksTypeFilter" data-bs-toggle="dropdown"
+                            aria-expanded="false" data-value="">
+                        Type<span class="ob-filter-value"></span>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="domainTasksTypeFilter">
+                        <li><button type="button" class="dropdown-item active" data-value="">All</button></li>
+                        <li><button type="button" class="dropdown-item" data-value="assigned">Assigned to me</button></li>
+                        <li><button type="button" class="dropdown-item" data-value="review">Review</button></li>
+                    </ul>
+                </div>
+
+                <div class="dropdown">
+                    <button type="button" class="btn btn-sm ob-filter-btn dropdown-toggle"
+                            id="domainTasksStatusFilter" data-bs-toggle="dropdown"
+                            aria-expanded="false" data-value="">
+                        Status<span class="ob-filter-value"></span>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="domainTasksStatusFilter">
+                        <li><button type="button" class="dropdown-item active" data-value="">All</button></li>
+                        <li><button type="button" class="dropdown-item" data-value="open">Open</button></li>
+                        <li><button type="button" class="dropdown-item" data-value="in_progress">In progress</button></li>
+                        <li><button type="button" class="dropdown-item" data-value="draft">Draft</button></li>
+                        <li><button type="button" class="dropdown-item" data-value="in-review">In review</button></li>
+                    </ul>
+                </div>
+
+                <span class="ob-runs-count ms-auto" id="domainTasksCount" aria-live="polite"></span>
+            </div>
+
+            <div id="domainMyTasksContainer">
+                <div class="text-center text-muted small py-4">
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    Loading your tasks...
+                </div>
+            </div>
         </div>
     </div>
 </div>

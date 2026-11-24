@@ -77,18 +77,19 @@ This document describes all external dependencies used by OntoBricks, including 
 | **aiofiles** | ≥23.0.0 | Async file I/O for Starlette static file serving | Apache-2.0 | [pypi.org/project/aiofiles](https://pypi.org/project/aiofiles/) |
 | **databricks-sql-connector[kernel]** | ≥4.4.0 | Python SQL connector with the native Kernel backend used for Lakehouse/RT Statement Execution API queries | Apache-2.0 | [pypi.org/project/databricks-sql-connector](https://pypi.org/project/databricks-sql-connector/) |
 | **databricks-sql-kernel** | ≥1.0.0,<2.0.0 | Native Rust SQL client core installed by the connector's `kernel` extra | Apache-2.0 | [pypi.org/project/databricks-sql-kernel](https://pypi.org/project/databricks-sql-kernel/) |
-| **databricks-sdk** | ≥0.20.0 | Databricks SDK for workspace API, OAuth authentication, and auto-auth in App mode | Apache-2.0 | [pypi.org/project/databricks-sdk](https://pypi.org/project/databricks-sdk/) |
+| **databricks-sdk** | ≥0.20.0 | [Databricks SDK](https://docs.databricks.com/aws/en/dev-tools/sdk-python) for workspace API, OAuth authentication, and auto-auth in App mode | Apache-2.0 | [pypi.org/project/databricks-sdk](https://pypi.org/project/databricks-sdk/) |
 | **pyarrow** | ≥23.0.1 | Columnar in-memory data format (required by databricks-sql-connector) | Apache-2.0 | [arrow.apache.org/docs/python](https://arrow.apache.org/docs/python/) |
 | **RDFLib** | ≥7.6.0 | Python library for working with RDF (Resource Description Framework) | BSD-3-Clause | [rdflib.readthedocs.io](https://rdflib.readthedocs.io/) |
 | **python-dotenv** | ≥1.2.2 | Load environment variables from `.env` files | BSD-3-Clause | [pypi.org/project/python-dotenv](https://pypi.org/project/python-dotenv/) |
 | **requests** | ≥2.33.0 | HTTP library for Python | Apache-2.0 | [requests.readthedocs.io](https://requests.readthedocs.io/) |
-| **psycopg[binary,pool]** | ≥3.2.0 | Postgres driver + connection pool used by the Lakebase Graph DB engine and the Lakebase registry backend | LGPL-3.0 | [psycopg.org/psycopg3](https://www.psycopg.org/psycopg3/) |
+| **neo4j** | ≥5.0 | Neo4j Bolt driver — connects OntoBricks to external Neo4j graph instances | Apache-2.0 | [neo4j.com/docs/python-manual](https://neo4j.com/docs/python-manual/) |
+| **psycopg[binary,pool]** | ≥3.2.0 | Postgres driver + connection pool used by the [Lakebase](https://docs.databricks.com/aws/en/oltp/) Graph DB engine and the Lakebase registry backend | LGPL-3.0 | [psycopg.org/psycopg3](https://www.psycopg.org/psycopg3/) |
 | **APScheduler** | ≥3.10.0 | Advanced Python Scheduler for background jobs (used by BuildScheduler for scheduled triple store builds) | MIT | [pypi.org/project/APScheduler](https://pypi.org/project/APScheduler/) |
 | **owlrl** | ≥7.0.0 | OWL 2 RL forward-chaining reasoner — performs deductive closure on RDFLib graphs for ontology-level inference | W3C | [owl-rl.readthedocs.io](https://owl-rl.readthedocs.io/) |
 | **pyshacl** | ≥0.26.0 | W3C SHACL validator for RDFLib graphs — validates RDF data against SHACL shapes for data quality checks | Apache-2.0 | [github.com/RDFLib/pySHACL](https://github.com/RDFLib/pySHACL) |
-| **NetworkX** | ≥3.0 | Graph analysis library — server-side community detection (Louvain, Label Propagation, Greedy Modularity) on the full graph viewer | BSD-3-Clause | [networkx.org](https://networkx.org/) |
+| **NetworkX** | ≥3.0 | Graph analysis library — cohort discovery (connected components over compatibility links) | BSD-3-Clause | [networkx.org](https://networkx.org/) |
 | **strawberry-graphql[fastapi]** | ≥0.327.2 | GraphQL library for Python — auto-generates typed schema from ontology and integrates with FastAPI | MIT | [strawberry.rocks](https://strawberry.rocks/) |
-| **MLflow** | ≥3.16.1 | ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent) | Apache-2.0 | [mlflow.org](https://mlflow.org/) |
+| **[MLflow](https://docs.databricks.com/aws/en/mlflow/)** | ≥3.17.2 | ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent) | Apache-2.0 | [mlflow.org](https://mlflow.org/) |
 
 ##### MCP Server Additional Dependencies
 
@@ -96,7 +97,7 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 
 | Package | Version | Description | License | Link |
 |---------|---------|-------------|---------|------|
-| **fastmcp** | ≥2.3.1 | Model Context Protocol (MCP) server SDK for exposing tools to LLMs | Apache-2.0 | [gofastmcp.com](https://gofastmcp.com/) |
+| **fastmcp** | ≥3.4.10 | Model Context Protocol (MCP) server SDK for exposing tools to LLMs | Apache-2.0 | [gofastmcp.com](https://gofastmcp.com/) |
 | **httpx** | ≥0.25.0 | Async HTTP client (used by MCP server to call the main app REST API) | BSD-3-Clause | [www.python-httpx.org](https://www.python-httpx.org/) |
 | **cryptography** | ≥50.0.0 | MCP transitive security floor (PKCS#7 oracle fix) | Apache-2.0 / BSD-3-Clause | [cryptography.io](https://cryptography.io/) |
 
@@ -110,7 +111,7 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 | **httpx** | ≥0.25.0 | HTTP client for testing FastAPI applications | BSD-3-Clause | [www.python-httpx.org](https://www.python-httpx.org/) |
 | **responses** | ≥0.24.0 | Mock HTTP request/response library for unit tests | Apache-2.0 | [pypi.org/project/responses](https://pypi.org/project/responses/) |
 | **playwright** | ≥1.40.0 | Browser automation for end-to-end tests | Apache-2.0 | [playwright.dev/python](https://playwright.dev/python/) |
-| **black** | ≥26.3.1 | Python code formatter | MIT | [black.readthedocs.io](https://black.readthedocs.io/) |
+| **black** | ≥26.10.1 | Python code formatter | MIT | [black.readthedocs.io](https://black.readthedocs.io/) |
 | **flake8** | ≥6.0.0 | Python style guide enforcer | MIT | [flake8.pycqa.org](https://flake8.pycqa.org/) |
 | **Sphinx** | ≥7.0.0 | Documentation generator from docstrings (API reference) | BSD-2-Clause | [sphinx-doc.org](https://www.sphinx-doc.org/) |
 | **myst-parser** | ≥3.0.0 | Markdown support for Sphinx (MyST flavour) | MIT | [myst-parser.readthedocs.io](https://myst-parser.readthedocs.io/) |
@@ -133,6 +134,8 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 |---------|---------|-------------|---------|-----|
 | **Bootstrap Bundle** | 5.3.2 | JavaScript plugins for Bootstrap (includes Popper.js) | MIT | [cdn.jsdelivr.net/npm/bootstrap@5.3.2](https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js) |
 | **D3.js** | 7.x | Data-driven document manipulation and graph data processing | ISC | [d3js.org/d3.v7.min.js](https://d3js.org/d3.v7.min.js) |
+| **DOMPurify** | 3.4.17 | XSS sanitizer for HTML/Markdown output across templates and client UI | Apache-2.0 / MPL-2.0 | [cdn.jsdelivr.net/npm/dompurify@3.4.17](https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js) |
+| **Marked** | 15.0.12 | Markdown parser and compiler for client-side rendering | MIT | [cdn.jsdelivr.net/npm/marked@15.0.12](https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js) |
 | **Sigma.js** | 3.0.2 | WebGL-powered graph visualization library for large-scale networks | MIT | [cdnjs.com/libraries/sigma.js](https://cdnjs.com/libraries/sigma.js/) |
 | **Graphology** | 0.26.0 | Robust graph data model and algorithm library (used with Sigma.js) | MIT | [graphology.github.io](https://graphology.github.io/) |
 | **Graphology Library** | 0.8.0 | Standard library bundle for Graphology (includes ForceAtlas2 layout and Louvain community detection) | MIT | [cdn.jsdelivr.net/npm/graphology-library](https://cdn.jsdelivr.net/npm/graphology-library@0.8.0/) |
@@ -191,7 +194,7 @@ async def ontology_page(request: Request):
 
 #### databricks-sql-connector
 
-Enables direct connectivity to Databricks SQL Warehouses for executing queries.
+Enables direct connectivity to Databricks [SQL Warehouses](https://docs.databricks.com/aws/en/compute/sql-warehouse/) for executing queries.
 
 **Example usage:**
 ```python
@@ -355,7 +358,7 @@ uv sync --frozen --extra lakebase
 Both `uv.lock` files are deployment artifacts. `registry =
 "https://pypi.org/simple"` identifies the package index used for resolution;
 the pinned `url = "https://files.pythonhosted.org/..."` entries are the wheel
-and source downloads used by `uv run --frozen` in Databricks Apps. Never commit
+and source downloads used by `uv run --frozen` in [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/). Never commit
 `pypi-proxy.dev.databricks.com` URLs. For routine install, run, and test
 commands, always pass `--frozen` so uv cannot rewrite the lock.
 
@@ -463,7 +466,7 @@ tests/
   test_permissions.py               # Permission service tests
   test_reasoning.py                 # Reasoning engine tests
   test_reasoning_service.py         # Reasoning service orchestration
-  test_swrl_engine.py               # SWRL rule compilation and execution
+  test_if_then_engine.py               # IF-THEN rule compilation and execution
   test_business_rules.py            # Business rules engine tests
   test_dataquality.py               # SHACL data quality shapes and SQL generation
   test_errors.py                    # Centralized error hierarchy
@@ -508,8 +511,8 @@ These test the pure-logic modules that implement OntoBricks' semantic web capabi
 
 | Test File | Tests | Module Under Test | What Is Verified |
 |-----------|-------|-------------------|------------------|
-| `test_owl_parser.py` | 24 | `back.core.w3c.owl.OntologyParser` | Initialization, `_to_camel_case`, `get_classes`, `get_properties`, `get_ontology_info`, `get_constraints`, `get_swrl_rules`, `get_axioms` |
-| `test_owl_generator.py` | 18 | `back.core.w3c.owl.OntologyGenerator` | Basic generation, classes with hierarchy, datatype/object properties, property constraints, SWRL rules, axioms, generate-then-parse roundtrip |
+| `test_owl_parser.py` | 24 | `back.core.w3c.owl.OntologyParser` | Initialization, `_to_camel_case`, `get_classes`, `get_properties`, `get_ontology_info`, `get_constraints`, `get_if_then_rules`, `get_axioms` |
+| `test_owl_generator.py` | 18 | `back.core.w3c.owl.OntologyGenerator` | Basic generation, classes with hierarchy, datatype/object properties, property constraints, IF-THEN rules, axioms, generate-then-parse roundtrip |
 | `test_r2rml_generator.py` | 11 | `back.core.w3c.r2rml.R2RMLGenerator` | Initialization, entity mapping (SQL query, label, attributes, exclusion flag), relationship mapping, `generate_r2rml_from_config` convenience function |
 | `test_r2rml_parser.py` | 9 | `back.core.w3c.r2rml.R2RMLParser` | Valid/invalid R2RML parsing, entity extraction, `_parse_table_name` helper, `parse_r2rml_content` convenience, generate-then-parse roundtrip |
 
@@ -520,7 +523,7 @@ Test the business-logic service functions that sit between routes and core modul
 | Test File | Tests | Module Under Test | What Is Verified |
 |-----------|-------|-------------------|------------------|
 | `test_sparql_service.py` | 9 | `back.core.w3c.sparql` | SQL dialect helpers, `extract_r2rml_mappings`, `execute_local_query` (SELECT, LIMIT), `translate_sparql_to_spark` (non-SELECT rejection, basic SELECT) |
-| `test_ontology_service.py` | 50 | `back.objects.ontology.Ontology` | `ensure_uris`, `get_ontology_stats`, `normalize_property_domain_range`, `prune_mappings_to_ontology_uris`, `save_ontology_config_from_editor`, `delete_class_by_uri`, `delete_property_by_uri`, `add_class`, `update_class`, `add_property`, `update_property`, `ingest_owl`, `apply_parsed_rdfs_to_project`, `rename_relationship_references`, `apply_agent_ontology_changes`, `validate_swrl_rule`, `merge_icon_suggestions`, `postprocess_generated_owl`, `build_class_from_data`, `build_property_from_data`, `validate_constraint`, `generate_owl`, `parse_owl` |
+| `test_ontology_service.py` | 50 | `back.objects.ontology.Ontology` | `ensure_uris`, `get_ontology_stats`, `normalize_property_domain_range`, `prune_mappings_to_ontology_uris`, `save_ontology_config_from_editor`, `delete_class_by_uri`, `delete_property_by_uri`, `add_class`, `update_class`, `add_property`, `update_property`, `ingest_owl`, `apply_parsed_rdfs_to_project`, `rename_relationship_references`, `apply_agent_ontology_changes`, `validate_if_then_rule`, `merge_icon_suggestions`, `postprocess_generated_owl`, `build_class_from_data`, `build_property_from_data`, `validate_constraint`, `generate_owl`, `parse_owl` |
 | `test_home_service.py` | 13 | `back.services.home` | `get_session_status`, `get_ontology_status`, `validate_ontology`, `validate_mapping`, `validate_status`, `get_detailed_validation` |
 | `test_dtwin_service.py` | 13 | `back.objects.digitaltwin` | `_normalize_base_uri`, `_safe_class_label`, `augment_mappings_from_config`, `augment_relationships_from_config` |
 
@@ -539,7 +542,7 @@ These use `unittest.mock` to isolate modules that depend on external systems (Da
 
 #### P1b -- Lakebase Graph DB Tests
 
-These test the Lakebase Postgres graph engine. Heavy paths (`COPY FROM
+These test the [Lakebase Postgres](https://docs.databricks.com/aws/en/oltp/) graph engine. Heavy paths (`COPY FROM
 STDIN`, Lakeflow synced-table orchestration) are mocked at the
 `psycopg`/SDK boundary so the suite runs without a live Postgres or
 Databricks workspace.
@@ -559,7 +562,7 @@ End-to-end HTTP tests using Starlette's `TestClient`. These verify that routes a
 | `TestHealthRoutes` | `GET /health` (public liveness probe — minimal payload, `/health/detailed` retired) and the admin-only `GET /settings/diagnostics/readiness` |
 | `TestMainPages` | `GET /`, `GET /about`, `GET /session-status`, `GET /ontology-status`, `GET /validate/*` |
 | `TestSettingsRoutes` | `GET /settings`, `GET /settings/current`, `POST /settings/save`, `GET /settings/get-default-emoji`, `GET /settings/get-base-uri` |
-| `TestOntologyRoutes` | Page loads, load/save config, class/property CRUD, generate/import OWL, constraints list/save, SWRL list/save, axioms list |
+| `TestOntologyRoutes` | Page loads, load/save config, class/property CRUD, generate/import OWL, constraints list/save, IF-THEN list/save, axioms list |
 | `TestMappingRoutes` | Page loads, load/save config, entity/relationship CRUD, generate R2RML |
 | `TestProjectRoutes` | Page loads, info/save, export/import, config, session debug, design/map layout, design views |
 | `TestQueryRoutes` | `GET /dtwin/` |
@@ -573,7 +576,7 @@ These exercise multi-module pipelines to verify that components work together co
 
 | Test File | Tests | Pipeline | What Is Verified |
 |-----------|-------|----------|------------------|
-| `test_workflow_owl_roundtrip.py` | 4 | Parse OWL -> Regenerate -> Re-parse | Classes, properties, constraints, SWRL rules, axioms survive a full roundtrip |
+| `test_workflow_owl_roundtrip.py` | 4 | Parse OWL -> Regenerate -> Re-parse | Classes, properties, constraints, IF-THEN rules, axioms survive a full roundtrip |
 | `test_workflow_mapping.py` | 3 | Ontology config -> Build mappings -> Generate R2RML -> Parse R2RML | Entity exclusion, relationship direction, and overall pipeline integrity |
 | `test_workflow_sparql.py` | 2 | Ontology + Mapping -> R2RML -> Extraction -> SPARQL-to-SQL | End-to-end translation of SPARQL queries to Spark SQL via R2RML mappings |
 | `test_workflow_domain.py` | 3 | Create domain -> Set data -> Export -> Import -> Verify | Full domain roundtrip data integrity, secret exclusion from exports |
@@ -619,7 +622,7 @@ open htmlcov/index.html
 | `back/core/w3c/sparql/SparqlTranslator.py` | 41% | Large module; advanced translation paths need Databricks |
 | Routes (`front/routes/`, `api/routers/internal/`) | 11-40% | Route handlers require full app context for deeper testing |
 | `back/core/graphdb/lakebase/FlatStore.py` | ~80% | Triple CRUD, bulk paths and named queries covered with mocked psycopg |
-| `back/core/graphdb/lakebase/SyncedTableManager.py` | ~85% | `ensure` idempotency, refresh trigger, polling and delete fully tested with mocked Databricks SDK |
+| `back/core/graphdb/lakebase/SyncedTableManager.py` | ~85% | `ensure` idempotency, refresh trigger, polling and delete fully tested with mocked [Databricks SDK](https://docs.databricks.com/aws/en/dev-tools/sdk-python) |
 
 Modules with 0% coverage (`back/core/w3c/rdfs`, `back/core/sqlwizard`, `back/core/databricks/unity_catalog/MetadataService.py`) are either not yet tested or depend entirely on external services.
 
@@ -682,7 +685,7 @@ Complete), not the 0.8 one-shot Generate click. The canonical guide
 for environment variables, chaining, registry isolation, and adding scenarios
 is `tests/e2e/scenarios/README.md`.
 
-Scenario 4 additionally needs a Databricks profile/token and SQL warehouse ID
+Scenario 4 additionally needs a Databricks profile/token and [SQL warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/) ID
 exported in the pytest shell because it creates and drops scratch UC tables.
 The deterministic full-lifecycle browser journey can be run independently
 with `ONTOBRICKS_E2E_FAKE_CREDS=1`; see the canonical scenario guide.
@@ -761,15 +764,14 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Page | What Is Verified |
 |------|-----------------|
 | All pages | Navbar present, brand link, notification container, Bootstrap/utils.js scripts, nav dropdowns (Registry, Domain, Knowledge Graph), Ontology/Mapping links under Domain dropdown, Settings link, warehouse status, task tracker |
-| Home `/` | Hero section, domain panel, stat items (Entities, Relationships, Mappings), quick links (Settings, About) |
+| Home `/` | Hero (logo, `OntoBricks` title, tagline); three launch tiles (Contexts, Bridges, My tasks) that select the Registry panel below (`?section=domains\|bridges\|tasks`) |
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
-| Registry modal (`/?open=registry`) | Navbar boxes icon (`bi-boxes`) → Browse + Bridges modal |
 | Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Runs — admin only, all domains); Developer → API |
-| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. & Axioms); Studio **Export** (OWL); section divs, OntoViz script |
-| Mapping `/mapping` | Sidebar with section links (General, Import, Studio, Manual, Auto-Map, Diagnostics, Spark SQL), Studio **Export** (R2RML), mapping-core.js |
-| Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Knowledge Store, My Tasks, Discussions, Cockpit, Audit trail, OWL, R2RML), section divs |
-| Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Explorer, Query, Chat), Build, Advanced (Data Quality, Inference, Analytics); Sigma.js script |
-| Simulation `/simulation/` | Sidebar: Cohorts, Run, Scenarios, Results, Runs; scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
+| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships, Sanity Checks), Advanced (Data Quality, Business Rules, Expr. & Axioms); General tabs (Informations, OWL, with **Download**); section divs, OntoViz script |
+| Mapping `/mapping` | Graph → Management → Mapping (Informations, Visual, List tabs); toolbar Import / Export (R2RML); Auto-Map and Diagnostics modals; mapping-core.js, mapping-import.js, mapping-r2rml.js |
+| Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Documents, My Tasks, Discussions, Cockpit, Audit trail), section divs |
+| Knowledge Graph `/dtwin/` | Sidebar section groups: Management (Build with Build/Runs tabs, Overview), Navigation (Explorer, Query, Chat), Compute (Data Quality, Business rules); Sigma.js script |
+| Intelligence `/intelligence/` | Home landing of tiles; sidebar groups: Configuration (Cohorts), Discovery (Analytics with Analytics/Runs tabs, Communities, Patterns), Simulation (Scenarios, Compare); scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
 | About `/about` | Page renders, contains "OntoBricks" |
 
 **Run:**
@@ -826,7 +828,7 @@ Browser-based tests using Playwright against a live Uvicorn server. Verifies nav
 ### Known Limitations
 
 - **MCP server tests** are not included in the automated test suite — the MCP server is a separate project with its own dependencies.
-- **Databricks-connected features** (Unity Catalog operations, SQL Warehouse queries, triplestore sync) cannot be tested without a live workspace. These are tested at the mock/stub level only.
+- **Databricks-connected features** ([Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) operations, SQL Warehouse queries, triplestore sync) cannot be tested without a live workspace. These are tested at the mock/stub level only.
 - **LLM agent features** (AI Assistant, auto-map icons) rely on external API calls that are mocked with `responses` or `unittest.mock.patch`.
 - **E2E tests** validate navigation and DOM visibility but cannot fully test features that require a real Databricks connection (e.g., loading metadata, running queries).
 - **`test_sql_wizard.py`** has pre-existing failures unrelated to this test campaign and should be investigated separately.
@@ -867,7 +869,7 @@ OntoBricks uses a **two-layer** access-control model:
 | Layer | Where it lives | What it controls |
 |-------|----------------|------------------|
 | **Databricks App permissions** | Databricks workspace UI → Apps → *ontobricks* → Permissions | Who can reach the app at all, and who is an **Admin** (`CAN_MANAGE`). |
-| **In-app permission list** | `.permissions.json` stored in the Unity Catalog Registry Volume | Fine-grained roles (**Viewer** / **Editor** / **Builder**) for individual users and groups. |
+| **In-app permission list** | `.permissions.json` stored in the [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) Registry Volume | Fine-grained roles (**Viewer** / **Editor** / **Builder**) for individual users and groups. |
 | **Domain-level overrides** | `.domain_permissions.json` inside each domain folder | Per-domain role overrides that can restrict (but not elevate) the app-level role. |
 
 A user's effective role is determined by combining all three layers.
@@ -879,7 +881,7 @@ A user's effective role is determined by combining all three layers.
 | Role | Source | Capabilities |
 |------|--------|--------------|
 | **Admin** | Databricks App `CAN_MANAGE` permission | Full access. Can create domains in the registry, view, edit, build, and manage the Settings page including the permission list. |
-| **Builder** | In-app permission list | Can view, edit, **import and manage data sources**, and **build graph viewers**. Cannot change shared Settings (SQL Warehouse, Teams, branding). |
+| **Builder** | In-app permission list | Can view, edit, **import and manage data sources**, and **build graph viewers**. Cannot change shared Settings ([SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/), Teams, branding). |
 | **Editor** | In-app permission list | Can view all pages and modify assigned domains, ontologies, mappings, and **data sources**. Cannot create a domain (Admin only). **Cannot build graph viewers.** Cannot change shared Settings. |
 | **Viewer** | In-app permission list | Read-only access. Can browse domains, ontologies, and query results; can **search / expand Explorer** and **use Graph Chat** (those POSTs only read). Other writes (POST, PUT, PATCH, DELETE) stay blocked. Cannot access Settings. |
 | **None** | Default when not matched | Completely blocked. Redirected to the Access Denied page. |
@@ -1109,7 +1111,7 @@ access control list to determine which users are admins.
 1. Find the SP's application ID. It appears in the app details (e.g.,
    `84eff7c5-778b-4c0b-a24d-36126bcc8cca`).
 
-2. Grant the permission using the Databricks CLI:
+2. Grant the permission using the [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/):
 
    ```bash
    databricks permissions update apps ontobricks \
@@ -1159,7 +1161,7 @@ The entire Settings page (`/settings` and all sub-routes) is restricted
 to **admin users only**. This includes:
 
 - The General tab (Databricks connection, SQL Warehouse).
-- The Registry tab (Lakebase registry + optional Unity Catalog Volume for export bundles).
+- The Registry tab ([Lakebase](https://docs.databricks.com/aws/en/oltp/) registry + optional [Unity Catalog Volume](https://docs.databricks.com/aws/en/volumes/) for export bundles).
 - The Admin → Teams matrix (per-domain role management).
 - The About tab.
 
@@ -1331,7 +1333,7 @@ All code follows a strict three-layer stack: **routes (HTTP)** → **domain clas
 
 #### 1.2 Naming conventions
 
-- Python files containing a class: **PascalCase** matching the class name (e.g., `OWLRLReasoner.py`, `SWRLSQLTranslator.py`).
+- Python files containing a class: **PascalCase** matching the class name (e.g., `OWLRLReasoner.py`, `ShaclFlatSqlBackend.py`).
 - Python files without a primary class: **lowercase with underscores** (e.g., `constants.py`, `models.py`).
 - CSS/JS assets: lowercase with dashes, organised by feature area under `front/static/`.
 
@@ -1425,8 +1427,8 @@ back/core/
 ├── github/           <- GitHub Git Data API client (atomic commits, no git clone)
 ├── w3c/              <- W3C standard parsers/generators (OWL, RDFS, R2RML, SPARQL, SHACL)
 ├── industry/         <- Standard industry ontology importers (CDISC, FIBO, IOF)
-├── graph_analysis/   <- Community detection (NetworkX backend)
-├── reasoning/        <- OWL 2 RL, SWRL, decision tables, SPARQL rules, aggregates
+├── graph_analysis/   <- Graph analysis by type: community/, cohort/, pattern/, metrics/ (+ shared job plumbing)
+├── reasoning/        <- OWL 2 RL, IF-THEN (Simple), SPARQL rules (Complex)
 ├── sqlwizard/        <- LLM-assisted SQL generation
 ├── mcp_tools.py      <- Catalog of the configurable MCP surface + policy coercion
 └── query_limits.py   <- Shared query/row caps
@@ -1502,10 +1504,10 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 | `/`, `/about`, `/settings` (HTML), `/access-denied`, status endpoints for navbar | `front/routes/home.py` | `home.html`, `about.html`, `settings.html`, `access_denied.html` | Landing, about, settings **page shell**, consolidated `/navbar/state`, session/ontology status |
 | `/settings/*` (API) | `api/routers/internal/settings.py` | (mostly JSON) | Load/save Databricks config, test connection, permissions helpers |
 | `/ontology/*` | `front/routes/ontology.py` | `ontology.html`, fragments | Ontology editor, SHACL, industry catalogs, **agent**-backed flows (chat, OWL generation, icons) |
-| `/mapping/*` | `front/routes/mapping.py` | mapping templates | R2RML / table–ontology mapping UI |
-| `/dtwin/*` | `front/routes/dtwin.py` | dtwin templates | SPARQL, graph exploration, triple-store–backed "graph viewer" UI |
+| `/mapping/` (HTML) | `front/routes/mapping.py` | redirect | Legacy Mapping URL → `/dtwin/?section=…` (API stays under `/mapping/*` via `api/routers/internal/mapping.py`) |
+| `/dtwin/*` | `front/routes/dtwin.py` | `dtwin.html` + mapping partials | Graph UI: Mapping (General/Studio Visual+List), Build, Explorer, Query, Chat, Compute |
 | `/domain/*` | `front/routes/domain.py` | domain templates | Domain JSON in UC volumes, versioning, metadata, documents |
-| `/registry/` | `front/routes/registry.py` | redirects to `/?open=registry` | Opens Registry modal (Browse + Bridges) on Home |
+| `/registry/` | `front/routes/registry.py` | redirects to `/?section=domains` | Opens Home on the Registry Browse tab |
 | `/resolve` | `front/routes/resolve.py` | — (redirect) | Entity URI resolution — finds the owning domain and redirects to the graph viewer |
 | `/tasks/*` | `api/routers/internal/tasks.py` | — | Task list/detail JSON for long-running work |
 
@@ -1515,13 +1517,13 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 
 #### 3.4 Menu and client-side navigation
 
-- **Declarative menu:** `src/front/config/menu_config.json` defines sections (Domain, Ontology, Mapping, Graph, …), **routes** (e.g. `/domain/`), top-level Bootstrap Icons, groups, items, and `navbar_actions` (e.g. `domainSave`). The server can expose this to the client or the client can load it; either way it is the **source of truth** for section IDs, icons, and default tabs. When changing a top-level `icon`, also update `breadcrumb.js` `_ROUTE_MAP` (and any hardcoded labels such as the help walkthrough); `tests/units/front/test_knowledge_graph_icon.py` guards Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
+- **Declarative menu:** `src/front/config/menu_config.json` defines sections (Context/Domain, Ontology, Graph, Intelligence, …), **routes** (e.g. `/domain/`), top-level Bootstrap Icons, groups, items, and `navbar_actions` (e.g. `domainSave`). Mapping is a **group under Graph** (`digitaltwin-mapping`: General / Studio); Studio hosts Visual + List tabs. The server can expose this to the client or the client can load it; either way it is the **source of truth** for section IDs, icons, and default tabs. When changing a top-level `icon`, also update any hardcoded labels such as the help walkthrough; `tests/units/front/test_knowledge_graph_icon.py` guards that Domain ≠ Graph.
 - **JavaScript:** under `src/front/static/global/js/` (sidebar, navbar, domain actions). Pages load shared layout partials from templates and drive **in-page tabs** via menu item IDs rather than full page loads for every interaction.
 
 #### 3.5 Core UI concerns (conceptual)
 
 - **SessionManager / `get_domain`:** Most handlers depend on `SessionManager` to read/write the **current domain blob** (ontology, mappings, registry pointers, triple-store options) in the file session.
-- **Databricks integration:** UI services call helpers such as `get_databricks_client`, `get_databricks_host_and_token`, `resolve_warehouse_id`, and `VolumeFileService` to run SQL, read/write Unity Catalog volumes, and align with app vs. PAT auth.
+- **Databricks integration:** UI services call helpers such as `get_databricks_client`, `get_databricks_host_and_token`, `resolve_warehouse_id`, and `VolumeFileService` to run SQL, read/write [Unity Catalog volumes](https://docs.databricks.com/aws/en/volumes/), and align with app vs. PAT auth.
 - **TaskManager:** Long operations (builds, agent loops) register tasks under `/tasks/{id}` so the UI can poll progress without holding a request open.
 
 #### 3.6 Frontend code guidelines
@@ -1587,7 +1589,7 @@ Defined in `api/routers/digitaltwin.py`. Representative paths:
 | POST | `/dataquality/start` + GET `/dataquality/{task_id}` | Async data quality |
 | POST | `/reasoning/start` + GET `/reasoning/{task_id}`, GET `/reasoning/results` | Reasoning jobs and results |
 
-These endpoints combine **registry configuration** (Unity Catalog volume for the domain index) with **per-domain** parameters and often use the same Databricks credential resolution patterns as the UI.
+These endpoints combine **registry configuration** ([Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) volume for the domain index) with **per-domain** parameters and often use the same Databricks credential resolution patterns as the UI.
 
 #### 4.5 GraphQL
 
@@ -1647,7 +1649,7 @@ The **MCP** package exposes OntoBricks capabilities (domains, status, entities, 
 
 #### 6.3 Operating modes (from module docstring)
 
-- **`databricks`** — combined FastAPI + FastMCP app; uses **service principal** / app identity to reach the main app.  
+- **`databricks`** — combined FastAPI + FastMCP app; uses **[service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals)** / app identity to reach the main app.  
 - **`standalone`** — separate process (stdio/SSE HTTP) pointing at `ONTOBRICKS_URL` (e.g. localhost).  
 - **`mounted`** — optional embedding in the main OntoBricks process (loopback to the same host/port).
 
@@ -1785,11 +1787,11 @@ All logging goes through `back/core/logging/LogManager`.
 
 **Backend:**
 
-- **Asynchronous Operations**: Use `async/await` for Databricks SDK calls and I/O-bound operations.
+- **Asynchronous Operations**: Use `async/await` for [Databricks SDK](https://docs.databricks.com/aws/en/dev-tools/sdk-python) calls and I/O-bound operations.
 - **Logging**: Use %-style formatting (not f-strings) in logging calls for both security and performance.
 - **Session Data**: Minimize the number of session variables. Prefer computed values over stored ones when the cost is low.
 - **Caching**: Use TTL caches for frequently accessed, rarely changing data (e.g., version status in `version_status.py`).
-- **Triple Store / Graph DB**: Be mindful of query complexity. The Lakebase Graph DB engine streams large builds via `bulk_insert_iter` (`COPY FROM STDIN`) instead of materializing the full triple set in the FastAPI process; the Delta layer relies on Liquid Clustering and `OPTIMIZE` post-build.
+- **Triple Store / Graph DB**: Be mindful of query complexity. The [Lakebase](https://docs.databricks.com/aws/en/oltp/) Graph DB engine streams large builds via `bulk_insert_iter` (`COPY FROM STDIN`) instead of materializing the full triple set in the FastAPI process; the Delta layer relies on [Liquid Clustering](https://docs.databricks.com/aws/en/delta/clustering) and `OPTIMIZE` post-build.
 - **Background Tasks**: Offload heavy operations to `TaskManager` or Databricks Workflows. Log progress at each async step.
 
 **Frontend:**
@@ -1857,7 +1859,7 @@ All logging goes through `back/core/logging/LogManager`.
 | REST v1 | `src/api/routers/v1.py`, `src/api/service.py` |
 | Domain list & artifacts | `src/api/routers/domains.py` |
 | Knowledge Graph REST | `src/api/routers/digitaltwin.py` |
-| Graph analysis / clustering | `src/back/core/graph_analysis/` (`CommunityDetector`, models) |
+| Graph analysis / clustering | `src/back/core/graph_analysis/community/` (`JobCommunities`, `CommunityMaterializer`) |
 | GraphQL | `src/back/fastapi/graphql_routes.py` |
 | Agents | `src/agents/**` |
 | MCP | `src/mcp-server/server/app.py`, `src/mcp-server/server/main.py` |

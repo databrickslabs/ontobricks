@@ -6,8 +6,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SIGMA_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_sigmagraph.html"
 SIGMA_JS = REPO_ROOT / "src/front/static/query/js/query-sigmagraph.js"
 SYNC_JS = REPO_ROOT / "src/front/static/query/js/query-sync.js"
-RESULTS_HTML = REPO_ROOT / "src/front/templates/partials/simulation/_sim_results.html"
-RESULTS_JS = REPO_ROOT / "src/front/static/simulation/js/simulation-results.js"
+RESULTS_HTML = REPO_ROOT / "src/front/templates/partials/intelligence/_sim_results.html"
+RESULTS_JS = REPO_ROOT / "src/front/static/intelligence/js/simulation-results.js"
 
 
 def test_explorer_header_has_simulation_select() -> None:

@@ -32,9 +32,6 @@ SIGMAGRAPH_TEMPLATE = (
 ONTOLOGY_COHORT_TEMPLATE = (
     REPO_ROOT / "src/front/templates/partials/ontology/_ontology_cohorts.html"
 )
-QUERY_COHORT_TEMPLATE = (
-    REPO_ROOT / "src/front/templates/partials/dtwin/_query_cohorts.html"
-)
 ONTOLOGY_WIZARD_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-wizard.css"
 ONTOLOGY_WIZARD_TEMPLATE = (
     REPO_ROOT / "src/front/templates/partials/ontology/_ontology_wizard.html"
@@ -43,7 +40,7 @@ ONTOLOGY_IMPORT_TEMPLATE = (
     REPO_ROOT / "src/front/templates/partials/ontology/_ontology_import.html"
 )
 DOMAIN_RUNS_TEMPLATE = (
-    REPO_ROOT / "src/front/templates/partials/domain/_domain_runs.html"
+    REPO_ROOT / "src/front/templates/partials/dtwin/_query_build.html"
 )
 ONTOLOGY_DATAQUALITY_CSS = (
     REPO_ROOT / "src/front/static/ontology/css/ontology-dataquality.css"
@@ -54,9 +51,7 @@ ONTOLOGY_BUSINESS_RULES_CSS = (
 REGISTRY_TEAMS_CSS = (
     REPO_ROOT / "src/front/static/registry/css/registry-teams.css"
 )
-REGISTRY_MODAL_TEMPLATE = (
-    REPO_ROOT / "src/front/templates/partials/layout/registry_modal.html"
-)
+HOME_TEMPLATE = REPO_ROOT / "src/front/templates/home.html"
 FRONTEND_RULE = REPO_ROOT / ".cursor/11-frontend-design.mdc"
 CLAUDE_GUIDE = REPO_ROOT / "CLAUDE.md"
 FRONTEND_SKILL = REPO_ROOT / ".claude/skills/frontend-design/SKILL.md"
@@ -64,7 +59,7 @@ MENU_CONFIG = REPO_ROOT / "src/front/config/menu_config.json"
 SIDEBAR_NAV_PARTIAL = (
     REPO_ROOT / "src/front/templates/partials/layout/_sidebar_nav.html"
 )
-ONTOVIZ_CSS = REPO_ROOT / "src/front/static/global/ontoviz/css/ontoviz.css"
+ONTOLOGY_MAP_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-map.css"
 
 
 def _read(path: Path) -> str:
@@ -179,8 +174,8 @@ def _strip_root_palette_block(css_text: str) -> str:
 
 def test_main_css_declares_clarity_primary_and_warm_tokens():
     css = _read(MAIN_CSS)
-    # Contract keeps canonical uppercase hex for the primary indigo token.
-    assert re.search(r"--db-primary\s*:\s*#4F46E5\s*;", css)
+    # Contract keeps canonical uppercase hex for the factory primary token.
+    assert re.search(r"--db-primary\s*:\s*#737373\s*;", css)
     # Regression coverage from review fix: muted text token must remain accessible.
     assert re.search(r"--db-text-muted\s*:\s*#6F6B65\s*;", css)
 
@@ -207,28 +202,28 @@ def test_components_css_keeps_only_primary_button_filled():
     outline_primary_blocks = _rule_blocks_for_exact_class(css, ".btn-outline-primary")
 
     assert primary_blocks, "No CSS rule targets .btn-primary"
+    # Create: solid Databricks primary driven by the configurable button token.
     assert _any_block_has_declaration(
-        primary_blocks, r"(?:background|background-color)", r"var\(--db-gradient-primary\)"
+        primary_blocks, r"(?:background|background-color)", r"var\(--db-btn-primary\)"
     )
+    assert _any_block_has_declaration(primary_blocks, r"box-shadow", r"none")
     assert _any_block_has_declaration(
-        primary_blocks, r"box-shadow", r"var\(--db-shadow-primary\)"
-    )
-    assert _any_block_has_declaration(
-        primary_blocks, r"color", r"var\(--db-on-primary\)"
+        primary_blocks, r"color", r"var\(--db-btn-primary-on\)"
     )
 
-    # Semantic outcome: neutral and outline button variants stay visually unfilled.
+    # Share: outlined secondary sits on the white surface token, never a fill.
     assert secondary_blocks, "No CSS rule targets .btn-secondary"
     assert _any_block_has_declaration(
-        secondary_blocks, r"(?:background|background-color)", r"transparent"
+        secondary_blocks, r"(?:background|background-color)", r"var\(--db-surface-warm\)"
     )
     assert outline_secondary_blocks, "No CSS rule targets .btn-outline-secondary"
     assert _any_block_has_declaration(
-        outline_secondary_blocks, r"(?:background|background-color)", r"transparent"
+        outline_secondary_blocks, r"(?:background|background-color)", r"var\(--db-surface-warm\)"
     )
+    # Outline primary joins the Share family (same paint as secondary).
     assert outline_primary_blocks, "No CSS rule targets .btn-outline-primary"
     assert _any_block_has_declaration(
-        outline_primary_blocks, r"(?:background|background-color)", r"transparent"
+        outline_primary_blocks, r"(?:background|background-color)", r"var\(--db-surface-warm\)"
     )
 
 
@@ -256,7 +251,7 @@ def test_components_css_ob_tabs_active_is_transparent_with_primary_underline():
     assert re.search(
         r"\.nav-tabs\.ob-tabs\s+\.nav-link\.active,\s*"
         r"\.nav-tabs\.ob-tabs\s+\.nav-item\.show\s+\.nav-link\s*\{"
-        r"[^}]*color\s*:\s*var\(--db-primary-darker[^;]*;"
+        r"[^}]*color\s*:\s*var\(--db-text[,)][^;]*;"
         r"[^}]*background\s*:\s*transparent\s*!important;"
         r"[^}]*border-bottom-color\s*:\s*var\(--db-primary[^;]*;"
         r"[^}]*border-radius\s*:\s*0\s*!important;",
@@ -265,22 +260,23 @@ def test_components_css_ob_tabs_active_is_transparent_with_primary_underline():
     )
 
 
-def test_tab_hover_uses_the_brand_aware_indigo_token():
+def test_tab_hover_turns_the_label_primary_without_a_fill():
+    """Databricks tabs: hover recolours the label; no background fill."""
     components = _read(COMPONENTS_CSS)
     component_hover = _rule_blocks_for_exact_class(
         components, ".nav-tabs.ob-tabs .nav-link:hover:not(.active):not(.disabled)"
     )
     assert _any_block_has_declaration(
-        component_hover,
-        r"background",
-        r"var\(--db-hover-indigo[^;]*\)\s*!important",
+        component_hover, r"background", r"transparent\s*!important"
+    )
+    assert _any_block_has_declaration(
+        component_hover, r"color", r"var\(--db-primary\)\s*!important"
     )
 
     main = _read(MAIN_CSS)
     fallback_hover = _rule_blocks_for_exact_class(main, ".nav-tabs .nav-link:hover")
-    assert _any_block_has_declaration(
-        fallback_hover, r"background", r"var\(--db-hover-indigo[^;]*\)"
-    )
+    assert _any_block_has_declaration(fallback_hover, r"background", r"transparent")
+    assert _any_block_has_declaration(fallback_hover, r"color", r"var\(--db-primary\)")
 
 
 def test_components_css_ob_tabs_strip_is_a_transparent_scrollable_rail():
@@ -297,7 +293,7 @@ def test_components_css_ob_tabs_strip_is_a_transparent_scrollable_rail():
     assert _any_block_has_declaration(
         strip_blocks,
         r"border-bottom",
-        r"1px\s+solid\s+var\(--db-border[^;]*\)",
+        r"1px\s+solid\s+var\(--db-border\)",
     )
 
 
@@ -310,7 +306,7 @@ def test_components_css_ob_tabs_has_visible_keyboard_focus():
     assert _any_block_has_declaration(
         focus_blocks, r"outline", r"2px\s+solid\s+var\(--db-primary[^;]*\)"
     )
-    assert _any_block_has_declaration(focus_blocks, r"outline-offset", r"-3px")
+    assert _any_block_has_declaration(focus_blocks, r"outline-offset", r"2px")
 
 
 def test_components_css_ob_tabs_exposes_standard_and_compact_densities():
@@ -319,17 +315,21 @@ def test_components_css_ob_tabs_exposes_standard_and_compact_densities():
     compact = _rule_blocks_for_exact_class(
         css, ".nav-tabs.ob-tabs.ob-tabs--compact .nav-link"
     )
-    assert _any_block_has_declaration(standard, r"font-size", r"0\.9rem")
-    assert _any_block_has_declaration(standard, r"padding", r"0\.5rem\s+0\.875rem")
+    assert _any_block_has_declaration(standard, r"font-size", r"0\.8125rem")
+    assert _any_block_has_declaration(standard, r"padding", r"0\.5rem\s+0")
+    assert _any_block_has_declaration(
+        standard, r"border-bottom", r"3px\s+solid\s+transparent\s*!important"
+    )
     assert _any_block_has_declaration(compact, r"font-size", r"0\.75rem")
-    assert _any_block_has_declaration(compact, r"padding", r"0\.35rem\s+0\.6rem")
+    assert _any_block_has_declaration(compact, r"padding", r"0\.35rem\s+0")
+
+    rail = _rule_blocks_for_exact_class(css, ".nav-tabs.ob-tabs")
+    assert _any_block_has_declaration(rail, r"gap", r"1\.5rem")
 
     main = _read(MAIN_CSS)
     fallback = _rule_blocks_for_exact_class(main, ".nav-tabs .nav-link")
-    assert _any_block_has_declaration(fallback, r"font-size", r"0\.9rem")
-    assert _any_block_has_declaration(
-        fallback, r"padding", r"0\.5rem\s+0\.875rem"
-    )
+    assert _any_block_has_declaration(fallback, r"font-size", r"0\.8125rem")
+    assert _any_block_has_declaration(fallback, r"padding", r"0\.5rem\s+0")
 
 
 def test_data_quality_tabs_do_not_override_the_shared_density():
@@ -365,36 +365,34 @@ def test_ontology_import_uses_the_card_integrated_tab_pattern():
     assert "ob-tab-content" not in content_tag
 
 
-def test_domain_runs_uses_the_card_integrated_tab_pattern():
+def test_build_page_uses_the_card_integrated_tab_pattern():
     template = _read(DOMAIN_RUNS_TEMPLATE)
     assert '<div class="card h-100">' in template
     assert '<div class="card-body p-0 ob-tabs-wrap">' in template
     assert (
-        'class="nav nav-tabs ob-tabs nav-fill" id="runsTabs"'
+        'class="nav nav-tabs ob-tabs nav-fill" id="buildPageTabs"'
         in template
     )
-    anchor = template.index('id="runsTabContent"')
+    anchor = template.index('id="buildPageTabContent"')
     content_tag = template[template.rindex("<div", 0, anchor) : anchor]
     assert "tab-content p-3" in content_tag
     assert "ob-tab-content" not in content_tag
 
 
-def test_registry_modal_uses_the_shared_tab_rail():
-    template = _read(REGISTRY_MODAL_TEMPLATE)
-    assert '<div class="ob-tabs-wrap">' in template
-    assert (
-        'class="nav nav-tabs ob-tabs" id="registryModalTabs"'
-        in template
-    )
-    anchor = template.index('id="registryModalTabContent"')
-    content_tag = template[template.rindex("<div", 0, anchor) : anchor]
-    assert "tab-content p-3" in content_tag
-    assert "ob-tab-content" not in content_tag
+def test_home_registry_uses_launch_tiles_and_eighty_percent_modal():
+    """Home only: launch tiles open an 80% modal (no card-integrated tab rail)."""
+    template = _read(HOME_TEMPLATE)
+    assert 'class="home-nav-tiles" id="homeTabs"' in template
+    assert 'id="homeRegistryModal"' in template
+    assert "home-registry-dialog" in template
+    assert 'class="nav nav-tabs ob-tabs nav-fill" id="homeTabs"' not in template
+    assert 'class="card-body p-0 ob-tabs-wrap"' not in template
+    assert template.count('role="tab"') == 3
+    assert 'id="homeTabContent"' in template
 
-    css = _read(COMPONENTS_CSS)
-    assert ".ob-tabs-wrap > .nav-tabs.ob-tabs" in css
-    assert "margin-right: 0" in css
-    assert ".modal-body > .ob-tabs-wrap" in css
+    css = _read(HOME_TEMPLATE.parent.parent / "static" / "home" / "css" / "home.css")
+    assert "80vw" in css
+    assert "80vh" in css
 
 
 def test_frontend_rule_defines_card_integrated_page_tabs():
@@ -441,6 +439,10 @@ def test_sigmagraph_panel_uses_the_shared_compact_tab_rail():
 
     css = _read(SIGMAGRAPH_CSS)
     assert ".sg-panel-tabs .nav-link" not in css
+    # Tab rail header has horizontal padding so Details is inset from the panel edge
+    match = re.search(r"(?:#sigmagraph-section\s+)?\.sg-panel-tabs\s*\{([^}]*)\}", css)
+    assert match is not None
+    assert re.search(r"padding(?:-left)?\s*:\s*(?:0\s+)?1rem", match.group(1))
 
 
 def test_sigmagraph_max_entities_matches_backend_clamp():
@@ -464,14 +466,13 @@ def test_mapping_designer_panels_use_the_shared_compact_tab_rail():
     ) == 2
 
 
-def test_cohort_cards_do_not_masquerade_as_tab_strips():
-    for template_path in (ONTOLOGY_COHORT_TEMPLATE, QUERY_COHORT_TEMPLATE):
-        template = _read(template_path)
-        assert "cohort-tabs-wrap" not in template
-        assert 'class="cohort-content-card card"' in template
-    ontology_template = _read(ONTOLOGY_COHORT_TEMPLATE)
-    assert 'role="tabpanel"' not in ontology_template
-    assert 'class="tab-pane' not in ontology_template
+def test_cohort_page_uses_real_ob_tabs_not_a_fake_strip():
+    template = _read(ONTOLOGY_COHORT_TEMPLATE)
+    assert "cohort-tabs-wrap" not in template
+    assert 'class="cohort-content-card card"' in template
+    # Design / Runs are real Bootstrap tabs styled with the shared ob-tabs.
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in template
+    assert template.count('role="tabpanel"') == 2
 
 
 def test_orphan_tab_styles_are_removed():
@@ -498,12 +499,12 @@ def test_designer_canvas_selection_uses_clarity_indigo():
         assert any("--db-primary" in block for block in blocks), selector
 
 
-def test_main_css_l2_segment_and_nav_tabs_use_indigo_soft_selection():
+def test_main_css_l2_app_switcher_and_nav_tabs_use_indigo_soft_selection():
     css = _read(MAIN_CSS)
+    # Current workspace lives in the app switcher (rail dropdowns removed).
     assert re.search(
-        r"\.ob-subnav-link\.active\s*\{"
-        r"[^}]*background\s*:\s*var\(--db-gradient-primary\)\s*;"
-        r"[^}]*border-radius\s*:\s*calc\(var\(--db-radius-control\)\s*-\s*2px\)\s*;",
+        r"\.ob-app-switcher-item\.is-current\s*\{"
+        r"[^}]*background\s*:\s*var\(--db-primary-light\)\s*;",
         css,
         flags=re.DOTALL,
     )
@@ -538,10 +539,24 @@ def test_main_css_declares_aurora_gradient_tokens():
     )
 
 
-def test_resting_cards_now_carry_the_soft_shadow():
+def test_resting_cards_stay_flat_without_shadow():
     css = _read(MAIN_CSS)
     card_blocks = _rule_blocks_for_exact_class(css, ".card")
-    assert _any_block_has_declaration(card_blocks, r"box-shadow", r"var\(--db-shadow-sm\)")
+    assert _any_block_has_declaration(card_blocks, r"box-shadow", r"none")
+
+
+def test_task_progress_overlay_is_opaque():
+    """Auto-Map / Ontology Generate overlays must fully hide the previous screen."""
+    css = _read(COMPONENTS_CSS)
+    for selector in (".task-progress-overlay", ".wizard-form-overlay"):
+        blocks = _rule_blocks_for_exact_selector(css, selector)
+        assert blocks, f"missing rule for {selector}"
+        assert _any_block_has_declaration(
+            blocks, r"background", r"var\(--db-surface-warm\)"
+        )
+        assert not _any_block_has_declaration(
+            blocks, r"background", r"rgba\(\s*255\s*,\s*255\s*,\s*255\s*,\s*0\.[0-9]+\s*\)"
+        )
 
 
 def test_sidebar_active_rail_uses_the_aurora_gradient():
@@ -557,7 +572,7 @@ def test_nav_hover_indigo_token_is_lighter_than_active_fill():
     """Hover tint must stay below the 0.12 active fill so the two read apart."""
     css = _read(MAIN_CSS)
     hover_match = re.search(
-        r"--db-hover\s*:\s*rgba\(\s*79\s*,\s*70\s*,\s*229\s*,\s*(0\.[0-9]+)\s*\)\s*;",
+        r"--db-hover\s*:\s*rgba\(\s*115\s*,\s*115\s*,\s*115\s*,\s*(0\.[0-9]+)\s*\)\s*;",
         css,
     )
     assert hover_match, "--db-hover token missing"
@@ -577,7 +592,7 @@ def test_navbar_dropdown_hover_matches_sidebar():
     )
     assert re.search(
         r"\.navbar\s+\.dropdown-menu\s+\.dropdown-item\s*\{"
-        r"[^}]*border-radius\s*:\s*9px\s*;",
+        r"[^}]*border-radius\s*:\s*var\(--db-radius-control\)\s*;",
         css,
         flags=re.DOTALL,
     )
@@ -599,7 +614,7 @@ def test_l2_dropdown_items_match_sidebar_hover_and_active():
     )
     assert re.search(
         r"\.ob-subnav\s+\.dropdown-menu\s+\.dropdown-item\s*\{"
-        r"[^}]*border-radius\s*:\s*9px\s*;",
+        r"[^}]*border-radius\s*:\s*var\(--db-radius-control\)\s*;",
         css,
         flags=re.DOTALL,
     )
@@ -611,7 +626,7 @@ def test_l2_dropdown_items_match_sidebar_hover_and_active():
     )
 
 
-def test_base_template_keeps_logo_nav_structure_and_l1_before_l2():
+def test_base_template_keeps_logo_in_unified_chrome_bar():
     html = _read(BASE_HTML)
     menu = _menu_config()
     domain_menu = next(menu_item for menu_item in menu["menus"] if menu_item["id"] == "domain")
@@ -624,14 +639,19 @@ def test_base_template_keeps_logo_nav_structure_and_l1_before_l2():
     assert 'data-brand-title' in html
     assert "{{ _branding.logo_url }}" in html
     assert 'id="obSubnav"' in html
+    assert 'class="ob-subnav navbar navbar-light"' in html
+    assert html.count('<nav id="obSubnav"') == 1
+    assert 'navbar-expand-lg' not in html
+    assert 'id="navbarNav"' not in html
     assert save_action["element_id"] == "menuSaveDomain"
     # Base template contract is dynamic: id comes from save_action.v.element_id.
-    assert 'class="ob-subnav-save-btn btn-requires-domain"' in html
+    assert 'class="ob-subnav-action ob-subnav-save-btn btn-requires-domain"' in html
     assert '{% if save_action.v.element_id %}id="{{ save_action.v.element_id }}"{% endif %}' in html
 
-    l1_pos = html.index('<nav class="navbar navbar-expand-lg navbar-light">')
-    l2_pos = html.index('<nav id="obSubnav"')
-    assert l1_pos < l2_pos
+    # Left: toggle then brand; right group starts after the flex spacer.
+    assert html.index("obSidebarToggleItem") < html.index("brandLogoImg")
+    assert html.index("brandLogoImg") < html.index("ob-subnav-flex-spacer")
+    assert html.index("ob-subnav-flex-spacer") < html.index("domainContextTrigger")
 
 
 def test_sidebar_layout_preserves_geometry_and_clarity_active_tokens():
@@ -642,8 +662,8 @@ def test_sidebar_layout_preserves_geometry_and_clarity_active_tokens():
         [
             "width: 200px;",
             "min-width: 200px;",
-            "width: 48px;",
-            "min-width: 48px;",
+            "width: 40px;",
+            "min-width: 40px;",
         ],
     )
 
@@ -659,19 +679,26 @@ def test_sidebar_layout_preserves_geometry_and_clarity_active_tokens():
     )
 
 
-def test_sidebar_is_a_framed_card_like_the_split_panel_panes():
-    """The shell supplies the gutter that exposes all four rounded corners."""
+def test_sidebar_has_transparent_background_and_no_border():
+    """Sidebar has transparent background and no border (same as second navbar)."""
     css = _read(SIDEBAR_LAYOUT_CSS)
     blocks = _rule_blocks_for_exact_class(css, ".sidebar-nav")
 
-    assert _any_block_has_declaration(
-        blocks, r"border-radius", r"var\(--db-radius-card\)"
-    )
-    assert _any_block_has_declaration(blocks, r"border", r"1px solid var\(--db-border\)")
+    assert _any_block_has_declaration(blocks, r"background", r"transparent")
+    assert _any_block_has_declaration(blocks, r"border", r"none")
+
+
+def test_sidebar_toggle_has_no_hover_highlight():
+    """The L2 collapse/expand toggle must not change background on hover."""
+    main_css = _read(MAIN_CSS)
+    sidebar_css = _read(SIDEBAR_LAYOUT_CSS)
+
+    assert not re.search(r"\.ob-subnav-sidebar-toggle:hover\s*\{", main_css)
+    assert not re.search(r"\.sidebar-toggle:hover\s*\{", sidebar_css)
 
 
 def test_sidebar_layout_centralizes_the_shared_outer_gutter():
-    """The shell owns asymmetric vertical gutters and a 0.5rem horizontal inset.
+    """The shell owns asymmetric vertical gutters and a compact horizontal inset.
 
     Exact-selector parsing so a ``:has()`` page override cannot satisfy the
     base-layout contract.
@@ -681,30 +708,31 @@ def test_sidebar_layout_centralizes_the_shared_outer_gutter():
     sidebar = _rule_blocks_for_exact_selector(css, ".sidebar-nav")
     content = _rule_blocks_for_exact_selector(css, ".sidebar-content")
 
-    assert _any_block_has_declaration(layout, r"gap", r"0\.5rem")
-    assert _any_block_has_declaration(layout, r"padding", r"0\.25rem\s+0\.5rem\s+0\.5rem")
+    assert _any_block_has_declaration(layout, r"gap", r"0\.25rem")
+    assert _any_block_has_declaration(layout, r"padding", r"0\.15rem\s+0\.25rem\s+0\.25rem")
     assert _any_block_has_declaration(layout, r"box-sizing", r"border-box")
     assert _any_block_has_declaration(sidebar, r"margin", r"0")
     assert _any_block_has_declaration(sidebar, r"height", r"100%")
     assert _any_block_has_declaration(
-        content, r"padding", r"0\s+0\.5rem"
+        content, r"padding", r"0\s+0\.25rem"
     )
 
 
-def test_level_two_rail_and_content_share_the_same_vertical_gutter():
-    """L2 owns only its top gutter; the shell owns the gutter below it."""
+def test_chrome_rail_and_content_share_the_same_vertical_gutter():
+    """Chrome rail owns symmetric vertical padding; the shell owns space below."""
     main_css = _read(MAIN_CSS)
     subnav = _rule_blocks_for_exact_selector(main_css, ".ob-subnav-nav")
 
     assert _any_block_has_declaration(
         subnav,
         r"padding",
-        r"0\.25rem\s+0\s+0",
+        r"0\.15rem\s+0",
     )
 
 
-def test_desktop_sidebar_titles_match_subtitle_to_content_gap():
-    """Space above the title equals the header's bottom margin."""
+def test_desktop_sidebar_titles_sit_on_the_page_panel_padding():
+    """The white page panel owns the space above the title; the header keeps
+    a fixed 0.75rem gap to the body."""
     css = _read(SIDEBAR_LAYOUT_CSS)
     desktop_rule = re.search(
         r"@media\s*\(\s*min-width\s*:\s*769px\s*\)\s*\{"
@@ -717,7 +745,7 @@ def test_desktop_sidebar_titles_match_subtitle_to_content_gap():
     body = desktop_rule.group("body")
     assert re.search(
         r"\.sidebar-layout\s+\.section-header\s*\{"
-        r"[^}]*padding-top\s*:\s*0\.5rem\s*;",
+        r"[^}]*padding-top\s*:\s*0\s*;",
         body,
         flags=re.DOTALL,
     )
@@ -730,15 +758,14 @@ def test_desktop_sidebar_titles_match_subtitle_to_content_gap():
     assert _any_block_has_declaration(
         header_blocks,
         r"margin-bottom",
-        r"0\.5rem\s*!important",
+        r"0\.75rem\s*!important",
     )
 
 
-def test_section_header_top_inset_matches_subtitle_to_content_gap():
-    """``.section-header`` top padding equals its 0.5rem bottom margin."""
+def test_section_header_has_no_top_inset_inside_the_page_panel():
     css = _read(MAIN_CSS)
     blocks = _rule_blocks_for_exact_selector(css, ".section-header")
-    assert _any_block_has_declaration(blocks, r"padding-top", r"0\.5rem")
+    assert _any_block_has_declaration(blocks, r"padding-top", r"0")
 
 
 def test_sidebar_layout_has_a_min_height_safe_flex_chain():
@@ -813,7 +840,7 @@ def test_sidebar_layout_restores_natural_flow_on_mobile():
 
 
 def test_user_identity_lives_in_the_navbar_not_the_sidebar():
-    """One place for the current user, and it is the far right of the navbar."""
+    """One place for the current user, and it is the far right of the chrome bar."""
     partial = _read(SIDEBAR_NAV_PARTIAL)
     html = _read(BASE_HTML)
 
@@ -821,29 +848,32 @@ def test_user_identity_lives_in_the_navbar_not_the_sidebar():
     assert 'id="userMenuDropdown"' in html
     assert "ob-user-menu-email" in html
 
-    # Declared after the right-aligned group opens and after the last control
-    # in it, or it is not the right-most item.
+    # Declared after Activity and as the right-most chrome control.
     assert (
-        html.index('<ul class="navbar-nav ms-auto">')
-        < html.index("settingsGearDropdown")
+        html.index("activityCenterToggle")
         < html.index("userMenuDropdown")
     )
+    assert html.index("userMenuDropdown") < html.index("helpCenterToggle")
+    assert html.index("helpCenterToggle") < html.index("navReportIssue")
+    assert "settingsGearDropdown" not in html
+    assert "ob-user-avatar" in html
+    assert "bi-person-circle" not in html
 
     # The sidebar CSS for the old footer must go with it.
     assert "sidebar-user" not in _read(SIDEBAR_LAYOUT_CSS)
 
 
-def test_ontoviz_entity_headers_use_indigo_soft_not_red():
-    """Business Views entity cards were tinted light red, outside the palette."""
-    css = _read(ONTOVIZ_CSS)
-
+def test_studio_map_uses_design_tokens_not_hardcoded_red():
+    """Studio map chrome must stay on the Clarity token palette."""
+    css = _read(ONTOLOGY_MAP_CSS)
     assert "fdeaea" not in css.lower()
-    blocks = _rule_blocks_for_exact_class(css, ".ovz-entity-header")
-    assert _any_block_has_declaration(blocks, r"background", r"var\(--db-primary-light\)")
+    assert "var(--db-" in css
 
 
 def test_primary_consumers_use_runtime_tokens_outside_root_fallback():
-    css_files = [MAIN_CSS, COMPONENTS_CSS, SIDEBAR_LAYOUT_CSS, ONTOVIZ_CSS]
+    # Studio map CSS still uses a few interaction hex values (search popup,
+    # inheritance highlight); the shared chrome files must stay token-only.
+    css_files = [MAIN_CSS, COMPONENTS_CSS, SIDEBAR_LAYOUT_CSS]
     forbidden = [
         "#4f46e5",
         "rgba(79, 70, 229",
@@ -861,15 +891,15 @@ def test_ontology_map_highlight_reads_primary_token_from_css():
     assert "--db-primary" in js
     assert "getComputedStyle(document.documentElement)" in js
     # Keep exactly one explicit fallback literal scoped to the helper.
-    assert js.count("#4F46E5") == 1
-    assert "return value || '#4F46E5';" in js
+    assert js.count("#737373") == 1
+    assert "return value || '#737373';" in js
 
 
 def test_frontend_design_rule_documents_new_palette_and_immutable_structure():
     rule_text = _read(FRONTEND_RULE)
 
     required_statements = [
-        "#4F46E5",
+        "#737373",
         "warm",
         "filled primary",
         "semantic tinted status",
@@ -902,3 +932,21 @@ def test_base_template_preserves_css_and_js_contract_ordering():
     )
     assert defer_scripts, "No deferred script references found in base.html"
     assert defer_scripts[0] == "global/js/permissions.js"
+
+
+def test_navbar_count_bubbles_are_round():
+    """Notification and task-tracker count bubbles render as circles, not pills."""
+    css = _read(COMPONENTS_CSS)
+    for selector in ("#activityCenterBadge",):
+        assert re.search(
+            re.escape(selector) + r"[^{]*\{[^}]*border-radius\s*:\s*50%\s*!important\s*;",
+            css,
+            flags=re.DOTALL,
+        ), f"{selector} must be a round bubble"
+
+
+def test_task_tracker_badge_uses_flex_so_count_is_centred():
+    """The JS must not force inline-block on the round badge (top-aligns the count)."""
+    js = (REPO_ROOT / "src/front/static/global/js/utils.js").read_text(encoding="utf-8")
+    assert "badge.style.display = 'inline-flex'" in js
+    assert "badge.style.display = 'inline-block'" not in js

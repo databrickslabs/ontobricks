@@ -24,15 +24,19 @@ let lastFetchErrorAt = 0;
 const TASK_TYPE_URLS = {
     'ontology_generate_detect': '/ontology#wizard',
     'ontology_generate_complete': '/ontology#wizard',
-    'auto_assign': '/mapping#autoassign',
+    'auto_assign': '/dtwin/?open=automap',
     'metadata_load': '/domain#metadata',
     'metadata_update': '/domain#metadata',
     'triplestore_sync': '/dtwin#sync',
     'registry_archive': '/dtwin#sync',
     'quality_checks': '/dtwin#quality',
-    'graph_analytics': '/dtwin#analytics',
+    'graph_analytics': '/intelligence/?section=analytics',
+    'community_detection': '/intelligence/?section=communities',
+    'community_materialize': '/intelligence/?section=communities',
+    'pattern_detection': '/intelligence/?section=patterns',
+    'pattern_save': '/intelligence/?section=patterns',
     'entity_job_action': '/dtwin',
-    'simulation': '/simulation/?section=scenarios'
+    'simulation': '/intelligence/?section=scenarios'
 };
 
 function taskOpenUrl(task) {
@@ -41,7 +45,7 @@ function taskOpenUrl(task) {
     if (type !== 'simulation') return base;
     const sid = task.result && task.result.simulation_id;
     if (!sid) return base;
-    let url = '/simulation/?section=scenarios&simulation=' + encodeURIComponent(sid);
+    let url = '/intelligence/?section=scenarios&simulation=' + encodeURIComponent(sid);
     if (task.status === 'completed') url += '&tab=results';
     return url;
 }
@@ -76,11 +80,7 @@ function initTaskTracker() {
 function setupTaskTrackerEvents() {
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
-        const dropdown = document.getElementById('taskTrackerDropdown');
-        const toggle = document.getElementById('taskTrackerToggle');
-        if (dropdown && toggle && !dropdown.contains(e.target) && !toggle.contains(e.target)) {
-            dropdown.classList.remove('show');
-        }
+        const dropdown = document.getElementById('activityCenterDropdown');
         const item = e.target.closest('.task-item[data-open-url]');
         if (item && dropdown && dropdown.contains(item) && !e.target.closest('button, a')) {
             window.location.href = item.getAttribute('data-open-url');
@@ -178,7 +178,7 @@ function notifyTaskTransition(task) {
     }
 
     if (typeof NotificationCenter !== 'undefined' && NotificationCenter.add) {
-        NotificationCenter.add(body, type);
+        NotificationCenter.add(body, type, true);
     } else if (typeof showNotification === 'function') {
         showNotification(body, type);
     }
@@ -255,24 +255,18 @@ function updateTaskTrackerUI() {
 /**
  * Update the badge showing active task count
  */
-function updateTaskBadge() {
-    const badge = document.getElementById('taskTrackerBadge');
-    if (!badge) return;
-    
-    const activeCount = trackedTasks.filter(t => 
+function getActiveTaskCount() {
+    return trackedTasks.filter((t) =>
         t.status === 'pending' || t.status === 'running'
     ).length;
-    
-    if (activeCount > 0) {
-        badge.textContent = activeCount;
-        badge.style.display = 'inline-block';
-        
-        // Add pulse animation for running tasks
-        const hasRunning = trackedTasks.some(t => t.status === 'running');
-        badge.classList.toggle('pulse-animation', hasRunning);
-    } else {
-        badge.style.display = 'none';
-    }
+}
+
+function hasRunningTask() {
+    return trackedTasks.some((t) => t.status === 'running');
+}
+
+function updateTaskBadge() {
+    if (window.ActivityCenter) ActivityCenter.updateBadge();
 }
 
 /**
@@ -404,40 +398,8 @@ function getTaskStatusConfig(status) {
  * Toggle dropdown visibility
  */
 function toggleTaskDropdown(event) {
-    if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-    }
-    
-    const dropdown = document.getElementById('taskTrackerDropdown');
-    const toggle = document.getElementById('taskTrackerToggle');
-    
-    if (dropdown) {
-        const isOpen = dropdown.classList.contains('show');
-        
-        // Close all other dropdowns first
-        document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
-            if (menu !== dropdown) {
-                menu.classList.remove('show');
-            }
-        });
-        
-        if (isOpen) {
-            dropdown.classList.remove('show');
-        } else {
-            dropdown.classList.add('show');
-            
-            // Position the dropdown properly - align to right edge
-            if (toggle) {
-                const toggleRect = toggle.getBoundingClientRect();
-                dropdown.style.position = 'fixed';
-                dropdown.style.top = (toggleRect.bottom + 6) + 'px';
-                dropdown.style.right = '10px';  // 10px from right edge
-                dropdown.style.left = 'auto';
-            }
-            
-            fetchTasks();  // Refresh when opening
-        }
+    if (window.ActivityCenter) {
+        ActivityCenter.toggle(event);
     }
 }
 
@@ -572,7 +534,7 @@ function getTimeAgo(isoString) {
     if (diffSec < 60) return 'just now';
     if (diffMin < 60) return `${diffMin}m ago`;
     if (diffHour < 24) return `${diffHour}h ago`;
-    return date.toLocaleDateString();
+    return formatDateTime(date);
 }
 
 // escapeHtml is provided globally by utils.js
@@ -583,6 +545,8 @@ function getTimeAgo(isoString) {
 
 window.initTaskTracker = initTaskTracker;
 window.toggleTaskDropdown = toggleTaskDropdown;
+window.getActiveTaskCount = getActiveTaskCount;
+window.hasRunningTask = hasRunningTask;
 window.cancelTask = cancelTask;
 window.refreshTasks = refreshTasks;
 window.waitForTask = waitForTask;

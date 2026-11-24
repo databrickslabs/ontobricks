@@ -95,7 +95,7 @@ class TestAddDomainPermission:
         session_mgr, settings = _mock_context()
         data = {"principal": "a@b.com", "role": "viewer"}
 
-        with pytest.raises(ValidationError, match="Domain name"):
+        with pytest.raises(ValidationError, match="Context name"):
             SettingsService.add_domain_permission_result(
                 "", data, session_mgr, settings
             )

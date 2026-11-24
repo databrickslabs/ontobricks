@@ -1,51 +1,29 @@
 <!-- JS: /static/domain/js/domain-validation.js -->
 <!-- CSS: /static/domain/css/domain-validation.css -->
-<!-- Domain validation section -->
+<!-- Context validation section -->
 <div class="content-section validation-section-wrapper">
-
-    <!-- Loading overlay (shown until validation check completes) -->
-    <div id="validationLoadingOverlay" class="validation-loading-overlay">
-        <div class="ob-loading-spinner">
-            <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
-                <g class="ob-ring">
-                    <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
-                        <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
-                        <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
-                        <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
-                        <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
-                    </g>
-                    <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
-                    <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
-                    <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
-                    <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
-                </g>
-                <g transform="translate(40,40)">
-                    <g class="ob-center">
-                        <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
-                        <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
-                        <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
-                    </g>
-                </g>
-            </svg>
-            <span class="ob-spinner-label">Checking validation status...</span>
-        </div>
-    </div>
 
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="bi bi-speedometer2 me-2"></i>Cockpit</h4>
-            <p class="text-muted mb-0 small">Overall health and readiness of your domain</p>
+            <h4 class="mb-1"><i class="bi bi-compass me-2"></i>General</h4>
+            <p class="text-muted mb-0 small">Overall health and readiness of your context</p>
         </div>
         <button class="btn btn-sm btn-outline-secondary" id="validationRefreshBtn">
             <i class="bi bi-arrow-clockwise me-1"></i> Refresh
         </button>
     </div>
 
-    <!-- Overall Project Health Banner -->
-    <div id="domainHealthBanner" class="validation-health-banner mb-4" style="display: none;"></div>
+    <div class="card">
+    <div class="card-body">
+
+    <!-- Overall Project Health Banner — paints as soon as overview arrives -->
+    <div id="domainHealthBanner" class="validation-health-banner mb-4 health-loading">
+        <span id="domainHealthBannerSpinner" class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+        <div>Checking context health…</div>
+    </div>
 
     <!-- Project Assets & Versions Row -->
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-4" id="validationAssetsRow">
         <!-- Data Sources -->
         <div class="col">
             <div class="validation-tile" id="metadataTile">
@@ -54,7 +32,9 @@
                 </div>
                 <div class="validation-tile-body">
                     <div class="validation-tile-label">Data Assets</div>
-                    <div class="validation-tile-status" id="metadataTileStatus">Checking...</div>
+                    <div class="validation-tile-status" id="metadataTileStatus">
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -66,7 +46,9 @@
                 </div>
                 <div class="validation-tile-body">
                     <div class="validation-tile-label">Documents</div>
-                    <div class="validation-tile-status" id="documentsTileStatus">Checking...</div>
+                    <div class="validation-tile-status" id="documentsTileStatus">
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -78,7 +60,9 @@
                 </div>
                 <div class="validation-tile-body">
                     <div class="validation-tile-label">Versions</div>
-                    <div class="validation-tile-status" id="versionsTileStatus">Checking...</div>
+                    <div class="validation-tile-status" id="versionsTileStatus">
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -90,7 +74,9 @@
                 </div>
                 <div class="validation-tile-body">
                     <div class="validation-tile-label">Current Version</div>
-                    <div class="validation-tile-status" id="currentVersionTileStatus">Checking...</div>
+                    <div class="validation-tile-status" id="currentVersionTileStatus">
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -102,7 +88,9 @@
                 </div>
                 <div class="validation-tile-body">
                     <div class="validation-tile-label">Active Version</div>
-                    <div class="validation-tile-status" id="activeVersionTileStatus">Checking...</div>
+                    <div class="validation-tile-status" id="activeVersionTileStatus">
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -115,15 +103,20 @@
             <div class="card validation-detail-card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
                     <span><i class="bi bi-diagram-3 me-1"></i> Ontology — Entities</span>
-                    <span id="ontologyValidationBadge" class="badge bg-secondary">Checking...</span>
+                    <span id="ontologyValidationBadge" class="badge bg-secondary"><span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;" role="status" aria-hidden="true"></span></span>
                 </div>
                 <div class="card-body py-2 px-3 d-flex flex-column justify-content-center">
-                    <div class="text-center" id="ontologyStats">
-                        <div class="cockpit-ontology-value" id="ontologyClassCount">-</div>
-                        <div class="validation-metric-label">Entities</div>
+                    <div id="ontologyEntitiesSpinner" class="text-center py-3">
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
                     </div>
-                    <div id="ontologyIssues" class="mb-1"></div>
-                    <div id="ontologyWarnings"></div>
+                    <div id="ontologyEntitiesContent" class="d-none">
+                        <div class="text-center" id="ontologyStats">
+                            <div class="cockpit-ontology-value" id="ontologyClassCount">-</div>
+                            <div class="validation-metric-label">Entities</div>
+                        </div>
+                        <div id="ontologyIssues" class="mb-1"></div>
+                        <div id="ontologyWarnings"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -131,12 +124,17 @@
             <div class="card validation-detail-card h-100" id="ontologyRelCard">
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
                     <span><i class="bi bi-diagram-3 me-1"></i> Ontology — Relationships</span>
-                    <span id="ontologyRelValidationBadge" class="badge bg-secondary">Checking...</span>
+                    <span id="ontologyRelValidationBadge" class="badge bg-secondary"><span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;" role="status" aria-hidden="true"></span></span>
                 </div>
                 <div class="card-body py-2 px-3 d-flex flex-column justify-content-center">
-                    <div class="text-center">
-                        <div class="cockpit-ontology-value" id="ontologyPropertyCount">-</div>
-                        <div class="validation-metric-label">Relationships</div>
+                    <div id="ontologyRelSpinner" class="text-center py-3">
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+                    </div>
+                    <div id="ontologyRelContent" class="d-none">
+                        <div class="text-center">
+                            <div class="cockpit-ontology-value" id="ontologyPropertyCount">-</div>
+                            <div class="validation-metric-label">Relationships</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -147,16 +145,21 @@
             <div class="card validation-detail-card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
                     <span><i class="bi bi-link-45deg me-1"></i> Mapping — Entities</span>
-                    <span id="mappingValidationBadge" class="badge bg-secondary">Checking...</span>
+                    <span id="mappingValidationBadge" class="badge bg-secondary"><span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;" role="status" aria-hidden="true"></span></span>
                 </div>
                 <div class="card-body py-2 px-3">
-                    <div class="text-center">
-                        <canvas id="gaugeMappingEntities" width="130" height="72"></canvas>
-                        <div class="small text-muted mt-1"><span id="mappedEntitiesCount">-</span> / <span id="totalEntitiesCount">-</span> mapped</div>
-                        <span id="ignoredEntitiesLabel" class="badge bg-secondary bg-opacity-25 text-secondary mt-1 ob-badge-ignored-tight" style="display:none;"><i class="bi bi-eye-slash me-1"></i></span>
+                    <div id="mappingEntitiesSpinner" class="text-center py-3">
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
                     </div>
-                    <div id="mappingIssues" class="mb-1"></div>
-                    <div id="mappingWarnings"></div>
+                    <div id="mappingEntitiesContent" class="d-none">
+                        <div class="text-center">
+                            <canvas id="gaugeMappingEntities" width="130" height="72"></canvas>
+                            <div class="small text-muted mt-1"><span id="mappedEntitiesCount">-</span> / <span id="totalEntitiesCount">-</span> mapped</div>
+                            <span id="ignoredEntitiesLabel" class="badge bg-secondary bg-opacity-25 text-secondary mt-1 ob-badge-ignored-tight" style="display:none;"><i class="bi bi-eye-slash me-1"></i></span>
+                        </div>
+                        <div id="mappingIssues" class="mb-1"></div>
+                        <div id="mappingWarnings"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -164,13 +167,18 @@
             <div class="card validation-detail-card h-100" id="mappingRelCard">
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
                     <span><i class="bi bi-link-45deg me-1"></i> Mapping — Rel.</span>
-                    <span id="mappingRelValidationBadge" class="badge bg-secondary">Checking...</span>
+                    <span id="mappingRelValidationBadge" class="badge bg-secondary"><span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;" role="status" aria-hidden="true"></span></span>
                 </div>
                 <div class="card-body py-2 px-3">
-                    <div class="text-center">
-                        <canvas id="gaugeMappingRels" width="130" height="72"></canvas>
-                        <div class="small text-muted mt-1"><span id="mappedRelationshipsCount">-</span> / <span id="totalRelationshipsCount">-</span> mapped</div>
-                        <span id="ignoredRelationshipsLabel" class="badge bg-secondary bg-opacity-25 text-secondary mt-1 ob-badge-ignored-tight" style="display:none;"><i class="bi bi-eye-slash me-1"></i></span>
+                    <div id="mappingRelSpinner" class="text-center py-3">
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+                    </div>
+                    <div id="mappingRelContent" class="d-none">
+                        <div class="text-center">
+                            <canvas id="gaugeMappingRels" width="130" height="72"></canvas>
+                            <div class="small text-muted mt-1"><span id="mappedRelationshipsCount">-</span> / <span id="totalRelationshipsCount">-</span> mapped</div>
+                            <span id="ignoredRelationshipsLabel" class="badge bg-secondary bg-opacity-25 text-secondary mt-1 ob-badge-ignored-tight" style="display:none;"><i class="bi bi-eye-slash me-1"></i></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -179,11 +187,16 @@
             <div class="card validation-detail-card h-100" id="mappingCompletionCard">
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
                     <span><i class="bi bi-check2-circle me-1"></i> Completion</span>
-                    <span id="mappingCompletionBadge" class="badge bg-secondary">0%</span>
+                    <span id="mappingCompletionBadge" class="badge bg-secondary"><span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;" role="status" aria-hidden="true"></span></span>
                 </div>
                 <div class="card-body py-2 px-3">
-                    <div class="text-center">
-                        <canvas id="gaugeMappingCompletion" width="130" height="72"></canvas>
+                    <div id="mappingCompletionSpinner" class="text-center py-3">
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+                    </div>
+                    <div id="mappingCompletionContent" class="d-none">
+                        <div class="text-center">
+                            <canvas id="gaugeMappingCompletion" width="130" height="72"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -197,13 +210,18 @@
         <div class="card-header d-flex justify-content-between align-items-center">
             <span><i class="bi bi-radar me-1"></i> Graph</span>
             <div class="d-flex align-items-center gap-2">
-                <span id="dtwinValidationBadge" class="badge bg-secondary">Checking...</span>
+                <span id="dtwinValidationBadge" class="badge bg-secondary"><span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;" role="status" aria-hidden="true"></span></span>
                 <a href="/dtwin/" class="btn btn-outline-primary btn-sm py-0 px-2 validation-dtwin-link">
                     <i class="bi bi-box-arrow-up-right me-1"></i>Open
                 </a>
             </div>
         </div>
         <div class="card-body">
+            <div id="dtwinValidationSpinner" class="text-center py-4">
+                <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+                <span class="small text-muted ms-2">Checking Knowledge Graph…</span>
+            </div>
+            <div id="dtwinValidationContent" class="d-none">
             <!-- Rebuild warning -->
             <div id="psDtRebuildWarning" class="alert alert-warning d-none align-items-start gap-2 mb-3 py-2 small">
                 <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
@@ -306,6 +324,7 @@
                 <span class="d-none" id="psDtGraphStorageSubtitle"></span>
 
             </div>
+            </div><!-- /#dtwinValidationContent -->
         </div>
     </div>
     </div>
@@ -393,4 +412,7 @@
     </div>
     </div>
     </div>
+
+    </div><!-- /.card-body -->
+    </div><!-- /.card -->
 </div>

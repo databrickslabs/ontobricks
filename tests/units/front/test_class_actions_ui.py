@@ -9,7 +9,6 @@ LOADERS_JS = REPO_ROOT / "src/front/static/query/js/query-loaders.js"
 DETAILS_JS = REPO_ROOT / "src/front/static/query/js/query-entity-details.js"
 SIGMA_JS = REPO_ROOT / "src/front/static/query/js/query-sigmagraph.js"
 DASHBOARD_JS = REPO_ROOT / "src/front/static/query/js/query-dashboard.js"
-DESIGN_JS = REPO_ROOT / "src/front/static/global/js/ontology-design.js"
 INFO_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-information.js"
 
 
@@ -81,12 +80,12 @@ def test_loaders_retain_class_actions():
     assert "actions: classInfo?.actions || []" in js
 
 
-def test_designer_sync_preserves_dataset_actions_and_bridges():
-    """Designer → ontology sync must not wipe Links/Model/Behaviour metadata."""
-    js = DESIGN_JS.read_text(encoding="utf-8")
-    assert "bridges: existing.bridges || []" in js
-    assert "dataset: existing.dataset || null" in js
-    assert "actions: existing.actions || []" in js
+def test_entity_panel_save_preserves_dataset_actions_and_bridges():
+    """Entity panel save must keep Links/Model/Behaviour metadata."""
+    js = PANELS_JS.read_text(encoding="utf-8")
+    assert "bridges: sharedPanelBridges.length > 0 ? sharedPanelBridges : undefined" in js
+    assert "dataset: sharedPanelDatasets.length > 0 ? sharedPanelDatasets[0] : undefined" in js
+    assert "actions: (sharedPanelActions.length + sharedPanelJobs.length) > 0" in js
 
 
 def test_owl_and_rdfs_import_preserve_dataset_and_actions():

@@ -27,7 +27,7 @@ DATABRICKS_SQL_WAREHOUSE_ID=test-warehouse
 | `_set_env` | session | Injects mock env vars before the server starts |
 | `live_server` | session | Starts Uvicorn; yields the base URL `http://localhost:18765` |
 | `browser_instance` | session | Launches a headless Chromium browser (Playwright) |
-| `page` | function | Creates a fresh browser context + page per test |
+| `page` | function | Creates a fresh browser context + page per test. Tests marked `needs_domain` (module `pytestmark` or per test) get a session domain seeded first, in local mode too — otherwise `/dtwin`, `/mapping`, `/ontology` and `/domain` 303 to Home and assertions run against the landing page |
 
 ## Running
 
@@ -79,7 +79,7 @@ tests/e2e/
 
 | File | Class | What it tests |
 |---|---|---|
-| `test_navigation_flows.py` | `TestNavigation` | All 6 top-level routes load with correct `<title>`; navbar brand goes home; Settings nav-link works |
+| `test_navigation_flows.py` | `TestNavigation` | All 6 top-level routes load with correct `<title>`; navbar brand goes home; Settings page loads |
 | | `TestHomePage` | Hero visible, domain panel present, 3 workflow cards, stat counters (`#classCount`, `#propCount`, `#mappingCount`) |
 | | `TestAboutPage` | Body contains "OntoBricks" and "R2RML" |
 | `test_resolve_flows.py` | `TestResolveRoute` | `/resolve` without URI → 4xx; `?uri=...` → not 5xx; path variant → not 5xx |
@@ -92,17 +92,19 @@ tests/e2e/
 | `test_write_flows.py` | `TestSettingsSaveSessionOnly` | `POST /settings/save` host round-trips through `GET /settings/current` |
 | | `TestSettingsSaveRouteContracts` | Route-contract checks (route mounted, CSRF honoured, error JSON-shaped) for `save-base-uri`, `set-default-emoji`, `save-registry-cache-ttl` |
 
-### `mapping/` — 6 tests
+### `mapping/` — 13 tests
 
 | File | Class | What it tests |
 |---|---|---|
-| `test_mapping_flows.py` | `TestMappingSidebar` | All 6 sections (`information`, `design`, `manual`, `autoassign`, `r2rml`, `sparksql`) become visible via `SidebarNav.switchTo()` |
+| `test_mapping_flows.py` | `TestMappingNavigation` | Graph → Management sidebar order is Build → Mapping → Overview (label "Mapping", no `information`/`manual` items); default tab is Informations; legacy `/mapping/`, `?section=information`, `?section=manual` land on `section=design` with the right `tab` |
+| | `TestMappingTabs` | Tab clicks sync `?tab=` and hide the shared bottom panel on Informations only; R2RML import/export on Informations; Auto-Map modal (skipped without an LLM endpoint); Build hosts the Diagnostics modal |
+| | `TestVisualListSelectionSync` | With an injected two-class ontology: Visual is centered on render; clicking a Visual node selects the List row and vice versa; `selectInTree` expands collapsed parents |
 
 ### `domain/` — 6 tests
 
 | File | Class | What it tests |
 |---|---|---|
-| `test_domain_flows.py` | `TestDomainSidebar` | All 6 sections (`information`, `metadata`, `documents`, `validation`, `owl-content`, `r2rml`) switch correctly; CSS `pointer-events:none` bypassed via JS |
+| `test_domain_flows.py` | `TestDomainSidebar` | All 4 sections (`information`, `metadata`, `documents`, `validation`) switch correctly; CSS `pointer-events:none` bypassed via JS |
 
 ### `dtwin/` — 9 tests
 
@@ -152,7 +154,7 @@ Deep tests for the Ontology feature.
 | `test_class_crud_flows.py` | 15 | Entities DOM; `add_class` → load; `update` / `delete` by imported URI; `get-loaded-ontology` |
 | `test_property_crud_flows.py` | 15 | Relationships DOM; `add_property` → load; `update` / `delete` by imported URI |
 | `test_import_flows.py` | 22 | Import tabs DOM (5 tabs + file inputs + industry checkboxes); `import-owl` session effect; `parse-owl` response shape; industry catalog APIs |
-| `test_owl_export_flows.py` | 20 | OWL section DOM buttons; `export-owl` empty→404/import→Turtle; `generate-owl` inline config; full import→export round-trip |
+| `test_owl_export_flows.py` | 20 | OWL tab (Ontology → General) DOM buttons; `export-owl` empty→404/import→Turtle; `generate-owl` inline config; full import→export round-trip |
 
 ---
 

@@ -30,6 +30,7 @@ NAVBAR_JS = REPO_ROOT / "src/front/static/global/js/navbar.js"
 SETTINGS_JS = REPO_ROOT / "src/front/static/config/js/settings.js"
 BUILD_JS = REPO_ROOT / "src/front/static/query/js/query-databricks-build.js"
 BUILD_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_databricks_build.html"
+BUILD_SHELL = REPO_ROOT / "src/front/templates/partials/dtwin/_query_build.html"
 
 SELECT_ID = "domainLakehouseMaterialization"
 SECTION_ID = "lakehouseMaterializationSection"
@@ -92,8 +93,8 @@ class TestThePicker:
         block_start = html.index(f'id="{SECTION_ID}"')
         block = html[block_start : block_start + 1600]
         assert "Access type" in block
-        assert "Materialized - Faster but needs refresh" in block
-        assert "Views only" in block
+        assert "Materialized Graph" in block
+        assert "Virtual Graph (no copy)" in block
 
     def test_the_default_selection_is_views_only(self):
         """A new Lakehouse domain must not copy triples until the user opts in."""
@@ -175,7 +176,7 @@ class TestBothSavePathsSendTheField:
 
     def test_a_successful_save_updates_the_selector_baseline(self):
         """Otherwise a later rehydration re-selects the pre-save value."""
-        body = _function_body(_read(DOMAIN_JS), "async function saveDomainInfo(", span=4000)
+        body = _function_body(_read(DOMAIN_JS), "async function saveDomainInfo(", span=6000)
         assert f"materializationEl.dataset.savedValue = domainInfoPayload.{FIELD}" in body
 
 
@@ -211,9 +212,10 @@ class TestTheBuildPageNamesTheStorageKind:
 
     def test_the_badge_exists_and_is_addressable(self):
         html = _read(BUILD_HTML)
+        shell = _read(BUILD_SHELL)
         assert 'id="dbxBuildStorageBadge"' in html
         assert 'id="dbxBuildStorageNote"' in html
-        assert 'id="dbxBuildSubtitle"' in html
+        assert 'id="dbxBuildSubtitle"' in shell
 
     def test_the_badge_names_both_kinds_explicitly(self):
         body = _function_body(

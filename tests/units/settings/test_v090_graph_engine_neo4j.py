@@ -126,7 +126,7 @@ class TestNeo4jConnectionRefsGuard:
                     MagicMock(),
                 )
         msg = str(exc_info.value)
-        assert "re-point those domains first" in msg
+        assert "re-point those contexts first" in msg
         assert "'B' used by: sales, hr" in msg
         assert "'C' used by: ops" in msg
 

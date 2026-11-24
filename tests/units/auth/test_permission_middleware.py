@@ -430,12 +430,17 @@ class TestAdminOnlyPaths:
         assert not result.get("passed")
 
     @pytest.mark.parametrize(
-        "path", ["/settings/runs/build", "/settings/runs/analytics"]
+        "path",
+        [
+            "/settings/runs/build",
+            "/settings/runs/analytics",
+            "/settings/runs/simulation",
+        ],
     )
     def test_cross_domain_run_history_is_admin_only(self, path):
-        """The Runs page reports every domain's builds and analyses, so its
-        readers must not join the read-only exception list the way
-        ``/settings/registry/domains`` did."""
+        """The Runs page reports every domain's builds, analyses and
+        simulations, so its readers must not join the read-only exception
+        list the way ``/settings/registry/domains`` did."""
         _, resp, result = _dispatch_with_roles(
             ROLE_APP_USER, ROLE_BUILDER, method="GET", path=path
         )

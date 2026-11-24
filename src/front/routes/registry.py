@@ -8,5 +8,5 @@ router = APIRouter(prefix="/registry", tags=["Registry"])
 
 @router.get("/", include_in_schema=False)
 async def registry_page(request: Request):
-    """Legacy /registry/ bookmarks open the Registry modal on Home."""
-    return RedirectResponse(url="/?open=registry", status_code=302)
+    """Legacy /registry/ bookmarks land on the Registry tabs of Home."""
+    return RedirectResponse(url="/?section=domains", status_code=302)

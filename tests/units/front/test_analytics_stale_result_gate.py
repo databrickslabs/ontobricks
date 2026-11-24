@@ -1,6 +1,6 @@
 """Analytics must not show a stored result for a graph that no longer exists.
 
-Drop the Unity Catalog objects and reopen **Knowledge Graph → Analytics** and
+Drop the Unity Catalog objects and reopen **Intelligence → Discovery → Analytics** and
 the page used to contradict itself: the "No Knowledge Graph has been built yet"
 banner appeared (the live probe correctly failed) while the KPI tiles, the
 distribution strip and the ranking chart stayed populated from the last
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ANALYTICS_JS = REPO_ROOT / "src/front/static/query/js/query-analytics.js"
-ANALYTICS_HTML = REPO_ROOT / "src/front/templates/partials/dtwin/_query_analytics.html"
+ANALYTICS_HTML = REPO_ROOT / "src/front/templates/partials/intelligence/_intel_analytics.html"
 
 FLAG = "_graphMissing"
 
@@ -104,3 +104,61 @@ class TestTheBannerExplainsTheDisappearance:
     def test_it_points_at_the_retained_history(self):
         body = _block(_source(), "function _showNoGraphBanner(", 1400)
         assert "Runs" in body
+
+
+class TestSpinnerOnSectionOpen:
+    """The graph probe can take seconds: feedback must not wait for it."""
+
+    def test_spinner_is_shown_before_the_graph_probe(self):
+        body = _block(_source(), "window.analyticsLoadTypes = function", 900)
+        assert body.index("_showLoadingLatestSpinner()") < body.index("_loadEntityTypes()")
+
+    def test_latest_result_is_prefetched_during_the_probe(self):
+        body = _block(_source(), "window.analyticsLoadTypes = function", 900)
+        assert body.index("_fetchLatestMetrics()") < body.index("_loadEntityTypes()")
+        assert "analyticsResume(latest)" in body
+
+    def test_missing_graph_path_hides_the_spinner(self):
+        body = _block(_source(), "window.analyticsResume = async function", 700)
+        assert "_hideLoadingLatestSpinner()" in body
+
+
+class TestEmptyStateMatchesRunsTab:
+    """No stored analysis: same icon + message as Intelligence → Analytics → Runs."""
+
+    RUNS_HTML = Path(__file__).resolve().parents[3] / (
+        "src/front/templates/partials/domain/_domain_analytics_runs.html"
+    )
+
+    def _empty_block(self) -> str:
+        html = ANALYTICS_HTML.read_text(encoding="utf-8")
+        start = html.index('id="analyticsEmpty"')
+        return html[start : html.index("</div>", start)]
+
+    def test_empty_state_reuses_the_runs_icon_and_message(self):
+        runs = self.RUNS_HTML.read_text(encoding="utf-8")
+        block = self._empty_block()
+        assert "No analytics runs found" in runs and "No analytics runs found" in block
+        assert '<i class="bi bi-graph-up-arrow text-muted fs-1"></i>' in runs
+        assert '<i class="bi bi-graph-up-arrow text-muted fs-1"></i>' in block
+
+    def test_empty_state_starts_hidden(self):
+        html = ANALYTICS_HTML.read_text(encoding="utf-8")
+        assert 'id="analyticsEmpty" class="text-center py-5 d-none"' in html
+
+    def test_resume_shows_it_only_when_nothing_is_stored_or_running(self):
+        body = _block(_source(), "window.analyticsResume = async function", 1100)
+        assert "_showAnalyticsEmpty(_noStoredResult && !running)" in body
+        assert body.index("_findRunningAnalyticsTask()") < body.index(
+            "_showAnalyticsEmpty(_noStoredResult && !running)"
+        )
+
+    def test_rendering_busy_and_errors_hide_it(self):
+        src = _source()
+        for anchor in (
+            "function _renderAnalyticsData(data, meta)",
+            "function _setAnalysisBusy(busy)",
+            "function _showAnalyticsError(msg)",
+        ):
+            assert "_showAnalyticsEmpty(false)" in _block(src, anchor, 300)
+

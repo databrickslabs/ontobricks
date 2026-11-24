@@ -485,20 +485,14 @@ class SettingsService:
 
     @staticmethod
     def save_ui_branding_result(
-        app_title: str,
-        primary_color: str,
-        aurora_color: str,
-        logo_content: Optional[bytes],
-        logo_mime: Optional[str],
-        reset_logo: bool,
-        email: str,
-        user_token: str,
-        session_mgr: SessionManager,
-        settings: Settings,
+        app_title: str, primary_color: str, aurora_color: str, logo_content: Optional[bytes],
+        logo_mime: Optional[str], reset_logo: bool, email: str, user_token: str,
+        session_mgr: SessionManager, settings: Settings,
+        button_primary_color: str = "", button_secondary_color: str = "",
     ) -> Dict[str, Any]:
         from back.objects.domain.settings.WorkspaceUiSettings import WorkspaceUiSettings
 
-        return WorkspaceUiSettings.save_ui_branding_result(app_title, primary_color, aurora_color, logo_content, logo_mime, reset_logo, email, user_token, session_mgr, settings)
+        return WorkspaceUiSettings.save_ui_branding_result(app_title, primary_color, aurora_color, logo_content, logo_mime, reset_logo, email, user_token, session_mgr, settings, button_primary_color, button_secondary_color)
 
 
     @staticmethod

@@ -1,6 +1,6 @@
 /* Business Rules — styles for the tabbed rule editor container */
 
-#swrl-section .card-body {
+#if-then-section .card-body {
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -15,106 +15,19 @@
 
 /* Rule lists flow through the bounded tab-content scroll owner. */
 .br-rules-list,
-#swrlRulesList {
+#ifThenRulesList {
     min-height: 60px;
     max-height: none;
     overflow-y: visible;
     overflow-x: hidden;
 }
 
-.br-rules-list .br-rule-card {
-    border: 1px solid var(--bs-border-color);
-    border-radius: 0.375rem;
-    padding: 0.75rem 1rem;
-    margin-bottom: 0.5rem;
-    transition: background-color 0.15s;
-}
-.br-rules-list .br-rule-card:hover {
-    background-color: var(--bs-light);
-}
-.br-rule-card .br-rule-name {
-    font-weight: 600;
-    font-size: 0.875rem;
-}
-.br-rule-card .br-rule-meta {
-    font-size: 0.75rem;
-    color: var(--bs-secondary);
-}
-.br-rule-card .br-rule-actions {
-    white-space: nowrap;
-}
-
-/* Decision table grid */
-#dtGrid th, #dtGrid td {
-    vertical-align: middle;
-    font-size: 0.8rem;
-    padding: 0.3rem 0.4rem;
-}
-#dtGrid select, #dtGrid input {
-    font-size: 0.78rem;
-}
-#dtGrid .dt-col-header select {
-    min-width: 120px;
-}
-#dtGrid .dt-op-select {
-    width: 80px;
-}
-#dtGrid .dt-val-input {
-    min-width: 80px;
-}
-#dtGrid .dt-action-col {
-    background-color: rgba(25, 135, 84, 0.06);
-}
-#dtGrid .dt-remove-btn {
-    cursor: pointer;
-    color: var(--bs-danger);
-    opacity: 0.6;
-}
-#dtGrid .dt-remove-btn:hover {
-    opacity: 1;
-}
-
-/* SPARQL editor textarea */
+/* Complex (SPARQL) editor textarea */
 #sparqlQuery {
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     tab-size: 2;
     resize: vertical;
     min-height: 140px;
-}
-
-/* Toggle switch for enabled/disabled */
-.br-toggle-enabled {
-    cursor: pointer;
-}
-
-.br-disabled-badge {
-    font-size: 0.6rem;
-}
-
-.br-row-logic-label {
-    font-size: 0.72rem;
-}
-
-.br-row-logic-hint {
-    font-size: 0.68rem;
-}
-
-.dt-grid-num-col {
-    width: 40px;
-}
-
-.dt-grid-action-col {
-    width: 36px;
-}
-
-.dt-logic-row-cell {
-    border: none;
-    background: transparent;
-}
-
-.dt-logic-badge {
-    font-size: 0.65rem;
-    letter-spacing: 0.05em;
 }
 
 /* ── Auto-generate review modal ── */
@@ -137,10 +50,137 @@
     white-space: normal;
 }
 
-/* SWRL text modal editor (mirrors Data Quality SHACL modal) */
-#brSwrlEditor {
+/* Simple (IF/THEN) text modal editor (mirrors Data Quality SHACL modal) */
+#brIfThenEditor {
     font-size: 0.8rem;
     background: var(--bs-gray-100);
     resize: vertical;
     min-height: 22rem;
+}
+
+/* Complex rule assistant — fullscreen two-pane editor (same window style as
+   the Simple rule graph editor). The chat pane reuses the Graph-chat look &
+   feel (.graph-chat-* classes in query-chat.css). */
+.cra-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.cra-layout {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+}
+
+.cra-col-chat,
+.cra-col-code {
+    flex: 1 1 50%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+}
+
+.cra-col-chat {
+    border-right: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+/* The chat container fills its pane and scrolls internally. */
+.cra-col-chat .graph-chat-container {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Right pane scrolls; the query field grows to fill the available height. */
+.cra-code-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.cra-code-field {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.cra-code {
+    flex: 1 1 auto;
+    min-height: 16rem;
+    resize: none;
+}
+
+/* Stack the two panes on narrow viewports. */
+@media (max-width: 991.98px) {
+    .cra-layout {
+        flex-direction: column;
+    }
+    .cra-col-chat {
+        border-right: none;
+        border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+        min-height: 20rem;
+    }
+}
+
+/* Save button pulses when the assistant marks the draft ready. */
+.cra-save-ready {
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-success-rgb, 25, 135, 84), 0.5);
+}
+
+/* Agent-offered clickable answers inside the chat. */
+.cra-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.25rem 0 0.5rem 2.25rem; /* align under the bot bubble body */
+    align-items: center;
+}
+.cra-opt-pill {
+    border: 1px solid var(--bs-border-color, #ced4da);
+    background: var(--bs-body-bg, #fff);
+    color: var(--bs-body-color, #212529);
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+.cra-opt-pill:hover:not(:disabled) {
+    background: var(--db-primary-subtle, #eef2ff);
+    border-color: var(--db-primary, #4a6cf7);
+}
+.cra-opt-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border: 1px solid var(--bs-border-color, #ced4da);
+    border-radius: 0.5rem;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.cra-opt-send {
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.25rem 0.9rem;
+    font-size: 0.85rem;
+    color: #fff;
+    background: var(--db-primary, #4a6cf7);
+    cursor: pointer;
+}
+.cra-options-locked {
+    pointer-events: none;
+}
+.cra-options-locked .cra-opt-pill:not(.is-chosen),
+.cra-options-locked .cra-opt-check:not(.is-chosen) {
+    opacity: 0.45;
+}
+.cra-options-locked .is-chosen {
+    background: var(--db-primary, #4a6cf7);
+    border-color: var(--db-primary, #4a6cf7);
+    color: #fff;
 }

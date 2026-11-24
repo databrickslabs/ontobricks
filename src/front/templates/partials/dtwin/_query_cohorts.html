@@ -1,109 +1,53 @@
 <!--
-    Cohort Discovery — RUN page (Simulation → Run).
+    Cohort Discovery — Runs tab body (Intelligence → Configuration → Cohorts).
 
-    Design lives in Simulation → Cohorts. This page picks a saved rule,
-    previews and materialises it.
+    Header actions (Purge, Outputs, Preview, Materialise) and the shared
+    saved-rules rail live in partials/ontology/_ontology_cohorts.html.
+    This pane shows the selected rule, its preview and the diagnostics.
 -->
-<div class="content-section">
-    <div class="section-header d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h4 class="mb-1"><i class="bi bi-play-circle me-2"></i>Run cohorts{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
-            <p class="text-muted mb-0 small">
-                Preview a saved cohort rule and write the result to the graph or a Unity Catalog table.
-                Design rules in <em>Simulation → Cohorts</em>.
-            </p>
-        </div>
-        <div class="d-flex align-items-center gap-2">
-            {% include "partials/dtwin/_purge_inferences_button.html" %}
-            <button class="btn btn-sm btn-outline-secondary"
-                    id="cohortOutputsBtn"
-                    onclick="CohortModule.openOutputsModal()"
-                    title="Configure outputs (graph triples, UC table)">
-                <i class="bi bi-sliders me-1"></i>Outputs
-            </button>
-            <button class="btn btn-sm btn-outline-secondary"
-                    id="cohortPreviewBtn"
-                    onclick="CohortModule.preview()" disabled>
-                <i class="bi bi-eye me-1"></i>Preview cohorts
-            </button>
-            <button class="btn btn-sm btn-primary"
-                    id="cohortMaterializeBtn"
-                    onclick="CohortModule.openMaterializeModal()" disabled>
-                <i class="bi bi-cloud-upload me-1"></i>Materialise
-            </button>
+<div class="cohort-run-pane">
+
+    <!-- Selected rule summary (auto-populated when a rule is picked) -->
+    <div id="cohortRuleSummary" class="cohort-rule-summary mb-3"></div>
+
+    <!-- Preview results -->
+    <div id="cohortPreviewBody">
+        <div class="text-muted small fst-italic py-3">
+            Pick a rule from the left pane and click <em>Preview</em>.
         </div>
     </div>
 
-    <div class="cohort-layout cohort-layout--rail-left">
+    <!-- Path trace diagnostic -->
+    <div class="cohort-preview-trace mt-3 pt-3 border-top">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label small fw-semibold mb-0">
+                <i class="bi bi-bug me-1"></i>
+                Path trace
+                <span class="text-muted fw-normal ms-1">
+                    — see which hop empties the walk
+                </span>
+            </label>
+            <button class="btn btn-sm btn-outline-secondary"
+                    onclick="CohortModule.tracePaths()">
+                <i class="bi bi-activity me-1"></i>Trace path
+            </button>
+        </div>
+        <div id="cohortTraceResult" class="small"></div>
+    </div>
 
-        <!-- Left pane: Saved rules picker -->
-        <aside class="cohort-rail">
-            <div class="card cohort-rail-card">
-                <div class="card-header d-flex justify-content-between align-items-center py-2 px-3 bg-transparent">
-                    <span class="small fw-semibold text-muted">
-                        <i class="bi bi-list-ul me-1"></i>Saved rules
-                    </span>
-                    <span class="badge bg-secondary bg-opacity-50" id="cohortRunRulesCount">
-                        {{ reasoning_ctx.cohort_rules_count|default(0) }}
-                    </span>
-                </div>
-                <div class="cohort-rail-body" id="cohortRunRulesList">
-                    <div class="text-center py-4 text-muted small" id="cohortRunRulesEmpty">
-                        No rules yet. Design one in
-                        <em>Simulation → Cohorts</em>.
-                    </div>
-                </div>
-            </div>
-        </aside>
+    <div class="cohort-preview-explain mt-3 pt-3 border-top">
+        <label class="form-label small fw-semibold mb-1">
+            <i class="bi bi-question-circle me-1"></i>
+            Why didn't a member end up in a cohort?
+        </label>
+        <div class="input-group input-group-sm">
+            <input type="text" class="form-control" id="cohortExplainTarget"
+                   placeholder="Paste an entity URI…">
+            <button class="btn btn-outline-secondary" onclick="CohortModule.explain()">
+                Explain
+            </button>
+        </div>
+        <div id="cohortExplainResult" class="mt-2 small"></div>
+    </div>
 
-        <!-- Main column: selected rule summary + Preview pane -->
-        <section class="cohort-content-card card">
-            <div class="card-body p-3">
-
-                <!-- Selected rule summary (auto-populated when a rule is picked) -->
-                <div id="cohortRuleSummary" class="cohort-rule-summary mb-3"></div>
-
-                <!-- Preview results -->
-                <div id="cohortPreviewBody">
-                    <div class="text-muted small fst-italic py-3">
-                        Pick a rule from the left pane and click <em>Preview cohorts</em>.
-                    </div>
-                </div>
-
-                <!-- Path trace diagnostic -->
-                <div class="cohort-preview-trace mt-3 pt-3 border-top">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label class="form-label small fw-semibold mb-0">
-                            <i class="bi bi-bug me-1"></i>
-                            Path trace
-                            <span class="text-muted fw-normal ms-1">
-                                — see which hop empties the walk
-                            </span>
-                        </label>
-                        <button class="btn btn-sm btn-outline-secondary"
-                                onclick="CohortModule.tracePaths()">
-                            <i class="bi bi-activity me-1"></i>Trace path
-                        </button>
-                    </div>
-                    <div id="cohortTraceResult" class="small"></div>
-                </div>
-
-                <div class="cohort-preview-explain mt-3 pt-3 border-top">
-                    <label class="form-label small fw-semibold mb-1">
-                        <i class="bi bi-question-circle me-1"></i>
-                        Why didn't a member end up in a cohort?
-                    </label>
-                    <div class="input-group input-group-sm">
-                        <input type="text" class="form-control" id="cohortExplainTarget"
-                               placeholder="Paste an entity URI…">
-                        <button class="btn btn-outline-secondary" onclick="CohortModule.explain()">
-                            Explain
-                        </button>
-                    </div>
-                    <div id="cohortExplainResult" class="mt-2 small"></div>
-                </div>
-
-            </div>
-        </section>
-    </div><!-- /cohort-layout -->
 </div>

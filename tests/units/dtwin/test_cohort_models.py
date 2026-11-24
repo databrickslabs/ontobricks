@@ -2,7 +2,7 @@
 
 import pytest
 
-from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
+from back.core.graph_analysis.cohort.CohortVocabulary import CohortVocabulary
 from back.core.graph_analysis.models import (
     CohortCompat,
     CohortHop,

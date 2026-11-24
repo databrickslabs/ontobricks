@@ -3,6 +3,7 @@
 from back.objects.digitaltwin.build.SyncPlan import SyncPlan
 from back.objects.digitaltwin.build.TwinBuildPostMaterialize import TwinBuildPostMaterialize
 from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
+from back.objects.digitaltwin.build.BuildObjects import BuildObjects
 from back.objects.digitaltwin.build.TwinGraphBuild import TwinGraphBuild
 from back.objects.digitaltwin.build.TwinGraphRelation import TwinGraphRelation
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
@@ -27,6 +28,7 @@ __all__ = [
     "SyncPlan",
     "TwinBuildPostMaterialize",
     "TwinBuildRunHistory",
+    "BuildObjects",
     "TwinGraphBuild",
     "TwinGraphRelation",
     "TwinIncrementalBuild",

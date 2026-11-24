@@ -1,0 +1,90 @@
+{# Workspace home landing (Context / Ontology / Graph / Intelligence).
+   Expects `workspace_home_menu` — a menu_config entry. Tiles are grouped by
+   the same sidebar menu groups (Home group skipped). #}
+{% set _home_help_doc = 'intelligence' if workspace_home_menu.id == 'intelligence' else 'user-guide' %}
+<div class="content-section ob-workspace-home">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi {{ workspace_home_menu.icon }} me-2"></i>{{ workspace_home_menu.label }}</h4>
+            <p class="text-muted mb-0 small">{{ workspace_home_menu.description }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    data-help-jump="docs"
+                    data-help-doc="{{ _home_help_doc }}"
+                    title="Open Help Center">
+                <i class="bi bi-life-preserver me-1"></i>Help
+            </button>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            {% for group in workspace_home_menu.groups %}
+            {% set home_items = group['items']|rejectattr('id', 'equalto', 'home')|list %}
+            {% if home_items %}
+            <section class="ob-workspace-home-group" data-home-group="{{ group.id }}">
+                <h5 class="ob-workspace-home-group-title">
+                    <i class="bi {{ group.icon }}" aria-hidden="true"></i>
+                    <span>{{ group.title if group.title else 'Overview' }}</span>
+                </h5>
+                <div class="ob-workspace-home-tiles">
+                    {% for tile in home_items %}
+                    <a class="ob-workspace-home-tile{% if tile.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}{% if tile.requires|default('') == 'domain_saved' %} sidebar-requires-domain{% endif %}"
+                       href="{{ workspace_home_menu.route }}?section={{ tile.id }}"
+                       data-section="{{ tile.id }}"
+                       {% if tile.admin_only|default(false) %}data-requires-app="admin"{% endif %}>
+                        <span class="ob-workspace-home-tile-head">
+                            <span class="ob-workspace-home-tile-icon" aria-hidden="true">
+                                {% if 'ob-brand-icon' in tile.icon %}<i class="{{ tile.icon }}"></i>{% else %}<i class="bi {{ tile.icon }}"></i>{% endif %}
+                            </span>
+                            <span class="ob-workspace-home-tile-title">{{ tile.label }}</span>
+                        </span>
+                        <span class="ob-workspace-home-tile-desc">{{ tile.description|default('') }}</span>
+                        {% if tile.help_jump %}
+                        <button type="button"
+                                class="ob-workspace-home-tile-help"
+                                data-help-jump="{{ tile.help_jump }}"
+                                {% if tile.help_doc %}data-help-doc="{{ tile.help_doc }}"{% endif %}
+                                {% if tile.help_anchor %}data-help-anchor="{{ tile.help_anchor }}"{% endif %}
+                                title="Help: {{ tile.label }}"
+                                aria-label="Help: {{ tile.label }}">
+                            <i class="bi bi-question-circle" aria-hidden="true"></i>
+                        </button>
+                        {% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+            {% endfor %}
+            <div class="ob-workspace-home-resources">
+                <button type="button" class="ob-workspace-home-resource" data-help-jump="starter">
+                    <i class="bi bi-rocket-takeoff" aria-hidden="true"></i>
+                    <span>
+                        <span class="ob-workspace-home-resource-label">Starter Guide</span>
+                        <span class="ob-workspace-home-resource-desc">From a new context to a graph, then Intelligence.</span>
+                    </span>
+                </button>
+                <button type="button" class="ob-workspace-home-resource" data-help-jump="docs" data-help-doc="{{ _home_help_doc }}">
+                    <i class="bi bi-journal-text" aria-hidden="true"></i>
+                    <span>
+                        {% if workspace_home_menu.id == 'intelligence' %}
+                        <span class="ob-workspace-home-resource-label">Intelligence guide</span>
+                        <span class="ob-workspace-home-resource-desc">Cohorts, Analytics, Communities, Patterns, Scenarios.</span>
+                        {% else %}
+                        <span class="ob-workspace-home-resource-label">User Guide</span>
+                        <span class="ob-workspace-home-resource-desc">In-app documentation for this workspace.</span>
+                        {% endif %}
+                    </span>
+                </button>
+                <button type="button" class="ob-workspace-home-resource" data-help-jump="workflow">
+                    <i class="bi bi-signpost-2" aria-hidden="true"></i>
+                    <span>
+                        <span class="ob-workspace-home-resource-label">Workflow</span>
+                        <span class="ob-workspace-home-resource-desc">Ontology, mapping, sync, exploration and Intelligence.</span>
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

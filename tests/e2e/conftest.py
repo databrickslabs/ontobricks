@@ -581,13 +581,15 @@ def _seed_loaded_workspace(pg, base: str) -> None:
 
 
 @pytest.fixture
-def page(browser_instance, live_server, _live_bearer):
+def page(request, browser_instance, live_server, _live_bearer):
     """Provide a fresh browser page pointed at the server.
 
     In live mode the context carries an ``Authorization: Bearer`` header on
     every request (page nav, sub-resources, and ``page.context.request.*``
     API calls) and rewrites the deployed app's bad trailing-slash redirects.
-    Local mode is unchanged.
+    Local mode only seeds a session domain for ``needs_domain`` tests —
+    without it workspace URLs (``/dtwin``, ``/mapping``, ``/ontology``,
+    ``/domain``) 303 to Home and assertions run against the landing page.
     """
     token = _resolve_live_bearer() if _live_bearer else None
     if token:
@@ -599,7 +601,7 @@ def page(browser_instance, live_server, _live_bearer):
         ctx = browser_instance.new_context()
     pg = ctx.new_page()
     pg.base_url = live_server
-    if _live_base():
+    if _live_base() or request.node.get_closest_marker("needs_domain"):
         _seed_loaded_workspace(pg, live_server)
     yield pg
     pg.close()

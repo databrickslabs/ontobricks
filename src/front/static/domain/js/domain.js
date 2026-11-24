@@ -25,15 +25,19 @@ function enforceCamelCase(value) {
 // Configure sidebar navigation
 window.SIDEBAR_NAV_MANUAL_INIT = true;
 document.addEventListener('DOMContentLoaded', function() {
-    // Show the global domain-loading overlay while the Domain → General
-    // page boots up after a "New Domain" action. domain-information.js
-    // hides it once its Promise.all (info + version-status + LLM
-    // endpoints) resolves. Flag is set by domainNew() in navbar.js right
-    // before it navigates here.
-    let _creatingNewDomain = false;
-    try { _creatingNewDomain = sessionStorage.getItem('ob_creating_new_domain') === '1'; } catch (e) {}
-    if (_creatingNewDomain && typeof showDomainLoading === 'function') {
-        showDomainLoading('Creating new domain…');
+    // Overlay restore for open/create/validate is handled by the early
+    // sessionStorage script in base.html (ob_domain_loading). Keep a
+    // belt-and-suspenders re-show if navbar.js already defined the helper.
+    if (typeof showDomainLoading === 'function') {
+        try {
+            const raw = sessionStorage.getItem('ob_domain_loading');
+            if (raw) {
+                const data = JSON.parse(raw);
+                if (data && data.t && (Date.now() - data.t) <= 90000) {
+                    showDomainLoading(data.label || 'Loading context...');
+                }
+            }
+        } catch (e) {}
     }
 
     // Check URL for section parameter
@@ -45,6 +49,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Load metadata when switching to metadata section
             if (section === 'metadata' && typeof initMetadataSection === 'function') {
                 initMetadataSection();
+            }
+            // Configuration form fields (name, LLM, …) hydrate on demand.
+            if (section === 'information') {
+                loadDomainInfo();
+                if (typeof window.hydrateInformationSection === 'function') {
+                    window.hydrateInformationSection();
+                }
             }
             // Load validation details when switching to validation section
             if (section === 'validation') {
@@ -62,21 +73,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (section === 'audit' && typeof window.loadDomainAudit === 'function') {
                 window.loadDomainAudit();
             }
-            // Load OWL content when switching to owl-content section
-            if (section === 'owl-content' && typeof window.loadOwlContent === 'function') {
-                window.loadOwlContent();
-            }
-            // Load R2RML content when switching to r2rml section
-            if (section === 'r2rml' && typeof window.loadR2RMLContent === 'function') {
-                window.loadR2RMLContent();
-            }
         }
     });
-    
-    // Load initial data
-    loadDomainInfo();
 
     initMcpPolicyTab();
+
+    // Configuration-only fetches: skip on Context → Home so open feels snappy.
+    if ((initialSection || 'home') === 'information') {
+        loadDomainInfo();
+    }
 
     var domainFileInput = document.getElementById('domainFileInput');
     if (domainFileInput) {
@@ -157,7 +162,7 @@ async function loadDomainInfo() {
             }
         }
     } catch (error) {
-        console.error('Error loading domain info:', error);
+        console.error('Error loading context info:', error);
     }
 }
 
@@ -172,7 +177,7 @@ async function loadDefaultBaseUriDomain() {
             _defaultBaseUriDomain = result.base_uri.trim();
         }
     } catch (error) {
-        console.log('Could not load default base URI domain:', error);
+        console.log('Could not load default base URI context:', error);
     }
 }
 
@@ -221,7 +226,7 @@ function applyBaseUriMode() {
         baseUriEl.readOnly = true;
         baseUriEl.style.backgroundColor = '#e9ecef';
         updateAutoBaseUri();
-        if (hintEl) hintEl.innerHTML = 'Auto-generated from <a href="/settings">Settings</a> default domain and domain name.';
+        if (hintEl) hintEl.innerHTML = 'Auto-generated from <a href="/settings">Settings</a> default Base URI and context name.';
     } else {
         baseUriEl.readOnly = false;
         baseUriEl.style.backgroundColor = '';
@@ -254,7 +259,7 @@ async function checkDomainNameAvailability(nameEl) {
                 hint.style.display = 'block';
                 nameEl.parentNode.appendChild(hint);
             }
-            hint.textContent = `A domain named "${data.folder}" already exists in the registry.`;
+            hint.textContent = `A context named "${data.folder}" already exists in the registry.`;
         } else {
             nameEl.classList.remove('is-invalid');
             if (hint) hint.remove();
@@ -286,11 +291,11 @@ async function saveDomainInfo() {
 
     const domainName = nameEl.value.trim();
     if (!domainName) {
-        showNotification('Domain name is required', 'warning');
+        showNotification('Context name is required', 'warning');
         return;
     }
     if (!/^[A-Z][a-zA-Z0-9]*$/.test(domainName)) {
-        showNotification('Domain Name must be CamelCase and alphanumeric only', 'warning');
+        showNotification('Context Name must be CamelCase and alphanumeric only', 'warning');
         return;
     }
 
@@ -321,10 +326,11 @@ async function saveDomainInfo() {
             graph_cache_enabled: (graphBackendEl && (graphBackendEl.value === 'databricks' || graphBackendEl.value === 'lakebase'))
                 ? ((document.getElementById('domainGraphCacheEnabled') || {}).checked !== false)
                 : undefined,
+            identity_scope: (document.getElementById('domainIdentityScope') || {}).value || undefined,
         };
     
     try {
-        showNotification('Saving domain info...', 'info', 1000);
+        showNotification('Saving context info...', 'info', 1000);
         
         const response = await fetch('/domain/info', {
             method: 'POST',
@@ -336,7 +342,7 @@ async function saveDomainInfo() {
         const data = await response.json();
         
         if (data.success) {
-            showNotification('Domain info saved successfully!', 'success');
+            showNotification('Context info saved successfully!', 'success');
             window.OB?.updateLlmAvailability(
                 Boolean((data.info?.llm_endpoint || '').trim())
             );
@@ -360,12 +366,12 @@ async function saveDomainInfo() {
                 invalidateDomainCaches();
                 const currentDomainNameEl = document.getElementById('currentDomainName');
                 if (currentDomainNameEl) {
-                    currentDomainNameEl.textContent = domainInfoPayload.name || 'Domain';
+                    currentDomainNameEl.textContent = domainInfoPayload.name || 'Context';
                 }
             } else {
                 const currentDomainNameEl = document.getElementById('currentDomainName');
                 if (currentDomainNameEl) {
-                    currentDomainNameEl.textContent = domainInfoPayload.name || 'Domain';
+                    currentDomainNameEl.textContent = domainInfoPayload.name || 'Context';
                 }
             }
         } else {
@@ -383,7 +389,7 @@ async function handleDomainFileUpload(input) {
     const file = input.files[0];
     if (!file) return;
     
-    if (typeof showDomainLoading === 'function') showDomainLoading('Loading domain...');
+    if (typeof showDomainLoading === 'function') showDomainLoading('Loading context...');
     try {
         const formData = new FormData();
         formData.append('file', file);
@@ -397,7 +403,7 @@ async function handleDomainFileUpload(input) {
         const data = await response.json();
         
         if (data.success) {
-            showNotification('Domain loaded successfully!', 'success');
+            showNotification('Context loaded successfully!', 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             setTimeout(() => location.reload(), 1000);
         } else {
@@ -414,8 +420,8 @@ async function handleDomainFileUpload(input) {
 
 async function newDomain() {
     const confirmed = await showConfirmDialog({
-        title: 'New Domain',
-        message: 'Start a new domain? This will clear all current data.',
+        title: 'New Context',
+        message: 'Start a new context? This will clear all current data.',
         confirmText: 'Start New',
         confirmClass: 'btn-warning',
         icon: 'file-earmark-plus'
@@ -431,7 +437,7 @@ async function newDomain() {
         const data = await response.json();
         
         if (data.success) {
-            showNotification('New domain started!', 'success');
+            showNotification('New context started!', 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             setTimeout(() => location.reload(), 1000);
         } else {

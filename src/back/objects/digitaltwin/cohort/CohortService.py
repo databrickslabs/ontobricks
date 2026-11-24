@@ -88,7 +88,7 @@ class CohortService:
     # ------------------------------------------------------------------
 
     def _builder(self, store: Any, graph_name: str) -> Any:
-        from back.core.graph_analysis.CohortBuilder import CohortBuilder
+        from back.core.graph_analysis.cohort.CohortBuilder import CohortBuilder
         from shared.config.constants import DEFAULT_BASE_URI
 
         ontology = getattr(self._domain, "ontology", {}) or {}
@@ -345,7 +345,7 @@ class CohortService:
         """Per-hop frontier diagnostic for the rule's ``links``.
 
         Honours the rule's ``compatibility`` so the starting frontier
-        matches what *Preview cohorts* sees.  Returns the structure
+        matches what *Preview* sees.  Returns the structure
         emitted by :meth:`CohortBuilder.trace_paths`.
         """
         from back.core.graph_analysis import CohortCompat, CohortLink

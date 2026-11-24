@@ -9,6 +9,12 @@
     * building -> "Building…" badge
     * empty    -> "Graph not built" message + a "Go to Build" button
 
+  When the graph is definitely empty, the same updater also injects a blocking
+  empty-state card after the section header and hides the page body
+  (`updateKgGates()`), so Explorer / Query / Chat / Data Quality / Business
+  rules / Intelligence menus cannot be used until Build has materialised
+  triples.
+
   All containers on the page are updated together whenever the triple-store
   status changes (via `updateDataMenus()`).
 #}
