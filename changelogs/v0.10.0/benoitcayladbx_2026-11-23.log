@@ -340,3 +340,77 @@ Tests: uv run --frozen pytest -q -m "not scenario" -> 11228 passed, 334 skipped,
 Browser check (Playwright, headless Chromium): one- and two-line toasts now
 have icon, first text line and X centred on the same y (757.5 / 683.5 px);
 modal-header close is 30x30 px, centred on the title.
+
+================================================================================
+Intelligence → Analytics: "No analytics runs found" empty state
+================================================================================
+
+Context:
+When no graph analysis had ever been run for the context, the Analytics pane
+stayed blank. It now shows the same empty state as the Runs tab
+(`_domain_analytics_runs.html`): bi-graph-up-arrow icon + "No analytics runs
+found", with a hint pointing at the Run button.
+
+Changes:
+1. src/front/templates/partials/intelligence/_intel_analytics.html
+   - New hidden #analyticsEmpty block (same icon and message as Runs).
+2. src/front/static/query/js/query-analytics.js
+   - analyticsLoadLatest records _noStoredResult when /dtwin/metrics/latest
+     answers success with has_result=false (not on request failures).
+   - analyticsResume shows the empty state only after the running-task check
+     (no flash before a resumed run's spinner); hidden on render, while busy,
+     on errors and when the graph is missing (its own banner applies).
+3. tests/units/front/test_analytics_stale_result_gate.py
+   - Contracts: same icon/message as Runs, hidden by default, shown only when
+     nothing is stored or running, hidden on render/busy/error.
+
+Modified files:
+- src/front/templates/partials/intelligence/_intel_analytics.html
+- src/front/static/query/js/query-analytics.js
+- tests/units/front/test_analytics_stale_result_gate.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11232 passed, 334 skipped, 8 deselected
+Browser check: temporary 0.10.0 server on 127.0.0.1:8010 (stopped afterwards),
+probe context imported into the Playwright session only, stats / latest /
+tasks responses stubbed: only #analyticsEmpty visible, rendered like Runs.
+
+================================================================================
+Intelligence → Patterns: Certify button spinner + chart refresh
+================================================================================
+
+Context:
+Certifying a pattern of a saved Detect run only disabled the button while the
+PUT ran (16.8 s in the dev logs), with no visual feedback, then re-rendered
+the chart from the local toggle only.
+
+Changes:
+1. src/front/static/intelligence/js/intelligence-patterns.js
+   - toggleCertified: shows the same in-button spinner as Save / Detect
+     (`spinner-border spinner-border-sm ob-btn-spinner`) via the new
+     _setCertifyBusy (is-busy, aria-busy, disabled, width kept so the
+     toolbar does not shift); ignores clicks while busy.
+   - After success, the new _reloadSavedCatalog re-reads
+     /dtwin/patterns/saved/{id}/patterns (best-effort; keeps the local toggle
+     on failure), then _refreshCertUi rebuilds the toolbar and the
+     "Matching entities per pattern" chart.
+   - On failure the button is restored and the error is notified.
+2. src/front/static/intelligence/css/intelligence.css
+   - .pat-cert-btn.is-busy: progress cursor, no pointer events, full opacity
+     and Share colours so the spinner stays readable while disabled.
+3. tests/units/front/test_intelligence_page_contract.py
+   - Spinner before the PUT, catalog reload before the chart re-render,
+     button restored on failure.
+
+Modified files:
+- src/front/static/intelligence/js/intelligence-patterns.js
+- src/front/static/intelligence/css/intelligence.css
+- tests/units/front/test_intelligence_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-23.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 11235 passed, 334 skipped, 8 deselected
+Browser check: temporary 0.10.0 server on 127.0.0.1:8010 (stopped), probe
+context in the Playwright session, pattern APIs stubbed (PUT delayed 2 s):
+spinner shown in the 91 px button during the call; afterwards the button
+reads "Certified", the catalog was fetched again and the chart bar #1 and
+the gauge (0% -> 60%) switched to certified.
