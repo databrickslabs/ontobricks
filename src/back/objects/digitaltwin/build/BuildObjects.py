@@ -28,6 +28,9 @@ logger = get_logger(__name__)
 _PG_TABLE_SUFFIXES: Tuple[str, ...] = (
     "_entity_search_asserted",
     "_entity_search",
+    "_asserted_adj_out",
+    "_asserted_adj_in",
+    "_asserted_props",
     "_props",
     "_adj_out",
     "_adj_in",
@@ -53,6 +56,9 @@ _INFERRED_SUFFIXES: Tuple[str, ...] = (
     "_inferred",
 )
 _CACHE_SUFFIXES: Tuple[str, ...] = (
+    "_asserted_adj_out",
+    "_asserted_adj_in",
+    "_asserted_props",
     "_adj_out",
     "_adj_in",
     "_props",

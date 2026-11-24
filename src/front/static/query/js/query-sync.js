@@ -1816,6 +1816,9 @@ function _renderInsightsCache(data) {
         { key: 'props', label: 'Properties', icon: 'bi-list-ul', color: 'success' },
         { key: 'entity_search', label: 'Entity search', icon: 'bi-search', color: 'warning' },
         { key: 'entity_search_asserted', label: 'Entity search (asserted)', icon: 'bi-funnel', color: 'secondary' },
+        { key: 'adj_out_asserted', label: 'Adjacency out (asserted)', icon: 'bi-box-arrow-right', color: 'primary' },
+        { key: 'adj_in_asserted', label: 'Adjacency in (asserted)', icon: 'bi-box-arrow-in-left', color: 'info' },
+        { key: 'props_asserted', label: 'Properties (asserted)', icon: 'bi-list-ul', color: 'success' },
     ];
     var cards = specs.map(function (spec) {
         var item = _companionCount(companions, spec.key);

@@ -349,3 +349,96 @@ Modified files:
 Test result:
 Full suite: uv run --frozen pytest -q -m "not scenario" --deselect
 tests/units/api/test_routes.py -> 11317 passed, 334 skipped, 0 failed.
+
+================================================================================
+Search cache for the Original Graph: asserted companions + asserted routing
+================================================================================
+
+Context:
+The search cache had one set of adjacency and property companions, built from
+the certified (effective) graph. The Original Graph (asserted relation) only had
+its own entity-search table. Two defects followed:
+1. Delta: the asserted view name (`…_asserted`) was not recognised as an
+   asserted relation, so Original Graph Preview seeds came from the union
+   entity search (derived triples included), and Original Graph expansion walked
+   the certified `_adj_*` / `_props` tables built with derived triples.
+2. Lakebase: the same asserted-name gap sent Preview to the union entity search;
+   the Original Graph had no adjacency or props companion, so every expansion
+   fell back to SPO (correct, but slow).
+Fix: a second family of companions built from the asserted relation, routed by
+name. The Original Graph now reads only asserted companions, so it can use the
+cache without derived triples. The certified family is unchanged.
+
+Changes:
+1. src/back/core/graphdb/entity_search.py: `is_asserted_only_relation` also
+   returns True for a `…_asserted` leaf (the asserted view on both backends).
+2. src/back/core/graphdb/delta/_table_naming.py: new FQNs and suffixes
+   `_asserted_adj_out`, `_asserted_adj_in`, `_asserted_props`; added to
+   `graph_leaf_suffixes()` so Settings grouping (`object_base`) folds them into
+   their domain.
+3. src/back/core/graphdb/delta/ReadStore.py: `adjacency_table_ids` and
+   `props_table_id` route by relation (asserted names for asserted relations),
+   with and without a bound domain.
+4. src/back/core/graphdb/delta/MaterializedStore.py: `rebuild_adjacency` builds
+   the asserted adjacency and props from the asserted relation; one worker per
+   companion (8 jobs) instead of min(5, N).
+5. src/back/core/graphdb/lakebase/_adjacency_ddl.py: `asserted_adj_out_phy`,
+   `asserted_adj_in_phy`, `asserted_props_phy` (`<base>_asserted_*`).
+6. src/back/core/graphdb/lakebase/FlatStore.py: routing by relation; the
+   rebuild moved out to `_companion_rebuild.py` (class size budget: FlatStore
+   was at 1167 LOC vs 1148 baseline).
+7. src/back/core/graphdb/lakebase/_companion_rebuild.py (new): one function
+   rebuilding the certified and asserted companions in the same transactions
+   as before, plus the asserted set.
+8. src/back/core/graphdb/interfaces/SearchCacheMixin.py: inventory keys
+   `adj_out_asserted`, `adj_in_asserted`, `props_asserted`.
+9. src/back/objects/digitaltwin/build/BuildObjects.py: `_asserted_*` suffixes
+   classified as search cache and stripped to the graph base (Lakebase grouping).
+10. src/front/static/config/js/settings.js: same suffixes in the Lakebase
+    grouping; comment updated.
+11. src/front/static/query/js/query-build-cache.js and query-sync.js: three new
+    cache rows (Adjacency out/in and Properties, asserted).
+12. docs/backend.md, README.md: companion tables and the rebuild paragraph.
+13. Tests: tests/units/graphdb/test_asserted_companions.py (new, 9 tests:
+    relation detection, routing with and without domain, asserted entity-search
+    probe, rebuild builds asserted companions from the asserted view, grouping,
+    expansion SQL for the Original Graph); tests/units/graphdb/test_lakebase_adjacency.py
+    (3 new tests; rebuild transaction order now ends with the asserted props);
+    tests/units/graphdb/delta/test_delta_flat_store.py (expansion tests now use
+    the `_graph` relation for the certified cache; 8 companion jobs).
+
+Upgrade note:
+Graphs built before this change have no `_asserted_*` companions. Their Original
+Graph reads take the SPO path (no cache) until the next Build or Refresh cache.
+With the search cache forced on (`force_on`), Original Graph reads raise the
+cache-missing error until then.
+
+Not done (follow-up): the MCP tool description and agent prompts still say
+"live graph" (AI feature gate, see the previous section).
+
+Modified files:
+- src/back/core/graphdb/entity_search.py
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/core/graphdb/delta/ReadStore.py
+- src/back/core/graphdb/delta/MaterializedStore.py
+- src/back/core/graphdb/lakebase/_adjacency_ddl.py
+- src/back/core/graphdb/lakebase/FlatStore.py
+- src/back/core/graphdb/lakebase/_companion_rebuild.py (new)
+- src/back/core/graphdb/interfaces/SearchCacheMixin.py
+- src/back/objects/digitaltwin/build/BuildObjects.py
+- src/front/static/config/js/settings.js
+- src/front/static/query/js/query-build-cache.js
+- src/front/static/query/js/query-sync.js
+- docs/backend.md
+- README.md
+- tests/units/graphdb/test_asserted_companions.py (new)
+- tests/units/graphdb/test_lakebase_adjacency.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-24.log
+
+Test result:
+Targeted: tests/units/graphdb, tests/units/architecture, tests/units/dtwin,
+tests/units/settings, tests/units/front -> all passing after the fixes above.
+Full suite: uv run --frozen pytest -q -m "not scenario" --ignore=tests/units/api/test_routes.py
+-> 11329 passed, 334 skipped, 0 failed (test_routes.py excluded: hangs in this
+environment, as in the previous sections).

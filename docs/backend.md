@@ -417,6 +417,8 @@ per domain version, plus **four Explorer graph-index tables** rebuilt by
 | Entity search | App | `g_<domain>_v<n>_entity_search` | Preview with Inferred on; prefix + optional `pg_trgm` GIN |
 | Entity search (asserted) | App | `g_<domain>_v<n>_entity_search_asserted` | Preview with Inferred off; rebuilt from `_sync` |
 | Property companion | App | `g_<domain>_v<n>_props` | Outgoing triples of typed subjects; btree on `subject` |
+| Asserted adjacency out / in | App | `g_<domain>_v<n>_asserted_adj_out` / `_asserted_adj_in` | Same shape as `_adj_out` / `_adj_in`, built from the asserted view (no derived triples); the Original Graph walks these |
+| Asserted property companion | App | `g_<domain>_v<n>_asserted_props` | Same shape as `_props`, built from the asserted view; the Original Graph expansion payload |
 
 SPARQL still targets the union view `g_<domain>_v<n>`. Explorer hops use the
 adjacency tables; Preview uses `_entity_search` or `_entity_search_asserted`;
@@ -1082,6 +1084,8 @@ four-object triple-store family above:
 | `triplestore_<domain>_V<n>_entity_search` | Delta TABLE | `CLUSTER BY (type_uri, label_lc)` + Bloom on `label_lc,uri_lc` | same | Explorer Preview (Inferred on) |
 | `triplestore_<domain>_V<n>_entity_search_asserted` | Delta TABLE | same | same, from `_data` | Explorer Preview (Inferred off) |
 | `triplestore_<domain>_V<n>_props` | Delta TABLE | `CLUSTER BY (subject)` | same | Explorer expansion payload — all outgoing triples of typed subjects |
+| `triplestore_<domain>_V<n>_asserted_adj_out` / `_asserted_adj_in` | Delta TABLE | same as `_adj_out` / `_adj_in` | same, from the `_asserted` view | Explorer hops with Inferred off (Original Graph) |
+| `triplestore_<domain>_V<n>_asserted_props` | Delta TABLE | `CLUSTER BY (subject)` | same, from the `_asserted` view | Explorer expansion payload with Inferred off (Original Graph) |
 
 **Lakebase graph-index tables** use `_adj_out`, `_adj_in`,
 `_entity_search`, `_entity_search_asserted`, and `_props` suffixes. The entity
@@ -1747,6 +1751,8 @@ companions:
 | `_entity_search` | `(uri, type_uri, label, uri_lc, label_lc)` | Preview (Inferred on) |
 | `_entity_search_asserted` | same | Preview (Inferred off) |
 | `_props` | `(subject, predicate, object)` | Expansion payload for typed subjects |
+| `_asserted_adj_out` / `_asserted_adj_in` | same as `_adj_out` / `_adj_in` | Hops for the Original Graph (no derived triples) |
+| `_asserted_props` | same as `_props` | Expansion payload for the Original Graph |
 
 The companions are snapshots of the reader-facing graph at the moment of the
 rebuild — this is a full snapshot replacement, **not** an incremental refresh.
@@ -1758,11 +1764,12 @@ off; turning the switch back on leaves the domain in `pending_refresh` until
 the next successful rebuild (live SPO until then). `cache=true` on a read
 requires the companions and returns 400 if they are missing.
 
-For Lakehouse (Delta) graphs, four or five companion tables are rebuilt
-concurrently using a `ThreadPoolExecutor(max_workers=min(5, N))` per rebuild
-invocation, where N is the number of companions scheduled. The fifth companion,
-`entity_search_asserted`, is conditional: it is added only when both the
-asserted-SPO table and the companion FQN resolve to non-empty strings. Each
+For Lakehouse (Delta) graphs, up to eight companion tables are rebuilt
+concurrently using a `ThreadPoolExecutor(max_workers=N)` per rebuild
+invocation, where N is the number of companions scheduled (one worker each).
+The asserted companions (`entity_search_asserted`, `asserted_adj_out`,
+`asserted_adj_in`, `asserted_props`) are conditional: they are added only when
+the asserted-SPO table and the companion FQN resolve to non-empty strings. Each
 worker submits its DDL statement through the Databricks SQL connector, which
 maintains a thread-safe connection pool; each worker borrows a separate pooled
 connection so the CTAS statements run on the warehouse in true parallel without
@@ -1843,7 +1850,9 @@ GIN accelerates `contains` (`LIKE '%value%'`) when the planner selects it.
 
 The optimized union table is used when Explorer **Inferred** is enabled.
 When Inferred is off, Preview uses `_entity_search_asserted`, rebuilt from
-`_data` (Lakehouse) or `_sync` (Lakebase). A missing companion falls back to
+the asserted view (`_asserted`, or `_data` / `_sync` before it exists). Explorer
+hops and the expansion payload use `_asserted_adj_*` and `_asserted_props`
+for the same reason: the Original Graph never reads the certified companions. A missing companion falls back to
 the asserted SPO relation; unrelated SQL errors are not swallowed.
 
 Implementation:

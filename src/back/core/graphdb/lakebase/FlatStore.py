@@ -22,6 +22,8 @@ from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from back.core.graphdb.adjacency import expand_and_fetch_sql
+from back.core.graphdb.entity_search import is_asserted_only_relation
+from back.core.graphdb.lakebase._companion_rebuild import rebuild_graph_companions
 from back.core.graphdb.lakebase.InferredBreakdownMixin import InferredBreakdownMixin
 from back.core.graphdb.lakebase.OverrideOpsMixin import (
     _COPY_INSERT_TEMP,
@@ -39,10 +41,7 @@ from back.core.graphdb.overrides import (
 from back.core.graphdb.lakebase.SyncedTableManager import (
     DEFAULT_TIMEOUT_S as _SYNC_DEFAULT_TIMEOUT_S,
 )
-from back.core.graphdb.props import (
-    execute_expand_with_props_fallback,
-    forget_missing_props,
-)
+from back.core.graphdb.props import execute_expand_with_props_fallback
 from back.core.helpers import validate_table_name
 from back.core.logging import get_logger
 
@@ -193,6 +192,11 @@ class FlatStore(OverrideOpsMixin, InferredBreakdownMixin, Base):
         return "postgres"
 
     def adjacency_table_ids(self, table_name: str) -> tuple[str, str]:
+        if is_asserted_only_relation(table_name):
+            return (
+                _adjacency_ddl.asserted_adj_out_phy(table_name),
+                _adjacency_ddl.asserted_adj_in_phy(table_name),
+            )
         return (
             _adjacency_ddl.adj_out_phy(table_name),
             _adjacency_ddl.adj_in_phy(table_name),
@@ -205,34 +209,12 @@ class FlatStore(OverrideOpsMixin, InferredBreakdownMixin, Base):
         return _adjacency_ddl.entity_search_asserted_phy(table_name)
 
     def props_table_id(self, table_name: str) -> str:
+        if is_asserted_only_relation(table_name):
+            return _adjacency_ddl.asserted_props_phy(table_name)
         return _adjacency_ddl.props_phy(table_name)
 
     def rebuild_adjacency(self, table_name: str) -> None:
-        validate_table_name(table_name)
-        union_view = self._sql_relation(table_name)
-        adj_out, adj_in = self.adjacency_table_ids(table_name)
-        search = self.entity_search_table_id(table_name)
-        search_asserted = self.entity_search_asserted_table_id(table_name)
-        asserted_spo = self.synced_table_name(table_name)
-        props = self.props_table_id(table_name)
-        with self._cursor() as cur:
-            _adjacency_ddl.ensure_adjacency_tables(cur, adj_out, adj_in)
-            _adjacency_ddl.ensure_entity_search_table(cur, search)
-            _adjacency_ddl.ensure_entity_search_table(cur, search_asserted)
-            _adjacency_ddl.ensure_props_table(cur, props)
-        with self._txn_cursor() as (_, cur):
-            _adjacency_ddl.rebuild_adjacency_data(cur, union_view, adj_out, adj_in)
-            _adjacency_ddl.rebuild_entity_search_data(cur, union_view, search)
-            _adjacency_ddl.rebuild_entity_search_data(
-                cur, asserted_spo, search_asserted
-            )
-            _adjacency_ddl.rebuild_props_data(cur, union_view, props)
-        with self._cursor() as cur:
-            _adjacency_ddl.analyze_adjacency_tables(cur, adj_out, adj_in)
-            _adjacency_ddl.analyze_entity_search_table(cur, search)
-            _adjacency_ddl.analyze_entity_search_table(cur, search_asserted)
-            _adjacency_ddl.analyze_props_table(cur, props)
-        forget_missing_props(props)
+        rebuild_graph_companions(self, table_name)
 
     # -- Table-name resolution --------------------------------------------
 

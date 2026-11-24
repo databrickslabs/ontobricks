@@ -8,7 +8,7 @@ from typing import Any
 from back.core.graphdb.adjacency import typed_in_select, typed_out_select
 from back.core.graphdb.entity_search import entity_search_select
 from back.core.graphdb.props import props_select
-from back.core.graphdb.lakebase._companion_ddl import view_phy
+from back.core.graphdb.lakebase._companion_ddl import asserted_phy, view_phy
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -34,6 +34,26 @@ def adj_out_phy(graph_name: str) -> str:
 
 def adj_in_phy(graph_name: str) -> str:
     return _bounded_identifier(view_phy(graph_name), "_adj_in")
+
+
+def asserted_adj_out_phy(graph_name: str) -> str:
+    """Asserted-graph outgoing adjacency (``<base>_asserted_adj_out``)."""
+    return _bounded_identifier(_asserted_view_stem(graph_name), "_adj_out")
+
+
+def asserted_adj_in_phy(graph_name: str) -> str:
+    """Asserted-graph incoming adjacency (``<base>_asserted_adj_in``)."""
+    return _bounded_identifier(_asserted_view_stem(graph_name), "_adj_in")
+
+
+def asserted_props_phy(graph_name: str) -> str:
+    """Asserted-graph property companion (``<base>_asserted_props``)."""
+    return _bounded_identifier(_asserted_view_stem(graph_name), "_props")
+
+
+def _asserted_view_stem(graph_name: str) -> str:
+    """``<base>_asserted`` view name for any graph/companion name of one version."""
+    return asserted_phy(_asserted_stem_phy(graph_name))
 
 
 def entity_search_phy(graph_name: str) -> str:

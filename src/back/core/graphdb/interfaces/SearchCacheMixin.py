@@ -24,6 +24,9 @@ COMPANION_INVENTORY_KEYS = (
     ("props", "Properties"),
     ("entity_search", "Entity search"),
     ("entity_search_asserted", "Entity search (asserted)"),
+    ("adj_out_asserted", "Adjacency out (asserted)"),
+    ("adj_in_asserted", "Adjacency in (asserted)"),
+    ("props_asserted", "Properties (asserted)"),
 )
 
 
@@ -152,6 +155,8 @@ class SearchCacheMixin:
         if not getattr(self, "supports_adjacency", False):
             return []
         adj_out, adj_in = self.adjacency_table_ids(table_name)
+        asserted = self.synced_table_name(table_name)
+        asserted_adj_out, asserted_adj_in = self.adjacency_table_ids(asserted)
         ids = {
             "adj_out": adj_out,
             "adj_in": adj_in,
@@ -160,6 +165,9 @@ class SearchCacheMixin:
             "entity_search_asserted": self.entity_search_asserted_table_id(
                 table_name
             ),
+            "adj_out_asserted": asserted_adj_out,
+            "adj_in_asserted": asserted_adj_in,
+            "props_asserted": self.props_table_id(asserted),
         }
         inventory: List[Dict[str, Any]] = []
         for key, label in COMPANION_INVENTORY_KEYS:

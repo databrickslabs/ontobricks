@@ -107,8 +107,24 @@ class MaterializedStore(ReadStore, MaterializedGraphBackend):
             jobs["entity_search_asserted"] = lambda: self._rebuild_entity_search_table(
                 asserted_spo, search_asserted
             )
+        # Asserted-graph adjacency / props: the Original Graph reads these, so
+        # they must never be built from the certified relation.
+        asserted_adj_out, asserted_adj_in = self.adjacency_table_ids(asserted_spo)
+        asserted_props = self.props_table_id(asserted_spo)
+        if asserted_spo and asserted_adj_out and asserted_adj_in and asserted_props:
+            asserted_relation = self._sql_relation(asserted_spo)
+            jobs["adj_out_asserted"] = lambda: self._rebuild_adjacency_table(
+                asserted_relation, asserted_adj_out, "out"
+            )
+            jobs["adj_in_asserted"] = lambda: self._rebuild_adjacency_table(
+                asserted_relation, asserted_adj_in, "in"
+            )
+            jobs["props_asserted"] = lambda: self._rebuild_props_table(
+                asserted_relation, asserted_props
+            )
         started = time.perf_counter()
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(jobs))) as executor:
+        # One worker per companion: every CTAS runs at once, as before.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs)) as executor:
             future_names = {
                 executor.submit(self._run_rebuild_job, name, rebuild): name
                 for name, rebuild in jobs.items()
