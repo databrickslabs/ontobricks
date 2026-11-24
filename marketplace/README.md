@@ -78,7 +78,7 @@ Fresh install with the warehouse and Lakebase bound, user scopes `sql` + `apps`,
   Initialize then stored the location, and readiness showed 0 errors.
 - **The location survives a plain redeploy.** Readiness still shows 0 errors after it, "Apply upgrades" works (it used to return 400), and a second setup returns 409.
 - **Noise:** Initialize's own grant step still reports three warnings that don't apply to Marketplace: no MCP app, Lakebase CAN_USE, and catalog-wide `ALL_PRIVILEGES`.
-- **Still open:** a second, non-admin user (check 3).
+- **Still open:** a second, non-admin user (check 3). Benoit Cayla has `CAN_USE` on `ontobricks-mp-test-013` for this; he is not a dogfood workspace admin. Expected: he opens the app as a non-admin user, and Settings is refused.
 
 ### Results: E2 dogfood, 2026-11-24 (`ontobricks-mp-test-011`, Lakebase at install + lookup fix)
 
