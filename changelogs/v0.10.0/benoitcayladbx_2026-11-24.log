@@ -442,3 +442,61 @@ tests/units/settings, tests/units/front -> all passing after the fixes above.
 Full suite: uv run --frozen pytest -q -m "not scenario" --ignore=tests/units/api/test_routes.py
 -> 11329 passed, 334 skipped, 0 failed (test_routes.py excluded: hangs in this
 environment, as in the previous sections).
+
+================================================================================
+Tests: validate the search cache of both graphs (Certified and Original)
+================================================================================
+
+Context:
+The previous section added the asserted companions and was covered by SQL-shape
+tests. This one runs the stores' real cache rebuild and read SQL against the
+in-memory SQLite doubles, on Delta and Lakebase, and checks the behaviour of
+both caches on one scenario (mapped data, a derived edge and a derived-only
+entity, a user-added edge, a user-deleted edge).
+
+Changes:
+1. tests/units/graphdb/test_search_cache_both_graphs.py (new, 54 test runs:
+   every scenario runs on Delta and Lakebase, some also once per graph):
+   - companion contents: the Certified adjacency / props / entity search hold
+     the derived edge and the derived entity, the Original ones do not; a
+     user-deleted edge is in neither; the two families use different tables;
+   - reads served from the cache: expansion, neighbours, entities by type,
+     Preview seeds and the property payload return the right graph for each;
+   - parity: every cache-aware read gives the same answer with the cache
+     (auto) and without it (force_off), for each graph, plus a guard that the
+     two runs really take different paths;
+   - no cache / old graph: before the first build, and for a graph that only
+     has the certified family, reads fall back to SPO and stay correct;
+   - snapshot and refresh: an edit reaches the cache only at the next rebuild;
+     a refresh never moves a derived triple into the Original Graph; a full
+     rebuild drops derived rows from the Certified cache only; a user deletion
+     leaves both caches at the next refresh.
+2. tests/fixtures/sqlite_graph_backends.py: the doubles now run the cache
+   rebuild. Spark: `CREATE OR REPLACE TABLE ... USING DELTA [CLUSTER BY] AS`,
+   `DROP VIEW IF EXISTS` on a table (no-op), simple `LEFT ANTI JOIN <cte> ON`,
+   and a lock + `check_same_thread=False` (the rebuild runs one CTAS per
+   thread). Postgres: `TRUNCATE`, `ANALYZE`, `text_pattern_ops`, the pg_trgm
+   probe, and the `information_schema` existence probe.
+
+Mutation check (production code temporarily broken, then restored): the new
+tests fail when the `_asserted` leaf is not recognised (14 failures), when
+Delta routing ignores asserted relations (7), when the Delta asserted
+adjacency or props are built from the certified relation (5 and 4), and when
+the Lakebase asserted adjacency or props are built from the union view (4 and
+4). Ignoring the asserted routing in Lakebase `adjacency_table_ids` only fails
+the unit test in test_lakebase_adjacency.py (the `_sync` fallback name), because
+the `_asserted` view name already yields the asserted table name.
+
+Limits: SQLite is not Spark or Postgres; CLUSTER BY / OPTIMIZE / indexes and
+the real SQL dialect are not exercised, only the set semantics of the rebuild
+and of the reads.
+
+Modified files:
+- tests/units/graphdb/test_search_cache_both_graphs.py (new)
+- tests/fixtures/sqlite_graph_backends.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-24.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario" --ignore=tests/units/api/test_routes.py
+-> 11383 passed, 334 skipped, 0 failed (test_routes.py excluded: hangs in this
+environment, as in the previous sections).

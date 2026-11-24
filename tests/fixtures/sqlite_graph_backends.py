@@ -11,10 +11,13 @@ What is translated (and nothing else, so a new construct fails loudly):
 * Spark: ``cat.sch.name`` -> ``cat__sch__name``, ``CREATE OR REPLACE VIEW``,
   ``USING DELTA CLUSTER BY``, ``LEFT ANTI JOIN``, ``MERGE ... WHEN MATCHED THEN
   DELETE`` and ``(VALUES ...) AS v(...)``, ``current_timestamp()``,
-  ``DESCRIBE DETAIL``.
+  ``DESCRIBE DETAIL``, ``CREATE OR REPLACE TABLE ... USING DELTA ... AS`` (the
+  search-cache companions) and ``DROP VIEW IF EXISTS`` on a table.
 * Postgres: ``%s``, ``::TEXT``, ``now()``, ``CREATE OR REPLACE VIEW``,
   ``CREATE TEMP TABLE ... ON COMMIT DROP``, ``COPY ... FROM STDIN``,
-  ``DELETE ... USING``, ``ON CONFLICT DO NOTHING``, ``to_regclass``.
+  ``DELETE ... USING``, ``ON CONFLICT DO NOTHING``, ``to_regclass``,
+  ``TRUNCATE``, ``ANALYZE``, ``text_pattern_ops``, the ``pg_trgm`` probe and the
+  ``information_schema`` existence probe (the search-cache companions).
 
 Limits: SQLite is not Spark or Postgres. Type coercion, ``digest()`` generated
 columns and concurrency are not exercised; the point is the *set semantics* of
@@ -25,6 +28,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -74,15 +78,23 @@ def spark_to_sqlite(sql: str) -> list[str]:
     stmt = stmt.replace("current_timestamp()", "CURRENT_TIMESTAMP")
 
     view = re.match(r"CREATE OR REPLACE VIEW (\S+) AS (.*)$", stmt, re.S)
+    ctas = re.match(
+        r"CREATE OR REPLACE TABLE (\S+) USING DELTA(?:\s+CLUSTER BY \([^)]*\))?\s+AS (.*)$",
+        stmt,
+        re.S,
+    )
     if view:
         name, body = view.groups()
         statements = [f"DROP VIEW IF EXISTS {name}", f"CREATE VIEW {name} AS {body}"]
+    elif ctas:
+        name, body = ctas.groups()
+        statements = [f"DROP TABLE IF EXISTS {name}", f"CREATE TABLE {name} AS {body}"]
     else:
         statements = [stmt]
 
     out: list[str] = []
     for statement in statements:
-        if statement.startswith("CREATE TABLE"):
+        if statement.startswith("CREATE TABLE") and " AS " not in statement.split("(")[0]:
             statement = re.sub(r"\s+USING DELTA(\s+CLUSTER BY \([^)]*\))?", "", statement)
             statement = re.sub(r"\bSTRING\b", "TEXT", statement)
             statement = re.sub(r"\bTIMESTAMP\b", "TEXT", statement)
@@ -91,6 +103,12 @@ def spark_to_sqlite(sql: str) -> list[str]:
             r"WHERE NOT EXISTS (SELECT 1 FROM (\g<sub>) d WHERE \g<on>)",
             statement,
             flags=re.S,
+        )
+        # ``LEFT ANTI JOIN <cte> ON a.x = b.y`` (expansion visited-set filter).
+        statement = re.sub(
+            r"LEFT ANTI JOIN (\w+) ON (\w+\.\w+ = \w+\.\w+)",
+            r"WHERE NOT EXISTS (SELECT 1 FROM \1 WHERE \2)",
+            statement,
         )
         merge = re.match(
             r"MERGE INTO (\S+) t USING \(VALUES (.*)\) AS v\(subject, predicate, object\) "
@@ -125,7 +143,9 @@ class SqliteDeltaWarehouse:
     uses_inline_statements = True
 
     def __init__(self) -> None:
-        self.conn = sqlite3.connect(":memory:", isolation_level=None)
+        # The search-cache rebuild runs one CTAS per worker thread.
+        self.conn = sqlite3.connect(":memory:", isolation_level=None, check_same_thread=False)
+        self._lock = threading.RLock()
         self.statements: list[str] = []
 
     def execute_statement(self, sql: str) -> None:
@@ -135,8 +155,21 @@ class SqliteDeltaWarehouse:
         return self._run(sql)
 
     def _run(self, sql: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return self._run_locked(sql)
+
+    def _run_locked(self, sql: str) -> list[dict[str, Any]]:
         self.statements.append(sql)
         text = sql.strip()
+        drop_view = re.match(r"DROP VIEW IF EXISTS (\S+)$", text)
+        if drop_view:
+            # Spark: a no-op when the name is a table; SQLite would raise.
+            name = "__".join(drop_view.group(1).split("."))
+            found = self.conn.execute(
+                "SELECT type FROM sqlite_master WHERE name = ?", (name,)
+            ).fetchone()
+            if found is not None and found[0] == "table":
+                return []
         detail = re.match(r"DESCRIBE DETAIL (\S+)$", text)
         if detail:
             return self._describe(detail.group(1))
@@ -188,6 +221,12 @@ def postgres_to_sqlite(sql: str) -> tuple[list[str], list[str]]:
 
     out: list[str] = []
     for statement in statements:
+        truncate = re.match(r"TRUNCATE (\w+)$", statement)
+        if truncate:
+            statement = f"DELETE FROM {truncate.group(1)}"
+        if statement.startswith("ANALYZE "):
+            continue
+        statement = statement.replace(" text_pattern_ops", "")
         temp = re.match(r"CREATE TEMP TABLE (\w+) ", statement)
         if temp and statement.rstrip().endswith("ON COMMIT DROP"):
             dropped.append(temp.group(1))
@@ -239,6 +278,13 @@ class SqlitePgCursor:
         text = sql.strip()
         if text.startswith(("SET ", "RESET ")):
             return self
+        if text.startswith("DO "):
+            return self  # the pg_trgm CREATE EXTENSION block
+        if "pg_extension" in text:
+            self._cursor = self.conn.execute("SELECT 1 AS found WHERE 0")
+            return self
+        if "information_schema.tables" in text and params:
+            return self._regclass(params[0])  # ``FlatStore.table_exists``
         if "to_regclass" in text:
             return self._regclass((params or ("",))[0])
         statements, dropped = postgres_to_sqlite(text)
