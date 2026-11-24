@@ -1,0 +1,26 @@
+# Databricks Marketplace manifest for OntoBricks (0.10.x).
+# Spec: https://databricks.atlassian.net/wiki/spaces/UN/pages/5101748287
+# Resource names MUST match the valueFrom keys in ./app.yaml
+# (tests/units/scripts/test_marketplace_package.py enforces this).
+version: 1
+name: "ontobricks"
+description: "Design OWL ontologies, map them to Unity Catalog tables, and build and query knowledge graphs on Databricks."
+
+# Same user scope the DAB deploy grants (databricks.yml user_api_scopes):
+# admin group checks and MCP on-behalf-of. The identity scopes
+# (iam.current-user:read, iam.access-control:read) are platform defaults and
+# must not be declared.
+user_api_scopes:
+  - "sql"
+
+resource_specs:
+  - name: "sql-warehouse"
+    description: "SQL Warehouse for executing queries and metadata operations"
+    sql_warehouse_spec:
+      permission: "CAN_USE"
+
+# Not declared, because the manifest can't express them yet (PLAN.md Q1, Q7):
+# - Lakebase: the SDK's AppManifest model has no postgres/database spec. The
+#   installer binds a Lakebase database after install (LISTING.md).
+# - Registry catalog/schema: Apps can bind only CONNECTION, FUNCTION, TABLE or
+#   VOLUME securables, never a schema.

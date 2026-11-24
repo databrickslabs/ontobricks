@@ -15,7 +15,7 @@ CONFIG := scripts/deploy.config.sh
         deploy deploy-dry-run deploy-volume deploy-no-run \
         bootstrap-perms bootstrap-lakebase \
         bundle-validate bundle-summary deploy-check \
-        render-app-yaml docs-toc
+        render-app-yaml docs-toc marketplace-bundle marketplace-test-install
 
 # Output dir for the live scenario campaign reports (JUnit + HTML).
 SCENARIO_ARTIFACTS := artifacts/scenarios
@@ -56,6 +56,11 @@ help:
 	@echo "    make bundle-validate     - Validate the bundle config (target from deploy.config.sh)"
 	@echo "    make bundle-summary      - Preview what will deploy (target from deploy.config.sh)"
 	@echo "    make deploy-check        - Read-only deploy prerequisite check (see docs/deployment.md#deployment-checklist)"
+	@echo ""
+	@echo "  Databricks Marketplace (see marketplace/README.md):"
+	@echo "    make marketplace-bundle       - Assemble dist/marketplace/ontobricks for a Marketplace release"
+	@echo "    make marketplace-test-install ARGS=\"--profile <p> --warehouse-id <id> [--lakebase-branch projects/<p>/branches/<b>]\""
+	@echo "                                  - Install the assembled app into a workspace like Marketplace would"
 	@echo ""
 	@echo "  Maintenance:"
 	@echo "    make docs-toc     - Regenerate the table of contents of docs/*.md guides"
@@ -181,6 +186,12 @@ deploy-no-run:
 render-app-yaml:
 	@echo "Rendering app.yaml from app.yaml.template + $(CONFIG)..."
 	@. ./$(CONFIG) && python3 scripts/_internal/_render-app-yaml.py
+
+marketplace-bundle:
+	@uv run --frozen python scripts/marketplace/assemble.py
+
+marketplace-test-install:
+	@uv run --frozen python scripts/marketplace/emulate_install.py $(ARGS)
 
 docs-toc:
 	python3 scripts/_internal/_docs-toc.py docs

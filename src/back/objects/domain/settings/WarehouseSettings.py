@@ -83,6 +83,14 @@ class WarehouseSettings:
         domain = _ss.get_domain(session_mgr)
 
         if data.get("host"):
+            # In Databricks Apps mode the app always uses the platform-injected
+            # workspace host: a caller host would receive the service
+            # principal's client secret on the next OAuth mint.
+            if _ss.is_databricks_app():
+                raise ValidationError(
+                    "The workspace host cannot be changed when OntoBricks runs as a "
+                    "Databricks App; it always uses the workspace it is deployed in.",
+                )
             domain.databricks["host"] = data["host"]
 
         if data.get("warehouse_id"):
