@@ -42,7 +42,7 @@ def test_build_more_actions_offers_purge_and_refresh_cache():
     assert 'border-0' in more
     assert 'btn-outline-secondary' not in more
     assert 'text-danger' not in more
-    assert 'ob-dbx-menu-label">Purge inferences' in more
+    assert 'ob-dbx-menu-label">Purge overrides' in more
     assert 'ob-dbx-menu-label">Refresh cache' in more
     assert 'data-sync-action="refresh-adjacency-only"' in more
     assert 'js-dbx-adjacency-refresh' in more

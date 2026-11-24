@@ -31,7 +31,7 @@
 
 ### What's new in 0.10.0
 
-- **What-if simulation sandboxes**: build scenarios with hypothetical facts (add, remove, or set), written by hand, through a fact wizard, or with the natural-language agent. Run them in an isolated sandbox, explore the result in Explorer, and compare it with the live graph.
+- **What-if simulation sandboxes**: build scenarios with hypothetical facts (add, remove, or set), written by hand, through a fact wizard, or with the natural-language agent. Run them in an isolated sandbox, explore the result in Explorer, and compare it with the Original Graph.
 - **Simulation API**: create, run and read scenarios over REST (`/api/v1/simulations`), and query a ready sandbox through the graph endpoints.
 - **Graph Chat and search in the viewer**: search the graph and ask questions about it from Explorer.
 - **Patterns and communities at scale**: community detection and pattern detection handle larger graphs (Coverage KPI, hub pruning).
@@ -171,7 +171,7 @@ copies an entity neighbourhood or a cohort into a private sandbox, applies
 hypothetical facts ("what if this customer switches to the Green tariff?"),
 re-runs your IF-THEN, graph and business rules there, and shows exactly which
 triples would be added or removed — the live knowledge graph is never
-modified. **Compare** then overlays a ready scenario on today's live graph and
+modified. **Compare** then overlays a ready scenario on today's Original Graph and
 asks the same business question to both, with an AI commentary and a PDF
 report. Start from **Scenarios → New scenario** or **Simulate from here** on
 any Explorer entity. Lakebase, Lakehouse (Delta), and Neo4j backends are

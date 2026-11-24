@@ -94,7 +94,7 @@ class NodeBusinessRuleService:
         """Run *rule_name* on *entity_uri* and materialise the inferred triples.
 
         When *simulation_id* is set, the rule runs against that ready sandbox
-        and inferred triples are written there, not to the live graph.
+        and inferred triples are written there, not to the Original Graph.
 
         Raises:
             ValidationError: rule not declared on the class, or the rule has no

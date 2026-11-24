@@ -78,7 +78,7 @@
                         <figure class="howto-figure">
                             <svg class="howto-svg" viewBox="0 0 720 150" role="img"
                                  aria-labelledby="simHowFig1Title">
-                                <title id="simHowFig1Title">From the live graph to a list of changes, in five steps</title>
+                                <title id="simHowFig1Title">From the Original Graph to a list of changes, in five steps</title>
                                 <defs>
                                     <marker id="simHowArrow" viewBox="0 0 10 10" refX="9" refY="5"
                                             markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -86,7 +86,7 @@
                                     </marker>
                                 </defs>
                                 <rect class="hw-node hw-node--info" x="5" y="25" width="125" height="58" rx="10"/>
-                                <text class="hw-title" x="67" y="50" text-anchor="middle">Live graph</text>
+                                <text class="hw-title" x="67" y="50" text-anchor="middle">Original Graph</text>
                                 <text class="hw-small" x="67" y="67" text-anchor="middle">read only</text>
                                 <rect class="hw-node hw-node--sandbox" x="152" y="25" width="125" height="58" rx="10"/>
                                 <text class="hw-title" x="214" y="50" text-anchor="middle">Copy a slice</text>
@@ -117,7 +117,7 @@
                                 <text class="hw-small" x="654" y="110" text-anchor="middle">+2 added</text>
                                 <text class="hw-small" x="654" y="124" text-anchor="middle">−1 removed</text>
                             </svg>
-                            <figcaption>Everything after “Live graph” happens in the sandbox only.</figcaption>
+                            <figcaption>Everything after “Original Graph” happens in the sandbox only.</figcaption>
                         </figure>
 
                         <h6 class="fw-semibold mb-2">Step 1: Choose what to copy (the scope)</h6>
@@ -174,7 +174,7 @@
 
                         <h6 class="fw-semibold mb-2">Step 3: Choose which rules react</h6>
                         <p class="text-muted mb-3">
-                            Tick the same rule families you use on the live graph (business rules, IF-THEN rules,
+                            Tick the same rule families you use on the Original Graph (business rules, IF-THEN rules,
                             graph reasoning…). They run on the sandbox after your facts, so you see the
                             <em>knock-on effects</em>, not only the facts you typed.
                         </p>
@@ -240,10 +240,10 @@
                             <figcaption>Grey stays the same, amber is modified, green is new, red disappears.</figcaption>
                         </figure>
                         <ul class="text-muted mb-3">
-                            <li><strong>Live graph (inferred)</strong> compares against today’s data <em>including</em> rule
-                                results; <strong>Live graph (asserted only)</strong> compares against the raw data only.</li>
+                            <li><strong>Certified Graph</strong> compares against today’s data <em>including</em> rule
+                                results; <strong>Original Graph (asserted only)</strong> compares against the raw data only.</li>
                             <li>Click any box or link to see exactly what changed, and which rule produced it.</li>
-                            <li>Compare uses today’s live data. If the live graph changed since your run, re-run the
+                            <li>Compare uses today’s live data. If the Original Graph changed since your run, re-run the
                                 scenario to refresh it.</li>
                         </ul>
 
@@ -321,7 +321,7 @@
                             the scenario and its sandbox.
                         </p>
 
-                        <h6 class="fw-semibold mb-2">6. Compare with the live graph</h6>
+                        <h6 class="fw-semibold mb-2">6. Compare with the Original Graph</h6>
                         <p class="mb-2 text-muted">
                             Open <strong>Simulation → Compare</strong>. Pick a <strong>ready</strong> scenario and a
                             live source (<em>inferred</em> or <em>asserted only</em>) — the difference overlay loads
@@ -335,7 +335,7 @@
                         <p class="mb-3 text-muted">
                             Click a node or edge for details. Counters are exact; the drawing prioritises changes
                             (about 400 entities / 1&nbsp;500 links). Unlike Results (before vs after of the same sandbox),
-                            Compare also reflects what the live graph did since the run — re-run the scenario to refresh
+                            Compare also reflects what the Original Graph did since the run — re-run the scenario to refresh
                             the sandbox if live has moved on.
                         </p>
 

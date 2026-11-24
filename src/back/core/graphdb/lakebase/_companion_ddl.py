@@ -234,7 +234,7 @@ def backfill_sim_overlay_keys(cur: Any, sandbox: str, overlay: str) -> None:
 def ensure_sim_union_view(
     cur: Any, view: str, live: str, sandbox: str, overlay: str
 ) -> None:
-    """Live graph UNION sandbox, overlaying predicates the sandbox has owned.
+    """Original Graph UNION sandbox, overlaying predicates the sandbox has owned.
 
     Overlay keys live in *overlay* (``__smp_``), not remaining sandbox rows, so
     a last-value ``remove`` still hides the live triple.

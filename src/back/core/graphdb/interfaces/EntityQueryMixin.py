@@ -41,7 +41,7 @@ class EntityQueryMixin:
         subject (label, data properties, etc.) — not just ``rdfs:label``.
 
         When the entity-search companion is ready, reads it instead — a
-        Build/Refresh-cache snapshot rather than the live graph, and
+        Build/Refresh-cache snapshot rather than the Original Graph, and
         *search* then matches only ``rdfs:label``/URI (same fields Explorer
         Preview searches). Falls back to the SPO query below when the
         companion is missing or a missing-table error occurs mid-query.

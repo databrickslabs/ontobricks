@@ -654,7 +654,7 @@ class NodeContextService:
         ``run_entity_business_rule`` MCP tool is still exposed.
 
         When *simulation_id* is set, inference reads and writes that
-        simulation's sandbox (the live graph is left untouched).
+        simulation's sandbox (the Original Graph is left untouched).
         """
         resolved = NodeContextService.resolve_business_rule(
             domain,

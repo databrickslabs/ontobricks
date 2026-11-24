@@ -1066,7 +1066,7 @@ Entity **Inference rules (IF-THEN)** run against the sandbox (not the live
 graph) and write inferred triples there, so a rule such as attach-meter
 can see extra contracts asserted by the scenario. Opening Explorer from a
 scenario Results URI (or the Results **Explorer** button) lands on that
-sandbox via ``?simulation=``. Use **Live graph** to query the built
+sandbox via ``?simulation=``. Use **Original Graph** to query the built
 knowledge graph only. The same dropdown is on Query (SPARQL / GraphQL)
 and Chat. Programmatic callers use ``GET /api/v1/simulations`` then pass
 ``simulation_id`` on ``/api/v1/digitaltwin/triples``, ``/triples/find``,
@@ -1326,7 +1326,7 @@ Results are displayed as inferred triples and violations. Inferred triples can b
 
 In the **Business rules** phase tree (Graph → Business rules), rule names are links: clicking one opens the rule editor in place (the IF-THEN graph editor for Simple rules, the SPARQL editor for Complex rules). Users without ontology edit rights see the rule read-only. After you save, the list refreshes and your ticked rules stay ticked.
 
-Builders can use **Purge inferences** from the Build page ⋮ menu (Lakebase and
+Builders can use **Purge overrides** from the Build page ⋮ menu (Lakebase and
 Lakehouse), **Purge** on **Inference**, or **Intelligence → Configuration → Cohorts → Runs** to remove all materialized
 reasoning and cohort triples from the
 active graph. The confirmation dialog names the active graph and shows the
@@ -1356,7 +1356,7 @@ is **[Intelligence](intelligence.md)**.
 The left sidebar has three groups. The app switcher always opens Intelligence
 **Home** (tiles grouped like the sidebar).
 
-| Group | Page | Business question it answers | Writes to the live graph? |
+| Group | Page | Business question it answers | Writes to the Original Graph? |
 |-------|------|------------------------------|---------------------------|
 | *(landing)* | **Home** | *Where do I start?* | Never |
 | **Configuration** | **Cohorts** | *Which entities belong together according to rules I define?* | Only when you **Materialise** a cohort run |
@@ -1364,7 +1364,7 @@ The left sidebar has three groups. The app switcher always opens Intelligence
 | **Discovery** | **Communities** | *Which entities are tightly connected to each other?* | Only when you **Materialize** the partition |
 | **Discovery** | **Patterns** | *Which entities look alike (same kind of neighbourhood and profile)?* | Never (saved as a [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) snapshot) |
 | **Simulation** | **Scenarios** | *What would change if these facts were true?* | Never (private sandbox per scenario) |
-| **Simulation** | **Compare** | *How does a scenario differ from today's live graph, and what does it mean for the business?* | Never |
+| **Simulation** | **Compare** | *How does a scenario differ from today's Original Graph, and what does it mean for the business?* | Never |
 
 ### Home
 
@@ -1462,7 +1462,7 @@ The graph is never changed. The **How it works** tab explains the method.
 A scenario is a safe *what if*. It copies a slice of the graph (an entity
 neighbourhood or a cohort) into a private sandbox, applies hypothetical facts,
 re-runs the reasoning you ticked, and lists what would be added or removed.
-The live graph is never modified.
+The Original Graph is never modified.
 
 - **List** — saved scenarios with scope, number of facts, status (*draft*,
   *running*, *ready*, *failed*) and the added / removed counts of the last run.
@@ -1491,13 +1491,13 @@ larger scope fails the run with a message instead of being cut silently.
 Compare answers *how would today's real graph differ if this scenario
 happened, and what does it mean for the business?*
 
-- **Graphs** — pick a **ready** scenario and the **Live graph** (inferred or
+- **Graphs** — pick a **ready** scenario and the **Original Graph** (inferred or
   asserted only). The overlay loads automatically: grey unchanged, amber
   modified, green added, red removed. **Refresh** reloads it, **Metrics** shows
   exact counts, and **Selection & Guide** shows the details of a clicked node or
   link.
 - **Evaluate** — type a business question in **Prompt** and press **Ask both**:
-  the same question runs on the live graph and on the sandbox. **Business
+  the same question runs on the Original Graph and on the sandbox. **Business
   insights** comments on the difference, **Open report** builds a printable
   summary, and **Export PDF** uses the browser print dialog.
 
@@ -2831,7 +2831,7 @@ Open **Explorer** in the sidebar to explore the graph viewer interactively:
 - **Search** by entity type, field, match type, and relationship depth
 - **Cap expansion** with the max-entities control (default 5 000, up to 20 000). The server uses the value you pick, including in [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/).
 - **Navigate** relationships — click an entity to see its attributes, values, and connected entities in the detail panel
-- **Graph** chooses the live asserted graph, the live inferred graph, or one ready simulation sandbox per scenario. Opening Explorer from the sidebar always selects **Live graph (inferred)**; an inbound link (for example Results → Explorer with `?simulation=`) keeps that sandbox.
+- **Graph** chooses the live asserted graph, the live inferred graph, or one ready simulation sandbox per scenario. Opening Explorer from the sidebar always selects **Certified Graph**; an inbound link (for example Results → Explorer with `?simulation=`) keeps that sandbox.
 - **View** opens canvas help: entity and relationship labels, hide orphans, and quality rings
 - **Groups toggle** (toolbar, same control as Ontology → Studio) collapses or expands every ontology group on the canvas. The Groups popup and empty-canvas menu still list the same expand/collapse-all actions.
 
@@ -3206,12 +3206,12 @@ After import you can:
 - **Analytics**: **Intelligence → Discovery → Analytics** runs the centrality job (see **Graph Analytics** below). Tabs: **Dashboard** (KPIs, metric histograms, ranking chart), **Data Model Health** (flat entity types to exclude from the sync), **AI Insights** (**Interpret** with the domain LLM; **Add to audit trail**), and **Runs** (every launched analysis, failed ones included).
 - **Community detection**: **Intelligence → Discovery → Communities** previews a label-propagation partition computed on a Databricks job (optional entity-type scope, modularity, convergence), then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer colours and collapses that partition; **Purge** removes it.
 - **Pattern detection**: **Intelligence → Discovery → Patterns** lists saved neighbourhood snapshots; **New** opens the Detect dialog (entity, hops, numeric bins, min support, refine top-N, each with an (i) tooltip), runs a Databricks job, saves the run automatically to Unity Catalog, and opens it. Run KPIs: Hops, Entities, Patterns, Coverage; a bar chart ranks matching entities; each pattern shows the detail level, a layered diagram with hover lineage highlight and relationship badges, and a **Matching entities** dialog. The graph is never changed.
-- **What-if sandboxes (Scenarios)**: Assert hypothetical facts (Set / Add / Remove) on a private copy of an entity neighbourhood or a cohort, re-run the ticked reasoning phases, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
-- **Compare and Evaluate**: **Intelligence → Simulation → Compare** overlays a ready sandbox on today's live graph (inferred or asserted only) with colour-coded nodes and links and exact metrics; **Evaluate** asks one question to both graphs, adds a business-insights commentary, and builds a printable / PDF report.
+- **What-if sandboxes (Scenarios)**: Assert hypothetical facts (Set / Add / Remove) on a private copy of an entity neighbourhood or a cohort, re-run the ticked reasoning phases, and inspect the before/after diff. The Original Graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
+- **Compare and Evaluate**: **Intelligence → Simulation → Compare** overlays a ready sandbox on today's Original Graph (inferred or asserted only) with colour-coded nodes and links and exact metrics; **Evaluate** asks one question to both graphs, adds a business-insights commentary, and builds a printable / PDF report.
 - **How it works tabs**: Communities, Patterns and Scenarios each have a **How it works** tab with business-friendly diagrams, an energy & utilities example, and collapsed technical details. Every Intelligence page header has the **ontology discussion** button and the graph readiness badge.
 - **Scenario workbench**: **General**, **Hypothetical facts** (Set / Add / Remove; **Add fact** wizard; **Propose facts** drafts facts from plain language for review), **Reasoning** (T-Box, Simple rules, Graph reasoning, Complex rules) and **Results** (Added / Removed tables). Header buttons **Save**, **Run**, **Purge**. **Simulate from here** on an Explorer entity pre-fills the scope.
 - **Compare metrics and report**: the overlay loads for a ready scenario; **Metrics** shows exact counts; **Selection & Guide** explains the clicked node or link; **Evaluate** → **Ask both**, **Business insights**, **Open report** and **Export PDF**.
-- **Cohort runs**: the **Runs** tab previews a rule and materialises it to `:inCohort` and/or a Unity Catalog table (**Outputs**); **Purge inferences** (Build page ⋮ menu) removes the materialised cohort and reasoning triples.
+- **Cohort runs**: the **Runs** tab previews a rule and materialises it to `:inCohort` and/or a Unity Catalog table (**Outputs**); **Purge overrides** (Build page ⋮ menu) removes the materialised cohort and reasoning triples.
 - **Background runs and history**: long operations appear in the navbar **Activity** panel; Analytics **Runs** and Settings → Automation → Runs (admin) keep the history.
 
 ### Graph (Sync & Explore)
@@ -3235,7 +3235,7 @@ After import you can:
 - **Class Actions (Unity Catalog functions)**: Bind any number of UC functions to an ontology class in **Ontology → Studio → Behaviour → Functions**, each with its own description. Run them on a node from the details pane or its right-click menu; the result (scalar or table) opens in a popup. Each function must take exactly one argument — the entity's ID — and the invocation endpoint enforces an allow-list so only functions declared on the node's own class can be called. The same actions are surfaced to the MCP server through `get_entity_context` and `invoke_entity_action`.
 - **Class Actions (Databricks Jobs)**: In the same **Behaviour** tab (**Jobs** section), bind workspace Jobs that declare an `entity_id` parameter. OntoBricks only starts the Job (`run_now`); Spark still uses the Job's run-as identity. On Lakehouse domains in App mode the trigger is on-behalf-of the signed-in user. Triggering a Job from Explorer opens a popup that checks the run actually started and tells you right away whether it is **Running** or **Queued**, with a link to the run in Databricks. The popup keeps following the run while it is open (Running → Succeeded / Failed), and you can close it at any time: the run stays in the navbar **Activity** panel (`bi-inboxes`), which shows its live state and the same run link. Invoke the same `job:<job_id>` name from Explorer or MCP `invoke_entity_action`.
 
-- **Entity Inference Rules (IF-THEN)**: In **Ontology → Studio → Behaviour → Inference rules (IF-THEN)**, attach one or more IF-THEN rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the live graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the live graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the IF-THEN editor updates the class references. Neo4j supports graph-shaped rules with class and object-property atoms; unsupported literal or builtin atoms report an explicit rule error.
+- **Entity Inference Rules (IF-THEN)**: In **Ontology → Studio → Behaviour → Inference rules (IF-THEN)**, attach one or more IF-THEN rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the Original Graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the Original Graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the IF-THEN editor updates the class references. Neo4j supports graph-shaped rules with class and object-property atoms; unsupported literal or builtin atoms report an explicit rule error.
 - **Virtual Attributes (computed on demand)**: A class of attribute that no mapping feeds and no build materialises — a Unity Catalog function computes it from the entity's ID when someone asks. Declare them in **Ontology → Studio → Attrs. → Virtual attributes** by picking a UC function that takes exactly one parameter; one attribute is created per returned column (or a single one for a scalar function), read from `information_schema`. In the Graph Explorer they appear in their own **Virtual Attributes** section under the mapped ones with a per-function **Compute** button, a **Compute all**, and a right-click shortcut; computed values are cached per entity for the page's lifetime, with **Recompute** as the refresh. Over MCP the declarations always ride along with `get_entity_context`; when a question is about a virtual attribute's value, the model should call `compute_virtual_attributes(entity_uri)` to run the UC function — nothing is computed unless asked. A failing function reports its error without denying the attributes that still resolve. Because they are never materialised, virtual attributes are **not queryable** in SPARQL or GraphQL and take no part in mappings, R2RML, SHACL or data-quality checks.
 - **Entity SHACL facets**: Check one entity against every enabled SHACL shape that applies to it — the shapes on its class, on its parent classes, and the global ones. In **Graph → Explorer**, right-click a node and choose **Data quality → Data Quality Checks (N)**, or use **Check** in the node's **Data quality** section. The **Data Quality Checks** popup shows a scrollable activity log while the
 check runs, then one gauge per dimension (completeness, cardinality, uniqueness, consistency, conformance, structural): the share of checked shapes that passed, ignoring the ones that did not apply, were not evaluated or errored — a dash means nothing in that dimension could be checked. Clicking a gauge opens its section. Below, the shapes are listed by dimension in sections that start collapsed, each with its status — passed, failed (with its severity), not applicable (guard condition false), not evaluated (no SQL translation, such as `sh:closed`) or error — the values the entity carries on the constrained property, and the ancestor an inherited shape comes from. The status chips filter the list and open the sections that hold a match. Results are cached per entity for the page's lifetime; **Re-check** recomputes them. Checked nodes get a ring on the canvas: red when a Violation failed, amber when a Warning/Info failed or a shape errored, green when every shape passed or did not apply. **View → Quality rings** hides the rings. MCP clients get the same check through `check_entity_shacl_facets(entity_uri)`, which can be disabled per domain in the MCP policy.

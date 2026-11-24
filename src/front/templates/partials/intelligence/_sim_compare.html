@@ -1,9 +1,9 @@
-<!-- Compare Section - sandbox vs current live graph, same scope -->
+<!-- Compare Section - sandbox vs current Original Graph, same scope -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-3">
         <div>
             <h4 class="mb-1"><i class="bi bi-columns-gap me-2"></i>Compare{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
-            <p class="text-muted mb-0 small">Overlay a ready sandbox on the current live graph (same scope). The live knowledge graph is never modified.</p>
+            <p class="text-muted mb-0 small">Overlay a ready sandbox on the current Original Graph (same scope). The live knowledge graph is never modified.</p>
         </div>
         <div class="d-flex align-items-center gap-2">
             <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn" id="simCompareDiscussBtn"
@@ -16,10 +16,10 @@
     <!-- Shared graph sources: used by Graphs (Compare) and Evaluate (Ask both) -->
     <div class="sim-compare-sources d-flex flex-wrap align-items-end gap-3 mb-3 flex-shrink-0">
         <div class="sim-compare-source-field flex-grow-1">
-            <label class="form-label small mb-1 fw-semibold" for="simCompareSource">Live graph</label>
+            <label class="form-label small mb-1 fw-semibold" for="simCompareSource">Original Graph</label>
             <select class="form-select form-select-sm" id="simCompareSource">
-                <option value="inferred" selected>Live graph (inferred)</option>
-                <option value="asserted">Live graph (asserted only)</option>
+                <option value="inferred" selected>Certified Graph</option>
+                <option value="asserted">Original Graph (asserted only)</option>
             </select>
         </div>
         <div class="sim-compare-source-field flex-grow-1">
@@ -63,7 +63,7 @@
                     <div id="simCompareEmpty" class="sim-compare-overlay text-center text-muted p-4 my-auto d-none">
                         <i class="bi bi-collection fs-1 d-block mb-2"></i>
                         <h5 class="fw-semibold mb-1">No ready scenario to compare</h5>
-                        <p class="small text-muted mb-0">Run a scenario first: its sandbox can then be compared with the live graph.</p>
+                        <p class="small text-muted mb-0">Run a scenario first: its sandbox can then be compared with the Original Graph.</p>
                     </div>
 
                     <div id="simCompareIdle" class="sim-compare-overlay text-center text-muted p-4 my-auto">
@@ -74,11 +74,11 @@
 
                     <div id="simCompareLoading" class="sim-compare-overlay text-center text-muted p-4 my-auto d-none">
                         <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
-                        <h5 class="fw-semibold mb-1">Comparing sandbox and live graph…</h5>
+                        <h5 class="fw-semibold mb-1">Comparing sandbox and Original Graph…</h5>
                         <p class="small text-muted mb-0">Reading same-scope triples and calculating deltas.</p>
                     </div>
 
-                    <div id="simCompareCanvas" class="sim-compare-canvas flex-grow-1 d-none" role="img" aria-label="Sandbox versus live graph comparison"></div>
+                    <div id="simCompareCanvas" class="sim-compare-canvas flex-grow-1 d-none" role="img" aria-label="Sandbox versus Original Graph comparison"></div>
                 </div>
 
                 <div class="sim-compare-canvas-footer d-flex align-items-center justify-content-between px-3 py-1 border-top bg-light small flex-shrink-0">
@@ -86,7 +86,7 @@
                         <span title="Present in both live and sandbox with identical attributes"><span class="sim-compare-swatch sim-compare-swatch-unchanged"></span>Unchanged</span>
                         <span title="Entity present in both with modified attributes or links"><span class="sim-compare-swatch sim-compare-swatch-changed"></span>Modified</span>
                         <span title="Added in sandbox only"><span class="sim-compare-swatch sim-compare-swatch-added"></span>Added</span>
-                        <span title="Removed from live graph"><span class="sim-compare-swatch sim-compare-swatch-removed"></span>Removed</span>
+                        <span title="Removed from Original Graph"><span class="sim-compare-swatch sim-compare-swatch-removed"></span>Removed</span>
                         <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-muted" id="simCompareLegendToggle" data-bs-toggle="collapse" data-bs-target="#simCompareLegendHelp" aria-expanded="false" aria-controls="simCompareLegendHelp" title="Toggle color guide">
                             <i class="bi bi-question-circle"></i>
                         </button>
@@ -197,7 +197,7 @@
     </div>
     </div>
 
-    <!-- EVALUATE PANE: one prompt, asked of the live graph and the sandbox -->
+    <!-- EVALUATE PANE: one prompt, asked of the Original Graph and the sandbox -->
     <div class="tab-pane fade" id="simCompare-pane-evaluate" role="tabpanel"
          aria-labelledby="simCompare-tab-evaluate">
         <div class="sim-eval d-flex flex-column gap-3 flex-grow-1 min-h-0">
@@ -215,7 +215,7 @@
             <div class="row g-3 flex-grow-1 min-h-0">
                 <div class="col-12 col-lg-6 d-flex flex-column min-h-0">
                     <div class="small fw-semibold mb-1 text-truncate" id="simEvalLiveTitle">
-                        <i class="bi bi-diagram-3 me-1"></i><span data-role="title">Live graph (inferred)</span>
+                        <i class="bi bi-diagram-3 me-1"></i><span data-role="title">Certified Graph</span>
                     </div>
                     <div class="sim-eval-output flex-grow-1" aria-labelledby="simEvalLiveTitle">
                         <div class="small text-muted d-none" id="simEvalLiveStatus" role="status">

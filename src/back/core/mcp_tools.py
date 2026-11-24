@@ -99,7 +99,7 @@ MCP_DOMAIN_TOOLS: tuple[Dict[str, Any], ...] = (
         "name": "select_simulation",
         "label": "Select simulation",
         "description": "Read subsequent graph tools against a ready sandbox, "
-        "or the live graph when id is omitted.",
+        "or the Original Graph when id is omitted.",
         "requires_graph": True,
     },
     {

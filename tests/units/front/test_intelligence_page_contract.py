@@ -390,7 +390,7 @@ def test_scenarios_list_has_how_it_works_tab():
     assert 'id="simListPaneHow"' in html
     assert "How it works" in html
     assert "Hypothetical facts (operations)" in html
-    assert "Compare with the live graph" in html
+    assert "Compare with the Original Graph" in html
     assert "Evaluate (same Compare page)" in html
     assert "Entity neighbourhood" in html
     assert ".sim-how-it-works" in css
@@ -718,7 +718,7 @@ def test_compare_graph_sources_sit_above_the_tabs():
         assert f'id="{element}"' in above, element
         assert f'id="{element}"' not in tabs, element
     assert 'class="sim-compare-sources' in above
-    # Live graph comes first, Scenario second.
+    # Original Graph comes first, Scenario second.
     assert above.index('id="simCompareSource"') < above.index('id="simCompareScenario"')
     graphs = tabs.split('id="simCompare-pane-evaluate"')[0]
     assert 'id="simCompareCanvas"' in graphs

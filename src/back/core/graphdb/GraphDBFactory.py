@@ -692,7 +692,7 @@ class GraphDBFactory:
 
     @classmethod
     def classify_store(cls, store: Any) -> str:
-        """Map a live graph store instance to its backend kind.
+        """Map an Original Graph store instance to its backend kind.
 
         Returns ``"lakebase"`` / ``"delta"`` / ``"neo4j"`` or ``""`` — used by the
         simulation layer to pick the sandbox implementation without importing a

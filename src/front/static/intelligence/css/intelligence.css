@@ -277,7 +277,7 @@ a.sim-uri-link:focus-visible {
     background: var(--db-surface-warm);
 }
 
-/* Shared Scenario + Live graph row under the Compare subtitle */
+/* Shared Scenario + Original Graph row under the Compare subtitle */
 .sim-compare-sources .sim-compare-source-field {
     min-width: 220px;
     max-width: 420px;

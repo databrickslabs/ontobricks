@@ -137,7 +137,7 @@ class _CompanionMixin:
 
 
 class _LakebaseSandbox(_CompanionMixin):
-    """Seed, patch and read a standalone sandbox copy of a live graph slice.
+    """Seed, patch and read a standalone sandbox copy of an Original Graph slice.
 
     The live store is only read (``copy_subjects_from``); every write goes
     through a :class:`SimulationStore`, which refuses non-sandbox
@@ -201,7 +201,7 @@ class _LakebaseSandbox(_CompanionMixin):
 
         *inbound* follows live reverse edges (who already points at this
         contract). Leave it off for hypothesis objects: those contracts
-        still belong to other customers in the live graph, and pulling
+        still belong to other customers in the Original Graph, and pulling
         their claims into the sandbox makes IF-THEN fire on the wrong people.
         """
         unique = list(dict.fromkeys(u for u in uris if u))

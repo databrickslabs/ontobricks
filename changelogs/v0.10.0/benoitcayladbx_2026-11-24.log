@@ -255,3 +255,97 @@ Test result:
 tests/units/graphdb/test_overrides_behaviour.py -> 73 passed.
 Full suite: uv run --frozen pytest -q -m "not scenario" --deselect
 tests/units/api/test_routes.py -> 11317 passed, 334 skipped, 0 failed.
+
+================================================================================
+Build menu: "Purge inferences" renamed "Purge overrides" (labels, dialog, docs)
+================================================================================
+
+Context:
+The Build page ⋮ menu and the shared Purge button still said "Purge inferences",
+while the action now purges the derived rows of the overrides layer. User-facing
+text only: element ids, CSS classes, file names and routes are unchanged.
+
+Changes:
+1. src/front/templates/partials/dtwin/_build_more_actions.html
+   - Menu label "Purge overrides" (enabled and disabled entries); tooltips
+     "Remove the derived overrides (reasoning and cohort triples)" and
+     "Only builders and admins can purge overrides".
+2. src/front/templates/partials/dtwin/_purge_inferences_button.html
+   - Tooltip aligned with the menu.
+3. src/front/static/query/js/query-purge-inferences.js
+   - Confirmation dialog "Purge overrides?" ("This will delete N derived
+     overrides ..."), success toast "Purged N derived overrides.", and the
+     unavailable notifications.
+4. src/api/routers/internal/dtwin.py
+   - Error message of DELETE /dtwin/reasoning/inferred for backends that cannot
+     purge: "... cannot safely purge overrides".
+5. docs/user-guide.md
+   - Build menu and cohort runs sections name "Purge overrides".
+6. releases/ReleaseNotes_V0.10.0.md
+   - Build page and documentation bullets name "Purge overrides".
+7. tests/units/front/test_purge_inferences_ui.py,
+   tests/units/front/test_reasoning_header_buttons.py
+   - Assertions and docstring follow the new label.
+
+Not changed on purpose: file names (query-purge-inferences.js,
+_purge_inferences_button.html), CSS class js-purge-inferences-btn, the
+/dtwin/reasoning/inferred route, and the "Materialized inferences" count label.
+Earlier release notes (V0.8.0) keep their historical wording.
+
+Modified files:
+- src/front/templates/partials/dtwin/_build_more_actions.html
+- src/front/templates/partials/dtwin/_purge_inferences_button.html
+- src/front/static/query/js/query-purge-inferences.js
+- src/api/routers/internal/dtwin.py
+- docs/user-guide.md
+- releases/ReleaseNotes_V0.10.0.md
+- tests/units/front/test_purge_inferences_ui.py
+- tests/units/front/test_reasoning_header_buttons.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-24.log
+
+Test result:
+Targeted: tests/units/front/test_purge_inferences_ui.py,
+test_reasoning_header_buttons.py, test_cohorts_runs_tabs_contract.py,
+tests/units/dtwin/test_purge_materialized_inferences.py -> 22 passed.
+Full suite: uv run --frozen pytest -q -m "not scenario" --deselect
+tests/units/api/test_routes.py -> 11317 passed, 334 skipped, 0 failed.
+
+================================================================================
+Graph source labels: "Live graph" -> "Original Graph", "Live graph (inferred)" -> "Certified Graph"
+================================================================================
+
+Context:
+The graph source options (Explorer, Query, Compare, Evaluate, Simulation help)
+used "Live graph" for the asserted graph and "Live graph (inferred)" for the
+graph with derived triples. Renamed for the user-facing vocabulary: the
+asserted graph is the "Original Graph", the inferred one is the "Certified
+Graph". Text only: option values (live, live:inferred), CSS classes, element
+ids and identifiers (LIVE_INFERRED, _is_live_graph, test names) are unchanged.
+
+Changes:
+1. Templates, static JS, docs and tests (54 files under src/front, src/api,
+   src/back, docs, README.md, tests): "Live graph (inferred)" -> "Certified
+   Graph"; every other "live graph" -> "Original Graph" (articles adjusted,
+   "a live graph" -> "an Original Graph"). Includes the Compare and Evaluate
+   labels, the Scenario how-to, the help modal and the Knowledge Graph source
+   dropdown.
+2. Not changed, on purpose: src/agents/** (agent prompts and tool docstrings
+   read by the LLM) and src/mcp-server/** (MCP tool outputs). Both fall under
+   the AI feature lifecycle gate (.cursor/12-ai-feature-lifecycle.mdc): a prompt
+   or tool-description change needs an eval delta first. They still say "live
+   graph" and need a follow-up with an eval run.
+3. Exception, committed with the rest: src/back/core/mcp_tools.py is the MCP
+   tool catalogue, and the description of the select_simulation tool (read by
+   LLM clients) now says "Original Graph". This is a tool-description wording
+   change that has NOT been through an eval delta; it should be evaluated (or
+   reverted) under the AI feature lifecycle gate.
+
+Modified files:
+- 54 files under src/front, src/api, src/back, docs/, README.md and tests/
+  (list: git status; the set is the grep of "live graph" outside
+  src/agents, src/mcp-server and changelogs)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-24.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario" --deselect
+tests/units/api/test_routes.py -> 11317 passed, 334 skipped, 0 failed.

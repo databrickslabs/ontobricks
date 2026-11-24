@@ -1,4 +1,4 @@
-"""Which slice of the live graph a simulation copies into its sandbox."""
+"""Which slice of the Original Graph a simulation copies into its sandbox."""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ class Scope:
         cohort_service: Any = None,
         cohort_rule: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
-        """Return the in-scope entity URIs (read-only on the live graph)."""
+        """Return the in-scope entity URIs (read-only on the Original Graph)."""
         if self.type == "entity":
             entities = self._entity_neighbourhood(store, graph_name)
         else:

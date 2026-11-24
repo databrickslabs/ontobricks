@@ -846,7 +846,7 @@ class FlatStore(OverrideOpsMixin, InferredBreakdownMixin, Base):
     ) -> int:
         """Route a COPY batch to the writable table for *table_name*.
 
-        A live graph writes derived ``add`` rows (tagged with *origin*) to its
+        An Original Graph writes derived ``add`` rows (tagged with *origin*) to its
         overrides table; a store without an overrides layer (simulation sandbox)
         writes plain triples.
         """
@@ -1106,7 +1106,7 @@ class FlatStore(OverrideOpsMixin, InferredBreakdownMixin, Base):
     ) -> int:
         """Hide triples from the graph (or delete them physically in a sandbox).
 
-        On a live graph a triple that comes from the mapped data or from a derived
+        On an Original Graph a triple that comes from the mapped data or from a derived
         row gets a ``del`` row, and a user ``add`` row is dropped, both in one
         transaction. A store without an overrides layer (simulation sandbox)
         deletes the rows.

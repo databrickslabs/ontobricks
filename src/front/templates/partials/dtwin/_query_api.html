@@ -1045,7 +1045,7 @@ Content-Type: application/json
                 <p class="small mb-2">
                     Create a draft scenario. Hypothetical facts are the
                     <code>patches</code> list (<code>add</code> / <code>set</code> / <code>remove</code>).
-                    The live graph is never written until you run.
+                    The Original Graph is never written until you run.
                 </p>
                 <h6 class="small fw-semibold mb-1">Request Body</h6>
                 <table class="table table-sm table-borderless small mb-2">
@@ -1221,13 +1221,13 @@ Content-Type: application/json
                  data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
                 <code class="flex-grow-1 api-endpoint-path">/api/v1/simulations/{sim_id}/compare</code>
-                <small class="text-muted">Compare the sandbox with the live graph</small>
+                <small class="text-muted">Compare the sandbox with the Original Graph</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Nodes, edges and exact triple counts of a <em>ready</em> sandbox against the
-                    current live graph, restricted to the same scope. Each node and edge is tagged
+                    current Original Graph, restricted to the same scope. Each node and edge is tagged
                     <code>unchanged</code>, <code>added</code> (sandbox only) or <code>removed</code> (live only).
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>

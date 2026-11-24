@@ -19,8 +19,8 @@ def test_explorer_header_has_simulation_select() -> None:
     assert 'select_id="sgSimulationSelect"' in header
     assert "_kg_graph_source.html" in header
     assert 'id="{{ select_id }}"' in shared
-    assert "Live graph" in shared
-    assert "Live graph (inferred)" in shared
+    assert "Original Graph" in shared
+    assert "Certified Graph" in shared
     assert 'id="sgShowInferred"' not in html
     assert "onSimulationChange:" in (
         REPO_ROOT / "src/front/static/query/js/query-sigmagraph.js"

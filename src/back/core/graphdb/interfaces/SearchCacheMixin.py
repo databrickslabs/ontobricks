@@ -49,7 +49,7 @@ class SearchCacheMixin:
             if self.search_cache_mode() == "force_on":
                 raise
             logger.info(
-                "Companion existence probe failed; using live graph reads: %s",
+                "Companion existence probe failed; using Original Graph reads: %s",
                 exc,
             )
             return False

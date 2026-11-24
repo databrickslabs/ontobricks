@@ -92,7 +92,7 @@ class MaterializedGraphBackend(GraphBackend):
         return 0
 
     def _mark_cache_stale(self) -> None:
-        """Flag the search cache as out of date: reads fall back to the live graph."""
+        """Flag the search cache as out of date: reads fall back to the Original Graph."""
         from back.core.graphdb.SearchCachePolicy import SearchCachePolicy
 
         SearchCachePolicy.mark_graph_cache_pending(

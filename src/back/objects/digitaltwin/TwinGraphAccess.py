@@ -25,7 +25,7 @@ class TwinGraphAccess:
 
     @staticmethod
     def sandbox_id(raw: Optional[str]) -> Optional[str]:
-        """Return a real sandbox id, or ``None`` for the live graph."""
+        """Return a real sandbox id, or ``None`` for the Original Graph."""
         if not isinstance(raw, str):
             return None
         sid = raw.strip()

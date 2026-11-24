@@ -1,10 +1,10 @@
 """Lakebase triple store pinned to standalone simulation sandbox tables.
 
-A simulation copies a slice of the live graph into ``<graph>__sim_<id>``
+A simulation copies a slice of the Original Graph into ``<graph>__sim_<id>``
 and reasons over it. This store reuses every :class:`FlatStore`
 read/write path but resolves *every* table name to the sandbox itself (no
 ``_sync`` / ``__app`` / union-view trio) and refuses any name that is not a
-sandbox table, so a simulation can never write to the live graph.
+sandbox table, so a simulation can never write to the Original Graph.
 """
 
 from __future__ import annotations
@@ -161,7 +161,7 @@ class SimulationStore(FlatStore):
     ) -> int:
         """Copy every *source_relation* triple whose subject is in *subjects*.
 
-        *source_relation* is a live graph relation in the same Postgres
+        *source_relation* is an Original Graph relation in the same Postgres
         schema (e.g. the union view); it is only ever read.
         """
         phy = self.sandbox_table_id(table_name)

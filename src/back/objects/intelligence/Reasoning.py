@@ -8,7 +8,7 @@ from back.core.reasoning.ReasoningService import ReasoningService
 
 
 class Reasoning(ReasoningService):
-    """Run every reasoning phase against ``sandbox_table`` instead of the live graph.
+    """Run every reasoning phase against ``sandbox_table`` instead of the Original Graph.
 
     All phases resolve their table through :meth:`_get_graph_name`, so
     overriding it (together with a sandbox-pinned store) is enough to make

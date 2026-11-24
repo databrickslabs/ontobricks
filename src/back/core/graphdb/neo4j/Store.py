@@ -350,7 +350,7 @@ class Store(MaterializedGraphBackend):
         author: str = "",
         change_id: str = "",
     ) -> int:
-        """Remove triples from the graph; on a live graph the deletion is journaled."""
+        """Remove triples from the graph; on an Original Graph the deletion is journaled."""
         if self._is_live_graph(table_name):
             self._journal.record(
                 sanitise_label(table_name),

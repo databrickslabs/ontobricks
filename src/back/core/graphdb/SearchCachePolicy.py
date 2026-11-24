@@ -199,7 +199,7 @@ class SearchCachePolicy:
 
         Used after a failed rebuild, and after a write that changes the effective
         graph (user overrides). While the state is pending, reads bypass the
-        companions and see the live graph, so the change is visible at once.
+        companions and see the Original Graph, so the change is visible at once.
         *persist* saves the state so other sessions see it too.
         """
         info = SearchCachePolicy._domain_info(domain)

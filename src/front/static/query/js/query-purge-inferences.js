@@ -9,7 +9,7 @@ const InferencePurgeModule = {
         if (window.OB && typeof window.OB.canRefreshGraph === 'function'
                 && !window.OB.canRefreshGraph()) {
             showNotification(
-                'Purge is unavailable — builder access and graph refresh permission are required.',
+                'Purge overrides is unavailable — builder access and graph refresh permission are required.',
                 'warning'
             );
             return;
@@ -20,7 +20,7 @@ const InferencePurgeModule = {
             const status = await this._loadStatus();
             if (!status.purge_supported) {
                 showNotification(
-                    'The active graph backend cannot safely purge materialized inferences.',
+                    'The active graph backend cannot safely purge overrides.',
                     'warning'
                 );
                 return;
@@ -31,8 +31,8 @@ const InferencePurgeModule = {
             const count = Number(status.materialized_inference_count || 0);
             const countLabel = count.toLocaleString();
             const confirmed = await showConfirmDialog({
-                title: 'Purge materialized inferences?',
-                message: `This will delete ${countLabel} materialized inferences `
+                title: 'Purge overrides?',
+                message: `This will delete ${countLabel} derived overrides `
                     + `(reasoning and cohorts) from ${graphName}.`,
                 detailHtml: 'Mapped source triples and external Delta/UC outputs are preserved.',
                 confirmText: 'Purge',
@@ -52,7 +52,7 @@ const InferencePurgeModule = {
             this._clearReasoningResult();
             this._publishCount(0);
             showNotification(
-                `Purged ${data.purged_count || 0} materialized triples.`,
+                `Purged ${data.purged_count || 0} derived overrides.`,
                 'success'
             );
             if (typeof checkTripleStoreStatus === 'function') {

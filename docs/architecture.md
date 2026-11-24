@@ -1375,7 +1375,7 @@ over the mapped `…_data` snapshot. Graphless domains redirect to Context.
 
 ### Run pipeline
 
-1. **Scope** (`Scope`) resolves an entity set on the live graph
+1. **Scope** (`Scope`) resolves an entity set on the Original Graph
    (read-only): an entity neighbourhood (`expand_and_fetch_subgraph`, default 2
    hops) or a saved cohort rule (`CohortService.dry_run`, capped at 5000
    entities — exceeding the cap fails the run instead of truncating).
@@ -1433,7 +1433,7 @@ in `__smp_`, so a last-value `remove` does not resurrect the live fact.
 | `POST /simulation/{id}/run` | Start the run; poll `GET /tasks/{task_id}` (Builder) |
 | `POST /simulation/{id}/purge` | Drop sandbox after-picture; keep spec as draft (Builder) |
 | `GET /simulation/{id}/diff?kind=added\|removed&page=&search=` | Paged diff rows + summary |
-| `GET /simulation/{id}/compare?include_inferred=true\|false` | Sandbox vs current live graph on the same scope: status-tagged nodes/edges + exact counts |
+| `GET /simulation/{id}/compare?include_inferred=true\|false` | Sandbox vs current Original Graph on the same scope: status-tagged nodes/edges + exact counts |
 | `GET /simulation/runs?simulation_id=` | Run history |
 
 `Simulation.compare_to_live` reads the sandbox triples, takes their subjects
@@ -1464,7 +1464,7 @@ Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
 Bookmarks to `/ontology/?section=cohorts` redirect to the Design tab;
 `/dtwin/?section=cohorts` and `/intelligence/?section=cohort-run` redirect to
 the Runs tab (`?section=cohorts&tab=runs`).
-Materialise still writes to the live graph via `/dtwin/cohorts/*`.
+Materialise still writes to the Original Graph via `/dtwin/cohorts/*`.
 
 ---
 

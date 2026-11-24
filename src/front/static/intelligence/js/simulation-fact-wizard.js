@@ -1,5 +1,5 @@
 /**
- * Three-step picker for a hypothetical fact: subject from the live graph,
+ * Three-step picker for a hypothetical fact: subject from the Original Graph,
  * predicate from the ontology, object from entities or a typed literal.
  */
 const SimulationFactWizard = {
@@ -531,7 +531,7 @@ const SimulationFactWizard = {
         const rel = this._predIsObject
             ? (range
                 ? `This predicate is a relationship to ${range}. Search that entity type or paste a URI. `
-                : 'This predicate is a relationship. Search the live graph or paste a URI. ')
+                : 'This predicate is a relationship. Search the Original Graph or paste a URI. ')
             : (range
                 ? `This predicate is an attribute (${range}). Type a literal. `
                 : 'This predicate is an attribute. Type a literal. ');
@@ -798,7 +798,7 @@ const SimulationFactWizard = {
             });
             const seeds = data.seeds || [];
             if (!seeds.length) {
-                list.innerHTML = '<div class="list-group-item small text-muted">No matching entities in the live graph.</div>';
+                list.innerHTML = '<div class="list-group-item small text-muted">No matching entities in the Original Graph.</div>';
                 return;
             }
             const cap = data.capped ? ` <span class="text-muted">(first ${seeds.length})</span>` : '';
@@ -837,7 +837,7 @@ const SimulationFactWizard = {
         }
         const intro = this._el('simFactIntro');
         if (intro && pick) {
-            intro.textContent = 'Search the live graph for the entity whose neighbourhood becomes the simulation slice.';
+            intro.textContent = 'Search the Original Graph for the entity whose neighbourhood becomes the simulation slice.';
         }
         const apply = this._el('simFactApplyBtn');
         if (apply && pick) {
