@@ -564,7 +564,9 @@ class TwinBackgroundTasks:
                 triples = [
                     {"subject": t.subject, "predicate": t.predicate, "object": t.object}
                     for t in result.inferred_triples
-                    if is_uri(t.subject) and is_uri(t.predicate) and is_uri(t.object)
+                    # RDF objects may be literals (rule consequents, e.g. greatWine "true");
+                    # only subject + predicate must be URIs. See databrickslabs/ontobricks#236.
+                    if is_uri(t.subject) and is_uri(t.predicate)
                 ]
                 if triples:
                     try:

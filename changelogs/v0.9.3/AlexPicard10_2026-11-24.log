@@ -1,0 +1,33 @@
+## fix(inference): materialise rule triples that carry literal objects (#236)
+
+Context: Business-rule inference (SWRL / Decision Table / Aggregate) computed and
+reported its triples, but the materialisation step persisted only OWL-RL T-Box
+schema triples to the `_inferred` Delta table. Rule consequents set datatype
+attributes (literal objects, e.g. `greatWine "true"`, `tastingTier "Exceptionnel"`),
+and the materialise filter required all three of subject/predicate/object to be
+absolute HTTP(S) URIs — so every rule output was silently dropped. On a real build
+the Inference report showed 6691 inferred but only 84 (schema) triples were
+materialised; direct SQL on the `_inferred` table confirmed 100% schema predicates,
+zero rule outputs.
+
+Changes:
+1. src/back/objects/digitaltwin/TwinBackgroundTasks.py — the materialise filter no
+   longer requires the object to be a URI (RDF objects may be literals); it keeps
+   the subject + predicate URI checks.
+2. src/back/objects/digitaltwin/build/TwinInferredMaterialize.py — same relaxation
+   in `uri_triples`.
+3. tests/units/dtwin/test_v090_twin_build_prepare.py,
+   tests/units/dtwin/test_v090_twin_background_tasks.py — updated the v0.9.0 tests
+   that pinned the old drop; they now assert literal-object triples are kept and
+   materialised (to both the Delta `_inferred` table and the graph). Safe because
+   the store already routes literal objects (they land in `_data`/`_inferred` and
+   the `_props` companion; adjacency traversal filters `object LIKE 'http%'` at
+   query time, so a literal is never treated as an edge).
+
+Modified files:
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- tests/units/dtwin/test_v090_twin_background_tasks.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/dtwin tests/units/objects tests/units/architecture` -> 727 passed.

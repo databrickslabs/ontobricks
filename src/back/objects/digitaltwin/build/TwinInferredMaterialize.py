@@ -24,9 +24,10 @@ class TwinInferredMaterialize:
         return [
             t
             for t in raw_triples
+            # RDF objects may be literals (rule consequents); only subject +
+            # predicate must be URIs. See databrickslabs/ontobricks#236.
             if is_uri(t.get("subject", ""))
             and is_uri(t.get("predicate", ""))
-            and is_uri(t.get("object", ""))
         ]
 
     @staticmethod
