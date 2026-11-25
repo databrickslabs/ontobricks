@@ -297,10 +297,7 @@ request-scoped identity and the data-plane client factory
 (`DatabricksHelpers.get_data_plane_client`) mints a **user-token** Databricks
 client for every non-build UC read: SPARQL/GraphQL Delta reads, Graph Explorer
 Delta views, mapping preview / test-query / `information_schema` browse, Class
-Action `EXECUTE`, virtual-attribute compute, and **Knowledge Pages (Genie
-Pages) list / preview** under Context → Pages (`GET /pages/list`,
-`GET /pages/preview`), which call the Databricks Knowledge Pages REST API with
-the user token.
+Action `EXECUTE`, and virtual-attribute compute.
 
 Implications for Layer 2:
 
@@ -321,14 +318,18 @@ Implications for Layer 2:
   the UI hop from the M2M bearer, so those names cannot carry the user. The
   UI applies the acting headers **only** when the proxy identity is the MCP
   app service principal (`MCP_SP_CLIENT_ID`). Both apps declare `user_api_scopes`
-  (`sql`) so the inbound MCP request has a user token to forward. The UI app
-  also declares `domains` and `knowledge`, required by the Databricks Domains
-  and Knowledge Pages APIs behind Context → Pages (without them Databricks
-  answers 403 `Invalid scope, required scopes: …`). After a scope change, users
-  may need to sign out and back in to get a token with the new scopes. The identity
+  (`sql`) so the inbound MCP request has a user token to forward. The identity
   scopes (`iam.current-user:read`, `iam.access-control:read`) are platform
   defaults and must not be declared — the Apps create API rejects them. Granting the MCP SP a domain role
   in Teams is an emergency workaround only — it collapses per-user gating.
+- **Knowledge Pages (Genie Pages) stay on the app service principal.** The
+  Databricks Domains and Knowledge Pages APIs behind Context → Pages require
+  the `domains` and `knowledge` token scopes, which Databricks Apps does not
+  accept in `user_api_scopes` (`not a valid scope`), so a forwarded user token
+  is always rejected (`Invalid scope, required scopes: …`). Every user sees the
+  pages visible to the app SP. Listing pages **without a Domain filter** needs
+  account-wide domain admin rights on the SP; otherwise pick a Domain in the
+  Domains filter.
 - **Local dev is unchanged** — OBO and the Team gate are no-ops outside App mode
   (`is_databricks_app()` guards), so a single developer token keeps working.
 

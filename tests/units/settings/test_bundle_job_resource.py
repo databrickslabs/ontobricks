@@ -227,17 +227,6 @@ class TestAppPermissionsInBundle:
                 f"{key} declares platform-default scopes {forbidden & scopes}"
             )
 
-    def test_ui_app_declares_knowledge_pages_scopes(self):
-        """Context → Pages calls the Domains and Knowledge Pages APIs with the
-        user token; without these scopes Databricks answers 403
-        ``Invalid scope, required scopes: domains`` / ``knowledge``."""
-        data = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())
-        scopes = set(
-            data["resources"]["apps"]["ontobricks_dev_app"].get("user_api_scopes")
-            or []
-        )
-        assert {"domains", "knowledge"} <= scopes
-
 
 class TestAnalyticsJobPermissionBootstrap:
     """The app SP must get CAN_MANAGE_RUN on the analytics job at deploy time.

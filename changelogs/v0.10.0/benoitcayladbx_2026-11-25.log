@@ -144,3 +144,44 @@ Modified files:
 Test result:
 Full suite: uv run --frozen pytest -q -m "not scenario"
 -> 11480 passed, 334 skipped, 8 deselected, 0 failed.
+
+## Genie Pages: back to the app service principal (OBO not possible in Databricks Apps)
+
+Context: deploying the `domains` / `knowledge` user API scopes failed:
+`POST /api/2.0/apps/ontobricks-10x/update` -> 400 INVALID_PARAMETER_VALUE
+"The specified scope domains is not a valid scope". These scopes are not in the
+Databricks Apps supported list, and a U2M token carrying every app-supported
+scope (sql, genie, apps, files, catalog.*, workspace.workspace, ai-gateway,
+model-serving, vector-search) is still rejected with
+`Invalid scope, required scopes: domains|knowledge`. A forwarded Apps user token
+can therefore never call these APIs. The deployed apps were not modified by the
+failed deploy (still scopes ['sql']).
+
+Changes:
+1. databricks.yml, tests/units/settings/test_bundle_job_resource.py: scope
+   change from the previous section reverted (UI app declares `sql` only).
+2. src/api/routers/internal/domain.py: `_knowledge_page_service` uses
+   `get_databricks_client` (app identity) again; docstring states why it is not
+   OBO. `AuthorizationError` handling and the `get_data_plane_client` import
+   removed from the Pages routes. The `domains_only` Domains-filter fix is kept.
+3. src/back/core/databricks/KnowledgePageService.py: 401/403 hints refer to the
+   app identity again; the "Select a Domain" hint on the domain-filter 403 is kept.
+4. tests/units/api/test_knowledge_pages_route.py: OBO tests replaced by one test
+   pinning the app client for Knowledge Pages.
+5. docs/deployment.md, docs/user-guide.md: Knowledge Pages removed from the OBO
+   list; deployment.md documents that Pages stay on the SP, why, and that the
+   unfiltered list needs account-wide domain admin rights on the SP.
+
+Modified files:
+- databricks.yml
+- tests/units/settings/test_bundle_job_resource.py
+- src/api/routers/internal/domain.py
+- src/back/core/databricks/KnowledgePageService.py
+- tests/units/api/test_knowledge_pages_route.py
+- docs/deployment.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11477 passed, 334 skipped, 8 deselected, 0 failed.

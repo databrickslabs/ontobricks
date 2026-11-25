@@ -18,14 +18,12 @@ from back.core.databricks import (
     is_databricks_app,
 )
 from back.core.errors import (
-    AuthorizationError,
     InfrastructureError,
     NotFoundError,
     OntoBricksError,
     ValidationError,
 )
 from back.core.helpers import (
-    get_data_plane_client,
     get_databricks_client,
     resolve_warehouse_id,
     run_blocking,
@@ -1349,14 +1347,14 @@ async def preview_document(
 
 
 def _knowledge_page_service(domain: Any, settings: Settings):
-    """Build a KnowledgePageService bound to the signed-in user (OBO).
+    """Build a KnowledgePageService from the app's Databricks client.
 
-    In Databricks App mode the Knowledge Pages REST calls run with the
-    caller's forwarded token, so Unity Catalog decides which pages are
-    visible. A missing user token raises :class:`AuthorizationError`
-    (no fallback to the app service principal).
+    Not on-behalf-of: the Domains and Knowledge Pages APIs require the
+    ``domains`` / ``knowledge`` token scopes, which Databricks Apps does not
+    accept in ``user_api_scopes``, so a forwarded user token is always
+    rejected.
     """
-    client = get_data_plane_client(domain, settings)
+    client = get_databricks_client(domain, settings)
     if client is None:
         raise InfrastructureError(
             "Databricks client is not configured — cannot list Knowledge Pages"
@@ -1428,7 +1426,7 @@ async def list_knowledge_pages(
             include_domains=include_domains,
             domains_only=domains_only,
         )
-    except (InfrastructureError, AuthorizationError):
+    except InfrastructureError:
         raise
     except Exception as e:
         logger.exception("List Knowledge Pages failed: %s", e)
@@ -1452,7 +1450,7 @@ async def preview_knowledge_page(
         return {"success": True, "page": page}
     except ValueError as e:
         raise ValidationError(str(e))
-    except (InfrastructureError, AuthorizationError):
+    except InfrastructureError:
         raise
     except Exception as e:
         logger.exception("Preview Knowledge Page failed: %s", e)
