@@ -466,6 +466,11 @@ Rules to know before you save:
   removal rule and running reasoning brings the triples back.
 - **Manual edits win**: a triple you added by hand (a user override) is kept. A
   removal rule does not hide it.
+- **Same run**: in one reasoning run the removal rules run before the Complex
+  `CONSTRUCT` rules. A `CONSTRUCT` rule reads the graph without the triples the
+  removals match, so it does not derive new triples from data that the run is
+  removing. This applies to a triple a user added by hand too, even though that
+  triple is still kept in the graph.
 - **Missing triples**: a `DELETE DATA` of a triple that is not in the graph is
   not an error. The run reports a warning (`removal_not_found`) in the results.
 - **Literals** are matched on their lexical value only, so a typed literal in

@@ -8,7 +8,7 @@ table.  A query outside the supported subset is refused, never run partially.
 """
 
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 
 from back.core.errors import ValidationError
 from back.core.helpers import SQL_DIALECT_SPARK
@@ -66,16 +66,20 @@ class SPARQLRuleEngine:
         t0 = time.time()
         result = ReasoningResult()
         failed: List[str] = []
+        # Removal rules run first: a CONSTRUCT rule of the same run reads the graph
+        # without the triples they hide. The run itself writes nothing.
+        ordered = sorted(
+            (r for r in rules if r.get("enabled", True) and (r.get("query") or "").strip()),
+            key=lambda r: (r.get("kind") or "construct") != "removal",
+        )
+        removal_sql: List[str] = []
 
-        for rule in rules:
-            if not rule.get("enabled", True):
-                continue
+        for rule in ordered:
             name = rule.get("name", "unnamed")
-            query_text = rule.get("query", "")
-            if not query_text.strip():
-                continue
             try:
-                result.merge(self._execute_one(rule, store, table_name, ontology))
+                result.merge(self._execute_one(rule, store, table_name, ontology, removal_sql))
+                if (rule.get("kind") or "construct") == "removal":
+                    removal_sql.append(self._removal_sql(rule, store, table_name, ontology))
             except Exception as e:
                 logger.error("SPARQL rule '%s' failed: %s", name, e)
                 failed.append(f"{name}: {e}")
@@ -110,16 +114,41 @@ class SPARQLRuleEngine:
         guard (triples with a user add are skipped at write time), so it can
         slightly over-count those.
         """
-        compiler = SparqlUpdateCompiler(
-            base_uri=ontology.get("base_uri", ""),
-            uri_map=self._build_uri_map(ontology),
-            dialect=store.sql_flavor() or SQL_DIALECT_SPARK,
-        )
-        sql = compiler.compile_removal(rule.get("query", ""), store.sql_table_reference(table_name))
+        sql = self._removal_sql(rule, store, table_name, ontology)
         rows = store.execute_query(
             f"SELECT COUNT(*) AS cnt FROM (SELECT DISTINCT s, p, o FROM ({sql}) u) d"
         ) or []
         return int(rows[0].get("cnt", 0)) if rows else 0
+
+    @staticmethod
+    def _options(store: Any, ontology: Dict) -> Dict:
+        """Compiler options shared by the CONSTRUCT and removal compilers."""
+        return {
+            "base_uri": ontology.get("base_uri", ""),
+            "uri_map": SPARQLRuleEngine._build_uri_map(ontology),
+            "dialect": store.sql_flavor() or SQL_DIALECT_SPARK,
+        }
+
+    def _removal_sql(self, rule: Dict, store: Any, table_name: str, ontology: Dict) -> str:
+        """SQL selecting the triples a removal rule matches (raises ValidationError)."""
+        compiler = SparqlUpdateCompiler(**self._options(store, ontology))
+        return compiler.compile_removal(rule.get("query", ""), store.sql_table_reference(table_name))
+
+    @staticmethod
+    def _table_after_removals(base: str, removal_sql: List[str]) -> str:
+        """The base table minus the triples the earlier removal rules of this run match.
+
+        A user add row keeps its triple when the removal is written (D2), but
+        this view does not apply D2, so a CONSTRUCT rule of the same run skips
+        such a triple too.
+        """
+        if not removal_sql:
+            return base
+        union = "\nUNION ALL\n".join(removal_sql)
+        return (
+            f"(SELECT t.* FROM {base} t WHERE NOT EXISTS (SELECT 1 FROM ({union}) r "
+            "WHERE r.s = t.subject AND r.p = t.predicate AND r.o = t.object))"
+        )
 
     def _execute_one(
         self,
@@ -127,28 +156,31 @@ class SPARQLRuleEngine:
         store: Any,
         table_name: str,
         ontology: Dict,
+        removal_sql: Sequence[str] = (),
     ) -> ReasoningResult:
-        """Run one rule; its ``kind`` selects the CONSTRUCT or the removal path."""
+        """Run one rule; its ``kind`` selects the CONSTRUCT or the removal path.
+
+        ``removal_sql`` holds the removal rules that ran before this one in the
+        same run; a CONSTRUCT rule reads the table without their triples.
+        """
         name = rule.get("name", "unnamed")
         query = rule.get("query", "")
-        options = {
-            "base_uri": ontology.get("base_uri", ""),
-            "uri_map": self._build_uri_map(ontology),
-            "dialect": store.sql_flavor() or SQL_DIALECT_SPARK,
-        }
+        options = self._options(store, ontology)
+        base = store.sql_table_reference(table_name)
         kind = rule.get("kind") or "construct"
         if kind == "construct":
-            return self._execute_construct(name, query, store, table_name, options)
+            table = self._table_after_removals(base, list(removal_sql))
+            return self._execute_construct(name, query, store, table, options)
         if kind == "removal":
-            return self._execute_removal(name, query, store, table_name, options)
+            return self._execute_removal(name, query, store, base, options)
         raise ValidationError(f"Unknown rule kind '{kind}'")
 
     @staticmethod
     def _execute_construct(
-        name: str, query: str, store: Any, table_name: str, options: Dict
+        name: str, query: str, store: Any, table_sql: str, options: Dict
     ) -> ReasoningResult:
         compiler = SparqlConstructCompiler(**options)
-        sql = compiler.compile(query, store.sql_table_reference(table_name))
+        sql = compiler.compile(query, table_sql)
         logger.debug("SPARQL rule '%s' translated query:\n%s", name, sql)
 
         result = ReasoningResult()
@@ -166,11 +198,11 @@ class SPARQLRuleEngine:
 
     @staticmethod
     def _execute_removal(
-        name: str, query: str, store: Any, table_name: str, options: Dict
+        name: str, query: str, store: Any, table_sql: str, options: Dict
     ) -> ReasoningResult:
         """Collect the stored triples a removal matches; the caller hides them."""
         compiler = SparqlUpdateCompiler(**options)
-        sql = compiler.compile_removal(query, store.sql_table_reference(table_name))
+        sql = compiler.compile_removal(query, table_sql)
         logger.debug("SPARQL removal '%s' translated query:\n%s", name, sql)
 
         result = ReasoningResult()

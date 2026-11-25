@@ -128,6 +128,61 @@ def test_count_removals_is_zero_for_empty_result():
     assert SPARQLRuleEngine().count_removals(rule, store, "triples", ONTO) == 0
 
 
+# -- Same-run ordering: removals first ---------------------------------------
+
+VIP = PFX + "CONSTRUCT { ?c a :VIP } WHERE { ?c a :Customer . ?c :balance ?b }"
+REMOVAL = {"name": "drop", "kind": "removal", "query": GOOD}
+
+
+VIEW_MARKER = "SELECT t.* FROM"  # the same-run view of the table (see _table_after_removals)
+
+
+def test_removal_runs_before_construct_whatever_the_list_order():
+    store = FakeStore([])
+    construct = {"name": "vip", "query": VIP}
+    SPARQLRuleEngine().execute_rules([construct, REMOVAL], store, "triples", ONTO)
+    assert len(store.sql) == 2
+    assert VIEW_MARKER not in store.sql[0]  # the removal reads the plain table
+    assert VIEW_MARKER in store.sql[1]  # the CONSTRUCT reads the filtered view
+
+
+def test_construct_reads_the_graph_minus_the_removed_triples():
+    store = FakeStore([])
+    SPARQLRuleEngine().execute_rules(
+        [REMOVAL, {"name": "vip", "query": VIP}], store, "triples", ONTO
+    )
+    construct_sql = store.sql[1]
+    assert f"FROM ({VIEW_MARKER} triples t WHERE NOT EXISTS" in construct_sql
+    assert "WHERE r.s = t.subject AND r.p = t.predicate AND r.o = t.object" in construct_sql
+
+
+def test_construct_without_removals_reads_the_plain_table():
+    store = FakeStore([])
+    SPARQLRuleEngine().execute_rules([{"name": "vip", "query": VIP}], store, "triples", ONTO)
+    assert VIEW_MARKER not in store.sql[0]
+    assert "FROM triples" in store.sql[0]
+
+
+def test_disabled_removal_does_not_filter_the_construct():
+    store = FakeStore([])
+    disabled = dict(REMOVAL, enabled=False)
+    SPARQLRuleEngine().execute_rules(
+        [disabled, {"name": "vip", "query": VIP}], store, "triples", ONTO
+    )
+    assert len(store.sql) == 1
+    assert VIEW_MARKER not in store.sql[0]
+
+
+def test_failed_removal_does_not_filter_the_construct():
+    store = FakeStore([])
+    broken = {"name": "bad", "kind": "removal", "query": PFX + "INSERT DATA { :a :b :c }"}
+    result = SPARQLRuleEngine().execute_rules(
+        [broken, {"name": "vip", "query": VIP}], store, "triples", ONTO
+    )
+    assert [v.rule_name for v in result.violations] == ["bad"]
+    assert VIEW_MARKER not in store.sql[-1]
+
+
 def test_construct_rule_still_infers_through_dispatcher():
     rule = {
         "name": "vip",
