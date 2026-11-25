@@ -126,3 +126,9 @@ def test_invalid_name_is_reported_not_raised():
 def test_schema_check_is_skipped_when_the_catalog_is_unusable():
     w = _client(sql={"DESCRIBE CATALOG": _resp(StatementState.FAILED, "[NO_SUCH_CATALOG_EXCEPTION] not found")})
     assert _checks(w)["you.schema"]["status"] == "skipped"
+
+
+def test_no_bound_warehouse_says_to_bind_one():
+    svc = RegistrySetupService(_client(), warehouse_id="", app_name="app", sp_client_id=_SP, user_email=_ME)
+    check = {c["name"]: c for c in svc.preflight("main", "ontobricks")}["you.warehouse"]
+    assert check["status"] == "error" and "sql-warehouse" in check["fix"]

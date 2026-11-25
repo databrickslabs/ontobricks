@@ -93,3 +93,30 @@ Live (ontobricks-mp-test-014, fresh install):
   missing privilege
 - setup on dermot_smyth.ontobricks_mp_test_014 succeeded with no warnings;
   readiness went from 1 error / 5 warnings to 0 errors
+
+## Registry setup: clear error when no SQL warehouse is bound
+
+Context: Simulating an install from scratch (ontobricks-mp-test-015, no
+resources bound) showed that the admin's warehouse check reported "Can use on
+SQL warehouse ``" with a blank ID, and setup failed with a raw API error.
+Both now say to bind a `sql-warehouse` resource.
+
+Changes:
+
+1. src/back/objects/registry/RegistrySetupService.py
+   With no warehouse ID, preflight's warehouse check is an error with the
+   binding fix (the dependent checks are skipped), and prepare() raises a
+   ValidationError with the same fix before running any SQL.
+2. tests/units/registry/test_registry_setup_preflight.py,
+   tests/units/registry/test_registry_setup.py
+   Cover both cases.
+
+Modified files:
+- src/back/objects/registry/RegistrySetupService.py
+- tests/units/registry/test_registry_setup_preflight.py
+- tests/units/registry/test_registry_setup.py
+
+Tests: uv run --frozen pytest -q tests/units/registry tests/units/architecture tests/units/front → 3093 passed.
+Live (ontobricks-mp-test-015, no resources): the warehouse check is an error
+with the binding fix; the catalog and schema checks are skipped; the registry
+stays unconfigured.

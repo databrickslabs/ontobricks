@@ -38,6 +38,10 @@ class RegistrySetupService:
     the ``apps`` user scope for the app grant, the ``sql`` scope for the DDL.
     """
 
+    _NO_WAREHOUSE = (
+        "Bind a SQL warehouse to the app: Apps → this app → Edit → Resources → add a SQL warehouse "
+        "with the key `sql-warehouse` and Can use, then redeploy."
+    )
     _POLL_INTERVAL_S = 2.0
     _POLL_LIMIT_S = 300.0
 
@@ -85,6 +89,8 @@ class RegistrySetupService:
         Returns ``{"granted": [...], "warnings": [...]}``. A failed app grant
         is a warning (the admin can do it by hand); a failed SQL step raises.
         """
+        if not self._warehouse_id:
+            raise ValidationError(self._NO_WAREHOUSE)
         catalog_q = SQLHelpers.quote_uc_identifier(catalog, role="catalog")
         schema_q = SQLHelpers.quote_uc_identifier(schema, role="schema")
         sp_q = SQLHelpers.quote_uc_identifier(self._sp, role="service principal")
@@ -165,6 +171,9 @@ class RegistrySetupService:
 
     def _check_warehouse(self) -> Dict[str, str]:
         label = "You can run SQL on the app's warehouse (`sql` user scope)"
+        if not self._warehouse_id:
+            return self._check("you.warehouse", label, "error", "No SQL warehouse is bound to the app.",
+                               self._NO_WAREHOUSE)
         ok, message = self._probe("SELECT 1")
         if ok:
             return self._check("you.warehouse", label, "ok", f"Warehouse {self._warehouse_id} answered.")

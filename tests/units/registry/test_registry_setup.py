@@ -307,3 +307,9 @@ class TestSetupCheckResult:
             result = _rs.RegistrySettings.setup_check_result(MagicMock(), _settings(), "main", "s", "tok", "a@b.com")
         assert result == {"checks": [{"name": "you.warehouse", "status": "ok"}]}
         assert for_user.call_args.args[-1] == "a@b.com"
+
+
+def test_setup_without_a_bound_warehouse_is_a_validation_error():
+    svc = RegistrySetupService(_client(), warehouse_id="", app_name=_APP, sp_client_id=_SP)
+    with pytest.raises(ValidationError, match="sql-warehouse"):
+        svc.prepare("main", "ontobricks")
