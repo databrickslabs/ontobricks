@@ -247,3 +247,115 @@ agent lost its own previous question and answered without context.
 
 ### Test result
 `uv run --frozen pytest -q -m "not scenario"` → 11480 passed, 334 skipped, 8 deselected.
+
+## Feature: SPARQL Update removal rules (DELETE)
+
+### Context
+The Complex rule builder could only infer triples (SPARQL `CONSTRUCT`). Users also need to
+remove triples, for example to hide the meters of a customer that was closed. Removal rules
+use SPARQL 1.1 Update forms (`DELETE WHERE`, `DELETE DATA`, `DELETE {…} WHERE {…}`). On
+Lakebase and Delta they are stored as overlay rows in the `_overrides` table with origin
+`reasoning`, so the source tables are never changed and the matching original triples are
+hidden. On Neo4j the matching triples are deleted from the property graph. The SPEC and PLAN
+are local and gitignored (`.planning/sparql-update-removal/SPEC.md`, `PLAN.md`).
+
+Decisions applied: origin `reasoning` (D1); a triple a user added by hand is kept (D2, the
+plan default); `DELETE DATA` of a missing triple is a `removal_not_found` warning (D3); a
+removal must bind a subject or an object (D4); Neo4j removals are not journaled (D5); a
+removal that would hide more than 10,000 triples needs an explicit confirmation.
+
+### Changes
+1. `src/back/core/reasoning/rules/SparqlPatternCompiler.py` (new): BGP, FILTER and term
+   compilation shared by the CONSTRUCT and removal compilers (extracted, no behaviour change).
+2. `src/back/core/reasoning/rules/SparqlConstructCompiler.py`: extends `SparqlPatternCompiler`.
+3. `src/back/core/reasoning/rules/SparqlUpdateCompiler.py` (new): compiles the three removal
+   forms to one `SELECT s, p, o` per template triple. Refuses `INSERT`, `GRAPH`, unbound
+   patterns (D4) and any other construct outside the subset.
+4. `src/back/core/reasoning/rules/SPARQLRuleEngine.py`: rules carry a `kind` (`construct`
+   by default, or `removal`); `validate_rule` dispatches on it; `_execute_one` routes to
+   `_execute_construct` or `_execute_removal`; D3 violations; `count_removals` for the
+   preview; stats `removed_count`.
+5. `src/back/core/reasoning/results/ReasoningResult.py`: `removed_triples` (merged and
+   serialised by `to_dict`).
+6. `src/back/core/graphdb/overrides.py`: `HIDE_ORIGINS` and `validate_hide_origin`.
+7. `src/back/core/graphdb/delta/materialize.py`, `delta/MaterializedStore.py`: origin-aware
+   hide (`build_hide_statements`); a reasoning hide skips triples that have a user add row.
+8. `src/back/core/graphdb/lakebase/OverrideOpsMixin.py`, `lakebase/FlatStore.py`:
+   origin-aware `_hide_triples`; user add rows are dropped only for origin `user`.
+9. `src/back/core/graphdb/neo4j/Store.py`, `interfaces/GraphBackend.py`: `delete_triples`
+   takes `origin`; a removal is not journaled and skips journaled user adds.
+10. `src/back/core/reasoning/ReasoningService.py`: `materialize_inferred` is now
+    `_insert_inferred` followed by `_apply_removals` (origin `reasoning`); new
+    `count_sparql_removal`.
+11. `src/back/objects/digitaltwin/TwinBackgroundTasks.py`,
+    `src/back/objects/digitaltwin/build/TwinInferredMaterialize.py`: removed triples are
+    forwarded to the graph append path (also when a run has removals only).
+12. `src/back/core/reasoning/constants.py`, `src/back/objects/ontology/Rules.py`:
+    `REMOVAL_WHERE_RE` and `REMOVAL_TEMPLATE_RE`; reference checks cover removal rules.
+13. `src/shared/config/constants.py`: `SPARQL_REMOVAL_CONFIRM_THRESHOLD = 10_000`.
+14. `src/api/routers/internal/ontology.py`: `POST /ontology/rules/sparql_rules/removal-preview`
+    returns `success`, `count`, `requires_confirmation` and `errors`; nothing is written.
+15. Rule editor UI: `src/front/templates/partials/ontology/_ontology_business_rules.html`
+    (Rule type selector, removal box with Preview and confirmation);
+    `src/front/static/ontology/js/ontology-business-rules.js` (kind handling, preview, save
+    gate, removal badge, validation sends the kind); `src/front/static/ontology/css/ontology-business-rules.css`
+    (manual layout without the assistant, badge).
+16. Docs: `docs/user-guide.md` (Removal Rules section), `docs/api.md` (removal-preview),
+    `docs/architecture.md` (`SparqlUpdateCompiler`).
+
+Behaviour to know: a Build clears the rows that reasoning derived (removals included) and
+keeps user overrides. Removals come back on the next reasoning run, so a Build alone does not
+reapply them.
+
+Known limitations (not decided yet):
+- Same-run ordering: removals are applied after the inserts of the same run, so a CONSTRUCT
+  rule in that run can still derive from a triple that a removal hides.
+- Literals are matched on their lexical form only.
+- The preview does not apply D2, so it can over-count triples that have a user add row.
+- The Delta materialised table (`materialize_to_delta`) is not changed by removals.
+
+### Modified files
+- src/back/core/reasoning/rules/SparqlPatternCompiler.py
+- src/back/core/reasoning/rules/SparqlConstructCompiler.py
+- src/back/core/reasoning/rules/SparqlUpdateCompiler.py
+- src/back/core/reasoning/rules/SPARQLRuleEngine.py
+- src/back/core/reasoning/results/ReasoningResult.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/reasoning/constants.py
+- src/back/core/graphdb/overrides.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/MaterializedStore.py
+- src/back/core/graphdb/lakebase/OverrideOpsMixin.py
+- src/back/core/graphdb/lakebase/FlatStore.py
+- src/back/core/graphdb/neo4j/Store.py
+- src/back/core/graphdb/interfaces/GraphBackend.py
+- src/back/objects/ontology/Rules.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+- src/shared/config/constants.py
+- src/api/routers/internal/ontology.py
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- tests/units/reasoning/test_sparql_update_compiler.py (new)
+- tests/units/reasoning/test_sparql_removal_rules.py (new)
+- tests/units/reasoning/test_reasoning_service_removals.py (new)
+- tests/units/graphdb/test_removal_origin_contract.py (new)
+- tests/units/ontology/test_rules_removal_reference.py (new)
+- tests/units/ontology/test_rules_removal_roundtrip.py (new)
+- tests/units/api/test_removal_preview.py (new)
+- tests/units/front/test_business_rules_removal_ui.py (new)
+- tests/units/front/test_business_rules_list_ui.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- tests/units/core/test_sql_literal_escaping.py
+- docs/user-guide.md
+- docs/api.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+### Test result
+Full suite: `uv run --frozen pytest -q -m "not scenario"` → 11565 passed, 334 skipped,
+8 deselected, 0 failed. The size-budget architecture test passes.
+Not verified in this session: a manual run on a live domain (Lakebase, Delta, Neo4j) to check
+the acceptance criteria against the source tables and counts, and a browser check of the rule
+editor. These remain open and are not marked as passed.
