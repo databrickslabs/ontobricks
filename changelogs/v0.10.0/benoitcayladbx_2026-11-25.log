@@ -185,3 +185,28 @@ Modified files:
 Test result:
 Full suite: uv run --frozen pytest -q -m "not scenario"
 -> 11477 passed, 334 skipped, 8 deselected, 0 failed.
+
+## Genie Pages: surface Databricks' reason when the Domains list fails
+
+Context: after switching Pages back to the app service principal, the deployed
+app still shows "Databricks Domains unavailable: 403 Client Error: Forbidden"
+for `/api/2.0/domains`. The SP token is requested with `scope=all-apis`, so this
+is a permission refusal, not a scope one, but the response body (which names the
+missing permission) was dropped, unlike for the pages list.
+
+Changes:
+1. src/back/core/databricks/KnowledgePageService.py: new `_remote_message`
+   helper (Databricks error text, JSON `message` or raw body, truncated) used by
+   `_list_error`; `_fetch_domains` turns an HTTP error into an
+   `InfrastructureError` "Databricks Domains list failed (HTTP <status>).
+   Databricks said: <reason>", shown in the Pages filter status line.
+2. tests/units/core/test_knowledge_pages.py: +1 test (403 reason surfaced).
+
+Modified files:
+- src/back/core/databricks/KnowledgePageService.py
+- tests/units/core/test_knowledge_pages.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11478 passed, 334 skipped, 8 deselected, 0 failed.

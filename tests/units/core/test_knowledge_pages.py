@@ -217,6 +217,25 @@ class TestKnowledgePageService:
         assert domains[0]["label"] == "Logistics"
         assert domains[0]["name"].startswith("domains/")
 
+    @patch("requests.get")
+    def test_list_domains_403_surfaces_databricks_reason(
+        self, mock_get, clean_databricks_env
+    ):
+        response = MagicMock(status_code=403)
+        response.json.return_value = {"message": "Caller is not a domain admin"}
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError(
+            "403 Client Error: Forbidden", response=response
+        )
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+
+        with pytest.raises(InfrastructureError) as exc_info:
+            KnowledgePageService(auth).list_domains()
+
+        assert str(exc_info.value) == (
+            "Databricks Domains list failed (HTTP 403). "
+            "Databricks said: Caller is not a domain admin"
+        )
+
 
 def _domains_response(tag_key="Logistics"):
     m = MagicMock()

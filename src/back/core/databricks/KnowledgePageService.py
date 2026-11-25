@@ -133,16 +133,24 @@ class KnowledgePageService:
             else "Databricks refused the Knowledge Pages request."
         )
         message = f"{headline} (HTTP {status})"
+        remote = KnowledgePageService._remote_message(response)
+        if remote:
+            message += f" Databricks said: {remote}"
+        if status == 403 and "domain filter" in remote.lower():
+            message += " Select a Domain in the Domains filter to list its pages."
+        return InfrastructureError(message, detail=str(exc))
+
+    @staticmethod
+    def _remote_message(response: Any) -> str:
+        """Databricks' own error text from a failed response (truncated)."""
         try:
             body = response.json()
         except ValueError:
             body = None
         remote = str(body.get("message") or "").strip() if isinstance(body, dict) else ""
-        if remote:
-            message += f" Databricks said: {remote[:_REMOTE_MESSAGE_MAX]}"
-        if status == 403 and "domain filter" in remote.lower():
-            message += " Select a Domain in the Domains filter to list its pages."
-        return InfrastructureError(message, detail=str(exc))
+        if not remote:
+            remote = str(getattr(response, "text", "") or "").strip()
+        return remote[:_REMOTE_MESSAGE_MAX]
 
     def get_page(self, name: str) -> Dict[str, Any]:
         """Fetch a full Knowledge Page by resource name ``pages/{id}``."""
@@ -264,6 +272,21 @@ class KnowledgePageService:
                 pages += 1
                 if not page_token or not batch:
                     break
+        except requests.HTTPError as exc:
+            response = exc.response
+            message = (
+                "Databricks Domains list failed "
+                f"(HTTP {getattr(response, 'status_code', '?')})."
+            )
+            remote = (
+                KnowledgePageService._remote_message(response)
+                if response is not None
+                else ""
+            )
+            if remote:
+                message += f" Databricks said: {remote}"
+            logger.warning(message)
+            raise InfrastructureError(message, detail=str(exc)) from exc
         except Exception as exc:  # noqa: BLE001
             logger.warning("Databricks Domains list failed: %s", exc)
             raise
