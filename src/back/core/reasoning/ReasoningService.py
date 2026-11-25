@@ -4,6 +4,7 @@ SPARQL CONSTRUCT rule phases."""
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from back.core.graphdb.overrides import ORIGIN_REASONING, unique_triples
 from back.core.logging import get_logger
 from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
@@ -413,14 +414,19 @@ class ReasoningService:
         return engine.execute_rules(rules, self._store, table_name, ontology)
 
     def materialize_inferred(self, result: ReasoningResult) -> int:
-        """Insert inferred triples into the triplestore.
+        """Insert inferred triples, then hide the triples removal rules selected.
 
-        Returns the number of triples inserted.
+        Inserts run first, so a triple that one rule infers and another removes
+        in the same run ends up hidden. Returns the number of triples inserted.
         """
-        if self._store is None or not result.inferred_triples:
+        if self._store is None:
             return 0
-
         table_name = self._get_graph_name()
+        count = self._insert_inferred(result, table_name)
+        self._apply_removals(result, table_name)
+        return count
+
+    def _insert_inferred(self, result: ReasoningResult, table_name: str) -> int:
         triples = [
             {"subject": t.subject, "predicate": t.predicate, "object": t.object}
             for t in result.inferred_triples
@@ -444,6 +450,17 @@ class ReasoningService:
                     self._store, table_name, self._domain
                 )
         logger.info("Materialised %d inferred triples into %s", count, table_name)
+        return count
+
+    def _apply_removals(self, result: ReasoningResult, table_name: str) -> int:
+        """Hide the stored triples that removal rules selected (origin ``reasoning``)."""
+        triples = unique_triples(result.removed_triples)
+        if not triples:
+            return 0
+        count = self._store.delete_triples(
+            table_name, triples, origin=ORIGIN_REASONING
+        )
+        logger.info("Removal rules hid %d triples in %s", count, table_name)
         return count
 
     @staticmethod

@@ -547,7 +547,6 @@ class TwinBackgroundTasks:
 
         from back.core.helpers import get_databricks_client, is_uri
         from back.core.reasoning import ReasoningService
-        from back.core.reasoning.results.ReasoningResult import ReasoningResult as _RR
         from back.core.graphdb import get_graphdb
 
         is_api = build_kind == "api"
@@ -615,7 +614,9 @@ class TwinBackgroundTasks:
             if is_api:
                 result_dict["violations_count"] = len(result.violations)
 
-            if options.get("append_graph") and result.inferred_triples:
+            if options.get("append_graph") and (
+                result.inferred_triples or result.removed_triples
+            ):
                 tm.update_progress(
                     task_id, 92, "Appending inferred triples to graph..."
                 )
@@ -631,9 +632,7 @@ class TwinBackgroundTasks:
                     else:
                         append_count = ReasoningService(
                             domain_snap, graph_store
-                        ).materialize_inferred(
-                            _RR(inferred_triples=result.inferred_triples)
-                        )
+                        ).materialize_inferred(result)
                         result_dict["append_graph_count"] = append_count
                         logger.info(
                             "%s %s: appended %d triples to graph",

@@ -312,6 +312,24 @@ class TestInferredMaterialize:
         cls.materialize_to_delta.assert_not_called()
         assert result == {"success": True}
 
+    def test_removed_triples_are_forwarded_to_graph(self):
+        removed = [
+            {"subject": "http://ex.org/s1", "predicate": "http://ex.org/p", "object": "http://ex.org/o1"}
+        ]
+        task = SimpleNamespace(result={"inferred_triples": [], "removed_triples": removed})
+        svc = MagicMock()
+        svc.materialize_inferred.return_value = 0
+        reasoning_cls = MagicMock(return_value=svc)
+        with patch.object(_MAT_MODULE, "ReasoningService", reasoning_cls):
+            result = TwinInferredMaterialize.run(
+                _domain(), None, task_id="t", do_delta=False, do_graph=True,
+                mat_table="", get_task=lambda tid: task,
+                get_store=MagicMock(), get_client=MagicMock(),
+            )
+        forwarded = svc.materialize_inferred.call_args.args[0]
+        assert forwarded.removed_triples == removed
+        assert result["success"] is True
+
     def test_missing_client_reports_credentials_error(self):
         result, *_ = _materialize(do_graph=False, client=None)
         assert result["materialize_error"] == "Databricks credentials not configured"
