@@ -210,3 +210,40 @@ Modified files:
 Test result:
 Full suite: uv run --frozen pytest -q -m "not scenario"
 -> 11478 passed, 334 skipped, 8 deselected, 0 failed.
+
+## Fix: Complex Rule assistant — "[object Object]" reply and unusable "Something else" option
+
+### Context
+In the Complex Rule builder chat, the agent offered "Something else (let me explain)"
+as a clickable option. Clicking it sent that literal text as the answer, the user had no
+way to type, and the agent's next reply rendered as `[object Object],[object Object]`.
+Root cause: some serving endpoints (Claude-style) return `message.content` as a list of
+blocks. The engine stored that list as `reply`, which the browser stringified; the list
+also went back in `history`, where the backend silently drops non-string content, so the
+agent lost its own previous question and answered without context.
+
+### Changes
+1. `src/agents/engine_base.py` — new shared `normalize_reply_content` / `UNREADABLE_REPLY`
+   (moved from the Graph Chat engine) that flattens content blocks into Markdown text.
+2. `src/agents/agent_dtwin_chat/engine.py` — now imports the shared helper (behaviour unchanged).
+3. `src/agents/agent_complex_rule_builder/engine.py` — normalise the LLM content so `reply`
+   is always a string; prompt now forbids catch-all options ("Something else"/"Other").
+4. `src/agents/agent_complex_rule_builder/tools.py` — `propose_options` coerces object
+   options to labels, de-duplicates, and drops catch-all answers.
+5. `src/front/static/ontology/js/ontology-business-rules.js` + `.../css/ontology-business-rules.css`
+   — every option group gets a built-in "Something else…" pill that focuses the chat input
+   instead of sending text.
+6. `tests/units/agents/test_agent_complex_rule_builder.py` — tests for block-list content
+   and option sanitising.
+
+### Modified files
+- src/agents/engine_base.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/agents/agent_complex_rule_builder/engine.py
+- src/agents/agent_complex_rule_builder/tools.py
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- tests/units/agents/test_agent_complex_rule_builder.py
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` → 11480 passed, 334 skipped, 8 deselected.

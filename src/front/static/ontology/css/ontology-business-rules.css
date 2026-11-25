@@ -153,6 +153,10 @@
     background: var(--db-primary-subtle, #eef2ff);
     border-color: var(--db-primary, #4a6cf7);
 }
+.cra-opt-other {
+    border-style: dashed;
+    font-style: italic;
+}
 .cra-opt-check {
     display: inline-flex;
     align-items: center;

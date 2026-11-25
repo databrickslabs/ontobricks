@@ -167,6 +167,36 @@ class TestRunAgent:
         result = _run(responses)
         assert result.options is None
 
+    def test_block_list_content_is_flattened_to_text(self):
+        """Claude-style endpoints return content as blocks; reply must be a str."""
+        blocks = [
+            {"type": "text", "text": "Which customers?"},
+            {"type": "text", "text": "Pick one."},
+        ]
+        result = _run([_text_response(blocks)])
+        assert result.success is True
+        assert result.reply == "Which customers?\n\nPick one."
+
+    def test_catch_all_options_are_dropped_and_objects_coerced(self):
+        opts_args = json.dumps(
+            {
+                "question": "Which?",
+                "options": [
+                    {"label": "Inactive customers"},
+                    "Something else (let me explain)",
+                    "Something else (let me explain)",
+                    "Other",
+                    "Terminated contract",
+                ],
+            }
+        )
+        responses = [
+            _tool_call_response("propose_options", opts_args),
+            _text_response("Which customers?"),
+        ]
+        result = _run(responses)
+        assert result.options["options"] == ["Inactive customers", "Terminated contract"]
+
     def test_llm_failure_is_reported(self):
         with patch.object(
             cr_engine, "call_serving_endpoint", side_effect=RuntimeError("boom")

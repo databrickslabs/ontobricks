@@ -27,6 +27,7 @@ from agents.engine_base import (
     accumulate_usage,
     call_serving_endpoint,
     dispatch_tool,
+    normalize_reply_content,
 )
 from agents.tracing import trace_agent
 from agents.llm_utils import llm_failure_message
@@ -85,6 +86,10 @@ WORKFLOW
    type. Do NOT use propose_options for open-ended questions. Set multi=true
    only when more than one answer can legitimately apply. Keep your reply to
    the short question itself — do not also list the options as a bulleted list.
+   NEVER include a catch-all such as "Something else" / "Other" in the options:
+   the UI adds its own "Something else…" control that lets the user type.
+   If the user's answer is vague or says they want to explain something else,
+   ask an open-ended question — do not repeat the same options.
 3. As soon as you can express part of the rule, call update_draft with a
    first CONSTRUCT and keep refining it after each answer so the user watches
    it take shape.
@@ -243,7 +248,7 @@ def run_agent(
             return result
 
         message = choices[0].get("message", {})
-        content = message.get("content", "") or ""
+        content = normalize_reply_content(message.get("content"))
         tool_calls = message.get("tool_calls")
 
         if tool_calls:

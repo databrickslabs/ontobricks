@@ -16,6 +16,7 @@ Tools:
 """
 
 import json
+import re
 from typing import Callable, Dict, List
 
 from agents.tools.context import ToolContext
@@ -152,6 +153,40 @@ def tool_update_draft(
     return json.dumps({"ok": True, "ready": ctx.rule_draft_ready})
 
 
+# Catch-all answers the LLM sometimes adds; the UI provides its own
+# "Something else…" control that focuses the text box instead.
+_CATCH_ALL_RE = re.compile(
+    r"^(something else|other|others|none of (the above|these)|else)\s*(\(.*\))?\s*[….]*$",
+    re.IGNORECASE,
+)
+
+
+def _option_label(option) -> str:
+    """Best-effort text of one option (LLMs sometimes send ``{label: ...}``)."""
+    if isinstance(option, dict):
+        for key in ("label", "text", "value", "name", "title"):
+            if option.get(key):
+                return str(option[key]).strip()
+        return ""
+    return str(option).strip()
+
+
+def _clean_options(options) -> List[str]:
+    """Coerce to unique non-empty strings, dropping catch-all answers."""
+    if isinstance(options, str):
+        options = [options]
+    out: List[str] = []
+    seen = set()
+    for option in options or []:
+        label = _option_label(option)
+        key = label.lower()
+        if not label or key in seen or _CATCH_ALL_RE.match(label):
+            continue
+        seen.add(key)
+        out.append(label)
+    return out
+
+
 def tool_propose_options(
     ctx: ToolContext,
     *,
@@ -165,7 +200,7 @@ def tool_propose_options(
     Rendered in the chat as pills (single-select) or checkboxes + Send
     (multi-select). A per-turn hint only; it does not touch the draft.
     """
-    clean = [str(o).strip() for o in (options or []) if str(o).strip()]
+    clean = _clean_options(options)
     ctx.rule_options = (
         {"question": question or "", "options": clean, "multi": bool(multi)}
         if clean

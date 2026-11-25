@@ -624,6 +624,16 @@ window.BusinessRulesModule = {
                 group.appendChild(pill);
             }
         });
+        // Free-text escape hatch: focuses the chat box instead of sending text.
+        const other = document.createElement('button');
+        other.type = 'button';
+        other.className = 'cra-opt-pill cra-opt-other';
+        other.textContent = 'Something else…';
+        other.addEventListener('click', () => {
+            const input = document.getElementById('craChatInput');
+            if (input) input.focus();
+        });
+        group.appendChild(other);
         if (opts.multi) {
             const send = document.createElement('button');
             send.type = 'button';
