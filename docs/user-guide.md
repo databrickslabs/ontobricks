@@ -429,6 +429,48 @@ WHERE {
 }
 ```
 
+#### Removal Rules (SPARQL DELETE)
+
+A Complex rule can also **remove** triples. Set **Rule type** to
+**Remove triples (DELETE)** in the rule editor. A removal rule hides the stored
+triples its pattern matches. It never changes the source tables: the hidden
+triples are recorded as overrides in the `_overrides` table (Lakebase and Delta),
+and the original triples stay in place underneath. On Neo4j the matching triples
+are deleted from the property graph itself.
+
+Three forms are accepted, each with no `INSERT`, `GRAPH` or property-path part:
+
+```sparql
+# 1. Every triple that matches the WHERE pattern
+DELETE WHERE { ?m :meterOf :Customer_42 . ?m :status ?o }
+
+# 2. Specific triples, written out
+DELETE DATA { :m1 :meterOf :Customer_42 }
+
+# 3. Template and pattern
+DELETE { ?m :status ?o } WHERE { ?m :meterOf :Customer_42 . ?m :status ?o }
+```
+
+Rules to know before you save:
+
+- **Guard**: at least one triple pattern must bind a subject or an object. A
+  delete of a whole predicate (`DELETE WHERE { ?s :status ?o }`) is refused.
+- **Preview first**: **Preview** counts the triples the rule would hide without
+  writing anything. Save is available only for the query you previewed; editing
+  the query clears the preview.
+- **Confirmation**: a removal that would hide more than **10,000** triples needs
+  the confirmation box ticked before it can be saved.
+- **Removals follow the reasoning run**: a Build clears the rows that reasoning
+  derived, removals included, and keeps your manual overrides. The enabled
+  removal rules hide their triples again on the next reasoning run. Disabling a
+  removal rule and running reasoning brings the triples back.
+- **Manual edits win**: a triple you added by hand (a user override) is kept. A
+  removal rule does not hide it.
+- **Missing triples**: a `DELETE DATA` of a triple that is not in the graph is
+  not an error. The run reports a warning (`removal_not_found`) in the results.
+- **Literals** are matched on their lexical value only, so a typed literal in
+  `DELETE DATA` must be written exactly as stored.
+
 #### Expressions & Axioms
 
 Click **Expr. & Axioms** in the sidebar to define OWL class expressions and axioms.

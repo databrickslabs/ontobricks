@@ -1868,6 +1868,31 @@ POST /ontology/rules/import
 }
 ```
 
+#### Preview a Removal Rule
+
+```http
+POST /ontology/rules/sparql_rules/removal-preview
+```
+
+Counts the triples a removal rule (SPARQL `DELETE`) would hide, without writing anything. The rule is validated as a removal (`kind` is forced to `removal`).
+
+**Request Body:**
+```json
+{
+  "rule": {
+    "name": "drop_meters",
+    "query": "PREFIX : <http://ex.org/onto#> DELETE WHERE { ?m :meterOf :Customer_42 . ?m :status ?o }"
+  }
+}
+```
+
+**Response (valid rule):**
+```json
+{"success": true, "count": 3, "requires_confirmation": false, "errors": []}
+```
+
+`requires_confirmation` is `true` when `count` is above 10,000; the editor then asks for the confirmation box before the rule can be saved. An invalid rule returns `success: false` with `errors` and HTTP 200.
+
 #### Delete IF-THEN Rule
 
 ```http
