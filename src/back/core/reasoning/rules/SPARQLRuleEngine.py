@@ -101,6 +101,26 @@ class SPARQLRuleEngine:
         }
         return result
 
+    def count_removals(
+        self, rule: Dict, store: Any, table_name: str, ontology: Dict
+    ) -> int:
+        """Count the distinct triples a removal rule matches, without hiding them.
+
+        The count is the preview shown before a run. It does not apply the D2
+        guard (triples with a user add are skipped at write time), so it can
+        slightly over-count those.
+        """
+        compiler = SparqlUpdateCompiler(
+            base_uri=ontology.get("base_uri", ""),
+            uri_map=self._build_uri_map(ontology),
+            dialect=store.sql_flavor() or SQL_DIALECT_SPARK,
+        )
+        sql = compiler.compile_removal(rule.get("query", ""), store.sql_table_reference(table_name))
+        rows = store.execute_query(
+            f"SELECT COUNT(*) AS cnt FROM (SELECT DISTINCT s, p, o FROM ({sql}) u) d"
+        ) or []
+        return int(rows[0].get("cnt", 0)) if rows else 0
+
     def _execute_one(
         self,
         rule: Dict,

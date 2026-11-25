@@ -114,6 +114,20 @@ def test_merge_keeps_removed_triples():
     assert len(a.removed_triples) == 1
 
 
+def test_count_removals_counts_distinct_triples_in_sql():
+    store = FakeStore([{"cnt": 3}])
+    rule = {"name": "drop", "kind": "removal", "query": GOOD}
+    assert SPARQLRuleEngine().count_removals(rule, store, "triples", ONTO) == 3
+    assert store.sql[0].startswith("SELECT COUNT(*) AS cnt")
+    assert "SELECT DISTINCT s, p, o" in store.sql[0]
+
+
+def test_count_removals_is_zero_for_empty_result():
+    store = FakeStore([])
+    rule = {"name": "drop", "kind": "removal", "query": GOOD}
+    assert SPARQLRuleEngine().count_removals(rule, store, "triples", ONTO) == 0
+
+
 def test_construct_rule_still_infers_through_dispatcher():
     rule = {
         "name": "vip",

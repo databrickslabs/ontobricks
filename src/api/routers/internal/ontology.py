@@ -23,6 +23,7 @@ from shared.config.settings import get_settings, Settings
 from back.objects.ontology import DesignAutofix, DesignChecks, Ontology, Rules
 from back.objects.ontology.generate import GenerateWorkflow
 from back.objects.session import get_domain
+from back.core.graphdb import get_graphdb
 from back.core.task_manager import get_task_manager
 from back.core.helpers import (
     get_databricks_host_and_token,
@@ -47,7 +48,11 @@ from back.core.w3c.shacl.constants import (
     IF_THEN_ID_PREFIX,
     rule_check_id,
 )
-from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
+from shared.config.constants import (
+    DEFAULT_BASE_URI,
+    DEFAULT_GRAPH_NAME,
+    SPARQL_REMOVAL_CONFIRM_THRESHOLD,
+)
 
 router = APIRouter(prefix="/ontology", tags=["Ontology"])
 logger = get_logger(__name__)
@@ -1280,6 +1285,38 @@ async def validate_rule(rule_type: str, request: Request):
     if errors:
         raise ValidationError("; ".join(str(e) for e in errors))
     return {"success": True, "valid": True, "message": "Rule is valid"}
+
+
+@router.post("/rules/sparql_rules/removal-preview")
+async def sparql_removal_preview(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Count the triples a removal rule would hide, without writing anything."""
+    from back.core.reasoning import ReasoningService, SPARQLRuleEngine
+
+    data = await request.json()
+    rule = dict(data.get("rule") or {})
+    rule["kind"] = "removal"
+    errors = SPARQLRuleEngine.validate_rule(rule)
+    if errors:
+        return {
+            "success": False,
+            "count": 0,
+            "requires_confirmation": False,
+            "errors": errors,
+        }
+
+    domain = get_domain(session_mgr)
+    store = get_graphdb(domain, settings, for_write=False)
+    count = ReasoningService(domain, store).count_sparql_removal(rule)
+    return {
+        "success": True,
+        "count": count,
+        "requires_confirmation": count > SPARQL_REMOVAL_CONFIRM_THRESHOLD,
+        "errors": [],
+    }
 
 
 # ===========================================

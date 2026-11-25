@@ -413,6 +413,16 @@ class ReasoningService:
         table_name = self._get_graph_name()
         return engine.execute_rules(rules, self._store, table_name, ontology)
 
+    def count_sparql_removal(self, rule: Dict) -> int:
+        """Number of triples *rule* would hide; 0 when no store is available."""
+        if self._store is None:
+            return 0
+        from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine
+
+        return SPARQLRuleEngine().count_removals(
+            rule, self._store, self._get_graph_name(), self._get_ontology_dict()
+        )
+
     def materialize_inferred(self, result: ReasoningResult) -> int:
         """Insert inferred triples, then hide the triples removal rules selected.
 
