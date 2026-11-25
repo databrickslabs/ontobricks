@@ -14,10 +14,13 @@ class ReasoningResult:
     inferred_triples: List[InferredTriple] = field(default_factory=list)
     violations: List[RuleViolation] = field(default_factory=list)
     stats: Dict = field(default_factory=dict)
+    # Stored triples that a removal rule hides (SPARQL Update removal path).
+    removed_triples: List[Dict[str, str]] = field(default_factory=list)
 
     def merge(self, other: "ReasoningResult") -> None:
         """Merge another result into this one."""
         self.inferred_triples.extend(other.inferred_triples)
+        self.removed_triples.extend(other.removed_triples)
         self.violations.extend(other.violations)
         for key, val in other.stats.items():
             if isinstance(val, (int, float)) and isinstance(
@@ -59,6 +62,7 @@ class ReasoningResult:
                 }
                 for t in self.inferred_triples
             ],
+            "removed_triples": [dict(t) for t in self.removed_triples],
             "violations": [
                 {
                     "rule_name": v.rule_name,

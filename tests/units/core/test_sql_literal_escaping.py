@@ -98,7 +98,9 @@ class TestSPARQLRuleEngine:
         store.sql_flavor.return_value = dialect
         store.sql_table_reference.return_value = "triples"
         store.execute_query.return_value = []
-        SPARQLRuleEngine()._execute_one("r", query, store, "t", {"base_uri": BASE})
+        SPARQLRuleEngine()._execute_one(
+            {"name": "r", "query": query}, store, "t", {"base_uri": BASE}
+        )
         return store.execute_query.call_args.args[0]
 
     def test_construct_iri_stays_closed(self):

@@ -75,9 +75,7 @@ class SPARQLRuleEngine:
             if not query_text.strip():
                 continue
             try:
-                result.merge(
-                    self._execute_one(name, query_text, store, table_name, ontology)
-                )
+                result.merge(self._execute_one(rule, store, table_name, ontology))
             except Exception as e:
                 logger.error("SPARQL rule '%s' failed: %s", name, e)
                 failed.append(f"{name}: {e}")
@@ -96,6 +94,7 @@ class SPARQLRuleEngine:
             "rules_count": len(rules),
             "violations_count": len(result.violations),
             "inferred_count": len(result.inferred_triples),
+            "removed_count": len(result.removed_triples),
             "errors": len(failed),
             "error_details": "; ".join(failed)[:2000],
             "duration_seconds": round(time.time() - t0, 3),
@@ -104,17 +103,31 @@ class SPARQLRuleEngine:
 
     def _execute_one(
         self,
-        name: str,
-        query: str,
+        rule: Dict,
         store: Any,
         table_name: str,
         ontology: Dict,
     ) -> ReasoningResult:
-        compiler = SparqlConstructCompiler(
-            base_uri=ontology.get("base_uri", ""),
-            uri_map=self._build_uri_map(ontology),
-            dialect=store.sql_flavor() or SQL_DIALECT_SPARK,
-        )
+        """Run one rule; its ``kind`` selects the CONSTRUCT or the removal path."""
+        name = rule.get("name", "unnamed")
+        query = rule.get("query", "")
+        options = {
+            "base_uri": ontology.get("base_uri", ""),
+            "uri_map": self._build_uri_map(ontology),
+            "dialect": store.sql_flavor() or SQL_DIALECT_SPARK,
+        }
+        kind = rule.get("kind") or "construct"
+        if kind == "construct":
+            return self._execute_construct(name, query, store, table_name, options)
+        if kind == "removal":
+            return self._execute_removal(name, query, store, table_name, options)
+        raise ValidationError(f"Unknown rule kind '{kind}'")
+
+    @staticmethod
+    def _execute_construct(
+        name: str, query: str, store: Any, table_name: str, options: Dict
+    ) -> ReasoningResult:
+        compiler = SparqlConstructCompiler(**options)
         sql = compiler.compile(query, store.sql_table_reference(table_name))
         logger.debug("SPARQL rule '%s' translated query:\n%s", name, sql)
 
@@ -129,6 +142,41 @@ class SPARQLRuleEngine:
                     rule_name=name,
                 )
             )
+        return result
+
+    @staticmethod
+    def _execute_removal(
+        name: str, query: str, store: Any, table_name: str, options: Dict
+    ) -> ReasoningResult:
+        """Collect the stored triples a removal matches; the caller hides them."""
+        compiler = SparqlUpdateCompiler(**options)
+        sql = compiler.compile_removal(query, store.sql_table_reference(table_name))
+        logger.debug("SPARQL removal '%s' translated query:\n%s", name, sql)
+
+        result = ReasoningResult()
+        found = set()
+        for row in store.execute_query(sql) or []:
+            s, p, o = row.get("s", ""), row.get("p", ""), row.get("o", "")
+            found.add((s, p, o))
+            result.removed_triples.append({"subject": s, "predicate": p, "object": o})
+
+        # D3: a DELETE DATA triple that is not in the store is reported, not hidden.
+        try:
+            expected = compiler.data_triples(query)
+        except ValidationError:  # not a DELETE DATA: nothing to check
+            expected = []
+        for s, p, o in expected:
+            if (s, p, o) not in found:
+                result.violations.append(
+                    RuleViolation(
+                        rule_name=name,
+                        subject=s,
+                        message=f"triple not found: {s} {p} {o}",
+                        check_type="removal_not_found",
+                        rule_type="sparql",
+                    )
+                )
+        result.stats = {"removed_count": len(result.removed_triples)}
         return result
 
     @staticmethod
