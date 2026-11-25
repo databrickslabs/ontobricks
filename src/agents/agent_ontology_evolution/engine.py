@@ -26,6 +26,7 @@ from agents.engine_base import (
     call_serving_endpoint,
     dispatch_tool,
 )
+from agents.llm_utils import llm_failure_message
 from agents.tools.context import ToolContext
 from agents.tracing import trace_agent
 from back.core.logging import get_logger
@@ -104,6 +105,8 @@ ALTERNATIVES (up to three, best first)
   rationale     Why this join is the right link: its evidence (declared
                 key, data checks) and any page fact. Say when a page warns
                 that a join means something else.
+  When several joins are valid in the data, rank them, best first, and say
+  in each rationale what would make a builder pick it; the builder chooses.
 
 """ + _SHARED_RULES
 
@@ -210,7 +213,8 @@ def _run(
         Exception
     ) as exc:  # noqa: BLE001 — surfaced to the caller as a failed suggestion
         logger.exception("ontology_evolution agent failed")
-        result.error = str(exc)
+        # The raw exception carries the serving URL and response body.
+        result.error = llm_failure_message(exc)
         return result
     finally:
         result.usage["latency_ms"] = int((time.perf_counter() - started) * 1000)

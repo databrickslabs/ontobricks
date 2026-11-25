@@ -167,9 +167,10 @@ def _proposal_case(world, name, document, intent, probe, sets) -> Dict[str, Any]
     run = pipe.assess(run["id"], run["revision"])
     cov = run["coverage"]
     record = {"task": "proposal", "id": name, "arm": "+".join(sets) or "no_pages"}
-    if cov["decision_hint"] != "PROPOSE":
+    if cov["decision_hint"] != "PROPOSE" and not cov.get("choice_needed"):
         return {**record, "error": f"coverage {cov['decision_hint']}", "valid": 0.0}
-    chosen = cov["join"]["candidates"].index(cov["join"]["chosen"])
+    join = cov["join"]
+    chosen = join["candidates"].index(join["chosen"]) if join.get("chosen") else None
     t0 = time.time()
     try:
         run = EvolutionAssistant(svc, world.llm, world.fetch).propose(
@@ -192,7 +193,8 @@ def _proposal_case(world, name, document, intent, probe, sets) -> Dict[str, Any]
     return {
         **record,
         "valid": 1.0 if proposal["validation"]["passed"] else 0.0,
-        "matches_rules": 1.0 if alt["candidate"] == chosen else 0.0,
+        "matches_rules": (1.0 if chosen is None or alt["candidate"] == chosen else 0.0),
+        "needs_choice": bool(proposal.get("needs_choice")),
         "alternatives": len(proposal["alternatives"]),
         "rejected": proposal.get("rejected"),
         "relationship": alt["operations"][0]["target"]["name"],
@@ -217,7 +219,10 @@ def proposal_records(world: World, split: str) -> List[Dict[str, Any]]:
             row["input"]["domain_variant"],
             json.dumps(row["input"]["intent"], sort_keys=True),
         )
-        if "PASS" != row["expected"]["decision"] or key in seen:
+        proposable = row["expected"]["decision"] == "PASS" or row["id"].startswith(
+            "ambiguous-path"
+        )
+        if not proposable or key in seen:
             continue
         seen.add(key)
         out.append(
@@ -290,6 +295,11 @@ def summarise(records: List[Dict[str, Any]]) -> Dict[str, Any]:
         "proposal_valid": _mean(r["valid"] for r in props),
         "proposal_matches_rules": _mean(r.get("matches_rules", 0.0) for r in props),
         "proposal_injected_names": sum(1 for r in props if r.get("injected_name")),
+        "choice_rows_flagged": _mean(
+            1.0 if r.get("needs_choice") else 0.0
+            for r in props
+            if r["id"].startswith("ambiguous-path")
+        ),
         "citations_kept": sum(r.get("citations", 0) for r in records),
         "citations_dropped": sum(r.get("dropped_citations", 0) for r in records),
         "latency_p95_seconds": (
@@ -319,6 +329,7 @@ def run(endpoint: str, split: str, repeats: int, judge) -> Dict[str, Any]:
 
 def store(report: Dict[str, Any], table: str) -> None:
     """One row per repeat in a UC Delta table; the JSON columns keep every record."""
+    from back.core.helpers.SQLHelpers import SQLHelpers
     from back.objects.ontology.evolution.WarehouseSourceProbe import split_fqn
 
     fq = ".".join(split_fqn(table))
@@ -327,8 +338,9 @@ def store(report: Dict[str, Any], table: str) -> None:
     )
 
     def lit(value: Any) -> str:
-        text = value if isinstance(value, str) else json.dumps(value, default=str)
-        return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
+        return SQLHelpers.sql_literal(
+            value if isinstance(value, str) else json.dumps(value, default=str)
+        )
 
     world_client.sql.execute_query(
         f"CREATE TABLE IF NOT EXISTS {fq} (run_at TIMESTAMP, endpoint STRING, split STRING, "

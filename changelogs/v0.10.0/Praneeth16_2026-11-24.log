@@ -1,0 +1,23 @@
+## Evolve assistant: suggest the intent and the fix, grounded in Genie Pages
+
+Context: Typing the typed intent by hand was the main friction, and business
+words ("VOR", "the GERMANY market") only make sense with the organisation's
+glossary. The assistant reads the ontology and the Genie Pages selected on
+the version, then suggests; coverage, validation and evaluation still decide.
+
+Changes:
+1. src/agents/agent_ontology_evolution/
+   Two read-only tool loops (intent, proposal), one validated submit each, one repair.
+2. src/back/objects/ontology/evolution/{ContextPages,IntentValidator,EvolutionAssistant}.py
+   Pages from the version allowlist, read as the caller; a quote is kept only if it is in the page; an uncited path hint is dropped.
+3. src/back/objects/ontology/evolution/ProposalBuilder.py
+   The model picks a profiled join and names it; SQL is still built from checked columns.
+4. src/api/routers/internal/evolution.py, UI
+   `POST /evolution/intent/suggest`; `source: "agent"` on proposals.
+5. tests/eval
+   Glossary dataset with and without pages, injection page, live runner.
+
+Modified files:
+- see the PR file list
+
+Tests: uv run --frozen pytest -q tests/units/ontology/evolution → 231 passed

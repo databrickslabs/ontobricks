@@ -132,14 +132,67 @@ def deterministic(rows: list[dict]) -> int:
     return 0 if gates and not failures else 1
 
 
-def live(endpoint: str, split: str, repeats: int, table: str) -> int:
+def _mlflow(experiment: str, trace_uc: str, warehouse: str):
+    """Experiment whose traces land in a Unity Catalog location (``catalog.schema.prefix``)."""
+    import os
+
+    import mlflow
+    from mlflow.entities.trace_location import UnityCatalog
+
+    from agents import tracing
+
+    catalog, schema, prefix = trace_uc.split(".")
+    os.environ["MLFLOW_TRACING_SQL_WAREHOUSE_ID"] = warehouse
+    mlflow.set_tracking_uri("databricks")
+    mlflow.set_experiment(
+        experiment,
+        trace_location=UnityCatalog(catalog, schema, table_prefix=prefix),
+    )
+    tracing.setup_tracing(experiment)
+    return mlflow
+
+
+def live(
+    endpoint: str,
+    split: str,
+    repeats: int,
+    table: str,
+    experiment: str = "",
+    trace_uc: str = "",
+    warehouse: str = "",
+) -> int:
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     from tests.eval.evolution_agent_live import run, store
 
-    report = run(endpoint, "dev" if split == "all" else split, repeats, judge_intent)
+    split = "dev" if split == "all" else split
+    mlflow = _mlflow(experiment, trace_uc, warehouse) if experiment else None
+    active = mlflow.start_run(run_name=f"evolve-agent-{split}") if mlflow else None
+    report = run(endpoint, split, repeats, judge_intent)
     if table:
         store(report, table)
+    if active:
+        mlflow.log_params(
+            {
+                "endpoint": endpoint,
+                "split": split,
+                "repeats": repeats,
+                "results_table": table,
+            }
+        )
+        for rep in report["repeats"]:
+            mlflow.log_metrics(
+                {
+                    k: v
+                    for k, v in rep["summary"].items()
+                    if isinstance(v, (int, float))
+                },
+                step=rep["repeat"],
+            )
+        mlflow.end_run()
+        print(
+            f"MLflow run: {active.info.run_id} experiment {active.info.experiment_id}"
+        )
     means = {
         k: sum(r["summary"][k] for r in report["repeats"]) / len(report["repeats"])
         for k in (
@@ -168,10 +221,23 @@ def main() -> int:
     parser.add_argument("--endpoint", default="databricks-claude-sonnet-5-5")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--results-table", default="")
+    parser.add_argument("--mlflow-experiment", default="")
+    parser.add_argument(
+        "--trace-uc", default="", help="catalog.schema.prefix for the UC trace tables"
+    )
+    parser.add_argument("--trace-warehouse", default="")
     args = parser.parse_args()
 
     if args.live:
-        return live(args.endpoint, args.split, args.repeats, args.results_table)
+        return live(
+            args.endpoint,
+            args.split,
+            args.repeats,
+            args.results_table,
+            args.mlflow_experiment,
+            args.trace_uc,
+            args.trace_warehouse,
+        )
     rows = load_rows()
     if len(rows) < MIN_ROWS:
         raise SystemExit(f"{DATASET} has {len(rows)} rows; need >= {MIN_ROWS}")

@@ -86,7 +86,9 @@ class EvolutionAssistant:
 
         run = self._svc.get_run(run_id)
         coverage = run.get("coverage") or {}
-        if coverage.get("decision_hint") != "PROPOSE":
+        if coverage.get("decision_hint") != "PROPOSE" and not coverage.get(
+            "choice_needed"
+        ):
             raise ValidationError(
                 "Nothing to propose for this question",
                 detail=str(

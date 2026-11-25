@@ -1171,6 +1171,28 @@ This document describes the REST API endpoints available in OntoBricks.
 | Reasoning | `/dtwin/reasoning` | OWL 2 RL + IF-THEN inference, inferred triples |
 | GraphQL | `/graphql` (UI); `/api/v1/graphql` (external API mount) | Auto-generated typed GraphQL schema from ontology |
 | Domain | `/domain` | Domain save/load operations (UI route) |
+| Evolve | `/evolution` | Question coverage, assisted intent and fix proposals, paired candidate evaluation, accept as DRAFT version |
+
+---
+
+### Evolve Endpoints (`/evolution`)
+
+Requires `ONTOBRICKS_EVOLUTION_ENABLED=true` and the Lakebase registry. Every request names the loaded context folder as `domain` (409 if it differs from the session) and, for runs, the run `revision` (409 on a stale revision). Mutations require domain Builder. Writes on a run never change the parent version.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/evolution/capabilities` | Feature flag, graph backend support, `assistant` (an LLM is selected) |
+| POST | `/evolution/intent/suggest` | Body `domain`, `parent_version`, `question`. Returns a suggested `intent`, `citations` (verified page quotes), `ambiguities`, `notes`, and `agent` (model, usage, pages read). Nothing is stored |
+| GET / POST | `/evolution/runs` | List runs; create a run (`parent_version`, `intent`, `question`, `idempotency_key`, optional `suggestion` to record whether the intent was kept as suggested) |
+| GET / DELETE | `/evolution/runs/{id}` | Run state; delete a run and its run-owned graph tables |
+| PATCH | `/evolution/runs/{id}/intent` | Replace the intent (clears coverage, proposal and evaluation) |
+| POST | `/evolution/runs/{id}/assess` | Coverage check |
+| POST | `/evolution/runs/{id}/proposal` | Rule-based proposal; `source: "agent"` for assistant alternatives; `operations` to validate a builder's edit; `selected: i` to switch alternative (and confirm the join when several are valid) |
+| POST | `/evolution/runs/{id}/evaluate` | 202; builds both arms and compares answers (`expected_ids`, or `gold_table` + `target_question_id`, optional `checks`). Poll the run |
+| GET | `/evolution/runs/{id}/results` | Per-question, per-arm results |
+| POST | `/evolution/runs/{id}/accept` | Next DRAFT version from a PASS run (idempotent) |
+| POST | `/evolution/runs/{id}/cleanup` | Drop run-owned graph tables, keep the run |
+| POST | `/evolution/runs/{id}/cancel` | Cancel |
 
 ---
 

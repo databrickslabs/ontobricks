@@ -50,6 +50,7 @@ class EvolutionPipeline:
         coverage = CoverageService(index, self._probe).assess(
             Intent.from_dict(run["intent"])
         )
+        coverage["choice_needed"] = ProposalBuilder.needs_choice(coverage)
         return self._svc.update(
             run_id,
             revision,
@@ -126,6 +127,8 @@ class EvolutionPipeline:
             raise ValidationError("No such alternative")
         document, _index = self._parent(run)
         proposal["selected"] = int(selected)
+        # Picking a join is the builder's decision the evaluation waits for.
+        proposal["choice_confirmed"] = bool(proposal.get("needs_choice"))
         return self._validate_and_store(
             run, revision, document, run.get("coverage") or {}, proposal
         )

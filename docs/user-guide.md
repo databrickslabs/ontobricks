@@ -477,6 +477,17 @@ Open **Ontology → Sanity Checks** (last entry of the **Design** sidebar group)
 
 Context → General shows the same error / warning / info counts under Consistency checks, with a link to this section.
 
+#### Evolve
+
+Open **Ontology → Evolve** (after **Sanity Checks**) to check whether the loaded version can answer a business question and, when it cannot, to get a reviewed fix. Evolve reads a parent version of any status and never edits it: a fix becomes a new DRAFT version only when you accept it. It needs the Lakebase registry; evaluation also needs the Lakehouse (Delta) graph backend. Turn it on with `ONTOBRICKS_EVOLUTION_ENABLED=true`.
+
+1. **Question.** Type the question. With an LLM selected under Configuration → AI, **Suggest intent** fills the typed intent (output entity, filters, aggregate) from the ontology and from the Genie Pages selected under Context → Pages for this version. Page quotes it relied on are shown under the question; a quote is kept only if it appears in the page word for word. The suggestion is a draft: edit the JSON before you check it. A path hint is kept only when a page quote backs it.
+2. **Coverage.** **Check coverage** lists every requirement (entity, mapping, relationship, filter value, source access) with its state on the current source data. *Supported as is* means the preconditions hold, not that an answer is correct. When a link is missing, coverage profiles candidate joins in the data (declared keys first, then name and value checks).
+3. **Proposed change.** **Propose a fix** builds the rule-based fix from the best join. **Ask the assistant** lets the LLM pick among the same profiled joins (up to three, best first), name the relationship and describe it in the words of your Genie Pages. It cannot write SQL; the mapping is always built from the checked columns. When more than one join is valid, the assistant ranks them and you must pick one (**Use this join**) before evaluating. Business meaning always shows *needs review*.
+4. **Evaluation.** **Build and compare** builds the parent and the candidate into separate temporary graphs from the same source data, runs the question (and any protected questions) on both and compares each answer with the expected ids or a gold table. **Accept as a new draft version** creates the next DRAFT version; review and publish work as usual, and the review shows the evaluation it came from.
+
+Genie Pages are read with your own access; a selected page you cannot read is listed as skipped. Page text can name a concept or settle which reading of a question is meant. It is never treated as proof that a join holds or that an answer is right.
+
 #### Data Quality (SHACL Shapes)
 
 Click **Data Quality** in the sidebar to define data quality rules using W3C SHACL (Shapes Constraint Language).

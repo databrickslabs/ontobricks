@@ -25,7 +25,7 @@ window.EvolveModule = {
         mapping_checked: 'Mapping checked on the current data.',
         value_checked: 'Filter value checked on the current data.',
         relationship_not_in_ontology: 'The data has a join, but the ontology has no relationship for it.',
-        several_joins: 'More than one join is valid in the data. Choose one before continuing.',
+        several_joins: 'More than one join is valid in the data. Ask the assistant to rank them, then choose one.',
         several_paths: 'More than one path connects these entities. Choose one.',
         several_classes: 'This phrase could mean more than one entity.',
         value_matches_several_entities: 'More than one entity has this name.',
@@ -269,7 +269,7 @@ window.EvolveModule = {
 
         document.getElementById('evoProposeBtn').classList.toggle('d-none', cov.decision_hint !== 'PROPOSE');
         document.getElementById('evoProposeAgentBtn').classList.toggle('d-none',
-            cov.decision_hint !== 'PROPOSE' || !(this._caps && this._caps.assistant));
+            !(cov.decision_hint === 'PROPOSE' || cov.choice_needed) || !(this._caps && this._caps.assistant));
     },
 
     _gapText(gap) {
@@ -287,12 +287,24 @@ window.EvolveModule = {
             (pending ? 'bg-light text-dark border' : (ok ? 'bg-success' : 'bg-danger')) + ' me-1">' +
             escapeHtml(label) + '</span>';
         const alts = proposal.alternatives || [];
-        document.getElementById('evoAlternatives').innerHTML = alts.length < 2 ? '' :
+        const mustChoose = proposal.needs_choice && !proposal.choice_confirmed;
+        document.getElementById('evoAlternatives').innerHTML = (alts.length < 2 && !proposal.needs_choice) ? '' :
+            (mustChoose ? '<div class="alert alert-warning small mb-2">More than one join is valid in the data. ' +
+                'The assistant ranked them; pick the one the business means. Evaluation waits for your choice.</div>' : '') +
             '<div class="small fw-semibold mb-1">Fixes the assistant suggests</div>' + alts.map((a, i) =>
                 '<div class="form-check small"><input class="form-check-input" type="radio" name="evoAlt" id="evoAlt' + i +
                 '" value="' + i + '"' + (i === (proposal.selected || 0) ? ' checked' : '') + '><label class="form-check-label" for="evoAlt' + i +
                 '"><code>' + escapeHtml((a.operations[0].target || {}).name || '') + '</code> on <code>' +
-                escapeHtml(a.join || '') + '</code></label></div>').join('');
+                escapeHtml(a.join || '') + '</code></label></div>').join('') +
+            (mustChoose ? '<button type="button" class="btn btn-sm btn-outline-primary mt-1" id="evoConfirmChoiceBtn">' +
+                'Use this join</button>' : '');
+        const confirmBtn = document.getElementById('evoConfirmChoiceBtn');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+                const picked = document.querySelector('input[name="evoAlt"]:checked');
+                this.select(Number(picked ? picked.value : 0));
+            });
+        }
         document.getElementById('evoCitations').innerHTML = this._citationsHtml(alt.citations);
         document.getElementById('evoFacts').innerHTML =
             (proposal.source === 'agent' ? fact('Suggested by the assistant', false, true) : '') +
@@ -316,7 +328,7 @@ window.EvolveModule = {
                 c.status === 'fail' ? 'bi-x-circle text-danger' : 'bi-person-check text-secondary') +
             ' me-1"></i>' + escapeHtml(c.name.replace(/_/g, ' ')) +
             (c.reason ? ' — ' + escapeHtml(c.reason.replace(/_/g, ' ')) : '') + '</li>').join('');
-        document.getElementById('evoEvaluationCard').classList.toggle('d-none', !val.passed);
+        document.getElementById('evoEvaluationCard').classList.toggle('d-none', !val.passed || mustChoose);
     },
 
     OUTCOMES: {

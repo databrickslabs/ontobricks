@@ -94,6 +94,12 @@ class EvaluationService:
             "ontology"
         ):
             raise ValidationError("Only a validated proposal can be evaluated")
+        proposal = run.get("proposal") or {}
+        if proposal.get("needs_choice") and not proposal.get("choice_confirmed"):
+            raise ValidationError(
+                "Several joins are valid in the data: choose the one the business "
+                "means before evaluating"
+            )
         if run["cancel_requested"]:
             raise ConflictError("The run was cancelled")
         self._svc.ensure_parent_unchanged(run)

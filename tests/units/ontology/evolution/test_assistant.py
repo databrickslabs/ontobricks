@@ -514,7 +514,7 @@ class TestIntentAgent:
 
         assert (
             suggest_intent("q", _index(), _pages(), call_llm=boom, **LLM).error
-            == "endpoint down"
+            == "LLM request failed."
         )
 
     def test_read_tools(self):
@@ -744,3 +744,70 @@ class TestPathHintNeedsAPage:
         )
         result = suggest_intent("q", _index(), _pages(), call_llm=llm, **LLM)
         assert result.output["intent"]["path_hint"] == ["hasLine"]
+
+
+class TestAmbiguousJoinChoice:
+    def test_coverage_flags_a_choice_only_for_several_valid_joins(self):
+        _pipe, _svc, run = _assessed("nofk")
+        assert run["coverage"]["decision_hint"] == "BLOCKED"
+        assert run["coverage"]["choice_needed"] is True
+        _pipe, _svc, run = _assessed()
+        assert run["coverage"]["choice_needed"] is False
+        _pipe, _svc, run = _assessed("restricted", {**ACME, "output_class": "Product"})
+        assert run["coverage"]["choice_needed"] is False
+
+    def test_other_blockers_keep_the_run_blocked(self):
+        _pipe, _svc, run = _assessed("nofk")
+        cov = copy.deepcopy(run["coverage"])
+        cov["obligations"].append(
+            {
+                "key": "source:x",
+                "kind": "source",
+                "state": "INACCESSIBLE",
+                "reason": "access_denied",
+            }
+        )
+        assert ProposalBuilder.needs_choice(cov) is False
+
+    def test_ranked_alternatives_wait_for_the_builder(self):
+        from back.objects.ontology.evolution import EvaluationService
+
+        pipe, svc, run = _assessed("nofk")
+        alts = [
+            {"candidate": 1, "name": "refersToProduct", "rationale": "sku overlap"},
+            {"candidate": 0, "name": "hasProduct", "rationale": "id name match"},
+        ]
+        run = pipe.propose(
+            run["id"], run["revision"], suggestion={"alternatives": alts}
+        )
+        proposal = run["proposal"]
+        assert (
+            proposal["needs_choice"] is True and proposal["choice_confirmed"] is False
+        )
+        assert proposal["validation"]["passed"] is True
+        evaluator = EvaluationService(svc, None, MemorySourceProbe())
+        with pytest.raises(ValidationError, match="choose the one"):
+            evaluator.prepare(run["id"], run["revision"], {"expected_ids": ["O1"]})
+        run = pipe.select(run["id"], run["revision"], 1)
+        assert run["proposal"]["choice_confirmed"] is True
+        assert "hasProduct" in json.dumps(run["candidate"]["ontology"])
+
+    def test_assistant_runs_when_a_choice_is_needed(self):
+        pipe, svc, run = _assessed("nofk")
+        llm = _script(
+            [
+                _call(
+                    "submit_proposal",
+                    {
+                        "alternatives": [
+                            {"candidate": 0, "name": "hasProduct", "rationale": "r"}
+                        ]
+                    },
+                )
+            ]
+        )
+        assistant = EvolutionAssistant(
+            svc, ("h", "t", "e", ""), _fetch({}), call_llm=llm
+        )
+        run = assistant.propose(pipe, run["id"], run["revision"])
+        assert run["proposal"]["needs_choice"] is True

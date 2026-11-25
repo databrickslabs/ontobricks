@@ -68,7 +68,10 @@ class ProposalBuilder:
         """
         gap = coverage.get("gap") or {}
         join = coverage.get("join") or {}
-        if coverage.get("decision_hint") != "PROPOSE" or not join.get("chosen"):
+        choice = self.needs_choice(coverage)
+        if not choice and (
+            coverage.get("decision_hint") != "PROPOSE" or not join.get("chosen")
+        ):
             return None
         cands = list(join.get("candidates") or [])
         alternatives, rejected = [], []
@@ -88,7 +91,30 @@ class ProposalBuilder:
             "selected": 0,
             "alternatives": alternatives,
             "rejected": rejected,
+            "needs_choice": choice,
+            "choice_confirmed": False,
         }
+
+    @staticmethod
+    def needs_choice(coverage: Dict[str, Any]) -> bool:
+        """Coverage stopped only because several joins are valid for the gap.
+
+        The data cannot say which join the business means, so the assistant
+        may rank them, but a builder has to pick one before evaluation. Any
+        other blocker (access, unsupported question, ambiguous term) keeps
+        the run blocked.
+        """
+        join = coverage.get("join") or {}
+        if not coverage.get("gap") or join.get("chosen") or not join.get("ambiguous"):
+            return False
+        open_items = [
+            o for o in coverage.get("obligations") or [] if o["state"] != "RESOLVED"
+        ]
+        return bool(open_items) and all(
+            (o["state"] == "AMBIGUOUS" and o["reason"] == "several_joins")
+            or (o["state"] == "MISSING_SEMANTICS" and o["kind"] == "relationship")
+            for o in open_items
+        )
 
     def _alternative(self, gap, join, cands, alt):
         if not isinstance(alt, dict):
