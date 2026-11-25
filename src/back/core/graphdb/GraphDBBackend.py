@@ -25,6 +25,7 @@ from back.core.helpers import sql_escape as _shared_sql_escape
 from back.core.graphdb.adjacency import expand_entity_neighbors_sql, seeded_bfs_sql
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graphdb.props import execute_expand_with_props_fallback, props_page_sql
+from back.core.graphdb.SQLGraphReasoningOps import SQLGraphReasoningOps
 from back.core.graphdb.entity_search import (
     entity_search_seed_sql,
     entity_search_uri_search_sql,
@@ -37,11 +38,12 @@ from back.core.graphdb.entity_search import (
 logger = get_logger(__name__)
 
 
-class GraphDBBackend(ABC):
+class GraphDBBackend(SQLGraphReasoningOps, ABC):
     """Abstract base for graph DB engines (Lakebase Postgres, Delta, KuzuDB, ...).
 
     Subclasses must implement the core CRUD abstract methods **plus** the
-    graph-specific abstract methods (``get_connection`` / ``close``).
+    graph-specific abstract methods (``get_connection`` / ``close``).  Default
+    SQL reasoning ops come from :class:`SQLGraphReasoningOps`.
     """
 
     supports_materialized_inference_purge = False
@@ -827,108 +829,9 @@ class GraphDBBackend(ABC):
         rows = self.execute_query(sql)
         return {r["subject"] for r in rows}
 
-    # ------------------------------------------------------------------
-    # Reasoning methods — default SQL implementations.
-    # Future non-SQL engines (Cypher, Gremlin) override with native queries.
-    # ------------------------------------------------------------------
-
-    def transitive_closure(
-        self,
-        table_name: str,
-        predicate_uri: str,
-        start_uri: Optional[str] = None,
-        max_depth: int = 20,
-    ) -> List[Dict[str, Any]]:
-        """Compute transitive closure along *predicate_uri*.
-
-        Returns triples ``(subject, predicate, object)`` reachable through
-        transitive chains not already present as direct assertions.
-        Default uses a recursive CTE (Databricks SQL / Spark SQL).
-        """
-        esc_pred = self._sql_escape(predicate_uri)
-        start_filter = ""
-        if start_uri:
-            esc_start = self._sql_escape(start_uri)
-            start_filter = f" AND subject = '{esc_start}'"
-        sql = (
-            f"WITH RECURSIVE tc AS (\n"
-            f"  SELECT subject, object, 1 AS depth\n"
-            f"  FROM {self._sql_relation(table_name)}\n"
-            f"  WHERE predicate = '{esc_pred}'{start_filter}\n"
-            f"  UNION ALL\n"
-            f"  SELECT tc.subject, t.object, tc.depth + 1\n"
-            f"  FROM tc\n"
-            f"  JOIN {self._sql_relation(table_name)} t\n"
-            f"    ON tc.object = t.subject AND t.predicate = '{esc_pred}'\n"
-            f"  WHERE tc.depth < {int(max_depth)}\n"
-            f")\n"
-            f"SELECT DISTINCT tc.subject, '{esc_pred}' AS predicate, tc.object\n"
-            f"FROM tc\n"
-            f"WHERE NOT EXISTS (\n"
-            f"  SELECT 1 FROM {self._sql_relation(table_name)} ex\n"
-            f"  WHERE ex.subject = tc.subject\n"
-            f"    AND ex.predicate = '{esc_pred}'\n"
-            f"    AND ex.object = tc.object\n"
-            f")"
-        )
-        try:
-            return self.execute_query(sql) or []
-        except Exception as e:
-            logger.warning(
-                "transitive_closure SQL failed on %s, returning empty result: %s",
-                table_name,
-                e,
-                exc_info=True,
-            )
-            return []
-
-    def symmetric_expand(
-        self,
-        table_name: str,
-        predicate_uri: str,
-    ) -> List[Dict[str, Any]]:
-        """Find missing symmetric counterparts for *predicate_uri*.
-
-        For every ``(a, P, b)`` where ``(b, P, a)`` does not exist,
-        returns the missing ``(b, P, a)`` triple.
-        """
-        esc_pred = self._sql_escape(predicate_uri)
-        sql = (
-            f"SELECT t.object AS subject, '{esc_pred}' AS predicate, t.subject AS object\n"
-            f"FROM {self._sql_relation(table_name)} t\n"
-            f"WHERE t.predicate = '{esc_pred}'\n"
-            f"  AND NOT EXISTS (\n"
-            f"    SELECT 1 FROM {self._sql_relation(table_name)} inv\n"
-            f"    WHERE inv.subject = t.object\n"
-            f"      AND inv.predicate = '{esc_pred}'\n"
-            f"      AND inv.object = t.subject\n"
-            f"  )"
-        )
-        try:
-            return self.execute_query(sql) or []
-        except Exception as e:
-            logger.warning(
-                "symmetric_expand SQL failed on %s, returning empty result: %s",
-                table_name,
-                e,
-                exc_info=True,
-            )
-            return []
-
-    def shortest_path(
-        self,
-        table_name: str,
-        source_uri: str,
-        target_uri: str,
-        max_depth: int = 10,
-    ) -> List[Dict[str, Any]]:
-        """Find shortest path between two entities.
-
-        Default SQL implementation returns an empty list — shortest-path
-        is expensive in SQL.  Graph backends override with native
-        algorithms.
-        """
-        return []
+    # Reasoning ops (transitive_closure / symmetric_expand / inverse_expand /
+    # shortest_path) are provided by the SQLGraphReasoningOps mixin this class
+    # extends; non-SQL engines (Neo4j) override them with native queries.
 
     def delete_cohort_triples(
         self,
