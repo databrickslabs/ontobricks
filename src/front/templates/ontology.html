@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-business-rules.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-dataquality.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-design-checks.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-evolve.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-wizard.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-pages.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-groups.css') }}?v={{ asset_version }}">
@@ -80,6 +81,11 @@
             <div id="designchecks-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_design_checks.html" %}
             </div>
+
+            <!-- Evolve (question-driven ontology repair) -->
+            <div id="evolve-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_evolve.html" %}
+            </div>
             
             <!-- Business Rules Section (Simple IF/THEN + Complex SPARQL CONSTRUCT) -->
             <div id="if-then-section" class="sidebar-section">
@@ -112,6 +118,7 @@
 <script src="{{ url_for('static', filename='ontology/js/ontology-conditions.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-dataquality.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-design-checks.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-evolve.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-axioms.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-if-then.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-business-rules.js') }}?v={{ asset_version }}"></script>

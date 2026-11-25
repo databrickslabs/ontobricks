@@ -526,6 +526,53 @@ CREATE TABLE IF NOT EXISTS "${SCHEMA}".pattern_runs (
 CREATE INDEX IF NOT EXISTS idx_pattern_runs_domain_version
     ON "${SCHEMA}".pattern_runs(domain_id, version, computed_at DESC);
 
+-- evolution_runs / evolution_results (Ontology Evolve run state)
+CREATE TABLE IF NOT EXISTS "${SCHEMA}".evolution_runs (
+    domain_id        uuid NOT NULL
+                     REFERENCES "${SCHEMA}".domains(id) ON DELETE CASCADE,
+    id               text NOT NULL,
+    parent_version   text NOT NULL,
+    status           text NOT NULL DEFAULT 'CREATED',
+    stage            text NOT NULL DEFAULT '',
+    revision         integer NOT NULL DEFAULT 1,
+    idempotency_key  text NOT NULL,
+    owner            text NOT NULL DEFAULT '',
+    task_id          text NOT NULL DEFAULT '',
+    cancel_requested boolean NOT NULL DEFAULT false,
+    manifest         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    intent           jsonb NOT NULL DEFAULT '{}'::jsonb,
+    coverage         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    proposal         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    candidate        jsonb NOT NULL DEFAULT '{}'::jsonb,
+    evaluation       jsonb NOT NULL DEFAULT '{}'::jsonb,
+    accepted_version text NOT NULL DEFAULT '',
+    error_code       text NOT NULL DEFAULT '',
+    error            text NOT NULL DEFAULT '',
+    heartbeat_at     timestamptz,
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    updated_at       timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (domain_id, id),
+    UNIQUE (domain_id, idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evolution_runs_domain_parent
+    ON "${SCHEMA}".evolution_runs(domain_id, parent_version, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS "${SCHEMA}".evolution_results (
+    id           bigserial PRIMARY KEY,
+    domain_id    uuid NOT NULL
+                 REFERENCES "${SCHEMA}".domains(id) ON DELETE CASCADE,
+    run_id       text NOT NULL,
+    question_id  text NOT NULL,
+    arm          text NOT NULL,
+    status       text NOT NULL,
+    observed     jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_evolution_results_run
+    ON "${SCHEMA}".evolution_results(domain_id, run_id, created_at);
+
 -- domain_review_events (validation/review audit log added after initial release)
 CREATE TABLE IF NOT EXISTS "${SCHEMA}".domain_review_events (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -692,7 +739,7 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
     );
 SQL
         then
-            echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, domains.mcp_policy, build_runs, graph_analytics, graph_analytics_runs, community_runs, pattern_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
+            echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, domains.mcp_policy, build_runs, graph_analytics, graph_analytics_runs, community_runs, pattern_runs, evolution_runs, evolution_results, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
         else
             echo "  ⚠ schema migration failed — continuing (SP grants below may partially succeed)"
         fi

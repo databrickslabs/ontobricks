@@ -23,6 +23,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
+from .EvolutionStoreDefaults import EvolutionStoreDefaults
+
 
 _SCHEDULE_KEY_SEP = "::"
 
@@ -301,7 +303,7 @@ class DocumentRow(TypedDict, total=False):
     parsed_at: str           # ISO timestamp ('' until terminal)
 
 
-class RegistryStore(ABC):
+class RegistryStore(EvolutionStoreDefaults, ABC):
     """Single seam in front of all registry-shaped JSON storage."""
 
     # ------------------------------------------------------------------

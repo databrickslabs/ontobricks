@@ -114,3 +114,17 @@ design_fixer:
   latency_p95_seconds: 30.0
   cost_per_call_usd: 0.04
   aggregate: 0.85
+
+# Ontology → Evolve (agent_ontology_evolution). SPEC frozen 2026-11-21.
+# false_ready is a ceiling (lower is better); the rest are floors.
+ontology_evolution:
+  schema_valid: 1.00
+  intent_accuracy: 0.85
+  gap_correct: 0.90
+  proposal_valid: 0.90
+  candidate_fixes_gold: 0.90
+  false_ready: 0.00
+  abstention: 0.90
+  latency_p95_seconds: 60.0
+  cost_per_run_usd: 0.10
+  aggregate: 0.85

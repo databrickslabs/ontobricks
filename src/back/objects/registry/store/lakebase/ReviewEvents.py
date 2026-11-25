@@ -99,6 +99,8 @@ class ReviewEvents:
     ) -> Tuple[bool, str]:
         if not self._ensure_review_events_table():
             return False, "review audit log unavailable"
+        if (to_status or "").upper() == "IN-REVIEW":
+            meta = self.with_evolution_review_meta(folder, version, meta)
         try:
             sch = self._q(self._schema)
             with self._connect() as conn, conn.cursor() as cur:

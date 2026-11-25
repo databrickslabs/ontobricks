@@ -139,6 +139,7 @@ class Builder(GraphBuilder):
         ontology_config: Any,
         base_uri: str,
         build_kind: str = "ui",
+        record_history: bool = True,
     ) -> None:
         from back.core.graphdb.delta.BuildPipeline import (
             BuildPipeline,
@@ -160,4 +161,5 @@ class Builder(GraphBuilder):
             ontology_config=ontology_config,
             base_uri=base_uri,
             build_kind=build_kind,
+            record_history=record_history,
         ).run()

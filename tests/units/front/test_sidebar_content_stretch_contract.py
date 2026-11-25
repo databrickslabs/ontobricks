@@ -48,6 +48,7 @@ SECTION_INVENTORY = {
         "relationships",
         "dataquality",
         "designchecks",
+        "evolve",
         "if-then",
         "axioms",
     },

@@ -213,6 +213,7 @@ _DOMAIN_SCOPED_PREFIXES = (
     "/dtwin/",
     "/simulation/",
     "/intelligence/",
+    "/evolution/",
 )
 
 # Routes that live under a domain-scoped prefix but enumerate

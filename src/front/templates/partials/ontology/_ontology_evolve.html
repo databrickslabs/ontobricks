@@ -1,0 +1,115 @@
+<!-- Ontology Evolve (question-driven ontology repair) -->
+<!-- JS: /static/ontology/js/ontology-evolve.js -->
+<!-- CSS: /static/ontology/css/ontology-evolve.css -->
+<div class="content-section">
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div class="me-auto">
+        <h4 class="mb-1"><i class="bi bi-signpost-split me-2"></i>Evolve</h4>
+        <p class="text-muted mb-0 small">Check whether this version can answer a question. When it cannot, get a reviewed fix with the evidence behind it. The version itself is never changed here.</p>
+    </div>
+</div>
+
+<div class="alert alert-secondary d-none" id="evoDisabled" role="status"></div>
+
+<div id="evoBody">
+    <div class="card mb-3">
+        <div class="card-header fw-semibold">1. Question</div>
+        <div class="card-body">
+            <label class="form-label small" for="evoQuestion">Business question</label>
+            <div class="input-group input-group-sm mb-2">
+                <input type="text" class="form-control" id="evoQuestion"
+                       placeholder="Which orders contain products supplied by Acme?">
+                <button type="button" class="btn btn-outline-primary d-none" id="evoSuggestBtn"
+                        title="Let the assistant read the ontology and the Genie Pages selected for this version">
+                    <i class="bi bi-stars me-1"></i>Suggest intent
+                </button>
+            </div>
+            <div id="evoSuggestInfo" class="mb-2"></div>
+            <label class="form-label small" for="evoIntent">Interpreted intent (edit before checking)</label>
+            <textarea class="form-control form-control-sm font-monospace evo-intent" id="evoIntent" rows="8" spellcheck="false"></textarea>
+            <div class="form-text">Output class, filters as <code>{"class", "attribute", "op": "eq", "value"}</code>. Aggregates and other filter operators are reported as unsupported.</div>
+            <div class="mt-2 d-flex gap-2">
+                <button type="button" class="btn btn-primary btn-sm" id="evoCheckBtn">
+                    <i class="bi bi-search me-1"></i>Check coverage
+                </button>
+                <span class="small text-muted align-self-center" id="evoRunInfo"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3 d-none" id="evoCoverageCard">
+        <div class="card-header fw-semibold d-flex justify-content-between">
+            <span>2. Coverage</span>
+            <span class="badge" id="evoReadyBadge"></span>
+        </div>
+        <div class="card-body">
+            <p class="small text-muted mb-2">Coverage checks the preconditions for an answer on the current source tables. It is not an accuracy score.</p>
+            <div id="evoGap" class="mb-2"></div>
+            <table class="table table-sm align-middle evo-obligations">
+                <thead><tr><th>Requirement</th><th>State</th><th>Why</th></tr></thead>
+                <tbody id="evoObligations"></tbody>
+            </table>
+            <div id="evoJoins"></div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm d-none" id="evoProposeBtn">
+                    <i class="bi bi-lightbulb me-1"></i>Propose a fix
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm d-none" id="evoProposeAgentBtn"
+                        title="The assistant picks and names up to three fixes from the joins above, using the Genie Pages">
+                    <i class="bi bi-stars me-1"></i>Ask the assistant
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3 d-none" id="evoProposalCard">
+        <div class="card-header fw-semibold">3. Proposed change</div>
+        <div class="card-body">
+            <div class="evo-facts mb-3" id="evoFacts"></div>
+            <div id="evoAlternatives"></div>
+            <div id="evoOps"></div>
+            <div id="evoCitations"></div>
+            <h6 class="mt-3 small fw-semibold">Validation</h6>
+            <ul class="list-unstyled small mb-0" id="evoChecks"></ul>
+        </div>
+    </div>
+
+    <div class="card mb-3 d-none" id="evoEvaluationCard">
+        <div class="card-header fw-semibold d-flex justify-content-between">
+            <span>4. Evaluation</span>
+            <span class="badge" id="evoDecisionBadge"></span>
+        </div>
+        <div class="card-body">
+            <p class="small text-muted mb-2">Builds the parent and the candidate into separate, temporary graphs from the same source data, runs the question on both and compares each answer with the expected one. The parent graph and version are not touched.</p>
+            <div class="row g-2 mb-2">
+                <div class="col-md-6">
+                    <label class="form-label small" for="evoExpected">Expected answer (ids, comma separated)</label>
+                    <input type="text" class="form-control form-control-sm" id="evoExpected" placeholder="O1, O3, O5">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small" for="evoGoldTable">or a gold table and question id</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" id="evoGoldTable" placeholder="catalog.schema.gold_answers">
+                        <input type="text" class="form-control evo-gold-qid" id="evoGoldQuestion" placeholder="question id">
+                    </div>
+                </div>
+            </div>
+            <label class="form-label small" for="evoChecksInput">Questions that must not change (optional JSON list)</label>
+            <textarea class="form-control form-control-sm font-monospace evo-intent mb-2" id="evoChecksInput" rows="3" spellcheck="false" placeholder='[{"question_id": "acme_products", "intent": {"output_class": "Product", "filters": [...]}}]'></textarea>
+            <div class="d-flex gap-2 align-items-center">
+                <button type="button" class="btn btn-primary btn-sm" id="evoEvaluateBtn">
+                    <i class="bi bi-play-circle me-1"></i>Build and compare
+                </button>
+                <span class="small text-muted" id="evoEvalStatus"></span>
+            </div>
+            <div id="evoEvaluation" class="mt-3"></div>
+            <div class="mt-2 d-none" id="evoAcceptBox">
+                <button type="button" class="btn btn-success btn-sm" id="evoAcceptBtn">
+                    <i class="bi bi-check2-circle me-1"></i>Accept as a new draft version
+                </button>
+                <span class="small text-muted ms-2">Creates the next DRAFT version from the candidate. Review and publish work as usual.</span>
+            </div>
+        </div>
+    </div>
+</div>
+</div>

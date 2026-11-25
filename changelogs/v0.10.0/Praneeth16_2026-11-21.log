@@ -1,0 +1,27 @@
+## Add Ontology Evolve: check a question, propose a fix, test it before accepting
+
+Context: When a business question cannot be answered, nothing in OntoBricks
+says which concept, link or mapping is missing, and a fix can only be
+checked after it is saved. Evolve checks a question against a version,
+proposes a typed fix with source evidence, builds the parent and the fix
+into separate temporary graphs and compares their answers before anything
+is saved. Behind `ONTOBRICKS_EVOLUTION_ENABLED` (default off).
+
+Changes:
+1. src/back/objects/ontology/evolution/
+   Coverage (per-requirement states, join candidates with evidence), rule-based proposal (two new autofix ops), validator, paired evaluation over run-owned graph tables, accept as next DRAFT version.
+2. src/back/objects/registry/store/lakebase/{EvolutionRuns.py,schema.sql,store.py,ReviewEvents.py}
+   `evolution_runs` / `evolution_results`; one-transaction accept; review blocked when the design changed after evaluation.
+3. src/back/core/graphdb/delta/{BuildPipeline,Builder}.py
+   `record_history=False` so evaluation builds never touch the parent's build history.
+4. src/api/routers/internal/evolution.py
+   `/evolution` routes; Builder role; source probes run as the caller.
+5. src/front/…/ontology-evolve.* and menu
+   Ontology → Evolve page.
+6. tests/units/ontology/evolution, tests/eval, tests/fixtures/evolution
+   Unit tests, 30-row dataset, TPC-H fixtures (tiers S/M/L and messy variants).
+
+Modified files:
+- see the PR file list (Evolve package, store mixin, router, UI, tests)
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11495 passed

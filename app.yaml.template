@@ -156,6 +156,12 @@ env:
   # See docs/user-guide.md (Analytics).
   - name: ONTOBRICKS_ANALYTICS_JOB_ENABLED
     value: "false"
+  # Ontology -> Evolve: turn a question the ontology cannot answer into a
+  # reviewed relationship/mapping fix, checked on a run-owned candidate graph.
+  # Needs the Lakebase registry and a Delta (Lakehouse) graph backend.
+  # See docs/user-guide.md (Evolve).
+  - name: ONTOBRICKS_EVOLUTION_ENABLED
+    value: "false"
   # Deployed name of that job. Leave empty to derive it from the app name
   # as "<app>-graph-analytics", matching the bundle. Only set this if you
   # renamed the job; a bundle deployed in development mode prefixes the

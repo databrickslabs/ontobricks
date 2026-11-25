@@ -27,6 +27,8 @@ Submodules
   — community and pattern detection run history mixin.
 - :mod:`back.objects.registry.store.lakebase.Simulations`
   — what-if simulation definitions and run trace mixin.
+- :mod:`back.objects.registry.store.lakebase.EvolutionRuns`
+  — Ontology Evolve run state and per-question results mixin.
 - :mod:`back.objects.registry.store.lakebase.Catalog`
   — domain folders, versions, and permissions mixin.
 - :mod:`back.objects.registry.store.lakebase.Schedules`
@@ -55,6 +57,7 @@ from .Collab import Collab
 from .DetectRuns import DetectRuns
 from .Documents import Documents
 from .EditLocks import EditLocks
+from .EvolutionRuns import EvolutionRuns
 from .GlobalConfig import GlobalConfig
 from .ReviewEvents import ReviewEvents
 from .Schedules import Schedules
@@ -71,6 +74,7 @@ __all__ = [
     "DetectRuns",
     "Documents",
     "EditLocks",
+    "EvolutionRuns",
     "GlobalConfig",
     "ReviewEvents",
     "Schedules",

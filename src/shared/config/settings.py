@@ -140,6 +140,17 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Ontology → Evolve (question-driven ontology repair). Off by default;
+    # the internal ``/evolution`` API and the Ontology › Evolve page refuse
+    # to run until a deployment turns it on.
+    evolution_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_EVOLUTION_ENABLED",
+            "evolution_enabled",
+        ),
+    )
+
     # Deployed name of that job. Empty means "derive it from the app name" as
     # ``<app>-graph-analytics``, matching the bundle. A bundle deployed in
     # development mode prefixes the name with ``[dev <user>] ``, which the

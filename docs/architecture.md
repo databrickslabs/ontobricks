@@ -558,6 +558,7 @@ src/
 │   ├── agent_auto_assignment/          # Entity/relationship → SQL mapping agent
 │   ├── agent_auto_icon_assign/         # Emoji icon mapping agent
 │   ├── agent_design_fixer/             # Sanity Checks Auto-fix proposals (read-only)
+│   ├── agent_ontology_evolution/       # Evolve: question → intent, gap → ranked fixes (read-only)
 │   └── agent_ontology_assistant/       # Conversational assistant + ResponsesAgent wrapper
 │
 └── mcp-server/                         # MCP Server (separate Databricks App; under src/)
@@ -906,6 +907,7 @@ relational tables:
 | `build_runs` | Append-only build-run trace (all paths) keyed by `(domain_id, version)` for analytics; active build = latest successful run |
 | `graph_analytics` | Cache of the LAST knowledge-graph metrics result (centrality/structure) keyed by `(domain_id, version)`; one row, replaced on every successful async recompute (UPSERT). Backs the KG Analytics page and the Domain Validation cockpit |
 | `graph_analytics_runs` | Append-only history of every analytics run launched (success or failure) keyed by `(domain_id, version)`; lightweight per-run metadata (node/edge counts, components, avg degree, density, duration, scope, status). Capped per tuple. Backs the KG Analytics "History" tab |
+| `evolution_runs` / `evolution_results` | Ontology Evolve run state keyed by `(domain_id, parent_version, id)`: intent and its source, coverage, proposal, candidate design, evaluation, revision, heartbeat; and append-only per-question, per-arm results. The candidate stays here until accepted as a new DRAFT version |
 | `community_runs` | Append-only history of every community-detection (Detect) run that finished, completed or failed, keyed by `(domain_id, version)`; node and community counts, convergence, scope, duration, job-run link. Written by `DetectRunHistory` from the background task. Capped per tuple. Backs the Community runs tab of Settings → Automation → Runs |
 | `pattern_runs` | Append-only history of every pattern-detection (Detect) run that finished, completed or failed, keyed by `(domain_id, version)`; anchor type, hops, min support, detail level, anchor and pattern counts, duration, job-run link. Written by `DetectRunHistory`. Capped per tuple. Backs the Pattern runs tab of Settings → Automation → Runs |
 | `domain_review_events` | Append-only review/validation audit log (submit / sign-off / publish / reopen / comment) keyed by `(domain_id, version)` |

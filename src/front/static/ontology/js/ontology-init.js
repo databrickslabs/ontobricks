@@ -49,6 +49,8 @@ function _initSectionByName(section) {
         DataQualityModule.init();
     } else if (section === 'designchecks' && typeof DesignChecksModule !== 'undefined') {
         DesignChecksModule.init();
+    } else if (section === 'evolve' && typeof EvolveModule !== 'undefined') {
+        EvolveModule.init();
     } else if (section === 'axioms' && typeof AxiomsModule !== 'undefined') {
         AxiomsModule.init();
     }

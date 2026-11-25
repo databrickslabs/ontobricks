@@ -1,0 +1,21 @@
+## Evolve: ranked joins, client-safe agent errors, MLflow eval, docs
+
+Context: Rebased on 0.10.0 and aligned with changes that landed meanwhile;
+closed the remaining Stage 4 items.
+
+Changes:
+1. src/back/objects/registry/store/lakebase/store.py
+   Evolution table flag uses the shared store-state descriptor.
+2. src/agents/agent_ontology_evolution/engine.py
+   Errors to the client go through `llm_failure_message()`.
+3. src/back/objects/ontology/evolution/{ProposalBuilder,EvolutionPipeline,EvaluationService}.py
+   Several valid joins: the assistant ranks them, evaluation waits until a builder picks one.
+4. tests/eval/run_agent_ontology_evolution.py
+   `--live` logs an MLflow run with traces in a Unity Catalog location.
+5. docs/{user-guide,api,architecture}.md
+   Ontology → Evolve, `/evolution` endpoints, tables.
+
+Modified files:
+- see the PR file list
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 11495 passed

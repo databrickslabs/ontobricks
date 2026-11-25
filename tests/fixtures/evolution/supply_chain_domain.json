@@ -1,0 +1,171 @@
+{
+  "info": {
+    "name": "EvoSupplyChain",
+    "description": "OntoBricks Evolve fixture: orders, order lines, products and suppliers. The parent version has no OrderLine to Product relationship.",
+    "author": "ontobricks-evolve fixture",
+    "llm_endpoint": "",
+    "graph_backend": "databricks"
+  },
+  "versions": {
+    "1": {
+      "ontology": {
+        "name": "EvoSupplyChain",
+        "base_uri": "http://ontobricks.local/evo/supplychain#",
+        "description": "Supply chain fixture ontology",
+        "classes": [
+          {
+            "uri": "http://ontobricks.local/evo/supplychain#Order",
+            "name": "Order",
+            "label": "Order",
+            "description": "A customer order",
+            "parent": "",
+            "alternate_labels": ["purchase order"],
+            "dataProperties": [
+              {"name": "customerName", "localName": "customerName", "label": "customer name", "uri": "http://ontobricks.local/evo/supplychain#customerName"},
+              {"name": "orderDate", "localName": "orderDate", "label": "order date", "uri": "http://ontobricks.local/evo/supplychain#orderDate"}
+            ]
+          },
+          {
+            "uri": "http://ontobricks.local/evo/supplychain#OrderLine",
+            "name": "OrderLine",
+            "label": "Order Line",
+            "description": "One product line within an order",
+            "parent": "",
+            "alternate_labels": ["line item"],
+            "dataProperties": [
+              {"name": "quantity", "localName": "quantity", "label": "quantity", "uri": "http://ontobricks.local/evo/supplychain#quantity"}
+            ]
+          },
+          {
+            "uri": "http://ontobricks.local/evo/supplychain#Product",
+            "name": "Product",
+            "label": "Product",
+            "description": "A product that can be ordered",
+            "parent": "",
+            "alternate_labels": ["item"],
+            "dataProperties": [
+              {"name": "productName", "localName": "productName", "label": "product name", "uri": "http://ontobricks.local/evo/supplychain#productName"},
+              {"name": "sku", "localName": "sku", "label": "SKU", "uri": "http://ontobricks.local/evo/supplychain#sku"}
+            ]
+          },
+          {
+            "uri": "http://ontobricks.local/evo/supplychain#Supplier",
+            "name": "Supplier",
+            "label": "Supplier",
+            "description": "A company that supplies products",
+            "parent": "",
+            "alternate_labels": ["vendor"],
+            "dataProperties": [
+              {"name": "supplierName", "localName": "supplierName", "label": "supplier name", "uri": "http://ontobricks.local/evo/supplychain#supplierName"}
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "uri": "http://ontobricks.local/evo/supplychain#hasLine",
+            "name": "hasLine",
+            "label": "has line",
+            "description": "An order contains order lines",
+            "type": "ObjectProperty",
+            "domain": "Order",
+            "range": "OrderLine",
+            "direction": "forward"
+          },
+          {
+            "uri": "http://ontobricks.local/evo/supplychain#suppliedBy",
+            "name": "suppliedBy",
+            "label": "supplied by",
+            "description": "A product is supplied by a supplier",
+            "type": "ObjectProperty",
+            "domain": "Product",
+            "range": "Supplier",
+            "direction": "forward"
+          }
+        ],
+        "constraints": [],
+        "if_then_rules": [],
+        "axioms": [],
+        "expressions": []
+      },
+      "assignment": {
+        "entities": [
+          {
+            "ontology_class": "http://ontobricks.local/evo/supplychain#Order",
+            "ontology_class_label": "Order",
+            "sql_query": "SELECT * FROM __CATALOG__.__SCHEMA__.orders",
+            "id_column": "order_id",
+            "label_column": "order_id",
+            "catalog": "__CATALOG__",
+            "schema": "__SCHEMA__",
+            "table": "orders",
+            "attribute_mappings": {"customerName": "customer_name", "orderDate": "order_date"}
+          },
+          {
+            "ontology_class": "http://ontobricks.local/evo/supplychain#OrderLine",
+            "ontology_class_label": "Order Line",
+            "sql_query": "SELECT * FROM __CATALOG__.__SCHEMA__.order_lines",
+            "id_column": "line_id",
+            "label_column": "line_id",
+            "catalog": "__CATALOG__",
+            "schema": "__SCHEMA__",
+            "table": "order_lines",
+            "attribute_mappings": {"quantity": "quantity"}
+          },
+          {
+            "ontology_class": "http://ontobricks.local/evo/supplychain#Product",
+            "ontology_class_label": "Product",
+            "sql_query": "SELECT * FROM __CATALOG__.__SCHEMA__.products",
+            "id_column": "product_id",
+            "label_column": "product_name",
+            "catalog": "__CATALOG__",
+            "schema": "__SCHEMA__",
+            "table": "products",
+            "attribute_mappings": {"productName": "product_name", "sku": "sku"}
+          },
+          {
+            "ontology_class": "http://ontobricks.local/evo/supplychain#Supplier",
+            "ontology_class_label": "Supplier",
+            "sql_query": "SELECT * FROM __CATALOG__.__SCHEMA__.suppliers",
+            "id_column": "supplier_id",
+            "label_column": "supplier_name",
+            "catalog": "__CATALOG__",
+            "schema": "__SCHEMA__",
+            "table": "suppliers",
+            "attribute_mappings": {"supplierName": "supplier_name"}
+          }
+        ],
+        "relationships": [
+          {
+            "property": "http://ontobricks.local/evo/supplychain#hasLine",
+            "property_label": "has line",
+            "sql_query": "SELECT order_id, line_id FROM __CATALOG__.__SCHEMA__.order_lines",
+            "source_class": "http://ontobricks.local/evo/supplychain#Order",
+            "source_class_label": "Order",
+            "target_class": "http://ontobricks.local/evo/supplychain#OrderLine",
+            "target_class_label": "Order Line",
+            "source_table": "orders",
+            "target_table": "order_lines",
+            "source_id_column": "order_id",
+            "target_id_column": "line_id",
+            "direction": "forward"
+          },
+          {
+            "property": "http://ontobricks.local/evo/supplychain#suppliedBy",
+            "property_label": "supplied by",
+            "sql_query": "SELECT product_id, supplier_id FROM __CATALOG__.__SCHEMA__.products",
+            "source_class": "http://ontobricks.local/evo/supplychain#Product",
+            "source_class_label": "Product",
+            "target_class": "http://ontobricks.local/evo/supplychain#Supplier",
+            "target_class_label": "Supplier",
+            "source_table": "products",
+            "target_table": "suppliers",
+            "source_id_column": "product_id",
+            "target_id_column": "supplier_id",
+            "direction": "forward"
+          }
+        ]
+      },
+      "design_layout": {"current_view": "default", "views": {}, "map": {}}
+    }
+  }
+}

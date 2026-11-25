@@ -26,6 +26,11 @@ ALLOWED_OPS = frozenset(
     }
 )
 
+# Ontology Evolve operations. Deliberately separate from ALLOWED_OPS so the
+# Sanity Checks fixer agent cannot emit them and Evolve cannot emit merges,
+# renames or removals.
+EVOLVE_OPS = frozenset({"add_relationship", "set_relationship_mapping"})
+
 RULE_PLANNER: Dict[str, str] = {
     "DC-E01": "rule",
     "DC-E02": "rule",
