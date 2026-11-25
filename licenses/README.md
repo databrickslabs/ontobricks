@@ -33,7 +33,7 @@ This folder contains the license files for all external libraries used by OntoBr
 | Jinja2 | >=3.1.0 | BSD-3-Clause | [python/jinja2-LICENSE.txt](python/jinja2-LICENSE.txt) |
 | MLflow | >=3.15.0 | Apache-2.0 | [python/mlflow-LICENSE.txt](python/mlflow-LICENSE.txt) |
 | NetworkX | >=3.0 | BSD-3-Clause | [python/networkx-LICENSE.txt](python/networkx-LICENSE.txt) |
-| OWL-RL | >=7.0.0 | W3C Software License | [python/owlrl-LICENSE.txt](python/owlrl-LICENSE.txt) |
+| OWL-RL | >=7.1.1 | W3C-20150513 (W3C Software Notice and Document License) | [python/owlrl-LICENSE.txt](python/owlrl-LICENSE.txt) |
 | PyArrow | >=23.0.1 | Apache-2.0 | [python/pyarrow-LICENSE.txt](python/pyarrow-LICENSE.txt) |
 | Pydantic | >=2.5.0 | MIT | [python/pydantic-LICENSE.txt](python/pydantic-LICENSE.txt) |
 | Pydantic Settings | >=2.14.2 | MIT | [python/pydantic-settings-LICENSE.txt](python/pydantic-settings-LICENSE.txt) |
@@ -85,7 +85,7 @@ This folder contains the license files for all external libraries used by OntoBr
 | **ISC** | D3.js |
 | **BSD-3-Clause** | HTTPX, ItsDangerous, Jinja2, NetworkX, python-dotenv, RDFLib, scikit-learn, SciPy, Starlette, Uvicorn |
 | **Apache-2.0** | aiofiles, D2KLab Ontology-Pitfalls-Detector (vendored), Databricks SDK, databricks-sql-connector, FastMCP, MLflow, NLTK, PyArrow, pySHACL, python-multipart, Requests, sentence-transformers |
-| **W3C Software License** | OWL-RL |
+| **W3C-20150513** (W3C Software Notice and Document License) | OWL-RL |
 | **SIL OFL 1.1** | JetBrains Mono, Outfit (Google Fonts) |
 
 All dependencies use permissive open-source licenses compatible with commercial use.
