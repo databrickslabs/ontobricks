@@ -359,3 +359,43 @@ Full suite: `uv run --frozen pytest -q -m "not scenario"` → 11565 passed, 334 
 Not verified in this session: a manual run on a live domain (Lakebase, Delta, Neo4j) to check
 the acceptance criteria against the source tables and counts, and a browser check of the rule
 editor. These remain open and are not marked as passed.
+
+## Follow-up: removal rules run before CONSTRUCT rules in the same run
+
+### Context
+The removal feature section above listed three open decisions. They are now answered:
+1. Same-run ordering: removal rules run before the Complex CONSTRUCT rules of the same
+   reasoning run, so a CONSTRUCT rule does not derive from triples that a removal hides in
+   that run. This resolves the "same-run ordering" limitation listed above.
+2. Build: a Build does not reapply removals. They come back on the next reasoning run, the
+   same as CONSTRUCT-derived triples (no change to the Build).
+3. D2: a triple a user added by hand is kept when a removal rule matches it (unchanged).
+
+The run still writes nothing before the user chooses to append the results.
+
+### Changes
+1. `src/back/core/reasoning/rules/SPARQLRuleEngine.py`: `execute_rules` sorts the enabled
+   rules so removal rules run first and collects the SQL of the removal rules that succeed.
+   A CONSTRUCT rule reads `_table_after_removals(base, removal_sql)`, the table minus the
+   triples those removals match. New helpers `_options`, `_removal_sql`; `_execute_one`
+   takes the same-run removal SQL; `_execute_construct` and `_execute_removal` take the
+   resolved table SQL; `count_removals` reuses `_removal_sql`.
+2. `tests/units/reasoning/test_sparql_removal_rules.py`: ordering tests (removal runs first
+   whatever the list order; CONSTRUCT reads the filtered view; no view without removals; a
+   disabled or failed removal does not filter).
+3. `docs/user-guide.md`: "Same run" bullet in the Removal Rules section, including the D2
+   caveat (the same-run view also skips a triple a user added by hand, although that triple
+   stays in the graph).
+
+Known limitation kept: the same-run view does not apply D2, so a CONSTRUCT rule of the same
+run does not derive from a user-added triple that a removal matches.
+
+### Modified files
+- src/back/core/reasoning/rules/SPARQLRuleEngine.py
+- tests/units/reasoning/test_sparql_removal_rules.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+### Test result
+Full suite: `uv run --frozen pytest -q -m "not scenario"` → 11570 passed, 334 skipped,
+8 deselected, 0 failed. Ruff `--select F` is clean on the changed files.
