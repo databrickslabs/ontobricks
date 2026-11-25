@@ -248,6 +248,40 @@ agent lost its own previous question and answered without context.
 ### Test result
 `uv run --frozen pytest -q -m "not scenario"` → 11480 passed, 334 skipped, 8 deselected.
 
+## Edit lock: auto-resume on the user's return after an idle expiry
+
+### Context
+When the editing lease lapses through inactivity, the lock is released and the browser
+goes read-only with the sticky "expired" flag. The user had to click **Resume editing** to
+get editing back, even when they came back to the page and started working again. Resume
+is now also triggered automatically by a deliberate input. Plain mouse movement and
+scrolling do not count, because they would re-grab the lock by accident.
+
+### Changes
+1. `src/front/static/global/js/edit-lock.js` — after an idle expiry (and on a page load that
+   finds the sticky flag set), a capture-phase listener arms on `click`, `keydown` and
+   `touchstart`. The first deliberate input calls `POST /domain/edit-lock/acquire` with
+   `force: false`. If the lock is granted, the sticky flag is cleared and the page reloads
+   (same as the Resume button), so current data is shown before editing resumes. If another
+   user holds the lock, the browser stays read-only and shows a one-time notice naming the
+   holder. Attempts are spaced by 30 s. A lease lost to a take-over never arms auto-resume,
+   so the new holder is never auto-reclaimed from. The Resume button stays as the fallback.
+2. `tests/units/front/test_edit_lock_auto_resume_contract.py` — new contract tests: only
+   deliberate events arm auto-resume; the re-acquire is non-forcing; reload only happens when
+   the lock is granted; auto-resume is armed on the idle-expiry paths and not on take-over;
+   the Resume fallback is kept.
+
+### Modified files
+- src/front/static/global/js/edit-lock.js
+- tests/units/front/test_edit_lock_auto_resume_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+### Test result
+`node --check src/front/static/global/js/edit-lock.js` → OK.
+`uv run --frozen pytest -q tests/units/front/test_edit_lock_auto_resume_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_segmented_subnav_contract.py` → 22 passed.
+Full suite: `uv run --frozen pytest -q -m "not scenario"` → 11565 passed, 334 skipped, 8 deselected, 0 failed.
+Manual browser check not run in this session (the behaviour needs an idle lease to expire in a real browser).
+
 ## Feature: SPARQL Update removal rules (DELETE)
 
 ### Context
