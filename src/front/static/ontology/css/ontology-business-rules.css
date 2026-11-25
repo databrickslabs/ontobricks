@@ -114,6 +114,14 @@
     resize: none;
 }
 
+/* Removal rules are written by hand: the code pane takes the full width. */
+.cra-layout--manual .cra-col-chat {
+    display: none;
+}
+.cra-layout--manual .cra-col-code {
+    flex: 1 1 100%;
+}
+
 /* Stack the two panes on narrow viewports. */
 @media (max-width: 991.98px) {
     .cra-layout {
@@ -156,6 +164,13 @@
 .cra-opt-other {
     border-style: dashed;
     font-style: italic;
+}
+.br-kind-badge-removal {
+    background: var(--bs-danger-bg-subtle, #f8d7da);
+    color: var(--bs-danger-text-emphasis, #842029);
+    font-size: 0.7rem;
+    border-radius: 0.25rem;
+    padding: 0.1rem 0.4rem;
 }
 .cra-opt-check {
     display: inline-flex;

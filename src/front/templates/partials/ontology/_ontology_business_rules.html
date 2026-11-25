@@ -86,7 +86,8 @@
             <div class="tab-pane fade p-3" id="br-pane-sparql" role="tabpanel">
                 <p class="text-muted small mb-3">
                     <i class="bi bi-info-circle"></i>
-                    SPARQL CONSTRUCT queries that infer new triples from graph patterns.
+                    SPARQL CONSTRUCT queries that infer new triples from graph patterns, and
+                    DELETE queries that remove stored triples (hidden as overrides).
                     Supported: connected triple patterns, FILTER comparisons,
                     <code>&amp;&amp;</code> / <code>||</code>, <code>CONTAINS</code> /
                     <code>STRSTARTS</code> / <code>STRENDS</code> and <code>NOT EXISTS</code>.
@@ -314,6 +315,13 @@
                     <div class="cra-col-code">
                         <div class="cra-code-scroll">
                             <div class="mb-3">
+                                <label class="form-label small fw-semibold mb-1" for="sparqlKind">Rule type</label>
+                                <select class="form-select form-select-sm" id="sparqlKind">
+                                    <option value="construct" selected>Infer triples (CONSTRUCT)</option>
+                                    <option value="removal">Remove triples (DELETE)</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label small fw-semibold mb-1">Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control form-control-sm" id="sparqlName" placeholder="e.g., InferTransitiveRelation">
                             </div>
@@ -327,6 +335,25 @@
                                           placeholder="CONSTRUCT { ?s <predicate> ?o }&#10;WHERE {&#10;  ?s a <Class> .&#10;  ?s <prop> ?o .&#10;}"></textarea>
                                 <div class="form-text small">
                                     The assistant updates this as you chat; you can also edit it directly.
+                                </div>
+                            </div>
+                            <div id="sparqlRemovalBox" class="mb-3 d-none">
+                                <p class="form-text small mb-2">
+                                    Removal rules are written by hand. Preview shows how many stored triples
+                                    the DELETE would hide; the hidden triples are recorded as overrides.
+                                </p>
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                                            id="sparqlRemovalPreview" data-br-action="sparql-preview">
+                                        <i class="bi bi-eye me-1"></i>Preview
+                                    </button>
+                                    <span class="small" id="sparqlRemovalCount" aria-live="polite"></span>
+                                </div>
+                                <div class="form-check mt-2 d-none" id="sparqlRemovalConfirmWrap">
+                                    <input class="form-check-input" type="checkbox" id="sparqlRemovalConfirm">
+                                    <label class="form-check-label small" for="sparqlRemovalConfirm">
+                                        I understand this removal hides a large number of triples.
+                                    </label>
                                 </div>
                             </div>
                             <div id="sparqlValidationMsg" class="d-none"></div>

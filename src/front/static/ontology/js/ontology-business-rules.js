@@ -59,6 +59,7 @@ window.BusinessRulesModule = {
             else if (act === 'import-rules') document.getElementById('brImportRulesFile')?.click();
             else if (act === 'sparql-validate') this.sparqlValidate();
             else if (act === 'sparql-save') this.sparqlSave();
+            else if (act === 'sparql-preview') this.sparqlRemovalPreview();
             else if (act === 'cra-send') this.craSend();
         });
 
@@ -78,6 +79,9 @@ window.BusinessRulesModule = {
             const el = document.getElementById(id);
             if (el) el.addEventListener('input', () => this._craResetSaveConfirm());
         });
+        // An edited query no longer matches the last removal preview.
+        document.getElementById('sparqlQuery')?.addEventListener('input', () => this._sparqlRemovalReset());
+        document.getElementById('sparqlKind')?.addEventListener('change', () => this._sparqlKindChanged());
 
         // Re-enable the form when the editor closes (it may have been read-only).
         const sparqlModal = document.getElementById('sparqlEditorModal');
@@ -459,6 +463,7 @@ window.BusinessRulesModule = {
                 name: r.name || `Complex Rule ${i + 1}`,
                 meta: this._esc(querySnip) + (r.query && r.query.length > 80 ? '…' : ''),
                 enabled: r.enabled,
+                badge: r.kind === 'removal' ? this._removalBadgeHtml() : undefined,
                 onEdit: () => this.sparqlOpenEditor(i),
                 onDelete: () => this._deleteRule('sparql_rules', i),
                 onToggle: () => this._toggleEnabled('sparql_rules', i),
@@ -473,24 +478,117 @@ window.BusinessRulesModule = {
         document.getElementById('sparqlName').value = r.name || '';
         document.getElementById('sparqlDescription').value = r.description || '';
         document.getElementById('sparqlQuery').value = r.query || '';
+        document.getElementById('sparqlKind').value = r.kind === 'removal' ? 'removal' : 'construct';
         document.getElementById('sparqlEditorTitle').innerHTML = `<i class="bi bi-braces me-2"></i>${isNew ? 'Add' : 'Edit'} Complex Rule`;
         const svm = document.getElementById('sparqlValidationMsg');
         if (svm) svm.classList.add('d-none');
+        this._sparqlRemovalReset();
         this._craResetSaveConfirm();
+        const removal = this._sparqlKind() === 'removal';
+        // A removal is written by hand, so its assistant column is hidden (a read-only view keeps it for the message).
+        this._sparqlApplyKindUi({ removal, manual: removal && !readOnly });
         this._setSparqlReadOnly(readOnly);
         new bootstrap.Modal(document.getElementById('sparqlEditorModal')).show();
         if (readOnly) {
             const log = document.getElementById('craChatLog');
             if (log) log.innerHTML = '';
             this._craAppendBubble('assistant', 'You can view this rule. Editing requires the Editor role.');
+        } else if (removal) {
+            const log = document.getElementById('craChatLog');
+            if (log) log.innerHTML = '';
         } else {
             this._craKickoff(isNew);
         }
     },
 
+    // ── Rule type (CONSTRUCT or removal) ──
+
+    _sparqlKind() {
+        return document.getElementById('sparqlKind')?.value === 'removal' ? 'removal' : 'construct';
+    },
+
+    _removalBadgeHtml() {
+        return '<span class="br-kind-badge-removal small"><i class="bi bi-eraser me-1"></i>Removal</span>';
+    },
+
+    // Show the removal box for a removal rule; hide the assistant when it is written by hand.
+    _sparqlApplyKindUi({ removal, manual = removal }) {
+        document.getElementById('sparqlRemovalBox')?.classList.toggle('d-none', !removal);
+        document.querySelector('#sparqlEditorModal .cra-layout')?.classList.toggle('cra-layout--manual', manual);
+    },
+
+    _sparqlKindChanged() {
+        const removal = this._sparqlKind() === 'removal';
+        this._sparqlApplyKindUi({ removal });
+        this._sparqlRemovalReset();
+        this._craResetSaveConfirm();
+        if (!removal) this._craKickoff(parseInt(document.getElementById('sparqlEditIndex').value, 10) < 0);
+    },
+
+    _sparqlRemovalReset() {
+        this._sparqlRemovalPreview = null;
+        const countEl = document.getElementById('sparqlRemovalCount');
+        if (countEl) countEl.textContent = '';
+        document.getElementById('sparqlRemovalConfirmWrap')?.classList.add('d-none');
+        const confirmEl = document.getElementById('sparqlRemovalConfirm');
+        if (confirmEl) confirmEl.checked = false;
+    },
+
+    // Count the triples the DELETE would hide, through the backend (nothing is written).
+    async sparqlRemovalPreview() {
+        const query = (document.getElementById('sparqlQuery').value || '').trim();
+        const name = (document.getElementById('sparqlName').value || '').trim() || 'preview';
+        this._sparqlRemovalReset();
+        let data = {};
+        try {
+            const resp = await fetch('/ontology/rules/sparql_rules/removal-preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ rule: { name, query } }),
+            });
+            data = await resp.json();
+        } catch (e) {
+            data = { success: false, errors: ['Preview request failed'] };
+        }
+        if (!data.success) {
+            this._craShowValidation({ valid: false, message: (data.errors || []).join('; ') || 'Preview failed' });
+            return;
+        }
+        this._sparqlRemovalPreview = {
+            query,
+            count: data.count,
+            requiresConfirmation: !!data.requires_confirmation,
+        };
+        const countEl = document.getElementById('sparqlRemovalCount');
+        if (countEl) countEl.textContent = `${Number(data.count).toLocaleString()} triple(s) would be hidden.`;
+        document.getElementById('sparqlRemovalConfirmWrap')?.classList.toggle('d-none', !data.requires_confirmation);
+    },
+
+    // A removal is saved only after a preview of the same query, and after the
+    // confirmation box is ticked when the preview is large.
+    _sparqlRemovalReady(query) {
+        const pv = this._sparqlRemovalPreview;
+        if (!pv || pv.query !== query) {
+            this._craShowValidation({
+                valid: false,
+                message: 'Preview the removal first: it shows how many triples the rule would hide.',
+            });
+            return false;
+        }
+        if (pv.requiresConfirmation && !document.getElementById('sparqlRemovalConfirm')?.checked) {
+            this._craShowValidation({
+                valid: false,
+                message: 'Tick the confirmation box: this removal hides a large number of triples.',
+            });
+            return false;
+        }
+        return true;
+    },
+
     // Disable the form and the assistant while a read-only rule is shown.
     _setSparqlReadOnly(on) {
-        ['sparqlName', 'sparqlDescription', 'sparqlQuery', 'craChatInput'].forEach((id) => {
+        ['sparqlName', 'sparqlDescription', 'sparqlQuery', 'sparqlKind', 'craChatInput'].forEach((id) => {
             const el = document.getElementById(id);
             if (el) el.disabled = on;
         });
@@ -500,7 +598,7 @@ window.BusinessRulesModule = {
         });
         const modal = document.getElementById('sparqlEditorModal');
         if (modal) {
-            modal.querySelectorAll('[data-br-action="sparql-validate"]').forEach((el) => {
+            modal.querySelectorAll('[data-br-action="sparql-validate"], [data-br-action="sparql-preview"]').forEach((el) => {
                 el.disabled = on;
             });
         }
@@ -757,7 +855,7 @@ window.BusinessRulesModule = {
             const resp = await fetch('/ontology/rules/sparql_rules/validate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rule: { name, query } }),
+                body: JSON.stringify({ rule: { name, query, kind: this._sparqlKind() } }),
             });
             const data = await resp.json();
             return { valid: !!data.valid, message: data.message || '' };
@@ -807,6 +905,7 @@ window.BusinessRulesModule = {
             this._craAppendBubble('assistant', "There's no query to save yet — let's build the CONSTRUCT first.");
             return;
         }
+        if (this._sparqlKind() === 'removal' && !this._sparqlRemovalReady(query)) return;
         const check = await this._craValidate();
         this._craShowValidation(check);
         if (!check.valid) {
@@ -839,6 +938,7 @@ window.BusinessRulesModule = {
             name: document.getElementById('sparqlName').value.trim(),
             description: document.getElementById('sparqlDescription').value.trim(),
             query: document.getElementById('sparqlQuery').value,
+            kind: this._sparqlKind(),
             enabled: true,
         };
         if (index >= 0 && this.sparqlRules[index]) rule.enabled = this.sparqlRules[index].enabled;
