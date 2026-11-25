@@ -36,7 +36,9 @@ from back.core.graphdb.lakebase.Base import Base
 from back.core.graphdb.overrides import (
     OP_ADD,
     ORIGIN_REASONING,
+    ORIGIN_USER,
     validate_derived_origin,
+    validate_hide_origin,
 )
 from back.core.graphdb.lakebase.SyncedTableManager import (
     DEFAULT_TIMEOUT_S as _SYNC_DEFAULT_TIMEOUT_S,
@@ -1085,15 +1087,18 @@ class FlatStore(OverrideOpsMixin, InferredBreakdownMixin, Base):
         *,
         author: str = "",
         change_id: str = "",
+        origin: str = ORIGIN_USER,
     ) -> int:
         """Hide triples from the graph (or delete them physically in a sandbox).
 
         On an Original Graph a triple that comes from the mapped data or from a derived
-        row gets a ``del`` row, and a user ``add`` row is dropped, both in one
-        transaction. A store without an overrides layer (simulation sandbox)
-        deletes the rows.
+        row gets a ``del`` row, in one transaction. A manual hide (``user``) also drops
+        a user ``add`` row; a removal rule (``reasoning``) skips such triples instead
+        (D2). A store without an overrides layer (simulation sandbox) deletes the rows
+        and ignores *origin*.
         """
         validate_table_name(table_name)
+        validate_hide_origin(origin)
         if not triples:
             return 0
         if not self.supports_overrides:
@@ -1101,7 +1106,7 @@ class FlatStore(OverrideOpsMixin, InferredBreakdownMixin, Base):
                 table_name, triples, batch_size, on_progress
             )
         return self._hide_triples(
-            table_name, triples, batch_size, on_progress, author, change_id
+            table_name, triples, batch_size, on_progress, author, change_id, origin
         )
 
     def _delete_triples_physical(

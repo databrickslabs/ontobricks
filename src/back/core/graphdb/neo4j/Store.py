@@ -65,7 +65,13 @@ from back.core.graphdb.neo4j.Connection import (
 from back.core.graphdb.neo4j.OverrideJournal import OverrideJournal
 from back.core.graphdb.neo4j.ReadOps import ReadOps
 from back.core.graphdb.neo4j.WriteOps import WriteOps, sanitise_label
-from back.core.graphdb.overrides import OP_ADD, OP_DEL, unique_triples
+from back.core.graphdb.overrides import (
+    OP_ADD,
+    OP_DEL,
+    ORIGIN_USER,
+    unique_triples,
+    validate_hide_origin,
+)
 from back.core.logging import get_logger
 from shared.config.constants import DEFAULT_GRAPH_NAME
 
@@ -349,17 +355,44 @@ class Store(MaterializedGraphBackend):
         *,
         author: str = "",
         change_id: str = "",
+        origin: str = ORIGIN_USER,
     ) -> int:
-        """Remove triples from the graph; on an Original Graph the deletion is journaled."""
+        """Remove triples from the graph.
+
+        On an Original Graph a manual deletion (``user``) is journaled so that it is
+        replayed after a Build. A removal rule (``reasoning``) is not journaled (D5):
+        the reasoning phase recomputes it after each Build, and it skips triples that
+        a user added by hand (D2).
+        """
+        validate_hide_origin(origin)
+        todo = triples
         if self._is_live_graph(table_name):
-            self._journal.record(
-                sanitise_label(table_name),
-                unique_triples(triples),
-                OP_DEL,
-                author=author,
-                change_id=change_id,
-            )
-        return self._writes.delete_triples(table_name, triples, batch_size, on_progress)
+            if origin == ORIGIN_USER:
+                self._journal.record(
+                    sanitise_label(table_name),
+                    unique_triples(triples),
+                    OP_DEL,
+                    author=author,
+                    change_id=change_id,
+                )
+            else:
+                todo = self._without_journaled_adds(table_name, triples)
+        return self._writes.delete_triples(table_name, todo, batch_size, on_progress)
+
+    def _without_journaled_adds(
+        self, table_name: str, triples: List[Dict[str, str]]
+    ) -> List[Dict[str, str]]:
+        """Drop the triples that a user added by hand (journaled ``add`` rows)."""
+        added = {
+            (e.get("subject"), e.get("predicate"), e.get("object"))
+            for e in self._journal.entries(sanitise_label(table_name))
+            if e.get("op") == OP_ADD
+        }
+        return [
+            t
+            for t in triples
+            if (t.get("subject"), t.get("predicate"), t.get("object")) not in added
+        ]
 
     def replay_overrides(self, table_name: str) -> int:
         """Re-apply the journaled user edits after a Build; returns how many."""

@@ -23,6 +23,7 @@ from back.core.graphdb.overrides import (
     ORIGIN_COMMUNITY,
     ORIGIN_USER,
     unique_triples,
+    validate_hide_origin,
 )
 from back.core.helpers import validate_table_name
 from back.core.logging import get_logger
@@ -372,20 +373,37 @@ class OverrideOpsMixin:
         on_progress: Optional[Callable[[int, int], None]],
         author: str,
         change_id: str,
+        origin: str = ORIGIN_USER,
     ) -> int:
-        """Hide *triples* (``del`` rows) and drop their user ``add`` rows, atomically."""
+        """Hide *triples* (``del`` rows) in one transaction.
+
+        ``origin='user'`` also drops the user ``add`` rows of the triples. With
+        ``origin='reasoning'`` (removal rules) a triple that has a user ``add`` row is
+        skipped and no user row is dropped (D2).
+        """
+        validate_hide_origin(origin)
         self._ensure_override_layout(table_name)
         overrides = self.companion_phy(table_name)
         synced = self._synced_ref(self.synced_phy(table_name))
         key = _triple_match
+        user_add_guard = (
+            ""
+            if origin == ORIGIN_USER
+            else (
+                f"AND NOT EXISTS (SELECT 1 FROM {overrides} u "
+                f"WHERE u.op = '{OP_ADD}' AND u.origin = '{ORIGIN_USER}' "
+                f"AND {key('u', 't')}) "
+            )
+        )
         hide_sql = (
             f"INSERT INTO {overrides} (subject, predicate, object, op, origin, "
             "change_id, author) "
-            f"SELECT t.subject, t.predicate, t.object, '{OP_DEL}', '{ORIGIN_USER}', "
+            f"SELECT t.subject, t.predicate, t.object, '{OP_DEL}', '{origin}', "
             f"%s, %s FROM {_COPY_INSERT_TEMP} t "
             f"WHERE (EXISTS (SELECT 1 FROM {synced} s WHERE {key('s', 't')}) "
             f"OR EXISTS (SELECT 1 FROM {overrides} a WHERE a.op = '{OP_ADD}' "
             f"AND a.origin <> '{ORIGIN_USER}' AND {key('a', 't')})) "
+            f"{user_add_guard}"
             "ON CONFLICT DO NOTHING"
         )
         drop_sql = (
@@ -396,6 +414,7 @@ class OverrideOpsMixin:
 
         def statements(cur: Any) -> None:
             cur.execute(hide_sql, (change_id or None, author or None))
-            cur.execute(drop_sql)
+            if origin == ORIGIN_USER:
+                cur.execute(drop_sql)
 
         return self._run_override_batches(triples, batch_size, on_progress, statements)

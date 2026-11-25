@@ -24,7 +24,12 @@ from back.core.graphdb.entity_search import (
     is_missing_relation_error,
     is_view_not_table_error,
 )
-from back.core.graphdb.overrides import OP_ADD, OP_DEL, ORIGIN_USER
+from back.core.graphdb.overrides import (
+    OP_ADD,
+    OP_DEL,
+    ORIGIN_USER,
+    validate_hide_origin,
+)
 from back.core.graphdb.props import props_select
 from back.core.helpers import sql_escape, validate_table_name
 from back.core.logging import get_logger
@@ -313,19 +318,33 @@ def build_hide_sql(
     *,
     author: str = "",
     change_id: str = "",
+    origin: str = ORIGIN_USER,
 ) -> str:
     """Insert ``del`` rows for the triples of *batch* still visible without user adds.
 
     A triple only needs a ``del`` row when it comes from the mapped data or from a
     derived ``add`` row. A triple that exists solely as a user ``add`` row is
     removed by :func:`build_drop_user_adds_sql` and leaves no ``del`` behind.
+
+    With ``origin='reasoning'`` (removal rules) a triple that has a user ``add``
+    row is skipped instead: the user edit wins (decision D2).
     """
     validate_table_name(overrides_fqn)
     validate_table_name(data_fqn)
+    validate_hide_origin(origin)
+    user_add_guard = (
+        ""
+        if origin == ORIGIN_USER
+        else (
+            f"AND NOT EXISTS (SELECT 1 FROM {overrides_fqn} u "
+            f"WHERE u.op = {_lit(OP_ADD)} AND u.origin = {_lit(ORIGIN_USER)} "
+            f"AND {_row_key_match('u', 'v')}) "
+        )
+    )
     return (
         f"INSERT INTO {overrides_fqn} ({OVERRIDE_COLUMNS}) "
         f"SELECT v.subject, v.predicate, v.object, {_lit(OP_DEL)}, "
-        f"{_lit(ORIGIN_USER)}, {_nullable_lit(change_id)}, "
+        f"{_lit(origin)}, {_nullable_lit(change_id)}, "
         f"{_nullable_lit(author)}, current_timestamp() "
         f"FROM {_values_source(batch)} "
         f"WHERE (EXISTS (SELECT 1 FROM {data_fqn} d WHERE {_row_key_match('d', 'v')}) "
@@ -333,8 +352,31 @@ def build_hide_sql(
         f"AND COALESCE(a.origin, '') <> {_lit(ORIGIN_USER)} "
         f"AND {_row_key_match('a', 'v')})) "
         f"AND NOT EXISTS (SELECT 1 FROM {overrides_fqn} x WHERE x.op = {_lit(OP_DEL)} "
-        f"AND {_row_key_match('x', 'v')})"
+        f"AND {_row_key_match('x', 'v')}) "
+        f"{user_add_guard}"
     )
+
+
+def build_hide_statements(
+    overrides_fqn: str,
+    data_fqn: str,
+    batch: list[dict[str, str]],
+    *,
+    author: str = "",
+    change_id: str = "",
+    origin: str = ORIGIN_USER,
+) -> list[str]:
+    """Statements that hide *batch* for *origin*.
+
+    A manual hide (``user``) also drops the user ``add`` rows of the batch. A removal
+    rule (``reasoning``) never drops them (D2), so it issues the hide alone.
+    """
+    hide = build_hide_sql(
+        overrides_fqn, data_fqn, batch, author=author, change_id=change_id, origin=origin
+    )
+    if origin == ORIGIN_USER:
+        return [hide, build_drop_user_adds_sql(overrides_fqn, batch)]
+    return [hide]
 
 
 def build_migrate_inferred_sql(

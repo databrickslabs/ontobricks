@@ -76,8 +76,16 @@ class GraphBackend(
         triples: List[Dict[str, str]],
         batch_size: int = 500,
         on_progress: Optional[Callable[[int, int], None]] = None,
+        *,
+        author: str = "",
+        change_id: str = "",
+        origin: str = "user",
     ) -> int:
         """Remove specific triples from the store. Returns count deleted.
+
+        ``origin`` is ``"user"`` for a manual hide and ``"reasoning"`` for a removal
+        rule; backends with an overlay record it on the ``del`` row. Backends without
+        an overlay delete physically and ignore it.
 
         Default implementation raises NotImplementedError.
         Backends that support incremental sync should override this.

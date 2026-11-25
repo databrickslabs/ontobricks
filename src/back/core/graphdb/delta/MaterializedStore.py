@@ -470,15 +470,18 @@ class MaterializedStore(ReadStore, MaterializedGraphBackend):
         *,
         author: str = "",
         change_id: str = "",
+        origin: str = ORIGIN_USER,
     ) -> int:
         """Hide triples from the graph.
 
         A triple that comes from the mapped data or from a derived row gets a
-        ``del`` row; a user ``add`` row is simply dropped. The ``del`` row is written
-        first, so an interrupted call leaves the triple hidden rather than visible.
+        ``del`` row; a user ``add`` row is simply dropped for a manual hide. The
+        ``del`` row is written first, so an interrupted call leaves the triple hidden
+        rather than visible. A removal rule (``origin='reasoning'``) skips triples
+        that have a user ``add`` row and never drops user rows (D2).
 
         In raw mode (``domain is None``, a sandbox table) the rows are physically
-        deleted from *table_name*.
+        deleted from *table_name*; *origin* does not apply there.
         """
         if self._domain is None:
             return self._delete_raw_triples(
@@ -488,12 +491,10 @@ class MaterializedStore(ReadStore, MaterializedGraphBackend):
         data = _table_naming.data_table_fqn(self._domain, self._settings)
 
         def statements(batch: List[Dict[str, str]]) -> List[str]:
-            return [
-                materialize.build_hide_sql(
-                    overrides, data, batch, author=author, change_id=change_id
-                ),
-                materialize.build_drop_user_adds_sql(overrides, batch),
-            ]
+            return materialize.build_hide_statements(
+                overrides, data, batch,
+                author=author, change_id=change_id, origin=origin,
+            )
 
         handled = self._run_batches(triples, batch_size, on_progress, statements)
         if handled:

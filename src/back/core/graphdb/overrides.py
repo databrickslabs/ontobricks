@@ -4,7 +4,8 @@ One row of an overrides relation is a triple plus the operation applied to the
 mapped graph:
 
 * ``op = 'add'``  - the triple is added to the graph;
-* ``op = 'del'``  - the triple is hidden from the graph (always ``origin='user'``).
+* ``op = 'del'``  - the triple is hidden from the graph. ``origin='user'`` for a
+  manual hide; ``origin='reasoning'`` for a removal rule (recomputed on Build).
 
 ``origin`` records who wrote the row. Rows written by reasoning, cohorts and
 communities are *derived*: Build and purge remove them. Rows written by a user
@@ -59,6 +60,21 @@ def validate_derived_origin(origin: str) -> str:
     if origin not in DERIVED_ORIGINS:
         raise ValidationError(
             f"Origin {origin!r} is not a derived origin; use add_triples() for user rows"
+        )
+    return origin
+
+
+HIDE_ORIGINS = (ORIGIN_USER, ORIGIN_REASONING)
+
+
+def validate_hide_origin(origin: str) -> str:
+    """Return *origin* when a ``del`` row may carry it, else raise ``ValidationError``.
+
+    A manual hide is ``user``; a removal rule is ``reasoning`` (recomputed on Build).
+    """
+    if origin not in HIDE_ORIGINS:
+        raise ValidationError(
+            f"Invalid hide origin {origin!r}; expected one of {HIDE_ORIGINS}"
         )
     return origin
 
