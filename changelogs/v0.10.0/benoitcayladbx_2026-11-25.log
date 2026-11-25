@@ -34,3 +34,43 @@ Full suite: uv run --frozen pytest -q -m "not scenario"
 -> 11473 passed, 334 skipped, 8 deselected, 0 failed.
 Note: `uv lock --check` reports the lock as stale on HEAD too in this
 environment (proxy index), so it is not a usable signal here.
+
+## Genie Pages (UC Knowledge Pages) read on-behalf-of the signed-in user
+
+Context: Context → Pages (Genie Pages) listed and previewed UC Knowledge Pages
+with the app service principal. In Databricks Apps the page list and bodies
+must follow the caller's Unity Catalog permissions, like the other OBO data
+reads (v0.9.0). Local / PAT mode is unchanged.
+
+Changes:
+1. src/api/routers/internal/domain.py: `_knowledge_page_service` now uses
+   `get_data_plane_client` (OBO, fail-closed) instead of `get_databricks_client`.
+   `list_knowledge_pages` and `preview_knowledge_page` re-raise
+   `AuthorizationError` instead of wrapping it as `InfrastructureError`.
+2. src/back/core/databricks/KnowledgePageService.py: 401/403 hint texts no longer
+   reference the app identity (they now refer to the user's token / identity).
+3. tests/units/api/test_knowledge_pages_route.py: +3 tests (OBO client used, no SP
+   fallback; `AuthorizationError` surfaces unchanged on list and preview).
+4. docs/deployment.md, docs/user-guide.md: OBO scope now lists Knowledge Pages
+   list / preview.
+
+Not changed (follow-up): ontology generation (`GenerateWorkflow.load_knowledge_page_bodies`)
+still reads page bodies with the service principal. Its detection runs in a plain
+`threading.Thread` (`ontology.py`) that does not carry the request identity, so it
+needs the user token passed explicitly.
+
+Open risk: the Knowledge Pages REST API may require a user-token scope beyond
+`sql` (`user_api_scopes`). Not verifiable offline; verify after deploy. A 403 on
+Pages after deploy points to a missing scope. Identity scopes must not be added.
+
+Modified files:
+- src/api/routers/internal/domain.py
+- src/back/core/databricks/KnowledgePageService.py
+- tests/units/api/test_knowledge_pages_route.py
+- docs/deployment.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11476 passed, 334 skipped, 8 deselected, 0 failed.

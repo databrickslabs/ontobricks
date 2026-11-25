@@ -297,7 +297,10 @@ request-scoped identity and the data-plane client factory
 (`DatabricksHelpers.get_data_plane_client`) mints a **user-token** Databricks
 client for every non-build UC read: SPARQL/GraphQL Delta reads, Graph Explorer
 Delta views, mapping preview / test-query / `information_schema` browse, Class
-Action `EXECUTE`, and virtual-attribute compute.
+Action `EXECUTE`, virtual-attribute compute, and **Knowledge Pages (Genie
+Pages) list / preview** under Context → Pages (`GET /pages/list`,
+`GET /pages/preview`), which call the Databricks Knowledge Pages REST API with
+the user token.
 
 Implications for Layer 2:
 

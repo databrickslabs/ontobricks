@@ -59,3 +59,55 @@ def test_pages_list_runs_blocking_calls_off_the_event_loop():
     with patch.object(_domain, "run_blocking", side_effect=fake_run_blocking):
         _call(_svc())
     assert seen["func"] is _domain._knowledge_pages_payload
+
+
+def test_knowledge_page_service_uses_on_behalf_of_client():
+    """Knowledge Pages are read with the signed-in user's token (OBO), not the SP."""
+    client = MagicMock()
+    with (
+        patch.object(_domain, "get_data_plane_client", return_value=client) as obo,
+        patch.object(_domain, "get_databricks_client") as sp,
+    ):
+        svc = _domain._knowledge_page_service(MagicMock(), MagicMock())
+    obo.assert_called_once()
+    sp.assert_not_called()
+    assert svc is client.knowledge_pages
+
+
+def test_pages_list_surfaces_missing_user_token_as_authorization_error():
+    from back.core.errors import AuthorizationError
+
+    with (
+        patch.object(_domain, "get_domain", return_value=MagicMock()),
+        patch.object(
+            _domain,
+            "_knowledge_page_service",
+            side_effect=AuthorizationError("no user token"),
+        ),
+    ):
+        with pytest.raises(AuthorizationError):
+            asyncio.run(
+                _domain.list_knowledge_pages(
+                    page_size=1, page_token=None, filter=None, include_domains=False,
+                    session_mgr=MagicMock(), settings=MagicMock(),
+                )
+            )
+
+
+def test_pages_preview_surfaces_missing_user_token_as_authorization_error():
+    from back.core.errors import AuthorizationError
+
+    with (
+        patch.object(_domain, "get_domain", return_value=MagicMock()),
+        patch.object(
+            _domain,
+            "_knowledge_page_service",
+            side_effect=AuthorizationError("no user token"),
+        ),
+    ):
+        with pytest.raises(AuthorizationError):
+            asyncio.run(
+                _domain.preview_knowledge_page(
+                    name="pages/1", session_mgr=MagicMock(), settings=MagicMock(),
+                )
+            )

@@ -39,12 +39,12 @@ _domains_cache_lock = threading.Lock()
 _REMOTE_MESSAGE_MAX = 200
 _LIST_HTTP_HINTS = {
     401: (
-        "Authentication failed: Databricks rejected the credentials used to "
-        "list Knowledge Pages (Genie Pages). Check the app's Databricks authentication."
+        "Authentication failed: Databricks rejected the token used to list "
+        "Knowledge Pages (Genie Pages). Sign out and sign back in to refresh it."
     ),
     403: (
-        "Permission denied: the Databricks identity used by OntoBricks is not "
-        "allowed to list Knowledge Pages (Genie Pages) in this workspace. "
+        "Permission denied: your Databricks identity is not allowed to list "
+        "Knowledge Pages (Genie Pages) in this workspace. "
         "Ask a workspace admin to grant access."
     ),
     404: (

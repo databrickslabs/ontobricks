@@ -18,12 +18,14 @@ from back.core.databricks import (
     is_databricks_app,
 )
 from back.core.errors import (
+    AuthorizationError,
     InfrastructureError,
     NotFoundError,
     OntoBricksError,
     ValidationError,
 )
 from back.core.helpers import (
+    get_data_plane_client,
     get_databricks_client,
     resolve_warehouse_id,
     run_blocking,
@@ -1347,8 +1349,14 @@ async def preview_document(
 
 
 def _knowledge_page_service(domain: Any, settings: Settings):
-    """Build a KnowledgePageService from the domain's Databricks client."""
-    client = get_databricks_client(domain, settings)
+    """Build a KnowledgePageService bound to the signed-in user (OBO).
+
+    In Databricks App mode the Knowledge Pages REST calls run with the
+    caller's forwarded token, so Unity Catalog decides which pages are
+    visible. A missing user token raises :class:`AuthorizationError`
+    (no fallback to the app service principal).
+    """
+    client = get_data_plane_client(domain, settings)
     if client is None:
         raise InfrastructureError(
             "Databricks client is not configured — cannot list Knowledge Pages"
@@ -1408,7 +1416,7 @@ async def list_knowledge_pages(
             filter_str=filter,
             include_domains=include_domains,
         )
-    except InfrastructureError:
+    except (InfrastructureError, AuthorizationError):
         raise
     except Exception as e:
         logger.exception("List Knowledge Pages failed: %s", e)
@@ -1432,7 +1440,7 @@ async def preview_knowledge_page(
         return {"success": True, "page": page}
     except ValueError as e:
         raise ValidationError(str(e))
-    except InfrastructureError:
+    except (InfrastructureError, AuthorizationError):
         raise
     except Exception as e:
         logger.exception("Preview Knowledge Page failed: %s", e)
