@@ -145,9 +145,12 @@ const PagesManager = {
 
     async _fetchDomains() {
         try {
+            // domains_only: the unfiltered pages list needs account-wide domain
+            // admin rights; loading the Domains filter must not depend on it.
             const params = new URLSearchParams({
                 page_size: '1',
                 include_domains: 'true',
+                domains_only: 'true',
             });
             const resp = await fetch('/domain/pages/list?' + params.toString(), {
                 credentials: 'same-origin',

@@ -14,7 +14,7 @@ _domain = importlib.import_module("api.routers.internal.domain")
 def _call(svc, **kwargs):
     params = dict(
         page_size=1, page_token=None, filter=None, include_domains=False,
-        session_mgr=MagicMock(), settings=MagicMock(),
+        domains_only=False, session_mgr=MagicMock(), settings=MagicMock(),
     )
     params.update(kwargs)
     with (
@@ -89,7 +89,7 @@ def test_pages_list_surfaces_missing_user_token_as_authorization_error():
             asyncio.run(
                 _domain.list_knowledge_pages(
                     page_size=1, page_token=None, filter=None, include_domains=False,
-                    session_mgr=MagicMock(), settings=MagicMock(),
+                    domains_only=False, session_mgr=MagicMock(), settings=MagicMock(),
                 )
             )
 
@@ -111,3 +111,14 @@ def test_pages_preview_surfaces_missing_user_token_as_authorization_error():
                     name="pages/1", session_mgr=MagicMock(), settings=MagicMock(),
                 )
             )
+
+
+def test_pages_list_domains_only_skips_the_pages_call():
+    """The Domains filter must load even when the unfiltered pages list is denied."""
+    svc = _svc()
+    svc.list_pages.side_effect = RuntimeError("403 domain admin required")
+    res = _call(svc, domains_only=True)
+    assert not svc.list_pages.called
+    assert res["success"] is True
+    assert res["pages"] == [] and res["next_page_token"] is None
+    assert res["domains"] == [{"name": "domains/1", "label": "Sales"}]

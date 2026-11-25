@@ -140,6 +140,8 @@ class KnowledgePageService:
         remote = str(body.get("message") or "").strip() if isinstance(body, dict) else ""
         if remote:
             message += f" Databricks said: {remote[:_REMOTE_MESSAGE_MAX]}"
+        if status == 403 and "domain filter" in remote.lower():
+            message += " Select a Domain in the Domains filter to list its pages."
         return InfrastructureError(message, detail=str(exc))
 
     def get_page(self, name: str) -> Dict[str, Any]:

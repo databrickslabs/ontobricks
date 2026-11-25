@@ -1371,13 +1371,23 @@ def _knowledge_pages_payload(
     page_token: Optional[str],
     filter_str: Optional[str],
     include_domains: bool,
+    domains_only: bool = False,
 ) -> Dict[str, Any]:
-    """Synchronous body of :func:`list_knowledge_pages`."""
-    result = svc.list_pages(
-        page_size=page_size,
-        page_token=page_token,
-        filter_str=filter_str,
-    )
+    """Synchronous body of :func:`list_knowledge_pages`.
+
+    ``domains_only`` skips the pages call: the unfiltered pages list needs
+    account-wide domain admin rights, so a caller without them must still be
+    able to load the Domains used as the pages filter.
+    """
+    if domains_only:
+        result: Dict[str, Any] = {"pages": [], "next_page_token": None}
+        include_domains = True
+    else:
+        result = svc.list_pages(
+            page_size=page_size,
+            page_token=page_token,
+            filter_str=filter_str,
+        )
     payload: Dict[str, Any] = {
         "success": True,
         "pages": result.get("pages") or [],
@@ -1399,6 +1409,7 @@ async def list_knowledge_pages(
     page_token: Optional[str] = Query(None),
     filter: Optional[str] = Query(None, alias="filter"),
     include_domains: bool = Query(False),
+    domains_only: bool = Query(False),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -1415,6 +1426,7 @@ async def list_knowledge_pages(
             page_token=page_token,
             filter_str=filter,
             include_domains=include_domains,
+            domains_only=domains_only,
         )
     except (InfrastructureError, AuthorizationError):
         raise
