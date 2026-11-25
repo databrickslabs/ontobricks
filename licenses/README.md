@@ -35,7 +35,7 @@ This folder contains the license files for all external libraries used by OntoBr
 | MLflow | >=3.17.2 | Apache-2.0 | [python/mlflow-LICENSE.txt](python/mlflow-LICENSE.txt) |
 | neo4j | >=5.0 | Apache-2.0 | [python/neo4j-LICENSE.txt](python/neo4j-LICENSE.txt) |
 | NetworkX | >=3.0 | BSD-3-Clause | [python/networkx-LICENSE.txt](python/networkx-LICENSE.txt) |
-| OWL-RL | >=7.0.0 | W3C Software License | [python/owlrl-LICENSE.txt](python/owlrl-LICENSE.txt) |
+| OWL-RL | >=7.1.1 | W3C-20150513 (W3C Software Notice and Document License) | [python/owlrl-LICENSE.txt](python/owlrl-LICENSE.txt) |
 | psycopg / psycopg-pool | >=3.2.0 | LGPL-3.0 | [python/psycopg-LICENSE.txt](python/psycopg-LICENSE.txt) |
 | PyArrow | >=23.0.1 | Apache-2.0 | [python/pyarrow-LICENSE.txt](python/pyarrow-LICENSE.txt) |
 | Pydantic | >=2.5.0 | MIT | [python/pydantic-LICENSE.txt](python/pydantic-LICENSE.txt) |
@@ -78,7 +78,7 @@ This folder contains the license files for all external libraries used by OntoBr
 | **BSD-3-Clause** | HTTPX, ItsDangerous, Jinja2, NetworkX, python-dotenv, RDFLib, scikit-learn, SciPy, Starlette, Uvicorn |
 | **Apache-2.0** | aiofiles, cryptography, Databricks SDK, databricks-sql-connector, DOMPurify, FastMCP, MLflow, neo4j, PyArrow, pySHACL, python-multipart, Requests |
 | **LGPL-3.0** | psycopg, psycopg-pool |
-| **W3C Software License** | OWL-RL |
+| **W3C-20150513** (W3C Software Notice and Document License) | OWL-RL |
 | **SIL OFL 1.1** | JetBrains Mono, Outfit (Google Fonts) |
 
 All dependencies use permissive open-source licenses compatible with commercial use.

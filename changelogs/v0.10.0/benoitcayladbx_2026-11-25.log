@@ -1,0 +1,36 @@
+## 2026-11-25 - OWL-RL license correction (W3C-20150513)
+
+Context:
+Legal review of the bundled third-party licenses found that the owlrl license
+file did not match the license declared by the library. The file in
+`licenses/python/owlrl-LICENSE.txt` was an inaccurate transcription of the
+W3C Software Notice and Document License (2015-05-13), SPDX `W3C-20150513`.
+The locked owlrl version (7.1.4) ships the verbatim text. The `owlrl`
+lower bound `>=7.0.0` also referenced a version that does not exist on PyPI
+(the lowest 7.x release is 7.1.1).
+
+Changes:
+1. licenses/python/owlrl-LICENSE.txt: replaced with the verbatim `LICENSE.txt`
+   shipped in the owlrl 7.1.4 wheel (W3C-20150513).
+2. licenses/README.md: OWL-RL row now states the minimum version `>=7.1.1` and
+   the SPDX identifier `W3C-20150513`; the license summary table is updated
+   accordingly (previously "W3C Software License").
+3. pyproject.toml: `owlrl>=7.0.0` -> `owlrl>=7.1.1` (no behavioural change,
+   since 7.0.0 is not published and the resolver already picked 7.1.x).
+4. uv.lock: only the root `requires-dist` specifier for owlrl updated to
+   `>=7.1.1`. No package version or hash changed. The lock was edited by hand
+   because `uv lock` in this environment rewrites every registry URL to the
+   internal proxy (`UV_INDEX_URL`), which must not be committed.
+
+Modified files:
+- licenses/python/owlrl-LICENSE.txt
+- licenses/README.md
+- pyproject.toml
+- uv.lock
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11473 passed, 334 skipped, 8 deselected, 0 failed.
+Note: `uv lock --check` reports the lock as stale on HEAD too in this
+environment (proxy index), so it is not a usable signal here.
