@@ -567,6 +567,7 @@ class RegistrySettings:
         catalog: str,
         schema: str,
         user_token: str,
+        user_email: str = "",
     ) -> Dict[str, Any]:
         """First-run setup: prepare ``catalog.schema`` as the caller, then Initialize.
 
@@ -574,18 +575,9 @@ class RegistrySettings:
         Marketplace). The location is pinned on the session for Initialize,
         which stores it in the Lakebase ``registries`` row.
         """
-        if not user_token:
-            raise AuthorizationError(
-                "Registry setup runs as you, but the Databricks Apps proxy did not forward your token."
-            )
         RegistrySettings._refuse_if_located(session_mgr, settings)
         domain = get_domain(session_mgr)
-        setup = RegistrySetupService.for_user(
-            (settings.databricks_host or get_workspace_host()).rstrip("/"),
-            user_token,
-            resolve_warehouse_id(domain, settings),
-            settings.ontobricks_app_name,
-        ).prepare(catalog, schema)
+        setup = RegistrySettings._setup_service(domain, settings, user_token, user_email).prepare(catalog, schema)
         # Again, on a fresh read: another admin may have finished meanwhile.
         RegistrySettings._refuse_if_located(session_mgr, settings, fresh=True)
         registry = domain.settings.setdefault("registry", {})
@@ -599,6 +591,34 @@ class RegistrySettings:
             raise
         result["setup"] = setup
         return result
+
+    @staticmethod
+    def setup_check_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+        catalog: str,
+        schema: str,
+        user_token: str,
+        user_email: str = "",
+    ) -> Dict[str, Any]:
+        """Dry-run the first-run setup as the caller: ``{"checks": [...]}``, nothing changed."""
+        service = RegistrySettings._setup_service(get_domain(session_mgr), settings, user_token, user_email)
+        return {"checks": service.preflight(catalog, schema)}
+
+    @staticmethod
+    def _setup_service(domain: Any, settings: Settings, user_token: str, user_email: str) -> RegistrySetupService:
+        """Build the setup service on the caller's forwarded token."""
+        if not user_token:
+            raise AuthorizationError(
+                "Registry setup runs as you, but the Databricks Apps proxy did not forward your token."
+            )
+        return RegistrySetupService.for_user(
+            (settings.databricks_host or get_workspace_host()).rstrip("/"),
+            user_token,
+            resolve_warehouse_id(domain, settings),
+            settings.ontobricks_app_name,
+            user_email,
+        )
 
     @staticmethod
     def _refuse_if_located(session_mgr: SessionManager, settings: Settings, *, fresh: bool = False) -> None:

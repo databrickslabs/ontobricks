@@ -350,20 +350,40 @@ async def setup_registry(
     Body: ``{"catalog": "...", "schema": "..."}``. For installs with no
     deploy-time registry location (Databricks Marketplace).
     """
+    return await _run_registry_setup(RegistrySettings.setup_registry_result, request, session_mgr, settings)
+
+
+@router.post("/registry/setup/check", dependencies=[Depends(require(ROLE_ADMIN))])
+async def check_registry_setup(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Dry-run the first-run setup as the caller; changes nothing.
+
+    Body: ``{"catalog": "...", "schema": "..."}``. Returns ``{"checks": [...]}``,
+    each with a status and, when it fails, the fix.
+    """
+    return await _run_registry_setup(RegistrySettings.setup_check_result, request, session_mgr, settings)
+
+
+async def _run_registry_setup(fn, request: Request, session_mgr: SessionManager, settings: Settings):
+    """Call *fn* with the body's catalog/schema and the caller's token and email."""
     try:
         data = await request.json()
     except ValueError as exc:
         raise ValidationError("Expected a JSON body with catalog and schema") from exc
     if not isinstance(data, dict):
         raise ValidationError("Expected a JSON body with catalog and schema")
-    _email, _name, user_token, _role, _domain_role = _settings_request_identity(request)
+    email, _name, user_token, _role, _domain_role = _settings_request_identity(request)
     return await run_blocking(
-        RegistrySettings.setup_registry_result,
+        fn,
         session_mgr,
         settings,
         str(data.get("catalog") or "").strip(),
         str(data.get("schema") or "").strip(),
         user_token,
+        email,
     )
 
 

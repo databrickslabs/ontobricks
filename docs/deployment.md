@@ -935,6 +935,24 @@ Acting as that admin (user scopes `sql` and `apps`), OntoBricks then:
 The admin needs `USE CATALOG` and `CREATE SCHEMA` on the catalog, or must own
 it. Listing text and runbook: `marketplace/LISTING.md`, `marketplace/README.md`.
 
+**Debugging permission problems.** On the same form, **Check prerequisites** runs
+every check setup needs and changes nothing. It shows two groups:
+
+- **As you (the signed-in admin):** can you read the app's permissions (`apps`
+  scope), does the service principal already have Can Manage, can you run SQL
+  on the app's warehouse (`sql` scope), can you use the catalog, and does the
+  schema exist and who owns it.
+- **As the app's service principal:** the readiness checks, such as Lakebase
+  binding and permissions, the warehouse, and the registry location. Passing
+  checks are collapsed into one line.
+
+Every failing check names the fix, for example the exact
+`GRANT USE CATALOG, CREATE SCHEMA ON CATALOG … TO …` to ask a catalog owner for.
+If setup itself fails, the checks run automatically. **Copy diagnostics** puts
+the results on the clipboard as JSON (check results only, never tokens) for a
+support request. The form also has a **Troubleshooting** section for the common
+cases.
+
 ## 3. Unity Catalog Permissions for the Service Principal
 
 [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/) run as a **[service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals)** (SP) created automatically when the app is deployed. The app's workspace bindings (`sql-warehouse`, `volume`) only cover the compute and the registry volume — they do **not** grant [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) privileges on the catalogs, schemas, or tables OntoBricks reads from and writes to. These grants are your responsibility and must be done once per workspace.

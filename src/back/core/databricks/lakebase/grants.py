@@ -95,8 +95,8 @@ def resolve_app_service_principals(
             sp_ids[app_name] = sp_id
         else:
             warnings.append(
-                f"{app_name}: could not resolve service principal "
-                f"(app may not exist) — grants skipped"
+                f"{app_name}: app not found — grants skipped (fine if "
+                f"this is the optional MCP companion app)"
             )
     return sp_ids, warnings
 
@@ -146,11 +146,12 @@ def grant_can_use_on_project(
             granted.append(f"{app_name}: CAN_USE on project")
         else:
             warnings.append(
-                f"{app_name}: could not re-grant CAN_USE on project "
-                f"(app SP needs CAN_MANAGE to grant; usually already "
-                f"applied by scripts/bootstrap/lakebase-perms.sh at "
-                f"deploy — re-run that script as a workspace admin if "
-                f"the SP still lacks CAN_USE)"
+                f"{app_name}: could not re-grant CAN_USE on the Lakebase project "
+                f"(the app SP needs CAN_MANAGE on it to grant). Usually harmless: "
+                f"a bound postgres resource already lets the app connect. If the "
+                f"Lakebase checks fail, a project owner grants the app's service "
+                f"principal CAN_USE on the project (repository deploys: "
+                f"scripts/bootstrap/lakebase-perms.sh)."
             )
     return granted, warnings
 
@@ -197,8 +198,9 @@ def grant_schema_privileges(
             )
             warnings.append(
                 f"{app_name}: schema grant failed ({exc}). The Postgres "
-                f"role may not exist yet — re-run after the app has "
-                f"connected once, or use scripts/bootstrap-lakebase-perms.sh."
+                f"role may not exist yet: re-run Repair permissions after the "
+                f"app has connected once (repository deploys: "
+                f"scripts/bootstrap/lakebase-perms.sh)."
             )
     return granted, warnings
 
@@ -224,11 +226,12 @@ def grant_uc_catalog(
         except Exception as exc:  # noqa: BLE001
             logger.warning("UC catalog grant for %s failed: %s", app_name, exc)
             warnings.append(
-                f"{app_name}: UC catalog grant on {uc_catalog} failed "
-                f"({exc}). The app SP needs MANAGE on the catalog to "
-                f"grant ALL_PRIVILEGES to itself — prefer re-running "
-                f"scripts/bootstrap/lakebase-perms.sh -c {uc_catalog} "
-                f"as a workspace admin (deploy applies this before the "
-                f"registry schema exists)."
+                f"{app_name}: optional catalog-wide grant on {uc_catalog} "
+                f"skipped ({exc}). Not needed after Set up the registry, "
+                f"which grants the schema privileges the app uses. Only "
+                f"Lakebase synced tables created by other users need it: a "
+                f"catalog owner can grant ALL_PRIVILEGES on {uc_catalog} to "
+                f"the app's service principal (repository deploys: "
+                f"scripts/bootstrap/lakebase-perms.sh -c {uc_catalog})."
             )
     return granted, warnings

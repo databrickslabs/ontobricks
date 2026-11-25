@@ -43,3 +43,40 @@ def test_setup_form_visibility_follows_the_registry_location():
     js = REGISTRY_JS.read_text(encoding="utf-8")
     assert "getElementById('registrySetupForm')" in js
     assert "window.reloadRegistryConfig = loadRegistryConfig" in js
+
+
+ACCESS_DENIED_HTML = REPO_ROOT / "src/front/templates/access_denied.html"
+
+
+def test_setup_form_offers_a_read_only_prerequisite_check():
+    html = REGISTRY_HTML.read_text(encoding="utf-8")
+    assert 'id="btnRegistrySetupCheck"' in html and 'type="button"' in html
+
+
+def test_check_results_group_both_identities():
+    html = REGISTRY_HTML.read_text(encoding="utf-8")
+    assert 'id="registrySetupChecksYou"' in html and 'id="registrySetupChecksApp"' in html
+
+
+def test_check_results_are_announced_to_screen_readers():
+    assert re.search(r'id="registrySetupChecks"[^>]*aria-live="polite"', REGISTRY_HTML.read_text(encoding="utf-8"))
+
+
+def test_setup_form_has_troubleshooting_help():
+    assert 'id="registrySetupHelp"' in REGISTRY_HTML.read_text(encoding="utf-8")
+
+
+def test_checks_run_as_the_admin_and_as_the_service_principal():
+    js = REGISTRY_CONFIG_JS.read_text(encoding="utf-8")
+    assert "'/settings/registry/setup/check'" in js and "'/settings/diagnostics/readiness'" in js
+
+
+def test_failed_setup_shows_the_checks_automatically():
+    js = REGISTRY_CONFIG_JS.read_text(encoding="utf-8")
+    failure = js[js.index("Registry setup failed: ' + (data.message"):]
+    assert "_runSetupChecks(form)" in failure[:400]
+
+
+def test_access_denied_bootstrap_page_covers_marketplace_installs():
+    html = ACCESS_DENIED_HTML.read_text(encoding="utf-8")
+    assert "Set up the registry" in html and "scripts/bootstrap/app-permissions.sh" in html

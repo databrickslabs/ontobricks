@@ -237,7 +237,7 @@ class TestSetupRoute:
     def test_admin_call_runs_setup_with_the_forwarded_token(self):
         resp, setup = _post_setup("admin")
         assert resp.status_code == 200, resp.text
-        assert setup.call_args.args[2:] == ("main", "ontobricks", "user-token")
+        assert setup.call_args.args[2:] == ("main", "ontobricks", "user-token", "a@b.com")
 
     def test_non_admin_is_refused(self):
         resp, setup = _post_setup("app_user")
@@ -258,3 +258,52 @@ class TestSetupRoute:
                 follow_redirects=False,
             )
         assert resp.status_code == 400
+
+
+# --- POST /settings/registry/setup/check ------------------------------------
+
+
+def _post_check(role: str):
+    from fastapi.testclient import TestClient
+
+    from shared.fastapi.main import PermissionMiddleware, app
+
+    with patch("back.core.databricks.is_databricks_app", return_value=True), patch.object(
+        PermissionMiddleware, "_resolve_roles", return_value=(role, role)
+    ), patch.object(
+        _rs.RegistrySettings, "setup_check_result", return_value={"checks": []}
+    ) as check:
+        resp = TestClient(app).post(
+            "/settings/registry/setup/check",
+            json={"catalog": "main", "schema": "ontobricks"},
+            headers={"x-forwarded-access-token": "user-token", "x-forwarded-email": "a@b.com"},
+            follow_redirects=False,
+        )
+    return resp, check
+
+
+class TestSetupCheckRoute:
+    def test_admin_check_runs_as_the_caller(self):
+        resp, check = _post_check("admin")
+        assert resp.status_code == 200, resp.text
+        assert check.call_args.args[2:] == ("main", "ontobricks", "user-token", "a@b.com")
+
+    def test_non_admin_is_refused(self):
+        resp, check = _post_check("app_user")
+        assert resp.status_code in (302, 403) and not check.called
+
+
+class TestSetupCheckResult:
+    def test_requires_the_callers_token(self):
+        with pytest.raises(AuthorizationError):
+            _rs.RegistrySettings.setup_check_result(MagicMock(), _settings(), "main", "s", "", "a@b.com")
+
+    def test_returns_the_preflight_checks(self):
+        svc = MagicMock()
+        svc.preflight.return_value = [{"name": "you.warehouse", "status": "ok"}]
+        with patch.object(_rs, "get_domain"), patch.object(_rs, "resolve_warehouse_id", return_value=_WAREHOUSE), patch.object(
+            _rs.RegistrySetupService, "for_user", return_value=svc
+        ) as for_user:
+            result = _rs.RegistrySettings.setup_check_result(MagicMock(), _settings(), "main", "s", "tok", "a@b.com")
+        assert result == {"checks": [{"name": "you.warehouse", "status": "ok"}]}
+        assert for_user.call_args.args[-1] == "a@b.com"

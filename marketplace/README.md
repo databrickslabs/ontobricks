@@ -49,7 +49,7 @@ take over one another principal created.
 
 Then check:
 1. The app starts, and `/health` does not report `status: error`.
-2. **Settings → Registry → Set up the registry** succeeds as you (an admin), and readiness shows 0 errors.
+2. **Settings → Registry → Check prerequisites** reports nothing blocking, then **Set up the registry** succeeds as you (an admin), and readiness shows 0 errors.
 3. A second, **non-admin** user with `CAN_USE` can open the app.
 4. `POST /settings/save` with `{"token": "x"}` returns 400. The app never accepts a PAT in Apps mode.
 

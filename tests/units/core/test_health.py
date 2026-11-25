@@ -351,6 +351,29 @@ class TestCheckLakebase:
         assert status == "warning"
 
 
+    def _probe(self, reason, error):
+        auth = MagicMock(is_available=True)
+        store = MagicMock(schema="ontobricks_registry")
+        store.init_status.return_value = {"initialized": False, "reason": reason, "error": error}
+        with patch.object(_LBA_MOD, "get_lakebase_auth", return_value=auth), \
+             patch.object(health, "_resolve_registry_cfg", return_value=_fake_cfg()), \
+             patch(
+                 "back.objects.registry.store.lakebase.store.LakebaseRegistryStore",
+                 return_value=store,
+             ):
+            return health._check_lakebase(MagicMock())
+
+    def test_missing_registry_schema_on_a_fresh_install_is_a_warning(self):
+        status, detail = self._probe(
+            "connect_failed", 'Lakebase probe failed: schema "ontobricks_registry" does not exist'
+        )
+        assert status == "warning" and "Set up the registry" in detail
+
+    def test_other_connection_failures_stay_errors(self):
+        status, _ = self._probe("connect_failed", "Lakebase probe failed: connection refused")
+        assert status == "error"
+
+
 class TestCheckLakebasePermissions:
     def test_skipped_when_pg_not_bound(self):
         auth = MagicMock(is_available=False)

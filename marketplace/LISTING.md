@@ -23,6 +23,8 @@ Create a **Lakebase Autoscaling project** (Compute → Lakebase → Create proje
 1. Open the app as the installer and go to **Settings → Registry → Set up the registry**. Pick a Unity Catalog catalog and a schema name (default `ontobricks`). Using your permissions, OntoBricks creates the schema, gives its service principal access to it and **Can Manage** on the app, and initializes the registry. You need `USE CATALOG` and `CREATE SCHEMA` on that catalog, or must own it.
 2. Grant colleagues `CAN_USE` on the app (Apps → Permissions). Users with `CAN_MANAGE` are OntoBricks admins.
 
+If setup reports a permission problem, click **Check prerequisites** on the same form. It runs every check as you and as the app, changes nothing, and shows the fix for each problem.
+
 ## Learn more
 - Source and docs: https://github.com/databrickslabs/ontobricks
 - Databricks Labs projects are provided as-is, without formal Databricks support.
