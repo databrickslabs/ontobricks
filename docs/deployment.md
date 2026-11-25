@@ -321,7 +321,11 @@ Implications for Layer 2:
   the UI hop from the M2M bearer, so those names cannot carry the user. The
   UI applies the acting headers **only** when the proxy identity is the MCP
   app service principal (`MCP_SP_CLIENT_ID`). Both apps declare `user_api_scopes`
-  (`sql`) so the inbound MCP request has a user token to forward. The identity
+  (`sql`) so the inbound MCP request has a user token to forward. The UI app
+  also declares `domains` and `knowledge`, required by the Databricks Domains
+  and Knowledge Pages APIs behind Context → Pages (without them Databricks
+  answers 403 `Invalid scope, required scopes: …`). After a scope change, users
+  may need to sign out and back in to get a token with the new scopes. The identity
   scopes (`iam.current-user:read`, `iam.access-control:read`) are platform
   defaults and must not be declared — the Apps create API rejects them. Granting the MCP SP a domain role
   in Teams is an emergency workaround only — it collapses per-user gating.

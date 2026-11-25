@@ -111,3 +111,36 @@ Modified files:
 Test result:
 Full suite: uv run --frozen pytest -q -m "not scenario"
 -> 11479 passed, 334 skipped, 8 deselected, 0 failed.
+
+## Genie Pages: declare the `domains` and `knowledge` user API scopes
+
+Context: in the deployed app, Context -> Pages still failed under OBO:
+`GET /api/2.0/domains` returned HTTP 403 and the unfiltered Knowledge Pages list
+was refused. Reproduced locally with a U2M token limited to the app's effective
+scopes (`sql`, `iam.current-user:read`, `iam.access-control:read`): Databricks
+answers `Invalid scope, required scopes: domains` on the Domains API and
+`Invalid scope, required scopes: knowledge` on the Knowledge Pages API. With
+`domains` and `knowledge` added, the Domains list, the unfiltered pages list
+and a page body all return HTTP 200 for the same user.
+
+Changes:
+1. databricks.yml: `ontobricks_dev_app.user_api_scopes` adds `domains` and
+   `knowledge` (MCP app unchanged: it does not call these APIs).
+2. tests/units/settings/test_bundle_job_resource.py: +1 test pinning both
+   scopes on the UI app.
+3. docs/deployment.md: OBO section documents the two scopes and the
+   re-sign-in that a scope change may require.
+
+Note: `make bundle-validate` fails on HEAD too (`variable registry_volume has
+not been defined`, the target does not pass the deploy.sh variables); not
+related to this change.
+
+Modified files:
+- databricks.yml
+- tests/units/settings/test_bundle_job_resource.py
+- docs/deployment.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11480 passed, 334 skipped, 8 deselected, 0 failed.

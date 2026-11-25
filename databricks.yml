@@ -238,8 +238,12 @@ resources:
       # Only non-default scopes are declared; the identity scopes
       # (iam.current-user:read, iam.access-control:read) are platform
       # defaults — the Apps create API rejects them if listed explicitly.
+      # `domains` + `knowledge`: Context → Pages lists Databricks Domains and
+      # UC Knowledge Pages on-behalf-of the user (403 "required scopes" without).
       user_api_scopes:
         - sql
+        - domains
+        - knowledge
       # App ACL (not top-level bundle permissions — those reject CAN_USE; see #134).
       permissions:
         - level: CAN_MANAGE
