@@ -17,6 +17,7 @@ from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
 from back.core.reasoning.results.RuleViolation import RuleViolation
 from back.core.reasoning.rules.SparqlConstructCompiler import SparqlConstructCompiler
+from back.core.reasoning.rules.SparqlUpdateCompiler import SparqlUpdateCompiler
 from back.core.w3c.rdf_utils import uri_local_name
 
 logger = get_logger(__name__)
@@ -144,8 +145,14 @@ class SPARQLRuleEngine:
         if not query.strip():
             errors.append("SPARQL rule must have a query")
             return errors
+        kind = rule.get("kind") or "construct"
         try:
-            SparqlConstructCompiler().compile(query, "triples")
+            if kind == "construct":
+                SparqlConstructCompiler().compile(query, "triples")
+            elif kind == "removal":
+                SparqlUpdateCompiler().compile_removal(query, "triples")
+            else:
+                errors.append(f"Unknown rule kind '{kind}'")
         except ValidationError as exc:
             errors.append(exc.message)
         return errors
