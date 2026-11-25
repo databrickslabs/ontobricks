@@ -191,20 +191,35 @@ class Rules:
     def sparql_reference_errors(
         rule: Dict[str, Any], class_names: Set[str], property_names: Set[str]
     ) -> List[str]:
-        """Flag a CONSTRUCT rule referencing unknown terms.
+        """Flag a SPARQL rule referencing unknown terms.
 
-        In BOTH the CONSTRUCT head and the WHERE pattern, predicates must be
-        known properties and ``a``/``rdf:type`` objects must be known classes.
-        No new (invented) class may be asserted in the CONSTRUCT head.
+        For a CONSTRUCT rule, both the CONSTRUCT head and the WHERE pattern are
+        checked: predicates must be known properties and ``a``/``rdf:type``
+        objects must be known classes. No new (invented) class may be asserted
+        in the CONSTRUCT head. A removal rule is checked the same way on its
+        DELETE template and its WHERE body.
         """
-        from back.core.reasoning.constants import CONSTRUCT_RE, TRIPLE_PATTERN_RE
+        from back.core.reasoning.constants import (
+            CONSTRUCT_RE,
+            REMOVAL_TEMPLATE_RE,
+            REMOVAL_WHERE_RE,
+            TRIPLE_PATTERN_RE,
+        )
 
         errors: List[str] = []
         query = rule.get("query", "") or ""
-        m = CONSTRUCT_RE.search(query)
-        if not m:
+        if rule.get("kind") == "removal":
+            parts = [
+                m.group(1)
+                for m in (REMOVAL_TEMPLATE_RE.search(query), REMOVAL_WHERE_RE.search(query))
+                if m
+            ]
+        else:
+            m = CONSTRUCT_RE.search(query)
+            parts = [m.group(1), m.group(2)] if m else []
+        if not parts:
             return errors  # structural validator already reports a bad shape
-        for part in (m.group(1), m.group(2)):  # CONSTRUCT head, then WHERE
+        for part in parts:  # CONSTRUCT head then WHERE, or DELETE template then WHERE
             for _s, p, o in TRIPLE_PATTERN_RE.findall(part):
                 is_type = p == "a" or p.lower() == "rdf:type"
                 if is_type:

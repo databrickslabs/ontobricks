@@ -82,6 +82,15 @@ CONSTRUCT_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+# SPARQL removal regexes: the WHERE body of DELETE WHERE / DELETE {…} WHERE {…},
+# and the DELETE template of the latter (DELETE DATA has neither).
+REMOVAL_WHERE_RE = re.compile(
+    r"DELETE\s+(?:WHERE|\{[^}]*\}\s*WHERE)\s*\{(.+)\}\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+REMOVAL_TEMPLATE_RE = re.compile(r"DELETE\s*\{([^}]*)\}", re.IGNORECASE)
+
 TRIPLE_PATTERN_RE = re.compile(
     r"(\?\w+|<[^>]+>|\w*:\w+|\w+)"
     r"\s+"
