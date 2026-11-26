@@ -518,10 +518,22 @@ const CohortModule = {
             const url = `/dtwin/cohorts/preview/class-stats?class_uri=${encodeURIComponent(class_uri)}`;
             const r = await fetch(url, { credentials: 'include' });
             const data = await r.json();
+            if (this._applyTooLarge(el, data)) return;
             el.textContent = (data.instance_count ?? '—').toLocaleString();
         } catch {
             el.textContent = '—';
         }
+    },
+
+    // Graph too large to preview live — the server skipped the full-graph
+    // load (databricks-labs/ontobricks#248). Show a hint instead of a count.
+    _applyTooLarge(el, data) {
+        if (!data || !data.too_large) { if (el) el.title = ''; return false; }
+        el.textContent = '—';
+        const n = (data.triple_count ?? 0).toLocaleString();
+        el.title = `Graph too large for live preview (${n} triples). ` +
+                   `Use Materialise instead, or narrow the rule.`;
+        return true;
     },
 
     async _refreshEdgeCount() {
@@ -537,6 +549,7 @@ const CohortModule = {
                 body: JSON.stringify(this.rule),
             });
             const data = await r.json();
+            if (this._applyTooLarge(el, data)) return;
             el.textContent = (data.edge_count ?? '—').toLocaleString();
         } catch { el.textContent = '—'; }
     },
@@ -554,6 +567,7 @@ const CohortModule = {
                 body: JSON.stringify(this.rule),
             });
             const data = await r.json();
+            if (this._applyTooLarge(el, data)) return;
             const m = data.matching_count ?? 0;
             const t = data.total_count ?? 0;
             el.textContent = `${m.toLocaleString()} / ${t.toLocaleString()}`;

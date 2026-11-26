@@ -1,0 +1,46 @@
+## fix(cohort): bound live preview counters so they can't saturate the app (#248)
+
+Context: defining a cohort rule could take the whole app down. The Cohort
+designer's live counters (`/dtwin/cohorts/preview/class-stats|node-count|
+edge-count|path-trace`) each call `CohortBuilder`, which pulls the **entire
+graph** into the app via `store.query_triples(...)` and builds it in NetworkX —
+with the preview path explicitly bypassing the size cap
+(`_load_triples(max_triples=None, allow_overflow=True)`). On a ~1M-triple graph,
+fired on every edit, this pins the 2-vCPU app's request workers, OAuth token
+fetches time out, and the Databricks Apps proxy returns 502 for **every** route
+(the app looks "unavailable" though compute is ACTIVE). Full root cause +
+evidence in databricks-labs/ontobricks#248.
+
+This is the interim guard (the SQL-pushdown / async-job rewrite is the larger
+follow-up tracked in #248): the preview counters first ask the backend for a
+**cheap `count_triples` COUNT pushdown** and, above a budget, short-circuit
+with a `too_large` signal instead of loading the graph — so a big graph can no
+longer pin the workers.
+
+Changes:
+1. src/back/objects/digitaltwin/cohort/CohortService.py — `PREVIEW_MAX_TRIPLES`
+   budget + `_preview_blocked(store, graph_name)` helper (uses `count_triples`;
+   if the count is unavailable it does NOT block — falls back to prior
+   behaviour). Guard added to `class_stats`, `edge_count`, `node_count`,
+   `path_trace`: when the graph exceeds the budget they return
+   `{too_large, triple_count, preview_cap}` without loading the graph.
+2. src/front/static/query/js/query-cohorts.js — `_applyTooLarge()`: the three
+   live counters render `—` with a tooltip ("Graph too large for live preview
+   … use Materialise instead, or narrow the rule.") when the server returns
+   `too_large`.
+3. tests/units/dtwin/test_dtwin_cohort.py — previews short-circuit above the
+   budget and never call `query_triples`; previews still run when the backend
+   can't cheaply count; existing preview tests keep their counts (fixture now
+   sets `count_triples`).
+
+Not in this change (follow-up #248): push node/edge/class counts down to SQL
+(`COUNT` + self-join aggregate) so the previews work at any scale, and run
+build/materialise asynchronously via `TaskManager` / the graph-analytics job so
+a heavy cohort never blocks request workers.
+
+Modified files:
+- src/back/objects/digitaltwin/cohort/CohortService.py
+- src/front/static/query/js/query-cohorts.js
+- tests/units/dtwin/test_dtwin_cohort.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/dtwin/test_dtwin_cohort.py tests/units/dtwin/test_cohort_builder.py tests/units/architecture` -> 100 passed. Full suite -> pending (see PR).
