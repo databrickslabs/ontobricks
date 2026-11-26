@@ -1,0 +1,39 @@
+## fix(dtwin): stop Materialise double-writing inferred triples on a Lakehouse backend
+
+Context: on a Lakehouse (Delta) backend, a single Materialise with both
+"Write to Delta table" and "Append to graph database" ticked wrote every
+inferred triple twice. `TwinInferredMaterialize.run` ran `materialize_to_delta`
+(DELETE + INSERT into the named `_inferred` table) and then `materialize_inferred`
+(INSERT/append via the graph store). For a Lakehouse backend the graph store's
+inferred companion table IS that same `_inferred` table, so the two "targets"
+collapse onto one physical table and the append doubled it (e.g. haswinery
+15589 distinct but 31178 rows). The two sinks are only genuinely distinct for a
+non-SQL graph backend (e.g. Neo4j: a Delta export table vs the Neo4j graph).
+
+Changes:
+1. src/back/core/graphdb/delta/DeltaFlatStore.py — new public `inferred_table_fqn`
+   that exposes the fully-qualified Delta table this backend writes inferred
+   triples to (wraps the private `_writable_table_fqn`), so callers can detect
+   the coincidence.
+2. src/back/objects/digitaltwin/build/TwinInferredMaterialize.py — when the
+   "write to Delta" target resolves to the same physical table as the graph
+   store's inferred companion, collapse to a single write: skip the Delta write
+   and keep the graph-store write (which populates the shared table AND rebuilds
+   the adjacency index), mirroring its count under the Delta result key so the
+   UI still reports the written table. Non-coincident targets (export table, or
+   a non-SQL backend) keep both writes. Helpers `_same_table` and
+   `_delta_target_is_graph_store`.
+3. tests/units/dtwin/test_v090_twin_build_prepare.py — coincident target writes
+   once (no `materialize_to_delta`, single `materialize_inferred`, count mirrored);
+   distinct targets still write both.
+
+Note: materialise still APPENDS (no cross-run dedup) — re-materialising without
+a Purge in between will still accumulate. This fix removes the within-one-pass
+doubling; the purge-then-materialise workflow remains for clean single-run counts.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/dtwin/test_v090_twin_build_prepare.py` -> 44 passed. Full suite -> pending (see PR).
