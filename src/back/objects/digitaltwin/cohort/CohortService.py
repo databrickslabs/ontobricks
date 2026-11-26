@@ -27,6 +27,15 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+#: Live cohort previews load the whole graph into the app and build it in
+#: NetworkX (``CohortBuilder`` pulls every triple via ``store.query_triples``).
+#: Above this many triples that is too expensive to run interactively on every
+#: edit — it pins the app's request workers and can 502 the whole app — so the
+#: preview counters short-circuit and the UI points the user to Materialise.
+#: Interim guard pending the SQL-pushdown / async rewrite in
+#: databricks-labs/ontobricks#248.
+PREVIEW_MAX_TRIPLES = 100_000
+
 
 class CohortService:
     """Cohort Discovery operations scoped to a single domain session."""
@@ -295,6 +304,29 @@ class CohortService:
     # Live preview helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _preview_blocked(store: Any, graph_name: str) -> Optional[Dict[str, Any]]:
+        """Return a ``too_large`` payload when the graph exceeds the live-preview
+        budget, else ``None``.
+
+        Uses the backend's cheap ``count_triples`` COUNT pushdown so we decide
+        *without* loading the whole graph. If the count can't be obtained (an
+        engine without a cheap count), we don't block — the preview falls back
+        to its existing behaviour. See databricks-labs/ontobricks#248.
+        """
+        try:
+            n = store.count_triples(graph_name)
+        except Exception as exc:  # noqa: BLE001 — best-effort sizing
+            logger.debug("Cohort preview size check skipped: %s", exc)
+            return None
+        if isinstance(n, int) and n > PREVIEW_MAX_TRIPLES:
+            return {
+                "too_large": True,
+                "triple_count": n,
+                "preview_cap": PREVIEW_MAX_TRIPLES,
+            }
+        return None
+
     def class_stats(
         self,
         class_uri: str,
@@ -302,6 +334,9 @@ class CohortService:
         graph_name: str,
     ) -> Dict[str, Any]:
         """Return ``{instance_count}`` for *class_uri* in the live graph."""
+        blocked = self._preview_blocked(store, graph_name)
+        if blocked is not None:
+            return blocked
         builder = self._builder(store, graph_name)
         return {"instance_count": builder.count_class_members(class_uri)}
 
@@ -313,6 +348,9 @@ class CohortService:
     ) -> Dict[str, Any]:
         from back.core.graph_analysis import CohortLink
 
+        blocked = self._preview_blocked(store, graph_name)
+        if blocked is not None:
+            return blocked
         class_uri = rule_dict.get("class_uri", "")
         links = [CohortLink.from_dict(lk) for lk in rule_dict.get("links", []) or []]
         combine = rule_dict.get("links_combine", "any") or "any"
@@ -327,6 +365,9 @@ class CohortService:
     ) -> Dict[str, Any]:
         from back.core.graph_analysis import CohortCompat
 
+        blocked = self._preview_blocked(store, graph_name)
+        if blocked is not None:
+            return blocked
         class_uri = rule_dict.get("class_uri", "")
         compatibility = [
             CohortCompat.from_dict(cc)
@@ -350,6 +391,9 @@ class CohortService:
         """
         from back.core.graph_analysis import CohortCompat, CohortLink
 
+        blocked = self._preview_blocked(store, graph_name)
+        if blocked is not None:
+            return blocked
         class_uri = rule_dict.get("class_uri", "")
         links = [CohortLink.from_dict(lk) for lk in rule_dict.get("links", []) or []]
         compatibility = [

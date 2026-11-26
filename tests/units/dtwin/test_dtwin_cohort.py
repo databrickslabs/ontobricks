@@ -41,6 +41,7 @@ def _graph() -> List[Dict[str, str]]:
 def _store():
     s = MagicMock()
     s.query_triples.return_value = _graph()
+    s.count_triples.return_value = len(_graph())
     s.insert_triples.return_value = 7
     s.delete_cohort_triples.return_value = -1
     s.get_entity_metadata.return_value = []
@@ -296,6 +297,34 @@ class TestPreviewHelpers:
         link = out["links"][0]
         assert link["edge_count"] >= 1
         assert link["hops"][0]["in_frontier"] == 4
+
+    def test_previews_short_circuit_on_large_graph(self, domain, good_rule_dict):
+        # Above the live-preview budget the counters must NOT load the graph —
+        # they return a too_large signal from the cheap count_triples pushdown.
+        from back.objects.digitaltwin.cohort.CohortService import PREVIEW_MAX_TRIPLES
+
+        store = _store()
+        store.count_triples.return_value = PREVIEW_MAX_TRIPLES + 1
+        dt = DigitalTwin(domain)
+
+        for out in (
+            dt.cohort_class_stats(PERSON, store, "graph"),
+            dt.cohort_edge_count(good_rule_dict, store, "graph"),
+            dt.cohort_node_count(good_rule_dict, store, "graph"),
+            dt.cohort_path_trace(good_rule_dict, store, "graph"),
+        ):
+            assert out["too_large"] is True
+            assert out["triple_count"] == PREVIEW_MAX_TRIPLES + 1
+        # The expensive full-graph load was never triggered.
+        store.query_triples.assert_not_called()
+
+    def test_previews_run_when_count_unavailable(self, domain):
+        # A backend that can't cheaply count must not be blocked — fall back.
+        store = _store()
+        store.count_triples.side_effect = NotImplementedError("no cheap count")
+        dt = DigitalTwin(domain)
+        out = dt.cohort_class_stats(PERSON, store, "graph")
+        assert out["instance_count"] == 5
 
     def test_path_trace_pinpoints_collapse(self, domain):
         """Bad predicate URI → first-hop neighbours_raw == 0."""
