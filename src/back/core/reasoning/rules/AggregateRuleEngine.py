@@ -159,7 +159,14 @@ class AggregateRuleEngine:
                         rule_type="aggregate",
                     )
                 )
-                if materialize and rule.get("result_class_uri"):
+                # Emit the classification triple whenever the rule declares a
+                # result class. Like SWRL/Decision, the engine always RETURNS
+                # its inferred triples; the caller (Inference Run -> Materialise
+                # step) decides whether to persist. Previously gated on
+                # `materialize`, but the UI Run passes materialize=False and
+                # defers the write, so aggregate output never reached the
+                # materialise step ("No new findings").
+                if rule.get("result_class_uri"):
                     result.inferred_triples.append(
                         InferredTriple(
                             subject=subj,

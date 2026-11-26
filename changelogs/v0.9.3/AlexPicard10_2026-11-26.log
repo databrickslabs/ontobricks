@@ -1,0 +1,30 @@
+## fix(reasoning): aggregate rules never materialized their result class
+
+Context: an Aggregate rule with a Result entity (e.g. BlendWine = Wine with
+COUNT(containsGrape) > 1 -> typed BlendWine) computed and flagged matches but
+never materialized the `rdf:type <result_class>` triples — the Inference report
+always showed "No new findings" for the Aggregate phase. Root cause:
+`AggregateRuleEngine._execute_one` only appended its inferred triple when the
+engine was called with `materialize=True`, but the UI Inference Run passes
+`materialize=False` and defers the write to the separate Materialise step (which
+persists the task's stored `inferred_triples`). SWRL and Decision engines append
+their inferred triples unconditionally and only use `materialize` for an extra
+direct store write — which is why greatWine / tastingTier materialized but
+aggregate output never reached the materialise step.
+
+Changes:
+1. src/back/core/reasoning/rules/AggregateRuleEngine.py — emit the
+   `rdf:type <result_class_uri>` inferred triple whenever the rule declares a
+   result class, regardless of the `materialize` flag (consistent with
+   SWRL/Decision: the engine always RETURNS its triples; the caller decides
+   whether to persist). Rules without a result class still only report
+   violations.
+2. tests/units/ontology/test_business_rules.py — a matching row emits the
+   classification triple with `materialize=False`; a rule without a result
+   class reports only a violation.
+
+Modified files:
+- src/back/core/reasoning/rules/AggregateRuleEngine.py
+- tests/units/ontology/test_business_rules.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/dtwin tests/units/ontology/test_business_rules.py` -> 743 passed. Full suite -> pending (see PR).

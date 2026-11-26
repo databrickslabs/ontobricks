@@ -364,6 +364,45 @@ class TestAggregateRuleEngine:
         assert "SUM(TRY_CAST(t_agg.object AS DOUBLE))" in sql
         assert "CAST(" not in sql.replace("TRY_CAST(", "")
 
+    def test_matching_row_emits_classification_triple_without_materialize(
+        self, sample_rule
+    ):
+        # The engine must RETURN its rdf:type <result_class> triple even when
+        # materialize=False (the UI Run defers the write to the Materialise
+        # step) — otherwise aggregate rules never persist. See #246 follow-up.
+        engine = AggregateRuleEngine()
+        store = MagicMock()
+        store.sql_table_reference.return_value = "triples"
+        store.execute_query.return_value = [
+            {"s": "http://test.org/c/1", "agg_val": 7}
+        ]
+        result = engine.execute_rules(
+            [sample_rule],
+            store,
+            "g",
+            {"base_uri": "http://test.org/ontology#"},
+            materialize=False,
+        )
+        assert len(result.inferred_triples) == 1
+        triple = result.inferred_triples[0]
+        assert triple.subject == "http://test.org/c/1"
+        assert triple.predicate.endswith("#type")
+        assert triple.object == "http://test.org/ontology#FrequentBuyer"
+
+    def test_no_result_class_reports_only_violation(self, sample_rule):
+        engine = AggregateRuleEngine()
+        store = MagicMock()
+        store.sql_table_reference.return_value = "triples"
+        store.execute_query.return_value = [
+            {"s": "http://test.org/c/1", "agg_val": 7}
+        ]
+        rule = {**sample_rule, "result_class": "", "result_class_uri": ""}
+        result = engine.execute_rules(
+            [rule], store, "g", {"base_uri": "http://test.org/ontology#"}
+        )
+        assert result.inferred_triples == []
+        assert len(result.violations) == 1
+
     def test_validate_valid_rule(self, sample_rule):
         errors = AggregateRuleEngine.validate_rule(sample_rule)
         assert errors == []
