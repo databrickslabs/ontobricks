@@ -24,9 +24,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from back.core.w3c.shacl.constants import IF_THEN_ACTION_ASSERT, IF_THEN_ACTION_RETRACT
+
 #: SHACL-AF rule-shape discriminators.
 TRIPLE_RULE = "sh:TripleRule"
 SPARQL_RULE = "sh:SPARQLRule"
+#: A retraction removes triples, which SHACL-AF cannot express. It runs as a
+#: removal; ``construct_sparql`` holds its SPARQL Update equivalent.
+RETRACT_RULE = "retract:DeleteWhere"
 
 
 @dataclass
@@ -43,7 +48,12 @@ class ShaclRule:
     turtle: str
     enabled: bool = True
     description: str = ""
+    action: str = IF_THEN_ACTION_ASSERT
 
     @property
     def is_sparql_rule(self) -> bool:
         return self.rule_type == SPARQL_RULE
+
+    @property
+    def is_retraction(self) -> bool:
+        return self.action == IF_THEN_ACTION_RETRACT

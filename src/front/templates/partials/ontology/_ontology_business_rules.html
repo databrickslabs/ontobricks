@@ -217,6 +217,16 @@
                                     </span>
                                     <span class="badge if-then-badge-then-count" id="ifThenThenCount">0</span>
                                 </div>
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <label class="form-label small text-muted mb-0" for="ifThenAction">Action</label>
+                                    <select class="form-select form-select-sm w-auto" id="ifThenAction">
+                                        <option value="assert" selected>Assert &mdash; infer the conclusions</option>
+                                        <option value="retract">Remove &mdash; delete the matching triples</option>
+                                    </select>
+                                </div>
+                                <div class="form-text small mb-2 d-none" id="ifThenRetractNote">
+                                    <i class="bi bi-eraser me-1"></i>Triples matched by the IF part are hidden on the next reasoning run. Retractions are not SHACL-AF rules and are not exported.
+                                </div>
                                 <div id="ifThenThenAtoms">
                                     <div class="text-muted small fst-italic py-2" id="ifThenThenEmpty">
                                         Click entities or relationships on the graph

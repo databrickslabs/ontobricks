@@ -23,10 +23,12 @@ from back.core.reasoning.shacl_rules.RuleBuiltinRegistry import RuleBuiltinRegis
 from back.core.reasoning.shacl_rules.RuleExpressionParser import RuleExpressionParser
 from back.core.reasoning.shacl_rules.rule_uri_map import build_uri_map
 from back.core.reasoning.shacl_rules.ShaclRule import (
+    RETRACT_RULE,
     ShaclRule,
     SPARQL_RULE,
     TRIPLE_RULE,
 )
+from back.core.w3c.shacl.constants import IF_THEN_ACTION_ASSERT, IF_THEN_ACTION_RETRACT
 
 logger = get_logger(__name__)
 
@@ -61,14 +63,22 @@ class IfThenToShaclTranspiler:
         name = if_then_rule.get("name", "unnamed")
         antecedent = if_then_rule.get("antecedent", "")
         consequent = if_then_rule.get("consequent", "")
+        action = if_then_rule.get("action") or IF_THEN_ACTION_ASSERT
 
         part = RuleExpressionParser.partition_rule_atoms(if_then_rule)
-        rule_type = self._classify(part)
         target_uri = self._target_class_uri(part)
-        construct = self._build_construct(antecedent, consequent)
-        turtle = self._build_turtle(
-            self._shape_id(name), rule_type, target_uri, construct, consequent
-        )
+        if action == IF_THEN_ACTION_RETRACT:
+            construct = self._build_construct(antecedent, consequent, verb="DELETE")
+            rule_type = RETRACT_RULE
+            turtle = self._build_retraction_turtle(
+                self._shape_id(name), target_uri, construct
+            )
+        else:
+            construct = self._build_construct(antecedent, consequent)
+            rule_type = self._classify(part)
+            turtle = self._build_turtle(
+                self._shape_id(name), rule_type, target_uri, construct, consequent
+            )
 
         return ShaclRule(
             id=self._shape_id(name),
@@ -81,6 +91,7 @@ class IfThenToShaclTranspiler:
             turtle=turtle,
             enabled=if_then_rule.get("enabled", True),
             description=if_then_rule.get("description", ""),
+            action=action,
         )
 
     # -- Classification ---------------------------------------------------
@@ -109,8 +120,13 @@ class IfThenToShaclTranspiler:
 
     # -- SPARQL CONSTRUCT rendering ---------------------------------------
 
-    def _build_construct(self, antecedent: str, consequent: str) -> str:
+    def _build_construct(
+        self, antecedent: str, consequent: str, verb: str = "CONSTRUCT"
+    ) -> str:
         """Render a SPARQL ``CONSTRUCT { head } WHERE { body }`` string.
+
+        ``verb="DELETE"`` renders the retraction form ``DELETE { head } WHERE
+        { body }`` (SPARQL Update) instead.
 
         Built-ins become ``FILTER`` clauses (comparison ops) or SPARQL
         comments (non-comparison), and negated atoms become
@@ -135,7 +151,28 @@ class IfThenToShaclTranspiler:
 
         head_str = " ".join(t for t in head if t)
         body_str = " ".join(t for t in body if t)
-        return f"CONSTRUCT {{ {head_str} }} WHERE {{ {body_str} }}"
+        return f"{verb} {{ {head_str} }} WHERE {{ {body_str} }}"
+
+    def _build_retraction_turtle(
+        self, shape_id: str, target_uri: str, update: str
+    ) -> str:
+        """Render a retraction as a SHACL-AF shape that carries no ``sh:rule``.
+
+        SHACL-AF has no delete action, so the shape only documents the intent
+        (``ex:action "retract"``) and the SPARQL Update it stands for.  The
+        executable form is the removal run by the reasoning engine.
+        """
+        lines = [
+            "@prefix sh: <http://www.w3.org/ns/shacl#> .",
+            f"@prefix ex: <{self._base_uri or 'http://example.org/ontology#'}> .",
+            "",
+            f"ex:{shape_id} a sh:NodeShape ;",
+        ]
+        if target_uri:
+            lines.append(f"    sh:targetClass <{target_uri}> ;")
+        lines.append('    ex:action "retract" ;')
+        lines.append(f'    ex:sparqlUpdate """{update}""" .')
+        return "\n".join(lines) + "\n"
 
     def _atom_triple(self, atom: Dict) -> str:
         """Render a class/property atom as a SPARQL triple pattern."""

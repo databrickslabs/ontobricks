@@ -370,11 +370,23 @@ the generated SHACL-AF live as you build a rule.
    attributes**, pick the entity and attribute, and type the value (e.g.
    `priority = "high"`). This is a **replace** update: any existing value for
    that attribute on the matched entity is removed and the new one set.
-5. **Advanced rules**: rules using built-ins, negation, or derived classes that
+5. **Action (THEN)**: the THEN part has an **Action** switch.
+   - **Assert** (default) infers the THEN triples, as above.
+   - **Remove** deletes the triples the IF part matches. Put the relationship or
+     attribute to delete under **THEN**, and bind its variables with the **IF**
+     conditions. For example, IF `Meter(?m)` and `Customer(?c)`, THEN
+     `meterOf(?m, ?c)` with **Remove** deletes every `meterOf` link between a
+     meter and a customer. A literal such as `status = "closed"` removes only
+     the matching value.
+
+     A removal is hidden through the same overrides as a Complex removal rule, and
+     runs with the reasoning pipeline (not per entity). It is not a quality check,
+     and it is not exported as SHACL-AF (the SHACL view and file omit it).
+6. **Advanced rules**: rules using built-ins, negation, or derived classes that
    the visual graph cannot fully represent are shown read-only (their generated
    SHACL-AF is displayed and preserved on save).
-6. Enter a **Rule Name** and optional **Description**
-7. Click **Save Rule**
+7. Enter a **Rule Name** and optional **Description**
+8. Click **Save Rule**
 
 **View/Export**: Click the header **SHACL** button to open a modal
 (same pattern as Data Quality → SHACL). It shows all rules as their generated

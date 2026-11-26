@@ -11,6 +11,8 @@ from typing import Any, Optional
 
 from back.core.errors import ValidationError
 from back.core.w3c.shacl.constants import (
+    IF_THEN_ACTION_ASSERT,
+    IF_THEN_ACTION_RETRACT,
     RULE_FAMILY_CATEGORIES,
     IF_THEN_ID_PREFIX,
     rule_check_id,
@@ -82,12 +84,18 @@ class TwinDataQualityRun:
 
         ontology_dict = cls.read_ontology(domain)
         selected_ids = set(shape_ids)
-        if_then_rules = cls._selected_rules(
-            IF_THEN_ID_PREFIX,
-            domain.if_then_rules,
-            selected_ids=selected_ids,
-            dimensions=dimensions,
-        )
+        # A retraction removes triples; it is not a quality check (its matches
+        # are not violations), so only assertions are checked.
+        if_then_rules = [
+            r
+            for r in cls._selected_rules(
+                IF_THEN_ID_PREFIX,
+                domain.if_then_rules,
+                selected_ids=selected_ids,
+                dimensions=dimensions,
+            )
+            if (r.get("action") or IF_THEN_ACTION_ASSERT) != IF_THEN_ACTION_RETRACT
+        ]
         if not shapes and not if_then_rules:
             raise ValidationError(
                 "Nothing to check in the selected dimensions."

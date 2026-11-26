@@ -17,6 +17,7 @@ from back.core.errors import InfrastructureError, ValidationError
 from back.core.graphdb import get_graphdb
 from back.core.helpers import run_blocking
 from back.core.logging import get_logger
+from back.core.w3c.shacl.constants import IF_THEN_ACTION_ASSERT, IF_THEN_ACTION_RETRACT
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 from back.objects.digitaltwin.TwinGraphAccess import TwinGraphAccess
 from back.objects.digitaltwin.models import DomainSnapshot
@@ -177,6 +178,12 @@ class NodeBusinessRuleService:
                 f"Business rule {requested!r} is not configured on class {class_name!r}"
             )
         rule = next(r for r in if_then_rules if r.get("name") == requested)
+        if (rule.get("action") or IF_THEN_ACTION_ASSERT) == IF_THEN_ACTION_RETRACT:
+            # Only the reasoning pipeline applies removals; a per-entity run
+            # would silently write nothing.
+            raise ValidationError(
+                f"Business rule {requested!r} removes triples and runs with the reasoning pipeline"
+            )
         focus_vars = Rules.if_then_focus_variables(
             rule, Rules.class_lineage(domain.get_classes() or [], class_name)
         )

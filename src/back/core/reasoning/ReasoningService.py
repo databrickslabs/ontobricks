@@ -79,8 +79,9 @@ class ReasoningService:
     ) -> None:
         """Execute a single reasoning phase and fold its output into *result*.
 
-        Only inferred triples are collected; violations are intentionally
-        ignored — they belong to the Data Quality pipeline.
+        Inferred triples and the triples removal rules select are collected;
+        violations are intentionally ignored — they belong to the Data Quality
+        pipeline.
 
         Args:
             phase_name: Prefix for stat keys (e.g. ``"tbox"``).
@@ -95,6 +96,7 @@ class ReasoningService:
             phase_result = runner()
             ps = phase_result.stats or {}
             result.inferred_triples.extend(phase_result.inferred_triples)
+            result.removed_triples.extend(phase_result.removed_triples)
             result.stats[f"{phase_name}_duration_seconds"] = round(time.time() - t1, 3)
             result.stats[f"{phase_name}_inferred_count"] = ps.get(
                 "inferred_count",

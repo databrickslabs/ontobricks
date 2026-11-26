@@ -57,16 +57,21 @@ def _has_literal_assignment(cons_atoms: List[Dict]) -> bool:
 
 def _consequent_inference_selects(
     escape, table, cons_atoms, var_bindings, from_part, join_parts,
-    where_parts, ref, next_alias, base_uri, uri_map,
+    where_parts, ref, next_alias, base_uri, uri_map, retract: bool = False,
 ) -> List[str]:
     """Render each consequent atom as an inference ``SELECT`` (UNION ALL'd).
 
     Handles class assertions (``rdf:type``), relationships (bound or dangling
     object), and set-attribute literals.  De-dup is exact (s, p, o) for valued
     objects so a set-attribute fires on a changed value and no-ops otherwise.
+
+    ``retract=True`` renders the removal form: each SELECT keeps the triples
+    that *already exist* (``EXISTS``) rather than the ones still missing
+    (``NOT EXISTS``), because those are the triples a removal hides.
     """
     joins = "\n".join(join_parts)
     where = " AND ".join(where_parts)
+    guard = "EXISTS" if retract else "NOT EXISTS"
     selects: List[str] = []
     for atom in cons_atoms:
         c_uri = escape(RuleExpressionParser.resolve_uri(atom["name"], base_uri, uri_map))
@@ -76,7 +81,7 @@ def _consequent_inference_selects(
             if var not in var_bindings:
                 continue
             not_exists = (
-                f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
+                f"{guard} (SELECT 1 FROM {table} {c_alias} "
                 f"WHERE {c_alias}.predicate = '{RDF_TYPE}' "
                 f"AND {c_alias}.object = '{c_uri}' "
                 f"AND {c_alias}.subject = {ref(var)})"
@@ -98,8 +103,12 @@ def _consequent_inference_selects(
                 obj_expr = literal_obj
             else:
                 obj_expr = "''"
+            # A removal needs a concrete triple: a dangling object (not bound
+            # by the IF part) would match every value of the property.
+            if retract and var_o not in var_bindings and literal_obj is None:
+                continue
             not_exists = (
-                f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
+                f"{guard} (SELECT 1 FROM {table} {c_alias} "
                 f"WHERE {c_alias}.predicate = '{c_uri}' "
                 f"AND {c_alias}.subject = {ref(var_s)}"
             )
@@ -866,7 +875,7 @@ class ShaclFlatSqlBackend:
 
         selects = _consequent_inference_selects(
             self._escape, table, cons_atoms, var_bindings, from_part,
-            join_parts, where_parts, _ref, _next, base_uri, uri_map,
+            join_parts, where_parts, _ref, _next, base_uri, uri_map, bool(params.get("retract")),
         )
         if not selects:
             return None

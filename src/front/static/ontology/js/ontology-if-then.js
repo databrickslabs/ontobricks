@@ -136,6 +136,8 @@ window.IfThenModule = {
         const badge =
             `<span class="badge bg-primary bg-opacity-75 small">` +
             `<i class="bi bi-code-square me-1"></i>Simple</span>`;
+        const retractBadge =
+            `<span class="br-kind-badge-removal small"><i class="bi bi-eraser me-1"></i>Remove</span>`;
         this.rules.forEach((rule, i) => {
             const ante = this._esc(rule.antecedent || '');
             const cons = this._esc(rule.consequent || '');
@@ -143,7 +145,7 @@ window.IfThenModule = {
                 name: rule.name || `Simple Rule ${i + 1}`,
                 meta: `${ante} → ${cons}`,
                 enabled: rule.enabled,
-                badge,
+                badge: this._actionOf(rule) === 'retract' ? retractBadge : badge,
                 onEdit: () => this.editRule(i),
                 onDelete: () => this.deleteRule(i),
                 onToggle: () => this.toggleEnabled(i),
@@ -178,6 +180,7 @@ window.IfThenModule = {
 
     _resetEditor() {
         this.editingIndex = -1;
+        this._setActionUi('assert');
         this.ifNodes = new Set();
         this.thenNodes = new Set();
         this.ifLinks = new Set();
@@ -921,6 +924,30 @@ window.IfThenModule = {
         if (show) this._refreshShaclPreview(this._currentAntecedent, this._currentConsequent);
     },
 
+    // ── Action (assert / retract) ────────────────────────
+
+    _actionValue() {
+        return document.getElementById('ifThenAction')?.value || 'assert';
+    },
+
+    _actionOf(rule) {
+        return (rule && rule.action) || 'assert';
+    },
+
+    // Sync the action select and the retraction hint; a retraction previews
+    // as its SPARQL Update, so refresh the preview when the action changes.
+    _setActionUi(action) {
+        const sel = document.getElementById('ifThenAction');
+        if (sel) sel.value = action === 'retract' ? 'retract' : 'assert';
+        document.getElementById('ifThenRetractNote')
+            ?.classList.toggle('d-none', action !== 'retract');
+    },
+
+    _onActionChanged() {
+        this._setActionUi(this._actionValue());
+        this._refreshShaclPreview(this._currentAntecedent, this._currentConsequent);
+    },
+
     // Fetch and render the generated SHACL-AF for the rule being built.
     // Read-only: transpilation is one-directional (no SHACL->rule parser).
     // No-ops while the code pane is collapsed (avoids needless fetches).
@@ -944,6 +971,7 @@ window.IfThenModule = {
                     body: JSON.stringify({
                         name: document.getElementById('ifThenRuleName')?.value || 'rule',
                         antecedent, consequent,
+                        action: this._actionValue(),
                     }),
                 });
                 const data = await resp.json().catch(() => ({}));
@@ -1306,6 +1334,7 @@ window.IfThenModule = {
 
     _prefillFromRule(rule) {
         if (!rule) return;
+        this._setActionUi(this._actionOf(rule));
         const antD = this._parseAtomsDetailed(rule.antecedent || '');
         const conD = this._parseAtomsDetailed(rule.consequent || '');
 
@@ -1442,6 +1471,7 @@ window.IfThenModule = {
             description: document.getElementById('ifThenRuleDescription').value.trim(),
             antecedent,
             consequent,
+            action: this._actionValue(),
             enabled: true
         };
         if (this.editingIndex >= 0 && this.rules[this.editingIndex]) {
@@ -1598,6 +1628,11 @@ IfThenModule.bindEditorDom = function () {
             const act = b.getAttribute('data-if-then-action');
             if (act && typeof IfThenModule[act] === 'function') IfThenModule[act]();
         });
+    }
+
+    const ifThenAction = document.getElementById('ifThenAction');
+    if (ifThenAction) {
+        ifThenAction.addEventListener('change', () => IfThenModule._onActionChanged());
     }
 
     const ifThenCtx = document.getElementById('ifThenContextMenu');

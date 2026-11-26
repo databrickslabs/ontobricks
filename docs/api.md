@@ -1825,6 +1825,13 @@ POST /ontology/if-then/save
 
 **Note:** Set `index` to -1 for new rules, or the rule index to update existing.
 
+`rule.action` is optional: `"assert"` (default, infers the THEN triples) or
+`"retract"` (removes the triples the IF part matches through the removal
+overlay). A retraction's THEN part must be property or attribute atoms whose
+variables are bound by the IF part; class atoms, built-ins and negation are
+rejected. `POST /ontology/shacl-rules/preview` accepts the same `action` and
+returns the SPARQL `DELETE` form for a retraction.
+
 #### Export Rules
 
 ```http

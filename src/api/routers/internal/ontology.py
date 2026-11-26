@@ -1094,6 +1094,7 @@ async def preview_shacl_rule(
             data.get("antecedent", ""),
             data.get("consequent", ""),
             domain.ontology,
+            action=data.get("action", "assert"),
         )
         return {"success": True, **result}
 
@@ -1394,7 +1395,12 @@ def _rule_signature(key: str, rule: dict) -> tuple:
     differently, so re-accepting an already-stored suggestion is a no-op.
     """
     if key == "if_then_rules":
-        return ("if_then", _norm_ws(rule.get("antecedent")), _norm_ws(rule.get("consequent")))
+        return (
+            "if_then",
+            _norm_ws(rule.get("antecedent")),
+            _norm_ws(rule.get("consequent")),
+            rule.get("action") or "assert",
+        )
     if key == "sparql_rules":
         return ("sparql", _norm_ws(rule.get("query")))
     return ("raw", json.dumps(rule, sort_keys=True, default=str))

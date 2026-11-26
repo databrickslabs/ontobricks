@@ -1,0 +1,137 @@
+## Simple (IF-THEN) rules: Remove action (retraction)
+
+### Context
+Removal rules existed only for Complex (SPARQL) rules. A Simple (IF-THEN) rule could only
+assert triples. A THEN part can now remove triples: a rule with `action: "retract"` matches
+the triples its IF part binds and hides them through the same removal overlay as a Complex
+removal rule. Assertions are unchanged (`action` defaults to `"assert"`, so rules saved
+before this change behave as before).
+
+Decisions taken with the user:
+- A retraction's THEN part accepts property triples and literal attribute values only. Class
+  membership (`rdf:type`), built-ins and negation are refused.
+- Data-quality checks skip retractions (a removal is not a violation check).
+- A retraction matches the graph as it was before the run's inferences (same as the
+  Complex removal rules in the same run).
+
+### Changes
+1. `src/back/core/w3c/shacl/constants.py`: `IF_THEN_ACTION_ASSERT`, `IF_THEN_ACTION_RETRACT`,
+   `IF_THEN_ACTIONS`.
+2. `src/back/core/reasoning/shacl_rules/ShaclRule.py`: `RETRACT_RULE` rule type, `action`
+   field and `is_retraction` property on `ShaclRule`.
+3. `src/back/core/reasoning/shacl_rules/IfThenToShaclTranspiler.py`: a retraction renders
+   as a SPARQL `DELETE { … } WHERE { … }` (`construct_sparql`) and as a SHACL shape with
+   `ex:action "retract"` and no `sh:rule` (SHACL-AF has no delete). `_build_construct` takes
+   the verb.
+4. `src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py`: for a retraction the
+   consequent SELECT keeps the triples that exist (`EXISTS`) instead of the missing ones
+   (`NOT EXISTS`). A dangling object (not bound by the IF part) emits no SQL. The guard
+   flip was caught by running the generated SQL on sample rows: without it a retraction
+   matched nothing.
+5. `src/back/core/reasoning/shacl_rules/ShaclRuleSqlTranslator.py`: passes `retract` to the
+   flat backend for a retraction rule.
+6. `src/back/core/reasoning/shacl_rules/ShaclRuleEngine.py`: `execute_rules` routes a
+   retraction to `_retract_rule`, which collects the SELECT rows into `removed_triples`
+   (never inferred, never materialised). The SELECT runs in `_select_rule_rows`, shared
+   with `_infer_rule`. The removal is applied by `ReasoningService.materialize_inferred`
+   (origin `reasoning`), unchanged.
+7. `src/back/objects/ontology/Rules.py`: `validate_if_then_rule` checks the action and the
+   retraction shape (`_retraction_errors`: property/attribute atoms only, no built-ins or
+   negation, variables bound by the IF part). The tautology gate is skipped for retractions.
+   The atom parser is shared (`_iter_atoms`).
+8. `src/back/core/reasoning/shacl_rules/rule_serializer.py`: the combined SHACL export omits
+   retractions and says how many were omitted; `preview_rule_shacl` takes `action`.
+9. `src/api/routers/internal/ontology.py`: `/ontology/shacl-rules/preview` forwards `action`;
+   the import dedupe signature includes the action (an assertion and a retraction with the
+   same text are different rules).
+10. `src/back/objects/digitaltwin/quality/TwinDataQualityRun.py`: data-quality runs skip
+    retractions.
+11. `src/back/objects/digitaltwin/node/NodeBusinessRuleService.py`: a per-entity run of a
+    retraction is refused with a clear message (only the reasoning pipeline applies removals).
+12. `src/back/core/reasoning/shacl_rules/__init__.py`: exports `RETRACT_RULE`.
+13. `src/front/templates/partials/ontology/_ontology_business_rules.html`: **Action** select
+    (Assert / Remove) in the THEN pane and a retraction hint.
+14. `src/front/static/ontology/js/ontology-if-then.js`: the action is read on save and sent
+    to the preview; restored when editing; the preview refreshes on change; the Simple list
+    shows a **Remove** badge for retractions (reuses `br-kind-badge-removal`).
+15. `docs/user-guide.md`: step 5 "Action (THEN)" in the IF-THEN section (steps renumbered).
+16. `docs/api.md`: the `action` field of the save body and the preview route.
+
+Not covered (by design): Neo4j. The Cypher IF-THEN translator is still a scaffold that returns
+no SQL, so IF-THEN rules (assertions or retractions) do not run on Neo4j yet. Removals made
+by a retraction return on the next reasoning run, the same as Complex removals (a Build does
+not reapply them).
+
+### Modified files
+- src/back/core/w3c/shacl/constants.py
+- src/back/core/reasoning/shacl_rules/ShaclRule.py
+- src/back/core/reasoning/shacl_rules/IfThenToShaclTranspiler.py
+- src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py
+- src/back/core/reasoning/shacl_rules/ShaclRuleSqlTranslator.py
+- src/back/core/reasoning/shacl_rules/ShaclRuleEngine.py
+- src/back/core/reasoning/shacl_rules/rule_serializer.py
+- src/back/core/reasoning/shacl_rules/__init__.py
+- src/back/objects/ontology/Rules.py
+- src/back/objects/digitaltwin/quality/TwinDataQualityRun.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/api/routers/internal/ontology.py
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-if-then.js
+- tests/units/reasoning/test_if_then_retraction.py (new)
+- tests/units/front/test_if_then_retraction_ui.py (new)
+- docs/user-guide.md
+- docs/api.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-26.log
+
+### Test result
+- `uv run --frozen pytest -q -m "not scenario"` → 11606 passed, 334 skipped, 8 deselected,
+  0 failed. The size-budget test passes (`build_inference_sql` kept at its budget by passing
+  the flag on an existing line).
+- New tests: `tests/units/reasoning/test_if_then_retraction.py` (29; includes running the
+  generated SQL on sample rows in SQLite and checking that a retraction returns exactly the
+  existing triples) and `tests/units/front/test_if_then_retraction_ui.py` (7).
+- `ruff check --select F` clean on the changed Python files; `node --check` clean on
+  `ontology-if-then.js`.
+- Not verified: a live run on Lakebase, Delta or Spark (the SQL was checked on SQLite only),
+  and a browser check of the Simple rule editor.
+
+## Fix: full reasoning dropped removals; more tests for Simple-rule retractions
+
+### Context
+Adding tests for the retraction feature showed that `ReasoningService.run_full_reasoning`
+never carried a phase's `removed_triples` into its merged result. `_run_phase` copied only
+`inferred_triples`. The async reasoning task stores that merged result and the append step
+reads `removed_triples` back from it, so removals never reached the store through a real
+reasoning run. This affected the SPARQL removal rules released earlier as well as the new
+Simple-rule retractions. The earlier tests missed it because they called
+`materialize_inferred` directly and bypassed the merge.
+
+### Changes
+1. `src/back/core/reasoning/ReasoningService.py`: `_run_phase` now extends
+   `result.removed_triples` with the phase's removals; docstring updated.
+2. `tests/units/reasoning/test_full_reasoning_removals.py` (new, 4 tests): an IF-THEN
+   retraction and a SPARQL removal both survive `run_full_reasoning`, are combined and
+   serialised by `to_dict()`, and inferred triples are still collected. These failed before
+   the fix.
+3. `tests/units/api/test_if_then_retraction_routes.py` (new, 11 tests): save and list keep the
+   action; a class atom, an unbound variable and an unknown action are rejected with the
+   shared messages; toggling keeps the action; the preview returns the `DELETE` form; the
+   SHACL text omits retractions; the rules package export/import preserves the action and
+   rejects an invalid retraction while keeping the valid one.
+4. `tests/units/reasoning/test_if_then_retraction.py` (+12 tests, now 41): disabled
+   retraction skipped, assertion and retraction in one run, `inference_limit`, a failing
+   query counted without raising, a retraction not counted as inferred, missing/empty action
+   means assert, negation rejected, errors reported once, unknown ontology terms still
+   rejected, data-quality run with only retractions.
+
+### Modified files
+- src/back/core/reasoning/ReasoningService.py
+- tests/units/reasoning/test_full_reasoning_removals.py (new)
+- tests/units/api/test_if_then_retraction_routes.py (new)
+- tests/units/reasoning/test_if_then_retraction.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-26.log
+
+### Test result
+- `uv run --frozen pytest -q -m "not scenario"` → 11633 passed, 334 skipped, 8 deselected,
+  0 failed. `ruff check --select F` is clean on the changed files.
+- Still not verified: a live reasoning run on Lakebase or Delta with a removal rule.

@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from back.core.reasoning.shacl_rules.IfThenToShaclTranspiler import IfThenToShaclTranspiler
+from back.core.w3c.shacl.constants import IF_THEN_ACTION_ASSERT, IF_THEN_ACTION_RETRACT
 
 #: The shared prefix header for a combined SHACL-AF document.
 _PREFIX_HEADER = (
@@ -46,11 +47,24 @@ def serialize_rules_to_turtle(
     base_uri = (ontology or {}).get("base_uri", "") or "http://example.org/ontology#"
 
     header = _PREFIX_HEADER + f"@prefix ex: <{base_uri}> .\n"
-    if not rules:
-        return header + "\n# No rules defined.\n"
+    # Retractions delete triples, which SHACL-AF cannot express: they are
+    # left out of the combined document and counted in a comment instead.
+    assertions = [
+        r for r in rules
+        if (r.get("action") or IF_THEN_ACTION_ASSERT) != IF_THEN_ACTION_RETRACT
+    ]
+    retractions = len(rules) - len(assertions)
+    note = (
+        f"# {retractions} retraction rule(s) omitted: they delete triples "
+        "and have no SHACL-AF form.\n"
+        if retractions
+        else ""
+    )
+    if not assertions:
+        return header + "\n" + (note or "# No rules defined.\n")
 
-    blocks = [_strip_prefixes(transpiler.transpile(r).turtle) for r in rules]
-    return header + "\n" + "\n\n".join(b for b in blocks if b) + "\n"
+    blocks = [_strip_prefixes(transpiler.transpile(r).turtle) for r in assertions]
+    return header + "\n" + note + "\n\n".join(b for b in blocks if b) + "\n"
 
 
 def preview_rule_shacl(
@@ -58,6 +72,7 @@ def preview_rule_shacl(
     antecedent: str,
     consequent: str,
     ontology: Optional[Dict[str, Any]] = None,
+    action: str = IF_THEN_ACTION_ASSERT,
 ) -> Dict[str, Any]:
     """Transpile a single IF/THEN rule and return its SHACL-AF views."""
     transpiler = IfThenToShaclTranspiler(ontology or {})
@@ -66,6 +81,7 @@ def preview_rule_shacl(
             "name": name or "rule",
             "antecedent": antecedent or "",
             "consequent": consequent or "",
+            "action": action or IF_THEN_ACTION_ASSERT,
         }
     )
     return {
