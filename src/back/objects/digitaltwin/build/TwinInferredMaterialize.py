@@ -30,6 +30,27 @@ class TwinInferredMaterialize:
         ]
 
     @staticmethod
+    def _same_table(a: str, b: str) -> bool:
+        def norm(x: str) -> str:
+            return (x or "").replace("`", "").strip().lower()
+
+        return bool(a) and norm(a) == norm(b)
+
+    @staticmethod
+    def _delta_target_is_graph_store(store, svc, mat_table: str) -> bool:
+        """True when the "write to Delta" target IS the graph store's inferred
+        table — on a Lakehouse backend the two sinks coincide, so writing both
+        would duplicate every triple."""
+        resolver = getattr(store, "inferred_table_fqn", None)
+        if not callable(resolver):
+            return False
+        try:
+            target = resolver(svc._get_graph_name())
+        except Exception:  # noqa: BLE001 — resolution is best-effort
+            return False
+        return TwinInferredMaterialize._same_table(target, mat_table)
+
+    @staticmethod
     def run(
         domain,
         settings,
@@ -60,6 +81,30 @@ class TwinInferredMaterialize:
         domain_snap = DomainSnapshot(domain)
         result: Dict[str, Any] = {}
 
+        svc = None
+        if do_graph and uri_triples:
+            store = get_store(domain_snap, settings, for_write=True)
+            if store is None:
+                result["materialize_graph_error"] = "Graph store not available"
+            else:
+                svc = ReasoningService(domain_snap, store)
+
+        # Lakehouse backend: the graph store's inferred table and the Delta
+        # target are the same physical table, so running both sinks would write
+        # every triple twice. Collapse to the graph path — it populates the
+        # shared table AND rebuilds the adjacency index.
+        collapse = (
+            do_delta
+            and svc is not None
+            and bool(mat_table)
+            and len(mat_table.split(".")) == 3
+            and TwinInferredMaterialize._delta_target_is_graph_store(
+                svc._store, svc, mat_table
+            )
+        )
+        if collapse:
+            do_delta = False
+
         if do_delta and mat_table and len(mat_table.split(".")) == 3 and uri_triples:
             try:
                 client = get_client(domain_snap, settings)
@@ -76,26 +121,26 @@ class TwinInferredMaterialize:
                 result["materialize_error"] = "Materialise to Delta failed"
                 result["materialize_table"] = mat_table
 
-        if do_graph and uri_triples:
+        if svc is not None and uri_triples:
             try:
-                store = get_store(domain_snap, settings, for_write=True)
-                if store is None:
-                    result["materialize_graph_error"] = "Graph store not available"
-                else:
-                    svc = ReasoningService(domain_snap, store)
-                    inferred = [
-                        InferredTriple(
-                            subject=t.get("subject", ""),
-                            predicate=t.get("predicate", ""),
-                            object=t.get("object", ""),
-                            provenance=t.get("provenance", ""),
-                        )
-                        for t in uri_triples
-                    ]
-                    count = svc.materialize_inferred(
-                        ReasoningResult(inferred_triples=inferred)
+                inferred = [
+                    InferredTriple(
+                        subject=t.get("subject", ""),
+                        predicate=t.get("predicate", ""),
+                        object=t.get("object", ""),
+                        provenance=t.get("provenance", ""),
                     )
-                    result["materialize_graph_count"] = count
+                    for t in uri_triples
+                ]
+                count = svc.materialize_inferred(
+                    ReasoningResult(inferred_triples=inferred)
+                )
+                result["materialize_graph_count"] = count
+                if collapse:
+                    # Single shared write — report it under the Delta key too so
+                    # the UI's "written to Delta" line reflects the same table.
+                    result["materialize_count"] = count
+                    result["materialize_table"] = mat_table
             except Exception as exc:
                 logger.exception("Materialise to graph failed: %s", exc)
                 result["materialize_graph_error"] = "Materialise to graph failed"

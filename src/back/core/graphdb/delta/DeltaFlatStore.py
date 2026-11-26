@@ -253,6 +253,15 @@ class DeltaFlatStore(GraphDBBackend):
             return f"{cat}.{sch}.{base}{_table_naming.inferred_suffix()}"
         raise ValueError(f"Cannot resolve inferred companion table for {table_name!r}")
 
+    def inferred_table_fqn(self, table_name: str) -> str:
+        """Fully-qualified Delta table this backend writes inferred triples to.
+
+        Lets a caller detect when a separate "write to Delta" target is the
+        same physical table as the graph store's inferred companion (on a
+        Lakehouse backend they coincide), so it does not write twice.
+        """
+        return self._writable_table_fqn(table_name)
+
     def _ensure_companion_objects(self, table_name: str) -> str:
         """Ensure inferred TABLE + union graph VIEW exist before app writes."""
         inferred = self._writable_table_fqn(table_name)

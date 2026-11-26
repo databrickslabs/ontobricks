@@ -303,6 +303,36 @@ class TestInferredMaterialize:
         assert result["materialize_count"] == 1
         assert result["materialize_graph_count"] == 1
 
+    def test_coincident_delta_and_graph_target_write_once(self):
+        # Lakehouse backend: the graph store's inferred table IS the Delta
+        # target, so the Delta write is collapsed into the single graph write
+        # (which also rebuilds adjacency) — no double-materialisation.
+        svc = MagicMock()
+        svc._get_graph_name.return_value = "dom_V5"
+        svc._store.inferred_table_fqn.return_value = "c.s.inferred"
+        result, cls, svc, *_ = _materialize(svc=svc, mat_table="c.s.inferred")
+
+        cls.materialize_to_delta.assert_not_called()
+        svc.materialize_inferred.assert_called_once()
+        assert result["materialize_graph_count"] == 1
+        # Mirrored under the Delta key so the UI still reports the written table.
+        assert result["materialize_count"] == 1
+        assert result["materialize_table"] == "c.s.inferred"
+
+    def test_distinct_delta_and_graph_targets_both_write(self):
+        # A Delta target that is NOT the graph store's inferred table (e.g. an
+        # export table, or a non-SQL graph backend) keeps both writes.
+        svc = MagicMock()
+        svc.materialize_inferred.return_value = 1
+        svc._get_graph_name.return_value = "dom_V5"
+        svc._store.inferred_table_fqn.return_value = "c.s.other_inferred"
+        result, cls, svc, *_ = _materialize(svc=svc, mat_table="c.s.inferred")
+
+        cls.materialize_to_delta.assert_called_once()
+        svc.materialize_inferred.assert_called_once()
+        assert result["materialize_count"] == 1
+        assert result["materialize_graph_count"] == 1
+
     def test_non_three_part_table_skips_delta(self):
         result, cls, *_ = _materialize(do_graph=False, mat_table="s.inferred")
         cls.materialize_to_delta.assert_not_called()
