@@ -13,7 +13,7 @@ well under the class-size budget, independent of the large ``GraphDBBackend``.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from back.core.logging import get_logger
 
@@ -22,6 +22,16 @@ logger = get_logger(__name__)
 
 class SQLGraphReasoningOps:
     """SQL recursive-CTE / anti-join reasoning ops shared by SQL backends."""
+
+    if TYPE_CHECKING:
+        # Provided by the host GraphDBBackend / its SQL subclasses — declared
+        # here only for type-checkers; never defined at runtime, so the host's
+        # implementations are used unchanged.
+        def execute_query(self, query: str) -> List[Dict[str, Any]]: ...
+
+        def _sql_escape(self, value: str) -> str: ...
+
+        def _sql_relation(self, table_name: str) -> str: ...
 
     def transitive_closure(
         self,
@@ -101,6 +111,45 @@ class SQLGraphReasoningOps:
             logger.warning(
                 "symmetric_expand SQL failed on %s, returning empty result: %s",
                 table_name,
+                e,
+                exc_info=True,
+            )
+            return []
+
+    def inverse_expand(
+        self,
+        table_name: str,
+        predicate_uri: str,
+        inverse_predicate_uri: str,
+    ) -> List[Dict[str, Any]]:
+        """Materialise the inverse of *predicate_uri* under *inverse_predicate_uri*.
+
+        For every ``(a, P, b)`` where ``(b, Q, a)`` does not exist, returns the
+        missing ``(b, Q, a)`` triple (``Q`` = the inverse of ``P``, from an
+        ``owl:inverseOf`` axiom).  ``owl:inverseOf`` is symmetric, so the caller
+        runs this once per direction; each direction is a single anti-join.
+        """
+        esc_pred = self._sql_escape(predicate_uri)
+        esc_inv = self._sql_escape(inverse_predicate_uri)
+        sql = (
+            f"SELECT t.object AS subject, '{esc_inv}' AS predicate, t.subject AS object\n"
+            f"FROM {self._sql_relation(table_name)} t\n"
+            f"WHERE t.predicate = '{esc_pred}'\n"
+            f"  AND NOT EXISTS (\n"
+            f"    SELECT 1 FROM {self._sql_relation(table_name)} inv\n"
+            f"    WHERE inv.subject = t.object\n"
+            f"      AND inv.predicate = '{esc_inv}'\n"
+            f"      AND inv.object = t.subject\n"
+            f"  )"
+        )
+        try:
+            return self.execute_query(sql) or []
+        except Exception as e:
+            logger.warning(
+                "inverse_expand SQL failed on %s (%s -> %s), returning empty result: %s",
+                table_name,
+                predicate_uri,
+                inverse_predicate_uri,
                 e,
                 exc_info=True,
             )

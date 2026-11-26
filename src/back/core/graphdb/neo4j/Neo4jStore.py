@@ -483,6 +483,13 @@ class Neo4jStore(GraphDBBackend):
     ) -> List[Dict[str, Any]]:
         return self._reads.symmetric_expand(table_name, predicate_uri)
 
+    def inverse_expand(
+        self, table_name: str, predicate_uri: str, inverse_predicate_uri: str
+    ) -> List[Dict[str, Any]]:
+        # Native Cypher inverse expansion is a follow-up; no-op for now (the
+        # SQL default on SQLGraphReasoningOps is not valid against Neo4j).
+        return []
+
     def shortest_path(
         self,
         table_name: str,
