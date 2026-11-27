@@ -21,14 +21,29 @@ class TwinInferredMaterialize:
 
     @staticmethod
     def uri_triples(raw_triples: list) -> List[dict]:
+        """Keep triples that are valid to persist.
+
+        Subject and predicate must be absolute URIs; the object may be a URI or
+        a literal (rule consequents set datatype attributes, e.g. ``greatWine
+        "true"``) but must be non-empty. See databrickslabs/ontobricks#236.
+        """
         return [
             t
             for t in raw_triples
-            # RDF objects may be literals (rule consequents); only subject +
-            # predicate must be URIs. See databrickslabs/ontobricks#236.
             if is_uri(t.get("subject", ""))
             and is_uri(t.get("predicate", ""))
+            and str(t.get("object") or "").strip()
         ]
+
+    @staticmethod
+    def from_inferred(inferred_triples: list) -> List[dict]:
+        """Convert ``InferredTriple`` objects to dicts and apply :meth:`uri_triples`."""
+        return TwinInferredMaterialize.uri_triples(
+            [
+                {"subject": t.subject, "predicate": t.predicate, "object": t.object}
+                for t in inferred_triples
+            ]
+        )
 
     @staticmethod
     def run(
