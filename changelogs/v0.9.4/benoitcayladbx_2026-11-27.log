@@ -1,0 +1,33 @@
+## review(#238): dedupe materialise filter, reject empty objects, retarget to 0.9.4
+
+Context: Review follow-ups on PR #238 (fix for #236 - rule triples with literal
+objects dropped at materialisation). The PR was rebased onto the `0.9.4` branch
+and its changelog moved from `v0.9.3` to `v0.9.4` (current pyproject version).
+
+Changes:
+1. src/back/objects/digitaltwin/build/TwinInferredMaterialize.py - `uri_triples`
+   is now the single materialise filter: URI subject + URI predicate, literal or
+   URI object, but the object must be non-empty (empty/whitespace/missing objects
+   are dropped). Added a docstring explaining the rule.
+2. src/back/objects/digitaltwin/TwinBackgroundTasks.py - `run_inference_task` now
+   delegates to new `TwinInferredMaterialize.from_inferred` (wraps `uri_triples`) instead of re-implementing
+   the same predicate (removes duplication; the two sites can no longer drift).
+3. tests/units/dtwin/test_v090_twin_build_prepare.py - parametrised test that
+   empty / whitespace / missing objects, the `(batch)` placeholder subject and a
+   non-URI predicate are dropped.
+4. tests/units/dtwin/test_v090_twin_background_tasks.py - test that the scheduled
+   / API inference materialise path drops `(batch)` and empty-object triples while
+   keeping literal ones.
+5. changelogs/v0.9.4/AlexPicard10_2026-11-24.log - moved from v0.9.3 (version
+   alignment).
+
+Modified files:
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- tests/units/dtwin/test_v090_twin_background_tasks.py
+- changelogs/v0.9.4/AlexPicard10_2026-11-24.log (moved)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9717 passed, 338 skipped, 8 deselected.
+(The size-budget architecture test required extracting `TwinInferredMaterialize.from_inferred`
+so `run_inference_task` does not grow past its baseline.)

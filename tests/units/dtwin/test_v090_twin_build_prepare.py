@@ -249,8 +249,23 @@ def _materialize(*, do_delta=True, do_graph=True, mat_table="c.s.inferred",
 
 
 class TestInferredMaterialize:
-    def test_uri_triples_drops_literal_objects(self):
-        assert TwinInferredMaterialize.uri_triples([_GOOD, _LITERAL, {}]) == [_GOOD]
+    def test_uri_triples_keeps_literals_drops_malformed(self):
+        # #236: literal objects (rule consequents) are kept; only rows missing a
+        # URI subject/predicate (e.g. {}) are dropped.
+        assert TwinInferredMaterialize.uri_triples([_GOOD, _LITERAL, {}]) == [_GOOD, _LITERAL]
+
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            {"subject": "http://ex.org/s", "predicate": "http://ex.org/p", "object": ""},
+            {"subject": "http://ex.org/s", "predicate": "http://ex.org/p", "object": "  "},
+            {"subject": "http://ex.org/s", "predicate": "http://ex.org/p"},
+            {"subject": "(batch)", "predicate": "http://ex.org/p", "object": "3"},
+            {"subject": "http://ex.org/s", "predicate": "not-a-uri", "object": "3"},
+        ],
+    )
+    def test_uri_triples_drops_empty_objects_and_non_uri_subject_or_predicate(self, bad):
+        assert TwinInferredMaterialize.uri_triples([bad, _LITERAL]) == [_LITERAL]
 
     def test_missing_task_id_is_rejected(self):
         with pytest.raises(ValidationError):
@@ -276,24 +291,27 @@ class TestInferredMaterialize:
         with pytest.raises(ValidationError, match="no inferred triples"):
             _materialize(triples=())
 
-    def test_graph_write_receives_only_uri_triples_with_provenance(self):
+    def test_graph_write_receives_uri_and_literal_triples_with_provenance(self):
         result, cls, svc, get_store, _gc, store, _c = _materialize(do_delta=False)
 
         assert result == {"success": True, "materialize_graph_count": 1}
         assert cls.call_args.args[1] is store
         rr = svc.materialize_inferred.call_args.args[0]
+        # #236: literal-object triples are materialised too (missing provenance -> "").
         assert [(t.subject, t.predicate, t.object, t.provenance) for t in rr.inferred_triples] == [
-            ("http://ex.org/s1", "http://ex.org/p", "http://ex.org/o1", "swrl:rule1")
+            ("http://ex.org/s1", "http://ex.org/p", "http://ex.org/o1", "swrl:rule1"),
+            ("http://ex.org/s2", "http://ex.org/p", "42", ""),
         ]
 
     def test_graph_write_opens_the_store_on_the_build_warehouse(self):
         _r, _cls, _svc, get_store, *_ = _materialize(do_delta=False)
         assert get_store.call_args.kwargs == {"for_write": True}
 
-    def test_delta_write_goes_to_the_named_table_with_uri_triples(self):
+    def test_delta_write_goes_to_the_named_table_with_all_triples(self):
         result, cls, _svc, _gs, _gc, _s, client = _materialize(do_graph=False, delta_count=1)
 
-        cls.materialize_to_delta.assert_called_once_with(client, "c.s.inferred", [_GOOD])
+        # #236: both URI and literal-object triples are written.
+        cls.materialize_to_delta.assert_called_once_with(client, "c.s.inferred", [_GOOD, _LITERAL])
         assert result["materialize_count"] == 1
         assert result["materialize_table"] == "c.s.inferred"
         assert "materialize_graph_count" not in result
@@ -341,11 +359,13 @@ class TestInferredMaterialize:
             )
         assert result["materialize_graph_error"] == "Materialise to graph failed"
 
-    def test_only_literal_triples_writes_nothing(self):
+    def test_only_literal_triples_are_written(self):
+        # #236: literal-only rule output is a valid attribute write, not a no-op.
         result, cls, svc, get_store, get_client, *_ = _materialize(triples=(_LITERAL,))
-        get_store.assert_not_called()
-        get_client.assert_not_called()
-        assert result == {"success": True}
+        get_store.assert_called_once()
+        get_client.assert_called_once()
+        assert result["materialize_count"] == 1
+        assert result["materialize_graph_count"] == 1
 
 
 # ---------------------------------------------------------------------------

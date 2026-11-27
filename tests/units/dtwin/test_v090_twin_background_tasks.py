@@ -489,11 +489,24 @@ class TestInferenceTaskBranches:
         tm.fail_task.assert_not_called()
         assert tm.complete_task.call_args.kwargs["result"]["materialize_error"] == "UC denied"
 
-    def test_materialize_skips_literal_only_results(self):
+    def test_materialize_writes_literal_only_results(self):
+        # #236: rule outputs with literal objects must be materialised, not skipped.
         tm, cls, *_ = _infer(
             {"materialize": True, "materialize_table": "c.s.t"}, triples=(_LIT_T,)
         )
-        cls.materialize_to_delta.assert_not_called()
+        cls.materialize_to_delta.assert_called_once()
+        written = cls.materialize_to_delta.call_args.args[2]
+        assert [t["object"] for t in written] == ["literal"]
+
+    def test_materialize_drops_batch_placeholder_and_empty_object_triples(self):
+        batch_t = _T("(batch)", "http://ex.org/p", "3")
+        empty_t = _T("http://ex.org/s", "http://ex.org/p", "")
+        tm, cls, *_ = _infer(
+            {"materialize": True, "materialize_table": "c.s.t"},
+            triples=(batch_t, empty_t, _LIT_T),
+        )
+        written = cls.materialize_to_delta.call_args.args[2]
+        assert [t["object"] for t in written] == ["literal"]
 
     def test_api_run_keeps_violations_and_counts_them_in_the_message(self):
         tm, *_ = _infer({"swrl": True}, build_kind="api", violations=("v1", "v2"))
