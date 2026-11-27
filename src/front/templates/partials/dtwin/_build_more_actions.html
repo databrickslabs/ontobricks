@@ -1,4 +1,4 @@
-{# Build header kebab: Purge inferences + Refresh cache. Caller sets
+{# Build header kebab: Purge overrides + Refresh cache. Caller sets
    build_more_backend to "lakebase" or "databricks" so Refresh cache hits the
    right path. Visual style mirrors Databricks Du Bois action menus. #}
 {% set _dr = get_user_domain_role() %}
@@ -19,11 +19,11 @@
             <button type="button"
                     class="dropdown-item js-purge-inferences-btn"
                     data-graph-name="{{ graph_name or domain_name }}"
-                    title="Remove materialized inference and cohort triples">
+                    title="Remove the derived overrides (reasoning and cohort triples)">
                 <span class="ob-dbx-menu-icon" aria-hidden="true">
                     <i class="bi bi-trash"></i>
                 </span>
-                <span class="ob-dbx-menu-label">Purge inferences</span>
+                <span class="ob-dbx-menu-label">Purge overrides</span>
             </button>
         </li>
         <li>
@@ -51,11 +51,11 @@
         {% else %}
         <li>
             <button type="button" class="dropdown-item disabled" disabled
-                    title="Only builders and admins can purge inferences">
+                    title="Only builders and admins can purge overrides">
                 <span class="ob-dbx-menu-icon" aria-hidden="true">
                     <i class="bi bi-lock"></i>
                 </span>
-                <span class="ob-dbx-menu-label">Purge inferences</span>
+                <span class="ob-dbx-menu-label">Purge overrides</span>
             </button>
         </li>
         <li>

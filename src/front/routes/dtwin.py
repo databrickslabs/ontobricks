@@ -61,7 +61,7 @@ async def query_page(
         "cohort_rules_count": len(ont.get("cohort_rules", [])),
         "owlrl_available": DigitalTwin.is_owlrl_available(),
         "backend_type": DigitalTwin(domain_session).effective_backend_label(),
-        "materialize_table": f"{view_table}_inferred" if view_table else "",
+        "materialize_table": f"{view_table}_inferred_export" if view_table else "",
     }
 
     return templates.TemplateResponse(

@@ -301,7 +301,7 @@ class CohortService:
         store: Any,
         graph_name: str,
     ) -> Dict[str, Any]:
-        """Return ``{instance_count}`` for *class_uri* in the live graph."""
+        """Return ``{instance_count}`` for *class_uri* in the Original Graph."""
         builder = self._builder(store, graph_name)
         return {"instance_count": builder.count_class_members(class_uri)}
 

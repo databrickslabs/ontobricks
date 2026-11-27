@@ -1,6 +1,6 @@
 /**
  * Simulation Compare → Evaluate tab. Sends one prompt to the Graph Chat agent
- * twice, against the live graph and against the scenario sandbox, and shows
+ * twice, against the Original Graph and against the scenario sandbox, and shows
  * both answers side by side as rendered Markdown, with the agent's steps
  * (tool calls and results) streamed live above each answer. Each turn is
  * stateless (`persist: false`), so neither answer lands in the Graph Chat
@@ -74,7 +74,7 @@ const SimulationEvaluate = {
     _liveLabel() {
         const source = document.getElementById('simCompareSource');
         const option = source && source.options[source.selectedIndex];
-        return option ? option.textContent.trim() : 'Live graph';
+        return option ? option.textContent.trim() : 'Original Graph';
     },
 
     /** Enables Ask both only with a prompt and a ready scenario. */

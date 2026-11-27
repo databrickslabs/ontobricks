@@ -66,7 +66,9 @@ def test_lakebase_rebuild_adjacency_runs_ddl_and_rebuild_sql(auth):
 
     with patch.object(
         store, "_cursor", side_effect=[_cursor_ctx(setup_cur)(), _cursor_ctx(analyze_cur)()]
-    ), patch.object(store, "_txn_cursor", _tx_cm):
+    ), patch.object(store, "_txn_cursor", _tx_cm), patch.object(
+        store, "synced_table_name", return_value="g_v1_sync"
+    ):
         store.rebuild_adjacency("G_V1")
 
     assert known_missing_props(props) is False
@@ -106,9 +108,14 @@ def test_lakebase_rebuild_adjacency_runs_ddl_and_rebuild_sql(auth):
     assert any("ANALYZE g_v1_props" in s for s in executed)
 
     tx_sql = [str(c[0][0]) for c in tx_cur.execute.call_args_list]
-    assert tx_sql[-2].startswith("TRUNCATE g_v1_props")
-    assert tx_sql[-1].startswith(
+    # Certified props, then the asserted props (built last, same shape).
+    assert tx_sql[-4].startswith("TRUNCATE g_v1_props")
+    assert tx_sql[-3].startswith(
         "INSERT INTO g_v1_props (subject, predicate, object)"
+    )
+    assert tx_sql[-2].startswith("TRUNCATE g_v1_asserted_props")
+    assert tx_sql[-1].startswith(
+        "INSERT INTO g_v1_asserted_props (subject, predicate, object)"
     )
 
 
@@ -130,7 +137,9 @@ def test_lakebase_rebuild_adjacency_is_atomic_on_insert_failure(auth):
 
     with patch.object(
         store, "_cursor", side_effect=[_cursor_ctx(setup_cur)(), _cursor_ctx(analyze_cur)()]
-    ), patch.object(store, "_txn_cursor", _tx_cm):
+    ), patch.object(store, "_txn_cursor", _tx_cm), patch.object(
+        store, "synced_table_name", return_value="g_v1_sync"
+    ):
         with pytest.raises(RuntimeError, match="boom on second insert"):
             store.rebuild_adjacency("G_V1")
 
@@ -321,3 +330,64 @@ def test_long_index_names_fit_postgres_identifier_limit():
     idx = _adjacency_ddl.adjacency_index_name(table, "src")
     assert len(idx.encode("utf-8")) <= 63
     assert idx.endswith("_src_idx")
+
+
+def test_lakebase_asserted_companions_follow_the_asserted_relation(auth):
+    """Original Graph reads use ``…_asserted_*`` names; certified keep the old ones."""
+    store = FlatStore(auth, schema="ontobricks_graph")
+
+    assert store.adjacency_table_ids("G_V1") == ("g_v1_adj_out", "g_v1_adj_in")
+    assert store.props_table_id("G_V1") == "g_v1_props"
+
+    assert store.adjacency_table_ids("g_v1_asserted") == (
+        "g_v1_asserted_adj_out",
+        "g_v1_asserted_adj_in",
+    )
+    assert store.adjacency_table_ids("g_v1_sync") == (
+        "g_v1_asserted_adj_out",
+        "g_v1_asserted_adj_in",
+    )
+    assert store.props_table_id("g_v1_asserted") == "g_v1_asserted_props"
+
+
+def test_lakebase_asserted_entity_search_probes_the_asserted_table(auth):
+    store = FlatStore(auth, schema="ontobricks_graph")
+    probed = []
+    store.table_exists = MagicMock(side_effect=lambda fqn: probed.append(fqn) or True)
+
+    assert store.entity_search_ready("g_v1_asserted") is True
+    assert probed == ["g_v1_entity_search_asserted"]
+
+
+def test_lakebase_rebuild_builds_asserted_adjacency_from_the_asserted_view(auth):
+    setup_cur = MagicMock()
+    tx_cur = MagicMock()
+    analyze_cur = MagicMock()
+    store = FlatStore(auth, schema="ontobricks_graph")
+    store.synced_table_name = MagicMock(return_value="g_v1_asserted")
+    cursors = iter([setup_cur, analyze_cur])
+
+    @contextmanager
+    def _txn():
+        yield (None, tx_cur)
+
+    with patch.object(
+        store, "_cursor", side_effect=lambda: _cursor_ctx(next(cursors))()
+    ), patch.object(store, "_txn_cursor", side_effect=_txn):
+        store.rebuild_adjacency("G_V1")
+
+    tx_sql = [str(c[0][0]) for c in tx_cur.execute.call_args_list]
+    assert any("TRUNCATE g_v1_asserted_adj_out" in s for s in tx_sql)
+    assert any(
+        "INSERT INTO g_v1_asserted_adj_out (src, predicate, dst)" in s
+        and "FROM g_v1_asserted" in s
+        for s in tx_sql
+    )
+    assert any(
+        "INSERT INTO g_v1_asserted_props" in s and "FROM g_v1_asserted t" in s
+        for s in tx_sql
+    )
+    # Certified companions still come from the union view.
+    assert any(
+        "INSERT INTO g_v1_props" in s and "FROM g_v1 t" in s for s in tx_sql
+    )

@@ -6,6 +6,7 @@ be resolved must fail loudly, before a Lakeflow run is paid for.  A failed job
 run must propagate rather than silently degrading to a different compute path.
 """
 
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,6 +35,12 @@ class _FakeJobMetrics:
 class _RaisingJobMetrics:
     def compute(self, request, *, on_progress=None):
         raise OntoBricksError("job run failed")
+
+
+@contextmanager
+def _scan_in_place(domain, settings, source_table):
+    """Stands in for the snapshot step, which has its own tests in test_job_metrics."""
+    yield source_table
 
 
 def _fake_domain(session=None):
@@ -98,6 +105,9 @@ def test_compute_always_runs_the_job(monkeypatch):
         "back.core.graph_analysis.resolve_analytics_source",
         lambda d, s: ("cat.sch.t_data", ""),
     )
+    monkeypatch.setattr(
+        "back.core.graph_analysis.analytics_snapshot", _scan_in_place
+    )
     DigitalTwin(_fake_domain()).compute_graph_metrics(
         "cat.sch.graph", settings=_fake_settings()
     )
@@ -127,6 +137,9 @@ def test_failed_job_run_raises_not_degrades(monkeypatch):
     monkeypatch.setattr(
         "back.core.graph_analysis.resolve_analytics_source",
         lambda d, s: ("cat.sch.t_data", ""),
+    )
+    monkeypatch.setattr(
+        "back.core.graph_analysis.analytics_snapshot", _scan_in_place
     )
     with pytest.raises(OntoBricksError):
         DigitalTwin(_fake_domain()).compute_graph_metrics(

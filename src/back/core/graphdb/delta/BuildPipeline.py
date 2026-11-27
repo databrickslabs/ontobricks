@@ -10,6 +10,8 @@ from back.core.errors import OntoBricksError, OperationCancelledError
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 from back.core.graphdb.delta import _table_naming, materialize
+from back.core.graphdb.inferred_breakdown import legacy_origin_expr
+from back.core.helpers import sql_escape
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build._build_pipeline import collect_domain_stats
 from back.objects.digitaltwin.models import DomainSnapshot
@@ -88,8 +90,10 @@ class BuildPipeline:
         self.relationship_mappings: list = []
         self.spark_sql: str = ""
         self.triple_count: int = 0
-        self.inferred_table = _table_naming.inferred_table_fqn(domain, settings)
+        self.overrides_table = _table_naming.overrides_fqn(domain, settings)
+        self.legacy_inferred_table = _table_naming.inferred_table_fqn(domain, settings)
         self.graph_view = _table_naming.graph_view_fqn(domain, settings)
+        self.asserted_view = _table_naming.asserted_view_fqn(domain, settings)
         self.materialization = GraphDBFactory.resolve_lakehouse_materialization(
             domain, settings
         )
@@ -136,12 +140,12 @@ class BuildPipeline:
 
             t_phase = time.time()
             self.tm.advance_step(self.task_id, "Preparing inferred-triples table...")
-            self._ensure_inferred_companion()
-            self._log_phase("ensure_inferred", t_phase)
+            self._ensure_overrides_companion()
+            self._log_phase("ensure_overrides", t_phase)
 
             t_phase = time.time()
-            self._truncate_inferred()
-            self._log_phase("truncate_inferred", t_phase)
+            self._clear_derived_overrides()
+            self._log_phase("clear_derived_overrides", t_phase)
 
             t_phase = time.time()
             self.tm.advance_step(self.task_id, "Creating knowledge graph view...")
@@ -362,25 +366,44 @@ class BuildPipeline:
         )
         self._record_build_run("success", message=msg)
 
-    def _ensure_inferred_companion(self) -> None:
-        if not self.inferred_table:
+    def _ensure_overrides_companion(self) -> None:
+        """Create ``…_overrides``; seed a new one from the legacy ``…_inferred``."""
+        if not self.overrides_table:
             return
-        materialize.ensure_inferred_table(self.source_client, self.inferred_table)
+        created = materialize.ensure_overrides_table(
+            self.source_client, self.overrides_table
+        )
+        if created:
+            origin_expr = legacy_origin_expr(self.base_uri, sql_escape)
+            materialize.migrate_inferred(
+                self.source_client,
+                self.overrides_table,
+                self.legacy_inferred_table,
+                origin_expr,
+            )
 
-    def _truncate_inferred(self) -> None:
-        if not self.inferred_table:
+    def _clear_derived_overrides(self) -> None:
+        """Drop reasoning / cohort / community rows; user overrides survive a Build."""
+        if not self.overrides_table:
             return
-        materialize.truncate_table(self.source_client, self.inferred_table)
+        materialize.clear_derived(self.source_client, self.overrides_table)
 
     def _ensure_graph_view(self) -> None:
-        if not self.graph_view or not self.data_table or not self.inferred_table:
+        if not self.graph_view or not self.data_table or not self.overrides_table:
             return
         materialize.ensure_graph_view(
             self.source_client,
             self.graph_view,
             self.data_table,
-            self.inferred_table,
+            self.overrides_table,
         )
+        if self.asserted_view:
+            materialize.ensure_asserted_view(
+                self.source_client,
+                self.asserted_view,
+                self.data_table,
+                self.overrides_table,
+            )
 
     def _rebuild_adjacency_index(self) -> None:
         source = getattr(self, "graph_view", "") or self.data_table

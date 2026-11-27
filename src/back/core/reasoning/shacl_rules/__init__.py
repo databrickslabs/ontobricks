@@ -7,6 +7,7 @@ stats contract.
 """
 
 from back.core.reasoning.shacl_rules.ShaclRule import (
+    RETRACT_RULE,
     ShaclRule,
     SPARQL_RULE,
     TRIPLE_RULE,
@@ -22,6 +23,7 @@ __all__ = [
     "ShaclRuleEngine",
     "ShaclRuleSqlTranslator",
     "IfThenToShaclTranspiler",
+    "RETRACT_RULE",
     "SPARQL_RULE",
     "TRIPLE_RULE",
 ]

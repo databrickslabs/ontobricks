@@ -8,7 +8,12 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Set
 
-from back.core.w3c.shacl.constants import QUALITY_CATEGORIES
+from back.core.w3c.shacl.constants import (
+    IF_THEN_ACTION_ASSERT,
+    IF_THEN_ACTION_RETRACT,
+    IF_THEN_ACTIONS,
+    QUALITY_CATEGORIES,
+)
 
 class Rules:
     """Validate IF-THEN, SPARQL, and SHACL shapes."""
@@ -31,7 +36,57 @@ class Rules:
             errors.append("Rule antecedent is required")
         if not rule.get("consequent"):
             errors.append("Rule consequent is required")
+        action = rule.get("action") or IF_THEN_ACTION_ASSERT
+        if action not in IF_THEN_ACTIONS:
+            errors.append("Rule action must be 'assert' or 'retract'")
+        elif action == IF_THEN_ACTION_RETRACT:
+            errors.extend(Rules._retraction_errors(rule))
         return errors
+
+    @staticmethod
+    def _iter_atoms(text: str):
+        """Yield ``(prefix, name, args)`` for each atom in an IF-THEN expression."""
+        for m in Rules._IF_THEN_ATOM_RE.finditer(text or ""):
+            prefix = (m.group(1) or "").lower()
+            name = m.group(2)
+            args = [a.strip() for a in m.group(3).split(",") if a.strip()]
+            yield prefix, name, args
+
+    @staticmethod
+    def _retraction_errors(rule: Dict[str, Any]) -> List[str]:
+        """Constraints on a retraction's THEN part.
+
+        A retraction removes concrete triples, so each THEN atom must be one of
+        three single-triple forms whose variables the IF part binds:
+
+        - a class membership ``Class(?x)`` (removes the ``rdf:type`` triple);
+        - a relationship ``prop(?x, ?y)``;
+        - an attribute value ``prop(?x, "value")``.
+
+        Built-ins and negation have no single-triple meaning to remove.
+        """
+        errors: List[str] = []
+        bound = {
+            arg
+            for _, _, args in Rules._iter_atoms(rule.get("antecedent", ""))
+            for arg in args
+            if arg.startswith("?")
+        }
+        for prefix, name, args in Rules._iter_atoms(rule.get("consequent", "")):
+            if prefix or name.lower() == "not":
+                errors.append("a retraction's THEN part cannot use built-ins or negation")
+            elif len(args) not in (1, 2):
+                errors.append(
+                    f"a retraction can only remove a class membership or a "
+                    f"property/attribute triple; '{name}' has {len(args)} arguments"
+                )
+            else:
+                for arg in args:
+                    if arg.startswith("?") and arg not in bound:
+                        errors.append(
+                            f"retraction variable '{arg}' must be bound by the IF conditions"
+                        )
+        return list(dict.fromkeys(errors))
 
     @staticmethod
     def if_then_reference_errors(
@@ -49,16 +104,9 @@ class Rules:
         builtins (``builtin:``, ``xsd:``…) are ignored.
         """
 
-        def _atoms(text: str):
-            for m in Rules._IF_THEN_ATOM_RE.finditer(text or ""):
-                prefix = (m.group(1) or "").lower()
-                name = m.group(2)
-                args = [a.strip() for a in m.group(3).split(",") if a.strip()]
-                yield prefix, name, args
-
         errors: List[str] = []
         for part in ("antecedent", "consequent"):
-            for prefix, name, args in _atoms(rule.get(part, "")):
+            for prefix, name, args in Rules._iter_atoms(rule.get(part, "")):
                 if prefix:
                     continue
                 if len(args) <= 1:
@@ -73,16 +121,18 @@ class Rules:
         # present in the antecedent infers nothing (e.g. "… → Invoice(?i)" when
         # "Invoice(?i)" is already in the IF). Reject it. Builtin/datatype atoms
         # (prefixed) are ignored — only ontology class/property atoms count.
+        # A retraction is exempt: it removes exactly the triples its IF matches.
         def _norm(text: str):
             return {
                 (name.lower(), tuple(args))
-                for prefix, name, args in _atoms(text)
+                for prefix, name, args in Rules._iter_atoms(text)
                 if not prefix
             }
 
+        retraction = (rule.get("action") or IF_THEN_ACTION_ASSERT) == IF_THEN_ACTION_RETRACT
         ant = _norm(rule.get("antecedent", ""))
         con = _norm(rule.get("consequent", ""))
-        if con and con.issubset(ant):
+        if not retraction and con and con.issubset(ant):
             errors.append(
                 "consequent only repeats the antecedent and infers nothing new"
             )
@@ -191,20 +241,36 @@ class Rules:
     def sparql_reference_errors(
         rule: Dict[str, Any], class_names: Set[str], property_names: Set[str]
     ) -> List[str]:
-        """Flag a CONSTRUCT rule referencing unknown terms.
+        """Flag a SPARQL rule referencing unknown terms.
 
-        In BOTH the CONSTRUCT head and the WHERE pattern, predicates must be
-        known properties and ``a``/``rdf:type`` objects must be known classes.
-        No new (invented) class may be asserted in the CONSTRUCT head.
+        For a CONSTRUCT rule, both the CONSTRUCT head and the WHERE pattern are
+        checked: predicates must be known properties and ``a``/``rdf:type``
+        objects must be known classes. No new (invented) class may be asserted
+        in the CONSTRUCT head. A removal rule is checked the same way on its
+        DELETE template and its WHERE body.
         """
-        from back.core.reasoning.constants import CONSTRUCT_RE, TRIPLE_PATTERN_RE
+        from back.core.reasoning.constants import (
+            CONSTRUCT_RE,
+            REMOVAL_TEMPLATE_RE,
+            REMOVAL_WHERE_RE,
+            TRIPLE_PATTERN_RE,
+        )
+        from back.core.reasoning.rules.rule_kind import RULE_KIND_REMOVAL, sparql_rule_kind
 
         errors: List[str] = []
         query = rule.get("query", "") or ""
-        m = CONSTRUCT_RE.search(query)
-        if not m:
+        if sparql_rule_kind(query) == RULE_KIND_REMOVAL:
+            parts = [
+                m.group(1)
+                for m in (REMOVAL_TEMPLATE_RE.search(query), REMOVAL_WHERE_RE.search(query))
+                if m
+            ]
+        else:
+            m = CONSTRUCT_RE.search(query)
+            parts = [m.group(1), m.group(2)] if m else []
+        if not parts:
             return errors  # structural validator already reports a bad shape
-        for part in (m.group(1), m.group(2)):  # CONSTRUCT head, then WHERE
+        for part in parts:  # CONSTRUCT head then WHERE, or DELETE template then WHERE
             for _s, p, o in TRIPLE_PATTERN_RE.findall(part):
                 is_type = p == "a" or p.lower() == "rdf:type"
                 if is_type:

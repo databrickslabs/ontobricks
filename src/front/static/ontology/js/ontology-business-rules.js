@@ -59,6 +59,7 @@ window.BusinessRulesModule = {
             else if (act === 'import-rules') document.getElementById('brImportRulesFile')?.click();
             else if (act === 'sparql-validate') this.sparqlValidate();
             else if (act === 'sparql-save') this.sparqlSave();
+            else if (act === 'sparql-preview') this.sparqlRemovalPreview();
             else if (act === 'cra-send') this.craSend();
         });
 
@@ -78,6 +79,9 @@ window.BusinessRulesModule = {
             const el = document.getElementById(id);
             if (el) el.addEventListener('input', () => this._craResetSaveConfirm());
         });
+        // The query decides the rule type: an edit updates the label and the
+        // Preview box, and drops a preview that no longer matches the query.
+        document.getElementById('sparqlQuery')?.addEventListener('input', () => this._sparqlQueryChanged());
 
         // Re-enable the form when the editor closes (it may have been read-only).
         const sparqlModal = document.getElementById('sparqlEditorModal');
@@ -459,6 +463,7 @@ window.BusinessRulesModule = {
                 name: r.name || `Complex Rule ${i + 1}`,
                 meta: this._esc(querySnip) + (r.query && r.query.length > 80 ? '…' : ''),
                 enabled: r.enabled,
+                badge: this._sparqlKindOf(r.query) === 'removal' ? this._removalBadgeHtml() : undefined,
                 onEdit: () => this.sparqlOpenEditor(i),
                 onDelete: () => this._deleteRule('sparql_rules', i),
                 onToggle: () => this._toggleEnabled('sparql_rules', i),
@@ -476,7 +481,7 @@ window.BusinessRulesModule = {
         document.getElementById('sparqlEditorTitle').innerHTML = `<i class="bi bi-braces me-2"></i>${isNew ? 'Add' : 'Edit'} Complex Rule`;
         const svm = document.getElementById('sparqlValidationMsg');
         if (svm) svm.classList.add('d-none');
-        this._craResetSaveConfirm();
+        this._sparqlQueryChanged();
         this._setSparqlReadOnly(readOnly);
         new bootstrap.Modal(document.getElementById('sparqlEditorModal')).show();
         if (readOnly) {
@@ -486,6 +491,101 @@ window.BusinessRulesModule = {
         } else {
             this._craKickoff(isNew);
         }
+    },
+
+    // ── Rule kind: read from the query (CONSTRUCT infers, DELETE removes) ──
+    // Mirrors back/core/reasoning/rules/rule_kind.py: the first keyword after the
+    // PREFIX / BASE prologue decides. Null when the query is neither form.
+    _sparqlKindOf(query) {
+        const head = (query || '').replace(/^\s*(?:(?:PREFIX\s+[^\s<]*\s*<[^>]*>|BASE\s*<[^>]*>)\s*)*/i, '');
+        const m = /^(CONSTRUCT|DELETE)\b/i.exec(head);
+        if (!m) return null;
+        return m[1].toUpperCase() === 'CONSTRUCT' ? 'construct' : 'removal';
+    },
+
+    _sparqlKind() {
+        return this._sparqlKindOf(document.getElementById('sparqlQuery')?.value);
+    },
+
+    _removalBadgeHtml() {
+        return '<span class="br-kind-badge-removal small"><i class="bi bi-eraser me-1"></i>Removal</span>';
+    },
+
+    // Runs whenever the query text changes, typed or set by the editor or the
+    // assistant: shows the rule type and the Preview box of a DELETE, and drops
+    // anything (preview, save confirmation) that no longer matches the query.
+    _sparqlQueryChanged() {
+        const kind = this._sparqlKind();
+        const labels = {
+            construct: 'Infer triples (CONSTRUCT)',
+            removal: 'Remove triples (DELETE)',
+        };
+        const label = document.getElementById('sparqlKindLabel');
+        if (label) label.textContent = labels[kind] || 'Not a rule yet: start with CONSTRUCT or DELETE';
+        document.getElementById('sparqlRemovalBox')?.classList.toggle('d-none', kind !== 'removal');
+        this._sparqlRemovalReset();
+        this._craResetSaveConfirm();
+    },
+
+    _sparqlRemovalReset() {
+        this._sparqlRemovalPreview = null;
+        const countEl = document.getElementById('sparqlRemovalCount');
+        if (countEl) countEl.textContent = '';
+        document.getElementById('sparqlRemovalConfirmWrap')?.classList.add('d-none');
+        const confirmEl = document.getElementById('sparqlRemovalConfirm');
+        if (confirmEl) confirmEl.checked = false;
+    },
+
+    // Count the triples the DELETE would hide, through the backend (nothing is written).
+    async sparqlRemovalPreview() {
+        const query = (document.getElementById('sparqlQuery').value || '').trim();
+        const name = (document.getElementById('sparqlName').value || '').trim() || 'preview';
+        this._sparqlRemovalReset();
+        let data = {};
+        try {
+            const resp = await fetch('/ontology/rules/sparql_rules/removal-preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ rule: { name, query } }),
+            });
+            data = await resp.json();
+        } catch (e) {
+            data = { success: false, errors: ['Preview request failed'] };
+        }
+        if (!data.success) {
+            this._craShowValidation({ valid: false, message: (data.errors || []).join('; ') || 'Preview failed' });
+            return;
+        }
+        this._sparqlRemovalPreview = {
+            query,
+            count: data.count,
+            requiresConfirmation: !!data.requires_confirmation,
+        };
+        const countEl = document.getElementById('sparqlRemovalCount');
+        if (countEl) countEl.textContent = `${Number(data.count).toLocaleString()} triple(s) would be hidden.`;
+        document.getElementById('sparqlRemovalConfirmWrap')?.classList.toggle('d-none', !data.requires_confirmation);
+    },
+
+    // A removal is saved only after a preview of the same query, and after the
+    // confirmation box is ticked when the preview is large.
+    _sparqlRemovalReady(query) {
+        const pv = this._sparqlRemovalPreview;
+        if (!pv || pv.query !== query) {
+            this._craShowValidation({
+                valid: false,
+                message: 'Preview the removal first: it shows how many triples the rule would hide.',
+            });
+            return false;
+        }
+        if (pv.requiresConfirmation && !document.getElementById('sparqlRemovalConfirm')?.checked) {
+            this._craShowValidation({
+                valid: false,
+                message: 'Tick the confirmation box: this removal hides a large number of triples.',
+            });
+            return false;
+        }
+        return true;
     },
 
     // Disable the form and the assistant while a read-only rule is shown.
@@ -500,7 +600,7 @@ window.BusinessRulesModule = {
         });
         const modal = document.getElementById('sparqlEditorModal');
         if (modal) {
-            modal.querySelectorAll('[data-br-action="sparql-validate"]').forEach((el) => {
+            modal.querySelectorAll('[data-br-action="sparql-validate"], [data-br-action="sparql-preview"]').forEach((el) => {
                 el.disabled = on;
             });
         }
@@ -527,7 +627,7 @@ window.BusinessRulesModule = {
         const input = document.getElementById('craChatInput');
         if (input) input.value = '';
         const kickoff = isNew
-            ? "Hi! I'll help you build a SPARQL CONSTRUCT rule. In one sentence, what should this rule infer?"
+            ? "Hi! I'll help you build a Complex rule: a SPARQL CONSTRUCT that infers triples, or a removal (DELETE) that hides them. In one sentence, what should this rule do?"
             : "Let's refine this existing Complex rule. Summarise what the current query does and ask me what I'd like to change.";
         this._craTurn(kickoff, { silentUser: true });
     },
@@ -564,7 +664,7 @@ window.BusinessRulesModule = {
                 return;
             }
             this._craHistory.push({ role: 'user', content: message });
-            this._craHistory.push({ role: 'assistant', content: data.reply || '' });
+            this._craHistory.push({ role: 'assistant', content: this._craReplyWithQuestion(data) });
             this._craApplyResponse(data);
         } catch (e) {
             console.error('[BusinessRules] complex assistant error:', e);
@@ -575,8 +675,20 @@ window.BusinessRulesModule = {
         }
     },
 
+    // The question behind the offered answers must be visible (and kept in the
+    // history) even when the model's reply text does not repeat it.
+    _craReplyWithQuestion(data) {
+        const reply = (data.reply || '').trim();
+        const opts = data.options;
+        const offered = opts && Array.isArray(opts.options) && opts.options.length;
+        const question = offered ? String(opts.question || '').trim() : '';
+        if (!question || reply.includes(question)) return reply;
+        return reply ? reply + '\n\n' + question : question;
+    },
+
     _craApplyResponse(data) {
-        if (data.reply) this._craAppendBubble('assistant', data.reply);
+        const text = this._craReplyWithQuestion(data);
+        if (text) this._craAppendBubble('assistant', text);
         if (data.draft) {
             if (typeof data.draft.name === 'string' && data.draft.name) {
                 document.getElementById('sparqlName').value = data.draft.name;
@@ -587,8 +699,8 @@ window.BusinessRulesModule = {
             if (typeof data.draft.query === 'string') {
                 document.getElementById('sparqlQuery').value = data.draft.query;
             }
-            // The rule changed — require a fresh validate + review before saving.
-            this._craResetSaveConfirm();
+            // The rule changed — the query decides its kind, and a fresh validate + review is needed.
+            this._sparqlQueryChanged();
         }
         if (data.options && Array.isArray(data.options.options) && data.options.options.length) {
             this._craRenderOptions(data.options);
@@ -624,6 +736,16 @@ window.BusinessRulesModule = {
                 group.appendChild(pill);
             }
         });
+        // Free-text escape hatch: focuses the chat box instead of sending text.
+        const other = document.createElement('button');
+        other.type = 'button';
+        other.className = 'cra-opt-pill cra-opt-other';
+        other.textContent = 'Something else…';
+        other.addEventListener('click', () => {
+            const input = document.getElementById('craChatInput');
+            if (input) input.focus();
+        });
+        group.appendChild(other);
         if (opts.multi) {
             const send = document.createElement('button');
             send.type = 'button';
@@ -797,6 +919,7 @@ window.BusinessRulesModule = {
             this._craAppendBubble('assistant', "There's no query to save yet — let's build the CONSTRUCT first.");
             return;
         }
+        if (this._sparqlKind() === 'removal' && !this._sparqlRemovalReady(query)) return;
         const check = await this._craValidate();
         this._craShowValidation(check);
         if (!check.valid) {

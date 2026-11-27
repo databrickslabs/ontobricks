@@ -370,11 +370,24 @@ the generated SHACL-AF live as you build a rule.
    attributes**, pick the entity and attribute, and type the value (e.g.
    `priority = "high"`). This is a **replace** update: any existing value for
    that attribute on the matched entity is removed and the new one set.
-5. **Advanced rules**: rules using built-ins, negation, or derived classes that
+5. **Action (THEN)**: the THEN part has an **Action** switch.
+   - **Assert** (default) infers the THEN triples, as above.
+   - **Remove** deletes the triples the IF part matches. Right-click the class,
+     relationship or attribute to delete and choose **Add to THEN**; its variables
+     stay bound by the **IF** conditions. For example, IF `Meter(?m)` and
+     `Customer(?c)`, THEN `meterOf(?m, ?c)` with **Remove** deletes every
+     `meterOf` link between a meter and a customer. THEN `Meter(?m)` removes the
+     meter membership of each matched meter. A literal such as `status = "closed"`
+     removes only the matching value.
+
+     A removal is hidden through the same overrides as a Complex removal rule, and
+     runs with the reasoning pipeline (not per entity). It is not a quality check,
+     and it is not exported as SHACL-AF (the SHACL view and file omit it).
+6. **Advanced rules**: rules using built-ins, negation, or derived classes that
    the visual graph cannot fully represent are shown read-only (their generated
    SHACL-AF is displayed and preserved on save).
-6. Enter a **Rule Name** and optional **Description**
-7. Click **Save Rule**
+7. Enter a **Rule Name** and optional **Description**
+8. Click **Save Rule**
 
 **View/Export**: Click the header **SHACL** button to open a modal
 (same pattern as Data Quality → SHACL). It shows all rules as their generated
@@ -428,6 +441,65 @@ WHERE {
   FILTER(?t > 10000 && NOT EXISTS { ?o :approvedBy ?m })
 }
 ```
+
+#### Removal Rules (SPARQL DELETE)
+
+A Complex rule can also **remove** triples. Write a `DELETE` query in the rule
+editor: the **Rule type** line reads **Remove triples (DELETE)** and the Preview
+box appears. The first keyword of the query decides the rule type: `CONSTRUCT`
+infers triples, `DELETE` removes them. A removal rule hides the stored
+triples its pattern matches. It never changes the source tables: the hidden
+triples are recorded as overrides in the `_overrides` table (Lakebase and Delta),
+and the original triples stay in place underneath. On Neo4j the matching triples
+are deleted from the property graph itself.
+
+The chat assistant in the rule editor drafts removal rules too: ask it to
+remove something and it writes the `DELETE`, and the **Rule type** line follows
+the query. When your request does not say what should disappear, it asks
+first: only the link, the entity itself (its class membership and the link the
+condition uses), or only its class membership. If several relationships could
+be the link you mean (for example `Contract hasMeter Meter` and `Customer owns
+Meter` for "owned meters"), it then asks which one. It asks one question at a
+time, and the question always appears above its answer buttons. You still
+**Preview** before saving.
+
+Three forms are accepted, each with no `INSERT`, `GRAPH` or property-path part:
+
+```sparql
+# 1. Every triple that matches the WHERE pattern
+DELETE WHERE { ?m :meterOf :Customer_42 . ?m :status ?o }
+
+# 2. Specific triples, written out
+DELETE DATA { :m1 :meterOf :Customer_42 }
+
+# 3. Template and pattern
+DELETE { ?m :status ?o } WHERE { ?m :meterOf :Customer_42 . ?m :status ?o }
+```
+
+Rules to know before you save:
+
+- **Guard**: at least one triple pattern must bind a subject or an object. A
+  delete of a whole predicate (`DELETE WHERE { ?s :status ?o }`) is refused.
+- **Preview first**: **Preview** counts the triples the rule would hide without
+  writing anything. Save is available only for the query you previewed; editing
+  the query clears the preview.
+- **Confirmation**: a removal that would hide more than **10,000** triples needs
+  the confirmation box ticked before it can be saved.
+- **Removals follow the reasoning run**: a Build clears the rows that reasoning
+  derived, removals included, and keeps your manual overrides. The enabled
+  removal rules hide their triples again on the next reasoning run. Disabling a
+  removal rule and running reasoning brings the triples back.
+- **Manual edits win**: a triple you added by hand (a user override) is kept. A
+  removal rule does not hide it.
+- **Same run**: in one reasoning run the removal rules run before the Complex
+  `CONSTRUCT` rules. A `CONSTRUCT` rule reads the graph without the triples the
+  removals match, so it does not derive new triples from data that the run is
+  removing. This applies to a triple a user added by hand too, even though that
+  triple is still kept in the graph.
+- **Missing triples**: a `DELETE DATA` of a triple that is not in the graph is
+  not an error. The run reports a warning (`removal_not_found`) in the results.
+- **Literals** are matched on their lexical value only, so a typed literal in
+  `DELETE DATA` must be written exactly as stored.
 
 #### Expressions & Axioms
 
@@ -968,13 +1040,13 @@ Click **Build** in the sidebar to manage your triple store:
 | Triple count shown | Stored row count, as of the last build | A live query against your source tables |
 | Freshness | Point-in-time snapshot — rebuild to refresh | Always reflects current source data |
 
-In both modes `…_inferred` stays a Delta table, so reasoning and cohort writes are unaffected.
+In both modes `…_overrides` stays a Delta table, so edits, reasoning and cohort writes are unaffected.
 
-**Cache tab.** The Build page has a **Cache** tab (after Inferred) for Search cache. It shows whether the cache is **On** or **Off**, the state (**Ready** or **Refresh required**), **Cache updated** (last companion rebuild, or the Build that first created them), and one row per companion table (adjacency out/in, properties, entity search). Use **Activate / deactivate** to open Context Settings → Search cache, and **Refresh cache** (also in the Build page ⋮ menu) to rebuild the companions. Neo4j domains show a notice instead.
+**Cache tab.** The Build page has a **Cache** tab (after Overrides) for Search cache. It shows whether the cache is **On** or **Off**, the state (**Ready** or **Refresh required**), **Cache updated** (last companion rebuild, or the Build that first created them), and one row per companion table (adjacency out/in, properties, entity search). Use **Activate / deactivate** to open Context Settings → Search cache, and **Refresh cache** (also in the Build page ⋮ menu) to rebuild the companions. Neo4j domains show a notice instead.
 
 **Objects tab.** The Build page has an **Objects** tab (after Cache) listing the physical objects the current context version built in its graph backend: Postgres tables and views plus Unity Catalog sync registrations for Lakebase, Unity Catalog views and tables for the Lakehouse (Delta), the graph and its node/edge counts for Neo4j, and the analytics job output for the version. Everyone with access to the context can read the list. Only app **admins** see the **Drop** buttons and **Delete all** (the drop endpoints are admin-only on the server too). The list is grouped **by usage** by default (Graph data, Inferred, Search cache, Simulations, Analytics, with the same names as the Cache tab) or **by source** with the toggle at the top right (Lakebase (Postgres), Unity Catalog or Neo4j; the analytics output tables are Unity Catalog tables, so they are listed in the Unity Catalog group, last). Within a group, views come before tables and Lakeflow registrations before their source. The workspace-wide lists stay available in Settings → Lakebase / Lakehouse / Neo4j → Objects.
 
-**Inferred tab.** The Build page has an **Inferred** tab next to Build and Runs. It breaks down the materialized inferred triples by origin:
+**Overrides tab.** The Build page has an **Overrides** tab next to Build and Runs. It breaks down the derived override rows (materialized inferred triples) by origin:
 
 | Category | What it counts |
 |----------|----------------|
@@ -982,7 +1054,7 @@ In both modes `…_inferred` stays a Delta table, so reasoning and cohort writes
 | Cohorts | Cohort membership and cohort metadata written by cohort runs |
 | Communities | Community membership and cluster metadata written by community runs |
 
-Each row shows **Triples**, **Entities** (distinct subjects) and **Groups** (distinct cohorts or communities; not applicable to Reasoning). The total equals the Overview "Inferred triples" figure. The tab reloads each time it is opened; **Refresh** reloads it on demand. Neo4j domains show a notice instead, because the breakdown is not implemented for that backend yet.
+Each row shows **Triples**, **Entities** (distinct subjects) and **Groups** (distinct cohorts or communities; not applicable to Reasoning). The total equals the Overview "Inferred triples" figure. The tab reloads each time it is opened; **Refresh** reloads it on demand. Until the first Build (or the first edit) creates the overrides table, the tab shows the empty state instead of an error. Neo4j domains show a notice instead, because the breakdown is not implemented for that backend yet.
 
 **Explorer index snapshot.** Build materialises `_adj_out` / `_adj_in` for
 entity expansion, `_entity_search` (union) and `_entity_search_asserted` for
@@ -1008,7 +1080,7 @@ depends on backend and mode:
 >
 > **Note (Lakehouse `table` mode):** between two full Builds, Explorer expansion
 > (adjacency-driven) and a raw SPARQL scan of `_graph` can show different
-> results.  Expansion sees the adjacency snapshot; SPARQL includes `_inferred`
+> results.  Expansion sees the adjacency snapshot; SPARQL includes `_overrides`
 > rows not yet reflected in the adjacency tables.  A full **Build** reconciles
 > both.  The **Refresh cache** button on the Build panel lets builders
 > update hop indexes without waiting for a full rebuild — useful after reasoning
@@ -1066,7 +1138,7 @@ Entity **Inference rules (IF-THEN)** run against the sandbox (not the live
 graph) and write inferred triples there, so a rule such as attach-meter
 can see extra contracts asserted by the scenario. Opening Explorer from a
 scenario Results URI (or the Results **Explorer** button) lands on that
-sandbox via ``?simulation=``. Use **Live graph** to query the built
+sandbox via ``?simulation=``. Use **Original Graph** to query the built
 knowledge graph only. The same dropdown is on Query (SPARQL / GraphQL)
 and Chat. Programmatic callers use ``GET /api/v1/simulations`` then pass
 ``simulation_id`` on ``/api/v1/digitaltwin/triples``, ``/triples/find``,
@@ -1326,7 +1398,7 @@ Results are displayed as inferred triples and violations. Inferred triples can b
 
 In the **Business rules** phase tree (Graph → Business rules), rule names are links: clicking one opens the rule editor in place (the IF-THEN graph editor for Simple rules, the SPARQL editor for Complex rules). Users without ontology edit rights see the rule read-only. After you save, the list refreshes and your ticked rules stay ticked.
 
-Builders can use **Purge inferences** from the Build page ⋮ menu (Lakebase and
+Builders can use **Purge overrides** from the Build page ⋮ menu (Lakebase and
 Lakehouse), **Purge** on **Inference**, or **Intelligence → Configuration → Cohorts → Runs** to remove all materialized
 reasoning and cohort triples from the
 active graph. The confirmation dialog names the active graph and shows the
@@ -1356,7 +1428,7 @@ is **[Intelligence](intelligence.md)**.
 The left sidebar has three groups. The app switcher always opens Intelligence
 **Home** (tiles grouped like the sidebar).
 
-| Group | Page | Business question it answers | Writes to the live graph? |
+| Group | Page | Business question it answers | Writes to the Original Graph? |
 |-------|------|------------------------------|---------------------------|
 | *(landing)* | **Home** | *Where do I start?* | Never |
 | **Configuration** | **Cohorts** | *Which entities belong together according to rules I define?* | Only when you **Materialise** a cohort run |
@@ -1364,7 +1436,7 @@ The left sidebar has three groups. The app switcher always opens Intelligence
 | **Discovery** | **Communities** | *Which entities are tightly connected to each other?* | Only when you **Materialize** the partition |
 | **Discovery** | **Patterns** | *Which entities look alike (same kind of neighbourhood and profile)?* | Never (saved as a [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) snapshot) |
 | **Simulation** | **Scenarios** | *What would change if these facts were true?* | Never (private sandbox per scenario) |
-| **Simulation** | **Compare** | *How does a scenario differ from today's live graph, and what does it mean for the business?* | Never |
+| **Simulation** | **Compare** | *How does a scenario differ from today's Original Graph, and what does it mean for the business?* | Never |
 
 ### Home
 
@@ -1462,7 +1534,7 @@ The graph is never changed. The **How it works** tab explains the method.
 A scenario is a safe *what if*. It copies a slice of the graph (an entity
 neighbourhood or a cohort) into a private sandbox, applies hypothetical facts,
 re-runs the reasoning you ticked, and lists what would be added or removed.
-The live graph is never modified.
+The Original Graph is never modified.
 
 - **List** — saved scenarios with scope, number of facts, status (*draft*,
   *running*, *ready*, *failed*) and the added / removed counts of the last run.
@@ -1491,13 +1563,13 @@ larger scope fails the run with a message instead of being cut silently.
 Compare answers *how would today's real graph differ if this scenario
 happened, and what does it mean for the business?*
 
-- **Graphs** — pick a **ready** scenario and the **Live graph** (inferred or
+- **Graphs** — pick a **ready** scenario and the **Original Graph** (inferred or
   asserted only). The overlay loads automatically: grey unchanged, amber
   modified, green added, red removed. **Refresh** reloads it, **Metrics** shows
   exact counts, and **Selection & Guide** shows the details of a clicked node or
   link.
 - **Evaluate** — type a business question in **Prompt** and press **Ask both**:
-  the same question runs on the live graph and on the sandbox. **Business
+  the same question runs on the Original Graph and on the sandbox. **Business
   insights** comments on the difference, **Open report** builds a printable
   summary, and **Export PDF** uses the browser print dialog.
 
@@ -1611,8 +1683,9 @@ When you **commit** the domain name (blur the field or trigger `change`) or chan
 |--------|------|----------------|
 | `triplestore_<domain>_V<n>` | VIEW | Live R2RML mapping over your source tables |
 | `…_data` | Delta TABLE *or* VIEW | Mapped triples — what **Analytics** reads; also the bulk half of the graph. A pass-through view by default (`Virtual Graph (no copy)`); a Delta table under `Materialized Graph` access type |
-| `…_inferred` | Delta TABLE | Reasoning / cohort / app-written triples |
-| `…_graph` | VIEW | `_data ∪ _inferred` — what Explorer and most graph reads use |
+| `…_overrides` | Delta TABLE | Your edits (added, modified or deleted triples) plus reasoning / cohort triples. A Build keeps your edits |
+| `…_graph` | VIEW | `_data` with your overrides applied — what Explorer and most graph reads use |
+| `…_asserted` | VIEW | `_data` with only your edits applied (no derived triples) |
 
 Full detail: [Architecture → Lakehouse Unity Catalog objects](architecture.md#lakehouse-unity-catalog-objects).
 
@@ -1633,8 +1706,8 @@ Short version:
 |----------------|-------------------------|----------------------|--------------------------------------|
 | Lakehouse · **Materialized** | Yes — `_data` TABLE | Build CTAS + `OPTIMIZE` on the Build SQL Warehouse | Physical Delta tables rebuilt at end of Build and by **Refresh cache** |
 | Lakehouse · **Virtual Graph (no copy)** | No — `_data` is a pass-through VIEW | Build only refreshes VIEW DDL | Still physical Delta tables (a snapshot of hops/search). Refresh cache recaptures live sources |
-| Lakebase · **app_managed** | Yes, twice: UC `_data` TABLE + Postgres `_sync` | App streams warehouse rows into `_sync`; `__app` holds inferred rows; readers use the union view | Postgres tables rebuilt from that union view |
-| Lakebase · **managed_synced** | Yes, twice: UC `_data` TABLE + Lakeflow `_sync` | Lakeflow owns `_sync`; the app owns `__app` and the union view | Same Postgres index rebuild |
+| Lakebase · **app_managed** | Yes, twice: UC `_data` TABLE + Postgres `_sync` | App streams warehouse rows into `_sync`; `__overrides` holds edits and derived rows; readers use the union view | Postgres tables rebuilt from that union view |
+| Lakebase · **managed_synced** | Yes, twice: UC `_data` TABLE + Lakeflow `_sync` | Lakeflow owns `_sync`; the app owns `__overrides` and the union view | Same Postgres index rebuild |
 | Neo4j | Yes, twice: UC `_data` TABLE + Neo4j nodes | Build `MERGE` | None — native Bolt traversal |
 
 **Performance:**
@@ -1657,9 +1730,10 @@ either way, and a change takes effect on the next Build.
 
 Two things are unaffected by the choice:
 
-- **Inferred triples** keep their own `…_inferred` Delta table. Reasoning and
-  cohort output has no source table to be derived from, so it always lands in
-  real storage.
+- **Edits and inferred triples** keep their own `…_overrides` Delta table.
+  They have no source table to be derived from, so they always land in real
+  storage. Deleting or modifying a mapped value adds an override row; the
+  mapped value is hidden, not erased, so it is stable across Builds.
 - **Graph Analytics** always scans a Delta table. For a view-only domain the
   job materializes a temporary `…_analytics` snapshot for the duration of one
   run and drops it at the end — its iterative BFS would otherwise re-run the
@@ -2170,7 +2244,7 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 ### Lakebase domain objects
 
 **Settings → [Lakebase](https://docs.databricks.com/aws/en/oltp/) → Objects** groups each domain/version's reader view,
-`_sync` bulk table, `__app` writable companion, `_adj_in`, `_adj_out`,
+`_sync` bulk table, `__overrides` writable companion, `_adj_in`, `_adj_out`,
 `_entity_search`, `_entity_search_asserted`, and `_props` tables into one collapsible card. Simulation
 sandbox tables (`__sim_<id>`), Explorer overlay views (`__smu_<id>`),
 overlay-key companions (`__smp_<id>`), before-picture companions (`__smb_<id>`),
@@ -2829,7 +2903,7 @@ Open **Explorer** in the sidebar to explore the graph viewer interactively:
 - **Search** by entity type, field, match type, and relationship depth
 - **Cap expansion** with the max-entities control (default 5 000, up to 20 000). The server uses the value you pick, including in [Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/).
 - **Navigate** relationships — click an entity to see its attributes, values, and connected entities in the detail panel
-- **Graph** chooses the live asserted graph, the live inferred graph, or one ready simulation sandbox per scenario. Opening Explorer from the sidebar always selects **Live graph (inferred)**; an inbound link (for example Results → Explorer with `?simulation=`) keeps that sandbox.
+- **Graph** chooses the live asserted graph, the live inferred graph, or one ready simulation sandbox per scenario. Opening Explorer from the sidebar always selects **Certified Graph**; an inbound link (for example Results → Explorer with `?simulation=`) keeps that sandbox.
 - **View** opens canvas help: entity and relationship labels, hide orphans, and quality rings
 - **Groups toggle** (toolbar, same control as Ontology → Studio) collapses or expands every ontology group on the canvas. The Groups popup and empty-canvas menu still list the same expand/collapse-all actions.
 
@@ -3204,12 +3278,12 @@ After import you can:
 - **Analytics**: **Intelligence → Discovery → Analytics** runs the centrality job (see **Graph Analytics** below). Tabs: **Dashboard** (KPIs, metric histograms, ranking chart), **Data Model Health** (flat entity types to exclude from the sync), **AI Insights** (**Interpret** with the domain LLM; **Add to audit trail**), and **Runs** (every launched analysis, failed ones included).
 - **Community detection**: **Intelligence → Discovery → Communities** previews a label-propagation partition computed on a Databricks job (optional entity-type scope, modularity, convergence), then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer colours and collapses that partition; **Purge** removes it.
 - **Pattern detection**: **Intelligence → Discovery → Patterns** lists saved neighbourhood snapshots; **New** opens the Detect dialog (entity, hops, numeric bins, min support, refine top-N, each with an (i) tooltip), runs a Databricks job, saves the run automatically to Unity Catalog, and opens it. Run KPIs: Hops, Entities, Patterns, Coverage; a bar chart ranks matching entities; each pattern shows the detail level, a layered diagram with hover lineage highlight and relationship badges, and a **Matching entities** dialog. The graph is never changed.
-- **What-if sandboxes (Scenarios)**: Assert hypothetical facts (Set / Add / Remove) on a private copy of an entity neighbourhood or a cohort, re-run the ticked reasoning phases, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
-- **Compare and Evaluate**: **Intelligence → Simulation → Compare** overlays a ready sandbox on today's live graph (inferred or asserted only) with colour-coded nodes and links and exact metrics; **Evaluate** asks one question to both graphs, adds a business-insights commentary, and builds a printable / PDF report.
+- **What-if sandboxes (Scenarios)**: Assert hypothetical facts (Set / Add / Remove) on a private copy of an entity neighbourhood or a cohort, re-run the ticked reasoning phases, and inspect the before/after diff. The Original Graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
+- **Compare and Evaluate**: **Intelligence → Simulation → Compare** overlays a ready sandbox on today's Original Graph (inferred or asserted only) with colour-coded nodes and links and exact metrics; **Evaluate** asks one question to both graphs, adds a business-insights commentary, and builds a printable / PDF report.
 - **How it works tabs**: Communities, Patterns and Scenarios each have a **How it works** tab with business-friendly diagrams, an energy & utilities example, and collapsed technical details. Every Intelligence page header has the **ontology discussion** button and the graph readiness badge.
 - **Scenario workbench**: **General**, **Hypothetical facts** (Set / Add / Remove; **Add fact** wizard; **Propose facts** drafts facts from plain language for review), **Reasoning** (T-Box, Simple rules, Graph reasoning, Complex rules) and **Results** (Added / Removed tables). Header buttons **Save**, **Run**, **Purge**. **Simulate from here** on an Explorer entity pre-fills the scope.
 - **Compare metrics and report**: the overlay loads for a ready scenario; **Metrics** shows exact counts; **Selection & Guide** explains the clicked node or link; **Evaluate** → **Ask both**, **Business insights**, **Open report** and **Export PDF**.
-- **Cohort runs**: the **Runs** tab previews a rule and materialises it to `:inCohort` and/or a Unity Catalog table (**Outputs**); **Purge inferences** (Build page ⋮ menu) removes the materialised cohort and reasoning triples.
+- **Cohort runs**: the **Runs** tab previews a rule and materialises it to `:inCohort` and/or a Unity Catalog table (**Outputs**); **Purge overrides** (Build page ⋮ menu) removes the materialised cohort and reasoning triples.
 - **Background runs and history**: long operations appear in the navbar **Activity** panel; Analytics **Runs** and Settings → Automation → Runs (admin) keep the history.
 
 ### Graph (Sync & Explore)
@@ -3233,7 +3307,7 @@ After import you can:
 - **Class Actions (Unity Catalog functions)**: Bind any number of UC functions to an ontology class in **Ontology → Studio → Behaviour → Functions**, each with its own description. Run them on a node from the details pane or its right-click menu; the result (scalar or table) opens in a popup. Each function must take exactly one argument — the entity's ID — and the invocation endpoint enforces an allow-list so only functions declared on the node's own class can be called. The same actions are surfaced to the MCP server through `get_entity_context` and `invoke_entity_action`.
 - **Class Actions (Databricks Jobs)**: In the same **Behaviour** tab (**Jobs** section), bind workspace Jobs that declare an `entity_id` parameter. OntoBricks only starts the Job (`run_now`); Spark still uses the Job's run-as identity. On Lakehouse domains in App mode the trigger is on-behalf-of the signed-in user. Triggering a Job from Explorer opens a popup that checks the run actually started and tells you right away whether it is **Running** or **Queued**, with a link to the run in Databricks. The popup keeps following the run while it is open (Running → Succeeded / Failed), and you can close it at any time: the run stays in the navbar **Activity** panel (`bi-inboxes`), which shows its live state and the same run link. Invoke the same `job:<job_id>` name from Explorer or MCP `invoke_entity_action`.
 
-- **Entity Inference Rules (IF-THEN)**: In **Ontology → Studio → Behaviour → Inference rules (IF-THEN)**, attach one or more IF-THEN rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the live graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the live graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the IF-THEN editor updates the class references. Neo4j supports graph-shaped rules with class and object-property atoms; unsupported literal or builtin atoms report an explicit rule error.
+- **Entity Inference Rules (IF-THEN)**: In **Ontology → Studio → Behaviour → Inference rules (IF-THEN)**, attach one or more IF-THEN rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the Original Graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the Original Graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the IF-THEN editor updates the class references. Neo4j supports graph-shaped rules with class and object-property atoms; unsupported literal or builtin atoms report an explicit rule error.
 - **Virtual Attributes (computed on demand)**: A class of attribute that no mapping feeds and no build materialises — a Unity Catalog function computes it from the entity's ID when someone asks. Declare them in **Ontology → Studio → Attrs. → Virtual attributes** by picking a UC function that takes exactly one parameter; one attribute is created per returned column (or a single one for a scalar function), read from `information_schema`. In the Graph Explorer they appear in their own **Virtual Attributes** section under the mapped ones with a per-function **Compute** button, a **Compute all**, and a right-click shortcut; computed values are cached per entity for the page's lifetime, with **Recompute** as the refresh. Over MCP the declarations always ride along with `get_entity_context`; when a question is about a virtual attribute's value, the model should call `compute_virtual_attributes(entity_uri)` to run the UC function — nothing is computed unless asked. A failing function reports its error without denying the attributes that still resolve. Because they are never materialised, virtual attributes are **not queryable** in SPARQL or GraphQL and take no part in mappings, R2RML, SHACL or data-quality checks.
 - **Entity SHACL facets**: Check one entity against every enabled SHACL shape that applies to it — the shapes on its class, on its parent classes, and the global ones. In **Graph → Explorer**, right-click a node and choose **Data quality → Data Quality Checks (N)**, or use **Check** in the node's **Data quality** section. The **Data Quality Checks** popup shows a scrollable activity log while the
 check runs, then one gauge per dimension (completeness, cardinality, uniqueness, consistency, conformance, structural): the share of checked shapes that passed, ignoring the ones that did not apply, were not evaluated or errored — a dash means nothing in that dimension could be checked. Clicking a gauge opens its section. Below, the shapes are listed by dimension in sections that start collapsed, each with its status — passed, failed (with its severity), not applicable (guard condition false), not evaluated (no SQL translation, such as `sh:closed`) or error — the values the entity carries on the constrained property, and the ancestor an inherited shape comes from. The status chips filter the list and open the sections that hold a match. Results are cached per entity for the page's lifetime; **Re-check** recomputes them. Checked nodes get a ring on the canvas: red when a Violation failed, amber when a Warning/Info failed or a shape errored, green when every shape passed or did not apply. **View → Quality rings** hides the rings. MCP clients get the same check through `check_entity_shacl_facets(entity_uri)`, which can be disabled per domain in the MCP policy.

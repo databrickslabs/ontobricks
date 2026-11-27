@@ -28,7 +28,7 @@ class Runner:
     """Scope → seed sandbox → apply patches → reason → diff → persist.
 
     Everything except the initial scope read happens inside the sandbox
-    table; the live graph is never written.
+    table; the Original Graph is never written.
     """
 
     def __init__(
@@ -179,7 +179,7 @@ class Runner:
 
         Skip the scope slice (already copied). One hop plus a sandbox object
         walk is enough for ``hasContract`` → ``hasMeter``; two hops from the
-        customer re-traverses the live graph and freezes the 30% progress bar.
+        customer re-traverses the Original Graph and freezes the 30% progress bar.
         """
         ignored = set(skip or [])
         uris = [u for u in self._hypothesis_uris() if u not in ignored]
@@ -240,7 +240,7 @@ class Runner:
         """Copy live subjects that point at the scoped entity (e.g. claims).
 
         Skip this for patched contracts — those inbound neighbours are
-        other customers in the live graph.
+        other customers in the Original Graph.
         """
         if self._spec.scope.type != "entity":
             return

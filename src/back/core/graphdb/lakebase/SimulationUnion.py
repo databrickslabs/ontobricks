@@ -1,4 +1,4 @@
-"""Explorer read view: live graph UNION a simulation sandbox after-picture."""
+"""Explorer read view: Original Graph UNION a simulation sandbox after-picture."""
 
 from __future__ import annotations
 

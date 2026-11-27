@@ -32,8 +32,12 @@
 //      yellow **Resume editing** button in the L2 subnav (left of Save; the
 //      expiry message is a hover tooltip). A per-version sticky flag
 //      (sessionStorage) then keeps it read-only across incidental reloads /
-//      navigation — the still-free lock is not silently re-grabbed — until the
-//      user clicks **Resume editing**. A lease lost to a take-over / stale
+//      navigation — the still-free lock is not silently re-grabbed. The user
+//      gets editing back by coming back with a deliberate input (click, key,
+//      touch): that tries a non-forcing re-acquire and, if the lock is still
+//      free, reloads the page. Plain mouse movement / scrolling does not count,
+//      and the **Resume editing** button stays as the explicit fallback. A
+//      lease lost to a take-over / stale
 //      reclaim flips to read-only the same way (without the sticky, since it
 //      is already gone).
 //      Hovering the navbar domain badge (#currentDomainName) shows the
@@ -72,7 +76,8 @@
     // free lock to the loader) and hand editing straight back — undoing the
     // timeout. The sticky flag (per version, in sessionStorage so it survives
     // reloads but not a new tab) keeps the browser read-only until the user
-    // *explicitly* resumes (the subnav "Resume editing" button).
+    // resumes: either by a deliberate input (auto-resume, see below) or with
+    // the subnav "Resume editing" button.
 
     var STICKY_KEY = 'ob:editLockExpired';
     // "folder\u0000version" of the loaded lockable version, once known.
@@ -191,6 +196,77 @@
         window.location.reload();
     }
 
+    // ----- auto-resume on the user's return -------------------------
+    //
+    // After an idle expiry this browser is read-only with the sticky flag set.
+    // When the user comes back with a *deliberate* input (click, key, touch)
+    // we try a non-forcing re-acquire. If the lock is still free we clear the
+    // sticky flag and reload — exactly what the Resume button does — so the
+    // page shows current data before editing resumes. If someone else took the
+    // lock meanwhile we stay read-only and tell the user who holds it.
+    // Mouse movement and scrolling do not count: they would grab the lock by
+    // accident. Only the idle-expiry path arms this; a lease lost to a
+    // take-over never auto-reclaims from the new holder.
+
+    var AUTO_RESUME_EVENTS = ['click', 'keydown', 'touchstart'];
+    // Minimum gap between two acquire attempts, so a flurry of clicks does not
+    // hammer the backend while the lock is held by someone else.
+    var AUTO_RESUME_RETRY_MS = 30000;
+    var autoResumeArmed = false;
+    var autoResumeBusy = false;
+    var autoResumeLastAt = 0;
+    var autoResumeNotified = false;
+
+    function onAutoResumeInput() {
+        if (autoResumeBusy) return;
+        if (Date.now() - autoResumeLastAt < AUTO_RESUME_RETRY_MS) return;
+        tryAutoResume();
+    }
+
+    function armAutoResume() {
+        if (autoResumeArmed) return;
+        autoResumeArmed = true;
+        AUTO_RESUME_EVENTS.forEach(function (ev) {
+            document.addEventListener(ev, onAutoResumeInput, true);
+        });
+    }
+
+    async function tryAutoResume() {
+        autoResumeBusy = true;
+        autoResumeLastAt = Date.now();
+        try {
+            var res = await fetch('/domain/edit-lock/acquire', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ force: false }),
+            });
+            var data = await res.json();
+            if (data && data.success && data.mode === 'edit') {
+                // Lock is ours again: reload so the page refreshes its data and
+                // the normal editor path (lease keep-alive) takes over.
+                stickyClear();
+                window.location.reload();
+                return;
+            }
+            if (data && data.success && data.mode === 'view' && !autoResumeNotified) {
+                autoResumeNotified = true;
+                notify(
+                    'This version is now being edited by ' + holderLabel(data) +
+                    '. You stay read-only; use Resume editing to retry.',
+                    'warning'
+                );
+            }
+        } catch (e) {
+            // Network hiccup — the next deliberate input retries (after the gap).
+        } finally {
+            autoResumeBusy = false;
+        }
+    }
+
     function renderResumeEditingButton() {
         if (document.getElementById('editLockResumeBtn')) return;
 
@@ -283,6 +359,7 @@
         if (lockKey) stickySet(lockKey);
         releaseLock();
         onLeaseLost();
+        armAutoResume();
     }
 
     function leaseRemainingMs() {
@@ -563,11 +640,12 @@
                 // We timed out on this exact version earlier and the backend's
                 // non-forcing acquire just handed the still-free lock back.
                 // Honour the timeout: give it up again and stay read-only until
-                // the user explicitly resumes.
+                // the user comes back (auto-resume) or clicks Resume.
                 window.editLockMode = 'view';
                 releaseLock();
                 enterReadOnly({});
                 renderResumeEditingButton();
+                armAutoResume();
             } else {
                 // This browser holds the lock — keep its lease alive.
                 window.editLockMode = 'edit';

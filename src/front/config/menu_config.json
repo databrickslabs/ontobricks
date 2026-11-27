@@ -634,7 +634,7 @@
                             "icon": "bi-braces-asterisk",
                             "default": false,
                             "requires": null,
-                            "description": "Run GraphQL and SPARQL against the live graph.",
+                            "description": "Run GraphQL and SPARQL against the Original Graph.",
                             "help_jump": "docs",
                             "help_doc": "user-guide"
                         },

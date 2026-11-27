@@ -400,6 +400,18 @@ class TestReasoningTranslator:
         assert "RETURN DISTINCT" in query
 
 
+class TestInverseExpandUnsupported:
+    def test_inverse_expand_is_noop_and_warns(self):
+        s = _store()
+        with patch("back.core.graphdb.neo4j.Store.logger") as log:
+            out = s.inverse_expand("dom_V1", "http://ex.org/p", "http://ex.org/q")
+        assert out == []
+        # Never fall through to the SQL default against a Cypher backend.
+        s._connection.run.assert_not_called()
+        log.warning.assert_called_once()
+        assert "not supported on the Neo4j" in log.warning.call_args.args[0]
+
+
 # ---------------------------------------------------------------------------
 #  Password sourcing — Databricks Apps secret vs local-dev fallback
 # ---------------------------------------------------------------------------

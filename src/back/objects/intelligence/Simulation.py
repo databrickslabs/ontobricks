@@ -480,7 +480,7 @@ class Simulation:
     def compare_to_live(
         self, sim_id: str, *, include_inferred: bool = True
     ) -> Dict[str, Any]:
-        """Compare a ready sandbox with the **current** live graph, same scope.
+        """Compare a ready sandbox with the **current** Original Graph, same scope.
 
         The scope is the set of subjects materialised in the sandbox (the
         resolved entity slice plus hypothetical entities). The live side is

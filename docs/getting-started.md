@@ -35,7 +35,7 @@ Before you begin, ensure you have:
 - **[Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) catalog/schema** — hosts the optional registry Volume
   (ad-hoc export bundles only) and, for Lakehouse domains, the Delta
   triple-store family (`triplestore_<domain>_V<n>` VIEW plus `_data` /
-  `_inferred` tables and the `_graph` union VIEW — see
+  `_overrides` tables and the `_graph` / `_asserted` VIEWs — see
   [Architecture → Lakehouse Unity Catalog objects](architecture.md#lakehouse-unity-catalog-objects)).
   Uploaded documents are **not** stored on a Volume: they are parsed into
   the Lakebase **Knowledge Store** (`domain_documents`).

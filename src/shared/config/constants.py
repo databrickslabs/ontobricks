@@ -82,6 +82,12 @@ AUTO_ASSIGN_CHUNK_COOLDOWN: int = 15  # seconds to wait between chunks
 DTWIN_CHAT_MAX_TOKENS: int = 8192
 
 # =====================================================
+# SPARQL removal rules
+# =====================================================
+# A removal rule whose preview matches more triples than this needs explicit confirmation.
+SPARQL_REMOVAL_CONFIRM_THRESHOLD: int = 10_000
+
+# =====================================================
 # UI Defaults
 # =====================================================
 MAX_NOTIFICATIONS: int = 10

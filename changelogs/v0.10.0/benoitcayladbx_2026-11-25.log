@@ -1,0 +1,435 @@
+## 2026-11-25 - OWL-RL license correction (W3C-20150513)
+
+Context:
+Legal review of the bundled third-party licenses found that the owlrl license
+file did not match the license declared by the library. The file in
+`licenses/python/owlrl-LICENSE.txt` was an inaccurate transcription of the
+W3C Software Notice and Document License (2015-05-13), SPDX `W3C-20150513`.
+The locked owlrl version (7.1.4) ships the verbatim text. The `owlrl`
+lower bound `>=7.0.0` also referenced a version that does not exist on PyPI
+(the lowest 7.x release is 7.1.1).
+
+Changes:
+1. licenses/python/owlrl-LICENSE.txt: replaced with the verbatim `LICENSE.txt`
+   shipped in the owlrl 7.1.4 wheel (W3C-20150513).
+2. licenses/README.md: OWL-RL row now states the minimum version `>=7.1.1` and
+   the SPDX identifier `W3C-20150513`; the license summary table is updated
+   accordingly (previously "W3C Software License").
+3. pyproject.toml: `owlrl>=7.0.0` -> `owlrl>=7.1.1` (no behavioural change,
+   since 7.0.0 is not published and the resolver already picked 7.1.x).
+4. uv.lock: only the root `requires-dist` specifier for owlrl updated to
+   `>=7.1.1`. No package version or hash changed. The lock was edited by hand
+   because `uv lock` in this environment rewrites every registry URL to the
+   internal proxy (`UV_INDEX_URL`), which must not be committed.
+
+Modified files:
+- licenses/python/owlrl-LICENSE.txt
+- licenses/README.md
+- pyproject.toml
+- uv.lock
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11473 passed, 334 skipped, 8 deselected, 0 failed.
+Note: `uv lock --check` reports the lock as stale on HEAD too in this
+environment (proxy index), so it is not a usable signal here.
+
+## Genie Pages (UC Knowledge Pages) read on-behalf-of the signed-in user
+
+Context: Context → Pages (Genie Pages) listed and previewed UC Knowledge Pages
+with the app service principal. In Databricks Apps the page list and bodies
+must follow the caller's Unity Catalog permissions, like the other OBO data
+reads (v0.9.0). Local / PAT mode is unchanged.
+
+Changes:
+1. src/api/routers/internal/domain.py: `_knowledge_page_service` now uses
+   `get_data_plane_client` (OBO, fail-closed) instead of `get_databricks_client`.
+   `list_knowledge_pages` and `preview_knowledge_page` re-raise
+   `AuthorizationError` instead of wrapping it as `InfrastructureError`.
+2. src/back/core/databricks/KnowledgePageService.py: 401/403 hint texts no longer
+   reference the app identity (they now refer to the user's token / identity).
+3. tests/units/api/test_knowledge_pages_route.py: +3 tests (OBO client used, no SP
+   fallback; `AuthorizationError` surfaces unchanged on list and preview).
+4. docs/deployment.md, docs/user-guide.md: OBO scope now lists Knowledge Pages
+   list / preview.
+
+Not changed (follow-up): ontology generation (`GenerateWorkflow.load_knowledge_page_bodies`)
+still reads page bodies with the service principal. Its detection runs in a plain
+`threading.Thread` (`ontology.py`) that does not carry the request identity, so it
+needs the user token passed explicitly.
+
+Open risk: the Knowledge Pages REST API may require a user-token scope beyond
+`sql` (`user_api_scopes`). Not verifiable offline; verify after deploy. A 403 on
+Pages after deploy points to a missing scope. Identity scopes must not be added.
+
+Modified files:
+- src/api/routers/internal/domain.py
+- src/back/core/databricks/KnowledgePageService.py
+- tests/units/api/test_knowledge_pages_route.py
+- docs/deployment.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11476 passed, 334 skipped, 8 deselected, 0 failed.
+
+## Genie Pages: load the Domains filter independently of the unfiltered pages list
+
+Context: after the OBO switch, the deployed app returned HTTP 403 "Domain Admin
+permissions are required to list pages. Without a domain filter, account-wide
+domain administration is required." even for an admin user, while the same call
+works locally. App logs show the request runs on-behalf-of the user, but the
+app's user token only carries the scopes `sql`, `iam.access-control:read` and
+`iam.current-user:read` (a full-scope CLI token is recognised as domain admin).
+The unfiltered list therefore fails, and because the Domains filter was loaded
+through the same call, the user could not even pick a domain to filter by.
+
+Changes:
+1. src/api/routers/internal/domain.py: `GET /pages/list` accepts `domains_only`;
+   it skips the pages call and returns the Domains list only.
+2. src/front/static/domain/js/domain-pages.js: the Domains filter loads with
+   `domains_only=true`, so it no longer depends on the unfiltered pages list.
+3. src/back/core/databricks/KnowledgePageService.py: a 403 mentioning a missing
+   domain filter now ends with "Select a Domain in the Domains filter to list
+   its pages."
+4. tests/units/api/test_knowledge_pages_route.py, tests/units/core/test_knowledge_pages.py:
+   +3 tests (domains_only skips the pages call; 403 hint present / absent).
+
+Open point: whether the user token needs an additional scope to be recognised as
+domain admin for the unfiltered list is unverified (see user decision pending).
+
+Modified files:
+- src/api/routers/internal/domain.py
+- src/front/static/domain/js/domain-pages.js
+- src/back/core/databricks/KnowledgePageService.py
+- tests/units/api/test_knowledge_pages_route.py
+- tests/units/core/test_knowledge_pages.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11479 passed, 334 skipped, 8 deselected, 0 failed.
+
+## Genie Pages: declare the `domains` and `knowledge` user API scopes
+
+Context: in the deployed app, Context -> Pages still failed under OBO:
+`GET /api/2.0/domains` returned HTTP 403 and the unfiltered Knowledge Pages list
+was refused. Reproduced locally with a U2M token limited to the app's effective
+scopes (`sql`, `iam.current-user:read`, `iam.access-control:read`): Databricks
+answers `Invalid scope, required scopes: domains` on the Domains API and
+`Invalid scope, required scopes: knowledge` on the Knowledge Pages API. With
+`domains` and `knowledge` added, the Domains list, the unfiltered pages list
+and a page body all return HTTP 200 for the same user.
+
+Changes:
+1. databricks.yml: `ontobricks_dev_app.user_api_scopes` adds `domains` and
+   `knowledge` (MCP app unchanged: it does not call these APIs).
+2. tests/units/settings/test_bundle_job_resource.py: +1 test pinning both
+   scopes on the UI app.
+3. docs/deployment.md: OBO section documents the two scopes and the
+   re-sign-in that a scope change may require.
+
+Note: `make bundle-validate` fails on HEAD too (`variable registry_volume has
+not been defined`, the target does not pass the deploy.sh variables); not
+related to this change.
+
+Modified files:
+- databricks.yml
+- tests/units/settings/test_bundle_job_resource.py
+- docs/deployment.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11480 passed, 334 skipped, 8 deselected, 0 failed.
+
+## Genie Pages: back to the app service principal (OBO not possible in Databricks Apps)
+
+Context: deploying the `domains` / `knowledge` user API scopes failed:
+`POST /api/2.0/apps/ontobricks-10x/update` -> 400 INVALID_PARAMETER_VALUE
+"The specified scope domains is not a valid scope". These scopes are not in the
+Databricks Apps supported list, and a U2M token carrying every app-supported
+scope (sql, genie, apps, files, catalog.*, workspace.workspace, ai-gateway,
+model-serving, vector-search) is still rejected with
+`Invalid scope, required scopes: domains|knowledge`. A forwarded Apps user token
+can therefore never call these APIs. The deployed apps were not modified by the
+failed deploy (still scopes ['sql']).
+
+Changes:
+1. databricks.yml, tests/units/settings/test_bundle_job_resource.py: scope
+   change from the previous section reverted (UI app declares `sql` only).
+2. src/api/routers/internal/domain.py: `_knowledge_page_service` uses
+   `get_databricks_client` (app identity) again; docstring states why it is not
+   OBO. `AuthorizationError` handling and the `get_data_plane_client` import
+   removed from the Pages routes. The `domains_only` Domains-filter fix is kept.
+3. src/back/core/databricks/KnowledgePageService.py: 401/403 hints refer to the
+   app identity again; the "Select a Domain" hint on the domain-filter 403 is kept.
+4. tests/units/api/test_knowledge_pages_route.py: OBO tests replaced by one test
+   pinning the app client for Knowledge Pages.
+5. docs/deployment.md, docs/user-guide.md: Knowledge Pages removed from the OBO
+   list; deployment.md documents that Pages stay on the SP, why, and that the
+   unfiltered list needs account-wide domain admin rights on the SP.
+
+Modified files:
+- databricks.yml
+- tests/units/settings/test_bundle_job_resource.py
+- src/api/routers/internal/domain.py
+- src/back/core/databricks/KnowledgePageService.py
+- tests/units/api/test_knowledge_pages_route.py
+- docs/deployment.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11477 passed, 334 skipped, 8 deselected, 0 failed.
+
+## Genie Pages: surface Databricks' reason when the Domains list fails
+
+Context: after switching Pages back to the app service principal, the deployed
+app still shows "Databricks Domains unavailable: 403 Client Error: Forbidden"
+for `/api/2.0/domains`. The SP token is requested with `scope=all-apis`, so this
+is a permission refusal, not a scope one, but the response body (which names the
+missing permission) was dropped, unlike for the pages list.
+
+Changes:
+1. src/back/core/databricks/KnowledgePageService.py: new `_remote_message`
+   helper (Databricks error text, JSON `message` or raw body, truncated) used by
+   `_list_error`; `_fetch_domains` turns an HTTP error into an
+   `InfrastructureError` "Databricks Domains list failed (HTTP <status>).
+   Databricks said: <reason>", shown in the Pages filter status line.
+2. tests/units/core/test_knowledge_pages.py: +1 test (403 reason surfaced).
+
+Modified files:
+- src/back/core/databricks/KnowledgePageService.py
+- tests/units/core/test_knowledge_pages.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+Test result:
+Full suite: uv run --frozen pytest -q -m "not scenario"
+-> 11478 passed, 334 skipped, 8 deselected, 0 failed.
+
+## Fix: Complex Rule assistant — "[object Object]" reply and unusable "Something else" option
+
+### Context
+In the Complex Rule builder chat, the agent offered "Something else (let me explain)"
+as a clickable option. Clicking it sent that literal text as the answer, the user had no
+way to type, and the agent's next reply rendered as `[object Object],[object Object]`.
+Root cause: some serving endpoints (Claude-style) return `message.content` as a list of
+blocks. The engine stored that list as `reply`, which the browser stringified; the list
+also went back in `history`, where the backend silently drops non-string content, so the
+agent lost its own previous question and answered without context.
+
+### Changes
+1. `src/agents/engine_base.py` — new shared `normalize_reply_content` / `UNREADABLE_REPLY`
+   (moved from the Graph Chat engine) that flattens content blocks into Markdown text.
+2. `src/agents/agent_dtwin_chat/engine.py` — now imports the shared helper (behaviour unchanged).
+3. `src/agents/agent_complex_rule_builder/engine.py` — normalise the LLM content so `reply`
+   is always a string; prompt now forbids catch-all options ("Something else"/"Other").
+4. `src/agents/agent_complex_rule_builder/tools.py` — `propose_options` coerces object
+   options to labels, de-duplicates, and drops catch-all answers.
+5. `src/front/static/ontology/js/ontology-business-rules.js` + `.../css/ontology-business-rules.css`
+   — every option group gets a built-in "Something else…" pill that focuses the chat input
+   instead of sending text.
+6. `tests/units/agents/test_agent_complex_rule_builder.py` — tests for block-list content
+   and option sanitising.
+
+### Modified files
+- src/agents/engine_base.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/agents/agent_complex_rule_builder/engine.py
+- src/agents/agent_complex_rule_builder/tools.py
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- tests/units/agents/test_agent_complex_rule_builder.py
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` → 11480 passed, 334 skipped, 8 deselected.
+
+## Edit lock: auto-resume on the user's return after an idle expiry
+
+### Context
+When the editing lease lapses through inactivity, the lock is released and the browser
+goes read-only with the sticky "expired" flag. The user had to click **Resume editing** to
+get editing back, even when they came back to the page and started working again. Resume
+is now also triggered automatically by a deliberate input. Plain mouse movement and
+scrolling do not count, because they would re-grab the lock by accident.
+
+### Changes
+1. `src/front/static/global/js/edit-lock.js` — after an idle expiry (and on a page load that
+   finds the sticky flag set), a capture-phase listener arms on `click`, `keydown` and
+   `touchstart`. The first deliberate input calls `POST /domain/edit-lock/acquire` with
+   `force: false`. If the lock is granted, the sticky flag is cleared and the page reloads
+   (same as the Resume button), so current data is shown before editing resumes. If another
+   user holds the lock, the browser stays read-only and shows a one-time notice naming the
+   holder. Attempts are spaced by 30 s. A lease lost to a take-over never arms auto-resume,
+   so the new holder is never auto-reclaimed from. The Resume button stays as the fallback.
+2. `tests/units/front/test_edit_lock_auto_resume_contract.py` — new contract tests: only
+   deliberate events arm auto-resume; the re-acquire is non-forcing; reload only happens when
+   the lock is granted; auto-resume is armed on the idle-expiry paths and not on take-over;
+   the Resume fallback is kept.
+
+### Modified files
+- src/front/static/global/js/edit-lock.js
+- tests/units/front/test_edit_lock_auto_resume_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+### Test result
+`node --check src/front/static/global/js/edit-lock.js` → OK.
+`uv run --frozen pytest -q tests/units/front/test_edit_lock_auto_resume_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_segmented_subnav_contract.py` → 22 passed.
+Full suite: `uv run --frozen pytest -q -m "not scenario"` → 11565 passed, 334 skipped, 8 deselected, 0 failed.
+Manual browser check not run in this session (the behaviour needs an idle lease to expire in a real browser).
+
+## Feature: SPARQL Update removal rules (DELETE)
+
+### Context
+The Complex rule builder could only infer triples (SPARQL `CONSTRUCT`). Users also need to
+remove triples, for example to hide the meters of a customer that was closed. Removal rules
+use SPARQL 1.1 Update forms (`DELETE WHERE`, `DELETE DATA`, `DELETE {…} WHERE {…}`). On
+Lakebase and Delta they are stored as overlay rows in the `_overrides` table with origin
+`reasoning`, so the source tables are never changed and the matching original triples are
+hidden. On Neo4j the matching triples are deleted from the property graph. The SPEC and PLAN
+are local and gitignored (`.planning/sparql-update-removal/SPEC.md`, `PLAN.md`).
+
+Decisions applied: origin `reasoning` (D1); a triple a user added by hand is kept (D2, the
+plan default); `DELETE DATA` of a missing triple is a `removal_not_found` warning (D3); a
+removal must bind a subject or an object (D4); Neo4j removals are not journaled (D5); a
+removal that would hide more than 10,000 triples needs an explicit confirmation.
+
+### Changes
+1. `src/back/core/reasoning/rules/SparqlPatternCompiler.py` (new): BGP, FILTER and term
+   compilation shared by the CONSTRUCT and removal compilers (extracted, no behaviour change).
+2. `src/back/core/reasoning/rules/SparqlConstructCompiler.py`: extends `SparqlPatternCompiler`.
+3. `src/back/core/reasoning/rules/SparqlUpdateCompiler.py` (new): compiles the three removal
+   forms to one `SELECT s, p, o` per template triple. Refuses `INSERT`, `GRAPH`, unbound
+   patterns (D4) and any other construct outside the subset.
+4. `src/back/core/reasoning/rules/SPARQLRuleEngine.py`: rules carry a `kind` (`construct`
+   by default, or `removal`); `validate_rule` dispatches on it; `_execute_one` routes to
+   `_execute_construct` or `_execute_removal`; D3 violations; `count_removals` for the
+   preview; stats `removed_count`.
+5. `src/back/core/reasoning/results/ReasoningResult.py`: `removed_triples` (merged and
+   serialised by `to_dict`).
+6. `src/back/core/graphdb/overrides.py`: `HIDE_ORIGINS` and `validate_hide_origin`.
+7. `src/back/core/graphdb/delta/materialize.py`, `delta/MaterializedStore.py`: origin-aware
+   hide (`build_hide_statements`); a reasoning hide skips triples that have a user add row.
+8. `src/back/core/graphdb/lakebase/OverrideOpsMixin.py`, `lakebase/FlatStore.py`:
+   origin-aware `_hide_triples`; user add rows are dropped only for origin `user`.
+9. `src/back/core/graphdb/neo4j/Store.py`, `interfaces/GraphBackend.py`: `delete_triples`
+   takes `origin`; a removal is not journaled and skips journaled user adds.
+10. `src/back/core/reasoning/ReasoningService.py`: `materialize_inferred` is now
+    `_insert_inferred` followed by `_apply_removals` (origin `reasoning`); new
+    `count_sparql_removal`.
+11. `src/back/objects/digitaltwin/TwinBackgroundTasks.py`,
+    `src/back/objects/digitaltwin/build/TwinInferredMaterialize.py`: removed triples are
+    forwarded to the graph append path (also when a run has removals only).
+12. `src/back/core/reasoning/constants.py`, `src/back/objects/ontology/Rules.py`:
+    `REMOVAL_WHERE_RE` and `REMOVAL_TEMPLATE_RE`; reference checks cover removal rules.
+13. `src/shared/config/constants.py`: `SPARQL_REMOVAL_CONFIRM_THRESHOLD = 10_000`.
+14. `src/api/routers/internal/ontology.py`: `POST /ontology/rules/sparql_rules/removal-preview`
+    returns `success`, `count`, `requires_confirmation` and `errors`; nothing is written.
+15. Rule editor UI: `src/front/templates/partials/ontology/_ontology_business_rules.html`
+    (Rule type selector, removal box with Preview and confirmation);
+    `src/front/static/ontology/js/ontology-business-rules.js` (kind handling, preview, save
+    gate, removal badge, validation sends the kind); `src/front/static/ontology/css/ontology-business-rules.css`
+    (manual layout without the assistant, badge).
+16. Docs: `docs/user-guide.md` (Removal Rules section), `docs/api.md` (removal-preview),
+    `docs/architecture.md` (`SparqlUpdateCompiler`).
+
+Behaviour to know: a Build clears the rows that reasoning derived (removals included) and
+keeps user overrides. Removals come back on the next reasoning run, so a Build alone does not
+reapply them.
+
+Known limitations (not decided yet):
+- Same-run ordering: removals are applied after the inserts of the same run, so a CONSTRUCT
+  rule in that run can still derive from a triple that a removal hides.
+- Literals are matched on their lexical form only.
+- The preview does not apply D2, so it can over-count triples that have a user add row.
+- The Delta materialised table (`materialize_to_delta`) is not changed by removals.
+
+### Modified files
+- src/back/core/reasoning/rules/SparqlPatternCompiler.py
+- src/back/core/reasoning/rules/SparqlConstructCompiler.py
+- src/back/core/reasoning/rules/SparqlUpdateCompiler.py
+- src/back/core/reasoning/rules/SPARQLRuleEngine.py
+- src/back/core/reasoning/results/ReasoningResult.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/reasoning/constants.py
+- src/back/core/graphdb/overrides.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/MaterializedStore.py
+- src/back/core/graphdb/lakebase/OverrideOpsMixin.py
+- src/back/core/graphdb/lakebase/FlatStore.py
+- src/back/core/graphdb/neo4j/Store.py
+- src/back/core/graphdb/interfaces/GraphBackend.py
+- src/back/objects/ontology/Rules.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+- src/shared/config/constants.py
+- src/api/routers/internal/ontology.py
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- tests/units/reasoning/test_sparql_update_compiler.py (new)
+- tests/units/reasoning/test_sparql_removal_rules.py (new)
+- tests/units/reasoning/test_reasoning_service_removals.py (new)
+- tests/units/graphdb/test_removal_origin_contract.py (new)
+- tests/units/ontology/test_rules_removal_reference.py (new)
+- tests/units/ontology/test_rules_removal_roundtrip.py (new)
+- tests/units/api/test_removal_preview.py (new)
+- tests/units/front/test_business_rules_removal_ui.py (new)
+- tests/units/front/test_business_rules_list_ui.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- tests/units/core/test_sql_literal_escaping.py
+- docs/user-guide.md
+- docs/api.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+### Test result
+Full suite: `uv run --frozen pytest -q -m "not scenario"` → 11565 passed, 334 skipped,
+8 deselected, 0 failed. The size-budget architecture test passes.
+Not verified in this session: a manual run on a live domain (Lakebase, Delta, Neo4j) to check
+the acceptance criteria against the source tables and counts, and a browser check of the rule
+editor. These remain open and are not marked as passed.
+
+## Follow-up: removal rules run before CONSTRUCT rules in the same run
+
+### Context
+The removal feature section above listed three open decisions. They are now answered:
+1. Same-run ordering: removal rules run before the Complex CONSTRUCT rules of the same
+   reasoning run, so a CONSTRUCT rule does not derive from triples that a removal hides in
+   that run. This resolves the "same-run ordering" limitation listed above.
+2. Build: a Build does not reapply removals. They come back on the next reasoning run, the
+   same as CONSTRUCT-derived triples (no change to the Build).
+3. D2: a triple a user added by hand is kept when a removal rule matches it (unchanged).
+
+The run still writes nothing before the user chooses to append the results.
+
+### Changes
+1. `src/back/core/reasoning/rules/SPARQLRuleEngine.py`: `execute_rules` sorts the enabled
+   rules so removal rules run first and collects the SQL of the removal rules that succeed.
+   A CONSTRUCT rule reads `_table_after_removals(base, removal_sql)`, the table minus the
+   triples those removals match. New helpers `_options`, `_removal_sql`; `_execute_one`
+   takes the same-run removal SQL; `_execute_construct` and `_execute_removal` take the
+   resolved table SQL; `count_removals` reuses `_removal_sql`.
+2. `tests/units/reasoning/test_sparql_removal_rules.py`: ordering tests (removal runs first
+   whatever the list order; CONSTRUCT reads the filtered view; no view without removals; a
+   disabled or failed removal does not filter).
+3. `docs/user-guide.md`: "Same run" bullet in the Removal Rules section, including the D2
+   caveat (the same-run view also skips a triple a user added by hand, although that triple
+   stays in the graph).
+
+Known limitation kept: the same-run view does not apply D2, so a CONSTRUCT rule of the same
+run does not derive from a user-added triple that a removal matches.
+
+### Modified files
+- src/back/core/reasoning/rules/SPARQLRuleEngine.py
+- tests/units/reasoning/test_sparql_removal_rules.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-25.log
+
+### Test result
+Full suite: `uv run --frozen pytest -q -m "not scenario"` → 11570 passed, 334 skipped,
+8 deselected, 0 failed. Ruff `--select F` is clean on the changed files.

@@ -397,11 +397,11 @@ class GraphFilter:
         live_table: Optional[str] = None,
         depth: int = 2,
     ) -> Dict[str, Any]:
-        """Return the sandbox after-picture, optionally unioned with the live graph.
+        """Return the sandbox after-picture, optionally unioned with the Original Graph.
 
         Sandbox triples are the what-if slice (cohort members, patched facts,
         inferred conclusions). When *live_table* is set, expand those entities
-        on the live graph and overlay only the predicates the sandbox wrote.
+        on the Original Graph and overlay only the predicates the sandbox wrote.
         """
         loaded = _read_sandbox_triples(
             store,

@@ -153,6 +153,17 @@
     background: var(--db-primary-subtle, #eef2ff);
     border-color: var(--db-primary, #4a6cf7);
 }
+.cra-opt-other {
+    border-style: dashed;
+    font-style: italic;
+}
+.br-kind-badge-removal {
+    background: var(--bs-danger-bg-subtle, #f8d7da);
+    color: var(--bs-danger-text-emphasis, #842029);
+    font-size: 0.7rem;
+    border-radius: 0.25rem;
+    padding: 0.1rem 0.4rem;
+}
 .cra-opt-check {
     display: inline-flex;
     align-items: center;

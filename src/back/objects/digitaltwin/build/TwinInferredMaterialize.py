@@ -83,7 +83,8 @@ class TwinInferredMaterialize:
             raise NotFoundError("Inference results were not found for this task")
 
         raw_triples = task.result.get("inferred_triples", [])
-        if not raw_triples:
+        raw_removed = task.result.get("removed_triples", [])
+        if not raw_triples and not raw_removed:
             raise ValidationError("There are no inferred triples to materialise")
 
         uri_triples = TwinInferredMaterialize.uri_triples(raw_triples)
@@ -107,7 +108,7 @@ class TwinInferredMaterialize:
                 result["materialize_error"] = "Materialise to Delta failed"
                 result["materialize_table"] = mat_table
 
-        if do_graph and uri_triples:
+        if do_graph and (uri_triples or raw_removed):
             try:
                 store = get_store(domain_snap, settings, for_write=True)
                 if store is None:
@@ -124,7 +125,10 @@ class TwinInferredMaterialize:
                         for t in uri_triples
                     ]
                     count = svc.materialize_inferred(
-                        ReasoningResult(inferred_triples=inferred)
+                        ReasoningResult(
+                            inferred_triples=inferred,
+                            removed_triples=list(raw_removed),
+                        )
                     )
                     result["materialize_graph_count"] = count
             except Exception as exc:

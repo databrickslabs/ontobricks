@@ -146,6 +146,45 @@ class TestKnowledgePageService:
         assert "User does not have access" in message
 
     @patch("requests.get")
+    def test_list_pages_403_domain_admin_tells_to_pick_a_domain(
+        self, mock_get, clean_databricks_env
+    ):
+        response = MagicMock(status_code=403)
+        response.json.return_value = {
+            "message": (
+                "Domain Admin permissions are required to list pages. Without a "
+                "domain filter, account-wide domain administration is required."
+            )
+        }
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError(
+            "403 Client Error: Forbidden", response=response
+        )
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+
+        with pytest.raises(InfrastructureError) as exc_info:
+            KnowledgePageService(auth).list_pages()
+
+        assert exc_info.value.message.endswith(
+            "Select a Domain in the Domains filter to list its pages."
+        )
+
+    @patch("requests.get")
+    def test_list_pages_403_other_reason_has_no_domain_hint(
+        self, mock_get, clean_databricks_env
+    ):
+        response = MagicMock(status_code=403)
+        response.json.return_value = {"message": "User does not have access"}
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError(
+            "403 Client Error: Forbidden", response=response
+        )
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+
+        with pytest.raises(InfrastructureError) as exc_info:
+            KnowledgePageService(auth).list_pages()
+
+        assert "Domains filter" not in exc_info.value.message
+
+    @patch("requests.get")
     def test_list_pages_connection_error_is_explicit(self, mock_get, clean_databricks_env):
         mock_get.side_effect = requests.ConnectionError("no route to host")
         auth = DatabricksAuth(host="https://h.com", token="tok")
@@ -177,6 +216,25 @@ class TestKnowledgePageService:
         # Prefer governed tag_key (domain name) over subtitle description.
         assert domains[0]["label"] == "Logistics"
         assert domains[0]["name"].startswith("domains/")
+
+    @patch("requests.get")
+    def test_list_domains_403_surfaces_databricks_reason(
+        self, mock_get, clean_databricks_env
+    ):
+        response = MagicMock(status_code=403)
+        response.json.return_value = {"message": "Caller is not a domain admin"}
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError(
+            "403 Client Error: Forbidden", response=response
+        )
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+
+        with pytest.raises(InfrastructureError) as exc_info:
+            KnowledgePageService(auth).list_domains()
+
+        assert str(exc_info.value) == (
+            "Databricks Domains list failed (HTTP 403). "
+            "Databricks said: Caller is not a domain admin"
+        )
 
 
 def _domains_response(tag_key="Logistics"):

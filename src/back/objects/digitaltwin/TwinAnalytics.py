@@ -597,7 +597,7 @@ class TwinAnalytics:
         ts_status: Dict[str, Any],
         dt_exist: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Derive a three-state Knowledge Graph indicator from live graph and artefact checks.
+        """Derive a three-state Knowledge Graph indicator from Original Graph and artefact checks.
 
         Returns a dict with:
             indicator: ``'green'`` | ``'orange'`` | ``'red'``

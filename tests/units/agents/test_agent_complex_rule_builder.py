@@ -29,6 +29,7 @@ _PROPERTIES = [
 ]
 
 _QUERY = "CONSTRUCT { ?c a :VIP } WHERE { ?c a :Customer . ?c :balance ?b . FILTER(?b > 1000) }"
+_REMOVAL = 'DELETE { ?c :placesOrder ?o } WHERE { ?c :riskTier "high" ; :placesOrder ?o . }'
 
 
 def _tool_call_response(name: str, arguments: str = "{}"):
@@ -167,6 +168,81 @@ class TestRunAgent:
         result = _run(responses)
         assert result.options is None
 
+    def test_removal_draft_is_surfaced_without_a_kind(self):
+        update_args = json.dumps({"name": "DropRiskyOrders", "query": _REMOVAL})
+        responses = [
+            _tool_call_response("update_draft", update_args),
+            _text_response("Review it, then click Preview."),
+        ]
+        result = _run(responses, user_message="Remove orders of high-risk customers")
+        assert result.draft == {"name": "DropRiskyOrders", "description": "", "query": _REMOVAL}
+
+    def test_a_changed_query_resurfaces_the_draft(self):
+        existing = {"name": "R", "description": "", "query": _QUERY}
+        update_args = json.dumps({"name": "R", "query": _REMOVAL})
+        responses = [_tool_call_response("update_draft", update_args), _text_response("Done.")]
+        result = _run(responses, current_draft=existing)
+        assert result.draft is not None and result.draft["query"] == _REMOVAL
+
+    def test_existing_draft_kind_is_shown_to_the_model(self):
+        existing = {"name": "R", "description": "", "query": _REMOVAL}
+        captured = {}
+
+        def _capture(*args, **kwargs):
+            captured["messages"] = args[3]
+            return _text_response("This rule removes…")
+
+        with patch.object(cr_engine, "call_serving_endpoint", side_effect=_capture):
+            cr_engine.run_agent(
+                host="h", token="t", endpoint_name="e",
+                classes=_CLASSES, properties=_PROPERTIES, base_uri="http://ex.org/",
+                user_message="Summarise the current rule.", current_draft=existing,
+            )
+        assert "Kind: removal" in captured["messages"][0]["content"]
+
+    def test_empty_reply_after_options_uses_their_question(self):
+        # The prompt tells the model not to repeat the options, so it may say nothing.
+        opts_args = json.dumps(
+            {"question": "What should disappear?", "options": ["Only the link", "The meter itself"]}
+        )
+        responses = [_tool_call_response("propose_options", opts_args), _text_response("")]
+        result = _run(responses, user_message="remove the meters of terminated contracts")
+        assert result.reply == "What should disappear?"
+
+    def test_empty_reply_without_options_keeps_the_fallback(self):
+        result = _run([_text_response("")])
+        assert result.reply == cr_engine.UNREADABLE_REPLY
+
+    def test_block_list_content_is_flattened_to_text(self):
+        """Claude-style endpoints return content as blocks; reply must be a str."""
+        blocks = [
+            {"type": "text", "text": "Which customers?"},
+            {"type": "text", "text": "Pick one."},
+        ]
+        result = _run([_text_response(blocks)])
+        assert result.success is True
+        assert result.reply == "Which customers?\n\nPick one."
+
+    def test_catch_all_options_are_dropped_and_objects_coerced(self):
+        opts_args = json.dumps(
+            {
+                "question": "Which?",
+                "options": [
+                    {"label": "Inactive customers"},
+                    "Something else (let me explain)",
+                    "Something else (let me explain)",
+                    "Other",
+                    "Terminated contract",
+                ],
+            }
+        )
+        responses = [
+            _tool_call_response("propose_options", opts_args),
+            _text_response("Which customers?"),
+        ]
+        result = _run(responses)
+        assert result.options["options"] == ["Inactive customers", "Terminated contract"]
+
     def test_llm_failure_is_reported(self):
         with patch.object(
             cr_engine, "call_serving_endpoint", side_effect=RuntimeError("boom")
@@ -200,6 +276,56 @@ class TestSystemPrompt:
         assert "matches" in lower and "infers" in lower
 
 
+class TestRemovalPrompt:
+    def test_prompt_offers_both_kinds(self):
+        prompt = cr_engine.SYSTEM_PROMPT
+        assert "construct" in prompt and "removal" in prompt
+        assert "Do not emit mutating SPARQL (INSERT/DELETE)" not in prompt
+
+    def test_prompt_lists_the_accepted_removal_forms_and_limits(self):
+        prompt = cr_engine.SYSTEM_PROMPT
+        for form in ("DELETE { template } WHERE { pattern }", "DELETE WHERE", "DELETE DATA"):
+            assert form in prompt
+        for limit in ("OPTIONAL", "variable predicates", "INSERT"):
+            assert limit in prompt
+        assert "Preview" in prompt
+
+    def test_prompt_asks_what_disappears_before_drafting(self):
+        prompt = cr_engine.SYSTEM_PROMPT
+        assert "only the link" in prompt
+        assert "the entity itself" in prompt
+        assert "only its class membership" in prompt
+        assert "Do not draft until the user has answered" in prompt
+
+    def test_prompt_says_a_class_scope_satisfies_the_guard(self):
+        prompt = cr_engine.SYSTEM_PROMPT
+        assert "Scoping by class satisfies the guard" in prompt
+        assert "DELETE WHERE { ?s :status ?o }" in prompt
+
+    def test_prompt_keeps_an_entity_removal_to_patterns_that_always_match(self):
+        prompt = cr_engine.SYSTEM_PROMPT
+        assert "every pattern\n    must match" in prompt
+        assert "need their own removal rules" in prompt
+
+
+class TestOneQuestionPrompt:
+    def test_prompt_asks_one_visible_question_per_turn(self):
+        prompt = cr_engine.SYSTEM_PROMPT
+        assert "at most\n    ONCE per turn" in prompt
+        assert "Your reply must contain that question" in prompt
+        assert 'never refer to questions "above"' in prompt
+
+    def test_prompt_never_offers_a_single_option(self):
+        assert "Never offer a single option" in cr_engine.SYSTEM_PROMPT
+        assert "do not ask them to confirm it" in cr_engine.SYSTEM_PROMPT
+
+    def test_prompt_asks_which_link_when_several_relationships_fit(self):
+        prompt = cr_engine.SYSTEM_PROMPT
+        assert "call describe_class on the removed entity's class" in prompt
+        assert "Customer\n    owns Meter" in prompt
+        assert "Never assume one silently" in prompt
+
+
 class TestTools:
     def test_overview_lists_classes_and_properties(self):
         ctx = ToolContext(
@@ -223,6 +349,16 @@ class TestTools:
         assert out["dataProperties"] == ["balance", "riskTier"]
         assert [p["name"] for p in out["objectProperties"]] == ["placesOrder"]
 
+    def test_describe_class_lists_incoming_relationships(self):
+        # Removing "the link" of an Order needs every relationship that points to it.
+        ctx = ToolContext(
+            host="", token="", ontology_classes=_CLASSES, ontology_properties=_PROPERTIES,
+        )
+        out = json.loads(cr_tools.tool_describe_class(ctx, name="Order"))
+        assert out["incomingProperties"] == [{"name": "placesOrder", "domain": "Customer"}]
+        customer = json.loads(cr_tools.tool_describe_class(ctx, name="Customer"))
+        assert customer["incomingProperties"] == []
+
     def test_describe_unknown_class_errors(self):
         ctx = ToolContext(host="", token="", ontology_classes=_CLASSES)
         out = json.loads(cr_tools.tool_describe_class(ctx, name="Ghost"))
@@ -236,6 +372,25 @@ class TestTools:
         assert out["ok"] is True
         assert ctx.rule_draft == {"name": "R", "description": "d", "query": _QUERY}
         assert ctx.rule_draft_ready is True
+
+    def test_update_draft_stores_a_removal_query_without_a_kind(self):
+        ctx = ToolContext(host="", token="")
+        out = json.loads(cr_tools.tool_update_draft(ctx, query=_REMOVAL))
+        assert out["ok"] is True
+        assert ctx.rule_draft == {"name": "", "description": "", "query": _REMOVAL}
+
+    def test_update_draft_schema_has_no_kind_and_says_the_form_decides(self):
+        schema = next(
+            d for d in cr_tools.TOOL_DEFINITIONS if d["function"]["name"] == "update_draft"
+        )["function"]
+        assert "kind" not in schema["parameters"]["properties"]
+        assert "first keyword" in schema["description"]
+        assert "DELETE" in schema["parameters"]["properties"]["query"]["description"]
+
+    def test_kind_label_names_the_form_or_says_it_is_invalid(self):
+        assert cr_engine._kind_label(_REMOVAL) == "removal"
+        assert cr_engine._kind_label(_QUERY) == "construct"
+        assert "neither" in cr_engine._kind_label("SELECT * WHERE { ?a ?b ?c }")
 
     def test_propose_options_writes_context(self):
         ctx = ToolContext(host="", token="")
@@ -258,6 +413,28 @@ class TestTools:
         )
         assert ctx.rule_options["options"] == ["a", "b"]
         assert ctx.rule_options["multi"] is True
+
+    def test_propose_options_refuses_a_second_question_in_the_same_turn(self):
+        # The chat shows one options group: a second call must not erase the first question.
+        ctx = ToolContext(host="", token="")
+        cr_tools.tool_propose_options(ctx, question="What disappears?", options=["Link", "Entity"])
+        out = json.loads(
+            cr_tools.tool_propose_options(ctx, question="Which link?", options=["hasMeter", "owns"])
+        )
+        assert out["ok"] is False
+        assert "What disappears?" in out["error"]
+        assert "one question" in out["error"]
+        assert ctx.rule_options["question"] == "What disappears?"
+        assert ctx.rule_options["options"] == ["Link", "Entity"]
+
+    def test_propose_options_refuses_a_single_answer(self):
+        ctx = ToolContext(host="", token="")
+        out = json.loads(
+            cr_tools.tool_propose_options(ctx, question="Status value?", options=["terminated"])
+        )
+        assert out["ok"] is False
+        assert "at least two answers" in out["error"]
+        assert ctx.rule_options is None
 
     def test_propose_options_empty_sets_none(self):
         ctx = ToolContext(host="", token="")

@@ -597,7 +597,7 @@ type Query {
 
 The Knowledge Graph API provides stateless, programmatic access to the graph viewer — triple store status, entity search, ontology artifacts, and build triggers. All endpoints accept an optional `project_name` query parameter to load a domain from the registry instead of the browser session.
 
-Pass `simulation_id` on `GET /digitaltwin/triples`, `GET /digitaltwin/triples/find`, `GET /digitaltwin/stats`, and GraphQL to read a **ready** what-if sandbox — the same inferred overlay Explorer uses (`include_inferred` only switches the live graph). Create and run scenarios with [`/api/v1/simulations`](#simulation-api).
+Pass `simulation_id` on `GET /digitaltwin/triples`, `GET /digitaltwin/triples/find`, `GET /digitaltwin/stats`, and GraphQL to read a **ready** what-if sandbox — the same inferred overlay Explorer uses (`include_inferred` only switches the Original Graph). Create and run scenarios with [`/api/v1/simulations`](#simulation-api).
 
 ### Base URL
 
@@ -1825,6 +1825,14 @@ POST /ontology/if-then/save
 
 **Note:** Set `index` to -1 for new rules, or the rule index to update existing.
 
+`rule.action` is optional: `"assert"` (default, infers the THEN triples) or
+`"retract"` (removes the triples the IF part matches through the removal
+overlay). A retraction's THEN part may be a class membership (`Class(?x)`, removes
+the `rdf:type` triple), a relationship (`prop(?x, ?y)`) or an attribute value
+(`prop(?x, "value")`), each with variables bound by the IF part; built-ins and
+negation are rejected. `POST /ontology/shacl-rules/preview` accepts the same `action` and
+returns the SPARQL `DELETE` form for a retraction.
+
 #### Export Rules
 
 ```http
@@ -1867,6 +1875,31 @@ POST /ontology/rules/import
   "rejected": [{"type": "if_then_rules", "name": "Broken", "reason": "Rule antecedent is required"}]
 }
 ```
+
+#### Preview a Removal Rule
+
+```http
+POST /ontology/rules/sparql_rules/removal-preview
+```
+
+Counts the triples a removal rule (SPARQL `DELETE`) would hide, without writing anything. The rule type comes from the query: a query that is not a `DELETE` (for example a `CONSTRUCT`) returns `success: false` with the error `Only a DELETE rule has a removal preview`.
+
+**Request Body:**
+```json
+{
+  "rule": {
+    "name": "drop_meters",
+    "query": "PREFIX : <http://ex.org/onto#> DELETE WHERE { ?m :meterOf :Customer_42 . ?m :status ?o }"
+  }
+}
+```
+
+**Response (valid rule):**
+```json
+{"success": true, "count": 3, "requires_confirmation": false, "errors": []}
+```
+
+`requires_confirmation` is `true` when `count` is above 10,000; the editor then asks for the confirmation box before the rule can be saved. An invalid rule returns `success: false` with `errors` and HTTP 200.
 
 #### Delete IF-THEN Rule
 

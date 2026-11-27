@@ -1,3 +1,406 @@
+## Complex rule assistant drafts removal (DELETE) rules
+
+### Context
+Asking the Complex rule assistant "remove the meters owned when a contract is terminated"
+produced no usable rule: its prompt allowed only SPARQL CONSTRUCT and forbade DELETE, its
+`update_draft` tool had no notion of rule kind, and the editor hid the assistant for removal
+rules. The engine and editor already support removal rules (`kind: removal`). This is a material
+change to an LLM agent, so it follows the AI-feature gate (`.cursor/12-ai-feature-lifecycle.mdc`):
+local SPEC (`.planning/complex-rule-builder-removal/SPEC.md`), a committed eval dataset, a
+baseline MLflow run on the unchanged agent, the change, and a second run.
+Decision (user): when a removal request does not say what should disappear, the assistant asks
+(only the link, the entity itself, or only its class membership).
+
+### Changes
+1. `src/agents/agent_complex_rule_builder/engine.py`:
+   - System prompt covers both kinds (construct / removal), the accepted removal forms
+     (`DELETE {…} WHERE {…}`, `DELETE WHERE`, `DELETE DATA`) and limits (no INSERT, GRAPH,
+     OPTIONAL, property paths, variable predicates), the guard (a constant or class scope;
+     never a whole-predicate or whole-graph delete), the "what disappears" question asked first,
+     the entity-removal rule (class membership + the link the condition uses, no extra required
+     patterns), and a Preview reminder.
+   - The draft snapshot and the system prompt carry the rule `kind`.
+   - `_reply_text`: when the model ends a turn with an empty message after `propose_options`,
+     the reply is the options' question instead of "I couldn't display that answer".
+   - Removed an unused `Callable` import.
+2. `src/agents/agent_complex_rule_builder/tools.py`: `RULE_KIND_CONSTRUCT` / `RULE_KIND_REMOVAL`;
+   `update_draft` takes `kind` (enum in the schema), rejects an unknown kind, and stores it on the
+   draft.
+3. `src/api/routers/internal/ontology.py`: assistant route docstring documents `kind` in
+   `current_draft` and `draft`.
+4. `src/front/static/ontology/js/ontology-business-rules.js`: the draft sent to the assistant
+   carries the Rule type; `_craApplyDraftKind` applies the kind of the assistant's draft (shows the
+   Preview box for a removal); the assistant stays available for removal rules (the "written by
+   hand" layout is gone) and changing the Rule type keeps the conversation; new greeting.
+5. `src/front/static/ontology/css/ontology-business-rules.css`: removed the `cra-layout--manual`
+   rules. `src/front/templates/partials/ontology/_ontology_business_rules.html`: removal hint no
+   longer says removals are written by hand.
+6. Eval harness (new):
+   - `tests/eval/datasets/agent_complex_rule_builder/baseline.jsonl` — 15 rows: CONSTRUCT
+     regressions, link / membership / attribute / class-scoped removals, three answers to the
+     "what disappears" question, the two real ambiguous requests from the 2026-11-26 log, and
+     adversarial requests (wipe the graph, INSERT + DELETE in one rule).
+   - `tests/eval/judges/complex_rule_builder.py` — rule-based judges: kind, query compiles with
+     `SPARQLRuleEngine.validate_rule`, intent terms, clarification, safety.
+   - `tests/eval/run_agent_complex_rule_builder.py` — dry run (dataset contract) and live run
+     (calls the agent, logs to MLflow `/Shared/ontobricks/agents/complex_rule_builder`); refuses to
+     score or log LLM transport failures.
+   - `tests/eval/thresholds.yaml` — `complex_rule_builder` (aggregate 0.80);
+     `tests/eval/README.md` status row.
+7. Tests: `tests/units/agents/test_agent_complex_rule_builder.py` (draft kind, unknown kind,
+   schema, kind in the prompt, empty-reply fallback, removal prompt content);
+   `tests/units/front/test_business_rules_removal_ui.py` (assistant kept for removals, draft kind
+   applied); `tests/eval/test_run_agent_complex_rule_builder.py` (new, 12 offline tests: dataset
+   contract, judges, live wiring, transport-failure abort).
+8. `docs/user-guide.md`: Removal Rules section describes the assistant drafting removals.
+
+### Eval results (live, endpoint `benoit_cayla.ontobricks_dev_repository.bcay_ai_gateway`)
+- Baseline, unchanged agent, 15 rows: aggregate 0.505 —
+  https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/4083170204852255/runs/ea13bb73168640eb9aa18e59c13e5ca5
+  (CONSTRUCT rows 1.00; every removal row 0.18; clarification 0.17).
+- After the change, 15 rows: aggregate 0.995 —
+  https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/4083170204852255/runs/0192b06e63dd44f1bbac00aa25d2a598
+  The one partial row (entity removal written as `?meter a ?type`) was a judge miss; with the row
+  corrected, the saved outputs re-score at 1.000 (baseline unchanged at 0.505).
+- Dataset corrections made during the loop are logged in the local SPEC (explicit status literal;
+  the class-scoped "every status of every contract" row now expects a removal; `a ?type` accepted
+  for the entity row).
+
+### Modified files
+- src/agents/agent_complex_rule_builder/engine.py
+- src/agents/agent_complex_rule_builder/tools.py
+- src/api/routers/internal/ontology.py
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- tests/eval/datasets/agent_complex_rule_builder/baseline.jsonl (new)
+- tests/eval/judges/complex_rule_builder.py (new)
+- tests/eval/run_agent_complex_rule_builder.py (new)
+- tests/eval/test_run_agent_complex_rule_builder.py (new)
+- tests/eval/thresholds.yaml
+- tests/eval/README.md
+- tests/units/agents/test_agent_complex_rule_builder.py
+- tests/units/front/test_business_rules_removal_ui.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-27.log
+
+### Test result
+- `uv run --frozen ruff check --select F` on the changed Python files → clean.
+- `node --check src/front/static/ontology/js/ontology-business-rules.js` → OK.
+- `uv run --frozen python tests/eval/run_agent_complex_rule_builder.py` (dry run) → contract OK, n=15.
+- `uv run --frozen pytest -q -m "not scenario"` → 11673 passed, 334 skipped, 8 deselected, 0 failed.
+- Not verified: the assistant in the browser against your loaded Cust360 ontology.
+
+## Complex rule assistant: the question behind the answer buttons is always shown
+
+### Context
+Asking "Remove the meters owned when a contract is terminated" showed answer buttons
+(`Contract :hasMeter Meter` / `Customer :owns Meter` / Both) under the reply "I'll wait for
+your answers to both questions above", but no question was visible. Three causes: the editor
+rendered only the buttons of `options`, never `options.question`; a second `propose_options`
+call in one turn silently replaced the first question; and `describe_class` listed only
+outgoing relationships, so the model could not see that both `hasMeter` and `owns` point to
+Meter and either asked inconsistently or picked `hasMeter` silently.
+
+### Changes
+1. `src/front/static/ontology/js/ontology-business-rules.js` — new `_craReplyWithQuestion(data)`:
+   when the reply does not contain the options' question, the question is appended. Used for
+   the chat bubble and for the history sent back on the next turn, so the model also knows
+   what it asked.
+2. `src/agents/agent_complex_rule_builder/tools.py` — `propose_options` refuses a second call
+   in the same turn (keeps the first question, tells the model to ask one question at a time)
+   and refuses a single-answer question. `describe_class` now also returns
+   `incomingProperties` (relationships whose range is the class, with their domain).
+3. `src/agents/agent_complex_rule_builder/engine.py` — prompt: one question per turn, written
+   in the reply, never "questions above"; no single-option questions; use the literal the
+   user gave; new "Which link" rule (call `describe_class` on the removed entity's class and
+   ask which relationship when more than one could fit).
+4. Eval harness — `tests/eval/run_agent_complex_rule_builder.py` records the tools called per
+   turn and takes `--dataset baseline|regression|all`; `judge_clarifies` scores 0 when a turn
+   calls `propose_options` more than once or offers buttons without question text; new
+   `meter_contract_owns` fixture; `"entities"` accepted as the entity choice.
+5. `tests/eval/datasets/agent_complex_rule_builder/regression.jsonl` (new) — 3 rows from the
+   reported flow: first question, which link after "Only the link", the `owns` removal draft.
+6. Tests — tool refusals, `incomingProperties`, prompt rules
+   (`tests/units/agents/test_agent_complex_rule_builder.py`); question display under node
+   (`tests/units/front/test_complex_rule_assistant_question.py`, new); judge and runner
+   (`tests/eval/test_run_agent_complex_rule_builder.py`).
+7. `docs/user-guide.md` — the assistant asks which link, one question at a time, with the
+   question above its buttons. `tests/eval/README.md` — dataset row count.
+
+### Eval (endpoint benoit_cayla.ontobricks_dev_repository.bcay_ai_gateway)
+- Before, regression rows: 0.833 — after "Only the link" the agent drafted `hasMeter` without
+  asking and asked a single-option status question.
+  https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/4083170204852255/runs/04f874e5271c432eb61841d2998c345a
+- After, regression rows: 1.000 on 3 consecutive runs.
+- After, full set (15 baseline + 3 regression): 1.000.
+  https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/4083170204852255/runs/791bbc80e3dd4f63b9c72df35f7c60f8
+
+### Modified files
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/agents/agent_complex_rule_builder/tools.py
+- src/agents/agent_complex_rule_builder/engine.py
+- tests/eval/judges/complex_rule_builder.py
+- tests/eval/run_agent_complex_rule_builder.py
+- tests/eval/datasets/agent_complex_rule_builder/baseline.jsonl
+- tests/eval/datasets/agent_complex_rule_builder/regression.jsonl (new)
+- tests/eval/test_run_agent_complex_rule_builder.py
+- tests/eval/README.md
+- tests/units/agents/test_agent_complex_rule_builder.py
+- tests/units/front/test_complex_rule_assistant_question.py (new)
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-27.log
+
+### Test result
+- `uv run --frozen ruff check --select F` on the changed Python files → clean.
+- `node --check src/front/static/ontology/js/ontology-business-rules.js` → OK.
+- `uv run --frozen pytest -q -m "not scenario"` → 11686 passed, 334 skipped, 8 deselected, 0 failed.
+- Not verified: the chat in the browser against your loaded ontology.
+
+## Complex rules: the query decides the rule kind (no Rule type dropdown)
+
+### Context
+A Complex rule had a separate `kind` (construct or removal) chosen in a Rule type dropdown, and
+the assistant wrote it too. The dropdown could disagree with the query, and the editor, the
+assistant, the engine and the eval judge each read the kind from a different place. The query
+already says which kind it is (`CONSTRUCT` infers, `DELETE` removes), so the kind is now read
+from the query everywhere. Decided with the user after a review question.
+
+### Changes
+1. `src/back/core/reasoning/rules/rule_kind.py` (new) — `sparql_rule_kind(query)`: the first
+   keyword after the `PREFIX` / `BASE` prologue (`construct`, `removal`, or None);
+   `NOT_A_RULE_MESSAGE`.
+2. `src/back/core/reasoning/rules/SPARQLRuleEngine.py` — execution order, the per-rule dispatch
+   and `validate_rule` read the derived kind; a query that is neither form is refused.
+3. `src/back/objects/ontology/Rules.py` — the reference check uses the derived kind.
+4. `src/api/routers/internal/ontology.py` — the removal preview refuses a non-DELETE query
+   (`Only a DELETE rule has a removal preview`) instead of forcing `kind`; docstring updated.
+5. `src/agents/agent_complex_rule_builder/tools.py` — `update_draft` no longer takes `kind`; the
+   draft is `{name, description, query}`; the schema describes the form.
+6. `src/agents/agent_complex_rule_builder/engine.py` — prompt: the query's form is the kind;
+   "Never write a query in another form"; the prompt's `Kind:` line is derived from the query.
+7. `src/front/static/ontology/js/ontology-business-rules.js` — `_sparqlKindOf` (mirror of the
+   helper), `_sparqlKind()` from the query, `_sparqlQueryChanged()` (label, Preview box,
+   resets) on every query change, the assistant's and the editor's updates included. Dropped
+   `_sparqlKindChanged`, `_sparqlApplyKindUi`, `_craApplyDraftKind`, and the `kind` in the
+   save, validate and draft payloads.
+8. `src/front/templates/partials/ontology/_ontology_business_rules.html` — the dropdown is now a
+   read-only label (`sparqlKindLabel`) with a hint.
+9. `tests/eval/judges/complex_rule_builder.py`, `tests/eval/run_agent_complex_rule_builder.py` —
+   the kind is derived from the query; `query_errors(query)`; the dataset contract checks each
+   reference's form against its expected kind.
+10. Docs — `docs/user-guide.md` (Removal Rules), `docs/api.md` (removal preview),
+    `docs/architecture.md` (SparqlUpdateCompiler row), `.planning/complex-rule-builder-removal/SPEC.md`
+    (new §11 amendment; eval log entry).
+11. Tests — new `tests/units/reasoning/test_sparql_rule_kind.py` (form table + node parity check
+    with the editor's `_sparqlKindOf`); updated `test_sparql_removal_rules.py` (form decides;
+    stored kind ignored; neither-form message), `test_rules_removal_reference.py`,
+    `test_removal_preview.py`, `test_agent_complex_rule_builder.py` (no kind in `update_draft`,
+    schema, prompt label), `test_run_agent_complex_rule_builder.py`,
+    `test_business_rules_removal_ui.py` (rewritten: label, no dropdown, query-driven),
+    `test_business_rules_list_ui.py` (save-confirm reset goes through `_sparqlQueryChanged`).
+
+### Backward compatibility
+Rules saved before this change may still carry a stored `kind`. It is ignored: the query decides,
+and a saved rule was validated against its own query, so the two agree. No data migration.
+
+### Eval (endpoint benoit_cayla.ontobricks_dev_repository.bcay_ai_gateway)
+- All 18 rows (15 baseline + 3 regression), after the change: aggregate 1.000.
+  https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/4083170204852255/runs/c70d043548d04df7b71b87649b0fa65c
+- Previous 1.000 run, before the change: https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/4083170204852255/runs/791bbc80e3dd4f63b9c72df35f7c60f8
+
+### Modified files
+- src/back/core/reasoning/rules/rule_kind.py (new)
+- src/back/core/reasoning/rules/SPARQLRuleEngine.py
+- src/back/objects/ontology/Rules.py
+- src/api/routers/internal/ontology.py
+- src/agents/agent_complex_rule_builder/tools.py
+- src/agents/agent_complex_rule_builder/engine.py
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- tests/eval/judges/complex_rule_builder.py
+- tests/eval/run_agent_complex_rule_builder.py
+- tests/eval/test_run_agent_complex_rule_builder.py
+- tests/units/reasoning/test_sparql_rule_kind.py (new)
+- tests/units/reasoning/test_sparql_removal_rules.py
+- tests/units/ontology/test_rules_removal_reference.py
+- tests/units/api/test_removal_preview.py
+- tests/units/agents/test_agent_complex_rule_builder.py
+- tests/units/front/test_business_rules_removal_ui.py
+- tests/units/front/test_business_rules_list_ui.py
+- docs/user-guide.md
+- docs/api.md
+- docs/architecture.md
+- .planning/complex-rule-builder-removal/SPEC.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-27.log
+
+### Test result
+- `uv run --frozen ruff check --select F` on the changed Python files → clean.
+- `node --check src/front/static/ontology/js/ontology-business-rules.js` → OK; the kind regex was also checked on 8 samples.
+- `uv run --frozen python tests/eval/run_agent_complex_rule_builder.py` (dry run) → contract OK, n=18.
+- `uv run --frozen pytest -q -m "not scenario"` → 11705 passed, 334 skipped, 8 deselected, 0 failed.
+- Not verified: the editor in the browser (label, Preview box, assistant updates), against your loaded ontology.
+
+## docs: contributors list, third-party licenses refresh, release-notes routine
+
+### Context
+The release-notes routine did not cover the contributors list or the third-party licenses.
+CONTRIBUTORS.md was missing several GitHub contributors, and licenses/README.md had drifted
+from the dependencies declared in pyproject.toml (stale versions, LGPL psycopg presented as
+permissive). Same change as the 0.9.4 branch.
+
+### Changes
+1. `CONTRIBUTORS.md` - added Alex Picard (Core Team) and the missing community contributors
+   with merged PRs: LaurentPRAT-DB, arunnayar-byte, Amine Kerboute (CactusQuill), Diego Antonelli.
+2. `.cursorrules` - the "Release Notes" routine now also updates CONTRIBUTORS.md (GitHub
+   contributors + merged PR authors) and checks/updates /licenses/ against the current
+   dependencies.
+3. `licenses/README.md` - APScheduler `>=3.10,<4`; databricks-sql-connector `>=4.7.0` with the
+   `[kernel]` extra (databricks-sql-kernel, Apache-2.0); DOMPurify license expression; neo4j
+   note; new "Lakebase Registry" section with the psycopg LGPL-3.0 notice (used unmodified as
+   an external library); updated License Summary and closing sentence. The license files
+   under `licenses/` were already present on this branch and are unchanged.
+
+### Modified files
+- CONTRIBUTORS.md
+- .cursorrules
+- licenses/README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-27.log
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` -> 11705 passed, 334 skipped, 8 deselected.
+
+## fix(reasoning): forward-port #239 - OWL axioms drive scalable graph reasoning (#237)
+
+Context: Forward-port of PR #239 (merged on `0.9.4`, squash commit 37f00273) to
+`0.10.0`. OWL axioms declared in Expr. & Axioms never produced instance-level
+inferences; `run_graph_reasoning` only used the legacy property-characteristics
+panel whose save routes were removed.
+
+Changes:
+1. src/back/core/reasoning/ReasoningService.py - `run_graph_reasoning` also reads
+   `ontology["axioms"]`: a self `owl:propertyChainAxiom` of exactly two elements
+   (`p ∘ p ⊑ p`) marks `p` transitive and runs the scalable SQL
+   `transitive_closure(p)`. New helpers `_find_transitive_from_axioms` and
+   `_resolve_axiom_prop_uri`.
+2. src/back/core/w3c/owl/OntologyGenerator.py - `propertyChain` falls back to
+   `subject` when `resultProperty` is absent (the UI stores `subject`), so
+   UI-created chains are exported to OWL; a null chain no longer raises.
+3. src/front/static/ontology/js/ontology-axioms.js - the result property is
+   required for `propertyChain`; label reads "Result Property".
+4. tests/units/ontology/test_reasoning_service.py,
+   tests/units/ontology/test_owl_generator.py - coverage for self-chain
+   detection, 3-element/mixed/imported/null-chain cases and UI-shape export.
+
+Not in this change (follow-up on #237): `owl:inverseOf` SQL expansion and
+general `p ∘ q ⊑ r` chains.
+
+Modified files:
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/front/static/ontology/js/ontology-axioms.js
+- tests/units/ontology/test_reasoning_service.py
+- tests/units/ontology/test_owl_generator.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 11713 passed, 334 skipped.
+
+## feat(reasoning): forward-port #245 - owl:inverseOf SQL inverse expansion (#237)
+
+Context: Forward-port of PR #245 (AlexPicard10, merged-target `0.9.4`) with the
+review follow-ups. An `owl:inverseOf` axiom declared in Expr. & Axioms now
+materialises the missing `(b, Q, a)` edges for every `(a, P, b)`. On `0.10.0`
+the SQL reasoning defaults already live in
+`interfaces/TraversalMixin.py` (the `GraphDBBackend` split of 0.9.4 does not
+exist here), so the `SQLGraphReasoningOps` extract-class step is not needed:
+`inverse_expand` is added to `TraversalMixin` directly.
+
+Changes:
+1. src/back/core/graphdb/interfaces/TraversalMixin.py - new `inverse_expand(table,
+   P, Q)` SQL anti-join (error-swallowing, like the sibling ops).
+2. src/back/core/graphdb/neo4j/Store.py - `inverse_expand` no-op override that
+   logs a warning (native Cypher is a follow-up; the SQL default is invalid on Neo4j).
+3. src/back/core/reasoning/ReasoningService.py - `run_graph_reasoning` reads
+   `owl:inverseOf` axioms (`_find_inverse_pairs_from_axioms`, both directions),
+   new `_expand_property` dedupes the transitive / symmetric / inverse loops;
+   `_resolve_axiom_prop_uri` keeps only the local name of bare refs with `#` or `/`.
+4. src/front/static/ontology/js/ontology-axioms.js - the inverse property is
+   required when saving an `inverseOf` axiom.
+5. docs/architecture.md, docs/backend.md - `inverse_expand`, `graph:inverse`
+   provenance, axiom-driven graph reasoning, Neo4j limitation.
+6. tests - `test_sql_graph_reasoning_ops.py` (new: SQL shape, passthrough,
+   error swallow, GraphBackend inherits the ops), `test_neo4j_store.py`
+   (no-op + warning), `test_reasoning_service.py` (pair detection, firing from an
+   axiom, failing op does not abort others, ref resolution variants, dedupe).
+
+Modified files:
+- src/back/core/graphdb/interfaces/TraversalMixin.py
+- src/back/core/graphdb/neo4j/Store.py
+- src/back/core/reasoning/ReasoningService.py
+- src/front/static/ontology/js/ontology-axioms.js
+- docs/architecture.md
+- docs/backend.md
+- tests/units/graphdb/test_sql_graph_reasoning_ops.py (new)
+- tests/units/graphdb/test_neo4j_store.py
+- tests/units/ontology/test_reasoning_service.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 11727 passed, 334 skipped, 8 deselected.
+
+## fix(graph-chat): enforce the Depth setting and report incomplete results (#252)
+
+Context: Graph Chat gave different totals for the same question depending on the
+Depth dropdown (issue #252). The dropdown only rewrote a sentence in the system
+prompt, so the LLM chose the real traversal depth. At Depth 1 the agent summed a
+partial neighbourhood and presented it as complete. Truncated results were also
+flagged with a hint ("increase limit or use pagination") the model could not act on.
+Forward-port of the 0.9.4 change.
+
+Changes:
+1. src/agents/tools/context.py - new `ToolContext.dtwin_describe_depth` (None = no cap).
+2. src/agents/agent_dtwin_chat/tools.py - `tool_describe_entity` caps the LLM-requested
+   depth at the user's Depth; the schema description says so.
+3. src/agents/agent_dtwin_chat/engine.py - new `_configure_depth` helper stores the
+   Depth on the context and builds the system prompt. Prompt: Depth is a hard limit;
+   check the entity types reached before totalling; do not present a figure as complete
+   when a type is missing or the result is TRUNCATED.
+4. src/agents/tools/graph_formatting.py - `format_find_response` lists the entity types
+   reached with counts in the header; truncation is an explicit TRUNCATED warning with the
+   number of omitted triples. The MCP server has its own formatter and is unchanged.
+5. tests/units/agents/test_agent_dtwin_chat.py - user Depth caps the LLM depth; a higher
+   LLM depth does not raise the user's cap.
+6. tests/units/agents/test_graph_formatting_context.py - entity-type summary and
+   TRUNCATED wording.
+7. tests/eval/datasets/agent_dtwin_chat/regression.jsonl (new) - 3 regression rows for
+   #252: depth cap honoured, truncated total disclosed, capped indirect question disclosed.
+8. tests/eval/run_agent_dtwin_chat.py - `depth_capped` and `discloses_partial_result`
+   judges, trace built from engine steps, live runs pass `describe_depth`, regression file
+   loaded with the baseline.
+9. tests/eval/test_run_agent_dtwin_chat_depth.py (new) - judge contract tests (reject the bad
+   behaviour, accept the clean one).
+
+Not in this change: Auto depth, the post-answer completeness cross-check and the
+aggregate counting tool (issue #252 phases 2-3). The live MLflow eval run for this
+prompt/tool change has not been done. The dry-run harness and judge tests check wiring only.
+The local SPEC (`.planning/agents/agent_dtwin_chat/SPEC.md`, gitignored) is updated.
+
+Known limit: the engine keeps only the first 500 characters of each tool result in its
+trace, so the live `TRUNCATED` check can miss a warning placed later in a long result.
+
+Modified files:
+- src/agents/tools/context.py
+- src/agents/agent_dtwin_chat/tools.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/agents/tools/graph_formatting.py
+- tests/units/agents/test_agent_dtwin_chat.py
+- tests/units/agents/test_graph_formatting_context.py
+- tests/eval/run_agent_dtwin_chat.py
+- tests/eval/datasets/agent_dtwin_chat/regression.jsonl (new)
+- tests/eval/test_run_agent_dtwin_chat_depth.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-27.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 11738 passed, 334 skipped, 8 deselected.
+Eval: `python tests/eval/run_agent_dtwin_chat.py --dry-run` -> aggregate 1.000 (15 examples), PASS.
+
+
 ## Review fixes for the Marketplace packaging PR (#235)
 
 Context: code review of the Marketplace packaging and first-run setup PR found

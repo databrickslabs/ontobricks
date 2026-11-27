@@ -105,3 +105,29 @@ def test_format_find_pagination_hint_uses_explicit_has_more():
     assert "12 triples across" in text_no_more
     assert "Showing 1 of 12 triples" not in text_no_more
     assert "Showing 1 of 12 triples" in text_with_more
+    assert "TRUNCATED" in text_with_more
+    assert "11 triples are NOT in this result" in text_with_more
+    assert "TRUNCATED" not in text_no_more
+
+
+def test_format_find_lists_entity_types_reached_with_counts():
+    rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+    data = {
+        "success": True,
+        "seed_count": 1,
+        "depth": 2,
+        "total": 5,
+        "triples": [
+            {"subject": "https://ex/Study/S1", "predicate": rdf_type, "object": "https://ex/Study"},
+            {"subject": "https://ex/Study/S2", "predicate": rdf_type, "object": "https://ex/Study"},
+            {"subject": "https://ex/Study/S3", "predicate": rdf_type, "object": "https://ex/Study"},
+            {"subject": "https://ex/Program/P1", "predicate": rdf_type, "object": "https://ex/Program"},
+            {"subject": "https://ex/Program/P1", "predicate": "https://ex/name", "object": "Prog"},
+        ],
+    }
+
+    text = format_find_response(data)
+
+    assert "depth=2" in text
+    assert "Entity types reached (in this result): Study (3), Program (1)" in text
+    assert "TRUNCATED" not in text

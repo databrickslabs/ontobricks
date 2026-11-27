@@ -26,9 +26,15 @@ __all__ = [
 
 
 def is_asserted_only_relation(table_name: str) -> bool:
-    """Whether *table_name* excludes the inferred companion."""
+    """Whether *table_name* is the asserted graph (no derived triples).
+
+    The asserted relation is the ``…_asserted`` view on both backends (Delta
+    and Lakebase); ``…_data`` / ``…_sync`` are its fallbacks before the view
+    exists. Any of them must route to the asserted companions, never to the
+    certified ones that include reasoning / cohort / community rows.
+    """
     leaf = table_name.rsplit(".", 1)[-1]
-    return leaf.endswith("_data") or leaf.endswith("_sync")
+    return leaf.endswith(("_data", "_sync", "_asserted"))
 
 
 def _exception_haystack(exc: Exception) -> str:

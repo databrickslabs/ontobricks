@@ -221,6 +221,41 @@ def extract_message_content(llm_response: dict) -> str:
     return ""
 
 
+UNREADABLE_REPLY = "I couldn't display that answer. Please try again."
+
+
+def _extract_reply_text(content: object) -> list[str]:
+    """Recursively extract user-visible text from model content blocks."""
+    if isinstance(content, str):
+        return [content] if content.strip() else []
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            parts.extend(_extract_reply_text(item))
+        return parts
+    if isinstance(content, dict):
+        block_type = content.get("type")
+        if block_type and block_type not in ("text", "output_text"):
+            return []
+        for key in ("text", "content", "value"):
+            if key in content:
+                return _extract_reply_text(content[key])
+    return []
+
+
+def normalize_reply_content(content: object) -> str:
+    """Return readable Markdown for a model response content payload.
+
+    Some endpoints (Claude, Responses-style) return ``message.content`` as a
+    list of blocks instead of a string; serialising that raw list to the UI
+    renders as ``[object Object]``.
+    """
+    if isinstance(content, str) and content.strip():
+        return content
+    parts = [part.strip() for part in _extract_reply_text(content) if part.strip()]
+    return "\n\n".join(parts) if parts else UNREADABLE_REPLY
+
+
 # =====================================================
 # Token usage accumulation
 # =====================================================

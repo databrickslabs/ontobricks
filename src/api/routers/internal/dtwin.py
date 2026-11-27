@@ -1621,7 +1621,7 @@ async def triplestore_status(
     Returns session-cached status when available; falls back to a live query and
     caches the result. ``refresh=true`` bypasses the cache, which is the escape
     hatch the Build page's Refresh button needs when a stale entry disagrees with
-    the live graph.
+    the Original Graph.
     """
     try:
         domain = get_domain(session_mgr)
@@ -1773,7 +1773,8 @@ async def databricks_build_info(
             "readiness": readiness,
             "view_table": view_table,
             "data_table": data_table,
-            "inferred_table": builder.inferred_table_fqn(),
+            "overrides_table": builder.overrides_fqn(),
+            "inferred_table": builder.overrides_fqn(),  # legacy key, same table
             "triplestore_status": data_status,
         }
 
@@ -2179,7 +2180,7 @@ async def purge_materialized_inferences(
         )
     except NotImplementedError as exc:
         raise InfrastructureError(
-            "The active graph backend cannot safely purge materialized inferences",
+            "The active graph backend cannot safely purge overrides",
             detail=str(exc),
         ) from exc
     return {

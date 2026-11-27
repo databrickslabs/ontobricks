@@ -58,9 +58,44 @@ class Builder(GraphBuilder):
         return _table_naming.graph_view_fqn(self._domain, self._settings)
 
     def inferred_table_fqn(self) -> str:
+        """Legacy ``…_inferred`` companion (superseded by ``…_overrides``)."""
         from back.core.graphdb.delta import _table_naming
 
         return _table_naming.inferred_table_fqn(self._domain, self._settings)
+
+    def overrides_fqn(self) -> str:
+        from back.core.graphdb.delta import _table_naming
+
+        return _table_naming.overrides_fqn(self._domain, self._settings)
+
+    def asserted_view_fqn(self) -> str:
+        from back.core.graphdb.delta import _table_naming
+
+        return _table_naming.asserted_view_fqn(self._domain, self._settings)
+
+    def has_user_overrides(self) -> bool:
+        """``True`` when at least one ``user`` override row exists.
+
+        Graph Analytics reads the ``…_data`` snapshot directly while nobody has
+        edited the graph, so the common case keeps its cost; the asserted view is
+        only worth scanning once there is something to apply.
+        """
+        from back.core.graphdb.delta import _table_naming
+        from back.core.graphdb.entity_search import is_missing_relation_error
+        from back.core.graphdb.overrides import ORIGIN_USER
+
+        overrides = _table_naming.overrides_fqn(self._domain, self._settings)
+        if not overrides:
+            return False
+        try:
+            rows = self._get_client().execute_query(
+                f"SELECT 1 AS ok FROM {overrides} WHERE origin = '{ORIGIN_USER}' LIMIT 1"
+            )
+        except Exception as exc:  # noqa: BLE001
+            if is_missing_relation_error(exc):
+                return False
+            raise
+        return bool(rows)
 
     def dq_snapshot_fqn(self, task_id: str = "") -> str:
         from back.core.graphdb.delta import _table_naming

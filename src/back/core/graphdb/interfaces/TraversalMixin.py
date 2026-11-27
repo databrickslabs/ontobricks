@@ -187,6 +187,45 @@ class TraversalMixin:
             )
             return []
 
+    def inverse_expand(
+        self,
+        table_name: str,
+        predicate_uri: str,
+        inverse_predicate_uri: str,
+    ) -> List[Dict[str, Any]]:
+        """Materialise the inverse of *predicate_uri* under *inverse_predicate_uri*.
+
+        For every ``(a, P, b)`` where ``(b, Q, a)`` does not exist, returns the
+        missing ``(b, Q, a)`` triple (``Q`` = the inverse of ``P``, from an
+        ``owl:inverseOf`` axiom).  ``owl:inverseOf`` is symmetric, so the caller
+        runs this once per direction; each direction is a single anti-join.
+        """
+        esc_pred = self._sql_escape(predicate_uri)
+        esc_inv = self._sql_escape(inverse_predicate_uri)
+        sql = (
+            f"SELECT t.object AS subject, '{esc_inv}' AS predicate, t.subject AS object\n"
+            f"FROM {self._sql_relation(table_name)} t\n"
+            f"WHERE t.predicate = '{esc_pred}'\n"
+            f"  AND NOT EXISTS (\n"
+            f"    SELECT 1 FROM {self._sql_relation(table_name)} inv\n"
+            f"    WHERE inv.subject = t.object\n"
+            f"      AND inv.predicate = '{esc_inv}'\n"
+            f"      AND inv.object = t.subject\n"
+            f"  )"
+        )
+        try:
+            return self.execute_query(sql) or []
+        except Exception as e:
+            logger.warning(
+                "inverse_expand SQL failed on %s (%s -> %s), returning empty result: %s",
+                table_name,
+                predicate_uri,
+                inverse_predicate_uri,
+                e,
+                exc_info=True,
+            )
+            return []
+
     def shortest_path(
         self,
         table_name: str,

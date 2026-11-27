@@ -55,7 +55,9 @@ class _SqlStore:
         self.queries.append(sql)
         return [dict(r) for r in self.conn.execute(sql).fetchall()]
 
-    def insert_triples(self, name: str, triples: List[Dict[str, str]]) -> int:
+    def insert_triples(
+        self, name: str, triples: List[Dict[str, str]], origin: str = "reasoning"
+    ) -> int:
         self.conn.executemany(
             f"INSERT INTO {name} VALUES (?, ?, ?)",
             [(t["subject"], t["predicate"], t["object"]) for t in triples],
@@ -78,7 +80,9 @@ class _DeltaStore(_SqlStore):
         super().__init__()
         self.selects: List[str] = []
 
-    def insert_triples_from_select(self, name: str, select_sql: str) -> None:
+    def insert_triples_from_select(
+        self, name: str, select_sql: str, origin: str = "reasoning"
+    ) -> None:
         self.selects.append(select_sql)
 
 
@@ -92,7 +96,7 @@ class _ScanStore:
     def query_triples(self, _name):
         return list(self.rows)
 
-    def insert_triples(self, _name, triples):
+    def insert_triples(self, _name, triples, origin="reasoning"):
         self.rows.extend(triples)
         return len(triples)
 

@@ -32,7 +32,7 @@ is the deep reference for writing cohort rules.
 The left sidebar has three groups. Opening Intelligence from the app switcher
 always lands on **Home**.
 
-| Group | Page | Business question it answers | Writes to the live graph? |
+| Group | Page | Business question it answers | Writes to the Original Graph? |
 |-------|------|------------------------------|---------------------------|
 | *(landing)* | **Home** | *Where do I start in this workspace?* | Never |
 | **Configuration** | **Cohorts** | *Which entities belong together according to rules I define?* | Only when you **Materialise** a cohort run |
@@ -40,7 +40,7 @@ always lands on **Home**.
 | **Discovery** | **Communities** | *Which entities are tightly connected to each other?* | Only when you **Materialize** the partition |
 | **Discovery** | **Patterns** | *Which entities look alike (same kind of neighbourhood and profile)?* | Never (saved as a [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) snapshot) |
 | **Simulation** | **Scenarios** | *What would change if these facts were true?* | Never (private sandbox per scenario) |
-| **Simulation** | **Compare** | *How does a scenario differ from today's live graph, and what does it mean for the business?* | Never |
+| **Simulation** | **Compare** | *How does a scenario differ from today's Original Graph, and what does it mean for the business?* | Never |
 
 **Common to every Intelligence page.**
 
@@ -353,7 +353,7 @@ Live knowledge graph ──(read only)──▶ 1. Scope ──▶ 2. Copy into 
 ```
 
 1. **Scope**: an entity and its neighbours up to *N* hops, or the members of a
-   cohort rule. The live graph is only read in this step.
+   cohort rule. The Original Graph is only read in this step.
 2. **Copy into sandbox**: every triple whose subject is one of those entities
    is copied into a separate table named `<graph>__sim_<scenario id>` (Delta
    for Lakehouse, or an isolated marker-labelled graph for Neo4j). Overlay
@@ -368,11 +368,11 @@ Live knowledge graph ──(read only)──▶ 1. Scope ──▶ 2. Copy into 
    for the rule). Removed triples are listed separately.
 
 Once a scenario is **ready**, go to [Simulation → Compare](#simulation--compare)
-to overlay it on today's live graph.
+to overlay it on today's Original Graph.
 
 **Isolation.** The sandbox store refuses to write to any table that is not a
 simulation sandbox. Re-running a scenario rebuilds its sandbox from the
-current live graph. Deleting a scenario drops its sandbox. **Purge** drops the
+current Original Graph. Deleting a scenario drops its sandbox. **Purge** drops the
 sandbox and keeps the scenario as a draft.
 
 **Limits.** Scope is capped at 5,000 entities and 250,000 copied triples. A
@@ -452,10 +452,10 @@ Explorer always read that overlay (`simulation_id` on the public endpoints).
 — and what does that mean for the business?*
 
 **Header.** Pick the **Scenario** (only **ready** scenarios are listed) and
-the **Live graph**:
+the **Original Graph**:
 
-- *Live graph (inferred)*: today's data **including** reasoning conclusions.
-- *Live graph (asserted only)*: the raw mapped data only.
+- *Certified Graph*: today's data **including** reasoning conclusions.
+- *Original Graph (asserted only)*: the raw mapped data only.
 
 ### Graphs tab
 
@@ -476,7 +476,7 @@ counts are always exact. The share button opens the sandbox in Explorer.
 
 Type a business question in **Prompt** (for example *"Which customers are
 eligible for the green rebate?"*) and press **Ask both**. Graph Chat answers
-twice, side by side: once on the live graph and once on the sandbox. When
+twice, side by side: once on the Original Graph and once on the sandbox. When
 both answers are ready, **Business insights** comments on the difference.
 **Open report** builds a printable summary (facts, Compare metrics and graph
 if the overlay already loaded, both answers and the analysis).
@@ -489,7 +489,7 @@ if the overlay already loaded, both answers and the analysis).
 3. **Click the green links** to check which rule produced each conclusion.
 4. **Switch to *asserted only*** to separate facts from inferred knock-ons.
 5. **Ask the business question in Evaluate**, then **Open report**.
-6. **Re-run when live data moved.** Compare uses today's live graph; the
+6. **Re-run when live data moved.** Compare uses today's Original Graph; the
    sandbox reflects the moment of the run.
 7. **Compare alternatives** by creating one scenario per option (for example
    *Green tariff* vs *Time-of-use*) and evaluating the same question on each.
@@ -544,5 +544,5 @@ run shows up in both.
 | Scenario run fails on scope size | More than 5,000 entities or 250,000 triples | Reduce hops or use a smaller cohort |
 | Scenario ready but no inferences | Rules need data outside the slice | Widen hops or use a cohort scope; check the ticked rules |
 | Scenario missing from Compare | Not **ready** (draft, running, failed or purged) | Run it again |
-| Compare shows unexpected red/amber items | The live graph changed since the run | Re-run the scenario, then compare again |
+| Compare shows unexpected red/amber items | The Original Graph changed since the run | Re-run the scenario, then compare again |
 | Analytics *Not computed for this run* on betweenness/closeness | BFS hit the depth cap | Raise `ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH` and re-run, or treat PageRank/Degree as the ranking |

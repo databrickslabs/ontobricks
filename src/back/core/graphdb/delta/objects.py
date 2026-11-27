@@ -29,7 +29,7 @@ def object_base(name: str) -> str:
     Simulation sandboxes (``__sim_<id>``), before-pictures (``__smb_<id>``),
     origin companions (``__smo_<id>``), and Explorer overlays
     (``__smu_<id>``, ``__smp_<id>``, leftover ``__sms_<id>``) fold into the
-    same card as the live graph. Other companions go through
+    same card as the Original Graph. Other companions go through
     :func:`strip_graph_leaf_suffix` (adjacency, entity-search, props).
     """
     stem = _SIM_LEAF_RE.sub("", name or "")

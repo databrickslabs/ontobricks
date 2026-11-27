@@ -39,6 +39,9 @@ class ShaclRuleSqlTranslator:
         }
         if ctx.get("focus"):
             params["focus"] = ctx["focus"]
+        if rule.is_retraction:
+            # Selects the existing triples a removal hides (see the flat backend).
+            params["retract"] = True
         return params
 
     def build_inference_sql(

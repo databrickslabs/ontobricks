@@ -23,6 +23,7 @@ from shared.config.settings import get_settings, Settings
 from back.objects.ontology import DesignAutofix, DesignChecks, Ontology, Rules
 from back.objects.ontology.generate import GenerateWorkflow
 from back.objects.session import get_domain
+from back.core.graphdb import get_graphdb
 from back.core.task_manager import get_task_manager
 from back.core.helpers import (
     get_databricks_host_and_token,
@@ -47,7 +48,11 @@ from back.core.w3c.shacl.constants import (
     IF_THEN_ID_PREFIX,
     rule_check_id,
 )
-from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
+from shared.config.constants import (
+    DEFAULT_BASE_URI,
+    DEFAULT_GRAPH_NAME,
+    SPARQL_REMOVAL_CONFIRM_THRESHOLD,
+)
 
 router = APIRouter(prefix="/ontology", tags=["Ontology"])
 logger = get_logger(__name__)
@@ -1089,6 +1094,7 @@ async def preview_shacl_rule(
             data.get("antecedent", ""),
             data.get("consequent", ""),
             domain.ontology,
+            action=data.get("action", "assert"),
         )
         return {"success": True, **result}
 
@@ -1282,6 +1288,40 @@ async def validate_rule(rule_type: str, request: Request):
     return {"success": True, "valid": True, "message": "Rule is valid"}
 
 
+@router.post("/rules/sparql_rules/removal-preview")
+async def sparql_removal_preview(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Count the triples a removal rule would hide, without writing anything."""
+    from back.core.reasoning import ReasoningService, SPARQLRuleEngine
+    from back.core.reasoning.rules.rule_kind import RULE_KIND_REMOVAL, sparql_rule_kind
+
+    data = await request.json()
+    rule = dict(data.get("rule") or {})
+    errors = SPARQLRuleEngine.validate_rule(rule)
+    if not errors and sparql_rule_kind(rule.get("query")) != RULE_KIND_REMOVAL:
+        errors = ["Only a DELETE rule has a removal preview"]
+    if errors:
+        return {
+            "success": False,
+            "count": 0,
+            "requires_confirmation": False,
+            "errors": errors,
+        }
+
+    domain = get_domain(session_mgr)
+    store = get_graphdb(domain, settings, for_write=False)
+    count = ReasoningService(domain, store).count_sparql_removal(rule)
+    return {
+        "success": True,
+        "count": count,
+        "requires_confirmation": count > SPARQL_REMOVAL_CONFIRM_THRESHOLD,
+        "errors": [],
+    }
+
+
 # ===========================================
 # Business Rules — Auto-generate via Agent
 # ===========================================
@@ -1357,7 +1397,12 @@ def _rule_signature(key: str, rule: dict) -> tuple:
     differently, so re-accepting an already-stored suggestion is a no-op.
     """
     if key == "if_then_rules":
-        return ("if_then", _norm_ws(rule.get("antecedent")), _norm_ws(rule.get("consequent")))
+        return (
+            "if_then",
+            _norm_ws(rule.get("antecedent")),
+            _norm_ws(rule.get("consequent")),
+            rule.get("action") or "assert",
+        )
     if key == "sparql_rules":
         return ("sparql", _norm_ws(rule.get("query")))
     return ("raw", json.dumps(rule, sort_keys=True, default=str))
@@ -2559,7 +2604,7 @@ async def complex_rule_assistant_chat(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Process a single turn of the Complex (SPARQL CONSTRUCT) rule builder.
+    """Process a single turn of the Complex rule builder (CONSTRUCT or removal).
 
     Expects a JSON body::
 

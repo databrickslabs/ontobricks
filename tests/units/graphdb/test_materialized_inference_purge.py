@@ -26,7 +26,7 @@ def test_base_backend_rejects_generated_purge():
         GraphBackend.purge_materialized_triples(MagicMock(), "sales_V3")
 
 
-def test_delta_counts_and_truncates_only_inferred_companion():
+def test_delta_counts_and_clears_only_derived_overrides():
     client = MagicMock()
     store = MaterializedStore(client, domain=MagicMock(), settings=MagicMock())
     store.rebuild_adjacency = MagicMock()
@@ -35,21 +35,21 @@ def test_delta_counts_and_truncates_only_inferred_companion():
         patch.object(
             store,
             "_writable_table_fqn",
-            return_value="cat.sch.sales_inferred",
+            return_value="cat.sch.sales_overrides",
         ),
-        patch.object(store, "count_triples", return_value=17) as count,
+        patch.object(store, "get_inferred_triple_count", return_value=17) as count,
         patch(
-            "back.core.graphdb.delta.MaterializedStore.materialize.truncate_table"
-        ) as truncate,
+            "back.core.graphdb.delta.MaterializedStore.materialize.clear_derived"
+        ) as clear,
+        patch("back.core.graphdb.search_cache.rebuild_graph_cache_if_enabled"),
     ):
         assert store.purge_materialized_triples("sales_V3") == 17
 
-    count.assert_called_once_with("cat.sch.sales_inferred")
-    truncate.assert_called_once_with(client, "cat.sch.sales_inferred")
-    store.rebuild_adjacency.assert_called_once_with("sales_V3")
+    count.assert_called_once_with("sales_V3", raise_errors=True)
+    clear.assert_called_once_with(client, "cat.sch.sales_overrides")
 
 
-def test_delta_purge_returns_zero_when_inferred_companion_is_missing():
+def test_delta_purge_returns_zero_when_overrides_table_is_missing():
     client = MagicMock()
     store = MaterializedStore(client, domain=MagicMock(), settings=MagicMock())
     store.rebuild_adjacency = MagicMock()
@@ -58,20 +58,20 @@ def test_delta_purge_returns_zero_when_inferred_companion_is_missing():
         patch.object(
             store,
             "_writable_table_fqn",
-            return_value="cat.sch.sales_inferred",
+            return_value="cat.sch.sales_overrides",
         ),
         patch.object(
             store,
-            "count_triples",
-            side_effect=RuntimeError("TABLE_OR_VIEW_NOT_FOUND: sales_inferred"),
+            "get_inferred_triple_count",
+            side_effect=RuntimeError("TABLE_OR_VIEW_NOT_FOUND: sales_overrides"),
         ),
         patch(
-            "back.core.graphdb.delta.MaterializedStore.materialize.truncate_table"
-        ) as truncate,
+            "back.core.graphdb.delta.MaterializedStore.materialize.clear_derived"
+        ) as clear,
     ):
         assert store.purge_materialized_triples("sales_V3") == 0
 
-    truncate.assert_not_called()
+    clear.assert_not_called()
     store.rebuild_adjacency.assert_not_called()
 
 
@@ -84,21 +84,21 @@ def test_delta_purge_surfaces_adjacency_rebuild_failure():
         patch.object(
             store,
             "_writable_table_fqn",
-            return_value="cat.sch.sales_inferred",
+            return_value="cat.sch.sales_overrides",
         ),
-        patch.object(store, "count_triples", return_value=17),
+        patch.object(store, "get_inferred_triple_count", return_value=17),
         patch(
-            "back.core.graphdb.delta.MaterializedStore.materialize.truncate_table"
+            "back.core.graphdb.delta.MaterializedStore.materialize.clear_derived"
         ),
     ):
         with pytest.raises(RuntimeError, match="adjacency failed"):
             store.purge_materialized_triples("sales_V3")
 
 
-def test_lakebase_counts_and_truncates_only_app_companion():
+def test_lakebase_counts_and_clears_only_derived_overrides():
     store = object.__new__(FlatStore)
     store._sync_mode = "app_managed"
-    store.count_triples = MagicMock(return_value=9)
+    store.get_inferred_triple_count = MagicMock(return_value=9)
     store.rebuild_adjacency = MagicMock()
     cursor = MagicMock()
     cursor_context = MagicMock()
@@ -107,16 +107,16 @@ def test_lakebase_counts_and_truncates_only_app_companion():
     store._cursor = MagicMock(return_value=cursor_context)
 
     with (
-        patch.object(store, "companion_phy", return_value="g_sales_v3__app"),
+        patch.object(store, "companion_phy", return_value="g_sales_v3__overrides"),
         patch(
-            "back.core.graphdb.lakebase.FlatStore."
-            "_companion_ddl.truncate_companion"
+            "back.core.graphdb.lakebase.OverrideOpsMixin."
+            "_companion_ddl.clear_derived"
         ) as truncate,
     ):
         assert store.purge_materialized_triples("sales_V3") == 9
 
-    store.count_triples.assert_called_once_with("g_sales_v3__app")
-    truncate.assert_called_once_with(cursor, "g_sales_v3__app")
+    store.get_inferred_triple_count.assert_called_once_with("sales_V3")
+    truncate.assert_called_once_with(cursor, "g_sales_v3__overrides")
     store.rebuild_adjacency.assert_called_once_with("sales_V3")
 
 
@@ -124,7 +124,7 @@ def test_lakebase_purge_skips_rebuild_when_search_cache_disabled():
     store = object.__new__(FlatStore)
     store._sync_mode = "app_managed"
     store._domain = SimpleNamespace(info={"graph_cache_enabled": False})
-    store.count_triples = MagicMock(return_value=9)
+    store.get_inferred_triple_count = MagicMock(return_value=9)
     store.rebuild_adjacency = MagicMock()
     cursor = MagicMock()
     cursor_context = MagicMock()
@@ -133,10 +133,10 @@ def test_lakebase_purge_skips_rebuild_when_search_cache_disabled():
     store._cursor = MagicMock(return_value=cursor_context)
 
     with (
-        patch.object(store, "companion_phy", return_value="g_sales_v3__app"),
+        patch.object(store, "companion_phy", return_value="g_sales_v3__overrides"),
         patch(
-            "back.core.graphdb.lakebase.FlatStore."
-            "_companion_ddl.truncate_companion"
+            "back.core.graphdb.lakebase.OverrideOpsMixin."
+            "_companion_ddl.clear_derived"
         ),
     ):
         assert store.purge_materialized_triples("sales_V3") == 9
@@ -147,7 +147,7 @@ def test_lakebase_purge_skips_rebuild_when_search_cache_disabled():
 def test_lakebase_purge_surfaces_adjacency_rebuild_failure():
     store = object.__new__(FlatStore)
     store._sync_mode = "app_managed"
-    store.count_triples = MagicMock(return_value=9)
+    store.get_inferred_triple_count = MagicMock(return_value=9)
     store.rebuild_adjacency = MagicMock(side_effect=RuntimeError("adjacency failed"))
     cursor = MagicMock()
     cursor_context = MagicMock()
@@ -156,10 +156,10 @@ def test_lakebase_purge_surfaces_adjacency_rebuild_failure():
     store._cursor = MagicMock(return_value=cursor_context)
 
     with (
-        patch.object(store, "companion_phy", return_value="g_sales_v3__app"),
+        patch.object(store, "companion_phy", return_value="g_sales_v3__overrides"),
         patch(
-            "back.core.graphdb.lakebase.FlatStore."
-            "_companion_ddl.truncate_companion"
+            "back.core.graphdb.lakebase.OverrideOpsMixin."
+            "_companion_ddl.clear_derived"
         ),
     ):
         with pytest.raises(RuntimeError, match="adjacency failed"):

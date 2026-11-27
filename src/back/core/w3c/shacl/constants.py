@@ -50,6 +50,13 @@ IF_THEN_CATEGORY = "structural"
 #: derive it the same way or a rule becomes unselectable.
 IF_THEN_ID_PREFIX = "if_then"
 
+#: What an IF-THEN rule does with its THEN part. ``assert`` (the default for
+#: rules saved before the field existed) infers the triples; ``retract``
+#: removes the matching triples through the removal overlay.
+IF_THEN_ACTION_ASSERT = "assert"
+IF_THEN_ACTION_RETRACT = "retract"
+IF_THEN_ACTIONS = (IF_THEN_ACTION_ASSERT, IF_THEN_ACTION_RETRACT)
+
 RULE_FAMILY_CATEGORIES = {
     IF_THEN_ID_PREFIX: IF_THEN_CATEGORY,
 }

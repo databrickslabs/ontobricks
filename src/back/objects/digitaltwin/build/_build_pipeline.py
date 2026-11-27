@@ -866,8 +866,7 @@ class _BuildPipeline:
             self.task_id,
             self.graph_name,
         )
-        self.store.drop_table(self.graph_name)
-        self.store.create_table(self.graph_name)
+        self.store.reset_for_rebuild(self.graph_name)
 
         is_api_local = self.is_api
         tm_local = self.tm
@@ -899,7 +898,7 @@ class _BuildPipeline:
         select_sql = f"SELECT subject, predicate, object FROM {self.view_table}"
         if hasattr(self.store, "bulk_load_into_sync"):
             # Lakebase app_managed: warehouse data goes into *_sync; app writes
-            # (reasoning / materialise) target the companion (*__app) via
+            # (reasoning / materialise) target the overrides table (*__overrides) via
             # _writable_table_id.  Non-Lakebase backends fall through to the
             # legacy single-table path below.
             triple_iter = self.source_client.iter_rows(select_sql, batch_size=5000)
@@ -921,6 +920,7 @@ class _BuildPipeline:
                 insert_batch_size=5000,
                 on_progress=_on_progress_full,
             )
+        self.store.replay_overrides(self.graph_name)  # Neo4j journal; no-op elsewhere
         logger.info(
             "[DT-BUILD %s] optimizing graph table %s",
             self.task_id,

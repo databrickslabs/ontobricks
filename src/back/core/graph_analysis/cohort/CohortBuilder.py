@@ -33,6 +33,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 
+from back.core.graphdb.overrides import ORIGIN_COHORT as _ORIGIN
 from back.core.graph_analysis.cohort.CohortVocabulary import CohortVocabulary
 from back.core.graph_analysis.models import (
     CohortCompat,
@@ -644,7 +645,7 @@ class CohortBuilder:
         if not triples:
             inserted = 0
         else:
-            inserted = int(self._store.insert_triples(self._graph_name, triples))
+            inserted = int(self._store.insert_triples(self._graph_name, triples, origin=_ORIGIN))
         if (
             (deleted != 0 or inserted > 0)
             and getattr(self._store, "supports_adjacency", False) is True

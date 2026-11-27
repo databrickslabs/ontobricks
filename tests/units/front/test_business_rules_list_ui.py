@@ -85,7 +85,9 @@ def test_business_rules_module_loads_after_if_then():
 
 def _complex_modal() -> str:
     start = HTML.index('id="sparqlEditorModal"')
-    return HTML[start:start + 5200]
+    # The window must reach the modal footer (Validate / Save), past the rule-type and removal controls.
+    end = HTML.index('<!-- ═══ Auto-generate Review Modal', start)
+    return HTML[start:end]
 
 
 def test_complex_editor_is_two_column_assistant_modal():
@@ -159,8 +161,13 @@ def test_complex_assistant_options_styled():
 
 
 def test_complex_save_confirm_resets_on_change():
-    """Confirm state resets on open and when the agent rewrites the draft."""
-    assert "_craResetSaveConfirm" in BR_JS[BR_JS.index("sparqlOpenEditor("):BR_JS.index("_craKickoff(")] \
-        or "_craResetSaveConfirm" in BR_JS[BR_JS.index("_craKickoff("):BR_JS.index("craSend(")]
+    """Confirm state resets on open and when the agent rewrites the draft.
+
+    Both paths set the query and run ``_sparqlQueryChanged``, which resets it.
+    """
+    query_changed = BR_JS[BR_JS.index("_sparqlQueryChanged() {"):BR_JS.index("_sparqlRemovalReset() {")]
+    assert "this._craResetSaveConfirm();" in query_changed
+    opener = BR_JS[BR_JS.index("sparqlOpenEditor("):BR_JS.index("_craKickoff(")]
+    assert "this._sparqlQueryChanged();" in opener
     apply_fn = BR_JS[BR_JS.index("_craApplyResponse("):BR_JS.index("_OB_ICON_SVG")]
-    assert "_craResetSaveConfirm" in apply_fn
+    assert "this._sparqlQueryChanged();" in apply_fn

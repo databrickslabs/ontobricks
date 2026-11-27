@@ -23,6 +23,7 @@ from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graphdb.delta import _table_naming
 from back.core.graphdb.delta.OverviewStats import OverviewStats
 from back.core.graphdb.entity_search import (
+    is_asserted_only_relation,
     is_missing_relation_error,
     is_view_not_table_error,
 )
@@ -94,15 +95,31 @@ class ReadStore:
         return "spark"
 
     def adjacency_table_ids(self, table_name: str) -> tuple[str, str]:
+        """``(adj_out, adj_in)`` for the certified or the asserted relation.
+
+        Asserted names (``…_asserted_adj_*``) are used for the ``…_asserted``
+        view and its ``…_data`` fallback, so the Original Graph never walks
+        adjacency built from derived triples.
+        """
+        asserted = is_asserted_only_relation(table_name)
         if self._domain is not None:
-            adj_out = _table_naming.adj_out_fqn(self._domain, self._settings)
-            adj_in = _table_naming.adj_in_fqn(self._domain, self._settings)
+            if asserted:
+                adj_out = _table_naming.asserted_adj_out_fqn(self._domain, self._settings)
+                adj_in = _table_naming.asserted_adj_in_fqn(self._domain, self._settings)
+            else:
+                adj_out = _table_naming.adj_out_fqn(self._domain, self._settings)
+                adj_in = _table_naming.adj_in_fqn(self._domain, self._settings)
             if adj_out and adj_in:
                 return (adj_out, adj_in)
         if "." not in table_name or table_name.count(".") != 2:
             return ("", "")
         cat, sch, base = table_name.split(".", 2)
         base = _table_naming.strip_graph_leaf_suffix(base)
+        if asserted:
+            return (
+                f"{cat}.{sch}.{base}{_table_naming.asserted_adj_out_suffix()}",
+                f"{cat}.{sch}.{base}{_table_naming.asserted_adj_in_suffix()}",
+            )
         return (
             f"{cat}.{sch}.{base}{_table_naming.adj_out_suffix()}",
             f"{cat}.{sch}.{base}{_table_naming.adj_in_suffix()}",
@@ -133,32 +150,63 @@ class ReadStore:
         return f"{cat}.{sch}.{base}{_table_naming.entity_search_asserted_suffix()}"
 
     def props_table_id(self, table_name: str) -> str:
+        asserted = is_asserted_only_relation(table_name)
         if self._domain is not None:
-            props = _table_naming.props_fqn(self._domain, self._settings)
+            props = (
+                _table_naming.asserted_props_fqn(self._domain, self._settings)
+                if asserted
+                else _table_naming.props_fqn(self._domain, self._settings)
+            )
             if props:
                 return props
         if "." not in table_name or table_name.count(".") != 2:
             return ""
         cat, sch, base = table_name.split(".", 2)
         base = _table_naming.strip_graph_leaf_suffix(base)
-        return f"{cat}.{sch}.{base}{_table_naming.props_suffix()}"
+        suffix = (
+            _table_naming.asserted_props_suffix()
+            if asserted
+            else _table_naming.props_suffix()
+        )
+        return f"{cat}.{sch}.{base}{suffix}"
 
     def synced_table_name(self, table_name: str) -> str:
-        """Base data table without inferred companion rows."""
-        if table_name.endswith(_table_naming.data_suffix()):
+        """Asserted relation: mapped triples plus user overrides, no derived triples.
+
+        With a bound domain this is the ``…_asserted`` VIEW once it exists, and the
+        plain ``…_data`` relation until the first Build or write creates it (a
+        domain that predates overrides has none). Without a domain only the name
+        can be derived, so it falls back to ``…_data``.
+        """
+        if table_name.endswith(
+            (_table_naming.data_suffix(), _table_naming.asserted_suffix())
+        ):
             return table_name
         if self._domain is not None:
             data = _table_naming.data_table_fqn(self._domain, self._settings)
+            asserted = _table_naming.asserted_view_fqn(self._domain, self._settings)
+            if asserted and self._asserted_view_ready(asserted):
+                return asserted
             if data:
                 return data
         if "." in table_name and table_name.count(".") == 2:
             cat, sch, base = table_name.split(".", 2)
-            if base.endswith(_table_naming.inferred_suffix()):
-                base = base[: -len(_table_naming.inferred_suffix())]
-            elif base.endswith(_table_naming.graph_suffix()):
-                base = base[: -len(_table_naming.graph_suffix())]
+            for suffix in (
+                _table_naming.inferred_suffix(),
+                _table_naming.overrides_suffix(),
+                _table_naming.graph_suffix(),
+            ):
+                if base.endswith(suffix):
+                    base = base[: -len(suffix)]
+                    break
             return f"{cat}.{sch}.{base}{_table_naming.data_suffix()}"
         return table_name
+
+    def _asserted_view_ready(self, asserted_fqn: str) -> bool:
+        try:
+            return self.table_exists(asserted_fqn)
+        except Exception:  # noqa: BLE001
+            return False
 
     def query_triples(self, table_name: str) -> List[Dict[str, str]]:
         """SELECT all triples."""

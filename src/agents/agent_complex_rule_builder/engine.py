@@ -1,10 +1,11 @@
 """
 Complex Rule Builder Agent engine.
 
-Conversational agent that helps a user author a Complex (SPARQL CONSTRUCT)
-business rule. Each call processes a single chat turn: the LLM may introspect
-the loaded ontology (``get_ontology_overview`` / ``describe_class``) and
-(re)write the proposed CONSTRUCT via ``update_draft``, then returns a short
+Conversational agent that helps a user author a Complex business rule: a
+SPARQL ``CONSTRUCT`` (infers triples) or a removal (SPARQL ``DELETE``, hides
+triples). Each call processes a single chat turn: the LLM may introspect the
+loaded ontology (``get_ontology_overview`` / ``describe_class``) and (re)write
+the proposed rule via ``update_draft``, then returns a short
 natural-language reply (the next question or a confirmation).
 
 Shares the ``engine_base`` helpers (LLM call, tool dispatch, usage) and the
@@ -17,16 +18,22 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from back.core.logging import get_logger
-from agents.agent_complex_rule_builder.tools import TOOL_DEFINITIONS, TOOL_HANDLERS
+from agents.agent_complex_rule_builder.tools import (
+    TOOL_DEFINITIONS,
+    TOOL_HANDLERS,
+)
+from back.core.reasoning.rules.rule_kind import sparql_rule_kind
 from agents.tools.context import ToolContext
 from agents.engine_base import (
+    UNREADABLE_REPLY,
     AgentStep,
     accumulate_usage,
     call_serving_endpoint,
     dispatch_tool,
+    normalize_reply_content,
 )
 from agents.tracing import trace_agent
 from agents.llm_utils import llm_failure_message
@@ -56,8 +63,14 @@ class AgentResult:
 
 SYSTEM_PROMPT = """\
 You are the Complex Rule Builder assistant for OntoBricks. You help the user
-author a **SPARQL CONSTRUCT** business rule that infers new triples from the
-knowledge graph, through a short back-and-forth conversation.
+author a SPARQL business rule through a short back-and-forth conversation.
+A rule is one of two forms, and its query says which:
+  • CONSTRUCT { … } WHERE { … } infers new triples (the construct kind).
+  • DELETE { … } WHERE { … } hides existing triples (the removal kind; recorded
+    as overrides, the source data is never changed).
+Pick the form from the user's intent: infer / derive / classify / set / flag →
+CONSTRUCT; remove / delete / hide / drop / unlink → DELETE. Never write a
+query in another form.
 
 TOOLS
   READ (always ground yourself before asking or writing):
@@ -66,18 +79,22 @@ TOOLS
   • describe_class(name)  – one class's data + object properties with ranges.
   WRITE:
   • update_draft(name, description, query, ready) – (re)write the proposed
-    CONSTRUCT shown to the user in the code pane. Call it whenever the query
-    materially changes. Set ready=true ONLY when the query is complete and
-    self-consistent.
+    rule shown to the user in the code pane. Call it whenever the query
+    materially changes.
+    Set ready=true ONLY when the query is complete and self-consistent.
   • propose_options(question, options, multi) – offer the user clickable answers
-    for a discrete-choice question (see step 2). Use sparingly.
+    for a discrete-choice question (see step 2). Use sparingly, and at most
+    ONCE per turn.
 
 WORKFLOW
 1. Before your first substantive question, call get_ontology_overview so you
    use real class and property names (never invent them). Use describe_class
    to confirm the exact properties of a class you intend to reference.
-2. Ask ONE focused question at a time to pin down: which entities the rule
-   matches, the condition(s), and what new triple(s) it should infer.
+2. Ask ONE focused question per turn to pin down: which entities the rule
+   matches, the condition(s), and which triple(s) it infers or removes.
+   Your reply must contain that question, word for word. Never ask several
+   questions in one turn, and never refer to questions "above": the user only
+   sees your reply and the buttons of your single propose_options call.
    When — and ONLY when — the question you are asking has a small, well-defined
    set of possible answers (a yes/no confirmation, a choice between a few named
    values, a comparison operator, a short list of candidate properties), call
@@ -85,31 +102,81 @@ WORKFLOW
    type. Do NOT use propose_options for open-ended questions. Set multi=true
    only when more than one answer can legitimately apply. Keep your reply to
    the short question itself — do not also list the options as a bulleted list.
+   Never offer a single option: if only one answer makes sense, use it and
+   say so in one sentence instead of asking. Likewise, use the literal the
+   user's words already give (e.g. "terminated" → ?c :status "terminated")
+   and mention it; do not ask them to confirm it.
+   NEVER include a catch-all such as "Something else" / "Other" in the options:
+   the UI adds its own "Something else…" control that lets the user type.
+   If the user's answer is vague or says they want to explain something else,
+   ask an open-ended question — do not repeat the same options.
 3. As soon as you can express part of the rule, call update_draft with a
-   first CONSTRUCT and keep refining it after each answer so the user watches
-   it take shape.
-4. When the CONSTRUCT fully captures the user's intent, call update_draft once
+   first query and keep refining it after each answer so the user watches it
+   take shape.
+4. When the query fully captures the user's intent, call update_draft once
    more with a suggested name + description and ready=true. Then, as your final
    message, ALWAYS ask the user to review and, if they like, rename the rule
    Name and Description before they Validate and Save — propose your own Name
-   and Description but make clear they can change them.
+   and Description but make clear they can change them. For a removal, also
+   remind them to click Preview: it shows how many triples the rule hides.
+
+REMOVAL RULES
+  • Accepted forms only:
+      DELETE { template } WHERE { pattern }
+      DELETE WHERE { pattern }
+      DELETE DATA { constant triples }
+    No INSERT, GRAPH, OPTIONAL, property paths, variable predicates or
+    sub-queries. Every variable in the template must be bound by the pattern.
+  • Guard: at least one pattern must bind a subject or an object to a constant
+    (e.g. ?c :status "terminated", or a class: ?c a :Contract). Never draft a
+    whole-predicate or whole-graph delete (such as DELETE WHERE { ?s ?p ?o } or
+    DELETE WHERE { ?s :status ?o }); explain that it is refused and ask how to
+    narrow it. Scoping by class satisfies the guard: when the user explicitly
+    wants every value of a class (e.g. every status of every Contract), draft
+    it — Preview and the save confirmation protect large removals.
+  • What disappears: when the user asks to remove something about an entity
+    and does not say WHICH triples should disappear, your FIRST question —
+    before any other — is propose_options with these three choices:
+      – only the link (e.g. ?contract :hasMeter ?meter);
+      – the entity itself;
+      – only its class membership (e.g. ?meter a :Meter).
+    Do not draft until the user has answered.
+  • Which link: before drafting a removal that involves a link (only the link,
+    or the entity itself), call describe_class on the removed entity's class
+    and list every relationship whose domain or range is that class. If the
+    user has not named the relationship and more than one could fit their
+    words (e.g. "owned meters" could be Contract hasMeter Meter or Customer
+    owns Meter), your NEXT question is propose_options listing those
+    relationships as "Domain property Range". Never assume one silently, even
+    when one of them matches the condition's class.
+  • "The entity itself" means its class membership (e.g. ?meter a :Meter)
+    plus the link the condition already uses (e.g. ?contract :hasMeter ?meter).
+    Do not add its other attributes or links to the pattern: every pattern
+    must match, so an entity missing one of them would not be removed at all.
+    Variable predicates and OPTIONAL are not supported, so say in one sentence
+    that its other attributes and links need their own removal rules.
 
 EDITING AN EXISTING RULE
   If the conversation starts with an existing draft, your FIRST message must
-  explain, in plain language (one or two sentences), what the current CONSTRUCT
-  matches and what triples it infers — then ask what they want to change. Do
-  NOT ask the user to paste the query; it is already in the draft. Build on the
-  existing query rather than starting from scratch.
+  explain, in plain language (one or two sentences), what the current rule
+  matches and which triples it infers or removes — then ask what they want to
+  change. Do NOT ask the user to paste the query; it is already in the draft.
+  Build on the existing query rather than starting from scratch.
 
 RULES
   • Use the exact class/property names from the tools. Never invent names.
-  • CONSTRUCT syntax only: CONSTRUCT { ?s <pred> ?o } WHERE { ... }. Variables
-    start with ?. Do not emit mutating SPARQL (INSERT/DELETE).
+  • Variables start with ?. Never emit INSERT, LOAD, CLEAR, DROP or any update
+    other than the DELETE forms above.
   • Keep replies short and in Markdown. Put SPARQL only in the draft (via
     update_draft), not duplicated in the chat, unless the user asks to see it.
   • If the ontology is empty or a name is missing, say so and ask the user to
     provide the class/property names.
 """
+
+
+def _kind_label(query: Optional[str]) -> str:
+    """'construct' / 'removal' for the prompt; says so when the query is neither."""
+    return sparql_rule_kind(query) or "neither CONSTRUCT nor DELETE (invalid)"
 
 
 def _snapshot(draft: Optional[dict]) -> Optional[dict]:
@@ -134,6 +201,14 @@ def _surface_state(
     result.options = ctx.rule_options
 
 
+def _reply_text(content: object, ctx: ToolContext) -> str:
+    """Readable reply; falls back to the question of the options offered this
+    turn, since the prompt tells the model not to repeat them in its text."""
+    text = normalize_reply_content(content)
+    question = (ctx.rule_options or {}).get("question") or ""
+    return question if text == UNREADABLE_REPLY and question else text
+
+
 def _build_system_prompt(initial_draft: Optional[dict]) -> str:
     """System prompt, with the current draft inlined so the model can SEE the
     rule being edited (and any hand-edits made in the code pane). Rebuilt every
@@ -145,7 +220,8 @@ def _build_system_prompt(initial_draft: Optional[dict]) -> str:
         "summarise and build on this; do NOT ask the user to paste it):\n"
         f"Name: {initial_draft.get('name', '') or '(none)'}\n"
         f"Description: {initial_draft.get('description', '') or '(none)'}\n"
-        "CONSTRUCT query:\n"
+        f"Kind: {_kind_label(initial_draft.get('query'))}\n"
+        "Query:\n"
         f"```sparql\n{initial_draft.get('query', '') or '(empty)'}\n```"
     )
 
@@ -243,7 +319,7 @@ def run_agent(
             return result
 
         message = choices[0].get("message", {})
-        content = message.get("content", "") or ""
+        content = _reply_text(message.get("content"), ctx)
         tool_calls = message.get("tool_calls")
 
         if tool_calls:

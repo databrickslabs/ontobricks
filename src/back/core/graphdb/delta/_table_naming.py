@@ -8,7 +8,9 @@ from typing import Any
 from back.core.helpers.SQLHelpers import SQLHelpers
 
 _SUFFIX_DATA = "_data"
-_SUFFIX_INFERRED = "_inferred"
+_SUFFIX_INFERRED = "_inferred"  # legacy companion, read only by the migration
+_SUFFIX_OVERRIDES = "_overrides"
+_SUFFIX_ASSERTED = "_asserted"
 _SUFFIX_GRAPH = "_graph"
 _SUFFIX_ANALYTICS = "_analytics"
 _SUFFIX_DQ = "_dq"
@@ -17,17 +19,27 @@ _SUFFIX_ADJ_IN = "_adj_in"
 _SUFFIX_ENTITY_SEARCH = "_entity_search"
 _SUFFIX_ENTITY_SEARCH_ASSERTED = "_entity_search_asserted"
 _SUFFIX_PROPS = "_props"
+# Asserted-graph companions: adjacency / props built from the ``…_asserted`` view
+# so the Original Graph can use the search cache without derived triples.
+_SUFFIX_ASSERTED_ADJ_OUT = "_asserted_adj_out"
+_SUFFIX_ASSERTED_ADJ_IN = "_asserted_adj_in"
+_SUFFIX_ASSERTED_PROPS = "_asserted_props"
 
 
 def graph_leaf_suffixes() -> tuple[str, ...]:
     """Longest-first suffixes stripped when deriving the mapping-view stem."""
     return (
+        _SUFFIX_ASSERTED_ADJ_OUT,
+        _SUFFIX_ASSERTED_ADJ_IN,
+        _SUFFIX_ASSERTED_PROPS,
         _SUFFIX_ENTITY_SEARCH_ASSERTED,
         _SUFFIX_ENTITY_SEARCH,
         _SUFFIX_ADJ_OUT,
         _SUFFIX_ADJ_IN,
         _SUFFIX_PROPS,
         _SUFFIX_ANALYTICS,
+        _SUFFIX_OVERRIDES,
+        _SUFFIX_ASSERTED,
         _SUFFIX_INFERRED,
         _SUFFIX_GRAPH,
         _SUFFIX_DATA,
@@ -56,7 +68,10 @@ def data_table_fqn(domain: Any, settings: Any = None) -> str:
 
 
 def inferred_table_fqn(domain: Any, settings: Any = None) -> str:
-    """Companion table for reasoning / app-written triples."""
+    """Legacy ``…_inferred`` companion, superseded by ``…_overrides``.
+
+    Only the one-shot migration reads it; nothing writes to it any more.
+    """
     view = view_fqn(domain, settings)
     if not view or view.count(".") != 2:
         return ""
@@ -64,8 +79,26 @@ def inferred_table_fqn(domain: Any, settings: Any = None) -> str:
     return f"{cat}.{sch}.{base}{_SUFFIX_INFERRED}"
 
 
+def overrides_fqn(domain: Any, settings: Any = None) -> str:
+    """Writable overrides TABLE (``…_overrides``): add / del rows over ``…_data``."""
+    view = view_fqn(domain, settings)
+    if not view or view.count(".") != 2:
+        return ""
+    cat, sch, base = view.split(".", 2)
+    return f"{cat}.{sch}.{base}{_SUFFIX_OVERRIDES}"
+
+
+def asserted_view_fqn(domain: Any, settings: Any = None) -> str:
+    """Asserted VIEW: mapped triples plus user overrides, without derived triples."""
+    view = view_fqn(domain, settings)
+    if not view or view.count(".") != 2:
+        return ""
+    cat, sch, base = view.split(".", 2)
+    return f"{cat}.{sch}.{base}{_SUFFIX_ASSERTED}"
+
+
 def graph_view_fqn(domain: Any, settings: Any = None) -> str:
-    """Union VIEW (``…_data`` UNION ALL ``…_inferred``) for graph read queries."""
+    """Effective-graph VIEW: ``…_data`` plus ``…_overrides`` adds, minus dels."""
     view = view_fqn(domain, settings)
     if not view or view.count(".") != 2:
         return ""
@@ -158,6 +191,45 @@ def props_fqn(domain: Any, settings: Any = None) -> str:
     return f"{cat}.{sch}.{base}{_SUFFIX_PROPS}"
 
 
+def asserted_adj_out_fqn(domain: Any, settings: Any = None) -> str:
+    """Asserted-graph outgoing adjacency FQN (``..._asserted_adj_out``)."""
+    view = view_fqn(domain, settings)
+    if not view or view.count(".") != 2:
+        return ""
+    cat, sch, base = view.split(".", 2)
+    return f"{cat}.{sch}.{base}{_SUFFIX_ASSERTED_ADJ_OUT}"
+
+
+def asserted_adj_in_fqn(domain: Any, settings: Any = None) -> str:
+    """Asserted-graph incoming adjacency FQN (``..._asserted_adj_in``)."""
+    view = view_fqn(domain, settings)
+    if not view or view.count(".") != 2:
+        return ""
+    cat, sch, base = view.split(".", 2)
+    return f"{cat}.{sch}.{base}{_SUFFIX_ASSERTED_ADJ_IN}"
+
+
+def asserted_props_fqn(domain: Any, settings: Any = None) -> str:
+    """Asserted-graph property-companion FQN (``..._asserted_props``)."""
+    view = view_fqn(domain, settings)
+    if not view or view.count(".") != 2:
+        return ""
+    cat, sch, base = view.split(".", 2)
+    return f"{cat}.{sch}.{base}{_SUFFIX_ASSERTED_PROPS}"
+
+
+def asserted_adj_out_suffix() -> str:
+    return _SUFFIX_ASSERTED_ADJ_OUT
+
+
+def asserted_adj_in_suffix() -> str:
+    return _SUFFIX_ASSERTED_ADJ_IN
+
+
+def asserted_props_suffix() -> str:
+    return _SUFFIX_ASSERTED_PROPS
+
+
 def graph_suffix() -> str:
     return _SUFFIX_GRAPH
 
@@ -168,6 +240,14 @@ def data_suffix() -> str:
 
 def inferred_suffix() -> str:
     return _SUFFIX_INFERRED
+
+
+def overrides_suffix() -> str:
+    return _SUFFIX_OVERRIDES
+
+
+def asserted_suffix() -> str:
+    return _SUFFIX_ASSERTED
 
 
 def adj_out_suffix() -> str:

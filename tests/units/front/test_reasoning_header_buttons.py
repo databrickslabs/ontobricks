@@ -1,7 +1,7 @@
 """Contract: Digital Twin Reasoning header button ordering and primary style.
 
 The Run button is a primary CTA (btn-primary) placed immediately to the left
-of the discussion button, and the Purge Inferences button precedes it.
+of the discussion button, and the Purge overrides button precedes it.
 """
 
 from pathlib import Path

@@ -3329,6 +3329,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // by every physical object belonging to one domain/version card.
             // Tables: "{base}_sync", "{base}__app", "{base}_adj_*",
             //         "{base}_entity_search", "{base}_entity_search_asserted",
+            //         "{base}_asserted_adj_*", "{base}_asserted_props",
             //         and "{base}_props" → base
             // Views:  "{base}"                          → base
             // Simulations: "{base}__sim_<id>", "{base}__smu_<id>",
@@ -3349,6 +3350,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     const domainSuffixes = [
                         '_entity_search_asserted',
                         '_entity_search',
+                        '_asserted_adj_out',
+                        '_asserted_adj_in',
+                        '_asserted_props',
                         '_props',
                         '_adj_out',
                         '_adj_in',

@@ -86,7 +86,8 @@
             <div class="tab-pane fade p-3" id="br-pane-sparql" role="tabpanel">
                 <p class="text-muted small mb-3">
                     <i class="bi bi-info-circle"></i>
-                    SPARQL CONSTRUCT queries that infer new triples from graph patterns.
+                    SPARQL CONSTRUCT queries that infer new triples from graph patterns, and
+                    DELETE queries that remove stored triples (hidden as overrides).
                     Supported: connected triple patterns, FILTER comparisons,
                     <code>&amp;&amp;</code> / <code>||</code>, <code>CONTAINS</code> /
                     <code>STRSTARTS</code> / <code>STRENDS</code> and <code>NOT EXISTS</code>.
@@ -216,6 +217,16 @@
                                     </span>
                                     <span class="badge if-then-badge-then-count" id="ifThenThenCount">0</span>
                                 </div>
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <label class="form-label small text-muted mb-0" for="ifThenAction">Action</label>
+                                    <select class="form-select form-select-sm w-auto" id="ifThenAction">
+                                        <option value="assert" selected>Assert &mdash; infer the conclusions</option>
+                                        <option value="retract">Remove &mdash; delete the matching triples</option>
+                                    </select>
+                                </div>
+                                <div class="form-text small mb-2 d-none" id="ifThenRetractNote">
+                                    <i class="bi bi-eraser me-1"></i>Right-click a class, relationship or attribute and choose <em>Add to THEN</em>: the matching triples are removed. It stays in IF to bind its variables. Removals run with the reasoning pipeline and are not exported as SHACL-AF.
+                                </div>
                                 <div id="ifThenThenAtoms">
                                     <div class="text-muted small fst-italic py-2" id="ifThenThenEmpty">
                                         Click entities or relationships on the graph
@@ -314,6 +325,11 @@
                     <div class="cra-col-code">
                         <div class="cra-code-scroll">
                             <div class="mb-3">
+                                <span class="form-label small fw-semibold mb-1 d-block">Rule type</span>
+                                <div class="small" id="sparqlKindLabel" aria-live="polite"></div>
+                                <div class="form-text">Set by the query: CONSTRUCT infers triples, DELETE removes them.</div>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label small fw-semibold mb-1">Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control form-control-sm" id="sparqlName" placeholder="e.g., InferTransitiveRelation">
                             </div>
@@ -327,6 +343,25 @@
                                           placeholder="CONSTRUCT { ?s <predicate> ?o }&#10;WHERE {&#10;  ?s a <Class> .&#10;  ?s <prop> ?o .&#10;}"></textarea>
                                 <div class="form-text small">
                                     The assistant updates this as you chat; you can also edit it directly.
+                                </div>
+                            </div>
+                            <div id="sparqlRemovalBox" class="mb-3 d-none">
+                                <p class="form-text small mb-2">
+                                    Preview shows how many stored triples the DELETE would hide; the hidden
+                                    triples are recorded as overrides. Save needs a preview of the same query.
+                                </p>
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                                            id="sparqlRemovalPreview" data-br-action="sparql-preview">
+                                        <i class="bi bi-eye me-1"></i>Preview
+                                    </button>
+                                    <span class="small" id="sparqlRemovalCount" aria-live="polite"></span>
+                                </div>
+                                <div class="form-check mt-2 d-none" id="sparqlRemovalConfirmWrap">
+                                    <input class="form-check-input" type="checkbox" id="sparqlRemovalConfirm">
+                                    <label class="form-check-label small" for="sparqlRemovalConfirm">
+                                        I understand this removal hides a large number of triples.
+                                    </label>
                                 </div>
                             </div>
                             <div id="sparqlValidationMsg" class="d-none"></div>

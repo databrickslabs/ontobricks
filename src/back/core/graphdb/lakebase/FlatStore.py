@@ -9,10 +9,10 @@ Two operating modes are supported:
 * ``managed_synced`` -- the bulk R2RML data movement is delegated to a
   Lakeflow synced-table pipeline (Databricks data plane only). The PG layout
   becomes a triad: a read-only ``_sync`` table owned by Lakeflow, a writable
-  ``__app`` companion that absorbs reasoning + cohort writes, and a UNION
-  view (named after the legacy single-table) that readers query. Direct
-  writes through this class always target the companion; reads always go
-  through the union view, so callers stay unchanged.
+  ``__overrides`` table that absorbs reasoning + cohort writes and user edits,
+  and a UNION view (named after the legacy single-table) that readers query.
+  Direct writes through this class always target the overrides table; reads
+  always go through the union view, so callers stay unchanged.
 """
 
 from __future__ import annotations
@@ -22,18 +22,28 @@ from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from back.core.graphdb.adjacency import expand_and_fetch_sql
+from back.core.graphdb.entity_search import is_asserted_only_relation
+from back.core.graphdb.lakebase._companion_rebuild import rebuild_graph_companions
 from back.core.graphdb.lakebase.InferredBreakdownMixin import InferredBreakdownMixin
+from back.core.graphdb.lakebase.OverrideOpsMixin import (
+    _COPY_INSERT_TEMP,
+    OverrideOpsMixin,
+)
 from back.core.errors import InfrastructureError
 from back.core.graphdb.lakebase import _adjacency_ddl
 from back.core.graphdb.lakebase import _companion_ddl
 from back.core.graphdb.lakebase.Base import Base
+from back.core.graphdb.overrides import (
+    OP_ADD,
+    ORIGIN_REASONING,
+    ORIGIN_USER,
+    validate_derived_origin,
+    validate_hide_origin,
+)
 from back.core.graphdb.lakebase.SyncedTableManager import (
     DEFAULT_TIMEOUT_S as _SYNC_DEFAULT_TIMEOUT_S,
 )
-from back.core.graphdb.props import (
-    execute_expand_with_props_fallback,
-    forget_missing_props,
-)
+from back.core.graphdb.props import execute_expand_with_props_fallback
 from back.core.helpers import validate_table_name
 from back.core.logging import get_logger
 
@@ -42,7 +52,6 @@ logger = get_logger(__name__)
 _BULK_INSERT_THRESHOLD = 50
 _BULK_DELETE_THRESHOLD = 50
 
-_COPY_INSERT_TEMP = "_ob_copy_stage"
 _COPY_DELETE_TEMP = "_ob_del_stage"
 
 # Postgres btree version-4 index entry limit (bytes).
@@ -100,7 +109,7 @@ def _reraise_lakebase_index_limit(
     ) from exc
 
 
-class FlatStore(InferredBreakdownMixin, Base):
+class FlatStore(OverrideOpsMixin, InferredBreakdownMixin, Base):
     """Flat-model triple store on Lakebase Postgres.
 
     In ``app_managed`` mode, one physical table per logical graph name lives
@@ -108,7 +117,7 @@ class FlatStore(InferredBreakdownMixin, Base):
 
     In ``managed_synced`` mode, that same logical name resolves to a UNION
     view fronting the Lakeflow-managed ``_sync`` table and the app-owned
-    ``__app`` companion. Direct writes go to the companion; the synced side
+    ``__overrides`` table. Direct writes go to it; the synced side
     is populated by the Databricks data plane via
     :class:`SyncedTableManager`.
 
@@ -120,6 +129,7 @@ class FlatStore(InferredBreakdownMixin, Base):
     supports_adjacency = True
     supports_entity_search = True
     supports_props = True
+    supports_overrides = True
 
     def __init__(
         self,
@@ -147,6 +157,8 @@ class FlatStore(InferredBreakdownMixin, Base):
         # schema when the registry is unreachable.
         self._sync_uc_schema = sync_uc_schema or ""
         self._synced_manager = synced_manager
+        # Graph names whose overrides table and views this instance already ensured.
+        self._override_ready: set[str] = set()
 
     # -- Mode introspection ------------------------------------------------
 
@@ -182,6 +194,11 @@ class FlatStore(InferredBreakdownMixin, Base):
         return "postgres"
 
     def adjacency_table_ids(self, table_name: str) -> tuple[str, str]:
+        if is_asserted_only_relation(table_name):
+            return (
+                _adjacency_ddl.asserted_adj_out_phy(table_name),
+                _adjacency_ddl.asserted_adj_in_phy(table_name),
+            )
         return (
             _adjacency_ddl.adj_out_phy(table_name),
             _adjacency_ddl.adj_in_phy(table_name),
@@ -194,42 +211,20 @@ class FlatStore(InferredBreakdownMixin, Base):
         return _adjacency_ddl.entity_search_asserted_phy(table_name)
 
     def props_table_id(self, table_name: str) -> str:
+        if is_asserted_only_relation(table_name):
+            return _adjacency_ddl.asserted_props_phy(table_name)
         return _adjacency_ddl.props_phy(table_name)
 
     def rebuild_adjacency(self, table_name: str) -> None:
-        validate_table_name(table_name)
-        union_view = self._sql_relation(table_name)
-        adj_out, adj_in = self.adjacency_table_ids(table_name)
-        search = self.entity_search_table_id(table_name)
-        search_asserted = self.entity_search_asserted_table_id(table_name)
-        asserted_spo = self.synced_table_name(table_name)
-        props = self.props_table_id(table_name)
-        with self._cursor() as cur:
-            _adjacency_ddl.ensure_adjacency_tables(cur, adj_out, adj_in)
-            _adjacency_ddl.ensure_entity_search_table(cur, search)
-            _adjacency_ddl.ensure_entity_search_table(cur, search_asserted)
-            _adjacency_ddl.ensure_props_table(cur, props)
-        with self._txn_cursor() as (_, cur):
-            _adjacency_ddl.rebuild_adjacency_data(cur, union_view, adj_out, adj_in)
-            _adjacency_ddl.rebuild_entity_search_data(cur, union_view, search)
-            _adjacency_ddl.rebuild_entity_search_data(
-                cur, asserted_spo, search_asserted
-            )
-            _adjacency_ddl.rebuild_props_data(cur, union_view, props)
-        with self._cursor() as cur:
-            _adjacency_ddl.analyze_adjacency_tables(cur, adj_out, adj_in)
-            _adjacency_ddl.analyze_entity_search_table(cur, search)
-            _adjacency_ddl.analyze_entity_search_table(cur, search_asserted)
-            _adjacency_ddl.analyze_props_table(cur, props)
-        forget_missing_props(props)
+        rebuild_graph_companions(self, table_name)
 
     # -- Table-name resolution --------------------------------------------
 
     def _writable_table_id(self, name: str) -> str:
         """Return the Postgres table that direct app writes target.
 
-        Both ``app_managed`` and ``managed_synced`` use the companion table
-        (``*__app``) for reasoning and cohort writes so that bulk warehouse
+        Both ``app_managed`` and ``managed_synced`` use the overrides table
+        (``*__overrides``) for reasoning, cohort and user writes so that bulk warehouse
         data in ``*_sync`` is never modified by the app post-build.
         """
         return _companion_ddl.companion_phy(name)
@@ -240,29 +235,12 @@ class FlatStore(InferredBreakdownMixin, Base):
         # union view name (which equals the legacy table name).
         return self.physical_table_id(name)
 
-    def synced_table_name(self, table_name: str) -> str:
-        """Return the ``_sync`` table name so callers can query without materialised triples."""
-        return _companion_ddl.synced_phy(table_name)
-
-    def get_inferred_triple_count(self, table_name: str) -> int:
-        """Return the count of triples in the companion (reasoning / app-written) table.
-
-        Queries ``*__app`` directly so callers can determine whether any
-        inferred data exists independently of the union view total.
-        Returns 0 on any error (e.g. companion table not yet created).
-        """
-        companion = _companion_ddl.companion_phy(table_name)
-        try:
-            return self.count_triples(companion)
-        except Exception:
-            return 0
-
     def synced_phy(self, name: str) -> str:
         """Postgres table name for the read-only synced side (managed_synced only)."""
         return _companion_ddl.synced_phy(name)
 
     def companion_phy(self, name: str) -> str:
-        """Postgres table name for the writable companion (managed_synced only)."""
+        """Postgres table name for the writable overrides table."""
         return _companion_ddl.companion_phy(name)
 
     def synced_uc_name(self, name: str, fallback_catalog: str = "") -> str:
@@ -292,9 +270,8 @@ class FlatStore(InferredBreakdownMixin, Base):
         """
         if not self.is_synced:
             return
-        companion = self.companion_phy(name)
         with self._cursor() as cur:
-            _companion_ddl.ensure_companion(cur, self._schema, companion)
+            self._ensure_companion_table(cur, name)
 
     def drop_app_owned_sync_artifacts_if_present(self, name: str) -> bool:
         """Remove a user-owned ``_sync`` table (and union view) before Lakeflow sync.
@@ -339,6 +316,7 @@ class FlatStore(InferredBreakdownMixin, Base):
                 owner,
             )
             _companion_ddl.drop_view(cur, view)
+            _companion_ddl.drop_view(cur, _companion_ddl.asserted_phy(name))
             _companion_ddl.drop_synced(cur, synced)
             dropped = True
         return dropped
@@ -391,11 +369,7 @@ class FlatStore(InferredBreakdownMixin, Base):
         synced_bare = synced_phy_override or self.synced_phy(name)
         view = self._readable_table_id(name)
         sync_pg_schema = (self._sync_uc_schema or self._schema).strip()
-        synced = (
-            f'"{sync_pg_schema}".{synced_bare}'
-            if sync_pg_schema != self._schema
-            else synced_bare
-        )
+        synced = self._synced_ref(synced_bare)
 
         # Poll until the _sync table is visible in Postgres (propagation lag after ONLINE).
         deadline = _time.time() + max(1, int(wait_s))
@@ -445,7 +419,10 @@ class FlatStore(InferredBreakdownMixin, Base):
                     synced,
                     exc,
                 )
-            _companion_ddl.ensure_union_view(cur, view, synced, companion)
+            _companion_ddl.ensure_union_view(
+                cur, view, synced, companion, _companion_ddl.asserted_phy(name)
+            )
+        self._override_ready.add(name)
 
     @staticmethod
     def _sync_table_exists(cur: Any, schema: str, table: str) -> bool:
@@ -466,28 +443,6 @@ class FlatStore(InferredBreakdownMixin, Base):
         """
         self.ensure_synced_companion(name)
         self.ensure_synced_union_view(name)
-
-    def truncate_companion(self, name: str) -> None:
-        """Truncate the companion table (used on full rebuild in synced mode)."""
-        if not self.is_synced:
-            return
-        companion = self.companion_phy(name)
-        with self._cursor() as cur:
-            _companion_ddl.truncate_companion(cur, companion)
-
-    def purge_materialized_triples(self, table_name: str) -> int:
-        """Truncate the app companion while preserving mapped source triples."""
-        companion = self.companion_phy(table_name)
-        count = self.count_triples(companion)
-        with self._cursor() as cur:
-            _companion_ddl.truncate_companion(cur, companion)
-        from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
-
-        rebuild_graph_cache_if_enabled(
-            self, table_name, getattr(self, "_domain", None)
-        )
-        logger.info("Purged %d materialized triples from %s", count, companion)
-        return count
 
     def _idx_name(self, phy: str, suffix: str) -> str:
         base = f"g_{phy}_{suffix}".lower()
@@ -781,9 +736,12 @@ class FlatStore(InferredBreakdownMixin, Base):
                     f"Fix: connect to Lakebase with a superuser and run: "
                     f"DROP TABLE IF EXISTS \"{self._schema}\".\"{synced}\" CASCADE;"
                 ) from _col_err
-            _companion_ddl.ensure_companion(cur, self._schema, companion)
+            self._ensure_companion_table(cur, table_name)
             self._ensure_legacy_columns(cur, companion)
-            _companion_ddl.ensure_union_view(cur, view, synced, companion)
+            _companion_ddl.ensure_union_view(
+                cur, view, synced, companion, _companion_ddl.asserted_phy(table_name)
+            )
+        self._override_ready.add(table_name)
         logger.info(
             "Lakebase graph layout ready: %s.[%s | %s | view %s]",
             self._schema,
@@ -792,18 +750,26 @@ class FlatStore(InferredBreakdownMixin, Base):
             view,
         )
 
-    def drop_table(self, table_name: str) -> None:
+    def drop_table(self, table_name: str, *, keep_overrides: bool = False) -> None:
+        """Drop the graph layout. *keep_overrides* preserves the ``__overrides`` table."""
         validate_table_name(table_name)
-        if self.is_synced:
-            view = self._readable_table_id(table_name)
-            companion = self.companion_phy(table_name)
-            with self._cursor() as cur:
-                _companion_ddl.drop_view(cur, view)
+        companion = self.companion_phy(table_name)
+        self._override_ready.discard(table_name)
+        with self._cursor() as cur:
+            _companion_ddl.drop_view(cur, _companion_ddl.asserted_phy(table_name))
+            _companion_ddl.drop_view(cur, self._readable_table_id(table_name))
+            if not keep_overrides:
                 _companion_ddl.drop_companion(cur, companion)
+                _companion_ddl.drop_companion(
+                    cur, _companion_ddl.legacy_companion_phy(table_name)
+                )
+            if not self.is_synced:
+                _companion_ddl.drop_synced(cur, _companion_ddl.synced_phy(table_name))
+        if self.is_synced:
             try:
-                mgr = self.synced_manager()
-                synced_uc = self.synced_uc_name(table_name)
-                mgr.delete(synced_uc, purge_data=True)
+                self.synced_manager().delete(
+                    self.synced_uc_name(table_name), purge_data=True
+                )
             except InfrastructureError as exc:
                 # No catalog configured / SDK unavailable -- best-effort cleanup
                 # so callers can still drop the PG side without aborting.
@@ -812,24 +778,7 @@ class FlatStore(InferredBreakdownMixin, Base):
                     table_name,
                     exc,
                 )
-            logger.info(
-                "Dropped Lakebase synced trio for %s.%s", self._schema, table_name
-            )
-            return
-        view = self._readable_table_id(table_name)
-        companion = _companion_ddl.companion_phy(table_name)
-        synced = _companion_ddl.synced_phy(table_name)
-        with self._cursor() as cur:
-            _companion_ddl.drop_view(cur, view)
-            _companion_ddl.drop_companion(cur, companion)
-            _companion_ddl.drop_synced(cur, synced)
-        logger.info(
-            "Dropped Lakebase graph layout %s.[%s | %s | view %s]",
-            self._schema,
-            synced,
-            companion,
-            view,
-        )
+        logger.info("Dropped Lakebase graph layout %s.%s", self._schema, table_name)
 
     @contextmanager
     def _txn_cursor(self) -> Iterator[Tuple[Any, Any]]:
@@ -863,27 +812,7 @@ class FlatStore(InferredBreakdownMixin, Base):
             return 0
         try:
             with self._txn_cursor() as (_, cur):
-                cur.execute(
-                    f"CREATE TEMP TABLE {_COPY_INSERT_TEMP} ("
-                    "subject TEXT, predicate TEXT, object TEXT, "
-                    "datatype TEXT, lang TEXT) ON COMMIT DROP"
-                )
-                copy_sql = (
-                    f"COPY {_COPY_INSERT_TEMP} "
-                    "(subject, predicate, object, datatype, lang) FROM STDIN"
-                )
-                with cur.copy(copy_sql) as cp:
-                    for t in batch:
-                        dt, lg = self._literal_meta(t)
-                        cp.write_row(
-                            (
-                                (t.get("subject", "") or ""),
-                                (t.get("predicate", "") or ""),
-                                (t.get("object", "") or ""),
-                                dt,
-                                lg,
-                            )
-                        )
+                self._stage_triples(cur, batch)
                 cur.execute(
                     f"INSERT INTO {phy} (subject, predicate, object, datatype, lang) "
                     f"SELECT subject, predicate, object, datatype, lang "
@@ -894,13 +823,25 @@ class FlatStore(InferredBreakdownMixin, Base):
         return len(batch)
 
     def _copy_insert_batch(
-        self, table_name: str, batch: List[Dict[str, str]]
+        self,
+        table_name: str,
+        batch: List[Dict[str, str]],
+        origin: str = ORIGIN_REASONING,
     ) -> int:
-        """Route a COPY batch to the writable companion table for *table_name*."""
+        """Route a COPY batch to the writable table for *table_name*.
+
+        An Original Graph writes derived ``add`` rows (tagged with *origin*) to its
+        overrides table; a store without an overrides layer (simulation sandbox)
+        writes plain triples.
+        """
         if not batch:
             return 0
         validate_table_name(table_name)
-        return self._copy_insert_batch_phy(self._writable_table_id(table_name), batch)
+        phy = self._writable_table_id(table_name)
+        if not self.supports_overrides:
+            return self._copy_insert_batch_phy(phy, batch)
+        self._ensure_override_layout(table_name)
+        return self._copy_insert_override_rows(phy, batch, origin)
 
     def _copy_delete_batch(
         self, table_name: str, batch: List[Dict[str, str]]
@@ -948,16 +889,25 @@ class FlatStore(InferredBreakdownMixin, Base):
         triples: List[Dict[str, str]],
         batch_size: int = 2000,
         on_progress: Optional[Callable[[int, int], None]] = None,
+        origin: str = ORIGIN_REASONING,
     ) -> int:
         """Insert rows with ``executemany`` (small-payload fallback, < ``_BULK_INSERT_THRESHOLD``)."""
         validate_table_name(table_name)
         if not triples:
             return 0
         phy = self._writable_table_id(table_name)
-        sql = (
-            f"INSERT INTO {phy} (subject, predicate, object, datatype, lang) "
-            f"VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING"
-        )
+        if self.supports_overrides:
+            self._ensure_override_layout(table_name)
+            sql = (
+                f"INSERT INTO {phy} (subject, predicate, object, datatype, lang, "
+                f"op, origin) VALUES (%s, %s, %s, %s, %s, '{OP_ADD}', %s) "
+                "ON CONFLICT DO NOTHING"
+            )
+        else:
+            sql = (
+                f"INSERT INTO {phy} (subject, predicate, object, datatype, lang) "
+                f"VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING"
+            )
         total = 0
         with self._cursor() as cur:
             for i in range(0, len(triples), batch_size):
@@ -965,15 +915,14 @@ class FlatStore(InferredBreakdownMixin, Base):
                 rows = []
                 for t in batch:
                     dt, lg = self._literal_meta(t)
-                    rows.append(
-                        (
-                            (t.get("subject", "") or ""),
-                            (t.get("predicate", "") or ""),
-                            (t.get("object", "") or ""),
-                            dt,
-                            lg,
-                        )
+                    row = (
+                        (t.get("subject", "") or ""),
+                        (t.get("predicate", "") or ""),
+                        (t.get("object", "") or ""),
+                        dt,
+                        lg,
                     )
+                    rows.append(row + (origin,) if self.supports_overrides else row)
                 cur.executemany(sql, rows)
                 total += len(batch)
                 if on_progress:
@@ -987,19 +936,32 @@ class FlatStore(InferredBreakdownMixin, Base):
         triples: List[Dict[str, str]],
         batch_size: int = 2000,
         on_progress: Optional[Callable[[int, int], None]] = None,
+        origin: str = ORIGIN_REASONING,
     ) -> int:
+        """Insert derived triples as ``add`` rows tagged with *origin*.
+
+        User edits go through :meth:`add_triples`; a store without an overrides
+        layer (simulation sandbox) writes plain triples and ignores *origin*.
+        """
         validate_table_name(table_name)
         if not triples:
             return 0
+        if self.supports_overrides:
+            validate_derived_origin(origin)
         if len(triples) >= _BULK_INSERT_THRESHOLD:
             return self.bulk_insert_iter(
                 table_name,
                 iter(triples),
                 batch_size=batch_size,
                 on_progress=on_progress,
+                origin=origin,
             )
         return self._insert_triples_executemany(
-            table_name, triples, batch_size=batch_size, on_progress=on_progress
+            table_name,
+            triples,
+            batch_size=batch_size,
+            on_progress=on_progress,
+            origin=origin,
         )
 
     def bulk_insert_iter(
@@ -1008,6 +970,7 @@ class FlatStore(InferredBreakdownMixin, Base):
         triple_iterator: Iterable[Dict[str, str]],
         batch_size: int = 2000,
         on_progress: Optional[Callable[[int, int], None]] = None,
+        origin: str = ORIGIN_REASONING,
     ) -> int:
         """Insert triples from an iterator in fixed-size batches via ``COPY FROM STDIN``.
 
@@ -1022,12 +985,12 @@ class FlatStore(InferredBreakdownMixin, Base):
         for t in triple_iterator:
             batch.append(t)
             if len(batch) >= batch_size:
-                total += self._copy_insert_batch(table_name, batch)
+                total += self._copy_insert_batch(table_name, batch, origin)
                 if on_progress:
                     on_progress(total, total)
                 batch = []
         if batch:
-            total += self._copy_insert_batch(table_name, batch)
+            total += self._copy_insert_batch(table_name, batch, origin)
             if on_progress:
                 on_progress(total, total)
         if total:
@@ -1121,10 +1084,38 @@ class FlatStore(InferredBreakdownMixin, Base):
         triples: List[Dict[str, str]],
         batch_size: int = 2000,
         on_progress: Optional[Callable[[int, int], None]] = None,
+        *,
+        author: str = "",
+        change_id: str = "",
+        origin: str = ORIGIN_USER,
     ) -> int:
+        """Hide triples from the graph (or delete them physically in a sandbox).
+
+        On an Original Graph a triple that comes from the mapped data or from a derived
+        row gets a ``del`` row, in one transaction. A manual hide (``user``) also drops
+        a user ``add`` row; a removal rule (``reasoning``) skips such triples instead
+        (D2). A store without an overrides layer (simulation sandbox) deletes the rows
+        and ignores *origin*.
+        """
         validate_table_name(table_name)
+        validate_hide_origin(origin)
         if not triples:
             return 0
+        if not self.supports_overrides:
+            return self._delete_triples_physical(
+                table_name, triples, batch_size, on_progress
+            )
+        return self._hide_triples(
+            table_name, triples, batch_size, on_progress, author, change_id, origin
+        )
+
+    def _delete_triples_physical(
+        self,
+        table_name: str,
+        triples: List[Dict[str, str]],
+        batch_size: int = 2000,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> int:
         if len(triples) >= _BULK_DELETE_THRESHOLD:
             return self.bulk_delete_iter(
                 table_name,

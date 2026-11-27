@@ -63,30 +63,39 @@ class _CopyRecorder:
 
 
 def test_create_table_issues_schema_ddl_and_indexes(auth):
-    """app_managed create_table now produces the 3-object layout (*_sync + *__app + view)."""
+    """app_managed create_table produces *_sync + *__overrides + the union and asserted views."""
     cur = MagicMock()
     store = FlatStore(auth, schema="ontobricks_graph")
     with patch.object(store, "_cursor", _cursor_ctx(cur)):
         store.create_table("MyDomain_V1")
     executed = [str(c[0][0]) for c in cur.execute.call_args_list]
     assert any("CREATE SCHEMA" in s for s in executed)
-    # Both *_sync and *__app tables must be created.
+    # Both *_sync and *__overrides tables must be created.
     create_tables = [s for s in executed if "CREATE TABLE" in s]
     assert len(create_tables) >= 2
     assert any("mydomain_v1_sync" in s for s in create_tables)
-    assert any("mydomain_v1__app" in s for s in create_tables)
+    assert any("mydomain_v1__overrides" in s for s in create_tables)
     # Union view must be created.
     assert any("CREATE OR REPLACE VIEW" in s and "mydomain_v1" in s for s in executed)
     assert any("CREATE INDEX" in s for s in executed)
     assert any("CREATE EXTENSION pgcrypto WITH SCHEMA public" in s for s in executed)
     assert any("object_hash" in s and "digest" in s for s in create_tables)
     assert any("PRIMARY KEY (subject, predicate, object_hash)" in s for s in create_tables)
+    # The overrides table also keys on ``op``, so a del row can sit next to a derived add.
+    assert any(
+        "mydomain_v1__overrides" in s
+        and "PRIMARY KEY (subject, predicate, object_hash, op)" in s
+        for s in create_tables
+    )
+    assert any(
+        "CREATE OR REPLACE VIEW mydomain_v1_asserted" in s for s in executed
+    )
 
 
 def test_writable_table_id_is_companion_for_app_managed(auth):
-    """app_managed _writable_table_id resolves to the *__app companion table."""
+    """app_managed _writable_table_id resolves to the *__overrides table."""
     store = FlatStore(auth, schema="ontobricks_graph")
-    assert store._writable_table_id("G_V1") == "g_v1__app"
+    assert store._writable_table_id("G_V1") == "g_v1__overrides"
 
 
 def test_drop_table_app_managed_drops_view_companion_and_sync(auth):
@@ -97,19 +106,32 @@ def test_drop_table_app_managed_drops_view_companion_and_sync(auth):
         store.drop_table("G_V1")
     executed = [str(c[0][0]) for c in cur.execute.call_args_list]
     assert any("DROP VIEW IF EXISTS g_v1" in s for s in executed)
-    assert any("DROP TABLE IF EXISTS g_v1__app" in s for s in executed)
+    assert any("DROP VIEW IF EXISTS g_v1_asserted" in s for s in executed)
+    assert any("DROP TABLE IF EXISTS g_v1__overrides" in s for s in executed)
+    assert any("DROP TABLE IF EXISTS g_v1__app" in s for s in executed)  # legacy
+    assert any("DROP TABLE IF EXISTS g_v1_sync" in s for s in executed)
+
+
+def test_drop_table_can_keep_the_overrides(auth):
+    """A rebuild drops the bulk layout but never the user's edits."""
+    cur = MagicMock()
+    store = FlatStore(auth, schema="ontobricks_graph")
+    with patch.object(store, "_cursor", _cursor_ctx(cur)):
+        store.drop_table("G_V1", keep_overrides=True)
+    executed = [str(c[0][0]) for c in cur.execute.call_args_list]
+    assert not any("g_v1__overrides" in s and "DROP TABLE" in s for s in executed)
     assert any("DROP TABLE IF EXISTS g_v1_sync" in s for s in executed)
 
 
 def test_optimize_table_vacuums_sync_and_companion_for_app_managed(auth):
-    """app_managed optimize_table vacuums both *_sync and *__app."""
+    """app_managed optimize_table vacuums both *_sync and *__overrides."""
     cur = MagicMock()
     store = FlatStore(auth, schema="ontobricks_graph")
     with patch.object(store, "_cursor", _cursor_ctx(cur)):
         store.optimize_table("G_V1")
     executed = [str(c[0][0]) for c in cur.execute.call_args_list]
     assert any("VACUUM ANALYZE g_v1_sync" in s for s in executed)
-    assert any("VACUUM ANALYZE g_v1__app" in s for s in executed)
+    assert any("VACUUM ANALYZE g_v1__overrides" in s for s in executed)
 
 
 def test_bulk_load_into_sync_writes_to_sync_table(auth):
@@ -199,7 +221,7 @@ def test_bulk_insert_iter_batches_without_recursion(auth):
 
     calls: list = []
 
-    def _fake_copy_batch(table_name: str, batch: list) -> int:
+    def _fake_copy_batch(table_name: str, batch: list, origin: str = "reasoning") -> int:
         calls.append(len(batch))
         return len(batch)
 
@@ -220,6 +242,7 @@ def test_copy_insert_batch_streams_via_temp_table(auth):
     recorder = _CopyRecorder()
     cur.copy = recorder
     store = FlatStore(auth, schema="ontobricks_graph")
+    store._override_ready.add("G_V1")
     batch = [
         {
             "subject": "http://ex/s",
@@ -273,6 +296,7 @@ def test_bulk_delete_iter_uses_copy_temp_table_join(auth):
 def test_delete_triples_routes_large_payload_to_bulk(auth):
     """``delete_triples`` must delegate to the bulk COPY path for large payloads."""
     store = FlatStore(auth, schema="ontobricks_graph")
+    store.supports_overrides = False  # a sandbox deletes rows physically
     triples = [
         {"subject": f"http://ex/{i}", "predicate": "http://ex/p", "object": "http://ex/o"}
         for i in range(60)
@@ -381,7 +405,7 @@ class TestManagedSyncedRouting:
     """Direct writes target the companion; reads see the union view."""
 
     def test_writable_table_id_is_companion(self, synced_store):
-        assert synced_store._writable_table_id("G_V1") == "g_v1__app"
+        assert synced_store._writable_table_id("G_V1") == "g_v1__overrides"
 
     def test_readable_table_id_is_union_view(self, synced_store):
         # The union view name equals the legacy table name for backwards
@@ -427,6 +451,7 @@ class TestManagedSyncedRouting:
 
     def test_insert_executemany_targets_companion(self, synced_store):
         cur = MagicMock()
+        synced_store._override_ready.add("G_V1")
         with patch.object(synced_store, "_cursor", _cursor_ctx(cur)):
             synced_store.insert_triples(
                 "G_V1",
@@ -440,7 +465,7 @@ class TestManagedSyncedRouting:
             )
         cur.executemany.assert_called_once()
         sql = cur.executemany.call_args[0][0]
-        assert "INSERT INTO g_v1__app" in sql
+        assert "INSERT INTO g_v1__overrides" in sql
 
     def test_copy_insert_batch_targets_companion(self, synced_store):
         cur = MagicMock()
@@ -449,11 +474,12 @@ class TestManagedSyncedRouting:
         batch = [
             {"subject": "http://ex/s", "predicate": "http://ex/p", "object": "o"}
         ]
+        synced_store._override_ready.add("G_V1")
         with patch.object(synced_store, "_txn_cursor", _txn_cursor_ctx(cur)):
             synced_store._copy_insert_batch("G_V1", batch)
         executed = [str(c[0][0]) for c in cur.execute.call_args_list]
         assert any(
-            "INSERT INTO g_v1__app" in s and "ON CONFLICT DO NOTHING" in s
+            "INSERT INTO g_v1__overrides" in s and "ON CONFLICT DO NOTHING" in s
             for s in executed
         )
 
@@ -468,7 +494,7 @@ class TestManagedSyncedRouting:
             synced_store._copy_delete_batch("G_V1", batch)
         executed = [str(c[0][0]) for c in cur.execute.call_args_list]
         assert any(
-            "DELETE FROM g_v1__app" in s and "USING _ob_del_stage" in s
+            "DELETE FROM g_v1__overrides" in s and "USING _ob_del_stage" in s
             for s in executed
         )
 
@@ -494,7 +520,7 @@ class TestManagedSyncedRouting:
         with patch.object(synced_store, "_cursor", _cursor_ctx(cur)):
             synced_store.optimize_table("G_V1")
         sql = cur.execute.call_args_list[-1][0][0]
-        assert sql == "VACUUM ANALYZE g_v1__app"
+        assert sql == "VACUUM ANALYZE g_v1__overrides"
 
     def test_drop_table_drops_view_companion_and_synced(self, synced_store):
         cur = MagicMock()
@@ -502,7 +528,7 @@ class TestManagedSyncedRouting:
             synced_store.drop_table("G_V1")
         executed = [str(c[0][0]) for c in cur.execute.call_args_list]
         assert any("DROP VIEW IF EXISTS g_v1" in s for s in executed)
-        assert any("DROP TABLE IF EXISTS g_v1__app" in s for s in executed)
+        assert any("DROP TABLE IF EXISTS g_v1__overrides" in s for s in executed)
         # synced_store has no sync_uc_schema, falls back to pg schema
         synced_store._synced_manager.delete.assert_called_once_with(
             "catX.ontobricks_graph.g_v1_sync", purge_data=True
@@ -514,11 +540,11 @@ class TestManagedSyncedRouting:
         with patch.object(synced_store, "_cursor", _cursor_ctx(cur)):
             synced_store.ensure_synced_layout("G_V1")
         executed = [str(c[0][0]) for c in cur.execute.call_args_list]
-        assert any("CREATE TABLE IF NOT EXISTS g_v1__app" in s for s in executed)
+        assert any("CREATE TABLE IF NOT EXISTS g_v1__overrides" in s for s in executed)
         assert any(
             "CREATE OR REPLACE VIEW g_v1" in s
             and "FROM g_v1_sync" in s
-            and "FROM g_v1__app" in s
+            and "FROM g_v1__overrides" in s
             for s in executed
         )
 
@@ -539,7 +565,7 @@ class TestManagedSyncedRouting:
         executed = [str(c[0][0]) for c in cur.execute.call_args_list]
         view_ddl = next(s for s in executed if "CREATE OR REPLACE VIEW" in s)
         assert '"ontobricks".g_v1_sync' in view_ddl
-        assert "FROM g_v1__app" in view_ddl
+        assert "FROM g_v1__overrides" in view_ddl
 
     def test_ensure_synced_union_view_unqualified_when_schemas_same(self, synced_store):
         """When sync_uc_schema matches pg schema, the _sync reference is unqualified."""
@@ -572,7 +598,7 @@ class TestManagedSyncedRouting:
         with patch.object(synced_store, "_cursor", _cursor_ctx(cur)):
             synced_store.ensure_synced_companion("G_V1")
         executed = [str(c[0][0]) for c in cur.execute.call_args_list]
-        assert any("CREATE TABLE IF NOT EXISTS g_v1__app" in s for s in executed)
+        assert any("CREATE TABLE IF NOT EXISTS g_v1__overrides" in s for s in executed)
         assert not any("CREATE OR REPLACE VIEW" in s for s in executed)
 
     def test_drop_app_owned_sync_artifacts_skips_lakeflow_owner(self, synced_store):
@@ -593,12 +619,13 @@ class TestManagedSyncedRouting:
         assert any("DROP VIEW IF EXISTS g_v1" in s for s in executed)
         assert any("DROP TABLE IF EXISTS g_v1_sync" in s for s in executed)
 
-    def test_truncate_companion_runs_truncate(self, synced_store):
+    def test_truncate_companion_clears_derived_rows_only(self, synced_store):
         cur = MagicMock()
+        cur.rowcount = 0
         with patch.object(synced_store, "_cursor", _cursor_ctx(cur)):
             synced_store.truncate_companion("G_V1")
         sql = cur.execute.call_args_list[-1][0][0]
-        assert sql == "TRUNCATE TABLE g_v1__app"
+        assert sql == "DELETE FROM g_v1__overrides WHERE origin <> 'user'"
 
 
 class TestResolveLakebaseGraphSchema:

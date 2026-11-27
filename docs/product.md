@@ -184,7 +184,7 @@ flowchart LR
 | Quality Checks        | Async validation against ontology constraints (cardinality, orphans, value rules)    |
 | Dashboard Integration | Embed Databricks dashboards with parameter mapping to ontology entities              |
 | Triples Grid          | Sortable, searchable table view of all materialized triples                          |
-| What-if Simulation    | Assert hypothetical facts on a sandbox copy of a graph slice, re-run reasoning, compare before/after — the live graph is never touched |
+| What-if Simulation    | Assert hypothetical facts on a sandbox copy of a graph slice, re-run reasoning, compare before/after — the Original Graph is never touched |
 
 
 #### Intelligence (Discover and simulate)
@@ -197,7 +197,7 @@ flowchart LR
 | Communities           | Label-propagation clusters; Materialize for Explorer colour / collapse               |
 | Patterns              | Recurring neighbourhood profiles; Coverage KPI, bar chart, diagrams                  |
 | Cohorts               | Explainable grouping rules; Preview / Materialise (`:inCohort` or a UC table)        |
-| Scenarios & Compare   | What-if sandbox, overlay vs live graph, Evaluate a question, PDF report              |
+| Scenarios & Compare   | What-if sandbox, overlay vs Original Graph, Evaluate a question, PDF report              |
 
 
 #### Domain Management

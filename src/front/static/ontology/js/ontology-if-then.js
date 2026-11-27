@@ -136,6 +136,8 @@ window.IfThenModule = {
         const badge =
             `<span class="badge bg-primary bg-opacity-75 small">` +
             `<i class="bi bi-code-square me-1"></i>Simple</span>`;
+        const retractBadge =
+            `<span class="br-kind-badge-removal small"><i class="bi bi-eraser me-1"></i>Remove</span>`;
         this.rules.forEach((rule, i) => {
             const ante = this._esc(rule.antecedent || '');
             const cons = this._esc(rule.consequent || '');
@@ -143,7 +145,7 @@ window.IfThenModule = {
                 name: rule.name || `Simple Rule ${i + 1}`,
                 meta: `${ante} → ${cons}`,
                 enabled: rule.enabled,
-                badge,
+                badge: this._actionOf(rule) === 'retract' ? retractBadge : badge,
                 onEdit: () => this.editRule(i),
                 onDelete: () => this.deleteRule(i),
                 onToggle: () => this.toggleEnabled(i),
@@ -178,6 +180,7 @@ window.IfThenModule = {
 
     _resetEditor() {
         this.editingIndex = -1;
+        this._setActionUi('assert');
         this.ifNodes = new Set();
         this.thenNodes = new Set();
         this.ifLinks = new Set();
@@ -656,7 +659,7 @@ window.IfThenModule = {
         const thenItem = menu.querySelector('.if-then-ctx-then');
         const removeItem = menu.querySelector('.if-then-ctx-remove');
         if (ifItem) ifItem.classList.toggle('d-none', isSelected);
-        if (thenItem) thenItem.classList.toggle('d-none', isSelected);
+        if (thenItem) thenItem.classList.toggle('d-none', !this._canAddToThen(elementId));
         if (removeItem) removeItem.classList.toggle('d-none', !isSelected);
 
         menu.classList.remove('d-none');
@@ -671,6 +674,18 @@ window.IfThenModule = {
     _hideContextMenu() {
         const menu = document.getElementById('ifThenContextMenu');
         if (menu) menu.classList.add('d-none');
+    },
+
+    // Whether "Add to THEN" applies to an element. Normally an element has one
+    // role. A removal (Remove action) may name an element that is also a
+    // condition: the IF part binds its variables, the THEN part names the triple
+    // to delete (a class membership, a relationship or an attribute value).
+    _canAddToThen(elementId) {
+        if (this._actionValue() !== 'retract') {
+            return !(this.ifNodes.has(elementId) || this.thenNodes.has(elementId) ||
+                     this.ifLinks.has(elementId) || this.thenLinks.has(elementId));
+        }
+        return !(this.thenNodes.has(elementId) || this.thenLinks.has(elementId));
     },
 
     ctxAddToIf() {
@@ -718,6 +733,11 @@ window.IfThenModule = {
         if (side === 'if') {
             this.thenNodes.delete(nodeId);
             this.ifNodes.add(nodeId);
+        } else if (this._actionValue() === 'retract') {
+            // A removal keeps the class as a condition: the IF part binds the
+            // variable, the THEN part names the membership to delete.
+            this.ifNodes.add(nodeId);
+            this.thenNodes.add(nodeId);
         } else {
             this.ifNodes.delete(nodeId);
             this.thenNodes.add(nodeId);
@@ -729,11 +749,16 @@ window.IfThenModule = {
         const link = this._graphLinks.find(l => l.linkId === linkId);
         if (!link) return;
 
+        // A removal keeps the relationship as a condition and binds its
+        // endpoints in IF, so the THEN part stays a relationship (see _canAddToThen).
+        const removal = this._actionValue() === 'retract';
+        const endpointSide = removal ? 'if' : side;
+
         if (side === 'if') {
             this.thenLinks.delete(linkId);
             this.ifLinks.add(linkId);
         } else {
-            this.ifLinks.delete(linkId);
+            if (!removal) this.ifLinks.delete(linkId);
             this.thenLinks.add(linkId);
         }
 
@@ -741,10 +766,10 @@ window.IfThenModule = {
         const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
 
         if (!this.ifNodes.has(srcId) && !this.thenNodes.has(srcId)) {
-            if (side === 'if') this.ifNodes.add(srcId); else this.thenNodes.add(srcId);
+            if (endpointSide === 'if') this.ifNodes.add(srcId); else this.thenNodes.add(srcId);
         }
         if (!this.ifNodes.has(tgtId) && !this.thenNodes.has(tgtId)) {
-            if (side === 'if') this.ifNodes.add(tgtId); else this.thenNodes.add(tgtId);
+            if (endpointSide === 'if') this.ifNodes.add(tgtId); else this.thenNodes.add(tgtId);
         }
         this._ensureNodeVar(srcId);
         this._ensureNodeVar(tgtId);
@@ -921,6 +946,30 @@ window.IfThenModule = {
         if (show) this._refreshShaclPreview(this._currentAntecedent, this._currentConsequent);
     },
 
+    // ── Action (assert / retract) ────────────────────────
+
+    _actionValue() {
+        return document.getElementById('ifThenAction')?.value || 'assert';
+    },
+
+    _actionOf(rule) {
+        return (rule && rule.action) || 'assert';
+    },
+
+    // Sync the action select and the retraction hint; a retraction previews
+    // as its SPARQL Update, so refresh the preview when the action changes.
+    _setActionUi(action) {
+        const sel = document.getElementById('ifThenAction');
+        if (sel) sel.value = action === 'retract' ? 'retract' : 'assert';
+        document.getElementById('ifThenRetractNote')
+            ?.classList.toggle('d-none', action !== 'retract');
+    },
+
+    _onActionChanged() {
+        this._setActionUi(this._actionValue());
+        this._refreshShaclPreview(this._currentAntecedent, this._currentConsequent);
+    },
+
     // Fetch and render the generated SHACL-AF for the rule being built.
     // Read-only: transpilation is one-directional (no SHACL->rule parser).
     // No-ops while the code pane is collapsed (avoids needless fetches).
@@ -944,6 +993,7 @@ window.IfThenModule = {
                     body: JSON.stringify({
                         name: document.getElementById('ifThenRuleName')?.value || 'rule',
                         antecedent, consequent,
+                        action: this._actionValue(),
                     }),
                 });
                 const data = await resp.json().catch(() => ({}));
@@ -1306,6 +1356,7 @@ window.IfThenModule = {
 
     _prefillFromRule(rule) {
         if (!rule) return;
+        this._setActionUi(this._actionOf(rule));
         const antD = this._parseAtomsDetailed(rule.antecedent || '');
         const conD = this._parseAtomsDetailed(rule.consequent || '');
 
@@ -1442,6 +1493,7 @@ window.IfThenModule = {
             description: document.getElementById('ifThenRuleDescription').value.trim(),
             antecedent,
             consequent,
+            action: this._actionValue(),
             enabled: true
         };
         if (this.editingIndex >= 0 && this.rules[this.editingIndex]) {
@@ -1449,8 +1501,12 @@ window.IfThenModule = {
         }
 
         if (!rule.name || !rule.antecedent || !rule.consequent) {
-            if (typeof showNotification === 'function')
-                showNotification('Rule name, IF conditions, and THEN conclusions are all required.', 'warning');
+            if (typeof showNotification === 'function') {
+                const message = rule.action === 'retract' && !rule.consequent
+                    ? 'Remove needs a class, relationship or attribute under THEN: right-click one and choose "Add to THEN".'
+                    : 'Rule name, IF conditions, and THEN conclusions are all required.';
+                showNotification(message, 'warning');
+            }
             return;
         }
 
@@ -1598,6 +1654,11 @@ IfThenModule.bindEditorDom = function () {
             const act = b.getAttribute('data-if-then-action');
             if (act && typeof IfThenModule[act] === 'function') IfThenModule[act]();
         });
+    }
+
+    const ifThenAction = document.getElementById('ifThenAction');
+    if (ifThenAction) {
+        ifThenAction.addEventListener('change', () => IfThenModule._onActionChanged());
     }
 
     const ifThenCtx = document.getElementById('ifThenContextMenu');

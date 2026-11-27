@@ -79,6 +79,18 @@ class ShaclRuleEngine:
                     pass
             try:
                 shacl_rule = self._transpiler.transpile(rule)
+                if shacl_rule.is_retraction:
+                    # A retraction hides triples; it never infers or materialises.
+                    self._retract_rule(
+                        translator,
+                        store,
+                        table_name,
+                        shacl_rule,
+                        ctx,
+                        result,
+                        inference_limit=inference_limit,
+                    )
+                    continue
                 self._infer_rule(
                     translator,
                     store,
@@ -129,22 +141,10 @@ class ShaclRuleEngine:
         inference_limit: Optional[int] = None,
     ) -> None:
         """Execute the inference SELECT for a single rule."""
-        query = translator.build_inference_sql(
-            store.sql_table_reference(table_name), rule, ctx
-        )
-        if not query:
-            logger.warning("Could not build inference query for rule: %s", rule.name)
-            return
-
-        if inference_limit is not None and inference_limit > 0:
-            query = query.rstrip().rstrip(";") + f"\nLIMIT {inference_limit}"
-
         t_rule = time.time()
-        count = 0
-        execute = store.execute_query
-        if getattr(store, "query_dialect", "") == "cypher":
-            execute = getattr(store, "execute_reasoning_query", execute)
-        rows = execute(query) or []
+        rows = self._select_rule_rows(
+            translator, store, table_name, rule, ctx, inference_limit
+        )
         for row in rows:
             result.inferred_triples.append(
                 InferredTriple(
@@ -155,14 +155,72 @@ class ShaclRuleEngine:
                     rule_name=rule.name,
                 )
             )
-            count += 1
         logger.info(
             "SHACL rule inference '%s' (%s): %d triples (%.2fs)",
             rule.name,
             rule.rule_type,
-            count,
+            len(rows),
             time.time() - t_rule,
         )
+
+    def _retract_rule(
+        self,
+        translator: ShaclRuleSqlTranslator,
+        store: Any,
+        table_name: str,
+        rule: ShaclRule,
+        ctx: Dict[str, Any],
+        result: ReasoningResult,
+        inference_limit: Optional[int] = None,
+    ) -> None:
+        """Collect the triples a retraction matches into ``result.removed_triples``.
+
+        The SELECT is the same one an assertion uses; its rows are the triples
+        to hide. The hide itself is applied by ``ReasoningService``.
+        """
+        t_rule = time.time()
+        rows = self._select_rule_rows(
+            translator, store, table_name, rule, ctx, inference_limit
+        )
+        for row in rows:
+            subject = row.get("subject", "")
+            predicate = row.get("predicate", "")
+            obj = row.get("object", "")
+            if subject and predicate and obj:
+                result.removed_triples.append(
+                    {"subject": subject, "predicate": predicate, "object": obj}
+                )
+        logger.info(
+            "SHACL retraction '%s': %d triples matched (%.2fs)",
+            rule.name,
+            len(rows),
+            time.time() - t_rule,
+        )
+
+    def _select_rule_rows(
+        self,
+        translator: ShaclRuleSqlTranslator,
+        store: Any,
+        table_name: str,
+        rule: ShaclRule,
+        ctx: Dict[str, Any],
+        inference_limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Run the rule's SELECT and return its ``subject/predicate/object`` rows."""
+        query = translator.build_inference_sql(
+            store.sql_table_reference(table_name), rule, ctx
+        )
+        if not query:
+            logger.warning("Could not build inference query for rule: %s", rule.name)
+            return []
+
+        if inference_limit is not None and inference_limit > 0:
+            query = query.rstrip().rstrip(";") + f"\nLIMIT {inference_limit}"
+
+        execute = store.execute_query
+        if getattr(store, "query_dialect", "") == "cypher":
+            execute = getattr(store, "execute_reasoning_query", execute)
+        return execute(query) or []
 
     def _materialize_rule(
         self,

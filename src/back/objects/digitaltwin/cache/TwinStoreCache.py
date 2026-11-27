@@ -25,7 +25,7 @@ def _digital_twin():
 
 
 class TwinStoreCache:
-    """Per-section TTL cache plus live graph / Lakebase / Neo4j existence probes."""
+    """Per-section TTL cache plus Original Graph / Lakebase / Neo4j existence probes."""
 
     def __init__(self, domain) -> None:
         self._domain = domain
@@ -277,7 +277,7 @@ class TwinStoreCache:
             logger.debug("sync_last_build_from_schedule: %s", exc)
 
     async def fetch_graph_triplestore_status(self, settings) -> Dict[str, Any]:
-        """Live graph backend row count and paths.
+        """Original Graph backend row count and paths.
 
         ``has_data`` is tri-state: ``True``/``False`` once the probe has answered,
         and ``None`` when the engine could not be reached. A failed probe must

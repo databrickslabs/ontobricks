@@ -230,8 +230,8 @@ var SigmaGraph = (function () {
     }
 
     function _liveGraphOptions() {
-        return '<option value="' + LIVE_INFERRED + '">Live graph (inferred)</option>'
-            + '<option value="' + LIVE_ASSERTED + '">Live graph</option>';
+        return '<option value="' + LIVE_INFERRED + '">Certified Graph</option>'
+            + '<option value="' + LIVE_ASSERTED + '">Original Graph</option>';
     }
 
     function _sandboxGraphOptions(sim) {

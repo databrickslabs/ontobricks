@@ -61,7 +61,7 @@ dependencies = [
     # Dependabot #263).
     "mlflow>=3.17.2",
     "apscheduler>=3.10,<4",
-    "owlrl>=7.0.0",
+    "owlrl>=7.1.1",
     "pyshacl>=0.26.0",
     "networkx>=3.0",
 ]

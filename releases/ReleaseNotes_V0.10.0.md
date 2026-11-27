@@ -8,7 +8,7 @@
 ## Highlights
 
 - **Intelligence workspace** — a new top-level **Intelligence** menu groups graph analysis into **Configuration**, **Discovery**, and **Simulation**: Communities, Cohorts, Patterns, and what-if Sandbox scenarios, with Simulation, Community, and Pattern run history under **Settings → Runs**.
-- **What-if Simulation sandbox** — assert hypothetical facts on a sandbox copy of a graph slice, re-run reasoning there, and compare **Live vs Sandbox** before and after. The live graph is never written. Sandboxes work on Lakebase, Lakehouse Delta, and Neo4j.
+- **What-if Simulation sandbox** — assert hypothetical facts on a sandbox copy of a graph slice, re-run reasoning there, and compare **Live vs Sandbox** before and after. The Original Graph is never written. Sandboxes work on Lakebase, Lakehouse Delta, and Neo4j.
 - **Pattern detection** — discover recurring typed neighbourhoods for an entity type on a dedicated serverless job, then save, reopen, and explore them with layered diagrams, KPIs (Patterns, Entities, Coverage), and a Matching-entities modal.
 - **SHACL-AF rule engine** — business rules now execute as canonical SHACL-AF rules (`sh:TripleRule` / `sh:SPARQLRule`) while keeping SQL-at-scale execution. The editor offers two rule families, **Simple** (IF/THEN) and **Complex** (SPARQL CONSTRUCT), with a fail-closed SPARQL-to-SQL compiler and a conversational SPARQL assistant.
 - **Ontology Sanity Checks** — advisory schema lint (integrity, hygiene, naming, hierarchy) with click-through to the offending entity or attribute and a propose-then-apply **Auto-fix**.
@@ -104,7 +104,7 @@ This release is additive on v0.9.x for data and external contracts. Several UI s
 
 ## Graph, Build, and Explorer
 
-- **Build page.** New **Runs**, **Inferred**, and **Cache** tabs. **Inferred** shows a breakdown of materialized inferred triples with **Purge**; **Cache** shows status, companions, and an Activate link. A header **⋮** menu holds **Purge inferences** and **Refresh cache**; the header Refresh button is removed.
+- **Build page.** New **Runs**, **Overrides**, and **Cache** tabs. **Overrides** shows a breakdown of materialized inferred triples with **Purge**; **Cache** shows status, companions, and an Activate link. A header **⋮** menu holds **Purge overrides** and **Refresh cache**; the header Refresh button is removed.
 - **Graph DB cloisonnement.** The god-class `GraphDBBackend` is replaced by a read root (`GraphBackend`), a `MaterializedGraphBackend` hat, and capability interfaces per family, with a guardrail test and updated architecture docs. `DeltaFlatStore` is split into materialized and virtual stores.
 - **Explorer.** Entity behaviour is grouped into one section, a groups toggle is added, canvas toggles move under **View** and **Graph**, and neighbourhoods stay connected when the entity cap hits.
 - **Search and chat.** Viewers can search the graph and use Graph Chat; Graph Chat shows the full, collapsible thinking process.
@@ -138,7 +138,7 @@ This release is additive on v0.9.x for data and external contracts. Several UI s
 
 ## Documentation
 
-- `docs/user-guide.md` — full Intelligence coverage, Purge inferences in the Build ⋮ menu, Load lands on Context → Home.
+- `docs/user-guide.md` — full Intelligence coverage, Purge overrides in the Build ⋮ menu, Load lands on Context → Home.
 - `docs/intelligence.md` and the Sphinx Intelligence guide — operator guide for Communities, Cohorts, Patterns, and Simulation.
 - `docs/architecture.md` and `.cursor` rules — graph backend cloisonnement and the minimal-surface checklist for agents.
 - `docs/mcp.md` — Genie One connection setup delegated to official Databricks documentation, plus MCP example scripts moved to `resources/examples`.

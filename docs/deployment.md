@@ -136,12 +136,12 @@ OntoBricks uses Lakebase Postgres (Autoscaling) as **both** its registry store (
 ║  domain_versions (full documents)     ║     · app_managed: COPY FROM STDIN             ║
 ║  domain_permissions (roles / ACL)     ║     · managed_synced: Lakeflow snapshot        ║
 ║  schedules      (build definitions)   ║                                                ║
-║  schedule_runs  (build run history)   ║  g_<domain>_v<n>__app                          ║
-║  domain_edit_locks (DRAFT edit lock)  ║   ← reasoning results / cohort writes          ║
+║  schedule_runs  (build run history)   ║  g_<domain>_v<n>__overrides                    ║
+║  domain_edit_locks (DRAFT edit lock)  ║   ← user edits, reasoning / cohort writes      ║
 ║                                       ║                                                ║
 ║                                       ║  g_<domain>_v<n>  (UNION VIEW — read only)    ║
 ║                                       ║   ← target of SPARQL queries                  ║
-║                                       ║   SELECT … FROM _sync UNION ALL __app         ║
+║                                       ║   _sync + __overrides (anti-join)             ║
 ║                                       ║                                                ║
 ║                                       ║  Columns: subject · predicate · object        ║
 ║                                       ║           datatype · lang                     ║
@@ -171,13 +171,13 @@ OntoBricks uses Lakebase Postgres (Autoscaling) as **both** its registry store (
                         triplestore_<domain>_Vn          │  Postgres Synced Table API       │
                         (persisted in Unity Catalog)     └────────────────────────────────┬─┘
                                                                                            │
-                                                         reasoning / cohort writes ────────►  g_<dom>_v<n>__app
+                                                         edits / reasoning writes ─────────►  g_<dom>_v<n>__overrides
                                                                                            │
                                                          ┌──────────────────────────────────────────────────┐
                                                          │  g_<domain>_v<n>  (UNION VIEW — reader-facing)   │
                                                          │  SELECT * FROM g_<dom>_v<n>_sync                 │
-                                                         │  UNION ALL                                        │
-                                                         │  SELECT * FROM g_<dom>_v<n>__app                 │
+                                                         │  + __overrides rows, minus hidden (del) rows     │
+                                                         │  SELECT * FROM g_<dom>_v<n>__overrides           │
                                                          └─────────────────────┬────────────────────────────┘
                                                                                │
                     SPARQL query ──► SPARQL→SQL translator ──► SQL Warehouse ──┘  (or direct Lakebase path)
@@ -322,6 +322,14 @@ Implications for Layer 2:
   scopes (`iam.current-user:read`, `iam.access-control:read`) are platform
   defaults and must not be declared — the Apps create API rejects them. Granting the MCP SP a domain role
   in Teams is an emergency workaround only — it collapses per-user gating.
+- **Knowledge Pages (Genie Pages) stay on the app service principal.** The
+  Databricks Domains and Knowledge Pages APIs behind Context → Pages require
+  the `domains` and `knowledge` token scopes, which Databricks Apps does not
+  accept in `user_api_scopes` (`not a valid scope`), so a forwarded user token
+  is always rejected (`Invalid scope, required scopes: …`). Every user sees the
+  pages visible to the app SP. Listing pages **without a Domain filter** needs
+  account-wide domain admin rights on the SP; otherwise pick a Domain in the
+  Domains filter.
 - **Local dev is unchanged** — OBO and the Team gate are no-ops outside App mode
   (`is_databricks_app()` guards), so a single developer token keeps working.
 
@@ -1938,7 +1946,7 @@ make bootstrap-lakebase
 | **Active Postgres endpoint** | Project/branch must expose a host via `/api/2.0/postgres/.../endpoints` |
 | **Registry schema exists** | `make deploy` creates it. CAN_USE + `pgcrypto` are applied even before tables exist; schema GRANTs need the schema |
 | **Apps deployed** | [Service principal](https://docs.databricks.com/aws/en/admin/users-groups/service-principals) ids are resolved from existing apps (warn-only on first deploy) |
-| **`pgcrypto` in `public`** | Companion `__app` tables need `digest(..., 'sha256')`. Step 1b installs it **in `public`** and relocates a stranded copy — an extension sitting in a graph schema is invisible once that schema changes. Applies **per database**, so the graph DB needs it too |
+| **`pgcrypto` in `public`** | Companion `__overrides` tables need `digest(..., 'sha256')`. Step 1b installs it **in `public`** and relocates a stranded copy — an extension sitting in a graph schema is invisible once that schema changes. Applies **per database**, so the graph DB needs it too |
 
 Preflight (read-only):
 

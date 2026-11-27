@@ -490,7 +490,7 @@ src/
 │   │   │   ├── shacl_rules/            # ShaclRuleEngine, IfThenToShaclTranspiler, ShaclRule, ShaclRuleSqlTranslator,
 │   │   │   │                           # ShaclFlatSqlBackend, ShaclFlatCypherBackend, RuleExpressionParser,
 │   │   │   │                           # RuleBuiltinRegistry, RuleBuiltin, RuleAtomPartition, RuleTextCodec, rule_uri_map
-│   │   │   ├── rules/                  # SPARQLRuleEngine + SparqlConstructCompiler (Complex rules)
+│   │   │   ├── rules/                  # SPARQLRuleEngine + SparqlConstructCompiler + SparqlUpdateCompiler (Complex rules)
 │   │   │   └── results/                # InferredTriple, RuleViolation, ReasoningResult
 │   │   │
 │   │   ├── industry/                   # Industry-standard ontology importers
@@ -1047,7 +1047,7 @@ surface exposes ontology information only.
 
 | Layer | Key | Storage | Query Language | Source of truth |
 |-------|-----|---------|----------------|-----------------|
-| **Delta Triple Store** | `view` / `_data` / `_inferred` / `_graph` | Unity Catalog R2RML VIEW + Delta tables, or Virtual Graph (no copy) ([SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)) | Spark SQL | Yes (mapped triples = `_data`) |
+| **Delta Triple Store** | `view` / `_data` / `_overrides` / `_graph` / `_asserted` | Unity Catalog R2RML VIEW + Delta tables, or Virtual Graph (no copy) ([SQL Warehouse](https://docs.databricks.com/aws/en/compute/sql-warehouse/)) | Spark SQL | Yes (mapped triples = `_data`) |
 | **[Lakebase](https://docs.databricks.com/aws/en/oltp/) Graph DB** | `graph` (engine `lakebase`) | Postgres flat `(subject, predicate, object)` table on the App-bound Lakebase instance | Postgres SQL | Mirror of the mapped snapshot |
 | **Databricks Graph DB** | `graph` (engine `databricks`) | Same Delta objects as the triple store (no second copy) | Spark SQL | The mapped snapshot itself |
 | **Neo4j Graph DB** | `graph` (engine `neo4j`) | Bolt-connected Neo4j (Aura / self-hosted); flat-triple nodes per store | Cypher | Mirror of the mapped snapshot |
@@ -1063,11 +1063,11 @@ rows; **no copy** means a VIEW that re-reads the source on each query.
 |------------|--------------------------|-----------------------------------------|--------------------------|-----------------------------|-------|
 | Chosen where | Context → Knowledge Graph, backend `databricks`, materialization `table` | Same backend, materialization `view` | Domain backend `lakebase`; Settings → Lakebase `sync_mode` | Same backend, `sync_mode=managed_synced` | Domain backend `neo4j` |
 | Mapped triples | `_data` **TABLE** — CTAS from the R2RML VIEW, then `OPTIMIZE` / [Liquid Clustering](https://docs.databricks.com/aws/en/delta/clustering) | `_data` **VIEW** — pass-through over the R2RML VIEW; no row copy | UC `_data` is always a **TABLE** (analytics needs a Delta scan). Postgres `_sync` is a second copy loaded by the app (`COPY FROM STDIN`) | UC `_data` **TABLE**. Postgres `_sync` is a second copy kept by Lakeflow | UC `_data` **TABLE**. Neo4j nodes are a second copy (`MERGE`) |
-| Inferred / app writes | `_inferred` **TABLE** (truncated on full Build, then refilled) | Same `_inferred` **TABLE** — inferred rows have no source table | Postgres `__app` companion; UC `_inferred` still exists for the UC family | Same `__app` companion; Lakeflow never writes it | Stored as Neo4j triples in the same store label; no `_adj_*` |
-| Interactive read façade | `_graph` VIEW = `_data UNION ALL _inferred` | Same `_graph` VIEW (each read re-runs mapping SQL through `_data`) | Postgres union view `g_<dom>_v<n>` = `_sync UNION ALL __app` | Same union view | Bolt / Cypher against the store |
+| Overrides (user edits + derived triples) | `_overrides` **TABLE** (`op` add/del, `origin`) — survives a Build for `origin='user'` | Same `_overrides` **TABLE** | Postgres `__overrides` companion | Same `__overrides` companion; Lakeflow never writes it | Applied to the graph at once and journaled as `:__Override` nodes, replayed after Build; no `_adj_*` |
+| Interactive read façade | `_graph` VIEW = (`_data` ∪ `add` rows) minus `del` rows | Same `_graph` VIEW (each read re-runs mapping SQL through `_data`) | Postgres union view `g_<dom>_v<n>` = (`_sync` ∪ `add` rows) minus `del` rows | Same union view | Bolt / Cypher against the store |
 | Explorer hop + Preview indexes | `_adj_out`, `_adj_in`, `_entity_search`, `_props` **TABLES** (always copies of a projection) | Same four **TABLES** — views-only does **not** leave indexes as views | Same four **TABLES** in the Postgres graph schema | Same four Postgres tables | None — native traversal / search |
-| Who creates objects | Build SQL Warehouse DDL | Same warehouse (DDL only for `_data`; indexes still CTAS) | Build warehouse for UC; FastAPI/psycopg for Postgres | Build warehouse for UC schema; Lakeflow for `_sync`; app for `__app`, union view, indexes | Build warehouse for UC; Bolt for Neo4j |
-| Full **Build** | Recreates gateway VIEW, replaces `_data`, truncates `_inferred`, refreshes `_graph`, rebuilds indexes | Recreates gateway + `_data` VIEW, truncates `_inferred`, rebuilds indexes from live `_graph` | Recreates UC family as tables, reloads `_sync`, truncates `__app`, rebuilds indexes | Recreates UC family, triggers Lakeflow full refresh into `_sync`, truncates `__app`, rebuilds indexes | Recreates UC family, `MERGE`s mapped triples into Neo4j |
+| Who creates objects | Build SQL Warehouse DDL | Same warehouse (DDL only for `_data`; indexes still CTAS) | Build warehouse for UC; FastAPI/psycopg for Postgres | Build warehouse for UC schema; Lakeflow for `_sync`; app for `__overrides`, union view, indexes | Build warehouse for UC; Bolt for Neo4j |
+| Full **Build** | Recreates gateway VIEW, replaces `_data`, clears derived `_overrides` rows (user rows kept), refreshes `_graph`, rebuilds indexes | Recreates gateway + `_data` VIEW, clears derived `_overrides` rows (user rows kept), rebuilds indexes from live `_graph` | Recreates UC family as tables, reloads `_sync`, clears derived `__overrides` rows (user rows kept), rebuilds indexes | Recreates UC family, triggers Lakeflow full refresh into `_sync`, clears derived `__overrides` rows (user rows kept), rebuilds indexes | Recreates UC family, `MERGE`s mapped triples into Neo4j, then replays the user journal |
 | **Refresh cache** | Rebuilds the four indexes from the existing `_graph` snapshot; does **not** recopy `_data`. Runs on the **Build SQL Warehouse**, never Lakehouse/RT | Rebuilds indexes from live `_graph` (source changes are visible in the next index snapshot) | Rebuilds indexes from the current Postgres union view | Same | Not available |
 | When new source rows appear in Explorer hops | Next full **Build** | Next **Refresh cache** or Build (indexes stay a snapshot) | Next Refresh cache or Build | Next Refresh cache or Build (after Lakeflow has updated `_sync`) | Immediately after Build `MERGE` |
 | Analytics | Scans `_data` TABLE | Temporary `…_analytics` TABLE for the run, then drop | Always scans UC `_data` TABLE, not Postgres | Same | Same UC `_data` TABLE |
@@ -1079,8 +1079,9 @@ rows; **no copy** means a VIEW that re-reads the source on each query.
 1. **Mapped triples** — only Lakehouse `view` avoids duplicating source-mapped
    rows. Lakehouse `table`, Lakebase, and Neo4j all freeze mapped triples
    (Lakebase and Neo4j freeze them twice: UC `_data` plus the engine store).
-2. **Inferred triples** — always stored (Delta `_inferred` or Lakebase
-   `__app`). There is no live source to view over.
+2. **Overrides** — always stored (Delta `_overrides`, Lakebase
+   `__overrides`, Neo4j journal). User edits and derived triples have no live
+   source to view over.
 3. **Graph indexes** — always stored tables when the backend supports them,
    even in Lakehouse views-only. Traversal and Preview never re-walk the
    mapping SQL per hop.
@@ -1096,8 +1097,9 @@ Every successful **Knowledge Graph → Build** creates (or refreshes) four relat
 |--------|------|------|
 | `triplestore_<domain>_V<n>` | **VIEW** | Live R2RML mapping: SQL that projects source Unity Catalog tables into `(subject, predicate, object)`. Refreshed on Build. Not a durable store — it recomputes from sources when queried. |
 | `…_data` | **Delta TABLE** or **VIEW** | The mapped triples. By default a materialised snapshot of the VIEW (`CREATE OR REPLACE TABLE … AS SELECT subject, predicate, object FROM <view>`) clustered by `(predicate, subject)`; under view-only materialization, a pass-through `CREATE OR REPLACE VIEW` over the same VIEW. Either way it is what **Graph Analytics** reads and the bulk half of the graph. Domains built before this step existed need one rebuild. |
-| `…_inferred` | **Delta TABLE** | Writable companion with the same schema. Holds app-written / reasoning / cohort triples that are *not* in the mapped sources. Truncated on a full rebuild, then refilled as those features write. A table in both materialization modes — inferred triples have no source to be derived from. |
-| `…_graph` | **VIEW** | Read façade: `_data UNION ALL _inferred`. Explorer, filters, stats, GraphQL, and most interactive reads use this when inferred triples are included. |
+| `…_overrides` | **Delta TABLE** | The single writable companion. One row per change: `(subject, predicate, object, op, origin, change_id, author, created_at)`. `op` is `add` or `del`; `origin` is `user`, `reasoning`, `cohort` or `community`. A table in both materialization modes — these rows have no source to be derived from. A full Build clears only the derived rows (`origin <> 'user'`). Legacy `…_inferred` rows are migrated once as `add` rows. |
+| `…_graph` | **VIEW** | Effective graph: (`_data` ∪ `add` rows) minus `del` rows (LEFT ANTI JOIN on the triple). Explorer, filters, stats, GraphQL, and most interactive reads use it when derived triples are included. |
+| `…_asserted` | **VIEW** | Same as `_graph` but only the `add` rows with `origin='user'`: mapped data plus the user's corrections, no derived triples. Read when derived triples are excluded and by Graph Analytics when user overrides exist. |
 
 ```text
 source tables
@@ -1106,10 +1108,12 @@ source tables
          ↘
            _graph VIEW    (what the UI usually reads)
          ↗
-      _inferred TABLE     (extra triples written by the app)
+      _overrides TABLE    (user edits + derived triples; add / del)
 ```
 
-**Why both a VIEW and `_data`?** The R2RML view is the definition of “what the mapping says.” Analytics and heavy jobs need a fixed Delta table they can scan reliably (and identically across Lakehouse, Lakebase, and Neo4j backends). `_data` is that freeze. `_graph` then layers inferred rows on top for interactive reads without copying them into the mapped snapshot.
+**Editing the graph.** Add, modify and delete of entities, relations and attributes all reduce to triples: *add* inserts an `add` row, *delete* inserts a `del` row (hiding a mapped triple) or removes the user's own `add` row, and *modify* is an `add` of the new triple plus a `del` of the old one sharing one `change_id`. A user triple is never both added and hidden. The same contract holds on every backend (`back/core/graphdb/overrides.py`); Lakebase applies it in one Postgres transaction, Neo4j applies edits at once and journals them for replay after a Build, and Delta orders its statements so an interruption leaves the old value visible.
+
+**Why both a VIEW and `_data`?** The R2RML view is the definition of “what the mapping says.” Analytics and heavy jobs need a fixed Delta table they can scan reliably (and identically across Lakehouse, Lakebase, and Neo4j backends). `_data` is that freeze. `_graph` then layers the overrides on top for interactive reads without copying them into the mapped snapshot.
 
 **Materialization modes** are a per-domain Lakehouse setting (`info['lakehouse_materialization']`, resolved by `GraphDBFactory.resolve_lakehouse_materialization`, applied by `materialize.apply_data_relation`):
 
@@ -1167,7 +1171,7 @@ rejects the `CREATE OR REPLACE TABLE` DDL used by graph-index refreshes.
 >
 > On a `table`-mode Lakehouse domain, Explorer expansion (adjacency-driven) and
 > a raw SPARQL scan of `_graph` can diverge between builds: expansion sees the
-> adjacency snapshot while SPARQL sees `_graph` including `_inferred`.  A full
+> adjacency snapshot while SPARQL sees `_graph` including `_overrides`.  A full
 > **Build** reconciles both.
 
 Full detail: [`docs/graphdb-integration.md` § Adjacency index objects](backend.md#adjacency-index-objects).
@@ -1186,11 +1190,11 @@ The single `GraphDBFactory` returns the per-domain engine — Delta (`databricks
 
 Lakebase Postgres is one of three shipped Graph DB engines (alongside the Delta/`databricks` store and Neo4j). The implementation lives in `src/back/core/graphdb/lakebase/` (`FlatStore`, `Base`, `SyncedTableManager`).
 
-**Storage model** — per graph version, a three-object layout inside a configurable Postgres schema (default `ontobricks_graph`) on the App-bound Lakebase database: bulk `_sync`, writable `__app`, reader-facing union view `g_<dom>_v<n>`. Connection comes from the same OAuth/M2M credential the registry hybrid backend uses. See [Backend capability and object lifecycle](#backend-capability-and-object-lifecycle).
+**Storage model** — per graph version, a three-object layout inside a configurable Postgres schema (default `ontobricks_graph`) on the App-bound Lakebase database: bulk `_sync`, writable `__overrides`, reader-facing union view `g_<dom>_v<n>`. Connection comes from the same OAuth/M2M credential the registry hybrid backend uses. See [Backend capability and object lifecycle](#backend-capability-and-object-lifecycle).
 
 **Two write modes** (Lakebase only), configured under **Settings → Back end → Lakebase**:
 
-- `managed_synced` (what **Settings → Lakebase** proposes when `sync_mode` is unset) — Databricks Lakeflow keeps a Postgres synced table (`g_<dom>_v<n>_sync`) in lock-step with the R2RML view via a **Snapshot** pipeline (the view has no Change Data Feed, so Triggered / Continuous cannot run). The app only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`); a writable companion table (`g_<dom>_v<n>__app`) absorbs reasoning / cohort writes; readers see both via a UNION view (`g_<dom>_v<n>`). See `docs/graphdb-integration.md §9` for the full architecture.
+- `managed_synced` (what **Settings → Lakebase** proposes when `sync_mode` is unset) — Databricks Lakeflow keeps a Postgres synced table (`g_<dom>_v<n>_sync`) in lock-step with the R2RML view via a **Snapshot** pipeline (the view has no Change Data Feed, so Triggered / Continuous cannot run). The app only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`); a writable companion table (`g_<dom>_v<n>__overrides`) absorbs user edits and reasoning / cohort writes; readers see the effective graph through a view (`g_<dom>_v<n>`). See `docs/graphdb-integration.md §9` for the full architecture.
 - `app_managed` (runtime fallback when the key is omitted, so existing workspaces that never saved Settings keep COPY ingest) — the FastAPI app streams warehouse rows in `fetchmany` batches and ingests them via `COPY FROM STDIN` into a per-batch temp table followed by `INSERT … ON CONFLICT DO NOTHING`.
 
 ### Neo4j Graph DB Architecture
@@ -1225,7 +1229,8 @@ OntoBricks includes a **multi-phase reasoning engine** (`src/back/core/reasoning
    DeductiveClosure        └─ SQL translator       methods
    (OWLRL_Semantics)              │                ├─ transitive_closure
          │                        │                ├─ symmetric_expand
-         ▼                        ▼                └─ shortest_path
+         ▼                        ▼                ├─ inverse_expand
+                                                   └─ shortest_path
    InferredTriple[]        RuleViolation[]               │
                            InferredTriple[]               ▼
                                                    InferredTriple[]
@@ -1308,6 +1313,13 @@ Graph reasoning leverages **OWL property characteristics** to perform structural
 - For every `(a, P, b)` where `(b, P, a)` is missing, adds the inverse edge
 - **Delta** & **Lakebase**: SQL `NOT EXISTS` anti-join
 
+**Inverse expansion** (`owl:inverseOf` axiom from *Expr. & Axioms*):
+- For `P owl:inverseOf Q` and every `(a, P, b)` where `(b, Q, a)` is missing, adds `(b, Q, a)`; `owl:inverseOf` is symmetric, so both directions are expanded (provenance `graph:inverse`)
+- **Delta** & **Lakebase**: SQL `NOT EXISTS` anti-join (`TraversalMixin.inverse_expand`)
+- **Neo4j**: not supported yet — `inverse_expand` is a logged no-op (native Cypher is a follow-up)
+
+**Axiom-driven**: transitivity comes from a self `owl:propertyChainAxiom` (`p ∘ p ⊑ p`) and inversion from `owl:inverseOf` axioms; both are read from the ontology's axioms, not from the legacy property-characteristics panel.
+
 **Shortest path**:
 - SQL engines (Delta, Lakebase) use a BFS-bounded recursive CTE. The Cypher-capable Neo4j engine can back this with a native `SHORTEST` path once its Cypher query translation is completed (currently scaffolded).
 
@@ -1336,7 +1348,7 @@ All reasoning phases produce standardized output via three dataclasses (`src/bac
 
 | Model | Purpose |
 |-------|---------|
-| `InferredTriple` | A new triple with `subject`, `predicate`, `object`, `provenance` (e.g., `"owlrl"`, `"if_then:RuleName"`, `"graph:transitive"`) |
+| `InferredTriple` | A new triple with `subject`, `predicate`, `object`, `provenance` (e.g., `"owlrl"`, `"if_then:RuleName"`, `"graph:transitive"`, `"graph:symmetric"`, `"graph:inverse"`) |
 | `RuleViolation` | A constraint failure with `rule_name`, `subject`, `message`, `check_type` |
 | `ReasoningResult` | Aggregated output: `inferred_triples[]`, `violations[]`, `stats{}` — mergeable across phases |
 
@@ -1355,7 +1367,7 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 | `src/back/core/reasoning/shacl_rules/ShaclRuleEngine.py` | `ShaclRuleEngine` — business-rule orchestration (SHACL-AF) |
 | `src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py` | `ShaclFlatSqlBackend` — rule → Spark / Postgres SQL compilation |
 | `src/back/core/reasoning/models.py` | `InferredTriple`, `RuleViolation`, `ReasoningResult` dataclasses |
-| `src/back/core/graphdb/GraphBackend.py` | Graph DB primitives: `transitive_closure()`, `symmetric_expand()`, `shortest_path()` |
+| `src/back/core/graphdb/GraphBackend.py` | Graph DB primitives: `transitive_closure()`, `symmetric_expand()`, `inverse_expand()`, `shortest_path()` (SQL defaults from `interfaces/TraversalMixin.py`) |
 
 ---
 
@@ -1371,7 +1383,7 @@ over the mapped `…_data` snapshot. Graphless domains redirect to Context.
 
 ### Run pipeline
 
-1. **Scope** (`Scope`) resolves an entity set on the live graph
+1. **Scope** (`Scope`) resolves an entity set on the Original Graph
    (read-only): an entity neighbourhood (`expand_and_fetch_subgraph`, default 2
    hops) or a saved cohort rule (`CohortService.dry_run`, capped at 5000
    entities — exceeding the cap fails the run instead of truncating).
@@ -1394,7 +1406,7 @@ over the mapped `…_data` snapshot. Graphless domains redirect to Context.
 ### Isolation guarantees
 
 `SimulationStore` (a `FlatStore` subclass) resolves every
-table name to the sandbox itself — no `_sync` / `__app` / union-view trio — and
+table name to the sandbox itself — no `_sync` / `__overrides` / union-view trio — and
 raises `ValidationError` for any name without the `__sim_` marker, on reads,
 writes, DDL and generated SQL (`_sql_relation`). Purge, synced bulk load and
 adjacency rebuilds are refused. The live store is only used for the scope read
@@ -1429,7 +1441,7 @@ in `__smp_`, so a last-value `remove` does not resurrect the live fact.
 | `POST /simulation/{id}/run` | Start the run; poll `GET /tasks/{task_id}` (Builder) |
 | `POST /simulation/{id}/purge` | Drop sandbox after-picture; keep spec as draft (Builder) |
 | `GET /simulation/{id}/diff?kind=added\|removed&page=&search=` | Paged diff rows + summary |
-| `GET /simulation/{id}/compare?include_inferred=true\|false` | Sandbox vs current live graph on the same scope: status-tagged nodes/edges + exact counts |
+| `GET /simulation/{id}/compare?include_inferred=true\|false` | Sandbox vs current Original Graph on the same scope: status-tagged nodes/edges + exact counts |
 | `GET /simulation/runs?simulation_id=` | Run history |
 
 `Simulation.compare_to_live` reads the sandbox triples, takes their subjects
@@ -1460,7 +1472,7 @@ Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
 Bookmarks to `/ontology/?section=cohorts` redirect to the Design tab;
 `/dtwin/?section=cohorts` and `/intelligence/?section=cohort-run` redirect to
 the Runs tab (`?section=cohorts&tab=runs`).
-Materialise still writes to the live graph via `/dtwin/cohorts/*`.
+Materialise still writes to the Original Graph via `/dtwin/cohorts/*`.
 
 ---
 
@@ -3391,6 +3403,7 @@ based on the active triple-store backend's `query_dialect`.
 | `OWLRLReasoner` | OWL 2 RL fragment + facts | RDF graph operations (rdflib) | Python in-memory; results materialized to triple store via Spark SQL or GraphDB bulk insert |
 | `ShaclRuleEngine` + `ShaclFlatSqlBackend` | Business rules (SHACL-AF) | **SQL** | Databricks SQL Warehouse on the Delta view, and the Lakebase Postgres Graph DB engine. Future Cypher / Gremlin engines can plug in their own flat-triple backend. |
 | `SPARQLRuleEngine` + `SparqlConstructCompiler` | Complex (SPARQL `CONSTRUCT`) rules | **SQL** on the flat triple table (rdflib algebra → Spark / Postgres SQL; fail-closed subset, already-known triples skipped) | Same engines as `ShaclRuleEngine`; a query outside the subset is refused on save and reported as a phase error at run time |
+| `SparqlUpdateCompiler` (removal rules) | Complex rules whose query is a `DELETE` (SPARQL `DELETE WHERE` / `DELETE DATA` / `DELETE {…} WHERE {…}`) | **SQL** that selects the stored triples to hide; the store records them as `del` rows with origin `reasoning` (overlay on Lakebase and Delta, physical delete on Neo4j) | Shares `SparqlPatternCompiler` with the CONSTRUCT compiler; requires a bound subject or object; removals are reapplied after every Build |
 
 ---
 

@@ -1,9 +1,11 @@
 """Reasoning service — orchestrates T-Box, IF-THEN, Graph, Constraint, and
 SPARQL CONSTRUCT rule phases."""
 
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from back.core.graphdb.overrides import ORIGIN_REASONING, unique_triples
 from back.core.logging import get_logger
 from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
@@ -78,8 +80,9 @@ class ReasoningService:
     ) -> None:
         """Execute a single reasoning phase and fold its output into *result*.
 
-        Only inferred triples are collected; violations are intentionally
-        ignored — they belong to the Data Quality pipeline.
+        Inferred triples and the triples removal rules select are collected;
+        violations are intentionally ignored — they belong to the Data Quality
+        pipeline.
 
         Args:
             phase_name: Prefix for stat keys (e.g. ``"tbox"``).
@@ -94,6 +97,7 @@ class ReasoningService:
             phase_result = runner()
             ps = phase_result.stats or {}
             result.inferred_triples.extend(phase_result.inferred_triples)
+            result.removed_triples.extend(phase_result.removed_triples)
             result.stats[f"{phase_name}_duration_seconds"] = round(time.time() - t1, 3)
             result.stats[f"{phase_name}_inferred_count"] = ps.get(
                 "inferred_count",
@@ -279,50 +283,35 @@ class ReasoningService:
         transitive_props = self._find_properties_by_characteristic(
             ontology, "transitive"
         )
-        logger.info(
-            "Graph reasoning: %d transitive properties found%s",
-            len(transitive_props),
-            f" ({', '.join(transitive_props)})" if transitive_props else "",
-        )
+        # Modern path: transitivity declared as a self propertyChain axiom
+        # (p ∘ p ⊑ p) in Expr. & Axioms, not the legacy characteristics panel.
+        for prop_uri in self._find_transitive_from_axioms(ontology):
+            if prop_uri not in transitive_props:
+                transitive_props.append(prop_uri)
         for prop_uri in transitive_props:
-            try:
-                rows = self._store.transitive_closure(table_name, prop_uri)
-                logger.info(
-                    "Transitive closure for %s: %d inferred", prop_uri, len(rows)
-                )
-                for row in rows:
-                    result.inferred_triples.append(
-                        InferredTriple(
-                            subject=row.get("subject", ""),
-                            predicate=row.get("predicate", prop_uri),
-                            object=row.get("object", ""),
-                            provenance="graph:transitive",
-                        )
-                    )
-            except Exception as e:
-                logger.warning("Transitive closure for %s failed: %s", prop_uri, e)
+            self._expand_property(
+                result,
+                "graph:transitive",
+                prop_uri,
+                lambda p=prop_uri: self._store.transitive_closure(table_name, p),
+            )
 
-        symmetric_props = self._find_properties_by_characteristic(ontology, "symmetric")
-        logger.info(
-            "Graph reasoning: %d symmetric properties found%s",
-            len(symmetric_props),
-            f" ({', '.join(symmetric_props)})" if symmetric_props else "",
-        )
-        for prop_uri in symmetric_props:
-            try:
-                rows = self._store.symmetric_expand(table_name, prop_uri)
-                logger.info("Symmetric expand for %s: %d inferred", prop_uri, len(rows))
-                for row in rows:
-                    result.inferred_triples.append(
-                        InferredTriple(
-                            subject=row.get("subject", ""),
-                            predicate=row.get("predicate", prop_uri),
-                            object=row.get("object", ""),
-                            provenance="graph:symmetric",
-                        )
-                    )
-            except Exception as e:
-                logger.warning("Symmetric expand for %s failed: %s", prop_uri, e)
+        for prop_uri in self._find_properties_by_characteristic(ontology, "symmetric"):
+            self._expand_property(
+                result,
+                "graph:symmetric",
+                prop_uri,
+                lambda p=prop_uri: self._store.symmetric_expand(table_name, p),
+            )
+
+        # owl:inverseOf axioms (bidirectional): for each (a, P, b) emit (b, Q, a).
+        for p_uri, q_uri in self._find_inverse_pairs_from_axioms(ontology):
+            self._expand_property(
+                result,
+                "graph:inverse",
+                q_uri,
+                lambda p=p_uri, q=q_uri: self._store.inverse_expand(table_name, p, q),
+            )
 
         result.stats = {
             "phase": "graph",
@@ -335,6 +324,38 @@ class ReasoningService:
             time.time() - t0,
         )
         return result
+
+    def _expand_property(
+        self,
+        result: ReasoningResult,
+        provenance: str,
+        fallback_predicate: str,
+        call: Callable[[], List[Dict[str, Any]]],
+    ) -> None:
+        """Run one store reasoning op and append its inferred triples.
+
+        Logs the inferred count and swallows+logs any backend error so one
+        property's failure does not abort the whole graph phase.
+        """
+        try:
+            rows = call() or []
+        except Exception as e:
+            logger.warning(
+                "%s expansion for %s failed: %s", provenance, fallback_predicate, e
+            )
+            return
+        logger.info(
+            "%s expansion for %s: %d inferred", provenance, fallback_predicate, len(rows)
+        )
+        for row in rows:
+            result.inferred_triples.append(
+                InferredTriple(
+                    subject=row.get("subject", ""),
+                    predicate=row.get("predicate", fallback_predicate),
+                    object=row.get("object", ""),
+                    provenance=provenance,
+                )
+            )
 
     def run_constraint_checks(self) -> ReasoningResult:
         """Validate instance data against ontology constraints.
@@ -412,15 +433,30 @@ class ReasoningService:
         table_name = self._get_graph_name()
         return engine.execute_rules(rules, self._store, table_name, ontology)
 
-    def materialize_inferred(self, result: ReasoningResult) -> int:
-        """Insert inferred triples into the triplestore.
-
-        Returns the number of triples inserted.
-        """
-        if self._store is None or not result.inferred_triples:
+    def count_sparql_removal(self, rule: Dict) -> int:
+        """Number of triples *rule* would hide; 0 when no store is available."""
+        if self._store is None:
             return 0
+        from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine
 
+        return SPARQLRuleEngine().count_removals(
+            rule, self._store, self._get_graph_name(), self._get_ontology_dict()
+        )
+
+    def materialize_inferred(self, result: ReasoningResult) -> int:
+        """Insert inferred triples, then hide the triples removal rules selected.
+
+        Inserts run first, so a triple that one rule infers and another removes
+        in the same run ends up hidden. Returns the number of triples inserted.
+        """
+        if self._store is None:
+            return 0
         table_name = self._get_graph_name()
+        count = self._insert_inferred(result, table_name)
+        self._apply_removals(result, table_name)
+        return count
+
+    def _insert_inferred(self, result: ReasoningResult, table_name: str) -> int:
         triples = [
             {"subject": t.subject, "predicate": t.predicate, "object": t.object}
             for t in result.inferred_triples
@@ -444,6 +480,17 @@ class ReasoningService:
                     self._store, table_name, self._domain
                 )
         logger.info("Materialised %d inferred triples into %s", count, table_name)
+        return count
+
+    def _apply_removals(self, result: ReasoningResult, table_name: str) -> int:
+        """Hide the stored triples that removal rules selected (origin ``reasoning``)."""
+        triples = unique_triples(result.removed_triples)
+        if not triples:
+            return 0
+        count = self._store.delete_triples(
+            table_name, triples, origin=ORIGIN_REASONING
+        )
+        logger.info("Removal rules hid %d triples in %s", count, table_name)
         return count
 
     @staticmethod
@@ -552,3 +599,76 @@ class ReasoningService:
                 if uri:
                     result.append(uri)
         return result
+
+    @staticmethod
+    def _resolve_axiom_prop_uri(ref: str, data_ns: str, base_uri: str, sep: str) -> str:
+        """Resolve a property reference (full URI or bare name) taken from an
+        axiom to the data-namespace predicate URI stored in the triple store."""
+        ref = (ref or "").strip()
+        if not ref:
+            return ""
+        if ref.startswith("http"):
+            return ReasoningService._normalize_property_uri(
+                ref, data_ns, base_uri, sep, ""
+            )
+        # Bare name; tolerate prefixed/partial refs ("ex#p", "a/p") by keeping
+        # only the local name so no stray "#" or "/" leaks into the predicate.
+        name = ReasoningService._local_name(ref) if re.search(r"[#/]", ref) else ref
+        return ReasoningService._normalize_property_uri("", data_ns, base_uri, sep, name)
+
+    @staticmethod
+    def _find_transitive_from_axioms(ontology: Dict) -> List[str]:
+        """Property URIs made transitive by a self ``owl:propertyChainAxiom``
+        (``p ∘ p ⊑ p``): a chain of exactly two elements that, with the result
+        property, all resolve to the same property. Longer self-chains
+        (``p ∘ p ∘ p ⊑ p``) do not imply transitivity and are ignored."""
+        base_uri = ontology.get("base_uri", "")
+        data_ns, sep = ReasoningService._namespace_parts(base_uri)
+        out: List[str] = []
+        for ax in ontology.get("axioms", []) or []:
+            if ax.get("type") != "propertyChain":
+                continue
+            chain = ax.get("chain") or []
+            result_ref = ax.get("resultProperty") or ax.get("subject") or ""
+            if len(chain) != 2 or not result_ref:
+                continue
+            uris = {
+                ReasoningService._resolve_axiom_prop_uri(r, data_ns, base_uri, sep)
+                for r in (result_ref, *chain)
+            }
+            if len(uris) == 1 and "" not in uris:
+                out.append(next(iter(uris)))
+        return out
+
+    @staticmethod
+    def _find_inverse_pairs_from_axioms(ontology: Dict) -> List[Tuple[str, str]]:
+        """Directed ``(property, inverse_property)`` URI pairs from
+        ``owl:inverseOf`` axioms (``subject`` inverse of each of ``objects``).
+
+        ``owl:inverseOf`` is symmetric, so each declared pair yields both
+        directions — ``(P, Q)`` and ``(Q, P)`` — deduplicated. URIs are
+        resolved to the data-namespace predicates stored in the triple store.
+        """
+        base_uri = ontology.get("base_uri", "")
+        data_ns, sep = ReasoningService._namespace_parts(base_uri)
+        pairs: List[Tuple[str, str]] = []
+        seen: set = set()
+        for ax in ontology.get("axioms", []) or []:
+            if ax.get("type") != "inverseOf":
+                continue
+            subj = ReasoningService._resolve_axiom_prop_uri(
+                ax.get("subject", ""), data_ns, base_uri, sep
+            )
+            if not subj:
+                continue
+            for obj_ref in ax.get("objects", []) or []:
+                obj = ReasoningService._resolve_axiom_prop_uri(
+                    obj_ref, data_ns, base_uri, sep
+                )
+                if not obj or obj == subj:
+                    continue
+                for a, b in ((subj, obj), (obj, subj)):
+                    if (a, b) not in seen:
+                        seen.add((a, b))
+                        pairs.append((a, b))
+        return pairs

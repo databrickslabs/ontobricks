@@ -666,7 +666,7 @@ class DigitalTwin:
         store: Any,
         graph_name: str,
     ) -> Dict[str, Any]:
-        """Return ``{instance_count}`` for *class_uri* in the live graph."""
+        """Return ``{instance_count}`` for *class_uri* in the Original Graph."""
         return self._cohort_service().class_stats(class_uri, store, graph_name)
 
     def cohort_edge_count(

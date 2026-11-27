@@ -46,6 +46,9 @@ const BuildCacheModule = (() => {
             { key: 'props', label: 'Properties' },
             { key: 'entity_search', label: 'Entity search' },
             { key: 'entity_search_asserted', label: 'Entity search (asserted)' },
+            { key: 'adj_out_asserted', label: 'Adjacency out (asserted)' },
+            { key: 'adj_in_asserted', label: 'Adjacency in (asserted)' },
+            { key: 'props_asserted', label: 'Properties (asserted)' },
         ];
         const byKey = {};
         (companions || []).forEach((item) => {

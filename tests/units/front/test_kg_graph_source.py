@@ -22,8 +22,8 @@ def test_query_and_chat_headers_include_graph_source() -> None:
     assert 'select_id="chatGraphSource"' in chat_header
     assert 'class="form-select' in shared
     assert "kg-graph-source" in shared
-    assert "Live graph (inferred)" in shared
-    assert "Live graph" in shared
+    assert "Certified Graph" in shared
+    assert "Original Graph" in shared
     assert "onclick=" not in query_header
     assert "onclick=" not in chat_header.split("onto-discuss-btn", 1)[0]
 

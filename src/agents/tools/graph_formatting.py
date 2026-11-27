@@ -388,8 +388,12 @@ def format_find_response(
     parts: list[str] = []
     parts.append(
         f"Found {seed_count} matching entit{'y' if seed_count == 1 else 'ies'} "
-        f"({total} triples across {unique_entities} entities, depth={depth})\n"
+        f"({total} triples across {unique_entities} entities, depth={depth})"
     )
+    type_summary = _entity_type_summary(triples)
+    if type_summary:
+        parts.append(f"Entity types reached (in this result): {type_summary}")
+    parts.append("")
 
     parts.append("── Matching Entities ──")
     for uri in seed_uris:
@@ -422,11 +426,27 @@ def format_find_response(
 
     if has_more:
         parts.append(
-            f"(Showing {len(triples)} of {total} triples — "
-            f"increase limit or use pagination for more)"
+            f"WARNING: (Showing {len(triples)} of {total} triples -- TRUNCATED. "
+            f"{total - len(triples)} triples are NOT in this result, so any "
+            f"total or count built from it may be incomplete.)"
         )
 
     return "\n".join(parts)
+
+
+def _entity_type_summary(triples: list[dict]) -> str:
+    """Return ``"Type (n), ..."`` counting distinct subjects per rdf:type.
+
+    Lets the LLM see which entity types a traversal actually reached, so an
+    aggregate answer can be checked against the types the question needs.
+    """
+    subjects_by_type: dict[str, set[str]] = {}
+    for t in triples:
+        if t.get("predicate") != RDF_TYPE or not is_uri(t.get("object", "")):
+            continue
+        subjects_by_type.setdefault(local_name(t["object"]), set()).add(t["subject"])
+    ordered = sorted(subjects_by_type.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    return ", ".join(f"{name} ({len(subs)})" for name, subs in ordered)
 
 
 def _format_graphql_entity(lines: list[str], entity: dict, indent: int = 0) -> None:

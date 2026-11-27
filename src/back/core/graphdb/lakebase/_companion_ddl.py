@@ -7,14 +7,20 @@ Postgres layout per graph version:
   In ``managed_synced`` it is read-only, populated by Lakeflow.
   In ``app_managed`` it is populated by the app during build (streaming from
   the Delta warehouse view) and is otherwise read-only post-build.
-- ``g_<dom>_v<n>__app``  -- writable companion (reasoning + cohort writes).
-- ``g_<dom>_v<n>``       -- union view that readers query (back-compat name).
+- ``g_<dom>_v<n>__overrides`` -- writable overrides table (see
+  ``back.core.graphdb.overrides``): derived rows (reasoning, cohorts,
+  communities) and user edits, each row an ``add`` or a ``del`` of a triple.
+- ``g_<dom>_v<n>``       -- union view that readers query (back-compat name):
+  ``(_sync UNION add rows) MINUS del rows``.
+- ``g_<dom>_v<n>_asserted`` -- the same without derived rows, for the
+  asserted-only reads (search cache, analytics).
 
 The synced table mirrors the source Delta view's columns
-(``subject``, ``predicate``, ``object``); the companion carries the full
-``(subject, predicate, object, datatype, lang)`` shape used by reasoning
-output. The union view casts NULL ``datatype`` / ``lang`` for the synced
-side so SPARQL / KG-search readers see a uniform schema.
+(``subject``, ``predicate``, ``object``); the overrides table carries the full
+``(subject, predicate, object, datatype, lang)`` shape plus ``op`` / ``origin``
+/ ``change_id`` / ``author`` / ``created_at``. The views cast NULL ``datatype``
+/ ``lang`` for the synced side so SPARQL / KG-search readers see a uniform
+schema. The legacy ``__app`` companion is read once, to seed ``__overrides``.
 """
 
 from __future__ import annotations
@@ -43,6 +49,26 @@ _TRIPLE_TABLE_COLUMNS = """
             PRIMARY KEY (subject, predicate, object_hash)
 """
 
+# Overrides table: one row per (triple, op). ``op`` is part of the key so a ``del``
+# row can coexist with a derived ``add`` row of the same triple (a user deleting a
+# reasoned triple); the stores keep user ``add`` and ``del`` rows exclusive.
+_OVERRIDE_TABLE_COLUMNS = """
+            subject TEXT NOT NULL,
+            predicate TEXT NOT NULL,
+            object TEXT NOT NULL,
+            object_hash BYTEA GENERATED ALWAYS AS (
+                digest(coalesce(object, ''), 'sha256')
+            ) STORED,
+            datatype TEXT,
+            lang TEXT,
+            op TEXT NOT NULL DEFAULT 'add',
+            origin TEXT NOT NULL DEFAULT 'reasoning',
+            change_id TEXT,
+            author TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            PRIMARY KEY (subject, predicate, object_hash, op)
+"""
+
 _TRIPLE_TABLE_INDEXES: tuple[tuple[str, str], ...] = (
     ("sp", "subject, predicate"),
     ("po", "predicate, object_hash"),
@@ -64,8 +90,20 @@ def synced_phy(name: str) -> str:
 
 
 def companion_phy(name: str) -> str:
-    """Postgres table name for the writable companion table."""
+    """Postgres table name for the writable overrides table (the "companion")."""
+    return f"{_safe(name)}__overrides"
+
+
+def legacy_companion_phy(name: str) -> str:
+    """Postgres name of the pre-overrides ``__app`` companion (migration source)."""
     return f"{_safe(name)}__app"
+
+
+def asserted_phy(name: str) -> str:
+    """Postgres view name of the asserted graph (no derived rows)."""
+    suffix = "_asserted"
+    stem = view_phy(name)[: _PG_IDENTIFIER_MAX_BYTES - len(suffix)]
+    return f"{stem}{suffix}"
 
 
 def view_phy(name: str) -> str:
@@ -196,7 +234,7 @@ def backfill_sim_overlay_keys(cur: Any, sandbox: str, overlay: str) -> None:
 def ensure_sim_union_view(
     cur: Any, view: str, live: str, sandbox: str, overlay: str
 ) -> None:
-    """Live graph UNION sandbox, overlaying predicates the sandbox has owned.
+    """Original Graph UNION sandbox, overlaying predicates the sandbox has owned.
 
     Overlay keys live in *overlay* (``__smp_``), not remaining sandbox rows, so
     a last-value ``remove`` still hides the live triple.
@@ -414,12 +452,14 @@ def ensure_graph_indexes(cur: Any, table_ref: str) -> None:
         )
 
 
-def _create_triple_table(cur: Any, schema: str, table: str) -> None:
+def _create_triple_table(
+    cur: Any, schema: str, table: str, columns: str = _TRIPLE_TABLE_COLUMNS
+) -> None:
     cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
     cur.execute(
         f"""
         CREATE TABLE IF NOT EXISTS {table} (
-        {_TRIPLE_TABLE_COLUMNS}
+        {columns}
         )
         """
     )
@@ -473,31 +513,48 @@ def drop_synced(cur: Any, synced: str) -> None:
     )
 
 
-def ensure_companion(cur: Any, schema: str, companion: str) -> None:
-    """Create the writable companion table + standard B-tree indexes if absent."""
-    ensure_pgcrypto(cur)
-    _create_triple_table(cur, schema, companion)
-
-
-def ensure_union_view(
+def ensure_companion(
     cur: Any,
-    view: str,
-    synced: str,
+    schema: str,
     companion: str,
-) -> None:
-    """``CREATE OR REPLACE`` the union view that readers query.
+    *,
+    legacy: str = "",
+    origin_expr: str = "'reasoning'",
+) -> bool:
+    """Create the writable overrides table + standard B-tree indexes if absent.
 
-    The synced side is NULL-padded for ``datatype`` / ``lang`` so the view
-    has a uniform 5-column shape regardless of which side a row came from.
-
-    If ``view`` already exists as a TABLE (e.g. from an old app-managed build
-    before the managed_synced migration), it is dropped first — Postgres's
-    ``CREATE OR REPLACE VIEW`` cannot replace a table with a view.
+    Returns ``True`` when the table was created. A table created here is seeded
+    from the legacy ``__app`` companion *legacy* (when it exists), each row
+    becoming a derived ``add`` row whose ``origin`` is *origin_expr* (a SQL
+    expression over the row), so no derived triple disappears on upgrade. The
+    legacy table is left untouched.
     """
-    # Drop any stale TABLE that occupies the view name before (re)creating the view.
-    # ``CREATE OR REPLACE VIEW`` cannot replace a table — it only replaces views.
-    # We check pg_class using the unqualified name and the current search_path schema
-    # so this works regardless of whether the caller schema-qualifies the name.
+    ensure_pgcrypto(cur)
+    existed = relation_exists(cur, companion)
+    _create_triple_table(cur, schema, companion, _OVERRIDE_TABLE_COLUMNS)
+    if existed:
+        return False
+    if legacy and relation_exists(cur, legacy):
+        cur.execute(
+            f"INSERT INTO {companion} "
+            "(subject, predicate, object, datatype, lang, op, origin) "
+            f"SELECT subject, predicate, object, datatype, lang, 'add', {origin_expr} "
+            f"FROM {legacy} ON CONFLICT DO NOTHING"
+        )
+    return True
+
+
+def _not_hidden(alias: str, companion: str) -> str:
+    """``NOT EXISTS`` predicate: no ``del`` row hides the triple of *alias*."""
+    return (
+        f"NOT EXISTS (SELECT 1 FROM {companion} d WHERE d.op = 'del' "
+        f"AND d.subject = {alias}.subject AND d.predicate = {alias}.predicate "
+        f"AND d.object = {alias}.object)"
+    )
+
+
+def _drop_table_in_the_way(cur: Any, view: str) -> None:
+    """Drop a stale TABLE occupying *view*'s name (``CREATE OR REPLACE VIEW`` cannot)."""
     bare_name = view.split(".")[-1].strip('"')
     cur.execute(
         "DO $$ BEGIN "
@@ -513,20 +570,56 @@ def ensure_union_view(
         "  END IF; "
         "END $$"
     )
-    sql = (
+
+
+def union_view_sql(view: str, synced: str, companion: str, *, asserted: bool) -> str:
+    """Effective-graph (or asserted-graph) view over ``_sync`` and the overrides.
+
+    ``(synced UNION add rows) MINUS del rows``. The synced side is NULL-padded for
+    ``datatype`` / ``lang`` so the view has a uniform 5-column shape. With
+    *asserted* only the user ``add`` rows are kept (no derived triples).
+    """
+    add_filter = "a.op = 'add'" + (" AND a.origin = 'user'" if asserted else "")
+    return (
         f"CREATE OR REPLACE VIEW {view} AS "
-        f"SELECT subject, predicate, object, "
+        f"SELECT s.subject, s.predicate, s.object, "
         f"NULL::TEXT AS datatype, NULL::TEXT AS lang "
-        f"FROM {synced} "
+        f"FROM {synced} s WHERE {_not_hidden('s', companion)} "
         f"UNION ALL "
-        f"SELECT subject, predicate, object, datatype, lang FROM {companion}"
+        f"SELECT a.subject, a.predicate, a.object, a.datatype, a.lang "
+        f"FROM {companion} a WHERE {add_filter} AND {_not_hidden('a', companion)}"
     )
-    cur.execute(sql)
 
 
-def truncate_companion(cur: Any, companion: str) -> None:
-    """Drop all rows from the companion table (used on full rebuild)."""
-    cur.execute(f"TRUNCATE TABLE {companion}")
+def ensure_union_view(
+    cur: Any,
+    view: str,
+    synced: str,
+    companion: str,
+    asserted_view: str = "",
+) -> None:
+    """``CREATE OR REPLACE`` the union view that readers query.
+
+    When *asserted_view* is given, the asserted view (no derived rows) is
+    created alongside.
+
+    If ``view`` already exists as a TABLE (e.g. from an old app-managed build
+    before the managed_synced migration), it is dropped first — Postgres's
+    ``CREATE OR REPLACE VIEW`` cannot replace a table with a view.
+    """
+    _drop_table_in_the_way(cur, view)
+    cur.execute(union_view_sql(view, synced, companion, asserted=False))
+    if asserted_view:
+        cur.execute(union_view_sql(asserted_view, synced, companion, asserted=True))
+
+
+def clear_derived(cur: Any, companion: str) -> int:
+    """Delete the derived rows of *companion*, keeping every ``user`` row.
+
+    Used on a full rebuild and on purge. Returns the number of rows deleted.
+    """
+    cur.execute(f"DELETE FROM {companion} WHERE origin <> 'user'")
+    return cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
 
 
 def drop_companion(cur: Any, companion: str) -> None:

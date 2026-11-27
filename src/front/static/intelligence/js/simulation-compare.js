@@ -1,5 +1,5 @@
 /**
- * Simulation Compare — overlays a ready sandbox on the current live graph
+ * Simulation Compare — overlays a ready sandbox on the current Original Graph
  * (inferred or asserted only), restricted to the scenario scope. Nodes and
  * edges are colour-coded unchanged / added (sandbox only) / removed (live only).
  */
@@ -209,7 +209,7 @@ const SimulationCompare = {
         if (note) {
             const asserted = data.include_inferred === false;
             const parts = [];
-            if (!(data.nodes || []).length) parts.push('Nothing to draw: the sandbox and the live graph have no triple in this scope.');
+            if (!(data.nodes || []).length) parts.push('Nothing to draw: the sandbox and the Original Graph have no triple in this scope.');
             if (asserted) parts.push('Compared with asserted triples only: inferences already present in the sandbox appear as added.');
             note.textContent = parts.join(' ');
             note.classList.toggle('d-none', !parts.length);

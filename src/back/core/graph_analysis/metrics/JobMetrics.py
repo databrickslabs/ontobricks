@@ -99,23 +99,33 @@ def resolve_analytics_source(domain: Any, settings: Any) -> Tuple[str, str]:
 def analytics_snapshot(domain: Any, settings: Any, source_table: str) -> Iterator[str]:
     """Yield a table the analytics job can scan repeatedly, cleaning up after.
 
-    In the default materialization ``source_table`` is already a Delta table
-    and this yields it unchanged. Under view-only materialization it is a
-    pass-through view over the R2RML gateway, and the job's iterative BFS would
-    re-run that whole query on every scan — so a disposable snapshot is
-    materialized for the run and dropped on the way out, including when the run
-    raises.
+    In the default materialization, with no user override, ``source_table`` is
+    already a Delta table and this yields it unchanged. Under view-only
+    materialization it is a pass-through view over the R2RML gateway, and the
+    job's iterative BFS would re-run that whole query on every scan — so a
+    disposable snapshot is materialized for the run and dropped on the way out,
+    including when the run raises.
+
+    Once users have overridden triples, the job must score the *asserted* graph
+    (mapped triples plus user overrides, no derived triples). That graph is a
+    VIEW, so it is snapshotted the same way, in either materialization.
 
     A failure to drop is logged rather than raised: the run's result matters
     more than the leftover, which Settings → Lakehouse lists for purging.
     """
     from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-    if GraphDBFactory.resolve_lakehouse_materialization(domain, settings) != "view":
+    builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+    view_only = (
+        GraphDBFactory.resolve_lakehouse_materialization(domain, settings) == "view"
+    )
+    overridden = bool(builder.has_client() and builder.has_user_overrides())
+    if overridden:
+        source_table = builder.asserted_view_fqn() or source_table
+    if not (view_only or overridden):
         yield source_table
         return
 
-    builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
     snapshot = builder.analytics_snapshot_fqn()
     if not snapshot or not builder.has_client():
         raise InfrastructureError(
