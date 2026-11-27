@@ -21,9 +21,17 @@ def test_data_plane_client_binds_user_token(monkeypatch):
     H = importlib.import_module("back.core.helpers.DatabricksHelpers")
 
     class _FakeClient:
-        def __init__(self, host="", token="", warehouse_id="", use_cloud_fetch=False):
+        def __init__(
+            self,
+            host="",
+            token="",
+            warehouse_id="",
+            use_cloud_fetch=False,
+            on_behalf_of=False,
+        ):
             self.token = token
             self.warehouse_id = warehouse_id
+            self.on_behalf_of = on_behalf_of
 
     monkeypatch.setattr(H._databricks, "is_databricks_app", lambda: True)
     monkeypatch.setattr(H._databricks, "DatabricksClient", _FakeClient)
@@ -47,3 +55,5 @@ def test_data_plane_client_binds_user_token(monkeypatch):
         reset_request_identity(tok)
 
     assert client.token == "UT"
+    # The token must win over the app service principal (see DatabricksAuth).
+    assert client.on_behalf_of is True

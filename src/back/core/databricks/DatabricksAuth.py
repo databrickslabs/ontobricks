@@ -158,8 +158,13 @@ class DatabricksAuth:
         warehouse_id: Optional[str] = None,
         use_cloud_fetch: Optional[bool] = None,
         use_sea: Optional[bool] = None,
+        on_behalf_of: bool = False,
     ) -> None:
         self.token = token or os.getenv("DATABRICKS_TOKEN", "")
+        # An explicit caller token (the Apps-forwarded user token) must win
+        # over the app's service-principal credentials, or "on-behalf-of"
+        # reads silently run as the app.
+        self.on_behalf_of = bool(on_behalf_of and token)
         self.warehouse_id = (
             warehouse_id
             or os.getenv("DATABRICKS_SQL_WAREHOUSE_ID", "")
@@ -216,9 +221,19 @@ class DatabricksAuth:
             )
 
     @property
+    def uses_app_credentials(self) -> bool:
+        """Authenticate as the app service principal (not when acting for a caller)."""
+        return bool(
+            self.is_app_mode
+            and self.client_id
+            and self.client_secret
+            and not self.on_behalf_of
+        )
+
+    @property
     def auth_mode(self) -> str:
         """Resolved auth mode: ``"app"``, ``"pat"``, ``"cli"``, or ``"none"``."""
-        if self.is_app_mode and self.client_id and self.client_secret:
+        if self.uses_app_credentials:
             return "app"
         if self.token:
             return "pat"
@@ -271,7 +286,7 @@ class DatabricksAuth:
 
     def get_auth_headers(self) -> dict:
         """Return ``Authorization`` + ``Content-Type`` headers for REST calls."""
-        if self.is_app_mode and self.client_id and self.client_secret:
+        if self.uses_app_credentials:
             token = self.get_oauth_token()
             return {
                 "Authorization": f"Bearer {token}",
@@ -311,7 +326,7 @@ class DatabricksAuth:
         params["use_cloud_fetch"] = self.can_use_cloud_fetch()
         if self.use_kernel:
             params["use_kernel"] = True
-        if self.is_app_mode and self.client_id and self.client_secret:
+        if self.uses_app_credentials:
             params["credentials_provider"] = self._oauth_credentials_provider
         elif self.token:
             params["access_token"] = self.token
@@ -405,7 +420,7 @@ class DatabricksAuth:
             }
             if self.use_kernel:
                 probe_params["use_kernel"] = True
-            if self.is_app_mode and self.client_id and self.client_secret:
+            if self.uses_app_credentials:
                 probe_params["access_token"] = self.get_oauth_token()
             elif self.token:
                 probe_params["access_token"] = self.token
@@ -437,6 +452,8 @@ class DatabricksAuth:
 
     def has_valid_auth(self) -> bool:
         """Return *True* when usable credentials are available."""
+        if self.on_behalf_of:
+            return True
         if self.is_app_mode:
             return bool(self.client_id and self.client_secret)
         if self.token:

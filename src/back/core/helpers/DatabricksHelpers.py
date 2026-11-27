@@ -555,6 +555,7 @@ class DatabricksHelpers:
             token=identity.user_token,
             warehouse_id=warehouse_id,
             use_cloud_fetch=use_cloud_fetch,
+            on_behalf_of=True,
         )
 
     @staticmethod
