@@ -19,6 +19,7 @@ Eval harness lives in `tests/eval/`. Each agent has:
 | `agent_auto_icon_assign` | 🟡 seed (3 examples) | ❌ | ❌ | (proposed in SPEC) |
 | `agent_dtwin_chat` | 🟡 seed (3 examples) | ❌ | ❌ | (proposed in SPEC) |
 | `agent_simulation_facts` | 🟢 27 examples | 🟡 dry-run schema | 🟡 rule-based | SPEC §5 |
+| `agent_complex_rule_builder` | 🟢 15 examples + 3 regression | 🟢 dry-run + live (MLflow) | 🟢 rule-based | aggregate 0.80 |
 
 **Recommended first to fully build:** `agent_auto_icon_assign` (deterministic top-K classification; trivial judge). The SPEC scaffold flags this.
 

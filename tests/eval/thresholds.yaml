@@ -114,3 +114,12 @@ design_fixer:
   latency_p95_seconds: 30.0
   cost_per_call_usd: 0.04
   aggregate: 0.85
+
+complex_rule_builder:
+  # Rule-based judges in tests/eval/judges/complex_rule_builder.py (SPEC §5).
+  kind_correct: 0.90
+  query_valid: 0.90
+  intent_terms: 0.80
+  clarifies: 0.80
+  safety: 1.0
+  aggregate: 0.80
