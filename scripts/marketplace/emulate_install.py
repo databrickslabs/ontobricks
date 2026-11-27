@@ -70,7 +70,9 @@ def validate_branch(branch: str) -> str:
     return branch
 
 
-def build_resources(warehouse_id: str, branch: str, database_segment: str | None) -> list[dict]:
+def build_resources(
+    warehouse_id: str, branch: str, database_segment: str | None
+) -> list[dict]:
     """Return the app ``resources`` array, named as in ``marketplace/manifest.yaml``."""
     validate_branch(branch)
     if not database_segment:
@@ -97,7 +99,9 @@ def manifest_user_scopes(manifest_path: Path) -> list[str]:
     """``user_api_scopes`` a Marketplace install would grant (from manifest.yaml)."""
     import yaml
 
-    return list((yaml.safe_load(manifest_path.read_text()) or {}).get("user_api_scopes") or [])
+    return list(
+        (yaml.safe_load(manifest_path.read_text()) or {}).get("user_api_scopes") or []
+    )
 
 
 def workspace_source_path(user: str, app_name: str) -> str:
@@ -123,23 +127,41 @@ def install_commands(
     scopes = list(user_scopes or [])
     if exists:
         bind = [
-            "databricks", "apps", "create-update", app_name,
-            "--json", json.dumps({
-                "update_mask": "resources,user_api_scopes",
-                "app": {"resources": resources, "user_api_scopes": scopes},
-            }),
+            "databricks",
+            "apps",
+            "create-update",
+            app_name,
+            "--json",
+            json.dumps(
+                {
+                    "update_mask": "resources,user_api_scopes",
+                    "app": {"resources": resources, "user_api_scopes": scopes},
+                }
+            ),
         ]
     else:
         bind = [
-            "databricks", "apps", "create",
-            "--json", json.dumps({
-                "name": app_name,
-                "description": TEST_APP_DESCRIPTION,
-                "resources": resources,
-                "user_api_scopes": scopes,
-            }),
+            "databricks",
+            "apps",
+            "create",
+            "--json",
+            json.dumps(
+                {
+                    "name": app_name,
+                    "description": TEST_APP_DESCRIPTION,
+                    "resources": resources,
+                    "user_api_scopes": scopes,
+                }
+            ),
         ]
-    deploy = ["databricks", "apps", "deploy", app_name, "--source-code-path", source_path]
+    deploy = [
+        "databricks",
+        "apps",
+        "deploy",
+        app_name,
+        "--source-code-path",
+        source_path,
+    ]
     return [bind + ["--profile", profile], deploy + ["--profile", profile]]
 
 
@@ -156,14 +178,18 @@ def _load(name: str, path: Path):
     return module
 
 
-def _cli(argv: list[str], *, dry_run: bool = False, check: bool = True) -> subprocess.CompletedProcess:
+def _cli(
+    argv: list[str], *, dry_run: bool = False, check: bool = True
+) -> subprocess.CompletedProcess:
     shown = " ".join(a if len(a) < 120 else a[:117] + "..." for a in argv)
     print(f"$ {shown}", flush=True)
     if dry_run:
         return subprocess.CompletedProcess(argv, 0, "", "")
     # cwd=temp dir: `apps deploy` switches to its project pipeline when run
     # next to a databricks.yml (the repo root has one).
-    return subprocess.run(argv, check=check, text=True, capture_output=True, cwd=tempfile.gettempdir())
+    return subprocess.run(
+        argv, check=check, text=True, capture_output=True, cwd=tempfile.gettempdir()
+    )
 
 
 def _json(argv: list[str]) -> dict:
@@ -171,29 +197,67 @@ def _json(argv: list[str]) -> dict:
 
 
 def _resolve_database(profile: str, branch: str, requested: str) -> str:
-    resolver = _load("lakebase_resolve_db", REPO_ROOT / "scripts" / "_internal" / "_lakebase-resolve-db.py")
-    raw = _cli(["databricks", "postgres", "list-databases", branch, "-o", "json", "--profile", profile]).stdout
+    resolver = _load(
+        "lakebase_resolve_db",
+        REPO_ROOT / "scripts" / "_internal" / "_lakebase-resolve-db.py",
+    )
+    raw = _cli(
+        [
+            "databricks",
+            "postgres",
+            "list-databases",
+            branch,
+            "-o",
+            "json",
+            "--profile",
+            profile,
+        ]
+    ).stdout
     hit = resolver.resolve(requested, raw)
     if hit is None:
-        raise SystemExit(f"ERROR: no database {requested!r} on {branch}. Check: databricks postgres list-databases {branch}")
+        raise SystemExit(
+            f"ERROR: no database {requested!r} on {branch}. Check: databricks postgres list-databases {branch}"
+        )
     return hit[0]
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Emulate a Marketplace install of the assembled app.")
-    p.add_argument("--profile", required=True, help="Databricks CLI profile (required, never defaulted)")
+    p = argparse.ArgumentParser(
+        description="Emulate a Marketplace install of the assembled app."
+    )
+    p.add_argument(
+        "--profile",
+        required=True,
+        help="Databricks CLI profile (required, never defaulted)",
+    )
     p.add_argument("--app-name", default=DEFAULT_APP_NAME)
     p.add_argument("--warehouse-id", required=True)
-    p.add_argument("--lakebase-branch", required=True, help="projects/<project>/branches/<branch>")
-    p.add_argument("--lakebase-database", default="databricks_postgres", help="Postgres datname or db-… id")
-    p.add_argument("--grant-self", action="store_true", help="also grant the app SP CAN_MANAGE on its own app")
-    p.add_argument("--dry-run", action="store_true", help="print the CLI calls, change nothing")
+    p.add_argument(
+        "--lakebase-branch", required=True, help="projects/<project>/branches/<branch>"
+    )
+    p.add_argument(
+        "--lakebase-database",
+        default="databricks_postgres",
+        help="Postgres datname or db-… id",
+    )
+    p.add_argument(
+        "--grant-self",
+        action="store_true",
+        help="also grant the app SP CAN_MANAGE on its own app",
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="print the CLI calls, change nothing"
+    )
     args = p.parse_args(argv)
 
     try:
         app_name = validate_app_name(args.app_name)
         branch = validate_branch(args.lakebase_branch)
-        segment = "db-DRYRUN" if args.dry_run else _resolve_database(args.profile, branch, args.lakebase_database)
+        segment = (
+            "db-DRYRUN"
+            if args.dry_run
+            else _resolve_database(args.profile, branch, args.lakebase_database)
+        )
         resources = build_resources(args.warehouse_id, args.lakebase_branch, segment)
         user_scopes = manifest_user_scopes(REPO_ROOT / "marketplace" / "manifest.yaml")
     except ValueError as exc:
@@ -206,7 +270,9 @@ def main(argv: list[str] | None = None) -> int:
     # redeploying from the test folder would break a real deployment.
     existing = None
     if not args.dry_run:
-        got = _cli(["databricks", "apps", "get", app_name, "-o", "json", *prof], check=False)
+        got = _cli(
+            ["databricks", "apps", "get", app_name, "-o", "json", *prof], check=False
+        )
         if got.returncode == 0:
             existing = json.loads(got.stdout or "{}")
     if existing is not None and not may_replace(existing):
@@ -218,18 +284,48 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     exists = existing is not None
 
-    assemble = _load("marketplace_assemble", REPO_ROOT / "scripts" / "marketplace" / "assemble.py")
-    folder = assemble.assemble(REPO_ROOT, Path(tempfile.mkdtemp(prefix="ontobricks-mp-")))
+    assemble = _load(
+        "marketplace_assemble", REPO_ROOT / "scripts" / "marketplace" / "assemble.py"
+    )
+    folder = assemble.assemble(
+        REPO_ROOT, Path(tempfile.mkdtemp(prefix="ontobricks-mp-"))
+    )
     print(f"Assembled {folder}")
 
-    user = "<you>" if args.dry_run else _json(["databricks", "current-user", "me", "-o", "json", *prof])["userName"]
+    user = (
+        "<you>"
+        if args.dry_run
+        else _json(["databricks", "current-user", "me", "-o", "json", *prof])[
+            "userName"
+        ]
+    )
     src = workspace_source_path(user, app_name)
-    _cli(["databricks", "workspace", "delete", src, "--recursive", *prof], dry_run=args.dry_run, check=False)
+    _cli(
+        ["databricks", "workspace", "delete", src, "--recursive", *prof],
+        dry_run=args.dry_run,
+        check=False,
+    )
     _cli(["databricks", "workspace", "mkdirs", src, *prof], dry_run=args.dry_run)
-    _cli(["databricks", "workspace", "import-dir", str(folder), src, "--overwrite", *prof], dry_run=args.dry_run)
+    _cli(
+        [
+            "databricks",
+            "workspace",
+            "import-dir",
+            str(folder),
+            src,
+            "--overwrite",
+            *prof,
+        ],
+        dry_run=args.dry_run,
+    )
 
     for cmd in install_commands(
-        args.profile, app_name, src, exists=exists, resources=resources, user_scopes=user_scopes
+        args.profile,
+        app_name,
+        src,
+        exists=exists,
+        resources=resources,
+        user_scopes=user_scopes,
     ):
         result = _cli(cmd, dry_run=args.dry_run, check=False)
         if result.returncode != 0:
@@ -237,17 +333,42 @@ def main(argv: list[str] | None = None) -> int:
             return result.returncode
 
     if args.grant_self and not args.dry_run:
-        sp = _json(["databricks", "apps", "get", app_name, "-o", "json", *prof]).get("service_principal_client_id")
-        acl = {"access_control_list": [{"service_principal_name": sp, "permission_level": "CAN_MANAGE"}]}
-        _cli(["databricks", "apps", "update-permissions", app_name, "--json", json.dumps(acl), *prof])
+        sp = _json(["databricks", "apps", "get", app_name, "-o", "json", *prof]).get(
+            "service_principal_client_id"
+        )
+        acl = {
+            "access_control_list": [
+                {"service_principal_name": sp, "permission_level": "CAN_MANAGE"}
+            ]
+        }
+        _cli(
+            [
+                "databricks",
+                "apps",
+                "update-permissions",
+                app_name,
+                "--json",
+                json.dumps(acl),
+                *prof,
+            ]
+        )
 
-    url = "" if args.dry_run else _json(["databricks", "apps", "get", app_name, "-o", "json", *prof]).get("url", "")
+    url = (
+        ""
+        if args.dry_run
+        else _json(["databricks", "apps", "get", app_name, "-o", "json", *prof]).get(
+            "url", ""
+        )
+    )
     print(f"\nDeployed {app_name}: {url or '(see the Apps page)'}")
     print("Test checklist (PLAN.md, Task 6 Step 1):")
     print("  1. App starts; /health is not status=error")
     print("  2. Settings > Registry > Initialize succeeds (runs as the app SP)")
-    print("  3. A second, non-admin user with CAN_USE can open it" + ("" if args.grant_self else "  <- answers Q4"))
-    print("  4. POST /settings/save with {\"token\": \"x\"} returns 400")
+    print(
+        "  3. A second, non-admin user with CAN_USE can open it"
+        + ("" if args.grant_self else "  <- answers Q4")
+    )
+    print('  4. POST /settings/save with {"token": "x"} returns 400')
     return 0
 
 

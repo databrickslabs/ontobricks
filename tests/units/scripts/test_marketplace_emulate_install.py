@@ -52,7 +52,9 @@ class TestBuildResources:
         # 0.10.x keeps no domain artefacts on a UC Volume.
         assert "volume" not in _names(mod.build_resources("wh1", _BRANCH, "db-abc"))
 
-    @pytest.mark.parametrize("bad", [None, "", "ontobricks-mp", "projects/p", "projects/p/branch/b"])
+    @pytest.mark.parametrize(
+        "bad", [None, "", "ontobricks-mp", "projects/p", "projects/p/branch/b"]
+    )
     def test_rejects_malformed_branch_path(self, bad):
         with pytest.raises(ValueError, match="projects/<project>/branches/<branch>"):
             mod.build_resources("wh1", bad, "db-abc")
@@ -65,14 +67,31 @@ class TestBuildResources:
 class TestUserScopes:
     def test_scopes_come_from_the_manifest(self):
         manifest = yaml.safe_load((_ROOT / "marketplace" / "manifest.yaml").read_text())
-        assert mod.manifest_user_scopes(_ROOT / "marketplace" / "manifest.yaml") == manifest["user_api_scopes"]
+        assert (
+            mod.manifest_user_scopes(_ROOT / "marketplace" / "manifest.yaml")
+            == manifest["user_api_scopes"]
+        )
 
     def test_new_app_is_created_with_the_scopes(self):
-        cmds = mod.install_commands("prof", "ob-mp", "/Workspace/x", exists=False, resources=[], user_scopes=["sql"])
+        cmds = mod.install_commands(
+            "prof",
+            "ob-mp",
+            "/Workspace/x",
+            exists=False,
+            resources=[],
+            user_scopes=["sql"],
+        )
         assert json.loads(cmds[0][4])["user_api_scopes"] == ["sql"]
 
     def test_existing_app_gets_resources_and_scopes_by_mask(self):
-        cmds = mod.install_commands("prof", "ob-mp", "/Workspace/x", exists=True, resources=[], user_scopes=["sql"])
+        cmds = mod.install_commands(
+            "prof",
+            "ob-mp",
+            "/Workspace/x",
+            exists=True,
+            resources=[],
+            user_scopes=["sql"],
+        )
         body = json.loads(cmds[0][cmds[0].index("--json") + 1])
         assert body["update_mask"] == "resources,user_api_scopes"
         assert body["app"]["user_api_scopes"] == ["sql"]
@@ -92,41 +111,56 @@ class TestAppName:
 class TestWorkspacePath:
     def test_path_is_scoped_to_a_test_folder(self):
         path = mod.workspace_source_path("me@databricks.com", "ob-mp")
-        assert path == "/Workspace/Users/me@databricks.com/ontobricks-marketplace-test/ob-mp"
+        assert (
+            path
+            == "/Workspace/Users/me@databricks.com/ontobricks-marketplace-test/ob-mp"
+        )
 
 
 class TestReplaceGuard:
     def test_app_created_by_this_helper_may_be_replaced(self):
-        assert mod.may_replace({"name": "ob-mp", "description": mod.TEST_APP_DESCRIPTION})
+        assert mod.may_replace(
+            {"name": "ob-mp", "description": mod.TEST_APP_DESCRIPTION}
+        )
 
     @pytest.mark.parametrize("desc", ["OntoBricks (development sandbox app)", "", None])
     def test_any_other_app_is_protected(self, desc):
         assert not mod.may_replace({"name": "ontobricks", "description": desc})
 
     def test_new_app_uses_the_test_description(self):
-        cmds = mod.install_commands("prof", "ob-mp", "/Workspace/x", exists=False, resources=[])
+        cmds = mod.install_commands(
+            "prof", "ob-mp", "/Workspace/x", exists=False, resources=[]
+        )
         assert json.loads(cmds[0][4])["description"] == mod.TEST_APP_DESCRIPTION
 
 
 class TestCommandPlan:
     def test_new_app_is_created_with_name_and_resources_in_json(self):
         # The CLI rejects a positional NAME when --json is given.
-        cmds = mod.install_commands("prof", "ob-mp", "/Workspace/x", exists=False, resources=[{"name": "r"}])
+        cmds = mod.install_commands(
+            "prof", "ob-mp", "/Workspace/x", exists=False, resources=[{"name": "r"}]
+        )
         assert cmds[0][:4] == ["databricks", "apps", "create", "--json"]
         body = json.loads(cmds[0][4])
         assert body["name"] == "ob-mp" and body["resources"] == [{"name": "r"}]
 
     def test_every_command_carries_the_profile(self):
-        cmds = mod.install_commands("prof", "ob-mp", "/Workspace/x", exists=False, resources=[])
+        cmds = mod.install_commands(
+            "prof", "ob-mp", "/Workspace/x", exists=False, resources=[]
+        )
         assert all(c[c.index("--profile") + 1] == "prof" for c in cmds)
 
     def test_existing_app_gets_resources_replaced_by_mask(self):
-        cmds = mod.install_commands("prof", "ob-mp", "/Workspace/x", exists=True, resources=[{"name": "r"}])
+        cmds = mod.install_commands(
+            "prof", "ob-mp", "/Workspace/x", exists=True, resources=[{"name": "r"}]
+        )
         assert cmds[0][:4] == ["databricks", "apps", "create-update", "ob-mp"]
         body = json.loads(cmds[0][cmds[0].index("--json") + 1])
         assert body["app"]["resources"] == [{"name": "r"}]
 
     def test_last_command_deploys_from_workspace_path(self):
-        cmds = mod.install_commands("prof", "ob-mp", "/Workspace/x", exists=False, resources=[])
+        cmds = mod.install_commands(
+            "prof", "ob-mp", "/Workspace/x", exists=False, resources=[]
+        )
         assert cmds[-1][:4] == ["databricks", "apps", "deploy", "ob-mp"]
         assert cmds[-1][cmds[-1].index("--source-code-path") + 1] == "/Workspace/x"

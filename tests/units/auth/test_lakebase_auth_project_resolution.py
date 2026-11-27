@@ -64,7 +64,9 @@ def _endpoints(branch_path: str, host: str) -> dict:
 
 def _matching_branch_routes() -> dict:
     return {
-        ("GET", f"/api/2.0/postgres/{_BRANCH_PATH}/endpoints"): _endpoints(_BRANCH_PATH, _HOST),
+        ("GET", f"/api/2.0/postgres/{_BRANCH_PATH}/endpoints"): _endpoints(
+            _BRANCH_PATH, _HOST
+        ),
         ("POST", "/api/2.0/postgres/credentials"): {"token": _TOKEN},
     }
 
@@ -186,7 +188,9 @@ class TestTolerantWalk:
             ("GET", f"/api/2.0/postgres/projects/{_PROJECT}/branches"): {
                 "branches": [{"name": broken_branch}, {"name": _BRANCH_PATH}]
             },
-            ("GET", f"/api/2.0/postgres/{broken_branch}/endpoints"): NotFound("branch gone"),
+            ("GET", f"/api/2.0/postgres/{broken_branch}/endpoints"): NotFound(
+                "branch gone"
+            ),
         }
 
         assert _auth_with(_FakeAPI(routes)).instance_name == _PROJECT
@@ -195,7 +199,9 @@ class TestTolerantWalk:
         monkeypatch.setenv("PGHOST", "unmatched-host.example.invalid")
         auth = _auth_with(_FakeAPI(_walk_routes()))
 
-        with pytest.raises(ValidationError, match="No Lakebase Autoscaling endpoint matched"):
+        with pytest.raises(
+            ValidationError, match="No Lakebase Autoscaling endpoint matched"
+        ):
             _ = auth.instance_name
 
     def test_password_mints_for_walk_matched_endpoint(self):
@@ -210,7 +216,9 @@ class TestFailedLookup:
     def test_transient_api_error_is_not_skipped(self):
         routes = {
             **_walk_routes(),
-            ("GET", "/api/2.0/postgres/projects/deleted/branches"): RuntimeError("503 unavailable"),
+            ("GET", "/api/2.0/postgres/projects/deleted/branches"): RuntimeError(
+                "503 unavailable"
+            ),
         }
         auth = _auth_with(_FakeAPI(routes))
 
@@ -261,10 +269,51 @@ class TestHostFromEnvBranch:
 
         _ = auth.host
         assert auth.password() == _TOKEN
-        assert api.calls.count(("GET", f"/api/2.0/postgres/{_BRANCH_PATH}/endpoints")) == 1
+        assert (
+            api.calls.count(("GET", f"/api/2.0/postgres/{_BRANCH_PATH}/endpoints")) == 1
+        )
 
     def test_unknown_branch_reports_missing_host(self):
-        routes = {("GET", f"/api/2.0/postgres/{_BRANCH_PATH}/endpoints"): NotFound("no branch")}
+        routes = {
+            ("GET", f"/api/2.0/postgres/{_BRANCH_PATH}/endpoints"): NotFound(
+                "no branch"
+            )
+        }
 
         with pytest.raises(ValidationError, match="Cannot determine Lakebase host"):
             _ = _auth_with(_FakeAPI(routes)).host
+
+    def test_failed_host_lookup_is_not_retried_immediately(self):
+        api = _FakeAPI(
+            {
+                ("GET", f"/api/2.0/postgres/{_BRANCH_PATH}/endpoints"): RuntimeError(
+                    "503 unavailable"
+                )
+            }
+        )
+        auth = _auth_with(api)
+        with pytest.raises(ValidationError, match="503 unavailable"):
+            _ = auth.host
+        calls_after_first = len(api.calls)
+
+        with pytest.raises(ValidationError, match="503 unavailable"):
+            _ = auth.host
+        assert len(api.calls) == calls_after_first
+
+    def test_failed_host_lookup_is_retried_after_the_backoff(self):
+        api = _FakeAPI(
+            {
+                ("GET", f"/api/2.0/postgres/{_BRANCH_PATH}/endpoints"): RuntimeError(
+                    "503 unavailable"
+                )
+            }
+        )
+        auth = _auth_with(api)
+        with pytest.raises(ValidationError):
+            _ = auth.host
+        auth._lookup_failed_at -= LakebaseAuth._LOOKUP_RETRY_S + 1
+        calls_after_first = len(api.calls)
+
+        with pytest.raises(ValidationError):
+            _ = auth.host
+        assert len(api.calls) > calls_after_first

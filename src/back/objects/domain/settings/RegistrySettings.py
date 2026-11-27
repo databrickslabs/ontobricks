@@ -7,6 +7,7 @@ Extracted from :class:`SettingsService` (Fowler Extract Class).
 from __future__ import annotations
 
 import importlib
+import threading
 from typing import Any, Dict, List, Optional
 
 from back.core.errors import (
@@ -34,6 +35,9 @@ from back.objects.domain.settings.SettingsService import SettingsService
 _ss = importlib.import_module("back.objects.domain.settings.SettingsService")
 
 logger = get_logger(__name__)
+
+#: Held for the whole first-run setup; a second concurrent attempt is a conflict.
+_SETUP_LOCK = threading.Lock()
 
 
 class RegistrySettings:
@@ -575,22 +579,37 @@ class RegistrySettings:
         Marketplace). The location is pinned on the session for Initialize,
         which stores it in the Lakebase ``registries`` row.
         """
-        RegistrySettings._refuse_if_located(session_mgr, settings)
-        domain = get_domain(session_mgr)
-        setup = RegistrySettings._setup_service(domain, settings, user_token, user_email).prepare(catalog, schema)
-        # Again, on a fresh read: another admin may have finished meanwhile.
-        RegistrySettings._refuse_if_located(session_mgr, settings, fresh=True)
-        registry = domain.settings.setdefault("registry", {})
-        registry.update(catalog=catalog, schema=schema)
+        # One setup at a time in this process: a second admin must not create
+        # and grant another schema while the first one is still running.
+        if not _SETUP_LOCK.acquire(blocking=False):
+            raise ConflictError(
+                "Registry setup is already running; try again when it has finished."
+            )
         try:
-            result = RegistrySettings.initialize_registry_result(session_mgr, settings)
-        except Exception:
-            # Unpin, so the admin can retry setup instead of hitting the guard.
-            registry.pop("catalog", None)
-            registry.pop("schema", None)
-            raise
-        result["setup"] = setup
-        return result
+            # Fresh read before any grant, so an already-located registry is
+            # refused before anything is created (the lock does not span replicas).
+            RegistrySettings._refuse_if_located(session_mgr, settings, fresh=True)
+            domain = get_domain(session_mgr)
+            setup = RegistrySettings._setup_service(
+                domain, settings, user_token, user_email
+            ).prepare(catalog, schema)
+            # Again, on a fresh read: another replica may have finished meanwhile.
+            RegistrySettings._refuse_if_located(session_mgr, settings, fresh=True)
+            registry = domain.settings.setdefault("registry", {})
+            registry.update(catalog=catalog, schema=schema)
+            try:
+                result = RegistrySettings.initialize_registry_result(
+                    session_mgr, settings
+                )
+            except Exception:
+                # Unpin, so the admin can retry setup instead of hitting the guard.
+                registry.pop("catalog", None)
+                registry.pop("schema", None)
+                raise
+            result["setup"] = setup
+            return result
+        finally:
+            _SETUP_LOCK.release()
 
     @staticmethod
     def setup_check_result(
@@ -602,11 +621,15 @@ class RegistrySettings:
         user_email: str = "",
     ) -> Dict[str, Any]:
         """Dry-run the first-run setup as the caller: ``{"checks": [...]}``, nothing changed."""
-        service = RegistrySettings._setup_service(get_domain(session_mgr), settings, user_token, user_email)
+        service = RegistrySettings._setup_service(
+            get_domain(session_mgr), settings, user_token, user_email
+        )
         return {"checks": service.preflight(catalog, schema)}
 
     @staticmethod
-    def _setup_service(domain: Any, settings: Settings, user_token: str, user_email: str) -> RegistrySetupService:
+    def _setup_service(
+        domain: Any, settings: Settings, user_token: str, user_email: str
+    ) -> RegistrySetupService:
         """Build the setup service on the caller's forwarded token."""
         if not user_token:
             raise AuthorizationError(
@@ -621,14 +644,20 @@ class RegistrySettings:
         )
 
     @staticmethod
-    def _refuse_if_located(session_mgr: SessionManager, settings: Settings, *, fresh: bool = False) -> None:
+    def _refuse_if_located(
+        session_mgr: SessionManager, settings: Settings, *, fresh: bool = False
+    ) -> None:
         """Raise :class:`ConflictError` if the registry already has a location."""
         if fresh:
-            from back.objects.registry.store.lakebase.store import reset_lakebase_triplet_cache
+            from back.objects.registry.store.lakebase.store import (
+                reset_lakebase_triplet_cache,
+            )
 
             reset_lakebase_triplet_cache()
         if RegistryCfg.from_session(session_mgr, settings).is_configured:
-            raise ConflictError("The registry location is already set; it cannot be moved from here.")
+            raise ConflictError(
+                "The registry location is already set; it cannot be moved from here."
+            )
 
     @staticmethod
     def _registry_grant_app_names(settings: Settings) -> List[str]:

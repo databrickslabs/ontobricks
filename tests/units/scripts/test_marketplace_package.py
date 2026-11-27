@@ -64,14 +64,18 @@ def test_app_yaml_has_no_template_placeholders():
 
 def test_every_value_from_is_declared_in_manifest():
     app = _load(MARKETPLACE / "app.yaml")
-    declared = {r["name"] for r in _load(MARKETPLACE / "manifest.yaml")["resource_specs"]}
+    declared = {
+        r["name"] for r in _load(MARKETPLACE / "manifest.yaml")["resource_specs"]
+    }
     used = {e["valueFrom"] for e in _env(app).values() if "valueFrom" in e}
     assert used <= declared, f"valueFrom without manifest resource: {used - declared}"
 
 
 def test_every_manifest_resource_is_consumed():
     app = _load(MARKETPLACE / "app.yaml")
-    declared = {r["name"] for r in _load(MARKETPLACE / "manifest.yaml")["resource_specs"]}
+    declared = {
+        r["name"] for r in _load(MARKETPLACE / "manifest.yaml")["resource_specs"]
+    }
     used = {e["valueFrom"] for e in _env(app).values() if "valueFrom" in e}
     assert declared - used <= AUTO_INJECTED_RESOURCES
 
@@ -118,5 +122,9 @@ def test_app_yaml_scopes_mirror_the_manifest():
 
 def test_manifest_binds_lakebase_at_install():
     """The registry is Lakebase-only in 0.10.x, so the install must bind it."""
-    specs = {r["name"]: r for r in _load(MARKETPLACE / "manifest.yaml")["resource_specs"]}
-    assert specs["postgres"]["postgres_spec"] == {"permission": "CAN_CONNECT_AND_CREATE"}
+    specs = {
+        r["name"]: r for r in _load(MARKETPLACE / "manifest.yaml")["resource_specs"]
+    }
+    assert specs["postgres"]["postgres_spec"] == {
+        "permission": "CAN_CONNECT_AND_CREATE"
+    }

@@ -33,7 +33,9 @@ _WAREHOUSE = "wh-1"
 
 def _response(state, message=""):
     error = SimpleNamespace(message=message, error_code=None) if message else None
-    return SimpleNamespace(statement_id="st-1", status=SimpleNamespace(state=state, error=error))
+    return SimpleNamespace(
+        statement_id="st-1", status=SimpleNamespace(state=state, error=error)
+    )
 
 
 def _client(state=StatementState.SUCCEEDED, message=""):
@@ -43,11 +45,16 @@ def _client(state=StatementState.SUCCEEDED, message=""):
 
 
 def _service(w):
-    return RegistrySetupService(w, warehouse_id=_WAREHOUSE, app_name=_APP, sp_client_id=_SP)
+    return RegistrySetupService(
+        w, warehouse_id=_WAREHOUSE, app_name=_APP, sp_client_id=_SP
+    )
 
 
 def _statements(w):
-    return [c.kwargs["statement"] for c in w.statement_execution.execute_statement.call_args_list]
+    return [
+        c.kwargs["statement"]
+        for c in w.statement_execution.execute_statement.call_args_list
+    ]
 
 
 class TestPrepare:
@@ -64,19 +71,45 @@ class TestPrepare:
     def test_sql_runs_on_the_bound_warehouse(self):
         w = _client()
         _service(w).prepare("main", "ontobricks")
-        assert w.statement_execution.execute_statement.call_args.kwargs["warehouse_id"] == _WAREHOUSE
+        assert (
+            w.statement_execution.execute_statement.call_args.kwargs["warehouse_id"]
+            == _WAREHOUSE
+        )
 
     def test_grants_the_service_principal_can_manage_on_the_app(self):
         w = _client()
         _service(w).prepare("main", "ontobricks")
         acl = w.apps.update_permissions.call_args.kwargs["access_control_list"]
-        assert [(a.service_principal_name, a.permission_level.value) for a in acl] == [(_SP, "CAN_MANAGE")]
+        assert [(a.service_principal_name, a.permission_level.value) for a in acl] == [
+            (_SP, "CAN_MANAGE")
+        ]
 
     def test_app_grant_failure_is_a_warning_not_an_error(self):
         w = _client()
         w.apps.update_permissions.side_effect = PermissionDenied("no apps scope")
         result = _service(w).prepare("main", "ontobricks")
         assert len(_statements(w)) == 3 and "Can Manage" in result["warnings"][0]
+
+    def test_use_catalog_grant_refused_is_a_warning_and_the_schema_grant_still_runs(
+        self,
+    ):
+        w = _client()
+        denied = _response(
+            StatementState.FAILED,
+            "[INSUFFICIENT_PERMISSIONS] User does not have MANAGE on catalog",
+        )
+        w.statement_execution.execute_statement.side_effect = [
+            _response(StatementState.SUCCEEDED),
+            denied,
+            _response(StatementState.SUCCEEDED),
+        ]
+        result = _service(w).prepare("main", "ontobricks")
+        assert len(_statements(w)) == 3
+        assert any(
+            f"GRANT USE CATALOG ON CATALOG `main` TO `{_SP}`" in x
+            for x in result["warnings"]
+        )
+        assert not any("USE CATALOG on main" in x for x in result["granted"])
 
     def test_invalid_name_runs_nothing(self):
         w = _client()
@@ -85,12 +118,18 @@ class TestPrepare:
         assert not w.statement_execution.execute_statement.called
 
     def test_insufficient_privileges_is_an_authorization_error(self):
-        w = _client(StatementState.FAILED, "[INSUFFICIENT_PERMISSIONS] User does not have CREATE SCHEMA")
+        w = _client(
+            StatementState.FAILED,
+            "[INSUFFICIENT_PERMISSIONS] User does not have CREATE SCHEMA",
+        )
         with pytest.raises(AuthorizationError, match="CREATE SCHEMA"):
             _service(w).prepare("main", "ontobricks")
 
     def test_unknown_catalog_is_a_validation_error(self):
-        w = _client(StatementState.FAILED, "[NO_SUCH_CATALOG_EXCEPTION] Catalog 'mian' was not found.")
+        w = _client(
+            StatementState.FAILED,
+            "[NO_SUCH_CATALOG_EXCEPTION] Catalog 'mian' was not found.",
+        )
         with pytest.raises(ValidationError, match="mian"):
             _service(w).prepare("mian", "ontobricks")
 
@@ -122,12 +161,16 @@ class TestForUser:
     def test_requires_the_app_service_principal_id(self, monkeypatch):
         monkeypatch.delenv("DATABRICKS_CLIENT_ID", raising=False)
         with pytest.raises(InfrastructureError, match="service principal"):
-            RegistrySetupService.for_user("https://h.example", "user-token", _WAREHOUSE, _APP)
+            RegistrySetupService.for_user(
+                "https://h.example", "user-token", _WAREHOUSE, _APP
+            )
 
     def test_authenticates_with_the_user_token_only(self, monkeypatch):
         monkeypatch.setenv("DATABRICKS_CLIENT_ID", _SP)
         monkeypatch.setenv("DATABRICKS_CLIENT_SECRET", "sp-secret-placeholder")
-        svc = RegistrySetupService.for_user("https://h.example", "user-token", _WAREHOUSE, _APP)
+        svc = RegistrySetupService.for_user(
+            "https://h.example", "user-token", _WAREHOUSE, _APP
+        )
         assert svc._w.config.authenticate()["Authorization"] == "Bearer user-token"
 
 
@@ -137,33 +180,50 @@ _rs = importlib.import_module("back.objects.domain.settings.RegistrySettings")
 
 
 def _settings():
-    return SimpleNamespace(ontobricks_app_name=_APP, databricks_host="https://h.example")
+    return SimpleNamespace(
+        ontobricks_app_name=_APP, databricks_host="https://h.example"
+    )
 
 
 def _run_setup(**kw):
     return _run_setup_with_domain(SimpleNamespace(settings={"registry": {}}), **kw)
 
 
-def _run_setup_with_domain(domain, *, configured=False, user_token="user-token", configured_after_prepare=False, init_error=None):
+def _run_setup_with_domain(
+    domain,
+    *,
+    configured=False,
+    user_token="user-token",
+    configured_after_prepare=False,
+    init_error=None,
+):
     setup = MagicMock()
     setup.prepare.return_value = {"granted": ["g"], "warnings": []}
     unset = RegistryCfg("", "", "v")
     taken = RegistryCfg(catalog="c", schema="s", volume="v")
-    cfgs = [taken] if configured else [unset, taken if configured_after_prepare else unset]
-    with patch.object(_rs, "get_domain", return_value=domain), patch.object(
-        _rs, "resolve_warehouse_id", return_value=_WAREHOUSE
-    ), patch.object(_rs.RegistryCfg, "from_session", side_effect=cfgs), patch.object(
-        _rs.RegistrySetupService, "for_user", return_value=setup
-    ) as for_user, patch.object(
-        _rs.RegistrySettings,
-        "initialize_registry_result",
-        return_value={"success": True},
-        side_effect=init_error,
-    ) as init:
+    cfgs = (
+        [taken] if configured else [unset, taken if configured_after_prepare else unset]
+    )
+    with (
+        patch.object(_rs, "get_domain", return_value=domain),
+        patch.object(_rs, "resolve_warehouse_id", return_value=_WAREHOUSE),
+        patch.object(_rs.RegistryCfg, "from_session", side_effect=cfgs),
+        patch.object(
+            _rs.RegistrySetupService, "for_user", return_value=setup
+        ) as for_user,
+        patch.object(
+            _rs.RegistrySettings,
+            "initialize_registry_result",
+            return_value={"success": True},
+            side_effect=init_error,
+        ) as init,
+    ):
         result = _rs.RegistrySettings.setup_registry_result(
             MagicMock(), _settings(), "main", "ontobricks", user_token
         )
-    return SimpleNamespace(result=result, domain=domain, setup=setup, for_user=for_user, init=init)
+    return SimpleNamespace(
+        result=result, domain=domain, setup=setup, for_user=for_user, init=init
+    )
 
 
 class TestSetupRegistryResult:
@@ -178,8 +238,28 @@ class TestSetupRegistryResult:
     def test_prepares_then_initializes_with_the_new_location(self):
         run = _run_setup()
         run.setup.prepare.assert_called_once_with("main", "ontobricks")
-        assert run.domain.settings["registry"] == {"catalog": "main", "schema": "ontobricks"}
-        assert run.init.called and run.result["setup"] == {"granted": ["g"], "warnings": []}
+        assert run.domain.settings["registry"] == {
+            "catalog": "main",
+            "schema": "ontobricks",
+        }
+        assert run.init.called and run.result["setup"] == {
+            "granted": ["g"],
+            "warnings": [],
+        }
+
+    def test_concurrent_setup_is_a_conflict_and_runs_nothing(self):
+        assert _rs._SETUP_LOCK.acquire(blocking=False)
+        try:
+            with pytest.raises(ConflictError, match="already running"):
+                _run_setup()
+        finally:
+            _rs._SETUP_LOCK.release()
+
+    def test_lock_is_released_after_a_failure(self):
+        with pytest.raises(AuthorizationError):
+            _run_setup(user_token="")
+        assert _rs._SETUP_LOCK.acquire(blocking=False)
+        _rs._SETUP_LOCK.release()
 
     def test_another_admin_finishing_first_wins(self):
         with pytest.raises(ConflictError):
@@ -187,7 +267,10 @@ class TestSetupRegistryResult:
 
     def test_failed_initialize_unpins_the_location_for_a_retry(self):
         domain = SimpleNamespace(settings={"registry": {}})
-        with patch.object(_rs, "get_domain", return_value=domain), pytest.raises(InfrastructureError):
+        with (
+            patch.object(_rs, "get_domain", return_value=domain),
+            pytest.raises(InfrastructureError),
+        ):
             _run_setup_with_domain(domain, init_error=InfrastructureError("boom"))
         assert domain.settings["registry"] == {}
 
@@ -202,12 +285,24 @@ class TestInitializeKeepsSavedLocation:
         saved = MagicMock()
         saved.cfg = RegistryCfg("c", "s", "v")
         saved.initialize.return_value = (True, "ok")
-        with patch.object(_rs, "get_domain"), patch.object(
-            _rs.RegistryService, "from_context", side_effect=[unpinned, saved]
-        ), patch.object(_rs, "get_databricks_client", return_value=MagicMock()), patch.object(
-            _rs.SettingsService, "_resolve_context", side_effect=RuntimeError("skip seed")
-        ), patch.object(_rs.SettingsService, "_grant_registry_permissions", return_value=None):
-            result = _rs.RegistrySettings.initialize_registry_result(MagicMock(), _settings())
+        with (
+            patch.object(_rs, "get_domain"),
+            patch.object(
+                _rs.RegistryService, "from_context", side_effect=[unpinned, saved]
+            ),
+            patch.object(_rs, "get_databricks_client", return_value=MagicMock()),
+            patch.object(
+                _rs.SettingsService,
+                "_resolve_context",
+                side_effect=RuntimeError("skip seed"),
+            ),
+            patch.object(
+                _rs.SettingsService, "_grant_registry_permissions", return_value=None
+            ),
+        ):
+            result = _rs.RegistrySettings.initialize_registry_result(
+                MagicMock(), _settings()
+            )
         assert result["success"] and saved.initialize.called
 
 
@@ -219,15 +314,22 @@ def _post_setup(role: str):
 
     from shared.fastapi.main import PermissionMiddleware, app
 
-    with patch("back.core.databricks.is_databricks_app", return_value=True), patch.object(
-        PermissionMiddleware, "_resolve_roles", return_value=(role, role)
-    ), patch.object(
-        _rs.RegistrySettings, "setup_registry_result", return_value={"success": True}
-    ) as setup:
+    with (
+        patch("back.core.databricks.is_databricks_app", return_value=True),
+        patch.object(PermissionMiddleware, "_resolve_roles", return_value=(role, role)),
+        patch.object(
+            _rs.RegistrySettings,
+            "setup_registry_result",
+            return_value={"success": True},
+        ) as setup,
+    ):
         resp = TestClient(app).post(
             "/settings/registry/setup",
             json={"catalog": " main ", "schema": "ontobricks"},
-            headers={"x-forwarded-access-token": "user-token", "x-forwarded-email": "a@b.com"},
+            headers={
+                "x-forwarded-access-token": "user-token",
+                "x-forwarded-email": "a@b.com",
+            },
             follow_redirects=False,
         )
     return resp, setup
@@ -237,7 +339,12 @@ class TestSetupRoute:
     def test_admin_call_runs_setup_with_the_forwarded_token(self):
         resp, setup = _post_setup("admin")
         assert resp.status_code == 200, resp.text
-        assert setup.call_args.args[2:] == ("main", "ontobricks", "user-token", "a@b.com")
+        assert setup.call_args.args[2:] == (
+            "main",
+            "ontobricks",
+            "user-token",
+            "a@b.com",
+        )
 
     def test_non_admin_is_refused(self):
         resp, setup = _post_setup("app_user")
@@ -248,13 +355,19 @@ class TestSetupRoute:
 
         from shared.fastapi.main import PermissionMiddleware, app
 
-        with patch("back.core.databricks.is_databricks_app", return_value=True), patch.object(
-            PermissionMiddleware, "_resolve_roles", return_value=("admin", "admin")
+        with (
+            patch("back.core.databricks.is_databricks_app", return_value=True),
+            patch.object(
+                PermissionMiddleware, "_resolve_roles", return_value=("admin", "admin")
+            ),
         ):
             resp = TestClient(app).post(
                 "/settings/registry/setup",
                 content=b"not json",
-                headers={"Content-Type": "application/json", "x-forwarded-access-token": "t"},
+                headers={
+                    "Content-Type": "application/json",
+                    "x-forwarded-access-token": "t",
+                },
                 follow_redirects=False,
             )
         assert resp.status_code == 400
@@ -268,15 +381,20 @@ def _post_check(role: str):
 
     from shared.fastapi.main import PermissionMiddleware, app
 
-    with patch("back.core.databricks.is_databricks_app", return_value=True), patch.object(
-        PermissionMiddleware, "_resolve_roles", return_value=(role, role)
-    ), patch.object(
-        _rs.RegistrySettings, "setup_check_result", return_value={"checks": []}
-    ) as check:
+    with (
+        patch("back.core.databricks.is_databricks_app", return_value=True),
+        patch.object(PermissionMiddleware, "_resolve_roles", return_value=(role, role)),
+        patch.object(
+            _rs.RegistrySettings, "setup_check_result", return_value={"checks": []}
+        ) as check,
+    ):
         resp = TestClient(app).post(
             "/settings/registry/setup/check",
             json={"catalog": "main", "schema": "ontobricks"},
-            headers={"x-forwarded-access-token": "user-token", "x-forwarded-email": "a@b.com"},
+            headers={
+                "x-forwarded-access-token": "user-token",
+                "x-forwarded-email": "a@b.com",
+            },
             follow_redirects=False,
         )
     return resp, check
@@ -286,7 +404,12 @@ class TestSetupCheckRoute:
     def test_admin_check_runs_as_the_caller(self):
         resp, check = _post_check("admin")
         assert resp.status_code == 200, resp.text
-        assert check.call_args.args[2:] == ("main", "ontobricks", "user-token", "a@b.com")
+        assert check.call_args.args[2:] == (
+            "main",
+            "ontobricks",
+            "user-token",
+            "a@b.com",
+        )
 
     def test_non_admin_is_refused(self):
         resp, check = _post_check("app_user")
@@ -296,20 +419,30 @@ class TestSetupCheckRoute:
 class TestSetupCheckResult:
     def test_requires_the_callers_token(self):
         with pytest.raises(AuthorizationError):
-            _rs.RegistrySettings.setup_check_result(MagicMock(), _settings(), "main", "s", "", "a@b.com")
+            _rs.RegistrySettings.setup_check_result(
+                MagicMock(), _settings(), "main", "s", "", "a@b.com"
+            )
 
     def test_returns_the_preflight_checks(self):
         svc = MagicMock()
         svc.preflight.return_value = [{"name": "you.warehouse", "status": "ok"}]
-        with patch.object(_rs, "get_domain"), patch.object(_rs, "resolve_warehouse_id", return_value=_WAREHOUSE), patch.object(
-            _rs.RegistrySetupService, "for_user", return_value=svc
-        ) as for_user:
-            result = _rs.RegistrySettings.setup_check_result(MagicMock(), _settings(), "main", "s", "tok", "a@b.com")
+        with (
+            patch.object(_rs, "get_domain"),
+            patch.object(_rs, "resolve_warehouse_id", return_value=_WAREHOUSE),
+            patch.object(
+                _rs.RegistrySetupService, "for_user", return_value=svc
+            ) as for_user,
+        ):
+            result = _rs.RegistrySettings.setup_check_result(
+                MagicMock(), _settings(), "main", "s", "tok", "a@b.com"
+            )
         assert result == {"checks": [{"name": "you.warehouse", "status": "ok"}]}
         assert for_user.call_args.args[-1] == "a@b.com"
 
 
 def test_setup_without_a_bound_warehouse_is_a_validation_error():
-    svc = RegistrySetupService(_client(), warehouse_id="", app_name=_APP, sp_client_id=_SP)
+    svc = RegistrySetupService(
+        _client(), warehouse_id="", app_name=_APP, sp_client_id=_SP
+    )
     with pytest.raises(ValidationError, match="sql-warehouse"):
         svc.prepare("main", "ontobricks")

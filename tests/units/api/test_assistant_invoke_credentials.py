@@ -31,22 +31,28 @@ def _invoke(app_mode: bool):
     agent_cls.return_value.predict.return_value = MagicMock(
         custom_outputs={}, model_dump=lambda: {"ok": True}
     )
-    with patch("back.core.databricks.is_databricks_app", return_value=app_mode), patch.object(
-        PermissionMiddleware, "_resolve_roles", return_value=("admin", "admin")
-    ), patch.object(_route_module, "get_domain", return_value=domain), patch.object(
-        _route_module,
-        "require_domain_llm",
-        return_value=("https://server.example", "server-token", "ep", "chat"),
-    ), patch.object(
-        _agent_module, "OntologyAssistantResponsesAgent", agent_cls
-    ), patch(
-        "mlflow.types.responses.ResponsesAgentRequest"
-    ) as request_cls:
+    with (
+        patch("back.core.databricks.is_databricks_app", return_value=app_mode),
+        patch.object(
+            PermissionMiddleware, "_resolve_roles", return_value=("admin", "admin")
+        ),
+        patch.object(_route_module, "get_domain", return_value=domain),
+        patch.object(
+            _route_module,
+            "require_domain_llm",
+            return_value=("https://server.example", "server-token", "ep", "chat"),
+        ),
+        patch.object(_agent_module, "OntologyAssistantResponsesAgent", agent_cls),
+        patch("mlflow.types.responses.ResponsesAgentRequest") as request_cls,
+    ):
         resp = TestClient(app).post(
             "/ontology/assistant/invoke",
             json={
                 "input": [{"role": "user", "content": "hi"}],
-                "custom_inputs": {"host": "https://caller.example", "token": "dapi-caller"},
+                "custom_inputs": {
+                    "host": "https://caller.example",
+                    "token": "dapi-caller",
+                },
             },
         )
     assert resp.status_code == 200, resp.text

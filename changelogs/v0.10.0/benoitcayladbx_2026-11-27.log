@@ -1,0 +1,77 @@
+## Review fixes for the Marketplace packaging PR (#235)
+
+Context: code review of the Marketplace packaging and first-run setup PR found
+a privilege gap on /api/v1 in Apps mode, an incomplete preflight hint, a race in
+first-run setup, an unthrottled host lookup, a brittle health check and style
+issues. This section fixes them without changing the DAB deploy path.
+
+Changes:
+
+1. src/api/routers/v1.py
+   In Apps mode `get_credentials` hands out the service principal only to a
+   signed-in admin or app user (the `/api/` prefix skips the role middleware, so
+   the role is resolved here with `permission_service.get_user_role`);
+   anonymous or no-access callers get a 403.
+2. src/back/objects/registry/RegistrySetupService.py
+   Preflight now tells the catalog owner to grant USE CATALOG, CREATE SCHEMA and
+   MANAGE. `prepare()` creates the schema first and treats a refused
+   `GRANT USE CATALOG` as a warning (with the exact statement for the owner)
+   instead of aborting; schema grants still run. Reformatted with black.
+3. src/back/objects/domain/settings/RegistrySettings.py
+   First-run setup holds a process-wide non-blocking lock (second attempt gets
+   409) and re-reads the registry location, fresh, before any grant and again
+   before Initialize.
+4. src/back/core/databricks/lakebase/LakebaseAuth.py
+   The `LAKEBASE_*` host lookup now backs off for 60 s after a failure, like the
+   endpoint lookup (`_raise_if_backing_off`).
+5. src/back/objects/registry/store/lakebase/Bootstrap.py
+   `init_status()` reports `schema_missing` (True for a missing schema, via the
+   `no_usage` branch or SQLSTATE 3F000 on connect failure). The no-usage message
+   moved to `_no_usage_message`.
+6. src/shared/fastapi/health.py
+   `_lakebase_probe_failure` decides on the `schema_missing` flag instead of
+   matching Postgres error text; the permission probe uses it for `no_usage`
+   too. Store construction extracted to `_lakebase_registry_store`.
+7. marketplace/README.md
+   New "Security notes": `apps` scope usage (FEIP-2484 note required before
+   listing), /api/v1 service-principal gate, setup lock and USE CATALOG fallback.
+8. tests/units/api/test_v1_credentials.py, tests/units/registry/test_registry_setup.py,
+   tests/units/registry/test_registry_setup_preflight.py,
+   tests/units/auth/test_lakebase_auth_project_resolution.py,
+   tests/units/core/test_health.py, tests/units/registry/test_v090_lakebase_bootstrap.py
+   Cover the app-access gate, USE CATALOG fallback, setup lock, host back-off and
+   the schema_missing flag.
+9. tests/units/architecture/baseline.json
+   Dropped the Bootstrap.init_status entry (now under budget) and lowered _check_lakebase_permissions.
+10. Style
+   Ran black over the lines this PR adds (and the PR's new files); unrelated
+   lines in existing files keep their current formatting.
+
+Modified files:
+- marketplace/README.md
+- scripts/marketplace/assemble.py
+- scripts/marketplace/emulate_install.py
+- src/api/routers/internal/settings.py
+- src/api/routers/v1.py
+- src/back/core/databricks/lakebase/LakebaseAuth.py
+- src/back/core/databricks/lakebase/LakebaseProjectService.py
+- src/back/objects/domain/settings/RegistrySettings.py
+- src/back/objects/registry/RegistrySetupService.py
+- src/back/objects/registry/store/lakebase/Bootstrap.py
+- src/shared/fastapi/health.py
+- tests/units/api/test_assistant_invoke_credentials.py
+- tests/units/api/test_v1_credentials.py
+- tests/units/auth/test_lakebase_auth_project_resolution.py
+- tests/units/core/test_health.py
+- tests/units/core/test_lakebase_project_service.py
+- tests/units/front/test_settings_registry_setup_form.py
+- tests/units/registry/test_registry_setup.py
+- tests/units/registry/test_registry_setup_preflight.py
+- tests/units/registry/test_v090_lakebase_bootstrap.py
+- tests/units/scripts/test_marketplace_assemble.py
+- tests/units/scripts/test_marketplace_emulate_install.py
+- tests/units/scripts/test_marketplace_package.py
+- tests/units/settings/test_no_pat_in_app_mode.py
+- tests/units/architecture/baseline.json
+
+Tests: uv run --frozen pytest -q -m 'not scenario' -> 11387 passed, 335 skipped, 8 deselected, 0 failed in 886s

@@ -61,8 +61,12 @@ class LakebaseProjectService:
             if endpoint:
                 return endpoint
         for project in LakebaseProjectService.list_projects(api):
-            for branch_path in LakebaseProjectService._branch_paths(api, project.get("name") or ""):
-                endpoint = LakebaseProjectService.branch_endpoint(api, branch_path, host)
+            for branch_path in LakebaseProjectService._branch_paths(
+                api, project.get("name") or ""
+            ):
+                endpoint = LakebaseProjectService.branch_endpoint(
+                    api, branch_path, host
+                )
                 if endpoint:
                     return endpoint
         return None
@@ -101,6 +105,8 @@ class LakebaseProjectService:
                 api.do("GET", f"/api/2.0/postgres/{project_path}/branches") or {}
             ).get("branches") or []
         except _UNREADABLE as exc:
-            logger.info("Skipping unreadable Lakebase project %s: %s", project_path, exc)
+            logger.info(
+                "Skipping unreadable Lakebase project %s: %s", project_path, exc
+            )
             return []
         return [b["name"] for b in branches if b.get("name")]

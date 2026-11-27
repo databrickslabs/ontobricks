@@ -121,7 +121,11 @@ class LakebaseAuth:
 
     @property
     def host(self) -> str:
-        host = os.environ.get("PGHOST", "") or self._cached_host or self._host_from_env_branch()
+        host = (
+            os.environ.get("PGHOST", "")
+            or self._cached_host
+            or self._host_from_env_branch()
+        )
         if not host:
             raise ValidationError(
                 "Cannot determine Lakebase host: set PGHOST (or both "
@@ -239,8 +243,7 @@ class LakebaseAuth:
         """
         if self._instance_name:
             return self._instance_name
-        if self._lookup_error and time.time() - self._lookup_failed_at < self._LOOKUP_RETRY_S:
-            raise self._lookup_error
+        self._raise_if_backing_off()
 
         host = self.host.strip().lower()
         if self._instance_name:  # resolved while deriving the host
@@ -268,6 +271,14 @@ class LakebaseAuth:
             host,
         )
         return self._instance_name
+
+    def _raise_if_backing_off(self) -> None:
+        """Re-raise the last failed lookup until :attr:`_LOOKUP_RETRY_S` has passed."""
+        if (
+            self._lookup_error
+            and time.time() - self._lookup_failed_at < self._LOOKUP_RETRY_S
+        ):
+            raise self._lookup_error
 
     def _lookup_failed(self, message: str) -> ValidationError:
         """Record a failed lookup so :attr:`instance_name` backs off, and return it."""
@@ -299,11 +310,14 @@ class LakebaseAuth:
         branch_path = self._env_branch_path()
         if not branch_path:
             return ""
+        self._raise_if_backing_off()
         try:
             self._ensure_workspace()
-            endpoint = LakebaseProjectService.branch_endpoint(self._api(), branch_path, "")
+            endpoint = LakebaseProjectService.branch_endpoint(
+                self._api(), branch_path, ""
+            )
         except Exception as exc:  # noqa: BLE001
-            raise ValidationError(
+            raise self._lookup_failed(
                 f"Could not resolve the Lakebase host of {branch_path}: {exc}"
             ) from exc
         if not endpoint or not self._remember(endpoint):
@@ -438,11 +452,14 @@ class LakebaseAuth:
         resource path, e.g.
         ``projects/<project_id>/branches/<branch_id>/endpoints/<endpoint_id>``.
         """
-        resp = self._api().do(
-            "POST",
-            "/api/2.0/postgres/credentials",
-            body={"endpoint": endpoint_resource},
-        ) or {}
+        resp = (
+            self._api().do(
+                "POST",
+                "/api/2.0/postgres/credentials",
+                body={"endpoint": endpoint_resource},
+            )
+            or {}
+        )
         return resp.get("token") or ""
 
     def invalidate(self) -> None:

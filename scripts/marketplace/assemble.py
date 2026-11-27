@@ -43,7 +43,14 @@ DOCS_DIR = "docs"
 DOCS_SUBDIRS = ("images", "screenshots")
 MARKETPLACE_FILES = ("app.yaml", "manifest.yaml")
 
-_EXCLUDED_DIRS = {"__pycache__", ".pytest_cache", "_build", ".doctrees", "mcp-server", "logs"}
+_EXCLUDED_DIRS = {
+    "__pycache__",
+    ".pytest_cache",
+    "_build",
+    ".doctrees",
+    "mcp-server",
+    "logs",
+}
 _EXCLUDED_NAMES = {".DS_Store", ".coding_rules.md"}
 _EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
 #: Files every previous bundle has at its root. An existing target folder is
@@ -64,7 +71,12 @@ def _ignore(_directory: str, names: list[str]) -> set[str]:
 
 def missing_inputs(repo_root: Path) -> list[str]:
     """Return every required input path that does not exist under *repo_root*."""
-    wanted = [*ROOT_FILES, *TREES, DOCS_DIR, *(f"marketplace/{n}" for n in MARKETPLACE_FILES)]
+    wanted = [
+        *ROOT_FILES,
+        *TREES,
+        DOCS_DIR,
+        *(f"marketplace/{n}" for n in MARKETPLACE_FILES),
+    ]
     return [p for p in wanted if not (repo_root / p).exists()]
 
 
@@ -83,9 +95,13 @@ def assemble(repo_root: Path, out_dir: Path) -> Path:
             raise ValueError(f"--out {out_dir} is inside copied tree {tree}/")
     target = out_dir / APP_FOLDER
     if repo_root.is_relative_to(out_dir):
-        raise ValueError(f"--out {out_dir} contains the repo; pick a separate output folder")
+        raise ValueError(
+            f"--out {out_dir} contains the repo; pick a separate output folder"
+        )
     if target.exists() and not all((target / f).is_file() for f in _BUNDLE_SIGNATURE):
-        raise ValueError(f"{target} exists and is not a previous bundle; refusing to delete it")
+        raise ValueError(
+            f"{target} exists and is not a previous bundle; refusing to delete it"
+        )
 
     missing = missing_inputs(repo_root)
     if missing:

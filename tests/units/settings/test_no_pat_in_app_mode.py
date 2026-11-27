@@ -27,10 +27,13 @@ def _domain():
 
 
 def _save(domain, body, app_mode):
-    with patch.object(_ss, "get_domain", return_value=domain), patch.object(
-        _ss, "is_databricks_app", return_value=app_mode
+    with (
+        patch.object(_ss, "get_domain", return_value=domain),
+        patch.object(_ss, "is_databricks_app", return_value=app_mode),
     ):
-        return WarehouseSettings.apply_config_save(body, "a@b.com", "", MagicMock(), MagicMock())
+        return WarehouseSettings.apply_config_save(
+            body, "a@b.com", "", MagicMock(), MagicMock()
+        )
 
 
 def test_host_rejected_in_app_mode():

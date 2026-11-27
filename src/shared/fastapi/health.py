@@ -399,11 +399,29 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 
-def _lakebase_probe_failure(err: str, schema: str, detail: str) -> Tuple[str, str]:
+def _lakebase_probe_failure(
+    status_dict: Dict[str, Any], detail: str
+) -> Tuple[str, str]:
     """Error, unless the registry schema is merely missing: a fresh install before setup."""
-    if f'"{schema}" does not exist' in err:
-        return _WARNING, f"Registry not initialized yet — run Settings → Registry → Set up the registry ({err})"
+    if status_dict.get("schema_missing"):
+        return (
+            _WARNING,
+            "Registry not initialized yet — run Settings → Registry → Set up the registry "
+            f"({status_dict.get('error')})",
+        )
     return _ERROR, detail
+
+
+def _lakebase_registry_store(settings: Settings):
+    """Build the Lakebase registry store the probes below inspect."""
+    from back.objects.registry.store.lakebase.store import LakebaseRegistryStore
+
+    cfg = _resolve_registry_cfg(settings)
+    return LakebaseRegistryStore(
+        registry_cfg=cfg,
+        schema=cfg.lakebase_schema or "ontobricks_registry",
+        database=cfg.lakebase_database or "",
+    )
 
 
 def _check_lakebase(settings: Settings) -> Tuple[str, str]:
@@ -418,14 +436,7 @@ def _check_lakebase(settings: Settings) -> Tuple[str, str]:
             "or set LAKEBASE_PROJECT + LAKEBASE_BRANCH + PGUSER in .env (local)",
         )
 
-    cfg = _resolve_registry_cfg(settings)
-    from back.objects.registry.store.lakebase.store import LakebaseRegistryStore
-
-    store = LakebaseRegistryStore(
-        registry_cfg=cfg,
-        schema=cfg.lakebase_schema or "ontobricks_registry",
-        database=cfg.lakebase_database or "",
-    )
+    store = _lakebase_registry_store(settings)
     status_dict = store.init_status()
     reason = status_dict.get("reason", "unknown")
     err = status_dict.get("error") or status_dict.get("reason")
@@ -436,7 +447,7 @@ def _check_lakebase(settings: Settings) -> Tuple[str, str]:
         # *Initialize* from Settings → Registry. Treat as warning.
         return _WARNING, str(err)
     # ``no_usage`` / ``connect_failed`` / unknown block the app, except a fresh install.
-    return _lakebase_probe_failure(str(err), store.schema, str(err))
+    return _lakebase_probe_failure(status_dict, str(err))
 
 
 def _check_lakebase_permissions(settings: Settings) -> Tuple[str, str]:
@@ -450,23 +461,18 @@ def _check_lakebase_permissions(settings: Settings) -> Tuple[str, str]:
             "Lakebase not bound (PG* env vars unset) — permission checks skipped",
         )
 
-    cfg = _resolve_registry_cfg(settings)
-    from back.objects.registry.store.lakebase.store import LakebaseRegistryStore
-
-    store = LakebaseRegistryStore(
-        registry_cfg=cfg,
-        schema=cfg.lakebase_schema or "ontobricks_registry",
-        database=cfg.lakebase_database or "",
-    )
+    store = _lakebase_registry_store(settings)
     status_dict = store.init_status()
     reason = status_dict.get("reason", "unknown")
     err = status_dict.get("error") or status_dict.get("reason")
     if reason == "no_usage":
-        return _ERROR, str(err)
+        return _lakebase_probe_failure(status_dict, str(err))
     if reason in ("no_registries_table", "no_registry_row"):
         return _WARNING, f"Lakebase not initialized ({reason}) — permission probe partial: {err}"
     if reason != "ok":
-        return _lakebase_probe_failure(str(err), store.schema, f"Lakebase probe unavailable ({reason}): {err}")
+        return _lakebase_probe_failure(
+            status_dict, f"Lakebase probe unavailable ({reason}): {err}"
+        )
 
     try:
         with store._connect() as conn, conn.cursor() as cur:

@@ -350,7 +350,9 @@ async def setup_registry(
     Body: ``{"catalog": "...", "schema": "..."}``. For installs with no
     deploy-time registry location (Databricks Marketplace).
     """
-    return await _run_registry_setup(RegistrySettings.setup_registry_result, request, session_mgr, settings)
+    return await _run_registry_setup(
+        RegistrySettings.setup_registry_result, request, session_mgr, settings
+    )
 
 
 @router.post("/registry/setup/check", dependencies=[Depends(require(ROLE_ADMIN))])
@@ -364,10 +366,14 @@ async def check_registry_setup(
     Body: ``{"catalog": "...", "schema": "..."}``. Returns ``{"checks": [...]}``,
     each with a status and, when it fails, the fix.
     """
-    return await _run_registry_setup(RegistrySettings.setup_check_result, request, session_mgr, settings)
+    return await _run_registry_setup(
+        RegistrySettings.setup_check_result, request, session_mgr, settings
+    )
 
 
-async def _run_registry_setup(fn, request: Request, session_mgr: SessionManager, settings: Settings):
+async def _run_registry_setup(
+    fn, request: Request, session_mgr: SessionManager, settings: Settings
+):
     """Call *fn* with the body's catalog/schema and the caller's token and email."""
     try:
         data = await request.json()

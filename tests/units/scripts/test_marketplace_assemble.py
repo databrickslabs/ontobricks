@@ -72,7 +72,12 @@ def test_dev_only_content_is_excluded(fake_repo, tmp_path):
 
 def test_help_center_set_is_shipped(fake_repo, tmp_path):
     target = mod.assemble(fake_repo, tmp_path / "out")
-    for name in ("docs/README.md", "docs/user-guide.md", "docs/images/arch.png", "docs/screenshots/home.png"):
+    for name in (
+        "docs/README.md",
+        "docs/user-guide.md",
+        "docs/images/arch.png",
+        "docs/screenshots/home.png",
+    ):
         assert (target / name).is_file(), name
 
 

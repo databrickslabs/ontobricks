@@ -62,7 +62,12 @@ class RegistrySetupService:
 
     @classmethod
     def for_user(
-        cls, host: str, user_token: str, warehouse_id: str, app_name: str, user_email: str = ""
+        cls,
+        host: str,
+        user_token: str,
+        warehouse_id: str,
+        app_name: str,
+        user_email: str = "",
     ) -> RegistrySetupService:
         """Build the service on the caller's token, for this app's service principal."""
         from databricks.sdk import WorkspaceClient
@@ -97,14 +102,27 @@ class RegistrySetupService:
         granted: List[str] = []
         warnings: List[str] = []
         self._grant_app_manage(granted, warnings)
-        for statement in (
-            f"CREATE SCHEMA IF NOT EXISTS {catalog_q}.{schema_q}",
-            f"GRANT USE CATALOG ON CATALOG {catalog_q} TO {sp_q}",
-            f"GRANT {', '.join(SCHEMA_PRIVILEGES)} ON SCHEMA {catalog_q}.{schema_q} TO {sp_q}",
-        ):
-            self._run_sql(statement)
+        self._run_sql(f"CREATE SCHEMA IF NOT EXISTS {catalog_q}.{schema_q}")
         granted.append(f"Schema {catalog}.{schema} is ready")
-        granted.append(f"App service principal: USE CATALOG on {catalog}, {', '.join(SCHEMA_PRIVILEGES)} on {catalog}.{schema}")
+        # Granting on the catalog needs its owner or MANAGE; the caller owns the
+        # schema it just created, so a refusal here is a warning, not a failure.
+        try:
+            self._run_sql(f"GRANT USE CATALOG ON CATALOG {catalog_q} TO {sp_q}")
+            granted.append(f"App service principal: USE CATALOG on {catalog}")
+        except AuthorizationError as exc:
+            logger.warning(
+                "Could not grant USE CATALOG on %s to %s: %s", catalog, self._sp, exc
+            )
+            warnings.append(
+                f"Could not grant USE CATALOG on {catalog} to the app's service principal ({exc}). "
+                f"The catalog's owner must run: GRANT USE CATALOG ON CATALOG `{catalog}` TO `{self._sp}`."
+            )
+        self._run_sql(
+            f"GRANT {', '.join(SCHEMA_PRIVILEGES)} ON SCHEMA {catalog_q}.{schema_q} TO {sp_q}"
+        )
+        granted.append(
+            f"App service principal: {', '.join(SCHEMA_PRIVILEGES)} on {catalog}.{schema}"
+        )
         return {"granted": granted, "warnings": warnings}
 
     # -- preflight (read-only) ------------------------------------------
@@ -120,22 +138,50 @@ class RegistrySetupService:
         checks.append(warehouse)
         if warehouse["status"] != "ok":
             reason = "Skipped: you can't run SQL on the app's warehouse yet."
-            checks.append(self._check("you.catalog", f"You can use catalog {catalog}", "skipped", reason))
-            checks.append(self._check("you.schema", f"Schema {catalog}.{schema}", "skipped", reason))
+            checks.append(
+                self._check(
+                    "you.catalog", f"You can use catalog {catalog}", "skipped", reason
+                )
+            )
+            checks.append(
+                self._check(
+                    "you.schema", f"Schema {catalog}.{schema}", "skipped", reason
+                )
+            )
             return checks
         try:
             catalog_q = SQLHelpers.quote_uc_identifier(catalog, role="catalog")
             schema_q = SQLHelpers.quote_uc_identifier(schema, role="schema")
         except ValidationError as exc:
-            checks.append(self._check("you.catalog", "Catalog and schema names", "error", f"Invalid name: {exc}",
-                                 "Use letters, digits, _ and - only."))
-            checks.append(self._check("you.schema", f"Schema {catalog}.{schema}", "skipped", "Skipped: invalid name."))
+            checks.append(
+                self._check(
+                    "you.catalog",
+                    "Catalog and schema names",
+                    "error",
+                    f"Invalid name: {exc}",
+                    "Use letters, digits, _ and - only.",
+                )
+            )
+            checks.append(
+                self._check(
+                    "you.schema",
+                    f"Schema {catalog}.{schema}",
+                    "skipped",
+                    "Skipped: invalid name.",
+                )
+            )
             return checks
         catalog_check = self._check_catalog(catalog, catalog_q)
         checks.append(catalog_check)
         if catalog_check["status"] != "ok":
-            checks.append(self._check("you.schema", f"Schema {catalog}.{schema}", "skipped",
-                                      "Skipped: fix catalog access first."))
+            checks.append(
+                self._check(
+                    "you.schema",
+                    f"Schema {catalog}.{schema}",
+                    "skipped",
+                    "Skipped: fix catalog access first.",
+                )
+            )
             return checks
         checks.append(self._check_schema(catalog, schema, f"{catalog_q}.{schema_q}"))
         return checks
@@ -148,65 +194,144 @@ class RegistrySetupService:
             acl = self._w.apps.get_permissions(self._app_name)
         except DatabricksError as exc:
             return [
-                self._check("you.app_permissions", label, "error", str(exc),
-                       f"The app needs the `apps` user scope, and you need Can Manage on {self._app_name}. "
-                       f"Or add the app's service principal ({self._sp}) yourself under Apps → "
-                       f"{self._app_name} → Permissions → Can Manage."),
-                self._check("app.can_manage", manage_label, "skipped", "Skipped: the app's permissions are unreadable."),
+                self._check(
+                    "you.app_permissions",
+                    label,
+                    "error",
+                    str(exc),
+                    f"The app needs the `apps` user scope, and you need Can Manage on {self._app_name}. "
+                    f"Or add the app's service principal ({self._sp}) yourself under Apps → "
+                    f"{self._app_name} → Permissions → Can Manage.",
+                ),
+                self._check(
+                    "app.can_manage",
+                    manage_label,
+                    "skipped",
+                    "Skipped: the app's permissions are unreadable.",
+                ),
             ]
         has_manage = any(
             (entry.service_principal_name or "") == self._sp
-            and any(getattr(p.permission_level, "value", p.permission_level) == "CAN_MANAGE"
-                    for p in (entry.all_permissions or []))
+            and any(
+                getattr(p.permission_level, "value", p.permission_level) == "CAN_MANAGE"
+                for p in (entry.all_permissions or [])
+            )
             for entry in (acl.access_control_list or [])
         )
         manage = (
-            self._check("app.can_manage", manage_label, "ok", f"{self._sp} has Can Manage.")
+            self._check(
+                "app.can_manage", manage_label, "ok", f"{self._sp} has Can Manage."
+            )
             if has_manage
-            else self._check("app.can_manage", manage_label, "warning",
-                        f"{self._sp} doesn't have Can Manage yet, so non-admin users are denied.",
-                        f"Setup grants it. Or add it yourself under Apps → {self._app_name} → Permissions.")
+            else self._check(
+                "app.can_manage",
+                manage_label,
+                "warning",
+                f"{self._sp} doesn't have Can Manage yet, so non-admin users are denied.",
+                f"Setup grants it. Or add it yourself under Apps → {self._app_name} → Permissions.",
+            )
         )
-        return [self._check("you.app_permissions", label, "ok", "Readable with your token."), manage]
+        return [
+            self._check(
+                "you.app_permissions", label, "ok", "Readable with your token."
+            ),
+            manage,
+        ]
 
     def _check_warehouse(self) -> Dict[str, str]:
         label = "You can run SQL on the app's warehouse (`sql` user scope)"
         if not self._warehouse_id:
-            return self._check("you.warehouse", label, "error", "No SQL warehouse is bound to the app.",
-                               self._NO_WAREHOUSE)
+            return self._check(
+                "you.warehouse",
+                label,
+                "error",
+                "No SQL warehouse is bound to the app.",
+                self._NO_WAREHOUSE,
+            )
         ok, message = self._probe("SELECT 1")
         if ok:
-            return self._check("you.warehouse", label, "ok", f"Warehouse {self._warehouse_id} answered.")
-        return self._check("you.warehouse", label, "error", message,
-                      f"You need Can use on SQL warehouse {self._warehouse_id} (SQL warehouses → Permissions), "
-                      "and the app needs the `sql` user scope.")
+            return self._check(
+                "you.warehouse",
+                label,
+                "ok",
+                f"Warehouse {self._warehouse_id} answered.",
+            )
+        return self._check(
+            "you.warehouse",
+            label,
+            "error",
+            message,
+            f"You need Can use on SQL warehouse {self._warehouse_id} (SQL warehouses → Permissions), "
+            "and the app needs the `sql` user scope.",
+        )
 
     def _check_catalog(self, catalog: str, catalog_q: str) -> Dict[str, str]:
         label = f"You can use catalog {catalog}"
         ok, message = self._probe(f"DESCRIBE CATALOG {catalog_q}")
         if ok:
-            return self._check("you.catalog", label, "ok", "Visible to you. CREATE SCHEMA is checked when setup runs.")
+            return self._check(
+                "you.catalog",
+                label,
+                "ok",
+                "Visible to you. Setup also needs CREATE SCHEMA on it, and ownership of or MANAGE on "
+                "the catalog to grant the app's service principal access; both are checked when setup runs.",
+            )
         if self._is_not_found(message):
-            return self._check("you.catalog", label, "error", message,
-                          "Check the catalog name, or pick one you can see in Catalog Explorer.")
-        return self._check("you.catalog", label, "error", message,
-                      f"Ask the catalog's owner to run: GRANT USE CATALOG, CREATE SCHEMA ON CATALOG "
-                      f"`{catalog}` TO `{self._me or '<your user>'}`")
+            return self._check(
+                "you.catalog",
+                label,
+                "error",
+                message,
+                "Check the catalog name, or pick one you can see in Catalog Explorer.",
+            )
+        return self._check(
+            "you.catalog", label, "error", message, self._catalog_fix(catalog)
+        )
+
+    def _catalog_fix(self, catalog: str) -> str:
+        """What the catalog's owner must do so that :meth:`prepare` can run as the caller."""
+        return (
+            f"Ask the catalog's owner to run: GRANT USE CATALOG, CREATE SCHEMA, MANAGE ON CATALOG "
+            f"`{catalog}` TO `{self._me or '<your user>'}`. "
+            f"Or have the owner run GRANT USE CATALOG ON CATALOG `{catalog}` TO `{self._sp}` "
+            "and choose a schema you can create."
+        )
 
     def _check_schema(self, catalog: str, schema: str, fqn: str) -> Dict[str, str]:
         label = f"Schema {catalog}.{schema}"
         ok, message, rows = self._probe_rows(f"DESCRIBE SCHEMA EXTENDED {fqn}")
         if not ok:
             if self._is_not_found(message):
-                return self._check("you.schema", label, "ok",
-                              "Doesn't exist yet: setup creates it (needs CREATE SCHEMA on the catalog).")
-            return self._check("you.schema", label, "error", message,
-                          f"Ask the schema's owner to grant you MANAGE on {catalog}.{schema}, or choose a new name.")
-        owner = next((str(r[1]) for r in rows if r and str(r[0]).strip().lower() == "owner"), "")
+                return self._check(
+                    "you.schema",
+                    label,
+                    "ok",
+                    "Doesn't exist yet: setup creates it (needs CREATE SCHEMA on the catalog).",
+                )
+            return self._check(
+                "you.schema",
+                label,
+                "error",
+                message,
+                f"Ask the schema's owner to grant you MANAGE on {catalog}.{schema}, or choose a new name.",
+            )
+        owner = next(
+            (str(r[1]) for r in rows if r and str(r[0]).strip().lower() == "owner"), ""
+        )
         if owner and self._me and owner.lower() != self._me.lower():
-            return self._check("you.schema", label, "warning", f"Exists, owned by {owner}.",
-                          f"Granting on it needs ownership or MANAGE. Ask {owner}, or choose a new schema name.")
-        return self._check("you.schema", label, "ok", f"Exists{', owned by ' + owner if owner else ''}.")
+            return self._check(
+                "you.schema",
+                label,
+                "warning",
+                f"Exists, owned by {owner}.",
+                f"Granting on it needs ownership or MANAGE. Ask {owner}, or choose a new schema name.",
+            )
+        return self._check(
+            "you.schema",
+            label,
+            "ok",
+            f"Exists{', owned by ' + owner if owner else ''}.",
+        )
 
     def _probe(self, statement: str) -> tuple:
         ok, message, _rows = self._probe_rows(statement)
@@ -219,7 +344,11 @@ class RegistrySetupService:
         except (DatabricksError, InfrastructureError) as exc:
             return False, str(exc), []
         if resp.status.state == StatementState.SUCCEEDED:
-            return True, "", list(getattr(getattr(resp, "result", None), "data_array", None) or [])
+            return (
+                True,
+                "",
+                list(getattr(getattr(resp, "result", None), "data_array", None) or []),
+            )
         return False, self._error_message(resp), []
 
     # -- statement execution ---------------------------------------------
@@ -237,7 +366,11 @@ class RegistrySetupService:
                 ],
             )
         except DatabricksError as exc:
-            logger.warning("Could not grant the app service principal Can Manage on %s: %s", self._app_name, exc)
+            logger.warning(
+                "Could not grant the app service principal Can Manage on %s: %s",
+                self._app_name,
+                exc,
+            )
             warnings.append(
                 f"Could not give the app's service principal Can Manage on {self._app_name} ({exc}). "
                 "Add it under Apps → Permissions, or non-admin users will be denied."
@@ -248,12 +381,16 @@ class RegistrySetupService:
     def _execute(self, statement: str) -> Any:
         """Run *statement* on the app's warehouse as the caller and wait for a final state."""
         sql = self._w.statement_execution
-        resp = sql.execute_statement(statement=statement, warehouse_id=self._warehouse_id, wait_timeout="50s")
+        resp = sql.execute_statement(
+            statement=statement, warehouse_id=self._warehouse_id, wait_timeout="50s"
+        )
         deadline = time.monotonic() + self._POLL_LIMIT_S
         while resp.status.state in (StatementState.PENDING, StatementState.RUNNING):
             if time.monotonic() > deadline:
                 sql.cancel_execution(resp.statement_id)
-                raise InfrastructureError("The SQL warehouse did not finish in time", detail=statement)
+                raise InfrastructureError(
+                    "The SQL warehouse did not finish in time", detail=statement
+                )
             time.sleep(self._POLL_INTERVAL_S)
             resp = sql.get_statement(resp.statement_id)
         return resp
@@ -267,21 +404,37 @@ class RegistrySetupService:
         hint = " Use Check prerequisites to see which privilege is missing."
         upper = message.upper()
         if any(word in upper for word in ("PERMISSION", "PRIVILEGE", "NOT AUTHORIZED")):
-            raise AuthorizationError(f"You lack a privilege the registry setup needs ({statement}): {message}.{hint}")
+            raise AuthorizationError(
+                f"You lack a privilege the registry setup needs ({statement}): {message}.{hint}"
+            )
         if self._is_not_found(message):
             raise ValidationError(f"Check the catalog name: {message}")
-        raise InfrastructureError("Registry setup SQL failed", detail=f"{statement}: {message}")
-
+        raise InfrastructureError(
+            "Registry setup SQL failed", detail=f"{statement}: {message}"
+        )
 
     @staticmethod
-    def _check(name: str, label: str, status: str, detail: str = "", fix: str = "") -> Dict[str, str]:
-        return {"name": name, "label": label, "status": status, "detail": detail, "fix": fix}
+    def _check(
+        name: str, label: str, status: str, detail: str = "", fix: str = ""
+    ) -> Dict[str, str]:
+        return {
+            "name": name,
+            "label": label,
+            "status": status,
+            "detail": detail,
+            "fix": fix,
+        }
 
     @staticmethod
     def _error_message(resp: Any) -> str:
-        return (resp.status.error.message if resp.status.error else "") or str(resp.status.state)
+        return (resp.status.error.message if resp.status.error else "") or str(
+            resp.status.state
+        )
 
     @staticmethod
     def _is_not_found(message: str) -> bool:
         upper = message.upper()
-        return any(word in upper for word in ("NOT FOUND", "NOT_FOUND", "NO_SUCH", "DOES NOT EXIST"))
+        return any(
+            word in upper
+            for word in ("NOT FOUND", "NOT_FOUND", "NO_SUCH", "DOES NOT EXIST")
+        )

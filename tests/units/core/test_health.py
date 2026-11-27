@@ -350,27 +350,58 @@ class TestCheckLakebase:
             status, _ = health._check_lakebase(MagicMock())
         assert status == "warning"
 
-
-    def _probe(self, reason, error):
+    def _probe(self, reason, error, **extra):
         auth = MagicMock(is_available=True)
         store = MagicMock(schema="ontobricks_registry")
-        store.init_status.return_value = {"initialized": False, "reason": reason, "error": error}
-        with patch.object(_LBA_MOD, "get_lakebase_auth", return_value=auth), \
-             patch.object(health, "_resolve_registry_cfg", return_value=_fake_cfg()), \
-             patch(
-                 "back.objects.registry.store.lakebase.store.LakebaseRegistryStore",
-                 return_value=store,
-             ):
+        store.init_status.return_value = {
+            "initialized": False,
+            "reason": reason,
+            "error": error,
+            **extra,
+        }
+        with (
+            patch.object(_LBA_MOD, "get_lakebase_auth", return_value=auth),
+            patch.object(health, "_resolve_registry_cfg", return_value=_fake_cfg()),
+            patch(
+                "back.objects.registry.store.lakebase.store.LakebaseRegistryStore",
+                return_value=store,
+            ),
+        ):
             return health._check_lakebase(MagicMock())
 
     def test_missing_registry_schema_on_a_fresh_install_is_a_warning(self):
         status, detail = self._probe(
-            "connect_failed", 'Lakebase probe failed: schema "ontobricks_registry" does not exist'
+            "connect_failed",
+            'Lakebase probe failed: schema "ontobricks_registry" does not exist',
+            schema_missing=True,
         )
         assert status == "warning" and "Set up the registry" in detail
 
+    def test_schema_absent_from_the_bound_database_is_a_warning(self):
+        status, detail = self._probe(
+            "no_usage",
+            "Schema 'ontobricks_registry' does not exist in database 'db'",
+            schema_missing=True,
+        )
+        assert status == "warning" and "Set up the registry" in detail
+
+    def test_missing_usage_on_an_existing_schema_stays_an_error(self):
+        status, _ = self._probe(
+            "no_usage", "Role lacks USAGE on schema", schema_missing=False
+        )
+        assert status == "error"
+
+    def test_error_text_alone_does_not_downgrade(self):
+        # The decision rests on the probe's flag, not on the Postgres message.
+        status, _ = self._probe(
+            "connect_failed", 'schema "ontobricks_registry" does not exist'
+        )
+        assert status == "error"
+
     def test_other_connection_failures_stay_errors(self):
-        status, _ = self._probe("connect_failed", "Lakebase probe failed: connection refused")
+        status, _ = self._probe(
+            "connect_failed", "Lakebase probe failed: connection refused"
+        )
         assert status == "error"
 
 

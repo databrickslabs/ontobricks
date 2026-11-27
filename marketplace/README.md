@@ -53,6 +53,12 @@ Then check:
 3. A second, **non-admin** user with `CAN_USE` can open the app.
 4. `POST /settings/save` with `{"token": "x"}` returns 400. The app never accepts a PAT in Apps mode.
 
+## Security notes
+
+- **`apps` user scope.** It lets the app call the Apps API as the signed-in user. Only the admin-only `/settings/registry/setup` and `/setup/check` routes use it, to read and update the app's own permissions. A security note on FEIP-2484 is required before the listing ships.
+- **`/api/v1` and the service principal.** In Apps mode these routes run as the app's service principal and ignore any caller-supplied host or token. Because `/api/` skips the role middleware, `get_credentials` checks the forwarded identity itself and answers 403 unless the caller is an admin or app user of this app. Anonymous or machine callers without a forwarded user identity are refused.
+- **Registry setup.** One setup runs at a time per process (a second attempt gets 409). If the caller is not the catalog's owner or lacks `MANAGE`, `GRANT USE CATALOG` becomes a warning and the catalog's owner runs it by hand.
+
 ### 0.10.x port (2026-11-12)
 
 - **No Volume.** 0.10.x keeps no domain artefacts on a UC Volume (`8fad03ff`), so the manifest binds only the SQL warehouse.
