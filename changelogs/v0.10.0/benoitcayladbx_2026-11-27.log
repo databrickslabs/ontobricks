@@ -240,3 +240,32 @@ and a saved rule was validated against its own query, so the two agree. No data 
 - `uv run --frozen python tests/eval/run_agent_complex_rule_builder.py` (dry run) → contract OK, n=18.
 - `uv run --frozen pytest -q -m "not scenario"` → 11705 passed, 334 skipped, 8 deselected, 0 failed.
 - Not verified: the editor in the browser (label, Preview box, assistant updates), against your loaded ontology.
+
+## docs: contributors list, third-party licenses refresh, release-notes routine
+
+### Context
+The release-notes routine did not cover the contributors list or the third-party licenses.
+CONTRIBUTORS.md was missing several GitHub contributors, and licenses/README.md had drifted
+from the dependencies declared in pyproject.toml (stale versions, LGPL psycopg presented as
+permissive). Same change as the 0.9.4 branch.
+
+### Changes
+1. `CONTRIBUTORS.md` - added Alex Picard (Core Team) and the missing community contributors
+   with merged PRs: LaurentPRAT-DB, arunnayar-byte, Amine Kerboute (CactusQuill), Diego Antonelli.
+2. `.cursorrules` - the "Release Notes" routine now also updates CONTRIBUTORS.md (GitHub
+   contributors + merged PR authors) and checks/updates /licenses/ against the current
+   dependencies.
+3. `licenses/README.md` - APScheduler `>=3.10,<4`; databricks-sql-connector `>=4.7.0` with the
+   `[kernel]` extra (databricks-sql-kernel, Apache-2.0); DOMPurify license expression; neo4j
+   note; new "Lakebase Registry" section with the psycopg LGPL-3.0 notice (used unmodified as
+   an external library); updated License Summary and closing sentence. The license files
+   under `licenses/` were already present on this branch and are unchanged.
+
+### Modified files
+- CONTRIBUTORS.md
+- .cursorrules
+- licenses/README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-27.log
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` -> 11705 passed, 334 skipped, 8 deselected.
