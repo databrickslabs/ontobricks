@@ -59,4 +59,22 @@ When asking to deploy:
 When asking to create a Release Notes:
 * Looks at the folder ./changelogs, and use the current version (vx.x.x)
 * Build a quick summary about all the files (covering the version x.x.x) and use the file ./releases/ReleaseNotes_V0.2.0.md as template and build the current Release Notes by using the same structure.
-* Creates the new Release file : releases/ReleaseNotes_Vx.x.x.md (by using the relevant version) 
+* Creates the new Release file : releases/ReleaseNotes_Vx.x.x.md (by using the relevant version)
+* Update /CONTRIBUTORS.md:
+ - Compare the GitHub contributors (`gh api repos/databrickslabs/ontobricks/contributors`
+ and the merged PR authors, `gh pr list --state merged`) with the current list.
+ - Add every missing human contributor with merged work (skip bots such as
+ dependabot, bootstrap/service accounts, and authors with only open or closed-unmerged PRs).
+ - Keep the existing Core Team / Community split; new external contributors go in
+ "Community Contributors" with a short contribution summary and PR/issue links.
+ - Also credit the contributors named in the version's /changelogs/vX.X.X/ files.
+* Check and update /licenses/ with the licenses currently used:
+ - Compare the dependencies in pyproject.toml (main, MCP server, optional extras)
+ and the JS/CSS/fonts vendored or loaded by the frontend with /licenses/README.md
+ and the files under /licenses/{python,javascript,fonts}/.
+ - Add the LICENSE file for every new library, remove the ones no longer used,
+ and update versions and license types (check the `License` metadata of the
+ installed package, e.g. `uv pip show` or PyPI) in the README tables.
+ - Refresh the "License Summary" table and confirm that all licenses remain
+ compatible with commercial use; flag any copyleft (GPL/AGPL/LGPL) addition.
+ - Keep /LICENSE.txt and the project metadata in pyproject.toml consistent. 

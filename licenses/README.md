@@ -12,11 +12,12 @@ This folder contains the license files for all external libraries used by OntoBr
 | Bootstrap Icons | 1.11.2 | MIT | [javascript/bootstrap-icons-LICENSE.txt](javascript/bootstrap-icons-LICENSE.txt) |
 | Chart.js | 4.x | MIT | [javascript/chartjs-LICENSE.txt](javascript/chartjs-LICENSE.txt) |
 | D3.js | 7.x | ISC | [javascript/d3-LICENSE.txt](javascript/d3-LICENSE.txt) |
+| DOMPurify | 3.4.17 | MPL-2.0 OR Apache-2.0 (used under Apache-2.0) | [javascript/dompurify-LICENSE.txt](javascript/dompurify-LICENSE.txt) |
 | GraphiQL | 3.x | MIT | [javascript/graphiql-LICENSE.txt](javascript/graphiql-LICENSE.txt) |
 | Graphology | 0.26.0 | MIT | [javascript/graphology-LICENSE.txt](javascript/graphology-LICENSE.txt) |
 | Graphology Library | 0.8.0 | MIT | [javascript/graphology-library-LICENSE.txt](javascript/graphology-library-LICENSE.txt) |
 | Grid.js | latest | MIT | [javascript/gridjs-LICENSE.txt](javascript/gridjs-LICENSE.txt) |
-| Marked | latest | MIT | [javascript/marked-LICENSE.txt](javascript/marked-LICENSE.txt) |
+| Marked | 15.0.12 | MIT | [javascript/marked-LICENSE.txt](javascript/marked-LICENSE.txt) |
 | React / ReactDOM | 18.x | MIT | [javascript/react-LICENSE.txt](javascript/react-LICENSE.txt) |
 | Sigma.js | 3.0.2 | MIT | [javascript/sigma-LICENSE.txt](javascript/sigma-LICENSE.txt) |
 
@@ -25,13 +26,14 @@ This folder contains the license files for all external libraries used by OntoBr
 | Library | Version | License | File |
 |---------|---------|---------|------|
 | aiofiles | >=23.0.0 | Apache-2.0 | [python/aiofiles-LICENSE.txt](python/aiofiles-LICENSE.txt) |
-| APScheduler | >=3.10 | MIT | [python/apscheduler-LICENSE.txt](python/apscheduler-LICENSE.txt) |
+| APScheduler | >=3.10,<4 | MIT | [python/apscheduler-LICENSE.txt](python/apscheduler-LICENSE.txt) |
 | Databricks SDK | >=0.20.0 | Apache-2.0 | [python/databricks-sdk-LICENSE.txt](python/databricks-sdk-LICENSE.txt) |
-| databricks-sql-connector | >=4.4.0 | Apache-2.0 | [python/databricks-sql-connector-LICENSE.txt](python/databricks-sql-connector-LICENSE.txt) |
+| databricks-sql-connector (`[kernel]` extra, adds `databricks-sql-kernel`, Apache-2.0) | >=4.7.0 | Apache-2.0 | [python/databricks-sql-connector-LICENSE.txt](python/databricks-sql-connector-LICENSE.txt) |
 | FastAPI | >=0.129.0 | MIT | [python/fastapi-LICENSE.txt](python/fastapi-LICENSE.txt) |
 | ItsDangerous | >=2.1.0 | BSD-3-Clause | [python/itsdangerous-LICENSE.txt](python/itsdangerous-LICENSE.txt) |
 | Jinja2 | >=3.1.0 | BSD-3-Clause | [python/jinja2-LICENSE.txt](python/jinja2-LICENSE.txt) |
-| MLflow | >=3.15.0 | Apache-2.0 | [python/mlflow-LICENSE.txt](python/mlflow-LICENSE.txt) |
+| MLflow | >=3.17.2 | Apache-2.0 | [python/mlflow-LICENSE.txt](python/mlflow-LICENSE.txt) |
+| neo4j (Bolt driver) | >=5.0 | Apache-2.0 (parts under PSF-2.0) | [python/neo4j-LICENSE.txt](python/neo4j-LICENSE.txt) |
 | NetworkX | >=3.0 | BSD-3-Clause | [python/networkx-LICENSE.txt](python/networkx-LICENSE.txt) |
 | OWL-RL | >=7.1.1 | W3C-20150513 (W3C Software Notice and Document License) | [python/owlrl-LICENSE.txt](python/owlrl-LICENSE.txt) |
 | PyArrow | >=23.0.1 | Apache-2.0 | [python/pyarrow-LICENSE.txt](python/pyarrow-LICENSE.txt) |
@@ -43,8 +45,18 @@ This folder contains the license files for all external libraries used by OntoBr
 | RDFLib | >=7.6.0 | BSD-3-Clause | [python/rdflib-LICENSE.txt](python/rdflib-LICENSE.txt) |
 | Requests | >=2.33.0 | Apache-2.0 | [python/requests-LICENSE.txt](python/requests-LICENSE.txt) |
 | Starlette | >=1.3.1 | BSD-3-Clause | [python/starlette-LICENSE.txt](python/starlette-LICENSE.txt) |
-| Strawberry GraphQL | >=0.315.7 | MIT | [python/strawberry-graphql-LICENSE.txt](python/strawberry-graphql-LICENSE.txt) |
+| Strawberry GraphQL | >=0.327.2 | MIT | [python/strawberry-graphql-LICENSE.txt](python/strawberry-graphql-LICENSE.txt) |
 | Uvicorn | >=0.27.0 | BSD-3-Clause | [python/uvicorn-LICENSE.txt](python/uvicorn-LICENSE.txt) |
+
+## Python Libraries (Lakebase Registry)
+
+> Install with `uv sync --frozen --extra lakebase`. Required for the Lakebase (Postgres) registry since v0.4.0.
+> **Copyleft notice:** the psycopg packages are licensed under the LGPL-3.0. OntoBricks uses them unmodified, as separately installed, dynamically imported libraries (not vendored or statically linked), which is compatible with commercial use. The `psycopg-binary` wheels also bundle `libpq` (PostgreSQL License) and OpenSSL (Apache-2.0).
+
+| Library | Version | License | File |
+|---------|---------|---------|------|
+| psycopg (incl. `psycopg-binary`) | >=3.2.0 | LGPL-3.0-only | [python/psycopg-LICENSE.txt](python/psycopg-LICENSE.txt) |
+| psycopg-pool | >=3.2.0 | LGPL-3.0-only | [python/psycopg-LICENSE.txt](python/psycopg-LICENSE.txt) |
 
 ## Python Libraries (Optional — Pitfalls Detection)
 
@@ -54,16 +66,16 @@ This folder contains the license files for all external libraries used by OntoBr
 | Library | Version | License | File |
 |---------|---------|---------|------|
 | D2KLab Ontology-Pitfalls-Detector (vendored) | 2023 | Apache-2.0 | [python/d2klab-ontology-pitfalls-detector-LICENSE.txt](python/d2klab-ontology-pitfalls-detector-LICENSE.txt) |
-| NLTK | >=3.10.3 | Apache-2.0 | [python/nltk-LICENSE.txt](python/nltk-LICENSE.txt) |
+| NLTK | >=3.10.4 | Apache-2.0 | [python/nltk-LICENSE.txt](python/nltk-LICENSE.txt) |
 | scikit-learn | >=1.3.0 | BSD-3-Clause | [python/scikit-learn-LICENSE.txt](python/scikit-learn-LICENSE.txt) |
 | SciPy | >=1.11.0 | BSD-3-Clause | [python/scipy-LICENSE.txt](python/scipy-LICENSE.txt) |
-| sentence-transformers | >=3.0.0 | Apache-2.0 | [python/sentence-transformers-LICENSE.txt](python/sentence-transformers-LICENSE.txt) |
+| sentence-transformers | >=5.6.0 | Apache-2.0 | [python/sentence-transformers-LICENSE.txt](python/sentence-transformers-LICENSE.txt) |
 
 ## Python Libraries (MCP Server)
 
 | Library | Version | License | File |
 |---------|---------|---------|------|
-| FastMCP | >=2.3.1 | Apache-2.0 | [python/fastmcp-LICENSE.txt](python/fastmcp-LICENSE.txt) |
+| FastMCP | >=3.4.10 | Apache-2.0 | [python/fastmcp-LICENSE.txt](python/fastmcp-LICENSE.txt) |
 | HTTPX | >=0.25.0 | BSD-3-Clause | [python/httpx-LICENSE.txt](python/httpx-LICENSE.txt) |
 | cryptography | >=50.0.0 | Apache-2.0 / BSD-3-Clause | [cryptography.io](https://cryptography.io/) |
 
@@ -84,8 +96,10 @@ This folder contains the license files for all external libraries used by OntoBr
 | **MIT** | Bootstrap, Bootstrap Icons, Chart.js, GraphiQL, Graphology, Graphology Library, Grid.js, Marked, React/ReactDOM, Sigma.js, APScheduler, FastAPI, Pydantic, Pydantic Settings, Strawberry GraphQL |
 | **ISC** | D3.js |
 | **BSD-3-Clause** | HTTPX, ItsDangerous, Jinja2, NetworkX, python-dotenv, RDFLib, scikit-learn, SciPy, Starlette, Uvicorn |
-| **Apache-2.0** | aiofiles, D2KLab Ontology-Pitfalls-Detector (vendored), Databricks SDK, databricks-sql-connector, FastMCP, MLflow, NLTK, PyArrow, pySHACL, python-multipart, Requests, sentence-transformers |
+| **Apache-2.0** | aiofiles, D2KLab Ontology-Pitfalls-Detector (vendored), Databricks SDK, databricks-sql-connector (and databricks-sql-kernel), FastMCP, MLflow, neo4j, NLTK, PyArrow, pySHACL, python-multipart, Requests, sentence-transformers |
+| **MPL-2.0 OR Apache-2.0** | DOMPurify (used under Apache-2.0) |
+| **LGPL-3.0-only** | psycopg, psycopg-pool, psycopg-binary (unmodified, dynamically linked — see Lakebase section) |
 | **W3C-20150513** (W3C Software Notice and Document License) | OWL-RL |
 | **SIL OFL 1.1** | JetBrains Mono, Outfit (Google Fonts) |
 
-All dependencies use permissive open-source licenses compatible with commercial use.
+All dependencies use open-source licenses compatible with commercial use. Apart from the LGPL-3.0 psycopg packages (used unmodified as external libraries), all licenses are permissive.
