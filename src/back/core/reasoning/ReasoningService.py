@@ -1,6 +1,7 @@
 """Reasoning service — orchestrates T-Box, SWRL, Graph, Constraint,
 Decision Table, SPARQL CONSTRUCT, and Aggregate rule phases."""
 
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -676,8 +677,13 @@ class ReasoningService:
         if not ref:
             return ""
         if ref.startswith("http"):
-            return ReasoningService._normalize_property_uri(ref, data_ns, base_uri, sep, "")
-        return ReasoningService._normalize_property_uri("", data_ns, base_uri, sep, ref)
+            return ReasoningService._normalize_property_uri(
+                ref, data_ns, base_uri, sep, ""
+            )
+        # Bare name; tolerate prefixed/partial refs ("ex#p", "a/p") by keeping
+        # only the local name so no stray "#" or "/" leaks into the predicate.
+        name = ReasoningService._local_name(ref) if re.search(r"[#/]", ref) else ref
+        return ReasoningService._normalize_property_uri("", data_ns, base_uri, sep, name)
 
     @staticmethod
     def _find_transitive_from_axioms(ontology: Dict) -> List[str]:

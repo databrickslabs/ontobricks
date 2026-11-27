@@ -54,3 +54,12 @@ def test_inverse_expand_swallows_backend_error():
     out = store.inverse_expand("g._graph", "http://ex.org/p", "http://ex.org/q")
 
     assert out == []
+
+
+def test_graph_db_backend_inherits_the_sql_reasoning_ops():
+    # Extract Class guard: every SQL backend still gets the ops by inheritance.
+    from back.core.graphdb.GraphDBBackend import GraphDBBackend
+
+    assert issubclass(GraphDBBackend, SQLGraphReasoningOps)
+    for op in ("transitive_closure", "symmetric_expand", "inverse_expand", "shortest_path"):
+        assert getattr(GraphDBBackend, op) is getattr(SQLGraphReasoningOps, op)

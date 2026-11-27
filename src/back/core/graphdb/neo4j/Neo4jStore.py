@@ -488,6 +488,12 @@ class Neo4jStore(GraphDBBackend):
     ) -> List[Dict[str, Any]]:
         # Native Cypher inverse expansion is a follow-up; no-op for now (the
         # SQL default on SQLGraphReasoningOps is not valid against Neo4j).
+        logger.warning(
+            "owl:inverseOf expansion (%s -> %s) is not supported on the Neo4j "
+            "backend yet; no inverse triples were materialised",
+            predicate_uri,
+            inverse_predicate_uri,
+        )
         return []
 
     def shortest_path(

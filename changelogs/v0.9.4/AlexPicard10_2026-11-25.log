@@ -44,6 +44,5 @@ Modified files:
 - tests/units/ontology/test_reasoning_service.py
 - tests/units/architecture/baseline.json (GraphDBBackend tightened 1189 -> 1091)
 
-Tests: `uv run --frozen pytest -q -m "not scenario"` -> pending (see PR); targeted
-`tests/units/dtwin tests/units/graphdb tests/units/ontology/test_reasoning_service.py
-tests/units/architecture` -> 1373 passed.
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9719 passed, 338 skipped
+(at PR submission; re-run after the review follow-ups, see benoitcayladbx_2026-11-27.log).
