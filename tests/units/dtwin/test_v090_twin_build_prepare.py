@@ -254,6 +254,19 @@ class TestInferredMaterialize:
         # URI subject/predicate (e.g. {}) are dropped.
         assert TwinInferredMaterialize.uri_triples([_GOOD, _LITERAL, {}]) == [_GOOD, _LITERAL]
 
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            {"subject": "http://ex.org/s", "predicate": "http://ex.org/p", "object": ""},
+            {"subject": "http://ex.org/s", "predicate": "http://ex.org/p", "object": "  "},
+            {"subject": "http://ex.org/s", "predicate": "http://ex.org/p"},
+            {"subject": "(batch)", "predicate": "http://ex.org/p", "object": "3"},
+            {"subject": "http://ex.org/s", "predicate": "not-a-uri", "object": "3"},
+        ],
+    )
+    def test_uri_triples_drops_empty_objects_and_non_uri_subject_or_predicate(self, bad):
+        assert TwinInferredMaterialize.uri_triples([bad, _LITERAL]) == [_LITERAL]
+
     def test_missing_task_id_is_rejected(self):
         with pytest.raises(ValidationError):
             TwinInferredMaterialize.run(

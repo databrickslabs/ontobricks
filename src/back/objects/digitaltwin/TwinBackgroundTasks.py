@@ -448,10 +448,11 @@ class TwinBackgroundTasks:
         build_kind: str = "session",
     ) -> None:
         """Run ReasoningService phases; ``options`` drive append/materialize."""
-        from back.core.helpers import get_databricks_client, is_uri
+        from back.core.helpers import get_databricks_client
         from back.core.reasoning import ReasoningService
         from back.core.reasoning.results.ReasoningResult import ReasoningResult as _RR
         from back.core.graphdb import get_graphdb
+        from back.objects.digitaltwin.build.TwinInferredMaterialize import TwinInferredMaterialize
 
         is_api = build_kind == "api"
         label = {
@@ -561,13 +562,7 @@ class TwinBackgroundTasks:
             ):
                 tm.update_progress(task_id, 95, f"Materialising to {mat_table}...")
 
-                triples = [
-                    {"subject": t.subject, "predicate": t.predicate, "object": t.object}
-                    for t in result.inferred_triples
-                    # RDF objects may be literals (rule consequents, e.g. greatWine "true");
-                    # only subject + predicate must be URIs. See databrickslabs/ontobricks#236.
-                    if is_uri(t.subject) and is_uri(t.predicate)
-                ]
+                triples = TwinInferredMaterialize.from_inferred(result.inferred_triples)
                 if triples:
                     try:
                         client = get_databricks_client(domain_snap, settings)
