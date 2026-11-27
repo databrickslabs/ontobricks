@@ -10,7 +10,7 @@ normal repo layout and builds that subfolder at release time.
 | `manifest.yaml` | Marketplace manifest: name, description, resource specs |
 | `LISTING.md` | Listing description (paste into the provider console) |
 
-Plan, open questions and status: `.planning/marketplace-listing/PLAN.md`.
+Plan, open questions and status are kept in the author's local `.planning/` folder, which is not part of the repository.
 
 ## Test a v1 in a workspace
 

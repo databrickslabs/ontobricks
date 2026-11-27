@@ -478,3 +478,29 @@ Modified files:
 - tests/units/architecture/baseline.json
 
 Tests: uv run --frozen pytest -q -m 'not scenario' -> 11387 passed, 335 skipped, 8 deselected, 0 failed in 886s
+
+
+## Untrack .planning/ from the repository
+
+Context: `.planning/` (SPECs, plans, roadmap) is a local author folder and must not be
+on GitHub. `.gitignore` already excludes it, but the Marketplace PR (#235) had added
+`.planning/marketplace-listing/PLAN.md` to the tracked tree on 0.10.0. `master` and the
+0.9.x branches track nothing under `.planning/`, so only 0.10.0 needed the change.
+
+Changes:
+
+1. `.planning/marketplace-listing/PLAN.md`
+   Removed from the index with `git rm --cached`; the local file is kept.
+2. `marketplace/README.md`
+   The pointer to the plan now says it lives in the author's local `.planning/`
+   folder instead of linking a path that is no longer in the repository.
+
+Note: the file remains in the history of commit 960f1454 (#235). Removing it from
+history needs a history rewrite of 0.10.0, which was not done.
+
+Modified files:
+- `.planning/marketplace-listing/PLAN.md` (untracked, local copy kept)
+- `marketplace/README.md`
+- `changelogs/v0.10.0/benoitcayladbx_2026-11-27.log`
+
+Tests: `uv run --frozen pytest -q tests/units/api/test_help_api.py tests/units/scripts tests/units/architecture` -> 125 passed, 0 failed in 5.3s (the full unit suite was not re-run: no code changed).
