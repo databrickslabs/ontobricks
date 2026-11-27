@@ -191,6 +191,79 @@ class TestFindPropertiesByCharacteristic:
         assert len(result) == 0
 
 
+class TestAxiomDerivedReasoning:
+    """Axioms (Expr. & Axioms) drive graph reasoning — the modern path, not the
+    legacy property-characteristics panel. See databrickslabs/ontobricks#237."""
+
+    def test_self_property_chain_is_transitive(self):
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {
+                    "type": "propertyChain",
+                    "subject": "http://ex.org#isPartOf",
+                    "chain": ["http://ex.org#isPartOf", "http://ex.org#isPartOf"],
+                }
+            ],
+        }
+        result = ReasoningService._find_transitive_from_axioms(ontology)
+        assert len(result) == 1
+        assert "isPartOf" in result[0]
+
+    def test_mixed_chain_is_not_transitive(self):
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {
+                    "type": "propertyChain",
+                    "subject": "http://ex.org#locatedIn",
+                    "chain": ["http://ex.org#locatedIn", "http://ex.org#partOf"],
+                }
+            ],
+        }
+        assert ReasoningService._find_transitive_from_axioms(ontology) == []
+
+    def test_three_element_self_chain_is_not_transitive(self):
+        # p . p . p => p does NOT imply transitivity (only p . p => p does).
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {
+                    "type": "propertyChain",
+                    "subject": "http://ex.org#isPartOf",
+                    "chain": ["http://ex.org#isPartOf"] * 3,
+                }
+            ],
+        }
+        assert ReasoningService._find_transitive_from_axioms(ontology) == []
+
+    def test_imported_axiom_shape_with_result_property(self):
+        # OntologyParser emits ``resultProperty`` + local-name chain members.
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {
+                    "type": "propertyChain",
+                    "resultProperty": "isPartOf",
+                    "chain": ["isPartOf", "isPartOf"],
+                }
+            ],
+        }
+        result = ReasoningService._find_transitive_from_axioms(ontology)
+        assert result == ["http://ex.org/isPartOf"]
+
+    def test_missing_axioms_key_or_result_property(self):
+        assert ReasoningService._find_transitive_from_axioms({"base_uri": "x#"}) == []
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {"type": "propertyChain", "chain": ["isPartOf", "isPartOf"]},
+                {"type": "propertyChain", "subject": "isPartOf", "chain": None},
+            ],
+        }
+        assert ReasoningService._find_transitive_from_axioms(ontology) == []
+
+
 # ===========================================================================
 # run_full_reasoning — phase orchestration
 # ===========================================================================
@@ -399,6 +472,39 @@ class TestRunGraphReasoning:
         result = svc.run_graph_reasoning()
         assert len(result.inferred_triples) == 1
         assert result.inferred_triples[0].provenance == "graph:symmetric"
+
+    def test_transitive_from_self_property_chain_axiom(self):
+        store = MagicMock()
+        store.transitive_closure.return_value = [
+            {
+                "subject": "http://ex.org/a",
+                "predicate": "http://ex.org/isPartOf",
+                "object": "http://ex.org/c",
+            },
+        ]
+        store.symmetric_expand.return_value = []
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "classes": [],
+            "properties": [],
+            "axioms": [
+                {
+                    "type": "propertyChain",
+                    "subject": "http://ex.org#isPartOf",
+                    "chain": ["http://ex.org#isPartOf", "http://ex.org#isPartOf"],
+                }
+            ],
+            "constraints": [],
+            "swrl_rules": [],
+            "shacl_shapes": [],
+        }
+        svc = ReasoningService(
+            _domain_session(ontology=ontology), triplestore_backend=store
+        )
+        result = svc.run_graph_reasoning()
+        store.transitive_closure.assert_called_once()
+        assert len(result.inferred_triples) == 1
+        assert result.inferred_triples[0].provenance == "graph:transitive"
 
     def test_store_method_failure_handled(self):
         store = MagicMock()

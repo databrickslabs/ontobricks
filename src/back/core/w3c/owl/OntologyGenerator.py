@@ -935,8 +935,8 @@ class OntologyGenerator:
             logger.debug("Added disjointProperties: %s disjoint %s", subject, objects)
 
         elif axiom_type == "propertyChain":
-            chain = axiom.get("chain", [])
-            result_property = axiom.get("resultProperty", "")
+            chain = axiom.get("chain") or []
+            result_property = axiom.get("resultProperty") or subject  # UI|parser
             if len(chain) >= 2 and result_property:
                 result_uri = get_uri(result_property)
                 chain_uris = collect_uris(chain)

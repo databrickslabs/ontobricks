@@ -269,3 +269,37 @@ permissive). Same change as the 0.9.4 branch.
 
 ### Test result
 `uv run --frozen pytest -q -m "not scenario"` -> 11705 passed, 334 skipped, 8 deselected.
+
+## fix(reasoning): forward-port #239 - OWL axioms drive scalable graph reasoning (#237)
+
+Context: Forward-port of PR #239 (merged on `0.9.4`, squash commit 37f00273) to
+`0.10.0`. OWL axioms declared in Expr. & Axioms never produced instance-level
+inferences; `run_graph_reasoning` only used the legacy property-characteristics
+panel whose save routes were removed.
+
+Changes:
+1. src/back/core/reasoning/ReasoningService.py - `run_graph_reasoning` also reads
+   `ontology["axioms"]`: a self `owl:propertyChainAxiom` of exactly two elements
+   (`p ∘ p ⊑ p`) marks `p` transitive and runs the scalable SQL
+   `transitive_closure(p)`. New helpers `_find_transitive_from_axioms` and
+   `_resolve_axiom_prop_uri`.
+2. src/back/core/w3c/owl/OntologyGenerator.py - `propertyChain` falls back to
+   `subject` when `resultProperty` is absent (the UI stores `subject`), so
+   UI-created chains are exported to OWL; a null chain no longer raises.
+3. src/front/static/ontology/js/ontology-axioms.js - the result property is
+   required for `propertyChain`; label reads "Result Property".
+4. tests/units/ontology/test_reasoning_service.py,
+   tests/units/ontology/test_owl_generator.py - coverage for self-chain
+   detection, 3-element/mixed/imported/null-chain cases and UI-shape export.
+
+Not in this change (follow-up on #237): `owl:inverseOf` SQL expansion and
+general `p ∘ q ⊑ r` chains.
+
+Modified files:
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/front/static/ontology/js/ontology-axioms.js
+- tests/units/ontology/test_reasoning_service.py
+- tests/units/ontology/test_owl_generator.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 11713 passed, 334 skipped.
