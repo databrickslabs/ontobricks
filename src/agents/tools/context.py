@@ -57,6 +57,9 @@ class ToolContext:
     dtwin_domain_name: str = ""
     dtwin_ontology_labels: dict = field(default_factory=dict)  # uri/name → display label
     dtwin_class_actions: dict = field(default_factory=dict)
+    # Manual Depth set by the user in the Graph Chat UI. Caps the traversal
+    # the LLM may request from ``describe_entity``; None = no cap.
+    dtwin_describe_depth: Optional[int] = None
     pending_action: dict | None = None
 
     # Mapping PGE planner output (``agent_mapping_pge``) – populated by the

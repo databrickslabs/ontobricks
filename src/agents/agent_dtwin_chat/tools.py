@@ -270,12 +270,21 @@ def tool_describe_entity(
     depth: int = _MAX_DEPTH,
     **_kwargs,
 ) -> str:
-    """Search for entities and traverse their relationships."""
+    """Search for entities and traverse their relationships.
+
+    The traversal depth is the LLM's request clamped to 1-10, then capped by
+    the Depth the user selected in the UI (``ctx.dtwin_describe_depth``) so
+    the manual setting is enforced rather than advisory.
+    """
     if not search and not entity_type:
         return _error("Please provide at least a search term or an entity type.")
 
+    effective_depth = min(max(int(depth or _MAX_DEPTH), 1), 10)
+    if ctx.dtwin_describe_depth is not None:
+        effective_depth = min(effective_depth, max(1, ctx.dtwin_describe_depth))
+
     params: dict = {
-        "depth": min(max(int(depth or _MAX_DEPTH), 1), 10),
+        "depth": effective_depth,
         "limit": 500,
         "offset": 0,
     }
@@ -588,7 +597,10 @@ _DESCRIBE_ENTITY_DEF = {
                 },
                 "depth": {
                     "type": "integer",
-                    "description": "Relationship traversal depth (1-10, default 1).",
+                    "description": (
+                        "Relationship traversal depth (1-10, default 1). "
+                        "Capped by the Depth setting chosen by the user."
+                    ),
                 },
             },
         },

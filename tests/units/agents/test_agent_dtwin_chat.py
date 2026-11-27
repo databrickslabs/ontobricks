@@ -181,6 +181,34 @@ class TestDescribeEntity:
         chat_tools.tool_describe_entity(_ctx(), search="foo", depth=99)
         assert captured["params"]["depth"] == "10"
 
+    def test_user_depth_caps_llm_requested_depth(self, patch_client):
+        captured = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if "/triples/find" in request.url.path:
+                captured["params"] = dict(request.url.params)
+            return httpx.Response(200, json={"success": True, "entities": []})
+
+        patch_client(handler)
+        ctx = _ctx()
+        ctx.dtwin_describe_depth = 1
+        chat_tools.tool_describe_entity(ctx, search="foo", depth=5)
+        assert captured["params"]["depth"] == "1"
+
+    def test_user_depth_does_not_raise_llm_depth(self, patch_client):
+        captured = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if "/triples/find" in request.url.path:
+                captured["params"] = dict(request.url.params)
+            return httpx.Response(200, json={"success": True, "entities": []})
+
+        patch_client(handler)
+        ctx = _ctx()
+        ctx.dtwin_describe_depth = 3
+        chat_tools.tool_describe_entity(ctx, search="foo", depth=1)
+        assert captured["params"]["depth"] == "1"
+
     def test_search_query_is_forwarded(self, patch_client):
         captured = {}
 

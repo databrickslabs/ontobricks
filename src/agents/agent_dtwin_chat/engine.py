@@ -137,7 +137,8 @@ WORKFLOW
      DO NOT rely on ``query_graphql`` or ``run_sparql`` alone to determine
      whether an entity has a relationship — they can miss inferred data.
      Use depth=2 only when the user explicitly asks for indirect or extended
-     relationships (e.g. "related through claims", "all connected entities").
+     relationships (e.g. "related through claims", "all connected entities")
+     AND the Depth setting allows it. The Depth setting is a hard limit.
   3. After ``describe_entity`` confirms what relationships exist, you may use
      ``query_graphql`` for bulk typed look-ups, but treat ``describe_entity``
      as the authoritative source.
@@ -145,6 +146,15 @@ WORKFLOW
 
 RULES
   * Use the exact entity / predicate names returned by the tools.
+  * Completeness: the header of a describe_entity result lists the entity
+    types it reached and their counts. Before you total, count or summarise
+    across entities, check that every entity type the question needs is
+    listed. If a type is missing, or the result says TRUNCATED, do NOT
+    present the figure as complete. Name what is missing and say the answer
+    may be partial.
+  * Depth limit: describe_entity cannot traverse deeper than the Depth
+    setting. If the question needs more relationships than that, say so and
+    suggest the user raise the Depth setting and ask again.
   * If a tool returns an error, read the error and try a different
     approach (e.g. narrower search, simpler SPARQL, different type).
   * Do NOT try to mutate data; mutating SPARQL is rejected.
@@ -183,6 +193,20 @@ LINKS TO THE KNOWLEDGE GRAPH (VERY IMPORTANT)
     * Never invent URIs: only link URIs that appeared in a tool
       response.
 """
+
+
+def _configure_depth(ctx: ToolContext, describe_depth: int) -> str:
+    """Enforce the user's Depth on the tools and return the system prompt.
+
+    The depth is stored on ``ctx`` so ``describe_entity`` cannot traverse
+    deeper than the value selected in the UI; the prompt states the same value.
+    """
+    depth = max(1, min(int(describe_depth or 1), 5))
+    ctx.dtwin_describe_depth = depth
+    return SYSTEM_PROMPT.replace(
+        "``describe_entity`` (depth=1)",
+        f"``describe_entity`` (depth={depth})",
+    )
 
 
 @trace_agent(name="dtwin_chat")
@@ -245,11 +269,7 @@ def run_agent(
 
     result = AgentResult(success=False)
 
-    depth = max(1, min(int(describe_depth or 1), 5))
-    system_prompt = SYSTEM_PROMPT.replace(
-        "``describe_entity`` (depth=1)",
-        f"``describe_entity`` (depth={depth})",
-    )
+    system_prompt = _configure_depth(ctx, describe_depth)
 
     messages = [{"role": "system", "content": system_prompt}]
     if conversation_history:

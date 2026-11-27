@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -46,6 +47,7 @@ if str(_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(_ROOT / "src"))
 
 DATASET_PATH = _ROOT / "tests/eval/datasets/agent_dtwin_chat/baseline.jsonl"
+REGRESSION_PATH = _ROOT / "tests/eval/datasets/agent_dtwin_chat/regression.jsonl"
 THRESHOLDS_PATH = _ROOT / "tests/eval/thresholds.yaml"
 AGENT_NAME = "dtwin_chat"
 
@@ -185,6 +187,73 @@ def judge_contains(expected: Dict[str, Any], reply: str) -> float:
     return found / len(must_contain)
 
 
+# ── Depth-setting judges (issue #252) ─────────────────────────────────────────
+#
+# ``trace`` is a list of ``{"tool", "args", "result"}`` dicts, one per tool call
+# in call order. ``result`` is the tool output text. In live mode it is the
+# engine's tool_result step, which is cut to 500 characters, so only the header
+# (``depth=N``) is reliable there; a ``TRUNCATED`` warning past that point is
+# not seen by these judges.
+
+_DEPTH_RE = re.compile(r"depth=(\d+)")
+_LIMITATION_MARKERS = (
+    "may be incomplete",
+    "may be partial",
+    "incomplete",
+    "partial",
+    "truncated",
+    "depth setting",
+)
+
+
+def _describe_calls(trace: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [t for t in trace if t.get("tool") == "describe_entity"]
+
+
+def _effective_depth(call: Dict[str, Any]) -> Optional[int]:
+    """Depth the tool actually traversed, from the result header."""
+    m = _DEPTH_RE.search(call.get("result", ""))
+    return int(m.group(1)) if m else None
+
+
+def _requested_depth(call: Dict[str, Any]) -> int:
+    """Depth the LLM asked for in its tool call (defaults to 1, like the tool)."""
+    return int((call.get("args") or {}).get("depth") or 1)
+
+
+def judge_depth_capped(expected: Dict[str, Any], trace: List[Dict[str, Any]]) -> float:
+    """`depth_capped` (value = user's Depth) — no describe_entity call may have
+    traversed deeper than the Depth the user selected in the UI."""
+    cs = _constraints_of(expected, "depth_capped")
+    if not cs:
+        return 1.0
+    cap = int(cs[0]["value"])
+    depths = [d for d in (_effective_depth(c) for c in _describe_calls(trace)) if d is not None]
+    if not depths:
+        return 1.0  # no traversal reported; tool_called covers whether a call happened
+    return 1.0 if all(d <= cap for d in depths) else 0.0
+
+
+def judge_discloses_partial_result(expected: Dict[str, Any], reply: str, trace: List[Dict[str, Any]]) -> float:
+    """`discloses_partial_result` — when the traversal was capped below the
+    requested depth or the result was TRUNCATED, the reply must say the answer
+    may be partial instead of presenting it as complete."""
+    cs = _constraints_of(expected, "discloses_partial_result")
+    if not cs:
+        return 1.0
+    limited = False
+    for c in _describe_calls(trace):
+        effective = _effective_depth(c)
+        if effective is None:
+            continue
+        if _requested_depth(c) > effective or "TRUNCATED" in c.get("result", ""):
+            limited = True
+    if not limited:
+        return 1.0
+    lowered = reply.lower()
+    return 1.0 if any(m in lowered for m in _LIMITATION_MARKERS) else 0.0
+
+
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
 _WEIGHTS = {
@@ -195,12 +264,23 @@ _WEIGHTS = {
 }
 
 
-def score_example(example: Dict[str, Any], tools_called: List[str], reply: str, elapsed_s: float) -> Dict[str, float]:
+def score_example(
+    example: Dict[str, Any],
+    tools_called: List[str],
+    reply: str,
+    elapsed_s: float,
+    trace: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, float]:
     expected = example.get("expected", {})
+    trace = trace or []
 
+    # Depth-setting checks are folded into tool_selection (depth argument /
+    # traversal) and groundedness (disclosing a partial answer), matching the
+    # SPEC's "fold until a live baseline justifies splitting" note.
     tool_selection = min(
         judge_tool_called(expected, tools_called),
         judge_does_not_call_tool(expected, tools_called),
+        judge_depth_capped(expected, trace),
     )
     action_safety = min(
         judge_does_not_invoke_action(expected, tools_called),
@@ -210,6 +290,7 @@ def score_example(example: Dict[str, Any], tools_called: List[str], reply: str, 
         judge_grounded_in_triplestore(expected, tools_called),
         judge_does_not_invent_entities(expected, reply, example),
         judge_response_acknowledges_absence(expected, reply),
+        judge_discloses_partial_result(expected, reply, trace),
     )
     contains = judge_contains(expected, reply)
 
@@ -227,7 +308,7 @@ def score_example(example: Dict[str, Any], tools_called: List[str], reply: str, 
 # ── Dry-run stub trace (used when --dry-run is set) ───────────────────────────
 
 
-def _stub_run(example: Dict[str, Any]) -> tuple[List[str], str]:
+def _stub_run(example: Dict[str, Any]) -> tuple[List[str], str, List[Dict[str, Any]]]:
     """Build a tool-call trace + reply that satisfies this example's own
     constraints. This validates dataset shape + judge wiring, mirroring
     ``run_agent_graph_interpreter.py``'s ``_stub_output`` — it does **not**
@@ -269,10 +350,49 @@ def _stub_run(example: Dict[str, Any]) -> tuple[List[str], str]:
     if not reply_parts:
         reply_parts.append(f"Grounded answer for: {inp.get('user_message', '')}")
 
-    return tools_called, " ".join(reply_parts)
+    # Depth-setting stub (issue #252): the user's Depth (``describe_depth``) caps
+    # the LLM's requested depth (``dry_run_depth_requested``), and a truncated
+    # result is marked with ``dry_run_truncated``. Mirrors the engine's behaviour.
+    cap = int(inp.get("describe_depth", 1) or 1)
+    requested = int(inp.get("dry_run_depth_requested", 1) or 1)
+    effective = min(requested, cap)
+    truncated = bool(inp.get("dry_run_truncated"))
+    trace: List[Dict[str, Any]] = []
+    for name in tools_called:
+        if name == "describe_entity":
+            header = f"Found 1 matching entity (3 triples across 2 entities, depth={effective})"
+            result = header
+            if truncated:
+                result += "\nWARNING: (Showing 1 of 9 triples -- TRUNCATED.)"
+            trace.append({"tool": name, "args": {"depth": requested}, "result": result})
+        else:
+            trace.append({"tool": name, "args": {}, "result": ""})
+
+    limited = requested > effective or truncated
+    if limited and _describe_calls(trace):
+        reply_parts.append(
+            "This answer may be incomplete: the Depth setting limits the traversal."
+        )
+
+    return tools_called, " ".join(reply_parts), trace
 
 
 # ── Dataset validation ─────────────────────────────────────────────────────────
+
+def _trace_from_steps(steps: List[Any]) -> List[Dict[str, Any]]:
+    """Pair each live tool_call step with its tool_result step, in call order."""
+    trace: List[Dict[str, Any]] = []
+    for s in steps:
+        if s.step_type == "tool_call" and s.tool_name:
+            try:
+                args = json.loads(s.content) if s.content else {}
+            except json.JSONDecodeError:
+                args = {}
+            trace.append({"tool": s.tool_name, "args": args, "result": ""})
+        elif s.step_type == "tool_result" and trace:
+            trace[-1]["result"] = s.content or ""
+    return trace
+
 
 _VALID_TAGS = {"happy", "ambiguous", "adversarial", "synthetic", "regression"}
 _VALID_CONSTRAINT_KINDS = {
@@ -284,6 +404,8 @@ _VALID_CONSTRAINT_KINDS = {
     "does_not_invent_entities",
     "response_acknowledges_absence",
     "grounded_in_triplestore",
+    "depth_capped",
+    "discloses_partial_result",
 }
 
 
@@ -346,13 +468,16 @@ def run(
     mlflow_experiment: Optional[str] = None,
 ) -> float:
     examples = []
-    with open(DATASET_PATH) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                examples.append(json.loads(line))
+    for path in (DATASET_PATH, REGRESSION_PATH):
+        if not path.exists():
+            continue
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    examples.append(json.loads(line))
 
-    print(f"Loaded {len(examples)} examples from {DATASET_PATH}")
+    print(f"Loaded {len(examples)} examples from {DATASET_PATH.name} + {REGRESSION_PATH.name}")
 
     if len(examples) < 10:
         print(f"FAIL: dataset has {len(examples)} examples, minimum is 10 for a material change")
@@ -378,7 +503,7 @@ def run(
     for ex in examples:
         t0 = time.time()
         if dry_run:
-            tools_called, reply = _stub_run(ex)
+            tools_called, reply, trace = _stub_run(ex)
             elapsed = time.time() - t0
         else:
             if not (host and token and endpoint and base_url and domain):
@@ -397,14 +522,16 @@ def run(
                 registry_params={},
                 session_cookies={},
                 user_message=ex["input"]["user_message"],
+                describe_depth=int(ex["input"].get("describe_depth", 1)),
             )
             tools_called = [
                 s.tool_name for s in agent_result.steps if s.step_type == "tool_call" and s.tool_name
             ]
+            trace = _trace_from_steps(agent_result.steps)
             reply = agent_result.reply
             elapsed = time.time() - t0
 
-        scores = score_example(ex, tools_called, reply, elapsed)
+        scores = score_example(ex, tools_called, reply, elapsed, trace)
         results.append({"id": ex["id"], "tags": ex.get("tags", []), **scores})
 
         status = "PASS" if scores["weighted"] >= threshold else "FAIL"
