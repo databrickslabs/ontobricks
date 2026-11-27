@@ -372,12 +372,13 @@ the generated SHACL-AF live as you build a rule.
    that attribute on the matched entity is removed and the new one set.
 5. **Action (THEN)**: the THEN part has an **Action** switch.
    - **Assert** (default) infers the THEN triples, as above.
-   - **Remove** deletes the triples the IF part matches. Put the relationship or
-     attribute to delete under **THEN**, and bind its variables with the **IF**
-     conditions. For example, IF `Meter(?m)` and `Customer(?c)`, THEN
-     `meterOf(?m, ?c)` with **Remove** deletes every `meterOf` link between a
-     meter and a customer. A literal such as `status = "closed"` removes only
-     the matching value.
+   - **Remove** deletes the triples the IF part matches. Right-click the class,
+     relationship or attribute to delete and choose **Add to THEN**; its variables
+     stay bound by the **IF** conditions. For example, IF `Meter(?m)` and
+     `Customer(?c)`, THEN `meterOf(?m, ?c)` with **Remove** deletes every
+     `meterOf` link between a meter and a customer. THEN `Meter(?m)` removes the
+     meter membership of each matched meter. A literal such as `status = "closed"`
+     removes only the matching value.
 
      A removal is hidden through the same overrides as a Complex removal rule, and
      runs with the reasoning pipeline (not per entity). It is not a quality check,
@@ -443,12 +444,24 @@ WHERE {
 
 #### Removal Rules (SPARQL DELETE)
 
-A Complex rule can also **remove** triples. Set **Rule type** to
-**Remove triples (DELETE)** in the rule editor. A removal rule hides the stored
+A Complex rule can also **remove** triples. Write a `DELETE` query in the rule
+editor: the **Rule type** line reads **Remove triples (DELETE)** and the Preview
+box appears. The first keyword of the query decides the rule type: `CONSTRUCT`
+infers triples, `DELETE` removes them. A removal rule hides the stored
 triples its pattern matches. It never changes the source tables: the hidden
 triples are recorded as overrides in the `_overrides` table (Lakebase and Delta),
 and the original triples stay in place underneath. On Neo4j the matching triples
 are deleted from the property graph itself.
+
+The chat assistant in the rule editor drafts removal rules too: ask it to
+remove something and it writes the `DELETE`, and the **Rule type** line follows
+the query. When your request does not say what should disappear, it asks
+first: only the link, the entity itself (its class membership and the link the
+condition uses), or only its class membership. If several relationships could
+be the link you mean (for example `Contract hasMeter Meter` and `Customer owns
+Meter` for "owned meters"), it then asks which one. It asks one question at a
+time, and the question always appears above its answer buttons. You still
+**Preview** before saving.
 
 Three forms are accepted, each with no `INSERT`, `GRAPH` or property-path part:
 

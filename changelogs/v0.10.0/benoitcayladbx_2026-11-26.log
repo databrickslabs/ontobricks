@@ -135,3 +135,91 @@ Simple-rule retractions. The earlier tests missed it because they called
 - `uv run --frozen pytest -q -m "not scenario"` → 11633 passed, 334 skipped, 8 deselected,
   0 failed. `ruff check --select F` is clean on the changed files.
 - Still not verified: a live reasoning run on Lakebase or Delta with a removal rule.
+
+## Fix: Simple Remove rule could not be saved (no THEN relationship)
+
+### Context
+A Simple (IF-THEN) rule with action `Remove` could not be saved. The user had to put a
+relationship under THEN, but the editor refused it: "Add to THEN" was hidden for any element
+already selected in IF, and selecting a relationship as THEN moved it out of IF and turned its
+endpoints into THEN classes, which validation rejects for a retraction. In Remove mode a
+relationship must be able to sit in both IF (to bind its variables) and THEN (the triple to
+delete), and its endpoints must bind from IF.
+
+### Changes
+1. `src/front/static/ontology/js/ontology-if-then.js`:
+   - `_canAddToThen(elementId)` (new): in assert mode, unchanged rule (an element already used in
+     IF or THEN cannot be added to THEN); in Remove mode, only relationships not already in THEN.
+   - `_showContextMenu`: the "Add to THEN" item uses `_canAddToThen`.
+   - `_selectLink`: in Remove mode the relationship stays in IF when added to THEN, and its
+     endpoints are bound in IF (`endpointSide`). Assert mode is unchanged.
+   - `saveRule`: a Remove rule without a THEN part gets an explicit message pointing to
+     "Add to THEN".
+2. `src/front/templates/partials/ontology/_ontology_business_rules.html`: the Remove hint now says
+   to right-click a relationship and choose "Add to THEN", and that its endpoints bind from IF.
+3. `tests/units/front/test_if_then_remove_editor.py` (new, 9 tests): runs `IfThenModule` under
+   node against a stubbed DOM. Remove mode: a condition relationship can be added to THEN, stays
+   in IF, endpoints bind in IF, a class cannot be added to THEN. Assert mode: unchanged behaviour.
+
+### Modified files
+- src/front/static/ontology/js/ontology-if-then.js
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- tests/units/front/test_if_then_remove_editor.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-26.log
+
+### Test result
+- `node --check src/front/static/ontology/js/ontology-if-then.js` → OK.
+- `uv run --frozen pytest -q tests/units/front/test_if_then_remove_editor.py` → 9 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 11642 passed, 334 skipped, 8 deselected,
+  0 failed.
+- Not verified in a browser: the click-through of the editor.
+
+## Feature: Remove rules can delete class membership (same entity in IF and THEN)
+
+### Context
+A Remove (Simple IF-THEN) rule could not use the same class in IF and THEN: "Add to THEN" was
+refused for any class already in IF, and the validator refused class atoms in a retraction. A
+removal now accepts a class membership in THEN, bound by the IF part (for example IF `Meter(?m)`
+and `meterOf(?m, ?c)`, THEN `Meter(?m)` removes the `rdf:type` triple of each matched meter).
+This reverses the earlier decision to refuse class membership in removals; assert rules are
+unchanged (a class in both IF and THEN is still a tautology).
+
+### Changes
+1. `src/back/objects/ontology/Rules.py`: `_retraction_errors` accepts unary (class) and binary
+   (relationship / attribute) THEN atoms whose variables the IF part binds; other arities,
+   built-ins and negation are still refused, with a clearer message.
+2. `src/front/static/ontology/js/ontology-if-then.js`:
+   - `_canAddToThen`: in Remove mode any class, relationship or attribute not already in THEN
+     qualifies (assert mode unchanged).
+   - `_selectNode`: in Remove mode "Add to THEN" keeps the class in IF (binds its variable) and
+     adds it to THEN.
+   - `saveRule`: the Remove warning mentions a class, relationship or attribute.
+3. `src/front/templates/partials/ontology/_ontology_business_rules.html`: the Remove hint lists the
+   three forms.
+4. `docs/user-guide.md` and `docs/api.md`: the Remove description and the allowed THEN forms.
+5. Tests updated to the new contract:
+   - `tests/units/reasoning/test_if_then_retraction.py`: class membership is valid; a three-argument
+     atom is refused; a class retraction selects only existing `rdf:type` rows (checked on SQLite).
+   - `tests/units/api/test_if_then_retraction_routes.py`: a class retraction is saved; the import
+     rejects a three-argument retraction.
+   - `tests/units/front/test_if_then_remove_editor.py`: a class in IF can be added to THEN and stays
+     in IF; a class outside IF is bound in IF; assert mode still refuses a class in IF.
+
+### Modified files
+- src/back/objects/ontology/Rules.py
+- src/front/static/ontology/js/ontology-if-then.js
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- docs/user-guide.md
+- docs/api.md
+- tests/units/reasoning/test_if_then_retraction.py
+- tests/units/api/test_if_then_retraction_routes.py
+- tests/units/front/test_if_then_remove_editor.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-26.log
+
+### Test result
+- `uv run --frozen ruff check --select F` on the changed Python files → clean.
+- `node --check src/front/static/ontology/js/ontology-if-then.js` → OK.
+- `uv run --frozen pytest -q -m "not scenario"` → 11647 passed, 334 skipped, 8 deselected,
+  0 failed.
+- Not verified: a live Lakebase/Delta run that removes a class membership, and a browser
+  click-through of the editor. The SQL was checked on SQLite only.

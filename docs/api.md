@@ -1827,9 +1827,10 @@ POST /ontology/if-then/save
 
 `rule.action` is optional: `"assert"` (default, infers the THEN triples) or
 `"retract"` (removes the triples the IF part matches through the removal
-overlay). A retraction's THEN part must be property or attribute atoms whose
-variables are bound by the IF part; class atoms, built-ins and negation are
-rejected. `POST /ontology/shacl-rules/preview` accepts the same `action` and
+overlay). A retraction's THEN part may be a class membership (`Class(?x)`, removes
+the `rdf:type` triple), a relationship (`prop(?x, ?y)`) or an attribute value
+(`prop(?x, "value")`), each with variables bound by the IF part; built-ins and
+negation are rejected. `POST /ontology/shacl-rules/preview` accepts the same `action` and
 returns the SPARQL `DELETE` form for a retraction.
 
 #### Export Rules
@@ -1881,7 +1882,7 @@ POST /ontology/rules/import
 POST /ontology/rules/sparql_rules/removal-preview
 ```
 
-Counts the triples a removal rule (SPARQL `DELETE`) would hide, without writing anything. The rule is validated as a removal (`kind` is forced to `removal`).
+Counts the triples a removal rule (SPARQL `DELETE`) would hide, without writing anything. The rule type comes from the query: a query that is not a `DELETE` (for example a `CONSTRUCT`) returns `success: false` with the error `Only a DELETE rule has a removal preview`.
 
 **Request Body:**
 ```json

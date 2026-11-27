@@ -3395,7 +3395,7 @@ based on the active triple-store backend's `query_dialect`.
 | `OWLRLReasoner` | OWL 2 RL fragment + facts | RDF graph operations (rdflib) | Python in-memory; results materialized to triple store via Spark SQL or GraphDB bulk insert |
 | `ShaclRuleEngine` + `ShaclFlatSqlBackend` | Business rules (SHACL-AF) | **SQL** | Databricks SQL Warehouse on the Delta view, and the Lakebase Postgres Graph DB engine. Future Cypher / Gremlin engines can plug in their own flat-triple backend. |
 | `SPARQLRuleEngine` + `SparqlConstructCompiler` | Complex (SPARQL `CONSTRUCT`) rules | **SQL** on the flat triple table (rdflib algebra → Spark / Postgres SQL; fail-closed subset, already-known triples skipped) | Same engines as `ShaclRuleEngine`; a query outside the subset is refused on save and reported as a phase error at run time |
-| `SparqlUpdateCompiler` (removal rules) | Complex rules with `kind: removal` (SPARQL `DELETE WHERE` / `DELETE DATA` / `DELETE {…} WHERE {…}`) | **SQL** that selects the stored triples to hide; the store records them as `del` rows with origin `reasoning` (overlay on Lakebase and Delta, physical delete on Neo4j) | Shares `SparqlPatternCompiler` with the CONSTRUCT compiler; requires a bound subject or object; removals are reapplied after every Build |
+| `SparqlUpdateCompiler` (removal rules) | Complex rules whose query is a `DELETE` (SPARQL `DELETE WHERE` / `DELETE DATA` / `DELETE {…} WHERE {…}`) | **SQL** that selects the stored triples to hide; the store records them as `del` rows with origin `reasoning` (overlay on Lakebase and Delta, physical delete on Neo4j) | Shares `SparqlPatternCompiler` with the CONSTRUCT compiler; requires a bound subject or object; removals are reapplied after every Build |
 
 ---
 
