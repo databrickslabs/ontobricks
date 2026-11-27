@@ -594,6 +594,23 @@ class TestAxiomGeneration:
         owl = gen.generate()
         assert "disjointWith" in owl
 
+    def test_property_chain_from_ui_subject_shape(self):
+        # The Add-Axiom UI stores the result property as ``subject``.
+        axioms = [
+            {
+                "type": "propertyChain",
+                "subject": "isPartOf",
+                "chain": ["isPartOf", "isPartOf"],
+            }
+        ]
+        owl = _make_generator(axioms=axioms).generate()
+        assert "propertyChainAxiom" in owl
+
+    def test_property_chain_with_null_chain_is_skipped(self):
+        axioms = [{"type": "propertyChain", "subject": "isPartOf", "chain": None}]
+        owl = _make_generator(axioms=axioms).generate()
+        assert "propertyChainAxiom" not in owl
+
 
 class TestExpressionGeneration:
     def test_union_of(self):

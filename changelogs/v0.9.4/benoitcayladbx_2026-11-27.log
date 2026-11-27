@@ -32,6 +32,40 @@ Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9717 passed, 338 skipped
 (The size-budget architecture test required extracting `TwinInferredMaterialize.from_inferred`
 so `run_inference_task` does not grow past its baseline.)
 
+## review(#239): exact transitive-chain rule, UI property-chain export, retarget to 0.9.4
+
+Context: Review follow-ups on PR #239 (axiom-driven graph reasoning, #237). The PR
+was retargeted from `master` to `0.9.4`; its changelog was merged into the
+existing `v0.9.4` AlexPicard10 file.
+
+Changes:
+1. src/back/core/reasoning/ReasoningService.py - `_find_transitive_from_axioms`
+   now requires a chain of exactly two elements (`p ∘ p ⊑ p`). Longer self-chains
+   (`p ∘ p ∘ p ⊑ p`) do not imply transitivity and are ignored.
+2. src/back/core/w3c/owl/OntologyGenerator.py - `propertyChain` axioms now fall
+   back to `subject` when `resultProperty` is absent (the Add-Axiom UI stores the
+   result property as `subject`; the parser emits `resultProperty`), so UI-created
+   chains are really exported to OWL. A `null` chain no longer raises `TypeError`.
+   Size-neutral to respect the architecture size ratchet.
+3. src/front/static/ontology/js/ontology-axioms.js - the subject label reads
+   "Result Property" for `propertyChain`.
+4. tests/units/ontology/test_reasoning_service.py - 3-element self-chain negative
+   case, imported (`resultProperty`) shape, missing-key / null-chain cases.
+5. tests/units/ontology/test_owl_generator.py - UI `subject` shape is exported as
+   `owl:propertyChainAxiom`; a null chain is skipped.
+6. changelogs/v0.9.4/AlexPicard10_2026-11-24.log - PR #239 section merged here
+   (removed from `v0.9.3`).
+
+Modified files:
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/front/static/ontology/js/ontology-axioms.js
+- tests/units/ontology/test_reasoning_service.py
+- tests/units/ontology/test_owl_generator.py
+- changelogs/v0.9.4/AlexPicard10_2026-11-24.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9725 passed, 338 skipped.
+
 ## docs: contributors list, third-party licenses refresh, release-notes routine
 
 Context: The release-notes routine did not cover the contributors list or the
