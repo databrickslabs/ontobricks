@@ -303,3 +303,44 @@ Modified files:
 - tests/units/ontology/test_owl_generator.py
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 11713 passed, 334 skipped.
+
+## feat(reasoning): forward-port #245 - owl:inverseOf SQL inverse expansion (#237)
+
+Context: Forward-port of PR #245 (AlexPicard10, merged-target `0.9.4`) with the
+review follow-ups. An `owl:inverseOf` axiom declared in Expr. & Axioms now
+materialises the missing `(b, Q, a)` edges for every `(a, P, b)`. On `0.10.0`
+the SQL reasoning defaults already live in
+`interfaces/TraversalMixin.py` (the `GraphDBBackend` split of 0.9.4 does not
+exist here), so the `SQLGraphReasoningOps` extract-class step is not needed:
+`inverse_expand` is added to `TraversalMixin` directly.
+
+Changes:
+1. src/back/core/graphdb/interfaces/TraversalMixin.py - new `inverse_expand(table,
+   P, Q)` SQL anti-join (error-swallowing, like the sibling ops).
+2. src/back/core/graphdb/neo4j/Store.py - `inverse_expand` no-op override that
+   logs a warning (native Cypher is a follow-up; the SQL default is invalid on Neo4j).
+3. src/back/core/reasoning/ReasoningService.py - `run_graph_reasoning` reads
+   `owl:inverseOf` axioms (`_find_inverse_pairs_from_axioms`, both directions),
+   new `_expand_property` dedupes the transitive / symmetric / inverse loops;
+   `_resolve_axiom_prop_uri` keeps only the local name of bare refs with `#` or `/`.
+4. src/front/static/ontology/js/ontology-axioms.js - the inverse property is
+   required when saving an `inverseOf` axiom.
+5. docs/architecture.md, docs/backend.md - `inverse_expand`, `graph:inverse`
+   provenance, axiom-driven graph reasoning, Neo4j limitation.
+6. tests - `test_sql_graph_reasoning_ops.py` (new: SQL shape, passthrough,
+   error swallow, GraphBackend inherits the ops), `test_neo4j_store.py`
+   (no-op + warning), `test_reasoning_service.py` (pair detection, firing from an
+   axiom, failing op does not abort others, ref resolution variants, dedupe).
+
+Modified files:
+- src/back/core/graphdb/interfaces/TraversalMixin.py
+- src/back/core/graphdb/neo4j/Store.py
+- src/back/core/reasoning/ReasoningService.py
+- src/front/static/ontology/js/ontology-axioms.js
+- docs/architecture.md
+- docs/backend.md
+- tests/units/graphdb/test_sql_graph_reasoning_ops.py (new)
+- tests/units/graphdb/test_neo4j_store.py
+- tests/units/ontology/test_reasoning_service.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 11727 passed, 334 skipped, 8 deselected.

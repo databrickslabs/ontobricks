@@ -1,6 +1,7 @@
 """Reasoning service — orchestrates T-Box, IF-THEN, Graph, Constraint, and
 SPARQL CONSTRUCT rule phases."""
 
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -287,50 +288,30 @@ class ReasoningService:
         for prop_uri in self._find_transitive_from_axioms(ontology):
             if prop_uri not in transitive_props:
                 transitive_props.append(prop_uri)
-        logger.info(
-            "Graph reasoning: %d transitive properties found%s",
-            len(transitive_props),
-            f" ({', '.join(transitive_props)})" if transitive_props else "",
-        )
         for prop_uri in transitive_props:
-            try:
-                rows = self._store.transitive_closure(table_name, prop_uri)
-                logger.info(
-                    "Transitive closure for %s: %d inferred", prop_uri, len(rows)
-                )
-                for row in rows:
-                    result.inferred_triples.append(
-                        InferredTriple(
-                            subject=row.get("subject", ""),
-                            predicate=row.get("predicate", prop_uri),
-                            object=row.get("object", ""),
-                            provenance="graph:transitive",
-                        )
-                    )
-            except Exception as e:
-                logger.warning("Transitive closure for %s failed: %s", prop_uri, e)
+            self._expand_property(
+                result,
+                "graph:transitive",
+                prop_uri,
+                lambda p=prop_uri: self._store.transitive_closure(table_name, p),
+            )
 
-        symmetric_props = self._find_properties_by_characteristic(ontology, "symmetric")
-        logger.info(
-            "Graph reasoning: %d symmetric properties found%s",
-            len(symmetric_props),
-            f" ({', '.join(symmetric_props)})" if symmetric_props else "",
-        )
-        for prop_uri in symmetric_props:
-            try:
-                rows = self._store.symmetric_expand(table_name, prop_uri)
-                logger.info("Symmetric expand for %s: %d inferred", prop_uri, len(rows))
-                for row in rows:
-                    result.inferred_triples.append(
-                        InferredTriple(
-                            subject=row.get("subject", ""),
-                            predicate=row.get("predicate", prop_uri),
-                            object=row.get("object", ""),
-                            provenance="graph:symmetric",
-                        )
-                    )
-            except Exception as e:
-                logger.warning("Symmetric expand for %s failed: %s", prop_uri, e)
+        for prop_uri in self._find_properties_by_characteristic(ontology, "symmetric"):
+            self._expand_property(
+                result,
+                "graph:symmetric",
+                prop_uri,
+                lambda p=prop_uri: self._store.symmetric_expand(table_name, p),
+            )
+
+        # owl:inverseOf axioms (bidirectional): for each (a, P, b) emit (b, Q, a).
+        for p_uri, q_uri in self._find_inverse_pairs_from_axioms(ontology):
+            self._expand_property(
+                result,
+                "graph:inverse",
+                q_uri,
+                lambda p=p_uri, q=q_uri: self._store.inverse_expand(table_name, p, q),
+            )
 
         result.stats = {
             "phase": "graph",
@@ -343,6 +324,38 @@ class ReasoningService:
             time.time() - t0,
         )
         return result
+
+    def _expand_property(
+        self,
+        result: ReasoningResult,
+        provenance: str,
+        fallback_predicate: str,
+        call: Callable[[], List[Dict[str, Any]]],
+    ) -> None:
+        """Run one store reasoning op and append its inferred triples.
+
+        Logs the inferred count and swallows+logs any backend error so one
+        property's failure does not abort the whole graph phase.
+        """
+        try:
+            rows = call() or []
+        except Exception as e:
+            logger.warning(
+                "%s expansion for %s failed: %s", provenance, fallback_predicate, e
+            )
+            return
+        logger.info(
+            "%s expansion for %s: %d inferred", provenance, fallback_predicate, len(rows)
+        )
+        for row in rows:
+            result.inferred_triples.append(
+                InferredTriple(
+                    subject=row.get("subject", ""),
+                    predicate=row.get("predicate", fallback_predicate),
+                    object=row.get("object", ""),
+                    provenance=provenance,
+                )
+            )
 
     def run_constraint_checks(self) -> ReasoningResult:
         """Validate instance data against ontology constraints.
@@ -595,8 +608,13 @@ class ReasoningService:
         if not ref:
             return ""
         if ref.startswith("http"):
-            return ReasoningService._normalize_property_uri(ref, data_ns, base_uri, sep, "")
-        return ReasoningService._normalize_property_uri("", data_ns, base_uri, sep, ref)
+            return ReasoningService._normalize_property_uri(
+                ref, data_ns, base_uri, sep, ""
+            )
+        # Bare name; tolerate prefixed/partial refs ("ex#p", "a/p") by keeping
+        # only the local name so no stray "#" or "/" leaks into the predicate.
+        name = ReasoningService._local_name(ref) if re.search(r"[#/]", ref) else ref
+        return ReasoningService._normalize_property_uri("", data_ns, base_uri, sep, name)
 
     @staticmethod
     def _find_transitive_from_axioms(ontology: Dict) -> List[str]:
@@ -621,3 +639,36 @@ class ReasoningService:
             if len(uris) == 1 and "" not in uris:
                 out.append(next(iter(uris)))
         return out
+
+    @staticmethod
+    def _find_inverse_pairs_from_axioms(ontology: Dict) -> List[Tuple[str, str]]:
+        """Directed ``(property, inverse_property)`` URI pairs from
+        ``owl:inverseOf`` axioms (``subject`` inverse of each of ``objects``).
+
+        ``owl:inverseOf`` is symmetric, so each declared pair yields both
+        directions — ``(P, Q)`` and ``(Q, P)`` — deduplicated. URIs are
+        resolved to the data-namespace predicates stored in the triple store.
+        """
+        base_uri = ontology.get("base_uri", "")
+        data_ns, sep = ReasoningService._namespace_parts(base_uri)
+        pairs: List[Tuple[str, str]] = []
+        seen: set = set()
+        for ax in ontology.get("axioms", []) or []:
+            if ax.get("type") != "inverseOf":
+                continue
+            subj = ReasoningService._resolve_axiom_prop_uri(
+                ax.get("subject", ""), data_ns, base_uri, sep
+            )
+            if not subj:
+                continue
+            for obj_ref in ax.get("objects", []) or []:
+                obj = ReasoningService._resolve_axiom_prop_uri(
+                    obj_ref, data_ns, base_uri, sep
+                )
+                if not obj or obj == subj:
+                    continue
+                for a, b in ((subj, obj), (obj, subj)):
+                    if (a, b) not in seen:
+                        seen.add((a, b))
+                        pairs.append((a, b))
+        return pairs

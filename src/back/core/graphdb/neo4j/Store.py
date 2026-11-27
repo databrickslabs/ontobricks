@@ -627,6 +627,19 @@ class Store(MaterializedGraphBackend):
     ) -> List[Dict[str, Any]]:
         return self._reads.symmetric_expand(table_name, predicate_uri)
 
+    def inverse_expand(
+        self, table_name: str, predicate_uri: str, inverse_predicate_uri: str
+    ) -> List[Dict[str, Any]]:
+        # Native Cypher inverse expansion is a follow-up; no-op for now (the
+        # SQL default on TraversalMixin is not valid against Neo4j).
+        logger.warning(
+            "owl:inverseOf expansion (%s -> %s) is not supported on the Neo4j "
+            "backend yet; no inverse triples were materialised",
+            predicate_uri,
+            inverse_predicate_uri,
+        )
+        return []
+
     def shortest_path(
         self,
         table_name: str,

@@ -440,7 +440,12 @@ window.AxiomsModule = {
         document.querySelectorAll('.chain-select').forEach(sel => {
             if (sel.value) chain.push(sel.value);
         });
-        
+
+        if (type === 'inverseOf' && objects.length === 0) {
+            showNotification('Please select the inverse property', 'warning');
+            return;
+        }
+
         const axiom = {
             type: type,
             subject: subject,
