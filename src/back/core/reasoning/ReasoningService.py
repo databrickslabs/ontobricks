@@ -670,8 +670,9 @@ class ReasoningService:
     @staticmethod
     def _find_transitive_from_axioms(ontology: Dict) -> List[str]:
         """Property URIs made transitive by a self ``owl:propertyChainAxiom``
-        (``p ∘ p ⊑ p``): a chain of length >= 2 whose elements and the result
-        property all resolve to the same property."""
+        (``p ∘ p ⊑ p``): a chain of exactly two elements that, with the result
+        property, all resolve to the same property. Longer self-chains
+        (``p ∘ p ∘ p ⊑ p``) do not imply transitivity and are ignored."""
         base_uri = ontology.get("base_uri", "")
         data_ns, sep = ReasoningService._namespace_parts(base_uri)
         out: List[str] = []
@@ -680,7 +681,7 @@ class ReasoningService:
                 continue
             chain = ax.get("chain") or []
             result_ref = ax.get("resultProperty") or ax.get("subject") or ""
-            if len(chain) < 2 or not result_ref:
+            if len(chain) != 2 or not result_ref:
                 continue
             uris = {
                 ReasoningService._resolve_axiom_prop_uri(r, data_ns, base_uri, sep)

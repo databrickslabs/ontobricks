@@ -223,6 +223,46 @@ class TestAxiomDerivedReasoning:
         }
         assert ReasoningService._find_transitive_from_axioms(ontology) == []
 
+    def test_three_element_self_chain_is_not_transitive(self):
+        # p . p . p => p does NOT imply transitivity (only p . p => p does).
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {
+                    "type": "propertyChain",
+                    "subject": "http://ex.org#isPartOf",
+                    "chain": ["http://ex.org#isPartOf"] * 3,
+                }
+            ],
+        }
+        assert ReasoningService._find_transitive_from_axioms(ontology) == []
+
+    def test_imported_axiom_shape_with_result_property(self):
+        # OntologyParser emits ``resultProperty`` + local-name chain members.
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {
+                    "type": "propertyChain",
+                    "resultProperty": "isPartOf",
+                    "chain": ["isPartOf", "isPartOf"],
+                }
+            ],
+        }
+        result = ReasoningService._find_transitive_from_axioms(ontology)
+        assert result == ["http://ex.org/isPartOf"]
+
+    def test_missing_axioms_key_or_result_property(self):
+        assert ReasoningService._find_transitive_from_axioms({"base_uri": "x#"}) == []
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {"type": "propertyChain", "chain": ["isPartOf", "isPartOf"]},
+                {"type": "propertyChain", "subject": "isPartOf", "chain": None},
+            ],
+        }
+        assert ReasoningService._find_transitive_from_axioms(ontology) == []
+
 
 # ===========================================================================
 # run_full_reasoning — phase orchestration

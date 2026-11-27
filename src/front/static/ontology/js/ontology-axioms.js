@@ -85,7 +85,8 @@ window.AxiomsModule = {
         const isPropertyType = ['equivalentProperty', 'inverseOf', 'propertyChain', 'disjointProperties'].includes(type);
         
         if (isPropertyType) {
-            document.getElementById('subjectLabel').textContent = 'Subject Property';
+            document.getElementById('subjectLabel').textContent =
+                type === 'propertyChain' ? 'Result Property' : 'Subject Property';
             document.getElementById('objectLabel').textContent = 'Object Property';
             this.populateSelect('axiomSubject', this.properties, 'property');
             this.populateSelect('axiomObject', this.properties, 'property');
