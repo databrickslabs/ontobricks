@@ -7,14 +7,26 @@ Extracted from :class:`SettingsService` (Fowler Extract Class).
 from __future__ import annotations
 
 import importlib
+import threading
 from typing import Any, Dict, List, Optional
 
-from back.core.errors import InfrastructureError, OntoBricksError, ValidationError
+from back.core.errors import (
+    AuthorizationError,
+    ConflictError,
+    InfrastructureError,
+    OntoBricksError,
+    ValidationError,
+)
 from shared.config.settings import Settings
 from back.core.databricks.lakebase.grants import resolve_mcp_app_name
-from back.core.helpers import get_databricks_client, run_blocking
+from back.core.helpers import (
+    get_databricks_client,
+    get_workspace_host,
+    resolve_warehouse_id,
+    run_blocking,
+)
 from back.core.logging import get_logger
-from back.objects.registry import RegistryCfg, RegistryService
+from back.objects.registry import RegistryCfg, RegistryService, RegistrySetupService
 from back.objects.session import SessionManager, get_domain
 from back.objects.domain.settings.SettingsService import SettingsService
 
@@ -23,6 +35,9 @@ from back.objects.domain.settings.SettingsService import SettingsService
 _ss = importlib.import_module("back.objects.domain.settings.SettingsService")
 
 logger = get_logger(__name__)
+
+#: Held for the whole first-run setup; a second concurrent attempt is a conflict.
+_SETUP_LOCK = threading.Lock()
 
 
 class RegistrySettings:
@@ -465,6 +480,10 @@ class RegistrySettings:
                 domain, settings, prefer_volume_binding=True
             )
             if not svc.cfg.is_configured:
+                # Nothing pinned by env or session (a Marketplace install
+                # after a redeploy): keep the location saved in Lakebase.
+                svc = RegistryService.from_context(domain, settings)
+            if not svc.cfg.is_configured:
                 raise ValidationError(
                     "Registry catalog, schema, and volume must be configured first"
                 )
@@ -544,6 +563,101 @@ class RegistrySettings:
             raise InfrastructureError(
                 "Initialize registry failed", detail=str(e)
             ) from e
+
+    @staticmethod
+    def setup_registry_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+        catalog: str,
+        schema: str,
+        user_token: str,
+        user_email: str = "",
+    ) -> Dict[str, Any]:
+        """First-run setup: prepare ``catalog.schema`` as the caller, then Initialize.
+
+        For installs with no deploy-time registry location (Databricks
+        Marketplace). The location is pinned on the session for Initialize,
+        which stores it in the Lakebase ``registries`` row.
+        """
+        # One setup at a time in this process: a second admin must not create
+        # and grant another schema while the first one is still running.
+        if not _SETUP_LOCK.acquire(blocking=False):
+            raise ConflictError(
+                "Registry setup is already running; try again when it has finished."
+            )
+        try:
+            # Fresh read before any grant, so an already-located registry is
+            # refused before anything is created (the lock does not span replicas).
+            RegistrySettings._refuse_if_located(session_mgr, settings, fresh=True)
+            domain = get_domain(session_mgr)
+            setup = RegistrySettings._setup_service(
+                domain, settings, user_token, user_email
+            ).prepare(catalog, schema)
+            # Again, on a fresh read: another replica may have finished meanwhile.
+            RegistrySettings._refuse_if_located(session_mgr, settings, fresh=True)
+            registry = domain.settings.setdefault("registry", {})
+            registry.update(catalog=catalog, schema=schema)
+            try:
+                result = RegistrySettings.initialize_registry_result(
+                    session_mgr, settings
+                )
+            except Exception:
+                # Unpin, so the admin can retry setup instead of hitting the guard.
+                registry.pop("catalog", None)
+                registry.pop("schema", None)
+                raise
+            result["setup"] = setup
+            return result
+        finally:
+            _SETUP_LOCK.release()
+
+    @staticmethod
+    def setup_check_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+        catalog: str,
+        schema: str,
+        user_token: str,
+        user_email: str = "",
+    ) -> Dict[str, Any]:
+        """Dry-run the first-run setup as the caller: ``{"checks": [...]}``, nothing changed."""
+        service = RegistrySettings._setup_service(
+            get_domain(session_mgr), settings, user_token, user_email
+        )
+        return {"checks": service.preflight(catalog, schema)}
+
+    @staticmethod
+    def _setup_service(
+        domain: Any, settings: Settings, user_token: str, user_email: str
+    ) -> RegistrySetupService:
+        """Build the setup service on the caller's forwarded token."""
+        if not user_token:
+            raise AuthorizationError(
+                "Registry setup runs as you, but the Databricks Apps proxy did not forward your token."
+            )
+        return RegistrySetupService.for_user(
+            (settings.databricks_host or get_workspace_host()).rstrip("/"),
+            user_token,
+            resolve_warehouse_id(domain, settings),
+            settings.ontobricks_app_name,
+            user_email,
+        )
+
+    @staticmethod
+    def _refuse_if_located(
+        session_mgr: SessionManager, settings: Settings, *, fresh: bool = False
+    ) -> None:
+        """Raise :class:`ConflictError` if the registry already has a location."""
+        if fresh:
+            from back.objects.registry.store.lakebase.store import (
+                reset_lakebase_triplet_cache,
+            )
+
+            reset_lakebase_triplet_cache()
+        if RegistryCfg.from_session(session_mgr, settings).is_configured:
+            raise ConflictError(
+                "The registry location is already set; it cannot be moved from here."
+            )
 
     @staticmethod
     def _registry_grant_app_names(settings: Settings) -> List[str]:

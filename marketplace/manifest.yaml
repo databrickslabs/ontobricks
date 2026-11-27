@@ -1,0 +1,36 @@
+# Databricks Marketplace manifest for OntoBricks (0.10.x).
+# Spec: https://databricks.atlassian.net/wiki/spaces/UN/pages/5101748287
+# Resource names MUST match the valueFrom keys in ./app.yaml
+# (tests/units/scripts/test_marketplace_package.py enforces this).
+version: 1
+name: "ontobricks"
+description: "Design OWL ontologies, map them to Unity Catalog tables, and build and query knowledge graphs on Databricks."
+
+# `sql`: the DAB deploy's scope (databricks.yml user_api_scopes), for admin
+# group checks, MCP on-behalf-of and the first-run registry DDL.
+# `apps` (Marketplace only): lets OntoBricks read its own permissions as the
+# signed-in admin before anything is granted, and lets the first-run setup
+# give the app's service principal Can Manage on the app (PLAN.md Q4). The
+# DAB deploy does that grant in app-permissions.sh instead.
+# The identity scopes (iam.current-user:read, iam.access-control:read) are
+# platform defaults and must not be declared.
+user_api_scopes:
+  - "sql"
+  - "apps"
+
+resource_specs:
+  - name: "sql-warehouse"
+    description: "SQL Warehouse for executing queries and metadata operations"
+    sql_warehouse_spec:
+      permission: "CAN_USE"
+  # Lakebase Autoscaling database for the registry. No valueFrom in app.yaml:
+  # the platform injects PGHOST/PGPORT/PGDATABASE/PGUSER. The SDK's
+  # AppManifest model (0.82) has no postgres_spec, but the Apps manifest
+  # accepts it, and Ontos, Lakemeter and app-templates ship it (PLAN.md Q1).
+  - name: "postgres"
+    description: "Lakebase Autoscaling Postgres database for the OntoBricks registry"
+    postgres_spec:
+      permission: "CAN_CONNECT_AND_CREATE"
+
+# Not declared, because Apps can bind only CONNECTION, FUNCTION, TABLE or
+# VOLUME securables, never a schema: the registry catalog/schema (PLAN.md Q7).

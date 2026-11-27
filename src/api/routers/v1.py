@@ -9,9 +9,14 @@ from fastapi import APIRouter, Header
 from pydantic import AliasChoices, BaseModel, Field
 from typing import Any, Literal, Optional
 
-from back.core.errors import ValidationError, NotFoundError
+from back.core.databricks import is_databricks_app
+from back.core.databricks.request_identity import get_request_identity
+from back.core.errors import AuthorizationError, ValidationError, NotFoundError
+from back.core.helpers import get_databricks_host_and_token
 from shared.config.constants import APP_VERSION
+from shared.config.settings import get_settings
 from back.objects.domain import resolve_domain_slice
+from back.objects.registry import ROLE_ADMIN, ROLE_APP_USER, permission_service
 from api import service
 
 router = APIRouter()
@@ -27,11 +32,18 @@ class CredentialsModel(BaseModel):
 
     databricks_host: Optional[str] = Field(
         None,
-        description="Databricks workspace URL (e.g., https://my-workspace.cloud.databricks.com)",
+        description=(
+            "Databricks workspace URL (e.g., https://my-workspace.cloud.databricks.com). "
+            "Local development only: ignored when OntoBricks runs as a Databricks App."
+        ),
         examples=["https://my-workspace.cloud.databricks.com"],
     )
     databricks_token: Optional[str] = Field(
-        None, description="Personal Access Token or OAuth token for authentication"
+        None,
+        description=(
+            "Token for local development only. Ignored when OntoBricks runs as a "
+            "Databricks App, which always uses its own service principal."
+        ),
     )
 
     model_config = {
@@ -167,12 +179,54 @@ class DomainInfoSuccessResponse(BaseModel):
 # ===========================================
 
 
+def _app_credentials() -> tuple[Optional[str], Optional[str]]:
+    """Return the service principal's host/token, for a caller with access to the app.
+
+    Raises:
+        AuthorizationError: the forwarded identity is missing or has no access
+            to this Databricks App (``ROLE_NONE``).
+    """
+    identity = get_request_identity()
+    settings = get_settings()
+    host, token = get_databricks_host_and_token(None, settings)
+    role = (
+        permission_service.get_user_role(
+            identity.email,
+            host,
+            token,
+            {},
+            settings.ontobricks_app_name,
+            user_token=identity.user_token,
+        )
+        if identity.email
+        else ""
+    )
+    if role not in (ROLE_ADMIN, ROLE_APP_USER):
+        raise AuthorizationError(
+            "This endpoint runs with the app's service principal and requires "
+            "a signed-in user with access to the OntoBricks app."
+        )
+    return host, token
+
+
 def get_credentials(
     request_data: Optional[CredentialsModel],
     x_databricks_host: Optional[str] = None,
     x_databricks_token: Optional[str] = None,
 ) -> tuple[Optional[str], Optional[str]]:
-    """Extract Databricks credentials from headers or request body."""
+    """Resolve the Databricks credentials a /api/v1 route runs with.
+
+    In Databricks Apps mode caller-supplied host/token (headers or body) are
+    ignored and the app's service principal is used: the app never accepts a
+    personal access token (Marketplace SOP). Because the service principal can
+    read more than the caller, it is only handed to a signed-in user who has
+    access to the app (the ``/api/`` prefix skips the role middleware, so the
+    check is made here). In local development the ``X-Databricks-*`` headers
+    win over the ``databricks_*`` body fields.
+    """
+    if is_databricks_app():
+        return _app_credentials()
+
     host = x_databricks_host
     token = x_databricks_token
 
@@ -220,7 +274,9 @@ async def list_domains(
         None, alias="X-Databricks-Host", description="Databricks workspace URL"
     ),
     x_databricks_token: Optional[str] = Header(
-        None, alias="X-Databricks-Token", description="Authentication token"
+        None,
+        alias="X-Databricks-Token",
+        description="Token for local development only; ignored in Databricks Apps mode",
     ),
 ):
     """
@@ -228,7 +284,9 @@ async def list_domains(
 
     Returns a list of `.json` domain files found in the specified volume location.
 
-    **Authentication** can be provided via:
+    **Authentication:** as a Databricks App, OntoBricks always uses its own
+    service principal and ignores any credentials below. For local development
+    they can be provided via:
     - HTTP Headers: `X-Databricks-Host`, `X-Databricks-Token`
     - Request body: `databricks_host`, `databricks_token`
 
@@ -353,7 +411,9 @@ async def execute_query(
         None, alias="X-Databricks-Host", description="Databricks workspace URL"
     ),
     x_databricks_token: Optional[str] = Header(
-        None, alias="X-Databricks-Token", description="Authentication token"
+        None,
+        alias="X-Databricks-Token",
+        description="Token for local development only; ignored in Databricks Apps mode",
     ),
 ):
     """

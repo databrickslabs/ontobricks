@@ -51,7 +51,11 @@ def test_init_status_reports_missing_usage_on_existing_schema():
 
     assert status["initialized"] is False
     assert status["reason"] == "no_usage"
-    assert "lacks USAGE on schema 'ontobricks_registry' in database 'db1'" in status["error"]
+    assert (
+        "lacks USAGE on schema 'ontobricks_registry' in database 'db1'"
+        in status["error"]
+    )
+    assert status["schema_missing"] is False
     assert not db.sql_with("to_regclass")
 
 
@@ -60,6 +64,7 @@ def test_init_status_reports_absent_schema_and_empty_probe():
     status = make_store(db).init_status()
     assert status["reason"] == "no_usage"
     assert "does not exist in database 'db1'" in status["error"]
+    assert status["schema_missing"] is True
 
     status = make_store(FakeDB()).init_status()
     assert status["reason"] == "no_usage"
@@ -99,7 +104,20 @@ def test_init_status_connect_failure():
         "initialized": False,
         "reason": "connect_failed",
         "error": "Lakebase probe failed: refused",
+        "schema_missing": False,
     }
+
+
+def test_init_status_flags_a_missing_schema_by_sqlstate():
+    class _InvalidSchema(RuntimeError):
+        sqlstate = "3F000"
+
+    db = FakeDB()
+    db.connect_error = _InvalidSchema('schema "ontobricks_registry" does not exist')
+
+    status = make_store(db).init_status()
+
+    assert status["reason"] == "connect_failed" and status["schema_missing"] is True
 
 
 # ---------------------------------------------------------------------------

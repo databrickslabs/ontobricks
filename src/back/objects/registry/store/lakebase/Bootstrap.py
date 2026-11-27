@@ -12,6 +12,9 @@ from back.core.logging import get_logger
 
 logger = get_logger("back.objects.registry.store.lakebase.store")
 
+#: SQLSTATE ``invalid_schema_name``.
+_INVALID_SCHEMA_NAME = "3F000"
+
 
 def _known_tables():
     from back.objects.registry.store.lakebase.store import _KNOWN_TABLES
@@ -40,10 +43,34 @@ class Bootstrap:
         """
         return self.init_status()["initialized"]
 
+    def _no_usage_message(self, cur_user: str, cur_db: str, schema_exists: bool) -> str:
+        """Explain a failed ``USAGE`` probe: a missing schema, or a role without the grant."""
+        if schema_exists:
+            return (
+                f"Role '{cur_user}' lacks USAGE on schema "
+                f"'{self._schema}' in database '{cur_db}'. "
+                f"Run scripts/bootstrap-lakebase-perms.sh "
+                f"-i <instance> -d {cur_db} -s {self._schema} "
+                f"-a <app-name>, or GRANT USAGE ON SCHEMA "
+                f'"{self._schema}" TO "{cur_user}" '
+                f"directly in database '{cur_db}'."
+            )
+        return (
+            f"Schema '{self._schema}' does not exist in "
+            f"database '{cur_db}' (role '{cur_user}'). "
+            f"Either initialize it from Settings > "
+            f"Registry, or check that bundle "
+            f"``lakebase_*`` Postgres binding points at "
+            f"the database where the schema actually "
+            f"lives."
+        )
+
     def init_status(self) -> Dict[str, Any]:
         """Detailed initialise-probe with explicit failure reasons.
 
-        Returns ``{initialized: bool, reason: str, error: Optional[str]}``.
+        Returns ``{initialized: bool, reason: str, error: Optional[str]}``,
+        plus ``schema_missing: bool`` on failures that probe the schema: True
+        when the registry schema does not exist yet (a fresh install).
         ``reason`` is a short stable token (``"ok"``, ``"no_usage"``,
         ``"no_registries_table"``, ``"no_registry_row"``,
         ``"connect_failed"``) suitable for log filtering; ``error``
@@ -82,31 +109,13 @@ class Bootstrap:
                     cur_db, cur_user, has_usage_raw, schema_exists = row
                     has_usage = bool(has_usage_raw)
                 if not has_usage:
-                    if schema_exists:
-                        msg = (
-                            f"Role '{cur_user}' lacks USAGE on schema "
-                            f"'{self._schema}' in database '{cur_db}'. "
-                            f"Run scripts/bootstrap-lakebase-perms.sh "
-                            f"-i <instance> -d {cur_db} -s {self._schema} "
-                            f"-a <app-name>, or GRANT USAGE ON SCHEMA "
-                            f"\"{self._schema}\" TO \"{cur_user}\" "
-                            f"directly in database '{cur_db}'."
-                        )
-                    else:
-                        msg = (
-                            f"Schema '{self._schema}' does not exist in "
-                            f"database '{cur_db}' (role '{cur_user}'). "
-                            f"Either initialize it from Settings > "
-                            f"Registry, or check that bundle "
-                            f"``lakebase_*`` Postgres binding points at "
-                            f"the database where the schema actually "
-                            f"lives."
-                        )
+                    msg = self._no_usage_message(cur_user, cur_db, schema_exists)
                     logger.warning("Lakebase init probe: %s", msg)
                     return {
                         "initialized": False,
                         "reason": "no_usage",
                         "error": msg,
+                        "schema_missing": not schema_exists,
                     }
                 cur.execute(
                     "SELECT to_regclass(%s) IS NOT NULL",
@@ -140,6 +149,12 @@ class Bootstrap:
                 "initialized": False,
                 "reason": "connect_failed",
                 "error": f"Lakebase probe failed: {exc}",
+                # Postgres raises invalid_schema_name (3F000) from
+                # has_schema_privilege() when the schema does not exist.
+                "schema_missing": (
+                    getattr(exc, "sqlstate", None) or getattr(exc, "pgcode", None)
+                )
+                == _INVALID_SCHEMA_NAME,
             }
 
     def check_permissions(self) -> Dict[str, Any]:

@@ -7,6 +7,9 @@ dependencies = [
     # fastapi>=0.129.0 added Starlette 1.0.0+ support (needed for starlette>=1.3.1 below).
     "fastapi>=0.129.0",
     "uvicorn[standard]>=0.27.0",
+    # httpx is imported at runtime (back/core/github/GitHubClient.py, agent
+    # tools); it was only in the dev group, so `uv run --no-dev` failed to start.
+    "httpx>=0.25.0",
     "pydantic>=2.5.0",
     # pydantic-settings>=2.14.2: NestedSecretsSettingsSource symlink traversal
     # (GHSA-4xgf-cpjx-pc3j) — symlinks inside secrets_dir pointing outside it were

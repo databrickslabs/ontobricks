@@ -274,6 +274,150 @@
     // Expose so registry.js can surface the post-Initialize ``permissions``.
     window._obRenderRegistryGrants = _renderGrantResult;
 
+    // ── Setup prerequisites (read-only) ───────────────────────────────
+    // Two identities: POST /settings/registry/setup/check runs as the signed-in
+    // admin; /settings/diagnostics/readiness runs as the app's service principal.
+    var _SETUP_BADGE = {
+        ok:      '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>ok</span>',
+        warning: '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>warning</span>',
+        error:   '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>error</span>',
+        skipped: '<span class="badge bg-secondary"><i class="bi bi-dash-circle me-1"></i>skipped</span>'
+    };
+    var _lastSetupDiagnostics = null;
+
+    function _setupCheckItem(c) {
+        return '<li class="list-group-item px-0 d-flex gap-2 align-items-start">'
+            + '<div class="flex-shrink-0">' + (_SETUP_BADGE[c.status] || _SETUP_BADGE.skipped) + '</div>'
+            + '<div class="flex-grow-1 text-break">'
+            +   '<div class="fw-semibold">' + _esc(c.label || c.name) + '</div>'
+            +   (c.detail ? '<div class="text-muted">' + _esc(c.detail) + '</div>' : '')
+            +   (c.fix ? '<div><i class="bi bi-wrench me-1"></i><strong>Fix:</strong> ' + _esc(c.fix) + '</div>' : '')
+            + '</div></li>';
+    }
+
+    function _renderSetupChecks(you, app) {
+        var panel = document.getElementById('registrySetupChecks');
+        if (!panel) return;
+        // Service-principal side: problems first; collapse the passing ones into one line.
+        var appProblems = app.filter(function (c) { return c.status !== 'ok'; });
+        var appOk = app.length - appProblems.length;
+        document.getElementById('registrySetupChecksYou').innerHTML = you.map(_setupCheckItem).join('');
+        document.getElementById('registrySetupChecksApp').innerHTML = appProblems.map(_setupCheckItem).join('')
+            + '<li class="list-group-item px-0 text-muted"><i class="bi bi-check-all me-1"></i>'
+            + appOk + ' other check' + (appOk === 1 ? '' : 's') + ' passed</li>';
+        var errors = you.concat(app).filter(function (c) { return c.status === 'error'; }).length;
+        document.getElementById('registrySetupChecksSummary').textContent = errors
+            ? errors + ' problem' + (errors === 1 ? '' : 's') + ' to fix before setup'
+            : 'Ready to set up';
+        panel.classList.remove('d-none');
+        return errors;
+    }
+
+    async function _runSetupChecks(form) {
+        var body = JSON.stringify({
+            catalog: form.elements.catalog.value.trim(),
+            schema: form.elements.schema.value.trim()
+        });
+        var youResp = fetch('/settings/registry/setup/check', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin', body: body
+        }).then(function (r) { return r.json().then(function (d) { return r.ok ? d.checks : [{
+            name: 'you.check', label: 'Checks as you', status: 'error',
+            detail: d.message || d.error || ('HTTP ' + r.status)
+        }]; }); });
+        var appResp = fetch('/settings/diagnostics/readiness', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { return d.checks || []; });
+        var results = await Promise.all([youResp, appResp]);
+        _lastSetupDiagnostics = {
+            collected_at: new Date().toISOString(),
+            page: window.location.pathname,
+            as_admin: results[0],
+            as_service_principal: results[1]
+        };
+        return _renderSetupChecks(results[0], results[1]);
+    }
+
+    document.getElementById('btnRegistrySetupCheck')?.addEventListener('click', async function () {
+        var form = document.getElementById('registrySetupForm');
+        if (!form.checkValidity()) { form.reportValidity(); return; }
+        var btn = this;
+        var label = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking…';
+        try {
+            var errors = await _runSetupChecks(form);
+            showNotification(errors ? 'Some prerequisites are missing — see the fixes below.' : 'All prerequisites are in place.',
+                errors ? 'warning' : 'success');
+        } catch (e) {
+            showNotification('Check failed: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = label;
+        }
+    });
+
+    document.getElementById('btnCopySetupDiagnostics')?.addEventListener('click', async function () {
+        if (!_lastSetupDiagnostics) return;
+        try {
+            await navigator.clipboard.writeText(JSON.stringify(_lastSetupDiagnostics, null, 2));
+            showNotification('Diagnostics copied to the clipboard.', 'success');
+        } catch (e) {
+            showNotification('Could not copy: ' + e.message, 'error');
+        }
+    });
+
+    // ── First-run setup (no registry location yet, e.g. Marketplace) ──
+    // POST /settings/registry/setup creates the schema and grants the app's
+    // service principal as the signed-in admin, then runs Initialize.
+    document.getElementById('registrySetupForm')?.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        var form = this;
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        var btn = document.getElementById('btnRegistrySetup');
+        var label = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Setting up…';
+        try {
+            var resp = await fetch('/settings/registry/setup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    catalog: form.elements.catalog.value.trim(),
+                    schema: form.elements.schema.value.trim()
+                })
+            });
+            var data = await resp.json();
+            if (!resp.ok || data.success === false) {
+                showNotification('Registry setup failed: ' + (data.message || data.error || ('HTTP ' + resp.status)), 'error');
+                // Show which prerequisite is missing, without making the admin ask.
+                try { await _runSetupChecks(form); } catch (_) { /* the notification already reported the failure */ }
+                return;
+            }
+            var setup = data.setup || {};
+            _renderGrantResult({
+                granted: (setup.granted || []).concat((data.permissions || {}).granted || []),
+                warnings: (setup.warnings || []).concat((data.permissions || {}).warnings || [])
+            });
+            showNotification(
+                (setup.warnings || []).length
+                    ? 'Registry set up, with warnings — review Permission Grants below.'
+                    : 'Registry set up and initialized.',
+                (setup.warnings || []).length ? 'warning' : 'success'
+            );
+            if (typeof window.reloadRegistryConfig === 'function') window.reloadRegistryConfig();
+        } catch (e) {
+            showNotification('Registry setup failed: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = label;
+        }
+    });
+
     document.getElementById('btnRepairRegistryPerms')?.addEventListener('click', async function () {
         var btn = this;
         btn.disabled = true;

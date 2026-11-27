@@ -1,0 +1,122 @@
+## Registry setup: prerequisite checks and Marketplace-aware help
+
+Context: With Lakebase bound at install (option A), the remaining failure
+points on a Marketplace install are permissions. These are the admin's scopes,
+warehouse access, catalog privileges and schema ownership, plus the service
+principal's Can Manage and its Lakebase access. The installer had no way to see
+which one was missing, and several hints pointed at bootstrap scripts the
+Marketplace bundle does not ship. The setup form gains a read-only "Check
+prerequisites" panel that shows every check, as the admin and as the app's
+service principal, each with a concrete fix. It runs automatically when setup
+fails. Hints across the access-denied page, readiness checks and Initialize's
+grant report now cover Marketplace installs. Verified live on a fresh install
+(ontobricks-mp-test-014).
+
+Changes:
+
+1. src/back/objects/registry/RegistrySetupService.py
+   New preflight(): read-only checks run as the caller. They cover the app's
+   permissions (`apps` scope), the SP's Can Manage, SQL on the app's warehouse
+   (`sql` scope), DESCRIBE CATALOG, and DESCRIBE SCHEMA EXTENDED (exists /
+   owner / will be created). Each check is {name, label, status, detail, fix};
+   the schema check is skipped when the catalog is unusable. Statement polling
+   moved into a shared _execute(). Setup's privilege error now names the
+   statement and points to Check prerequisites. The helpers are private
+   static methods (class-first, src/.coding_rules.md §2).
+2. src/back/objects/domain/settings/RegistrySettings.py
+   New setup_check_result(); setup and check share _setup_service(), which
+   requires the forwarded token and passes the caller's email (used in GRANT
+   hints).
+3. src/api/routers/internal/settings.py
+   New admin-only POST /settings/registry/setup/check. The two setup routes
+   share _run_registry_setup() (body validation, token and email).
+4. src/front/templates/partials/registry/_registry_configuration.html
+   "Check prerequisites" button, results grouped "As you" / "As the app's
+   service principal" (aria-live), "Copy diagnostics", and a Troubleshooting
+   section for the common cases.
+5. src/front/static/config/js/settings-registry-configuration.js
+   Runs the admin checks and the readiness checks in parallel, renders
+   icon-and-label badges with a fix per check, collapses passing service
+   principal checks, and copies the results as JSON (no tokens). The checks
+   run automatically after a failed setup.
+6. src/front/templates/access_denied.html
+   The "bootstrap" reason now explains the Marketplace path (Set up the
+   registry, or grant Can Manage in Apps → Permissions) before the repository
+   `make bootstrap-perms`, and fixes the script path.
+7. src/shared/fastapi/health.py
+   A missing registry schema on a fresh install is a "not initialized yet"
+   warning pointing to setup, not an error (shared _lakebase_probe_failure).
+   registry.cfg and "Lakebase not bound" hints describe the Marketplace fix
+   first. Script paths are corrected to scripts/bootstrap/lakebase-perms.sh.
+   The baselined functions did not grow.
+8. src/back/core/databricks/lakebase/grants.py
+   Initialize's grant warnings explain when they are harmless: a missing MCP
+   companion, CAN_USE on the Lakebase project, and the optional catalog-wide
+   grant after setup.
+9. docs/deployment.md, marketplace/LISTING.md, marketplace/README.md
+   Document Check prerequisites and Copy diagnostics.
+10. tests/units/registry/test_registry_setup_preflight.py (new),
+    tests/units/registry/test_registry_setup.py,
+    tests/units/front/test_settings_registry_setup_form.py,
+    tests/units/core/test_health.py
+    Cover the preflight checks (read-only, each failure's fix, skips), the
+    check route (admin-only, caller's token and email), the UI contract, the
+    access-denied text, and the fresh-install Lakebase warning.
+
+Modified files:
+- src/back/objects/registry/RegistrySetupService.py
+- src/back/objects/domain/settings/RegistrySettings.py
+- src/api/routers/internal/settings.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/static/config/js/settings-registry-configuration.js
+- src/front/templates/access_denied.html
+- src/shared/fastapi/health.py
+- src/back/core/databricks/lakebase/grants.py
+- docs/deployment.md
+- marketplace/LISTING.md
+- marketplace/README.md
+- tests/units/registry/test_registry_setup_preflight.py
+- tests/units/registry/test_registry_setup.py
+- tests/units/front/test_settings_registry_setup_form.py
+- tests/units/core/test_health.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes --deselect tests/units/core/test_health.py::TestRunReadinessChecks → 11367 passed, 335 skipped, 13 deselected in 69.2s.
+Browser (local run, 1440 and 390 px): panel renders both groups, no
+horizontal overflow, buttons wrap; the console shows only the expected local
+400 (no registry) and 403 (no forwarded token).
+Live (ontobricks-mp-test-014, fresh install):
+- checks as the admin: `apps` scope ok, missing Can Manage flagged as a
+  warning, warehouse ok
+- catalog checks: an unknown catalog is an error with a fix; system.information_schema
+  warns about its owner; dermot_smyth/<new schema> is ok
+- setup on the read-only system catalog failed with the exact statement and
+  missing privilege
+- setup on dermot_smyth.ontobricks_mp_test_014 succeeded with no warnings;
+  readiness went from 1 error / 5 warnings to 0 errors
+
+## Registry setup: clear error when no SQL warehouse is bound
+
+Context: Simulating an install from scratch (ontobricks-mp-test-015, no
+resources bound) showed that the admin's warehouse check reported "Can use on
+SQL warehouse ``" with a blank ID, and setup failed with a raw API error.
+Both now say to bind a `sql-warehouse` resource.
+
+Changes:
+
+1. src/back/objects/registry/RegistrySetupService.py
+   With no warehouse ID, preflight's warehouse check is an error with the
+   binding fix (the dependent checks are skipped), and prepare() raises a
+   ValidationError with the same fix before running any SQL.
+2. tests/units/registry/test_registry_setup_preflight.py,
+   tests/units/registry/test_registry_setup.py
+   Cover both cases.
+
+Modified files:
+- src/back/objects/registry/RegistrySetupService.py
+- tests/units/registry/test_registry_setup_preflight.py
+- tests/units/registry/test_registry_setup.py
+
+Tests: uv run --frozen pytest -q tests/units/registry tests/units/architecture tests/units/front → 3093 passed.
+Live (ontobricks-mp-test-015, no resources): the warehouse check is an error
+with the binding fix; the catalog and schema checks are skipped; the registry
+stays unconfigured.

@@ -59,11 +59,17 @@
                     <code>CAN_MANAGE</code> on this app so the middleware can
                     resolve who is an admin and who is a regular user.
                 </p>
-                <p class="mb-1">Run once from the project root:</p>
-                <pre class="bg-light border rounded p-2 mb-2 small"><code>make bootstrap-perms</code></pre>
+                <p class="mb-1 fw-semibold">Installed from Databricks Marketplace?</p>
+                <ul class="mb-2 ps-3">
+                    <li>An admin (anyone with <em>Can Manage</em> on the app) opens the app and runs
+                        <strong>Settings &rarr; Registry &rarr; Set up the registry</strong>, which grants this.</li>
+                    <li>Or, in Databricks, go to <strong>Apps &rarr; this app &rarr; Permissions</strong> and give the
+                        app's service principal (shown on the app's Overview page) <em>Can Manage</em>.</li>
+                </ul>
+                <p class="mb-1 fw-semibold">Deployed from the repository?</p>
                 <p class="mb-0">
-                    or equivalently
-                    <code>scripts/bootstrap-app-permissions.sh</code>.
+                    Run <code>make bootstrap-perms</code> (or
+                    <code>scripts/bootstrap/app-permissions.sh</code>) once from the project root.
                     You can reload this page afterwards.
                 </p>
             </div>

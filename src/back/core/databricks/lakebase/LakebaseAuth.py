@@ -23,9 +23,12 @@ short-lived Lakebase JWT via the Postgres API
 workspace bearer token returned by ``config.authenticate()`` is
 **not** accepted by Lakebase — it's not a JWT.
 
-Endpoint resolution walks ``GET /api/2.0/postgres/projects`` →
-branches → endpoints and matches ``status.hosts.host`` /
-``status.hosts.read_only_host`` against ``PGHOST``. The matched
+Endpoint resolution matches ``status.hosts.host`` /
+``status.hosts.read_only_host`` against ``PGHOST`` on the endpoints of
+the branch named by ``LAKEBASE_PROJECT`` + ``LAKEBASE_BRANCH``, then of
+the app's bound ``postgres`` resource (``GET /api/2.0/apps/<name>``),
+and only as a last resort walks ``GET /api/2.0/postgres/projects`` →
+branches → endpoints (skipping unreadable projects). The matched
 endpoint's full resource path
 (``projects/<project_id>/branches/<branch_id>/endpoints/<endpoint_id>``)
 is cached on the instance and used as the ``endpoint`` body of the
@@ -45,7 +48,10 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Iterator
 from typing import Optional
+
+from databricks.sdk.errors import NotFound, PermissionDenied
 
 from back.core.databricks.lakebase.constants import TOKEN_TTL_S as _TOKEN_TTL_S
 from back.core.databricks.lakebase.LakebaseProjectService import (
@@ -70,10 +76,14 @@ class LakebaseAuth:
 
     1. ``PGHOST`` — auto-injected by Databricks Apps at runtime; or
        set directly in ``.env`` if you already know the endpoint URL.
-    2. ``LAKEBASE_PROJECT`` + ``LAKEBASE_BRANCH`` — resolved via
-       the Postgres API (``/api/2.0/postgres/projects/<name>/branches``
-       → endpoints). Use these in local ``.env`` to select a branch
-       without looking up the endpoint hostname manually.
+    2. ``LAKEBASE_PROJECT`` + ``LAKEBASE_BRANCH`` — the primary host
+       of that branch's endpoints
+       (``/api/2.0/postgres/projects/<p>/branches/<b>/endpoints``). Use
+       these in local ``.env`` to select a branch without looking up the
+       endpoint hostname manually.
+
+    **Endpoint resolution** (for the credential mint) is described in
+    :attr:`instance_name`.
 
     **Database resolution order** (first non-empty wins):
 
@@ -82,6 +92,9 @@ class LakebaseAuth:
        when you want to point at a database that differs from the
        bound default.
     """
+
+    #: Seconds before a failed endpoint lookup is tried again.
+    _LOOKUP_RETRY_S = 60.0
 
     def __init__(self) -> None:
         self._w = None  # WorkspaceClient, lazily constructed
@@ -98,6 +111,9 @@ class LakebaseAuth:
         # Resolved host cache — avoids re-walking the API on every access
         # when PGHOST is absent and we resolved via branch resolution.
         self._cached_host: Optional[str] = None
+        # Last failed endpoint lookup, re-raised until _LOOKUP_RETRY_S passes.
+        self._lookup_error: Optional[ValidationError] = None
+        self._lookup_failed_at: float = 0.0
 
     # ------------------------------------------------------------------
     # Connection parameters (read directly from environment)
@@ -105,9 +121,11 @@ class LakebaseAuth:
 
     @property
     def host(self) -> str:
-        host = os.environ.get("PGHOST", "")
-        if not host:
-            host = self._cached_host or self._resolve_host_from_project_branch() or ""
+        host = (
+            os.environ.get("PGHOST", "")
+            or self._cached_host
+            or self._host_from_env_branch()
+        )
         if not host:
             raise ValidationError(
                 "Cannot determine Lakebase host: set PGHOST (or both "
@@ -207,16 +225,17 @@ class LakebaseAuth:
     def instance_name(self) -> str:
         """Resolve the Lakebase Autoscaling project_id (cached).
 
-        Walks ``GET /api/2.0/postgres/projects`` → branches →
-        endpoints and matches ``status.hosts.host`` /
-        ``status.hosts.read_only_host`` against ``PGHOST``. On a hit
+        Matches ``PGHOST`` against Lakebase endpoints (see
+        :meth:`_known_branch_paths` for the lookup order). On a hit
         we cache both the project_id and the matched endpoint
         resource path; the latter is consumed by :meth:`password`.
 
         Raises :class:`ValidationError` if no endpoint matches —
         that's the canonical "the bundle is binding the wrong
         project" failure and must surface loudly rather than
-        silently fall back to a different code path.
+        silently fall back to a different code path. A failure is
+        re-raised without a new lookup for :attr:`_LOOKUP_RETRY_S`,
+        because the fallback lists every project in the workspace.
 
         ``PGAPPNAME`` is intentionally **not** consulted: Databricks
         Apps populates it with the app's name (e.g. ``ontobricks-dev``)
@@ -224,145 +243,140 @@ class LakebaseAuth:
         """
         if self._instance_name:
             return self._instance_name
+        self._raise_if_backing_off()
 
         host = self.host.strip().lower()
+        if self._instance_name:  # resolved while deriving the host
+            return self._instance_name
         try:
             self._ensure_workspace()
-            project_id = self._lookup_via_postgres_api(host)
+            endpoint = LakebaseProjectService.find_endpoint(
+                self._api(), host, self._known_branch_paths()
+            )
         except Exception as exc:  # noqa: BLE001
-            raise ValidationError(
+            raise self._lookup_failed(
                 f"Could not resolve Lakebase Autoscaling project from "
                 f"PGHOST={host!r}: {exc}"
             ) from exc
-
-        if not project_id:
-            raise ValidationError(
+        if not endpoint or not self._remember(endpoint):
+            raise self._lookup_failed(
                 f"No Lakebase Autoscaling endpoint matched PGHOST={host!r} "
                 f"among all listed projects. "
                 f"Confirm the Apps ``postgres`` resource binding and endpoint host."
             )
 
-        self._instance_name = project_id
         logger.info(
             "Resolved Lakebase Autoscaling project %r from PGHOST=%s",
-            project_id,
+            self._instance_name,
             host,
         )
         return self._instance_name
 
-    def _resolve_host_from_project_branch(self) -> Optional[str]:
-        """Resolve the Lakebase endpoint hostname from project + branch name.
+    def _raise_if_backing_off(self) -> None:
+        """Re-raise the last failed lookup until :attr:`_LOOKUP_RETRY_S` has passed."""
+        if (
+            self._lookup_error
+            and time.time() - self._lookup_failed_at < self._LOOKUP_RETRY_S
+        ):
+            raise self._lookup_error
 
-        Reads ``LAKEBASE_PROJECT`` (project) and ``LAKEBASE_BRANCH``
-        (branch) from the environment, then walks
-        ``GET /api/2.0/postgres/projects/<project>/branches`` →
-        ``GET /api/2.0/postgres/<branch_path>/endpoints`` to find the
-        primary endpoint host for that branch.
+    def _lookup_failed(self, message: str) -> ValidationError:
+        """Record a failed lookup so :attr:`instance_name` backs off, and return it."""
+        self._lookup_error = ValidationError(message)
+        self._lookup_failed_at = time.time()
+        return self._lookup_error
 
-        On success also populates ``_instance_name`` and
-        ``_endpoint_resource`` so subsequent :meth:`password` calls do
-        not need to re-walk the API. Returns ``None`` (never raises) on
-        any configuration gap or API error — the caller falls back to a
-        descriptive ``ValidationError``.
-        """
+    def _remember(self, endpoint: dict) -> bool:
+        """Cache the endpoint path and its project_id; False if the path is malformed."""
+        parts = (endpoint.get("name") or "").split("/")
+        if len(parts) < 6 or parts[0] != "projects":
+            return False
+        self._endpoint_resource = "/".join(parts)
+        self._instance_name = parts[1]
+        return True
+
+    @staticmethod
+    def _env_branch_path() -> str:
+        """Return ``projects/<p>/branches/<b>`` from ``LAKEBASE_PROJECT`` + ``LAKEBASE_BRANCH``, or ``""``."""
         project = os.environ.get("LAKEBASE_PROJECT", "").strip()
-        branch_name = os.environ.get("LAKEBASE_BRANCH", "").strip()
-        if not project or not branch_name:
-            return None
+        branch = os.environ.get("LAKEBASE_BRANCH", "").strip()
+        return f"projects/{project}/branches/{branch}" if project and branch else ""
+
+    def _host_from_env_branch(self) -> str:
+        """Return the primary host of the ``LAKEBASE_*`` branch (local dev), or ``""``.
+
+        Also caches the endpoint, so :meth:`password` does not list it again.
+        """
+        branch_path = self._env_branch_path()
+        if not branch_path:
+            return ""
+        self._raise_if_backing_off()
         try:
             self._ensure_workspace()
-            api = getattr(self._w, "api_client", None)
-            if api is None or not hasattr(api, "do"):
-                return None
-            branches = (
-                api.do(
-                    "GET",
-                    f"/api/2.0/postgres/projects/{project}/branches",
-                )
-                or {}
-            ).get("branches") or []
-            for branch in branches:
-                branch_path = branch.get("name") or ""
-                if not branch_path:
-                    continue
-                if branch_path.rsplit("/", 1)[-1] != branch_name:
-                    continue
-                endpoints = (
-                    api.do("GET", f"/api/2.0/postgres/{branch_path}/endpoints")
-                    or {}
-                ).get("endpoints") or []
-                for endpoint in endpoints:
-                    hosts = (endpoint.get("status") or {}).get("hosts") or {}
-                    host = (hosts.get("host") or "").strip()
-                    if not host:
-                        continue
-                    endpoint_path = endpoint.get("name") or ""
-                    if endpoint_path:
-                        self._endpoint_resource = endpoint_path
-                    self._instance_name = project
-                    self._cached_host = host
-                    logger.info(
-                        "Resolved Lakebase host %r from project=%r branch=%r",
-                        host,
-                        project,
-                        branch_name,
-                    )
-                    return host
+            endpoint = LakebaseProjectService.branch_endpoint(
+                self._api(), branch_path, ""
+            )
         except Exception as exc:  # noqa: BLE001
-            logger.debug(
-                "Branch-based Lakebase host resolution failed "
-                "(project=%r branch=%r): %s",
-                project,
-                branch_name,
+            raise self._lookup_failed(
+                f"Could not resolve the Lakebase host of {branch_path}: {exc}"
+            ) from exc
+        if not endpoint or not self._remember(endpoint):
+            return ""
+        self._cached_host = endpoint["status"]["hosts"]["host"].strip()
+        logger.info("Resolved Lakebase host %r from %s", self._cached_host, branch_path)
+        return self._cached_host
+
+    def _known_branch_paths(self) -> Iterator[str]:
+        """Lazily yield the branches to try before walking every project.
+
+        1. ``LAKEBASE_PROJECT`` + ``LAKEBASE_BRANCH`` env vars;
+        2. the ``postgres`` resource bound to ``DATABRICKS_APP_NAME``.
+        """
+        env_branch = self._env_branch_path()
+        if env_branch:
+            yield env_branch
+        app_branch = self._app_branch_path()
+        if app_branch:
+            yield app_branch
+
+    def _app_branch_path(self) -> str:
+        """Return the branch of the app's bound ``postgres`` resource, or ``""``.
+
+        ``""`` when not running as an app, or when its service principal
+        may not read the app; the caller then walks every project.
+        """
+        app_name = os.environ.get("DATABRICKS_APP_NAME", "").strip()
+        if not app_name:
+            return ""
+        try:
+            app = self._api().do("GET", f"/api/2.0/apps/{app_name}") or {}
+        except (NotFound, PermissionDenied) as exc:
+            logger.info(
+                "Could not read Databricks App %r to find its Lakebase branch: %s",
+                app_name,
                 exc,
             )
-        return None
+            return ""
+        for resource in app.get("resources") or []:
+            branch = ((resource or {}).get("postgres") or {}).get("branch") or ""
+            if branch:
+                return branch
+        logger.warning(
+            "Databricks App %r has no postgres resource; finding its Lakebase "
+            "endpoint by listing every project",
+            app_name,
+        )
+        return ""
 
-    def _lookup_via_postgres_api(self, host: str) -> Optional[str]:
-        """Match ``host`` against Lakebase Autoscaling endpoints.
-
-        Walks ``/api/2.0/postgres/projects`` → branches → endpoints
-        and compares ``status.hosts.host`` / ``status.hosts.read_only_host``
-        against ``host``. Returns the project_id (final segment of
-        the resource name ``projects/<id>``) on a hit, ``None`` otherwise.
-
-        On a hit, also caches the matched endpoint's full resource
-        path on ``self._endpoint_resource`` so :meth:`password` can
-        mint via ``POST /api/2.0/postgres/credentials``.
-
-        Uses ``WorkspaceClient.api_client.do`` directly so we work
-        across SDK versions that may or may not have ``w.postgres``
-        bound on the public surface.
-        """
+    def _api(self):
+        """Return the workspace ``api_client`` used for Postgres API calls."""
         api = getattr(self._w, "api_client", None)
         if api is None or not hasattr(api, "do"):
-            return None
-        projects = LakebaseProjectService.list_projects(api)
-        for project in projects:
-            project_path = project.get("name") or ""
-            if not project_path:
-                continue
-            branches = (
-                api.do("GET", f"/api/2.0/postgres/{project_path}/branches") or {}
-            ).get("branches") or []
-            for branch in branches:
-                branch_path = branch.get("name") or ""
-                if not branch_path:
-                    continue
-                endpoints = (
-                    api.do("GET", f"/api/2.0/postgres/{branch_path}/endpoints")
-                    or {}
-                ).get("endpoints") or []
-                for endpoint in endpoints:
-                    hosts = (endpoint.get("status") or {}).get("hosts") or {}
-                    h = (hosts.get("host") or "").strip().lower()
-                    ro = (hosts.get("read_only_host") or "").strip().lower()
-                    if host in (h, ro):
-                        endpoint_path = endpoint.get("name") or ""
-                        if endpoint_path:
-                            self._endpoint_resource = endpoint_path
-                        return project_path.rsplit("/", 1)[-1]
-        return None
+            raise ValidationError(
+                "WorkspaceClient.api_client unavailable; cannot call the "
+                "Lakebase Postgres API."
+            )
+        return api
 
     def _ensure_workspace(self) -> None:
         """Lazily build the workspace client."""
@@ -438,17 +452,14 @@ class LakebaseAuth:
         resource path, e.g.
         ``projects/<project_id>/branches/<branch_id>/endpoints/<endpoint_id>``.
         """
-        api = getattr(self._w, "api_client", None)
-        if api is None or not hasattr(api, "do"):
-            raise ValidationError(
-                "WorkspaceClient.api_client unavailable; cannot mint "
-                "Lakebase JWT via Postgres API."
+        resp = (
+            self._api().do(
+                "POST",
+                "/api/2.0/postgres/credentials",
+                body={"endpoint": endpoint_resource},
             )
-        resp = api.do(
-            "POST",
-            "/api/2.0/postgres/credentials",
-            body={"endpoint": endpoint_resource},
-        ) or {}
+            or {}
+        )
         return resp.get("token") or ""
 
     def invalidate(self) -> None:

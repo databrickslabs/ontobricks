@@ -26,7 +26,7 @@ from api.routers.internal._helpers import map_route_errors
 from back.core.logging import get_logger, LogManager
 
 from back.objects.domain import SettingsService as config_service
-from back.objects.domain.settings import GitHubSettings
+from back.objects.domain.settings import GitHubSettings, RegistrySettings
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 logger = get_logger(__name__)
@@ -336,6 +336,60 @@ async def initialize_registry(
     """
     return await run_blocking(
         config_service.initialize_registry_result, session_mgr, settings
+    )
+
+
+@router.post("/registry/setup", dependencies=[Depends(require(ROLE_ADMIN))])
+async def setup_registry(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """First-run setup: create the registry schema as the caller, then Initialize.
+
+    Body: ``{"catalog": "...", "schema": "..."}``. For installs with no
+    deploy-time registry location (Databricks Marketplace).
+    """
+    return await _run_registry_setup(
+        RegistrySettings.setup_registry_result, request, session_mgr, settings
+    )
+
+
+@router.post("/registry/setup/check", dependencies=[Depends(require(ROLE_ADMIN))])
+async def check_registry_setup(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Dry-run the first-run setup as the caller; changes nothing.
+
+    Body: ``{"catalog": "...", "schema": "..."}``. Returns ``{"checks": [...]}``,
+    each with a status and, when it fails, the fix.
+    """
+    return await _run_registry_setup(
+        RegistrySettings.setup_check_result, request, session_mgr, settings
+    )
+
+
+async def _run_registry_setup(
+    fn, request: Request, session_mgr: SessionManager, settings: Settings
+):
+    """Call *fn* with the body's catalog/schema and the caller's token and email."""
+    try:
+        data = await request.json()
+    except ValueError as exc:
+        raise ValidationError("Expected a JSON body with catalog and schema") from exc
+    if not isinstance(data, dict):
+        raise ValidationError("Expected a JSON body with catalog and schema")
+    email, _name, user_token, _role, _domain_role = _settings_request_identity(request)
+    return await run_blocking(
+        fn,
+        session_mgr,
+        settings,
+        str(data.get("catalog") or "").strip(),
+        str(data.get("schema") or "").strip(),
+        user_token,
+        email,
     )
 
 

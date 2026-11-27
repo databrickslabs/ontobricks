@@ -276,8 +276,8 @@ def _check_registry_cfg(settings: Settings) -> Tuple[str, str]:
     if not (cfg.catalog and cfg.schema):
         return (
             _WARNING,
-            "Registry catalog/schema not fully resolved — set REGISTRY_CATALOG / "
-            "REGISTRY_SCHEMA or bind them in app.yaml",
+            "Registry location not set yet — run Settings → Registry → Set up the registry "
+            "(or set REGISTRY_CATALOG / REGISTRY_SCHEMA on a repository deploy)",
         )
     return (
         _OK,
@@ -399,6 +399,31 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 
+def _lakebase_probe_failure(
+    status_dict: Dict[str, Any], detail: str
+) -> Tuple[str, str]:
+    """Error, unless the registry schema is merely missing: a fresh install before setup."""
+    if status_dict.get("schema_missing"):
+        return (
+            _WARNING,
+            "Registry not initialized yet — run Settings → Registry → Set up the registry "
+            f"({status_dict.get('error')})",
+        )
+    return _ERROR, detail
+
+
+def _lakebase_registry_store(settings: Settings):
+    """Build the Lakebase registry store the probes below inspect."""
+    from back.objects.registry.store.lakebase.store import LakebaseRegistryStore
+
+    cfg = _resolve_registry_cfg(settings)
+    return LakebaseRegistryStore(
+        registry_cfg=cfg,
+        schema=cfg.lakebase_schema or "ontobricks_registry",
+        database=cfg.lakebase_database or "",
+    )
+
+
 def _check_lakebase(settings: Settings) -> Tuple[str, str]:
     from back.core.databricks.lakebase import get_lakebase_auth
 
@@ -406,19 +431,12 @@ def _check_lakebase(settings: Settings) -> Tuple[str, str]:
     if not auth.is_available:
         return (
             _WARNING,
-            "Lakebase not bound (PG* env vars unset) — registry is unavailable; "
-            "set LAKEBASE_PROJECT + LAKEBASE_BRANCH + PGUSER in .env (local) or bind a database "
-            "resource in app.yaml (deployed)",
+            "Lakebase not bound (PG* env vars unset) — registry is unavailable; bind the app's "
+            "`postgres` resource to a Lakebase database (Apps → Edit → Resources) and redeploy, "
+            "or set LAKEBASE_PROJECT + LAKEBASE_BRANCH + PGUSER in .env (local)",
         )
 
-    cfg = _resolve_registry_cfg(settings)
-    from back.objects.registry.store.lakebase.store import LakebaseRegistryStore
-
-    store = LakebaseRegistryStore(
-        registry_cfg=cfg,
-        schema=cfg.lakebase_schema or "ontobricks_registry",
-        database=cfg.lakebase_database or "",
-    )
+    store = _lakebase_registry_store(settings)
     status_dict = store.init_status()
     reason = status_dict.get("reason", "unknown")
     err = status_dict.get("error") or status_dict.get("reason")
@@ -428,8 +446,8 @@ def _check_lakebase(settings: Settings) -> Tuple[str, str]:
         # Schema reachable, just not bootstrapped — admins can run
         # *Initialize* from Settings → Registry. Treat as warning.
         return _WARNING, str(err)
-    # ``no_usage`` / ``connect_failed`` / unknown — these block the app.
-    return _ERROR, str(err)
+    # ``no_usage`` / ``connect_failed`` / unknown block the app, except a fresh install.
+    return _lakebase_probe_failure(status_dict, str(err))
 
 
 def _check_lakebase_permissions(settings: Settings) -> Tuple[str, str]:
@@ -443,23 +461,18 @@ def _check_lakebase_permissions(settings: Settings) -> Tuple[str, str]:
             "Lakebase not bound (PG* env vars unset) — permission checks skipped",
         )
 
-    cfg = _resolve_registry_cfg(settings)
-    from back.objects.registry.store.lakebase.store import LakebaseRegistryStore
-
-    store = LakebaseRegistryStore(
-        registry_cfg=cfg,
-        schema=cfg.lakebase_schema or "ontobricks_registry",
-        database=cfg.lakebase_database or "",
-    )
+    store = _lakebase_registry_store(settings)
     status_dict = store.init_status()
     reason = status_dict.get("reason", "unknown")
     err = status_dict.get("error") or status_dict.get("reason")
     if reason == "no_usage":
-        return _ERROR, str(err)
+        return _lakebase_probe_failure(status_dict, str(err))
     if reason in ("no_registries_table", "no_registry_row"):
         return _WARNING, f"Lakebase not initialized ({reason}) — permission probe partial: {err}"
     if reason != "ok":
-        return _ERROR, f"Lakebase probe unavailable ({reason}): {err}"
+        return _lakebase_probe_failure(
+            status_dict, f"Lakebase probe unavailable ({reason}): {err}"
+        )
 
     try:
         with store._connect() as conn, conn.cursor() as cur:
@@ -537,7 +550,7 @@ def _check_lakebase_permissions(settings: Settings) -> Tuple[str, str]:
             _ERROR,
             "Missing Lakebase grants for role "
             f"'{cur_user}' on {cur_db}.{store.schema}: {', '.join(missing)}. "
-            "Run scripts/bootstrap-lakebase-perms.sh.",
+            "Fix: Settings → Registry → Repair permissions (repo deploys: scripts/bootstrap/lakebase-perms.sh).",
         )
 
     return (
@@ -1144,8 +1157,8 @@ def _check_graphdb_permissions(settings: Settings) -> Tuple[str, str]:
                 _ERROR,
                 f"Missing Postgres permissions on graph schema '{schema}' for role '{cur_user}': "
                 f"{', '.join(missing)}. "
-                "Run Settings → Lakebase → Permissions to grant superuser, or use "
-                "scripts/bootstrap-lakebase-perms.sh.",
+                "Fix: Settings → Registry → Repair permissions; on a repository deploy, "
+                "scripts/bootstrap/lakebase-perms.sh.",
             )
         return (
             _OK,
@@ -1435,8 +1448,8 @@ def run_diagnostics_checks(settings: Optional[Settings] = None) -> Dict[str, Any
                 "lazy table: domain_change_events (created on first domain save); "
                 "(6) The role has USAGE/CREATE on the schema + SELECT/INSERT/UPDATE/DELETE "
                 "on all tables + USAGE/SELECT/UPDATE on all sequences. "
-                "Run Settings → Registry → Initialize or scripts/bootstrap-lakebase-perms.sh "
-                "to fix permission and initialization issues."
+                "Fix with Settings → Registry → Initialize (Set up the registry on a fresh Marketplace install); "
+                "repository deploys can also run scripts/bootstrap/lakebase-perms.sh."
             ),
             "checks": lb_checks,
         }

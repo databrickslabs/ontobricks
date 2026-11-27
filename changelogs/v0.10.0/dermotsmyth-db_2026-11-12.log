@@ -1,0 +1,130 @@
+## Databricks Marketplace v1 packaging, ported to 0.10.0
+
+Context: The Marketplace v1 (built and tested on the 0.7 base, 2026-11-03,
+.planning/marketplace-listing/PLAN.md) is redone on top of the 0.10.0 branch.
+0.10.0 removed the UC Volume (8fad03ff), moved the Help Center to docs/, split
+SettingsService, and adds a `sql` user scope.
+
+Already fixed upstream in 0.10.0:
+- the token write in /settings/save;
+- the assistant route using caller credentials.
+
+Ported here:
+- the session-host rejection;
+- the /api/v1 credential hardening.
+
+Findings while porting:
+- The SDK's AppManifest model has no Postgres/Lakebase resource spec, so
+  Lakebase becomes a post-install binding (Q1).
+- A Marketplace install has no source for REGISTRY_CATALOG / REGISTRY_SCHEMA
+  (new Q7).
+- 0.10.0 failed to start under `uv run --no-dev`, because httpx is imported at
+  runtime but was a dev-only dependency. Fixed here.
+
+Changes:
+
+1. marketplace/app.yaml, marketplace/manifest.yaml (new on this branch)
+   Fixed config for 0.10.x. The manifest declares the SQL warehouse only, plus
+   user_api_scopes [sql]. app.yaml ships the warehouse valueFrom and Settings
+   defaults, and mirrors the template's authorization block. No Volume, no
+   Postgres spec.
+2. marketplace/LISTING.md, marketplace/README.md (new on this branch)
+   New post-install steps: bind Lakebase, grant the service principal Can
+   Manage on the app, then Initialize. Adds the 0.10.x port notes and the
+   test-install runbook.
+3. scripts/marketplace/assemble.py (new on this branch)
+   Ships src/ (minus mcp-server and .coding_rules.md) and the Help Center set
+   docs/*.md + docs/images/ + docs/screenshots/, mirroring databricks.yml sync
+   and .databricksignore. The bundle is 15 MB (was 28 MB).
+4. scripts/marketplace/emulate_install.py (new on this branch)
+   No Volume. Grants the manifest's user_api_scopes, using update mask
+   resources,user_api_scopes on re-runs. Lakebase is bound as the post-install
+   step.
+5. Makefile
+   marketplace-bundle and marketplace-test-install targets (run via
+   uv run --frozen).
+6. src/back/objects/domain/settings/WarehouseSettings.py
+   apply_config_save rejects a caller host in Apps mode before writing it.
+7. src/api/routers/v1.py
+   get_credentials uses only the app service principal in Apps mode. OpenAPI
+   descriptions no longer ask for a PAT.
+8. pyproject.toml, uv.lock
+   httpx moved to the runtime dependencies. The lock edit is two lines in the
+   ontobricks package block; no download URLs changed. Re-run
+   `uv lock --no-config --default-index https://pypi.org/simple` where there is
+   network, to regenerate the lock.
+9. tests/units/scripts/test_marketplace_package.py, test_marketplace_assemble.py, test_marketplace_emulate_install.py (new on this branch)
+   - Drift guards against the 0.10.0 template.
+   - The authorization block and manifest scopes match the template.
+   - The manifest stays inside the SDK's AppManifest model.
+   - The Help Center payload is right.
+   - Install plan: scopes, no Volume, Lakebase as the post-install binding.
+10. tests/units/settings/test_no_pat_in_app_mode.py, tests/units/api/test_v1_credentials.py, tests/units/api/test_assistant_invoke_credentials.py (new on this branch)
+    - Host rejection.
+    - The upstream "token never stored" behaviour.
+    - /api/v1 credentials.
+    - The assistant always overwrites caller credentials (regression guard for
+      the upstream fix).
+11. .planning/marketplace-listing/PLAN.md
+    Q7 added, plus the Q1 evidence and the 0.10.0 status.
+
+Modified files:
+- Makefile
+- pyproject.toml
+- uv.lock
+- src/api/routers/v1.py
+- src/back/objects/domain/settings/WarehouseSettings.py
+- marketplace/app.yaml (new)
+- marketplace/manifest.yaml (new)
+- marketplace/LISTING.md (new)
+- marketplace/README.md (new)
+- scripts/marketplace/assemble.py (new)
+- scripts/marketplace/emulate_install.py (new)
+- tests/units/scripts/test_marketplace_package.py (new)
+- tests/units/scripts/test_marketplace_assemble.py (new)
+- tests/units/scripts/test_marketplace_emulate_install.py (new)
+- tests/units/settings/test_no_pat_in_app_mode.py (new)
+- tests/units/api/test_v1_credentials.py (new)
+- tests/units/api/test_assistant_invoke_credentials.py (new)
+- .planning/marketplace-listing/PLAN.md (new)
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes --deselect tests/units/core/test_health.py::TestRunReadinessChecks → 10336 passed, 324 skipped, 13 deselected in 65.8s.
+The deselected health/readiness tests make live network calls (urllib3 retry backoff against test.databricks.com), which hang in the sandbox this ran in. CI with network runs them as usual.
+
+## Marketplace v1 on 0.10.0: E2 dogfood test install
+
+Context: The 0.10.0 bundle was installed into E2 dogfood as
+ontobricks-mp-test-010, the Marketplace way: warehouse and the `sql` scope at
+install, the Lakebase project ontobricks-mp-test-010 bound as the post-install
+step, no bootstrap scripts.
+
+Results:
+- The app starts (so the httpx fix works).
+- Q4 reproduces: everyone is locked out until the service principal gets
+  CAN_MANAGE on the app.
+- Q7 is confirmed: Initialize returns 400 without REGISTRY_CATALOG /
+  REGISTRY_SCHEMA. With them supplied as a test-only deployment env_vars
+  override, Initialize succeeds and readiness shows 0 errors.
+- The Lakebase project lookup (walking every project to match PGHOST) aborts in
+  large workspaces, so the registry location saved in Lakebase is never read
+  back after a redeploy.
+- Credential checks: host returns 400, token isn't stored, /api/v1 runs as the
+  service principal.
+
+Changes:
+
+1. marketplace/README.md
+   0.10.0 results section.
+2. .planning/marketplace-listing/PLAN.md
+   0.10.0 live-test status, including the Lakebase project-walk finding.
+
+Modified files:
+- marketplace/README.md
+- .planning/marketplace-listing/PLAN.md
+
+Tests: docs only. Live checks on https://ontobricks-mp-test-010-6051921418418893.staging.aws.databricksapps.com:
+- app RUNNING
+- Initialize: 400 without the registry vars, 200 with them
+- readiness: 0 errors after Initialize
+- /settings/save host: 400
+- /api/v1 with a bogus token: 200, runs as the service principal
