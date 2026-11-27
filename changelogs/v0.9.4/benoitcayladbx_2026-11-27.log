@@ -31,3 +31,35 @@ Modified files:
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9717 passed, 338 skipped, 8 deselected.
 (The size-budget architecture test required extracting `TwinInferredMaterialize.from_inferred`
 so `run_inference_task` does not grow past its baseline.)
+
+## docs: contributors list, third-party licenses refresh, release-notes routine
+
+Context: The release-notes routine did not cover the contributors list or the
+third-party licenses. CONTRIBUTORS.md was missing several GitHub contributors,
+and licenses/ had drifted from the dependencies declared in pyproject.toml
+(missing neo4j, psycopg, DOMPurify; stale versions).
+
+Changes:
+1. CONTRIBUTORS.md - added Alex Picard (Core Team) and the missing community
+   contributors with merged PRs: LaurentPRAT-DB, arunnayar-byte, Amine Kerboute
+   (CactusQuill), Diego Antonelli.
+2. .cursorrules - "Release Notes" routine now also updates CONTRIBUTORS.md
+   (GitHub contributors + merged PR authors) and checks/updates /licenses/
+   against the current dependencies.
+3. licenses/README.md - refreshed versions (databricks-sql-connector[kernel],
+   MLflow, Strawberry GraphQL, APScheduler, NLTK, sentence-transformers, FastMCP,
+   Marked), added neo4j, DOMPurify and a Lakebase section (psycopg, LGPL-3.0,
+   used unmodified as an external library); updated the License Summary.
+4. licenses/python/neo4j-LICENSE.txt, licenses/python/psycopg-LICENSE.txt,
+   licenses/javascript/dompurify-LICENSE.txt - new license files.
+
+Modified files:
+- CONTRIBUTORS.md
+- .cursorrules
+- licenses/README.md
+- licenses/python/neo4j-LICENSE.txt (new)
+- licenses/python/psycopg-LICENSE.txt (new)
+- licenses/javascript/dompurify-LICENSE.txt (new)
+- changelogs/v0.9.4/benoitcayladbx_2026-11-27.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9718 passed, 337 skipped, 8 deselected.
