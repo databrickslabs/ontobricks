@@ -1,0 +1,48 @@
+## feat(reasoning): materialize owl:inverseOf axioms via SQL inverse expansion (#237)
+
+Context: follow-up to #239. An `owl:inverseOf` axiom declared in Expr. & Axioms
+produced no instance-level inferences — `run_graph_reasoning` drove only
+transitive and symmetric expansion. The natural home for a new SQL inverse
+expander, `GraphDBBackend`, was frozen over the 800-LOC class budget, so the
+op had nowhere to live. This change first extracts the SQL reasoning ops into a
+mixin (giving the new op a budget-safe home), then adds inverse expansion and
+wires it from `owl:inverseOf` axioms.
+
+Changes:
+1. src/back/core/graphdb/SQLGraphReasoningOps.py — new stateless mixin holding
+   the default SQL reasoning ops. Extract Class from GraphDBBackend:
+   `transitive_closure` / `symmetric_expand` / `shortest_path` moved verbatim
+   (pure refactor, no behaviour change), shrinking the frozen class 1189 -> 1091
+   LOC. Adds the new `inverse_expand(table, predicate, inverse_predicate)` — an
+   anti-join that emits the missing `(b, Q, a)` for every `(a, P, b)`.
+2. src/back/core/graphdb/GraphDBBackend.py — extends `SQLGraphReasoningOps`; the
+   reasoning methods are removed from its body.
+3. src/back/core/reasoning/ReasoningService.py — `run_graph_reasoning` now reads
+   `owl:inverseOf` axioms (new `_find_inverse_pairs_from_axioms`, both
+   directions, since inverseOf is symmetric) and calls `inverse_expand`. Extract
+   Method `_expand_property` dedupes the transitive / symmetric / inverse loop
+   bodies and keeps the method under the size budget.
+4. src/back/core/graphdb/neo4j/Neo4jStore.py — `inverse_expand` no-op override
+   (native Cypher inverse is a follow-up; the SQL default is not valid against
+   Neo4j, and Neo4jReadOps is already at the class-size ceiling).
+5. src/front/static/ontology/js/ontology-axioms.js — require the inverse property
+   when saving an `inverseOf` axiom, so it cannot be persisted incomplete and
+   silently dropped at generation (mirrors the propertyChain guard from #239).
+6. tests — `tests/units/graphdb/test_sql_graph_reasoning_ops.py` (inverse_expand
+   SQL shape + row passthrough + error-swallow);
+   `tests/units/ontology/test_reasoning_service.py` (inverseOf pair detection
+   both-directions + self-inverse ignored; `run_graph_reasoning` fires
+   `inverse_expand` from an `owl:inverseOf` axiom in both directions).
+
+Modified files:
+- src/back/core/graphdb/SQLGraphReasoningOps.py (new)
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- src/front/static/ontology/js/ontology-axioms.js
+- tests/units/graphdb/test_sql_graph_reasoning_ops.py (new)
+- tests/units/ontology/test_reasoning_service.py
+- tests/units/architecture/baseline.json (GraphDBBackend tightened 1189 -> 1091)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9719 passed, 338 skipped
+(at PR submission; re-run after the review follow-ups, see benoitcayladbx_2026-11-27.log).

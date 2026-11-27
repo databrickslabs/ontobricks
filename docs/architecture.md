@@ -1200,7 +1200,8 @@ OntoBricks includes a **multi-phase reasoning engine** (`src/back/core/reasoning
    DeductiveClosure        └─ SQL translator       methods
    (OWLRL_Semantics)              │                ├─ transitive_closure
          │                        │                ├─ symmetric_expand
-         ▼                        ▼                └─ shortest_path
+         ▼                        ▼                ├─ inverse_expand
+                                                   └─ shortest_path
    InferredTriple[]        RuleViolation[]               │
                            InferredTriple[]               ▼
                                                    InferredTriple[]
@@ -1280,6 +1281,13 @@ Graph reasoning leverages **OWL property characteristics** to perform structural
 - For every `(a, P, b)` where `(b, P, a)` is missing, adds the inverse edge
 - **Delta** & **Lakebase**: SQL `NOT EXISTS` anti-join
 
+**Inverse expansion** (`owl:inverseOf` axiom from *Expr. & Axioms*):
+- For `P owl:inverseOf Q` and every `(a, P, b)` where `(b, Q, a)` is missing, adds `(b, Q, a)`; `owl:inverseOf` is symmetric, so both directions are expanded (provenance `graph:inverse`)
+- **Delta** & **Lakebase**: SQL `NOT EXISTS` anti-join (`SQLGraphReasoningOps.inverse_expand`)
+- **Neo4j**: not supported yet — `inverse_expand` is a logged no-op (native Cypher is a follow-up)
+
+**Axiom-driven**: transitivity comes from a self `owl:propertyChainAxiom` (`p ∘ p ⊑ p`) and inversion from `owl:inverseOf` axioms; both are read from the ontology's axioms, not from the legacy property-characteristics panel.
+
 **Shortest path**:
 - SQL engines (Delta, Lakebase) use a BFS-bounded recursive CTE. The Cypher-capable Neo4j engine can back this with a native `SHORTEST` path once its Cypher query translation is completed (currently scaffolded).
 
@@ -1308,7 +1316,7 @@ All reasoning phases produce standardized output via three dataclasses (`src/bac
 
 | Model | Purpose |
 |-------|---------|
-| `InferredTriple` | A new triple with `subject`, `predicate`, `object`, `provenance` (e.g., `"owlrl"`, `"swrl:RuleName"`, `"graph:transitive"`) |
+| `InferredTriple` | A new triple with `subject`, `predicate`, `object`, `provenance` (e.g., `"owlrl"`, `"swrl:RuleName"`, `"graph:transitive"`, `"graph:symmetric"`, `"graph:inverse"`) |
 | `RuleViolation` | A constraint failure with `rule_name`, `subject`, `message`, `check_type` |
 | `ReasoningResult` | Aggregated output: `inferred_triples[]`, `violations[]`, `stats{}` — mergeable across phases |
 
@@ -1327,7 +1335,8 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 | `src/back/core/reasoning/swrl/SWRLEngine.py` | `SWRLEngine` — SWRL rule orchestration |
 | `src/back/core/reasoning/swrl/SWRLSQLTranslator.py` | `SWRLSQLTranslator` — SWRL → Spark / Postgres SQL compilation |
 | `src/back/core/reasoning/models.py` | `InferredTriple`, `RuleViolation`, `ReasoningResult` dataclasses |
-| `src/back/core/graphdb/GraphDBBackend.py` | Graph DB primitives: `transitive_closure()`, `symmetric_expand()`, `shortest_path()` |
+| `src/back/core/graphdb/GraphDBBackend.py` | Graph DB primitives (extends `SQLGraphReasoningOps`) |
+| `src/back/core/graphdb/SQLGraphReasoningOps.py` | Default SQL reasoning ops inherited by every SQL backend: `transitive_closure()`, `symmetric_expand()`, `inverse_expand()`, `shortest_path()` |
 
 ---
 

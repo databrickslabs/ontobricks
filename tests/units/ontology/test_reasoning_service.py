@@ -263,6 +263,74 @@ class TestAxiomDerivedReasoning:
         }
         assert ReasoningService._find_transitive_from_axioms(ontology) == []
 
+    def test_inverse_of_axiom_yields_both_directions(self):
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {
+                    "type": "inverseOf",
+                    "subject": "http://ex.org#locatedInRegion",
+                    "objects": ["http://ex.org#hasWinery"],
+                }
+            ],
+        }
+        pairs = ReasoningService._find_inverse_pairs_from_axioms(ontology)
+        assert len(pairs) == 2
+
+        def _local(uri: str) -> str:
+            return uri.replace("#", "/").rsplit("/", 1)[-1]
+
+        resolved = {(_local(p), _local(q)) for p, q in pairs}
+        assert resolved == {
+            ("locatedInRegion", "hasWinery"),
+            ("hasWinery", "locatedInRegion"),
+        }
+
+    @pytest.mark.parametrize(
+        "ref",
+        ["hasWinery", "ex#hasWinery", "a/b/hasWinery", " hasWinery ", "http://other.org/v#hasWinery"],
+    )
+    def test_axiom_refs_resolve_to_data_namespace_predicate(self, ref):
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {
+                    "type": "inverseOf",
+                    "subject": "locatedInRegion",
+                    "objects": [ref],
+                }
+            ],
+        }
+        pairs = ReasoningService._find_inverse_pairs_from_axioms(ontology)
+        assert pairs == [
+            ("http://ex.org/locatedInRegion", "http://ex.org/hasWinery"),
+            ("http://ex.org/hasWinery", "http://ex.org/locatedInRegion"),
+        ]
+
+    def test_duplicate_and_mirrored_inverse_axioms_are_deduplicated(self):
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {"type": "inverseOf", "subject": "p", "objects": ["q"]},
+                {"type": "inverseOf", "subject": "q", "objects": ["p"]},
+                {"type": "inverseOf", "subject": "p", "objects": ["q"]},
+            ],
+        }
+        assert len(ReasoningService._find_inverse_pairs_from_axioms(ontology)) == 2
+
+    def test_inverse_of_self_is_ignored(self):
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "axioms": [
+                {
+                    "type": "inverseOf",
+                    "subject": "http://ex.org#knows",
+                    "objects": ["http://ex.org#knows"],
+                }
+            ],
+        }
+        assert ReasoningService._find_inverse_pairs_from_axioms(ontology) == []
+
 
 # ===========================================================================
 # run_full_reasoning — phase orchestration
@@ -489,6 +557,83 @@ class TestRunGraphReasoning:
         store.transitive_closure.assert_called_once()
         assert len(result.inferred_triples) == 1
         assert result.inferred_triples[0].provenance == "graph:transitive"
+
+    def test_inverse_expand_from_inverse_of_axiom(self):
+        store = MagicMock()
+        store.transitive_closure.return_value = []
+        store.symmetric_expand.return_value = []
+        store.inverse_expand.return_value = [
+            {
+                "subject": "http://ex.org/winery",
+                "predicate": "http://ex.org/hasWinery",
+                "object": "http://ex.org/region",
+            },
+        ]
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "classes": [],
+            "properties": [],
+            "axioms": [
+                {
+                    "type": "inverseOf",
+                    "subject": "http://ex.org#locatedInRegion",
+                    "objects": ["http://ex.org#hasWinery"],
+                }
+            ],
+            "constraints": [],
+            "swrl_rules": [],
+            "shacl_shapes": [],
+        }
+        svc = ReasoningService(
+            _domain_session(ontology=ontology), triplestore_backend=store
+        )
+        result = svc.run_graph_reasoning()
+        # Both directions of the symmetric owl:inverseOf pair are expanded.
+        assert store.inverse_expand.call_count == 2
+        assert all(
+            t.provenance == "graph:inverse" for t in result.inferred_triples
+        )
+        assert len(result.inferred_triples) == 2
+
+    def test_inverse_expand_failure_does_not_abort_other_ops(self):
+        store = MagicMock()
+        store.transitive_closure.return_value = [
+            {
+                "subject": "http://ex.org/a",
+                "predicate": "http://ex.org/isPartOf",
+                "object": "http://ex.org/c",
+            },
+        ]
+        store.symmetric_expand.return_value = []
+        store.inverse_expand.side_effect = Exception("SQL error")
+        ontology = {
+            "base_uri": "http://ex.org#",
+            "classes": [],
+            "properties": [
+                {
+                    "name": "isPartOf",
+                    "uri": "http://ex.org#isPartOf",
+                    "characteristics": ["transitive"],
+                },
+            ],
+            "axioms": [
+                {
+                    "type": "inverseOf",
+                    "subject": "http://ex.org#locatedInRegion",
+                    "objects": ["http://ex.org#hasWinery"],
+                }
+            ],
+            "constraints": [],
+            "swrl_rules": [],
+            "shacl_shapes": [],
+        }
+        svc = ReasoningService(
+            _domain_session(ontology=ontology), triplestore_backend=store
+        )
+        result = svc.run_graph_reasoning()
+        assert store.inverse_expand.call_count == 2
+        # The transitive result survives; the failing inverse op adds nothing.
+        assert [t.provenance for t in result.inferred_triples] == ["graph:transitive"]
 
     def test_store_method_failure_handled(self):
         store = MagicMock()

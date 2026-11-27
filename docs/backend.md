@@ -1156,7 +1156,7 @@ if your engine does not speak SQL:
 - `paginated_triples` / `paginated_count`
 - `bfs_traversal`
 - `find_seed_subjects` / `find_subjects_by_patterns`
-- `transitive_closure` / `symmetric_expand` / `shortest_path`
+- `transitive_closure` / `symmetric_expand` / `inverse_expand` / `shortest_path` (default SQL implementations inherited from the `SQLGraphReasoningOps` mixin; the Neo4j backend overrides them, and `inverse_expand` is a logged no-op there)
 - `expand_entity_neighbors`
 - `delete_triples` (raises `NotImplementedError` by default)
 - `optimize_table` (no-op by default)

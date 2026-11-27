@@ -97,3 +97,39 @@ Modified files:
 - changelogs/v0.9.4/benoitcayladbx_2026-11-27.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9718 passed, 337 skipped, 8 deselected.
+
+## review(#245): retarget to 0.9.4, Neo4j inverseOf warning, axiom-ref hardening, docs
+
+Context: Review follow-ups on PR #245 (`owl:inverseOf` SQL inverse expansion,
+#237). The PR was retargeted from `master` to `0.9.4`, rebased onto `0.9.4`
+(dropping its copy of #239, already merged as 37f00273) and its changelog moved
+from `v0.9.3` to `v0.9.4`.
+
+Changes:
+1. src/back/core/graphdb/neo4j/Neo4jStore.py - the `inverse_expand` no-op now
+   logs a warning (backend does not support `owl:inverseOf` expansion yet)
+   instead of failing silently.
+2. src/back/core/reasoning/ReasoningService.py - `_resolve_axiom_prop_uri`
+   keeps only the local name of bare axiom refs containing `#` or `/`
+   (`ex#p`, `a/p`), so no stray separator leaks into the predicate URI.
+3. docs/architecture.md, docs/backend.md - document `inverse_expand`, the
+   `graph:inverse` provenance, the `SQLGraphReasoningOps` mixin, axiom-driven
+   graph reasoning and the Neo4j limitation.
+4. tests - `test_neo4j_store.py` (no-op + warning, never hits the SQL default),
+   `test_sql_graph_reasoning_ops.py` (GraphDBBackend inherits the mixin ops),
+   `test_reasoning_service.py` (failing `inverse_expand` does not abort other
+   ops, axiom ref resolution variants, mirrored/duplicate axioms deduplicated).
+5. changelogs/v0.9.4/AlexPicard10_2026-11-25.log - moved from `v0.9.3`; the
+   stale "tests pending" line replaced by the actual result.
+
+Modified files:
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- src/back/core/reasoning/ReasoningService.py
+- docs/architecture.md
+- docs/backend.md
+- tests/units/graphdb/test_neo4j_store.py
+- tests/units/graphdb/test_sql_graph_reasoning_ops.py
+- tests/units/ontology/test_reasoning_service.py
+- changelogs/v0.9.4/AlexPicard10_2026-11-25.log (moved)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9740 passed, 337 skipped, 8 deselected.
