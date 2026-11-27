@@ -53,12 +53,13 @@ class TestSaveAndList:
         saved = next(r for r in _rules(client) if r["name"] == ASSERT["name"])
         assert saved.get("action") in (None, "assert")
 
-    def test_class_atom_in_a_retraction_is_rejected(self, client):
-        rule = {**RETRACT, "name": "RouteBadClass", "consequent": "Customer(?c)"}
+    def test_class_membership_in_a_retraction_is_saved(self, client):
+        rule = {**RETRACT, "name": "RouteDropMembership", "consequent": "Customer(?c)"}
         response = _save(client, rule)
-        assert response.status_code in (400, 422)
-        assert "property or attribute triples" in response.json().get("message", "")
-        assert all(r["name"] != "RouteBadClass" for r in _rules(client))
+        assert response.status_code == 200, response.text
+        saved = next(r for r in _rules(client) if r["name"] == "RouteDropMembership")
+        assert saved["action"] == "retract"
+        assert saved["consequent"] == "Customer(?c)"
 
     def test_unbound_variable_in_a_retraction_is_rejected(self, client):
         rule = {**RETRACT, "name": "RouteBadVar", "consequent": "meterOf(?m, ?z)"}
@@ -136,11 +137,11 @@ class TestRulesPackage:
             "version": 1,
             "if_then_rules": [
                 {**RETRACT, "name": "RoutePkgGood"},
-                {**RETRACT, "name": "RoutePkgBad", "consequent": "Customer(?c)"},
+                {**RETRACT, "name": "RoutePkgBad", "consequent": "meterOf(?m, ?c, ?m)"},
             ],
             "sparql_rules": [],
         }
         body = client.post("/ontology/rules/import", json=payload).json()
         assert "RoutePkgGood" in body["added"]
         assert [r["name"] for r in body["rejected"]] == ["RoutePkgBad"]
-        assert "property or attribute triples" in body["rejected"][0]["reason"]
+        assert "has 3 arguments" in body["rejected"][0]["reason"]

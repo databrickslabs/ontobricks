@@ -17,6 +17,12 @@ from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
 from back.core.reasoning.results.RuleViolation import RuleViolation
 from back.core.reasoning.rules.SparqlConstructCompiler import SparqlConstructCompiler
+from back.core.reasoning.rules.rule_kind import (
+    NOT_A_RULE_MESSAGE,
+    RULE_KIND_CONSTRUCT,
+    RULE_KIND_REMOVAL,
+    sparql_rule_kind,
+)
 from back.core.reasoning.rules.SparqlUpdateCompiler import SparqlUpdateCompiler
 from back.core.w3c.rdf_utils import uri_local_name
 
@@ -70,7 +76,7 @@ class SPARQLRuleEngine:
         # without the triples they hide. The run itself writes nothing.
         ordered = sorted(
             (r for r in rules if r.get("enabled", True) and (r.get("query") or "").strip()),
-            key=lambda r: (r.get("kind") or "construct") != "removal",
+            key=lambda r: sparql_rule_kind(r.get("query")) != RULE_KIND_REMOVAL,
         )
         removal_sql: List[str] = []
 
@@ -78,7 +84,7 @@ class SPARQLRuleEngine:
             name = rule.get("name", "unnamed")
             try:
                 result.merge(self._execute_one(rule, store, table_name, ontology, removal_sql))
-                if (rule.get("kind") or "construct") == "removal":
+                if sparql_rule_kind(rule.get("query")) == RULE_KIND_REMOVAL:
                     removal_sql.append(self._removal_sql(rule, store, table_name, ontology))
             except Exception as e:
                 logger.error("SPARQL rule '%s' failed: %s", name, e)
@@ -158,7 +164,7 @@ class SPARQLRuleEngine:
         ontology: Dict,
         removal_sql: Sequence[str] = (),
     ) -> ReasoningResult:
-        """Run one rule; its ``kind`` selects the CONSTRUCT or the removal path.
+        """Run one rule; its query form selects the CONSTRUCT or the removal path.
 
         ``removal_sql`` holds the removal rules that ran before this one in the
         same run; a CONSTRUCT rule reads the table without their triples.
@@ -167,13 +173,13 @@ class SPARQLRuleEngine:
         query = rule.get("query", "")
         options = self._options(store, ontology)
         base = store.sql_table_reference(table_name)
-        kind = rule.get("kind") or "construct"
-        if kind == "construct":
+        kind = sparql_rule_kind(query)
+        if kind == RULE_KIND_CONSTRUCT:
             table = self._table_after_removals(base, list(removal_sql))
             return self._execute_construct(name, query, store, table, options)
-        if kind == "removal":
+        if kind == RULE_KIND_REMOVAL:
             return self._execute_removal(name, query, store, base, options)
-        raise ValidationError(f"Unknown rule kind '{kind}'")
+        raise ValidationError(NOT_A_RULE_MESSAGE)
 
     @staticmethod
     def _execute_construct(
@@ -245,14 +251,15 @@ class SPARQLRuleEngine:
         if not query.strip():
             errors.append("SPARQL rule must have a query")
             return errors
-        kind = rule.get("kind") or "construct"
+        kind = sparql_rule_kind(query)
+        if kind is None:
+            errors.append(NOT_A_RULE_MESSAGE)
+            return errors
         try:
-            if kind == "construct":
+            if kind == RULE_KIND_CONSTRUCT:
                 SparqlConstructCompiler().compile(query, "triples")
-            elif kind == "removal":
-                SparqlUpdateCompiler().compile_removal(query, "triples")
             else:
-                errors.append(f"Unknown rule kind '{kind}'")
+                SparqlUpdateCompiler().compile_removal(query, "triples")
         except ValidationError as exc:
             errors.append(exc.message)
         return errors

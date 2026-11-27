@@ -225,7 +225,7 @@
                                     </select>
                                 </div>
                                 <div class="form-text small mb-2 d-none" id="ifThenRetractNote">
-                                    <i class="bi bi-eraser me-1"></i>Triples matched by the IF part are hidden on the next reasoning run. Retractions are not SHACL-AF rules and are not exported.
+                                    <i class="bi bi-eraser me-1"></i>Right-click a class, relationship or attribute and choose <em>Add to THEN</em>: the matching triples are removed. It stays in IF to bind its variables. Removals run with the reasoning pipeline and are not exported as SHACL-AF.
                                 </div>
                                 <div id="ifThenThenAtoms">
                                     <div class="text-muted small fst-italic py-2" id="ifThenThenEmpty">
@@ -325,11 +325,9 @@
                     <div class="cra-col-code">
                         <div class="cra-code-scroll">
                             <div class="mb-3">
-                                <label class="form-label small fw-semibold mb-1" for="sparqlKind">Rule type</label>
-                                <select class="form-select form-select-sm" id="sparqlKind">
-                                    <option value="construct" selected>Infer triples (CONSTRUCT)</option>
-                                    <option value="removal">Remove triples (DELETE)</option>
-                                </select>
+                                <span class="form-label small fw-semibold mb-1 d-block">Rule type</span>
+                                <div class="small" id="sparqlKindLabel" aria-live="polite"></div>
+                                <div class="form-text">Set by the query: CONSTRUCT infers triples, DELETE removes them.</div>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label small fw-semibold mb-1">Name <span class="text-danger">*</span></label>
@@ -349,8 +347,8 @@
                             </div>
                             <div id="sparqlRemovalBox" class="mb-3 d-none">
                                 <p class="form-text small mb-2">
-                                    Removal rules are written by hand. Preview shows how many stored triples
-                                    the DELETE would hide; the hidden triples are recorded as overrides.
+                                    Preview shows how many stored triples the DELETE would hide; the hidden
+                                    triples are recorded as overrides. Save needs a preview of the same query.
                                 </p>
                                 <div class="d-flex align-items-center gap-2 flex-wrap">
                                     <button type="button" class="btn btn-outline-secondary btn-sm"

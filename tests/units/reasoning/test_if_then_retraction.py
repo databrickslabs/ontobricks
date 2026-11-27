@@ -22,6 +22,7 @@ import pytest
 import back.objects  # noqa: F401
 from back.core.errors import ValidationError
 from back.core.graphdb.overrides import ORIGIN_REASONING
+from back.core.reasoning.constants import RDF_TYPE
 from back.core.reasoning.ReasoningService import ReasoningService
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
 from back.core.reasoning.shacl_rules import (
@@ -158,8 +159,6 @@ class TestRemovalSql:
         # triples present in the graph, not the missing ones.
         import sqlite3
 
-        from back.core.reasoning.constants import RDF_TYPE
-
         e, c = "http://ex.org/", "http://ex.org#"
         db = sqlite3.connect(":memory:")
         db.execute("CREATE TABLE triples (subject TEXT, predicate TEXT, object TEXT)")
@@ -183,6 +182,37 @@ class TestRemovalSql:
             ("m2", e + "meterOf", "c2"),
         ]
         assert db.execute(value).fetchall() == [("m1", e + "status", "closed")]
+
+    def test_class_retraction_keeps_existing_memberships(self):
+        sql = _inference_sql(dict(RETRACT_LINK, consequent="Meter(?m)"))
+        assert "predicate = '" + RDF_TYPE + "'" in sql
+        assert "EXISTS (SELECT 1 FROM triples a" in sql
+        assert "NOT EXISTS" not in sql
+
+    def test_class_retraction_matches_only_existing_memberships(self):
+        import sqlite3
+
+        e, c = "http://ex.org/", "http://ex.org#"
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE triples (subject TEXT, predicate TEXT, object TEXT)")
+        db.executemany(
+            "INSERT INTO triples VALUES (?, ?, ?)",
+            [
+                ("m1", RDF_TYPE, c + "Meter"),
+                ("m2", RDF_TYPE, c + "Meter"),
+                ("m3", RDF_TYPE, c + "Meter"),
+                ("c1", RDF_TYPE, c + "Customer"),
+                ("c2", RDF_TYPE, c + "Customer"),
+                ("m1", e + "meterOf", "c1"),
+                ("m2", e + "meterOf", "c2"),
+            ],
+        )
+        sql = _inference_sql(dict(RETRACT_LINK, consequent="Meter(?m)"))
+        # m3 has no meterOf link, so the IF part does not bind it: not removed.
+        assert sorted(db.execute(sql).fetchall()) == [
+            ("m1", RDF_TYPE, c + "Meter"),
+            ("m2", RDF_TYPE, c + "Meter"),
+        ]
 
     def test_dangling_object_retraction_emits_no_sql(self):
         # ?z is not bound by the IF part: a removal would match every value.
@@ -258,10 +288,14 @@ class TestValidation:
         errors = Rules.validate_if_then_rule(dict(RETRACT_LINK, action="delete"))
         assert any("action must be" in e for e in errors)
 
-    def test_class_atom_in_the_then_part_is_rejected(self):
-        rule = dict(RETRACT_LINK, consequent="Customer(?c)")
+    def test_class_membership_in_the_then_part_is_valid(self):
+        rule = dict(RETRACT_LINK, consequent="Meter(?m)")
+        assert Rules.validate_if_then_rule(rule) == []
+
+    def test_three_argument_atom_in_the_then_part_is_rejected(self):
+        rule = dict(RETRACT_LINK, consequent="meterOf(?m, ?c, ?m)")
         errors = Rules.validate_if_then_rule(rule)
-        assert any("property or attribute triples" in e for e in errors)
+        assert any("has 3 arguments" in e for e in errors)
 
     def test_unbound_variable_in_the_then_part_is_rejected(self):
         rule = dict(RETRACT_LINK, consequent="meterOf(?m, ?z)")

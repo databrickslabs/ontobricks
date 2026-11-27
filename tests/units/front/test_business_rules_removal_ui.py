@@ -1,4 +1,4 @@
-"""Complex rule editor: the Removal rule type (kind selector, preview, save gate)."""
+"""Complex rule editor: the Removal rule type is read from the query (preview, save gate)."""
 
 from pathlib import Path
 
@@ -27,14 +27,29 @@ def css():
     return CSS.read_text(encoding="utf-8")
 
 
-def test_editor_has_kind_selector_and_removal_controls(html):
-    for element_id in ("sparqlKind", "sparqlRemovalPreview", "sparqlRemovalConfirm", "sparqlRemovalBox"):
+def test_editor_shows_the_rule_type_label_and_removal_controls(html):
+    for element_id in ("sparqlKindLabel", "sparqlRemovalPreview", "sparqlRemovalConfirm", "sparqlRemovalBox"):
         assert f'id="{element_id}"' in html
 
 
-def test_kind_selector_offers_construct_and_removal(html):
-    assert 'value="construct"' in html
-    assert 'value="removal"' in html
+def test_there_is_no_rule_type_dropdown(html, js):
+    # The query decides the kind: a dropdown could disagree with it.
+    assert 'id="sparqlKind"' not in html
+    assert "getElementById('sparqlKind')" not in js
+
+
+def test_the_rule_type_follows_the_query(js):
+    assert "_sparqlKindOf(query) {" in js
+    assert "_sparqlKind() {" in js
+    assert "return this._sparqlKindOf(document.getElementById('sparqlQuery')?.value);" in js
+
+
+def test_the_query_input_updates_the_rule_type_and_preview(js):
+    assert "addEventListener('input', () => this._sparqlQueryChanged());" in js
+    body = js[js.index("_sparqlQueryChanged() {"):]
+    assert "sparqlKindLabel" in body[:600]
+    assert "sparqlRemovalBox" in body[:600]
+    assert "this._sparqlRemovalReset();" in body[:600]
 
 
 def test_editor_calls_the_removal_preview_endpoint(js):
@@ -46,14 +61,10 @@ def test_preview_button_is_wired_through_the_action_delegate(html, js):
     assert "act === 'sparql-preview'" in js
 
 
-def test_save_payload_carries_the_kind(js):
-    assert "kind: this._sparqlKind()" in js
-    assert "'removal'" in js
-
-
-def test_validation_request_carries_the_kind(js):
-    # Without the kind a removal query is validated as CONSTRUCT and rejected.
-    assert "rule: { name, query, kind: this._sparqlKind() }" in js
+def test_no_kind_is_sent_to_the_backend(js):
+    # Save and validate send the query alone; the backend reads the kind from it.
+    assert "kind: this._sparqlKind()" not in js
+    assert "rule: { name, query }" in js
 
 
 def test_save_is_gated_on_a_preview_of_the_same_query(js):
@@ -62,15 +73,20 @@ def test_save_is_gated_on_a_preview_of_the_same_query(js):
     assert "pv.requiresConfirmation" in js
 
 
-def test_editing_the_query_clears_the_preview(js):
-    assert "this._sparqlRemovalReset()" in js
-
-
-def test_rule_list_shows_a_removal_badge(js, css):
+def test_rule_list_shows_a_removal_badge_from_the_query(js, css):
+    assert "this._sparqlKindOf(r.query) === 'removal'" in js
     assert "br-kind-badge-removal" in js
     assert ".br-kind-badge-removal" in css
 
 
-def test_removal_rules_hide_the_assistant_column(js, css):
-    assert "cra-layout--manual" in js
-    assert ".cra-layout--manual .cra-col-chat" in css
+def test_the_assistant_stays_available_for_removal_rules(js, css):
+    assert "cra-layout--manual" not in js
+    assert "cra-layout--manual" not in css
+
+
+def test_an_assistant_reply_updates_the_rule_type_through_the_query(js):
+    # The assistant sets the query programmatically (no input event), so it
+    # calls the same handler a typed edit runs.
+    assert "_craApplyDraftKind" not in js
+    assert "this._sparqlQueryChanged();" in js
+    assert "data.draft.kind" not in js

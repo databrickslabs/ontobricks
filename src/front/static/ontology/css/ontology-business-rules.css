@@ -114,14 +114,6 @@
     resize: none;
 }
 
-/* Removal rules are written by hand: the code pane takes the full width. */
-.cra-layout--manual .cra-col-chat {
-    display: none;
-}
-.cra-layout--manual .cra-col-code {
-    flex: 1 1 100%;
-}
-
 /* Stack the two panes on narrow viewports. */
 @media (max-width: 991.98px) {
     .cra-layout {

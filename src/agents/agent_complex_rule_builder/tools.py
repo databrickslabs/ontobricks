@@ -4,15 +4,16 @@ Complex Rule Builder Agent – tool definitions and handlers.
 Read tools let the LLM ground its questions and generated SPARQL in the
 **live loaded ontology** (classes / properties passed into ``run_agent`` and
 exposed in-process via :class:`~agents.tools.context.ToolContext` — no HTTP
-loopback). The single write tool ``update_draft`` stashes the current
-CONSTRUCT draft on the context so the engine can surface it to the editor's
-right-hand code pane after each turn.
+loopback). The write tool ``update_draft`` stashes the current draft on the
+context so the engine can surface it to the editor's right-hand code pane after
+each turn. The rule's kind is not a parameter: its query decides (CONSTRUCT
+infers, DELETE removes).
 
 Tools:
     * ``get_ontology_overview`` – class names + key data properties + all
       object properties (domain/range), so the agent uses real names.
     * ``describe_class``        – one class's data + object properties.
-    * ``update_draft``          – (re)write the proposed CONSTRUCT query.
+    * ``update_draft``          – (re)write the proposed rule.
 """
 
 import json
@@ -23,7 +24,6 @@ from agents.tools.context import ToolContext
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
-
 
 def _local_name(uri_or_name: str) -> str:
     if not uri_or_name:
@@ -58,6 +58,17 @@ def _object_properties_for_class(ctx: ToolContext, class_name: str) -> List[dict
                 }
             )
     return out
+
+
+def _incoming_properties_for_class(ctx: ToolContext, class_name: str) -> List[dict]:
+    """Object properties whose range is *class_name* (localname, case-insensitive)."""
+    target = (class_name or "").lower()
+    return [
+        {"name": p.get("name", ""), "domain": p.get("domain", "")}
+        for p in ctx.ontology_properties
+        if target
+        and target in ((p.get("range") or "").lower(), _local_name(p.get("range") or "").lower())
+    ]
 
 
 # =====================================================
@@ -99,7 +110,7 @@ def tool_get_ontology_overview(ctx: ToolContext, **_kwargs) -> str:
 
 
 def tool_describe_class(ctx: ToolContext, *, name: str = "", **_kwargs) -> str:
-    """Return one class's data + object properties."""
+    """Return one class's data properties and its outgoing + incoming relationships."""
     target = (name or "").lower()
     cls = next(
         (
@@ -120,6 +131,7 @@ def tool_describe_class(ctx: ToolContext, *, name: str = "", **_kwargs) -> str:
             "parent": cls.get("parent", ""),
             "dataProperties": _data_property_names(cls),
             "objectProperties": _object_properties_for_class(ctx, cls.get("name", "")),
+            "incomingProperties": _incoming_properties_for_class(ctx, cls.get("name", "")),
         }
     )
 
@@ -138,7 +150,7 @@ def tool_update_draft(
     ready: bool = False,
     **_kwargs,
 ) -> str:
-    """(Re)write the proposed CONSTRUCT draft shown in the editor's code pane."""
+    """(Re)write the proposed draft shown in the editor's code pane."""
     ctx.rule_draft = {
         "name": name or "",
         "description": description or "",
@@ -199,8 +211,27 @@ def tool_propose_options(
 
     Rendered in the chat as pills (single-select) or checkboxes + Send
     (multi-select). A per-turn hint only; it does not touch the draft.
+    One question per turn: the chat shows a single options group, so a second
+    call is refused instead of silently replacing the first question.
     """
+    if ctx.rule_options:
+        return json.dumps({
+            "ok": False,
+            "error": (
+                "You already asked a question this turn: "
+                f"{ctx.rule_options.get('question') or '(no text)'!r}. Ask one question "
+                "at a time: end the turn with that question and wait for the answer."
+            ),
+        })
     clean = _clean_options(options)
+    if len(clean) == 1:
+        return json.dumps({
+            "ok": False,
+            "error": (
+                "A question needs at least two answers. If only one makes sense, "
+                "use it and say so in your reply instead of asking."
+            ),
+        })
     ctx.rule_options = (
         {"question": question or "", "options": clean, "multi": bool(multi)}
         if clean
@@ -237,9 +268,10 @@ _DESCRIBE_CLASS_DEF = {
     "function": {
         "name": "describe_class",
         "description": (
-            "Get one class's data properties and the object properties whose "
-            "domain is that class, with ranges. Use to confirm exact property "
-            "names before writing the CONSTRUCT query."
+            "Get one class's data properties, the object properties whose "
+            "domain is that class (with ranges) and the incoming ones whose "
+            "range is that class (with domains). Use to confirm exact property "
+            "names before writing the query."
         ),
         "parameters": {
             "type": "object",
@@ -259,10 +291,11 @@ _UPDATE_DRAFT_DEF = {
     "function": {
         "name": "update_draft",
         "description": (
-            "Write or rewrite the proposed SPARQL CONSTRUCT rule shown to the "
-            "user in the code pane. Call this whenever the query materially "
-            "changes. Set ready=true only when the CONSTRUCT is complete and "
-            "self-consistent."
+            "Write or rewrite the proposed rule shown to the user in the code "
+            "pane: a SPARQL CONSTRUCT (infers triples) or a SPARQL DELETE (hides "
+            "triples); the query's first keyword sets the rule type. Call this "
+            "whenever the query materially changes. Set ready=true only when the "
+            "query is complete and self-consistent."
         ),
         "parameters": {
             "type": "object",
@@ -273,11 +306,15 @@ _UPDATE_DRAFT_DEF = {
                 },
                 "description": {
                     "type": "string",
-                    "description": "One-line description of what the rule infers.",
+                    "description": "One-line description of what the rule infers or removes.",
                 },
                 "query": {
                     "type": "string",
-                    "description": "The full SPARQL CONSTRUCT { ... } WHERE { ... } query.",
+                    "description": (
+                        "The full query: CONSTRUCT { ... } WHERE { ... } for a construct, "
+                        "or DELETE { ... } WHERE { ... } / DELETE WHERE { ... } / "
+                        "DELETE DATA { ... } for a removal."
+                    ),
                 },
                 "ready": {
                     "type": "boolean",

@@ -73,8 +73,9 @@ def test_rule_without_name_is_reported(client, store):
     assert resp.json()["success"] is False
 
 
-def test_preview_is_forced_to_removal_kind(client, store):
+def test_preview_refuses_a_construct_query(client, store):
     # A CONSTRUCT query sent to the removal endpoint is rejected, not run as a rule.
     construct = PFX + "CONSTRUCT { ?c a :VIP } WHERE { ?c a :Customer . ?c :balance ?b }"
     body = client.post(URL, json={"rule": {"name": "vip", "query": construct}}).json()
     assert body["success"] is False
+    assert body["errors"] == ["Only a DELETE rule has a removal preview"]

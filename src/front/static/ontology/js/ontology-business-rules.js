@@ -79,9 +79,9 @@ window.BusinessRulesModule = {
             const el = document.getElementById(id);
             if (el) el.addEventListener('input', () => this._craResetSaveConfirm());
         });
-        // An edited query no longer matches the last removal preview.
-        document.getElementById('sparqlQuery')?.addEventListener('input', () => this._sparqlRemovalReset());
-        document.getElementById('sparqlKind')?.addEventListener('change', () => this._sparqlKindChanged());
+        // The query decides the rule type: an edit updates the label and the
+        // Preview box, and drops a preview that no longer matches the query.
+        document.getElementById('sparqlQuery')?.addEventListener('input', () => this._sparqlQueryChanged());
 
         // Re-enable the form when the editor closes (it may have been read-only).
         const sparqlModal = document.getElementById('sparqlEditorModal');
@@ -463,7 +463,7 @@ window.BusinessRulesModule = {
                 name: r.name || `Complex Rule ${i + 1}`,
                 meta: this._esc(querySnip) + (r.query && r.query.length > 80 ? '…' : ''),
                 enabled: r.enabled,
-                badge: r.kind === 'removal' ? this._removalBadgeHtml() : undefined,
+                badge: this._sparqlKindOf(r.query) === 'removal' ? this._removalBadgeHtml() : undefined,
                 onEdit: () => this.sparqlOpenEditor(i),
                 onDelete: () => this._deleteRule('sparql_rules', i),
                 onToggle: () => this._toggleEnabled('sparql_rules', i),
@@ -478,51 +478,53 @@ window.BusinessRulesModule = {
         document.getElementById('sparqlName').value = r.name || '';
         document.getElementById('sparqlDescription').value = r.description || '';
         document.getElementById('sparqlQuery').value = r.query || '';
-        document.getElementById('sparqlKind').value = r.kind === 'removal' ? 'removal' : 'construct';
         document.getElementById('sparqlEditorTitle').innerHTML = `<i class="bi bi-braces me-2"></i>${isNew ? 'Add' : 'Edit'} Complex Rule`;
         const svm = document.getElementById('sparqlValidationMsg');
         if (svm) svm.classList.add('d-none');
-        this._sparqlRemovalReset();
-        this._craResetSaveConfirm();
-        const removal = this._sparqlKind() === 'removal';
-        // A removal is written by hand, so its assistant column is hidden (a read-only view keeps it for the message).
-        this._sparqlApplyKindUi({ removal, manual: removal && !readOnly });
+        this._sparqlQueryChanged();
         this._setSparqlReadOnly(readOnly);
         new bootstrap.Modal(document.getElementById('sparqlEditorModal')).show();
         if (readOnly) {
             const log = document.getElementById('craChatLog');
             if (log) log.innerHTML = '';
             this._craAppendBubble('assistant', 'You can view this rule. Editing requires the Editor role.');
-        } else if (removal) {
-            const log = document.getElementById('craChatLog');
-            if (log) log.innerHTML = '';
         } else {
             this._craKickoff(isNew);
         }
     },
 
-    // ── Rule type (CONSTRUCT or removal) ──
+    // ── Rule kind: read from the query (CONSTRUCT infers, DELETE removes) ──
+    // Mirrors back/core/reasoning/rules/rule_kind.py: the first keyword after the
+    // PREFIX / BASE prologue decides. Null when the query is neither form.
+    _sparqlKindOf(query) {
+        const head = (query || '').replace(/^\s*(?:(?:PREFIX\s+[^\s<]*\s*<[^>]*>|BASE\s*<[^>]*>)\s*)*/i, '');
+        const m = /^(CONSTRUCT|DELETE)\b/i.exec(head);
+        if (!m) return null;
+        return m[1].toUpperCase() === 'CONSTRUCT' ? 'construct' : 'removal';
+    },
 
     _sparqlKind() {
-        return document.getElementById('sparqlKind')?.value === 'removal' ? 'removal' : 'construct';
+        return this._sparqlKindOf(document.getElementById('sparqlQuery')?.value);
     },
 
     _removalBadgeHtml() {
         return '<span class="br-kind-badge-removal small"><i class="bi bi-eraser me-1"></i>Removal</span>';
     },
 
-    // Show the removal box for a removal rule; hide the assistant when it is written by hand.
-    _sparqlApplyKindUi({ removal, manual = removal }) {
-        document.getElementById('sparqlRemovalBox')?.classList.toggle('d-none', !removal);
-        document.querySelector('#sparqlEditorModal .cra-layout')?.classList.toggle('cra-layout--manual', manual);
-    },
-
-    _sparqlKindChanged() {
-        const removal = this._sparqlKind() === 'removal';
-        this._sparqlApplyKindUi({ removal });
+    // Runs whenever the query text changes, typed or set by the editor or the
+    // assistant: shows the rule type and the Preview box of a DELETE, and drops
+    // anything (preview, save confirmation) that no longer matches the query.
+    _sparqlQueryChanged() {
+        const kind = this._sparqlKind();
+        const labels = {
+            construct: 'Infer triples (CONSTRUCT)',
+            removal: 'Remove triples (DELETE)',
+        };
+        const label = document.getElementById('sparqlKindLabel');
+        if (label) label.textContent = labels[kind] || 'Not a rule yet: start with CONSTRUCT or DELETE';
+        document.getElementById('sparqlRemovalBox')?.classList.toggle('d-none', kind !== 'removal');
         this._sparqlRemovalReset();
         this._craResetSaveConfirm();
-        if (!removal) this._craKickoff(parseInt(document.getElementById('sparqlEditIndex').value, 10) < 0);
     },
 
     _sparqlRemovalReset() {
@@ -588,7 +590,7 @@ window.BusinessRulesModule = {
 
     // Disable the form and the assistant while a read-only rule is shown.
     _setSparqlReadOnly(on) {
-        ['sparqlName', 'sparqlDescription', 'sparqlQuery', 'sparqlKind', 'craChatInput'].forEach((id) => {
+        ['sparqlName', 'sparqlDescription', 'sparqlQuery', 'craChatInput'].forEach((id) => {
             const el = document.getElementById(id);
             if (el) el.disabled = on;
         });
@@ -625,7 +627,7 @@ window.BusinessRulesModule = {
         const input = document.getElementById('craChatInput');
         if (input) input.value = '';
         const kickoff = isNew
-            ? "Hi! I'll help you build a SPARQL CONSTRUCT rule. In one sentence, what should this rule infer?"
+            ? "Hi! I'll help you build a Complex rule: a SPARQL CONSTRUCT that infers triples, or a removal (DELETE) that hides them. In one sentence, what should this rule do?"
             : "Let's refine this existing Complex rule. Summarise what the current query does and ask me what I'd like to change.";
         this._craTurn(kickoff, { silentUser: true });
     },
@@ -662,7 +664,7 @@ window.BusinessRulesModule = {
                 return;
             }
             this._craHistory.push({ role: 'user', content: message });
-            this._craHistory.push({ role: 'assistant', content: data.reply || '' });
+            this._craHistory.push({ role: 'assistant', content: this._craReplyWithQuestion(data) });
             this._craApplyResponse(data);
         } catch (e) {
             console.error('[BusinessRules] complex assistant error:', e);
@@ -673,8 +675,20 @@ window.BusinessRulesModule = {
         }
     },
 
+    // The question behind the offered answers must be visible (and kept in the
+    // history) even when the model's reply text does not repeat it.
+    _craReplyWithQuestion(data) {
+        const reply = (data.reply || '').trim();
+        const opts = data.options;
+        const offered = opts && Array.isArray(opts.options) && opts.options.length;
+        const question = offered ? String(opts.question || '').trim() : '';
+        if (!question || reply.includes(question)) return reply;
+        return reply ? reply + '\n\n' + question : question;
+    },
+
     _craApplyResponse(data) {
-        if (data.reply) this._craAppendBubble('assistant', data.reply);
+        const text = this._craReplyWithQuestion(data);
+        if (text) this._craAppendBubble('assistant', text);
         if (data.draft) {
             if (typeof data.draft.name === 'string' && data.draft.name) {
                 document.getElementById('sparqlName').value = data.draft.name;
@@ -685,8 +699,8 @@ window.BusinessRulesModule = {
             if (typeof data.draft.query === 'string') {
                 document.getElementById('sparqlQuery').value = data.draft.query;
             }
-            // The rule changed — require a fresh validate + review before saving.
-            this._craResetSaveConfirm();
+            // The rule changed — the query decides its kind, and a fresh validate + review is needed.
+            this._sparqlQueryChanged();
         }
         if (data.options && Array.isArray(data.options.options) && data.options.options.length) {
             this._craRenderOptions(data.options);
@@ -855,7 +869,7 @@ window.BusinessRulesModule = {
             const resp = await fetch('/ontology/rules/sparql_rules/validate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rule: { name, query, kind: this._sparqlKind() } }),
+                body: JSON.stringify({ rule: { name, query } }),
             });
             const data = await resp.json();
             return { valid: !!data.valid, message: data.message || '' };
@@ -938,7 +952,6 @@ window.BusinessRulesModule = {
             name: document.getElementById('sparqlName').value.trim(),
             description: document.getElementById('sparqlDescription').value.trim(),
             query: document.getElementById('sparqlQuery').value,
-            kind: this._sparqlKind(),
             enabled: true,
         };
         if (index >= 0 && this.sparqlRules[index]) rule.enabled = this.sparqlRules[index].enabled;

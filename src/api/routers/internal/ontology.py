@@ -1296,11 +1296,13 @@ async def sparql_removal_preview(
 ):
     """Count the triples a removal rule would hide, without writing anything."""
     from back.core.reasoning import ReasoningService, SPARQLRuleEngine
+    from back.core.reasoning.rules.rule_kind import RULE_KIND_REMOVAL, sparql_rule_kind
 
     data = await request.json()
     rule = dict(data.get("rule") or {})
-    rule["kind"] = "removal"
     errors = SPARQLRuleEngine.validate_rule(rule)
+    if not errors and sparql_rule_kind(rule.get("query")) != RULE_KIND_REMOVAL:
+        errors = ["Only a DELETE rule has a removal preview"]
     if errors:
         return {
             "success": False,
@@ -2602,7 +2604,7 @@ async def complex_rule_assistant_chat(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Process a single turn of the Complex (SPARQL CONSTRUCT) rule builder.
+    """Process a single turn of the Complex rule builder (CONSTRUCT or removal).
 
     Expects a JSON body::
 

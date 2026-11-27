@@ -659,7 +659,7 @@ window.IfThenModule = {
         const thenItem = menu.querySelector('.if-then-ctx-then');
         const removeItem = menu.querySelector('.if-then-ctx-remove');
         if (ifItem) ifItem.classList.toggle('d-none', isSelected);
-        if (thenItem) thenItem.classList.toggle('d-none', isSelected);
+        if (thenItem) thenItem.classList.toggle('d-none', !this._canAddToThen(elementId));
         if (removeItem) removeItem.classList.toggle('d-none', !isSelected);
 
         menu.classList.remove('d-none');
@@ -674,6 +674,18 @@ window.IfThenModule = {
     _hideContextMenu() {
         const menu = document.getElementById('ifThenContextMenu');
         if (menu) menu.classList.add('d-none');
+    },
+
+    // Whether "Add to THEN" applies to an element. Normally an element has one
+    // role. A removal (Remove action) may name an element that is also a
+    // condition: the IF part binds its variables, the THEN part names the triple
+    // to delete (a class membership, a relationship or an attribute value).
+    _canAddToThen(elementId) {
+        if (this._actionValue() !== 'retract') {
+            return !(this.ifNodes.has(elementId) || this.thenNodes.has(elementId) ||
+                     this.ifLinks.has(elementId) || this.thenLinks.has(elementId));
+        }
+        return !(this.thenNodes.has(elementId) || this.thenLinks.has(elementId));
     },
 
     ctxAddToIf() {
@@ -721,6 +733,11 @@ window.IfThenModule = {
         if (side === 'if') {
             this.thenNodes.delete(nodeId);
             this.ifNodes.add(nodeId);
+        } else if (this._actionValue() === 'retract') {
+            // A removal keeps the class as a condition: the IF part binds the
+            // variable, the THEN part names the membership to delete.
+            this.ifNodes.add(nodeId);
+            this.thenNodes.add(nodeId);
         } else {
             this.ifNodes.delete(nodeId);
             this.thenNodes.add(nodeId);
@@ -732,11 +749,16 @@ window.IfThenModule = {
         const link = this._graphLinks.find(l => l.linkId === linkId);
         if (!link) return;
 
+        // A removal keeps the relationship as a condition and binds its
+        // endpoints in IF, so the THEN part stays a relationship (see _canAddToThen).
+        const removal = this._actionValue() === 'retract';
+        const endpointSide = removal ? 'if' : side;
+
         if (side === 'if') {
             this.thenLinks.delete(linkId);
             this.ifLinks.add(linkId);
         } else {
-            this.ifLinks.delete(linkId);
+            if (!removal) this.ifLinks.delete(linkId);
             this.thenLinks.add(linkId);
         }
 
@@ -744,10 +766,10 @@ window.IfThenModule = {
         const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
 
         if (!this.ifNodes.has(srcId) && !this.thenNodes.has(srcId)) {
-            if (side === 'if') this.ifNodes.add(srcId); else this.thenNodes.add(srcId);
+            if (endpointSide === 'if') this.ifNodes.add(srcId); else this.thenNodes.add(srcId);
         }
         if (!this.ifNodes.has(tgtId) && !this.thenNodes.has(tgtId)) {
-            if (side === 'if') this.ifNodes.add(tgtId); else this.thenNodes.add(tgtId);
+            if (endpointSide === 'if') this.ifNodes.add(tgtId); else this.thenNodes.add(tgtId);
         }
         this._ensureNodeVar(srcId);
         this._ensureNodeVar(tgtId);
@@ -1479,8 +1501,12 @@ window.IfThenModule = {
         }
 
         if (!rule.name || !rule.antecedent || !rule.consequent) {
-            if (typeof showNotification === 'function')
-                showNotification('Rule name, IF conditions, and THEN conclusions are all required.', 'warning');
+            if (typeof showNotification === 'function') {
+                const message = rule.action === 'retract' && !rule.consequent
+                    ? 'Remove needs a class, relationship or attribute under THEN: right-click one and choose "Add to THEN".'
+                    : 'Rule name, IF conditions, and THEN conclusions are all required.';
+                showNotification(message, 'warning');
+            }
             return;
         }
 

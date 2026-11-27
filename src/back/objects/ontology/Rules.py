@@ -56,10 +56,14 @@ class Rules:
     def _retraction_errors(rule: Dict[str, Any]) -> List[str]:
         """Constraints on a retraction's THEN part.
 
-        A retraction removes concrete triples, so its THEN part must be
-        property or attribute atoms (``prop(?x, ?y)`` / ``prop(?x, "value")``)
-        whose variables the IF part binds. Class membership, built-ins and
-        negation have no single-triple meaning to remove.
+        A retraction removes concrete triples, so each THEN atom must be one of
+        three single-triple forms whose variables the IF part binds:
+
+        - a class membership ``Class(?x)`` (removes the ``rdf:type`` triple);
+        - a relationship ``prop(?x, ?y)``;
+        - an attribute value ``prop(?x, "value")``.
+
+        Built-ins and negation have no single-triple meaning to remove.
         """
         errors: List[str] = []
         bound = {
@@ -71,10 +75,10 @@ class Rules:
         for prefix, name, args in Rules._iter_atoms(rule.get("consequent", "")):
             if prefix or name.lower() == "not":
                 errors.append("a retraction's THEN part cannot use built-ins or negation")
-            elif len(args) != 2:
+            elif len(args) not in (1, 2):
                 errors.append(
-                    f"a retraction can only remove property or attribute triples; "
-                    f"'{name}' is a class"
+                    f"a retraction can only remove a class membership or a "
+                    f"property/attribute triple; '{name}' has {len(args)} arguments"
                 )
             else:
                 for arg in args:
@@ -251,10 +255,11 @@ class Rules:
             REMOVAL_WHERE_RE,
             TRIPLE_PATTERN_RE,
         )
+        from back.core.reasoning.rules.rule_kind import RULE_KIND_REMOVAL, sparql_rule_kind
 
         errors: List[str] = []
         query = rule.get("query", "") or ""
-        if rule.get("kind") == "removal":
+        if sparql_rule_kind(query) == RULE_KIND_REMOVAL:
             parts = [
                 m.group(1)
                 for m in (REMOVAL_TEMPLATE_RE.search(query), REMOVAL_WHERE_RE.search(query))
