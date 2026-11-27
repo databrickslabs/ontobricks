@@ -344,3 +344,58 @@ Modified files:
 - tests/units/ontology/test_reasoning_service.py
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 11727 passed, 334 skipped, 8 deselected.
+
+## fix(graph-chat): enforce the Depth setting and report incomplete results (#252)
+
+Context: Graph Chat gave different totals for the same question depending on the
+Depth dropdown (issue #252). The dropdown only rewrote a sentence in the system
+prompt, so the LLM chose the real traversal depth. At Depth 1 the agent summed a
+partial neighbourhood and presented it as complete. Truncated results were also
+flagged with a hint ("increase limit or use pagination") the model could not act on.
+Forward-port of the 0.9.4 change.
+
+Changes:
+1. src/agents/tools/context.py - new `ToolContext.dtwin_describe_depth` (None = no cap).
+2. src/agents/agent_dtwin_chat/tools.py - `tool_describe_entity` caps the LLM-requested
+   depth at the user's Depth; the schema description says so.
+3. src/agents/agent_dtwin_chat/engine.py - new `_configure_depth` helper stores the
+   Depth on the context and builds the system prompt. Prompt: Depth is a hard limit;
+   check the entity types reached before totalling; do not present a figure as complete
+   when a type is missing or the result is TRUNCATED.
+4. src/agents/tools/graph_formatting.py - `format_find_response` lists the entity types
+   reached with counts in the header; truncation is an explicit TRUNCATED warning with the
+   number of omitted triples. The MCP server has its own formatter and is unchanged.
+5. tests/units/agents/test_agent_dtwin_chat.py - user Depth caps the LLM depth; a higher
+   LLM depth does not raise the user's cap.
+6. tests/units/agents/test_graph_formatting_context.py - entity-type summary and
+   TRUNCATED wording.
+7. tests/eval/datasets/agent_dtwin_chat/regression.jsonl (new) - 3 regression rows for
+   #252: depth cap honoured, truncated total disclosed, capped indirect question disclosed.
+8. tests/eval/run_agent_dtwin_chat.py - `depth_capped` and `discloses_partial_result`
+   judges, trace built from engine steps, live runs pass `describe_depth`, regression file
+   loaded with the baseline.
+9. tests/eval/test_run_agent_dtwin_chat_depth.py (new) - judge contract tests (reject the bad
+   behaviour, accept the clean one).
+
+Not in this change: Auto depth, the post-answer completeness cross-check and the
+aggregate counting tool (issue #252 phases 2-3). The live MLflow eval run for this
+prompt/tool change has not been done. The dry-run harness and judge tests check wiring only.
+The local SPEC (`.planning/agents/agent_dtwin_chat/SPEC.md`, gitignored) is updated.
+
+Known limit: the engine keeps only the first 500 characters of each tool result in its
+trace, so the live `TRUNCATED` check can miss a warning placed later in a long result.
+
+Modified files:
+- src/agents/tools/context.py
+- src/agents/agent_dtwin_chat/tools.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/agents/tools/graph_formatting.py
+- tests/units/agents/test_agent_dtwin_chat.py
+- tests/units/agents/test_graph_formatting_context.py
+- tests/eval/run_agent_dtwin_chat.py
+- tests/eval/datasets/agent_dtwin_chat/regression.jsonl (new)
+- tests/eval/test_run_agent_dtwin_chat_depth.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-27.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 11738 passed, 334 skipped, 8 deselected.
+Eval: `python tests/eval/run_agent_dtwin_chat.py --dry-run` -> aggregate 1.000 (15 examples), PASS.
