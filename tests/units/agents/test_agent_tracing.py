@@ -315,3 +315,41 @@ class TestTraceToolStatus:
         finally:
             tracing_mod._TRACING_READY = False
         assert span.outputs["status"] == "ok"
+
+
+class TestTraceToolNamedHandler:
+    """A handler called as ``fn(ctx, **arguments)`` is named by the decorator."""
+
+    def _run(self, decorated, *args, **kwargs):
+        mock_mlflow, mock_entities, span = TestTraceToolStatus()._fake_mlflow()
+        tracing_mod._TRACING_READY = True
+        try:
+            with patch.dict(
+                "sys.modules",
+                {"mlflow": mock_mlflow, "mlflow.entities": mock_entities},
+            ):
+                decorated(*args, **kwargs)
+        finally:
+            tracing_mod._TRACING_READY = False
+        return mock_mlflow, span
+
+    def test_named_handler_uses_decorator_name_and_kwargs(self):
+        @trace_tool("evolve:list_classes")
+        def handler(ctx, **kwargs):
+            return "{}"
+
+        mock_mlflow, span = self._run(handler, None, query="vendor")
+        assert (
+            mock_mlflow.start_span.call_args.kwargs["name"]
+            == "tool:evolve:list_classes"
+        )
+        assert span.inputs["tool_name"] == "evolve:list_classes"
+        assert "vendor" in span.inputs["arguments"]
+
+    def test_named_dispatcher_keeps_the_dispatched_name(self):
+        @trace_tool("responses_agent:tool")
+        def dispatch(ctx, tool_name, arguments):
+            return "{}"
+
+        _mock, span = self._run(dispatch, None, "get_item", {"name": "Order"})
+        assert span.inputs["tool_name"] == "get_item"

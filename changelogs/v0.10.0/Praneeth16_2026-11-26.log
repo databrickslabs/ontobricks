@@ -1,0 +1,19 @@
+## Name tool spans of handlers decorated with @trace_tool("…")
+
+Context: `trace_tool` took the tool name from the second positional
+argument, which only dispatchers `fn(ctx, tool_name, arguments)` have.
+Handlers called as `fn(ctx, **arguments)` (for example the Sanity Checks
+design-fixer tools) were recorded as `tool:?` with empty arguments, so a
+trace did not show which tool ran or with what input.
+
+Changes:
+1. src/agents/tracing.py
+   Handlers use the decorator's name and their keyword arguments; dispatchers keep the dispatched tool name, including named dispatchers such as `responses_agent:tool`.
+2. tests/units/agents/test_agent_tracing.py
+   Named handler and named dispatcher cases.
+
+Modified files:
+- src/agents/tracing.py
+- tests/units/agents/test_agent_tracing.py
+
+Tests: uv run --frozen pytest -q tests/units/agents tests/units/architecture → 495 passed

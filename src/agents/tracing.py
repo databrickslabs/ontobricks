@@ -167,8 +167,15 @@ def trace_tool(name: Optional[str] = None):
             import mlflow
             from mlflow.entities import SpanType
 
-            tool_name = kwargs.get("tool_name") or (args[1] if len(args) > 1 else "?")
-            tool_args = kwargs.get("arguments") or (args[2] if len(args) > 2 else {})
+            if len(args) > 1 or "tool_name" in kwargs:
+                # A dispatcher ``fn(ctx, tool_name, arguments)``.
+                tool_name = kwargs.get("tool_name") or args[1]
+                tool_args = kwargs.get("arguments") or (
+                    args[2] if len(args) > 2 else {}
+                )
+            else:
+                # A handler ``fn(ctx, **tool_arguments)``: the decorator names it.
+                tool_name, tool_args = name or "?", kwargs
             with mlflow.start_span(
                 name=f"tool:{tool_name}", span_type=SpanType.TOOL
             ) as span:
